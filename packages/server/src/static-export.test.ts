@@ -84,6 +84,31 @@ describe('server static export', () => {
     expect(exported.artifacts[0]?.body).toContain('installInlineJisoLoader');
   });
 
+  it('rejects raw request handlers before static export replay or writes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const rawHandler = async () => new Response('<main>compat</main>');
+
+    try {
+      await expect(
+        exportStaticApp(rawHandler as unknown as Parameters<typeof exportStaticApp>[0], {
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining('SPEC §9.5 export replay must start from createApp()'),
+            routePath: 'app',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('writes replayed html artifacts under the configured output directory', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     try {

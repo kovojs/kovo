@@ -1,4 +1,5 @@
 import type { JisoApp } from './app-types.js';
+import { isJisoApp } from './app-guards.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -18,6 +19,7 @@ export async function exportStaticApp(
   app: JisoApp,
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
+  assertStaticExportAppAggregate(app);
   assertStaticExportCompileDiagnostics(options.diagnostics ?? []);
   assertNoStaticExportHtmlPathStyleOption(options);
   if (options.outDir !== undefined) staticExportOutputRoot(options.outDir);
@@ -45,6 +47,17 @@ export async function exportStaticApp(
     clientModules: replay.clientModules,
     diagnostics: replay.diagnostics,
   };
+}
+
+function assertStaticExportAppAggregate(app: JisoApp): void {
+  if (isJisoApp(app)) return;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      'app',
+      'FW229 static export requires a closed Jiso app aggregate. SPEC §9.5 export replay must start from createApp(), not a raw request handler or compatibility shell.',
+    ),
+  ]);
 }
 
 function assertNoStaticExportHtmlPathStyleOption(options: object): void {

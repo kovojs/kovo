@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { VersionedClientModuleInput } from './client-modules.js';
+import { isJisoApp } from './app-guards.js';
 import type { JisoApp } from './app-types.js';
 import type { PageHintOptions } from './hints.js';
 import type { JisoAppShellViteBuildOutput } from './vite-build-output.js';
@@ -89,6 +90,7 @@ export interface JisoAppShellBuild {
 }
 
 export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
+  assertJisoAppShellBuildApp(options.app);
   const manifestOptions = viteManifestOptions(options.base);
   const routeHints = buildRouteHints(options.manifest, options.routeEntries, manifestOptions);
   const app =
@@ -107,6 +109,14 @@ export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): Jiso
     : [];
 
   return { app, assets, clientModules, routeHints };
+}
+
+function assertJisoAppShellBuildApp(app: JisoApp): void {
+  if (isJisoApp(app)) return;
+
+  throw new TypeError(
+    'createJisoAppShellViteBuild() requires a Jiso app aggregate. SPEC §9.5 Vite build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+  );
 }
 
 export function createJisoAppShellViteBuild(

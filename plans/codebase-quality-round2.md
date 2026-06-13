@@ -181,6 +181,14 @@ longer assembles that lowered string-render source or diagnostic-to-fw-check map
 
 Latest evidence:
 
+- Phase 5 static export/Vite build closed-app boundary slice:
+  `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/static-export.ts` and `packages/server/src/vite-build.ts` now
+  reject raw request handlers and partial compatibility shells before SPEC §9.5 static export
+  replay, Vite route-hint wiring, client-module registration, or static-host writes.
 - Phase 5 Vite static-export dist root boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

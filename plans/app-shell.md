@@ -118,6 +118,24 @@ Implemented areas:
   SPEC §9.5 dev/build/export replay boundary.
 - Vite app-shell filesystem roots now reject non-`file:` URL `distDir` values with FW229 before
   manifest-backed asset planning, route replay, or static-host writes.
+- `exportStaticApp()` and the public Vite build constructors now reject raw request handlers and
+  partial compatibility shells before SPEC §9.5 replay, route-hint wiring, client-module
+  registration, or static-host writes, keeping static export and Vite adoption on the closed
+  `createApp()` aggregate boundary.
+
+Round309 static export/Vite build closed-app boundary evidence:
+
+- `packages/server/src/static-export.ts` now applies the shared closed-app aggregate guard before
+  static export diagnostics, output-root validation, asset planning, synthetic replay, or writes.
+- `packages/server/src/vite-build.ts` now applies the same boundary before public Vite build route
+  hint wiring and client-module registration.
+- `packages/server/src/static-export.test.ts` proves a stale raw request handler fails with FW229
+  before static-host writes, and `packages/server/src/vite-build.test.ts` proves partial app-shell
+  shells fail before Vite build wiring.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round305 Vite static-export dist root boundary evidence:
 

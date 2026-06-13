@@ -166,6 +166,22 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('rejects partial app-shell compatibility shells before Vite build wiring', () => {
+    expect(() =>
+      createJisoAppShellViteBuild({
+        app: { routes: [] } as unknown as Parameters<typeof createJisoAppShellViteBuild>[0]['app'],
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cartClient = true;',
+          },
+        ],
+      }),
+    ).toThrow(
+      'createJisoAppShellViteBuild() requires a Jiso app aggregate. SPEC §9.5 Vite build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+    );
+  });
+
   it('does not emit Vite app-shell client modules when plugin-time static export is rejected', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-reject-dist-'));
     const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-reject-export-'));
