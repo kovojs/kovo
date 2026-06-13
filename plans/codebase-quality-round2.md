@@ -255,8 +255,8 @@ local helpers.
 
 Latest broad gate:
 
-- `pnpm run check` passed after checkpoint `7875edf`: inline loader check, 784
-  formatted files, 684 lint/typechecked files, and 7 typechecked example/conformance projects.
+- `pnpm run check` passed after checkpoint `ebb1520`: inline loader check, 788
+  formatted files, 688 lint/typechecked files, and 7 typechecked example/conformance projects.
 
 Focused gates since that broad run:
 
