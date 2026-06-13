@@ -134,6 +134,7 @@ export class FakeMorphRoot {
   deps: { deps?: string; id?: string; target?: string }[] = [];
   planElements: FakeQueryPlanElement[] = [];
   targets = new Map<string, FakeMorphTarget>();
+  wildcardSelectorCalls = 0;
 
   findFragmentTarget(target: string): FakeMorphTarget | null {
     return this.targets.get(target) ?? null;
@@ -147,10 +148,17 @@ export class FakeMorphRoot {
         id?: string;
       }
   > {
-    if (_selector === '[data-bind]') return this.bindings;
-    if (_selector === '*') return [...this.bindings, ...this.planElements];
-    const planElements = this.planElements.filter((element) => element.matches(_selector));
-    if (planElements.length > 0) return planElements;
+    if (_selector === '[data-bind]') {
+      return this.bindings.filter((element) => element.getAttribute('data-bind') !== null);
+    }
+    if (_selector === '*') {
+      this.wildcardSelectorCalls += 1;
+      return [...this.bindings, ...this.planElements];
+    }
+    const queryElements = [...this.bindings, ...this.planElements].filter((element) =>
+      element.matches(_selector),
+    );
+    if (queryElements.length > 0) return queryElements;
 
     return this.deps.map((dep) => ({
       getAttribute: (name) => {
@@ -220,21 +228,51 @@ export class FakeTemplateStampHost extends FakeQueryPlanElement {
 }
 
 export class FakeQueryBindingElement {
+  attributes: { name: string; value: string }[];
   textContent: string | null;
   value?: string;
 
   constructor(
-    private readonly path: string,
-    options: { textContent?: string | null; value?: string } = {},
+    pathOrAttributes: string | Record<string, string>,
+    options: { textContent?: string | null; value?: string } | string = {},
   ) {
-    this.textContent = options.textContent ?? null;
-    if (options.value !== undefined) {
-      this.value = options.value;
+    this.attributes =
+      typeof pathOrAttributes === 'string'
+        ? [{ name: 'data-bind', value: pathOrAttributes }]
+        : Object.entries(pathOrAttributes).map(([name, value]) => ({ name, value }));
+    const normalizedOptions = typeof options === 'string' ? { textContent: options } : options;
+    this.textContent = normalizedOptions.textContent ?? null;
+    if (normalizedOptions.value !== undefined) {
+      this.value = normalizedOptions.value;
     }
   }
 
   getAttribute(name: string): string | null {
-    return name === 'data-bind' ? this.path : null;
+    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
+  }
+
+  matches(selector: string): boolean {
+    const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
+    if (exactAttribute) {
+      return this.getAttribute(exactAttribute[1] ?? '') === exactAttribute[2];
+    }
+
+    const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
+    return presentAttribute ? this.getAttribute(presentAttribute[1] ?? '') !== null : false;
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
+  }
+
+  setAttribute(name: string, value: string): void {
+    const existing = this.attributes.find((attribute) => attribute.name === name);
+    if (existing) {
+      existing.value = value;
+      return;
+    }
+
+    this.attributes.push({ name, value });
   }
 }
 

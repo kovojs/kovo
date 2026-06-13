@@ -273,6 +273,16 @@ packages/runtime/src/inline-js-minifier.test.ts`.
       response apply, deferred stream, broadcast, and enhanced mutation flows. Verified by
       `pnpm exec vitest --run packages/runtime/src/query-bindings.test.ts
 packages/runtime/src/query-runtime-integration.test.ts`.
+      Evidence 2026-06-13: mutation response metadata/barrel/idempotency/change-record coverage
+      moved from `packages/runtime/src/mutation-response.test.ts` into
+      `packages/runtime/src/mutation-response-metadata.test.ts`, and the duplicated hook-aware
+      store-only apply case plus local morph/query fake classes were removed. Shared
+      `packages/runtime/src/runtime-test-fakes.ts` now owns attribute-binding fake behavior and
+      binding-index scan counting used by runtime apply/query tests. Verified by `pnpm exec vitest
+--run packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/mutation-response-metadata.test.ts packages/runtime/src/query-bindings.test.ts`
+      and `pnpm exec vitest --run packages/runtime/src/query-runtime-integration.test.ts
+packages/runtime/src/morph.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted

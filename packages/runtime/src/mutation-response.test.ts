@@ -1,92 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseToDom, createQueryStore } from './index.js';
-import * as runtime from './index.js';
-import {
-  applyMutationResponseChunksToRuntime,
-  applyMutationResponseToDom as applyMutationResponseToDomFromMutationModule,
-} from './apply-mutation-response.js';
-import {
-  createMutationIdem,
-  isMutationBroadcastMessage,
-  readMutationChangeHeader,
-  sanitizeMutationChangeRecord,
-} from './mutation-response.js';
+import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
+import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
-
-class FakeMorphTarget {
-  html: string;
-
-  constructor(html = '') {
-    this.html = html;
-  }
-
-  replaceWithHtml(html: string): void {
-    this.html = html;
-  }
-
-  appendHtml(html: string): void {
-    this.html += html;
-  }
-
-  readHtml(): string {
-    return this.html;
-  }
-}
-
-class FakeQueryBindingElement {
-  attributes: { name: string; value: string }[];
-  textContent: string | null;
-
-  constructor(attrs: Record<string, string>, textContent = '') {
-    this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
-    this.textContent = textContent;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
-  }
-
-  removeAttribute(name: string): void {
-    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
-  }
-
-  setAttribute(name: string, value: string): void {
-    const existing = this.attributes.find((attribute) => attribute.name === name);
-    if (existing) {
-      existing.value = value;
-      return;
-    }
-
-    this.attributes.push({ name, value });
-  }
-}
-
-class FakeMorphRoot {
-  bindings: FakeQueryBindingElement[] = [];
-  targets = new Map<string, FakeMorphTarget>();
-  wildcardSelectorCalls = 0;
-
-  findFragmentTarget(target: string): FakeMorphTarget | null {
-    return this.targets.get(target) ?? null;
-  }
-
-  querySelectorAll(selector: string): FakeQueryBindingElement[] {
-    if (selector === '[data-bind]') {
-      return this.bindings.filter((element) => element.getAttribute('data-bind'));
-    }
-    if (selector === '*') {
-      this.wildcardSelectorCalls += 1;
-      return this.bindings;
-    }
-    if (selector.startsWith('[data-derive="')) {
-      const value = selector.slice('[data-derive="'.length, -2);
-      return this.bindings.filter((element) => element.getAttribute('data-derive') === value);
-    }
-
-    return [];
-  }
-}
 
 describe('mutation response wire chunks', () => {
   it('applies mutation response query chunks and returns fragment chunks for morphing', () => {
@@ -129,13 +46,6 @@ describe('mutation response wire chunks', () => {
       fragments: [],
       queries: ['product:p1'],
     });
-  });
-
-  it('exports only the DOM mutation response helper through the runtime barrel', () => {
-    expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
-    expect(Object.hasOwn(runtime, 'applyMutationResponseBodyToRuntime')).toBe(false);
-    expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromMutationModule);
-    expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);
   });
 
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
@@ -311,29 +221,6 @@ describe('mutation response wire chunks', () => {
     expect(applied).toEqual({ fragments: [], queries: ['cart'] });
     expect(store.get('cart')).toEqual({ count: 6 });
     expect(plan).toHaveBeenCalledWith({ count: 6 });
-  });
-
-  it('keeps runtime store-only apply on the hook-aware mutation response path', () => {
-    const store = createQueryStore();
-    const beforeApplyQueries = vi.fn();
-
-    // SPEC.md §9.1: fw-query chunks are the mutation response vocabulary on
-    // every runtime apply path, including store-only multi-tab sync.
-    const body = '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>';
-    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
-      applyQuery(query) {
-        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
-        return { value: store.get(query.name, query.key) };
-      },
-      beforeApplyQueries,
-      store,
-    });
-
-    expect(applied).toEqual({ fragments: [], queries: ['cart:c1'] });
-    expect(store.get('cart', 'cart:c1')).toEqual({ count: 16 });
-    expect(beforeApplyQueries).toHaveBeenCalledWith([
-      { key: 'cart:c1', name: 'cart', value: { count: 6 } },
-    ]);
   });
 
   it('keeps runtime rootless apply store-only when DOM hooks are present', () => {
@@ -598,87 +485,5 @@ describe('mutation response wire chunks', () => {
     expect(summary.textContent).toBe('15 items');
     expect(observed).toEqual(['15:15 items']);
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>ready</cart-badge>');
-  });
-
-  it('reports malformed FW-Changes headers through the mutation response error hook', () => {
-    const onError = vi.fn();
-
-    // SPEC.md §9.1: FW-Changes is sanitized mutation response wire metadata.
-    expect(
-      readMutationChangeHeader(
-        {
-          headers: {
-            get(name: string) {
-              return name === 'FW-Changes' ? '[' : null;
-            },
-          },
-        },
-        onError,
-      ),
-    ).toEqual([]);
-
-    expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed JSON in FW-Changes header',
-    );
-  });
-
-  it('creates mutation idempotency keys from crypto or the local fallback', () => {
-    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
-    const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
-
-    try {
-      Object.defineProperty(globalThis, 'crypto', {
-        configurable: true,
-        value: { randomUUID: () => 'crypto-idem' },
-      });
-
-      expect(createMutationIdem()).toBe('crypto-idem');
-
-      Object.defineProperty(globalThis, 'crypto', {
-        configurable: true,
-        value: undefined,
-      });
-
-      // SPEC.md §9.1: generated enhanced mutation requests always carry FW-Idem.
-      const firstFallback = createMutationIdem();
-      const secondFallback = createMutationIdem();
-      expect(firstFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
-      expect(secondFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
-      expect(secondFallback).not.toBe(firstFallback);
-    } finally {
-      now.mockRestore();
-      if (cryptoDescriptor) {
-        Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
-      } else {
-        delete (globalThis as { crypto?: unknown }).crypto;
-      }
-    }
-  });
-
-  it('sanitizes mutation change records before broadcast publication and acceptance', () => {
-    expect(
-      sanitizeMutationChangeRecord({
-        domain: 'cart',
-        input: { productId: 'p1' },
-        keys: ['cart'],
-        stack: 'hidden',
-      }),
-    ).toEqual({ domain: 'cart', keys: ['cart'] });
-    expect(sanitizeMutationChangeRecord({ domain: 'cart', keys: [1] })).toBeNull();
-    expect(
-      isMutationBroadcastMessage({
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
-        changes: [{ domain: 'cart', keys: ['cart'] }],
-        type: 'jiso:mutation-response',
-      }),
-    ).toBe(true);
-    expect(
-      isMutationBroadcastMessage({
-        body: '<fw-query name="cart">{"count":1}</fw-query>',
-        changes: [{ domain: 'cart', keys: [1] }],
-        type: 'jiso:mutation-response',
-      }),
-    ).toBe(false);
   });
 });
