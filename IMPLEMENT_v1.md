@@ -143,6 +143,16 @@ check:inline-loader`, `pnpm exec tsc --noEmit --pretty false`, `pnpm exec vp che
 packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts
 packages/runtime/src/query-apply.test.ts packages/runtime/src/query-store.test.ts
 IMPLEMENT_v1.md plans/codebase-quality-round2.md`, and `git diff --check`.
+      Additional evidence 2026-06-13: browser query hydration coverage moved from
+      `packages/runtime/src/index.browser.test.ts` to
+      `packages/runtime/src/query-hydration.browser.test.ts`, which now proves later
+      discovered `script[fw-query]` nodes update both the query store and `queryPlans` DOM
+      bindings through the shared runtime apply path (SPEC §9.4). Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-events.test.ts
+packages/runtime/src/query-apply.test.ts packages/runtime/src/query-runtime-integration.test.ts`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/query-hydration.browser.test.ts packages/runtime/src/index.browser.test.ts`,
+      and `pnpm --filter @jiso/runtime run check:inline-loader`.
       Additional evidence 2026-06-13: `packages/runtime/src/apply-mutation-response.ts` now owns
       decoded chunk application through `applyMutationResponseChunksToRuntime`; mutation bodies,
       deferred stream parts, and typed-read responses parse through their transport-specific wire

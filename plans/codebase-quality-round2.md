@@ -152,12 +152,19 @@ enhanced-form, delegated handler, and handler-error behavior in `inline-loader.t
 Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
 transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
 decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
-body/apply wrapper has been deleted.
+body/apply wrapper has been deleted. Browser query hydration coverage now lives in
+`packages/runtime/src/query-hydration.browser.test.ts`, including inserted hydrated scripts updating
+DOM bindings through `queryPlans` on the shared runtime apply path.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
 - [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+- [x] Split browser query hydration and inline query-event coverage out of
+      `packages/runtime/src/index.browser.test.ts`.
+      Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
+      hydrated scripts, malformed script recovery, inline `jiso:query` events, store writes,
+      visible-return refetch keys, and DOM binding updates.
 - [ ] Re-run browser runtime tests after each apply/loader surface change.
 
 Latest evidence:
@@ -176,6 +183,9 @@ Latest evidence:
 - exact `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - exact `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/broadcast.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `pnpm exec vp check packages/runtime/src/index.test.ts packages/runtime/src/delegated-runtime-integration.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/query-runtime-integration.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts packages/runtime/src/index.browser.test.ts`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell
