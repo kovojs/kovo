@@ -126,7 +126,7 @@ export function htmlElementFacts(
       });
     }
 
-    offset = element.end;
+    offset = isRawTextElement(element.tag) ? end : element.end;
   }
 
   return facts;
@@ -381,6 +381,7 @@ function tagClose(html: string, start: number): number | undefined {
 
 function matchingElementEnd(html: string, element: OpeningElement): number | undefined {
   if (/\/\s*$/.test(element.attrs) || isVoidElement(element.tag)) return element.end;
+  if (isRawTextElement(element.tag)) return rawTextElementEnd(html, element);
 
   let offset = element.end;
   let depth = 1;
@@ -418,6 +419,12 @@ function elementFactEnd(html: string, element: OpeningElement): number | undefin
   return /\/\s*$/.test(element.attrs) || isVoidElement(element.tag)
     ? element.end
     : matchingElementEnd(html, element);
+}
+
+function rawTextElementEnd(html: string, element: OpeningElement): number | undefined {
+  const closing = new RegExp(`</${escapeRegExp(element.tag)}\\s*>`, 'i');
+  const match = closing.exec(html.slice(element.end));
+  return match ? element.end + match.index + match[0].length : undefined;
 }
 
 function readClosingElement(html: string, start: number): { end: number; tag: string } | undefined {
@@ -491,6 +498,10 @@ function isVoidElement(tag: string): boolean {
     'track',
     'wbr',
   ].includes(tag);
+}
+
+function isRawTextElement(tag: string): boolean {
+  return tag === 'script' || tag === 'style';
 }
 
 function decodeHtmlText(text: string): string {

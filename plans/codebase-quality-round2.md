@@ -15,6 +15,14 @@ with same-session file/test evidence.
       AGENTS.md; round-1 open work merged below.
 - [ ] Phase 1 gate de-tautologization: `tests/fw-check.node.mjs` source-text assertions replaced
       with behavioral checks; create-jiso templates are real files and scaffold is typechecked.
+      Round104 harness evidence 2026-06-13: `tests/fw-check.node.mjs` now consumes shared
+      `@jiso/test` HTML/query/link and source-site facts for document-load query scripts,
+      deferred-stream stylesheet assertions, and commerce touch-graph source-site checks instead
+      of local tag filters, `new Set` membership, and raw line checks. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts
+packages/test/src/html-fragment.test.ts`, `node --test --test-name-pattern
+'P3 server renders initial query scripts|P4 commerce touch graph|D3 deferred stream responses'
+tests/fw-check.node.mjs`, and `pnpm run check:build`.
 - [ ] Phase 2 compiler IR: single parse, span-patch lowering with offset map, validators consume
       the model; regex/source-string lowerers and validator reparses retired.
 - [ ] Phase 3 Drizzle extraction: ts-morph/project facts end-to-end; bespoke lexers deleted;

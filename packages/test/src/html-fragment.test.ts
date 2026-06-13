@@ -234,6 +234,29 @@ describe('@jiso/test html fragment seam', () => {
     expect(fwQueryFacts(html, 'cart').map((fact) => fact.json)).toEqual([{ count: 2 }]);
   });
 
+  it('keeps adjacent inline and JSON scripts as separate raw-text facts', () => {
+    const html = [
+      '<head>',
+      '<script>const closing = "</" + "script>";</script>',
+      '<script type="application/json" fw-query="cart">{"count":2}</script>',
+      '</head>',
+    ].join('');
+
+    expect(htmlElementFacts(html, { tag: 'script' }).map((script) => script.attrs)).toEqual([
+      {},
+      { 'fw-query': 'cart', type: 'application/json' },
+    ]);
+    expect(fwQueryFacts(html, 'cart')).toMatchObject([
+      {
+        attrs: { 'fw-query': 'cart', type: 'application/json' },
+        json: { count: 2 },
+        name: 'cart',
+        rawJson: '{"count":2}',
+        tag: 'script',
+      },
+    ]);
+  });
+
   it('returns structured framework fragment facts with nested stylesheet hints', () => {
     const html = [
       '<fw-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></fw-fragment>',

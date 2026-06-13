@@ -82,7 +82,12 @@ import {
   GeneratedFixtureMorphTarget,
   GeneratedFixtureTemplateStampHost,
 } from '../packages/test/src/generated-module-fixtures.ts';
-import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
+import {
+  fwQueryFacts,
+  htmlDocumentRegions,
+  htmlElementFacts,
+  htmlLinkHrefs,
+} from '../packages/test/src/html-fragment.ts';
 import {
   markdownBoldSectionHeadings,
   markdownFields,
@@ -99,7 +104,7 @@ import {
   projectDirectoryNames,
   projectFileSources,
   projectJsonFile,
-  projectSourceSiteFact,
+  projectSourceSiteSummaryFact,
 } from '../packages/test/src/source-fixtures.ts';
 import {
   executeStarterClientTemplate,
@@ -1136,21 +1141,16 @@ void test('P3 server renders initial query scripts for document-load hydration',
     queries: [query],
   });
   const documentRegions = htmlDocumentRegions(document.html);
-  const documentElements = htmlElementFacts(document.html);
-  const headQueryScripts = htmlElementFacts(documentRegions.head.innerHtml, {
-    tag: 'script',
-  }).filter((script) => script.attrs['fw-query'] === 'cart');
+  const documentQueryScripts = fwQueryFacts(document.html, 'cart');
+  const headQueryScripts = fwQueryFacts(documentRegions.head.innerHtml, 'cart');
   const bodyElements = htmlElementFacts(documentRegions.body.innerHtml);
-  const queryScriptElement = documentElements.find(
-    (element) => element.tag === 'script' && element.attrs['fw-query'] === 'cart',
-  );
 
   assert.equal(renderQueryScript(query), queryScript);
   assert.equal(renderDocumentQueryScript(query), queryScript);
   assert.deepEqual(
     headQueryScripts.map((script) => ({
       attrs: script.attrs,
-      innerHtml: script.innerHtml,
+      rawJson: script.rawJson,
     })),
     [
       {
@@ -1159,22 +1159,18 @@ void test('P3 server renders initial query scripts for document-load hydration',
           key: 'cart:c1',
           type: 'application/json',
         },
-        innerHtml: '{"html":"\\u003c/script>"}',
+        rawJson: '{"html":"\\u003c/script>"}',
       },
     ],
   );
   assert.deepEqual(bodyElements, [
     { attrs: {}, html: '<main></main>', innerHtml: '', tag: 'main' },
   ]);
-  assert.deepEqual(queryScriptElement?.attrs, {
+  assert.deepEqual(documentQueryScripts[0]?.attrs, {
     'fw-query': 'cart',
     key: 'cart:c1',
     type: 'application/json',
   });
-  assert.equal(
-    documentElements.some((element) => element.tag === 'main'),
-    true,
-  );
 });
 
 void test('P2 page hints keep speculation rules opt-in and non-empty', async () => {
@@ -5290,17 +5286,11 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   const generatedSites = Object.values(commerceGraph.touchGraph)
     .flatMap((entry) => entry.touches)
     .map((touch) => touch.site);
-  assert.equal(generatedSites.length, 5);
-  const generatedSiteFacts = generatedSites.map(projectSourceSiteFact);
-  assert.deepEqual(
-    [...new Set(generatedSiteFacts.map((site) => site.path))],
-    ['examples/commerce/src/app.ts'],
-  );
-  assert.equal(
-    generatedSiteFacts.every((site) => site.line > 0),
-    true,
-    'touch graph sites carry source line facts',
-  );
+  assert.deepEqual(projectSourceSiteSummaryFact(generatedSites), {
+    count: 5,
+    linesArePositive: true,
+    paths: ['examples/commerce/src/app.ts'],
+  });
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
   assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
@@ -5743,12 +5733,9 @@ export const CartBadge = component('cart-badge', {
   assert.deepEqual(fixtureStore.get('recommendations', 'product:p1'), {
     items: [{ id: 'rec-1' }],
   });
-  assert.deepEqual(
-    htmlElementFacts(fixtureRoot.targets.get('reviews:p1').html)
-      .filter((element) => element.tag === 'link')
-      .map((element) => element.attrs),
-    [{ rel: 'stylesheet', href: '/assets/reviews.css' }],
-  );
+  assert.deepEqual(htmlLinkHrefs(fixtureRoot.targets.get('reviews:p1').html), [
+    '/assets/reviews.css',
+  ]);
   assert.deepEqual(
     reviewsTargetBlocks.map((element) => ({
       attrs: element.attrs,

@@ -14,6 +14,8 @@ import {
   projectFileSources,
   projectJsonFile,
   projectSourceSiteFact,
+  projectSourceSiteFacts,
+  projectSourceSiteSummaryFact,
 } from './source-fixtures.js';
 
 describe('@jiso/test source fixture seam', () => {
@@ -53,12 +55,35 @@ describe('@jiso/test source fixture seam', () => {
       line: 42,
       path: 'examples/commerce/src/app.ts',
     });
+    expect(
+      projectSourceSiteFacts([
+        'examples/commerce/src/app.ts:42',
+        'examples/commerce/src/app.ts:47',
+      ]),
+    ).toEqual([
+      { line: 42, path: 'examples/commerce/src/app.ts' },
+      { line: 47, path: 'examples/commerce/src/app.ts' },
+    ]);
     expect(() => projectSourceSiteFact('examples/commerce/src/app.ts')).toThrow(
       'Project source site includes a line number: examples/commerce/src/app.ts',
     );
     expect(() => projectSourceSiteFact('examples/commerce/src/app.ts:0')).toThrow(
       'Project source site line is positive: examples/commerce/src/app.ts:0',
     );
+  });
+
+  it('summarizes generated graph source sites without inline Set membership checks', () => {
+    expect(
+      projectSourceSiteSummaryFact([
+        'examples/commerce/src/app.ts:42',
+        'examples/commerce/src/app.ts:47',
+        'examples/commerce/src/cart.ts:5',
+      ]),
+    ).toEqual({
+      count: 3,
+      linesArePositive: true,
+      paths: ['examples/commerce/src/app.ts', 'examples/commerce/src/cart.ts'],
+    });
   });
 
   it('loads structured project file and package-directory facts for fw-check gates', async () => {

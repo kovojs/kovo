@@ -6,6 +6,12 @@ export interface ProjectSourceSiteFact {
   path: string;
 }
 
+export interface ProjectSourceSiteSummaryFact {
+  count: number;
+  linesArePositive: boolean;
+  paths: string[];
+}
+
 export interface ProjectFileTreeOptions {
   directory: string;
   include?: (path: string) => boolean;
@@ -70,6 +76,24 @@ export function projectSourceSiteFact(site: string): ProjectSourceSiteFact {
   }
 
   return { line, path: site.slice(0, separator) };
+}
+
+export function projectSourceSiteFacts(sites: readonly string[]): ProjectSourceSiteFact[] {
+  return sites.map(projectSourceSiteFact);
+}
+
+export function projectSourceSiteSummaryFact(
+  sites: readonly string[],
+): ProjectSourceSiteSummaryFact {
+  const facts = projectSourceSiteFacts(sites);
+
+  return {
+    count: facts.length,
+    linesArePositive: facts.every((site) => site.line > 0),
+    paths: [...new Set(facts.map((site) => site.path))].sort((left, right) =>
+      left.localeCompare(right),
+    ),
+  };
 }
 
 export async function projectDirectoryNames(options: ProjectFileTreeOptions): Promise<string[]> {
