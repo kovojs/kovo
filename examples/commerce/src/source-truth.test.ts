@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { TouchGraph } from '@jiso/drizzle';
@@ -21,6 +20,7 @@ import {
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
+  graphFixtureFile,
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
   graphMutationUpdateConsumers,
@@ -70,8 +70,9 @@ describe('commerce source-truth graph acceptance', () => {
     execFileSync('node', ['examples/commerce/scripts/emit-graph.mjs', '--check'], {
       stdio: 'pipe',
     });
-    const graphArtifact = JSON.parse(
-      readFileSync(new URL('./generated/graph.json', import.meta.url), 'utf8'),
+    const graphArtifact = await graphFixtureFile<typeof commerceGraph>(
+      projectRootPath,
+      'examples/commerce/src/generated/graph.json',
     );
     const starterCart = loadCartQuery(createCommerceDb());
     const cartMeta = commerceCartPageMeta(starterCart);

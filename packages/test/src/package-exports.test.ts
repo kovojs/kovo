@@ -113,6 +113,7 @@ import {
   type GeneratedHandlerReferenceFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
+  graphFixtureFile,
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
   graphInvalidatedQueries,
@@ -123,6 +124,7 @@ import {
   graphQueryConsumers,
   type GraphInvalidationMatrix,
   type GraphQueryConsumerFact,
+  type ProjectGraphFixture,
 } from '@jiso/test/graph-fixtures';
 import {
   createJisoTestHarness,
@@ -398,6 +400,8 @@ describe('@jiso/test package subpath exports', () => {
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expect(graphFixtureFile).toBeTypeOf('function');
+    expectTypeOf<ProjectGraphFixture>().toMatchTypeOf<Record<string, unknown>>();
     expect(touchGraphProvenanceFact).toBeTypeOf('function');
     expect(touchGraphSourceFacts).toBeTypeOf('function');
     expect(

@@ -1,3 +1,5 @@
+import { projectJsonFile } from './source-fixtures.ts';
+
 export interface JisoGraphComponentFact {
   fragments?: readonly string[];
   name: string;
@@ -33,6 +35,8 @@ export interface JisoGraphFixture {
   pages?: readonly JisoGraphPageFact[];
   queries?: readonly JisoGraphQueryFact[];
 }
+
+export type ProjectGraphFixture = JisoGraphFixture & Record<string, unknown>;
 
 export interface GraphQueryConsumerFact {
   consumers: string[];
@@ -134,4 +138,11 @@ export function graphOptimisticStatusMatrix(graph: JisoGraphFixture): GraphInval
   }
 
   return matrix;
+}
+
+export async function graphFixtureFile<T extends ProjectGraphFixture = ProjectGraphFixture>(
+  rootPath: string,
+  path: string,
+): Promise<T> {
+  return projectJsonFile<T>(rootPath, path);
 }

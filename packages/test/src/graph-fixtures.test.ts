@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  graphFixtureFile,
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
   graphInvalidatedQueries,
@@ -78,6 +79,15 @@ describe('@jiso/test graph fixture seam', () => {
         orderHistory: 'no-invalidation',
         productGrid: 'no-invalidation',
       },
+    });
+  });
+
+  it('loads checked-in graph artifacts through the graph fixture seam', async () => {
+    await expect(
+      graphFixtureFile(process.cwd(), 'examples/commerce/src/generated/graph.json'),
+    ).resolves.toMatchObject({
+      pages: expect.arrayContaining([expect.objectContaining({ route: '/cart' })]),
+      queries: expect.arrayContaining([expect.objectContaining({ query: 'cart' })]),
     });
   });
 

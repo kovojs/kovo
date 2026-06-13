@@ -91,6 +91,7 @@ import {
   GeneratedFixtureTemplateStampHost,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
+  graphFixtureFile,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
 } from '../packages/test/src/graph-fixtures.ts';
@@ -472,7 +473,7 @@ void test('P10 constitution rejects forbidden browser architecture in framework 
 });
 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {
-  const commerceGraph = await projectJsonFile(
+  const commerceGraph = await graphFixtureFile(
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
@@ -2411,7 +2412,7 @@ void test('P5 morph evidence preserves keyed identity and applies fragments', ()
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {
-  const commerceGraph = await projectJsonFile(
+  const commerceGraph = await graphFixtureFile(
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
@@ -2869,7 +2870,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
       },
     };
   };
-  const commerceGraph = await projectJsonFile(
+  const commerceGraph = await graphFixtureFile(
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
@@ -3123,7 +3124,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
-  const commerceGraph = await projectJsonFile(
+  const commerceGraph = await graphFixtureFile(
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
@@ -5500,7 +5501,7 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
-  const commerceGraph = await projectJsonFile(
+  const commerceGraph = await graphFixtureFile(
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
