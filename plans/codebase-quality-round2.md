@@ -108,21 +108,24 @@ Current state: store-only mutation/query/deferred compatibility exports have bee
 narrowed. Visible-return hydration, typed-read refetch, mutation responses, deferred streams, inline
 query events, enhanced submit, broadcast, and hydrated query scripts increasingly share canonical
 parser/apply helpers. Runtime test coverage has started moving out of `index.test.ts` into focused
-query/apply/loader/optimism/morph integration tests.
+query/apply/loader/optimism/morph/delegated-handler integration tests; the broad barrel test is now
+focused on loader installation, inline parity, query hydration, enhanced mutation bridge, and
+disposal smoke coverage.
 
-- [x] Audit for remaining internal compatibility-style apply wrappers after
-      `applyFragmentQueryBody` deletion.
+- [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
+      deletion.
 - [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
 - [ ] Re-run browser runtime tests after each apply/loader surface change.
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/runtime/src/index.test.ts packages/runtime/src/delegated-runtime-integration.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec tsc --noEmit --pretty false`
-- exact `pnpm exec vp check ... packages/runtime/src/... IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/runtime/src/index.test.ts packages/runtime/src/delegated-runtime-integration.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell
@@ -173,8 +176,10 @@ Latest evidence:
 ## Phase 7 - Test Restructuring
 
 Current state: runtime, server static export, compiler shared/model-pipeline, and `@jiso/test`
-fixture tests have been split out of monoliths along module seams. `tests/fw-check.node.mjs` is
-still large but increasingly delegates mechanics to package fixtures and structured facts.
+fixture tests have been split out of monoliths along module seams. Runtime query/apply/broadcast,
+enhanced-submit, and delegated handler integration coverage now lives in focused runtime tests.
+`tests/fw-check.node.mjs` is still large but increasingly delegates mechanics to package fixtures
+and structured facts.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
