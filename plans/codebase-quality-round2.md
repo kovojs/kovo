@@ -220,8 +220,8 @@ local helpers.
 
 Latest broad gate:
 
-- `pnpm run check` passed after the integration wave through `0cac62d`: inline loader check, 782
-  formatted files, 682 lint/typechecked files, and 7 typechecked example/conformance projects.
+- `pnpm run check` passed after the integration wave through `aa195e9`: inline loader check, 784
+  formatted files, 684 lint/typechecked files, and 7 typechecked example/conformance projects.
 
 Focused gates since that broad run:
 
