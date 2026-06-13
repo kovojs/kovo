@@ -19,11 +19,15 @@ import type {
   JisoApp as PublicJisoApp,
   JisoAppShellBuild as PublicJisoAppShellBuild,
   StaticExportOptions as PublicStaticExportOptions,
+  StaticExportOutputPlanOptions as PublicStaticExportOutputPlanOptions,
   VersionedClientModuleRegistry as PublicVersionedClientModuleRegistry,
 } from '../index.js';
 import type { VersionedClientModuleRegistry as ClientModulesVersionedClientModuleRegistry } from './app-shell/client-modules.js';
 import type { JisoApp as CoreJisoApp } from './app-shell/core.js';
-import type { StaticExportOptions as StaticExportStaticExportOptions } from './app-shell/static-export.js';
+import type {
+  StaticExportOptions as StaticExportStaticExportOptions,
+  StaticExportOutputPlanOptions as StaticExportStaticExportOutputPlanOptions,
+} from './app-shell/static-export.js';
 import type { JisoAppShellBuild as ViteJisoAppShellBuild } from './app-shell/vite.js';
 
 describe('server app-shell public API barrels', () => {
@@ -71,6 +75,8 @@ describe('server app-shell public API barrels', () => {
     expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
     expect(appApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
+    expect(appApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
+    expect(publicApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
     expect(publicApi.formatStaticExportDiagnostic).toBe(
       staticExportApi.formatStaticExportDiagnostic,
     );
@@ -87,6 +93,7 @@ describe('server app-shell public API barrels', () => {
     expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
     expect(appShellApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
+    expect(appShellApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
     expect(appShellApi.formatStaticExportDiagnostics).toBe(
       staticExportApi.formatStaticExportDiagnostics,
     );
@@ -119,6 +126,9 @@ describe('server app-shell public API barrels', () => {
       PublicJisoApp extends CoreJisoApp ? true : false,
       PublicJisoAppShellBuild extends ViteJisoAppShellBuild ? true : false,
       PublicStaticExportOptions extends StaticExportStaticExportOptions ? true : false,
+      PublicStaticExportOutputPlanOptions extends StaticExportStaticExportOutputPlanOptions
+        ? true
+        : false,
       PublicVersionedClientModuleRegistry extends ClientModulesVersionedClientModuleRegistry
         ? true
         : false,
@@ -129,9 +139,10 @@ describe('server app-shell public API barrels', () => {
       true,
       true,
       true,
+      true,
     ];
 
-    expect(publicAppShellTypesStayAssignable).toEqual([true, true, true, true]);
+    expect(publicAppShellTypesStayAssignable).toEqual([true, true, true, true, true]);
   });
 
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {
@@ -145,6 +156,9 @@ describe('server app-shell public API barrels', () => {
       staticExportApi.staticExportInventory,
     );
     expect(packageStaticExportApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
+    expect(packageStaticExportApi.staticExportOutputPlan).toBe(
+      staticExportApi.staticExportOutputPlan,
+    );
     expect(packageStaticExportApi.formatStaticExportDiagnostic).toBe(
       staticExportApi.formatStaticExportDiagnostic,
     );
@@ -183,6 +197,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageAppShellApi.StaticExportError).toBe(staticExportApi.StaticExportError);
     expect(packageAppShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
     expect(packageAppShellApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
+    expect(packageAppShellApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
     expect(packageAppShellApi.formatStaticExportDiagnostics).toBe(
       staticExportApi.formatStaticExportDiagnostics,
     );

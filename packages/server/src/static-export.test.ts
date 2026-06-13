@@ -18,6 +18,7 @@ import {
   isStaticExportDiagnosticError,
   staticExportInventory,
   staticExportManifest,
+  staticExportOutputPlan,
   StaticExportError,
 } from './static-export.js';
 
@@ -358,6 +359,73 @@ describe('server static export', () => {
         status: 200,
       },
     ]);
+  });
+
+  it('plans dry-run and write export targets through the same output planner', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-plan-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-plan-assets-'));
+    try {
+      const registry = createMemoryVersionedClientModuleRegistry();
+      const cartHref = registry.put({
+        path: '/c/cart.client.js',
+        source: 'export const cart = "output-plan";',
+        version: 'cart-output-plan',
+      });
+      const cssSource = path.join(sourceDir, 'app.css');
+      await writeFile(cssSource, 'main { display: block; }\n', 'utf8');
+      const assets = [
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/app.css',
+          source: cssSource,
+        },
+      ];
+      const app = createApp({
+        clientModules: registry,
+        routes: [
+          route('/', {
+            modulepreloads: [cartHref],
+            page: () => '<main>Home</main>',
+          }),
+        ],
+      });
+
+      const dryRun = await exportStaticApp(app, { assets });
+      const dryRunPlan = staticExportOutputPlan(dryRun, { outDir: pathToFileURL(outDir) });
+      const writeResult = await exportStaticApp(app, { assets, outDir });
+      const writePlan = staticExportOutputPlan(writeResult, { outDir });
+
+      expect(dryRunPlan).toEqual([
+        {
+          kind: 'route-document',
+          path: '/index.html',
+          targetPath: path.join(outDir, 'index.html'),
+        },
+        {
+          kind: 'client-module',
+          path: '/c/cart.client.js',
+          targetPath: path.join(outDir, 'c', 'cart.client.js'),
+        },
+        {
+          kind: 'static-asset',
+          path: '/assets/app.css',
+          targetPath: path.join(outDir, 'assets', 'app.css'),
+        },
+      ]);
+      expect(writePlan).toEqual(dryRunPlan);
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toBe(
+        writeResult.artifacts[0]?.body,
+      );
+      await expect(readFile(path.join(outDir, 'c', 'cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cart = "output-plan";',
+      );
+      await expect(readFile(path.join(outDir, 'assets', 'app.css'), 'utf8')).resolves.toBe(
+        'main { display: block; }\n',
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
   });
 
   it('builds a stable public static export manifest from directory-index output', async () => {

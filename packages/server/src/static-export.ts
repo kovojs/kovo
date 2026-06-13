@@ -63,6 +63,18 @@ export interface StaticExportResult {
   diagnostics: readonly StaticExportDiagnostic[];
 }
 
+export type StaticExportOutputPlanItemKind = 'client-module' | 'route-document' | 'static-asset';
+
+export interface StaticExportOutputPlanItem {
+  kind: StaticExportOutputPlanItemKind;
+  path: string;
+  targetPath: string;
+}
+
+export interface StaticExportOutputPlanOptions {
+  outDir: string | URL;
+}
+
 export async function exportStaticApp(
   app: JisoApp,
   options: StaticExportOptions = {},
@@ -110,7 +122,7 @@ export async function exportStaticApp(
     routeArtifacts: artifacts,
   });
   const assets = staticExportAssetArtifacts(options.assets ?? []);
-  assertStaticExportOutputPlan({
+  const outputPlan = createStaticExportOutputPlan({
     artifacts,
     assets,
     clientModules,
@@ -118,7 +130,7 @@ export async function exportStaticApp(
   });
 
   if (options.outDir !== undefined) {
-    await writeStaticExportOutput({ artifacts, assets, clientModules, outDir: options.outDir });
+    await writeStaticExportOutput(outputPlan);
   }
 
   return { artifacts, assets, clientModules, diagnostics };
@@ -126,31 +138,55 @@ export async function exportStaticApp(
 
 const STATIC_EXPORT_DRY_RUN_ROOT = '/__jiso_static_export_plan__';
 
-interface StaticExportOutputPlan {
+interface StaticExportOutputArtifacts {
   artifacts: readonly StaticExportArtifact[];
   assets: readonly StaticExportAssetArtifact[];
   clientModules: readonly StaticExportClientModuleArtifact[];
-  outDir: string | URL;
 }
 
-async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {
+interface StaticExportOutputPlan extends StaticExportOutputArtifacts {
+  outDir: string | URL;
+  root: string;
+  writes: readonly StaticExportPlannedWrite[];
+}
+
+export function staticExportOutputPlan(
+  result: Pick<StaticExportResult, 'artifacts' | 'assets' | 'clientModules'>,
+  options: StaticExportOutputPlanOptions,
+): StaticExportOutputPlanItem[] {
+  // SPEC §9.5: dry-run export task wiring must inspect the same target files
+  // that a write export would publish, without reimplementing path planning.
+  return createStaticExportOutputPlan({
+    artifacts: result.artifacts,
+    assets: result.assets,
+    clientModules: result.clientModules,
+    outDir: options.outDir,
+  }).writes.map((write) => ({
+    kind: write.itemKind,
+    path: write.diagnosticPath,
+    targetPath: write.targetPath,
+  }));
+}
+
+function createStaticExportOutputPlan(
+  plan: StaticExportOutputArtifacts & Pick<StaticExportOutputPlan, 'outDir'>,
+): StaticExportOutputPlan {
   const root = path.resolve(plan.outDir instanceof URL ? fileURLToPath(plan.outDir) : plan.outDir);
   const writes = staticExportPlannedWrites(plan, root);
 
+  return { ...plan, root, writes };
+}
+
+async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {
   for (const artifact of plan.assets) {
     await assertReadableStaticExportAssetSource(artifact);
   }
 
-  await Promise.all(writes.map((write) => write.write()));
-}
-
-function assertStaticExportOutputPlan(plan: StaticExportOutputPlan): void {
-  const root = path.resolve(plan.outDir instanceof URL ? fileURLToPath(plan.outDir) : plan.outDir);
-  staticExportPlannedWrites(plan, root);
+  await Promise.all(plan.writes.map((write) => write.write()));
 }
 
 function staticExportPlannedWrites(
-  plan: Omit<StaticExportOutputPlan, 'outDir'>,
+  plan: StaticExportOutputArtifacts,
   root: string,
 ): StaticExportPlannedWrite[] {
   const writes: StaticExportPlannedWrite[] = [];
@@ -159,6 +195,7 @@ function staticExportPlannedWrites(
     const targetPath = staticExportArtifactTargetPath(root, artifact.path);
     writes.push({
       diagnosticPath: artifact.path,
+      itemKind: 'route-document',
       kind: 'route document',
       targetPath,
       write: async () => writeTextStaticExportFile(artifact.body, targetPath),
@@ -169,6 +206,7 @@ function staticExportPlannedWrites(
     const targetPath = staticExportClientModuleTargetPath(root, artifact.path);
     writes.push({
       diagnosticPath: artifact.path,
+      itemKind: 'client-module',
       kind: 'client module',
       targetPath,
       write: async () => writeTextStaticExportFile(artifact.body, targetPath),
@@ -179,6 +217,7 @@ function staticExportPlannedWrites(
     const targetPath = staticExportAssetTargetPath(root, artifact.path);
     writes.push({
       diagnosticPath: artifact.path,
+      itemKind: 'static-asset',
       kind: 'static asset',
       targetPath,
       write: async () => copyStaticExportAsset(artifact.source, targetPath),
@@ -237,6 +276,7 @@ async function copyStaticExportAsset(source: string, targetPath: string): Promis
 
 interface StaticExportPlannedWrite {
   diagnosticPath: string;
+  itemKind: StaticExportOutputPlanItemKind;
   kind: string;
   targetPath: string;
   write(): Promise<void>;

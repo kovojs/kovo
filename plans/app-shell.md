@@ -127,6 +127,16 @@ Round86b app-shell consumer manifest evidence:
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
 - `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
 
+Round86c app-shell static export output-plan evidence:
+
+- `staticExportOutputPlan()` exposes the route document, `/c/` module, and static asset target
+  files that a write export would publish, and `exportStaticApp()` now validates dry-run and write
+  exports through the same planned-write object before any bytes are written.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
