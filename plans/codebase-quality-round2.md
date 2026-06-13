@@ -938,6 +938,8 @@ limited to model-changing passes and diagnostics instead of an unused emit-only 
 contract.
 The terminal emit patch helper now returns the patched source string directly instead of a one-field
 compatibility result wrapper.
+The terminal emit patch helper no longer accepts model-patch prefix options; generated prefixes
+remain confined to the model-changing pass that reparses and carries offset maps.
 Static navigation lowerers now return source-patch arrays directly instead of one-field
 compatibility result wrappers.
 Server-render lowering now returns source-patch arrays directly instead of a one-field
@@ -958,6 +960,11 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Terminal emit patch prefix option deletion: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/stamps.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact
+  `pnpm exec vp check packages/compiler/src/model-pipeline.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Template stamp render-segment lowering: `pnpm exec vitest --run
 packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
 packages/compiler/src/query-bindings.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact

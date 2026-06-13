@@ -16,7 +16,7 @@ interface ComponentPipelinePatchResult<Model> {
   state: ComponentPipelineState<Model>;
 }
 
-interface ComponentPipelinePatchOptions {
+interface ComponentModelPatchOptions {
   prefix?: string;
 }
 
@@ -32,7 +32,7 @@ export function lowerComponentPipelinePatches<Model>(
   previous: ComponentPipelineState<Model>,
   replacements: readonly SourceReplacement[],
   parse: (fileName: string, source: string) => Model,
-  options: ComponentPipelinePatchOptions = {},
+  options: ComponentModelPatchOptions = {},
 ): ComponentPipelinePatchResult<Model> {
   const patch = applySourceReplacementsWithOffsetMap(
     previous.source,
@@ -53,7 +53,6 @@ export function lowerComponentPipelinePatches<Model>(
 export function applyComponentPipelineEmitPatches(
   previous: Pick<ComponentPipelineState<unknown>, 'source'>,
   replacements: readonly SourceReplacement[],
-  options: ComponentPipelinePatchOptions = {},
 ): string {
-  return `${options.prefix ?? ''}${applySourceReplacements(previous.source, replacements)}`;
+  return applySourceReplacements(previous.source, replacements);
 }
