@@ -387,6 +387,12 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Detached receiver method alias calls now stay bound to the resolved ts-morph alias symbol when
+  available; same-name shadow bindings no longer fall back to source-name compatibility and
+  fabricate FW406 diagnostics. Evidence: `packages/drizzle/src/static.ts`,
+  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
+  `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

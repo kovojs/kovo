@@ -577,6 +577,10 @@ describe('Drizzle pinned subset conformance', () => {
                 const { execute, query: relations } = db;
                 const fakeExecute = fake.execute;
                 await execute('select 1');
+                {
+                  const execute = fake.execute;
+                  await execute('select 1');
+                }
                 await fakeExecute('select 1');
                 return relations.products.findMany();
               },

@@ -6138,6 +6138,38 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not mark shadowed source detached receiver method aliases', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export async function syncUsers(db, fake) {',
+          '  const { execute } = db;',
+          '  {',
+          '    const execute = fake.execute;',
+          '    await execute("select 1");',
+          '  }',
+          '  await execute("select 1");',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks static element-access raw and relational receiver calls as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

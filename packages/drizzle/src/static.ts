@@ -4482,10 +4482,10 @@ function receiverMethodAliasName(
   if (!Node.isIdentifier(identifier)) return undefined;
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(identifier));
-  return (
-    (symbolKey ? aliases.symbols.get(symbolKey) : undefined) ??
-    aliases.names.get(identifier.getText())
-  );
+  // SPEC §11.1: detached receiver aliases are symbol facts when parser identity is available;
+  // same-name shadow bindings must not fall back to source-name compatibility.
+  if (symbolKey) return aliases.symbols.get(symbolKey);
+  return aliases.names.get(identifier.getText());
 }
 
 interface ReceiverMethodAliases {
