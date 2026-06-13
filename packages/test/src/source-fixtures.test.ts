@@ -13,6 +13,7 @@ import {
   projectFilePaths,
   projectFileSources,
   projectJsonFile,
+  projectPackageManifestFacts,
   projectSourceLineFacts,
   projectSourceSiteFact,
   projectSourceSiteFacts,
@@ -117,6 +118,7 @@ describe('@jiso/test source fixture seam', () => {
       await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
       await mkdir(join(root, 'packages/runtime/docs'), { recursive: true });
       await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
+      await writeFile(join(root, 'packages/compiler/package.json'), '{}');
       await writeFile(join(root, 'packages/runtime/package.json'), '{"name":"@jiso/runtime"}');
       await writeFile(join(root, 'packages/runtime/src/index.ts'), 'export const runtime = true;');
       await writeFile(join(root, 'packages/runtime/docs/readme.md'), '# Runtime');
@@ -145,6 +147,16 @@ describe('@jiso/test source fixture seam', () => {
       expect(await projectJsonFile(root, 'packages/runtime/package.json')).toEqual({
         name: '@jiso/runtime',
       });
+      expect(await projectPackageManifestFacts({ rootPath: root, directory: 'packages' })).toEqual([
+        {
+          directory: 'compiler',
+          manifest: {},
+        },
+        {
+          directory: 'runtime',
+          manifest: { name: '@jiso/runtime' },
+        },
+      ]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

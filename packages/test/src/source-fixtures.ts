@@ -27,6 +27,13 @@ export interface ProjectFileSourceFact {
   source: string;
 }
 
+export interface ProjectPackageManifestFact<
+  T = { name?: unknown; scripts?: Record<string, unknown> },
+> {
+  directory: string;
+  manifest: T;
+}
+
 export interface ForbiddenBrowserArchitectureFact {
   column: number;
   fileName: string;
@@ -155,6 +162,21 @@ export async function projectFileSources(
 
 export async function projectJsonFile<T = unknown>(rootPath: string, path: string): Promise<T> {
   return JSON.parse(await readFile(join(rootPath, path), 'utf8')) as T;
+}
+
+export async function projectPackageManifestFacts<
+  T extends { name?: unknown; scripts?: Record<string, unknown> } = {
+    name?: unknown;
+    scripts?: Record<string, unknown>;
+  },
+>(options: ProjectFileTreeOptions): Promise<ProjectPackageManifestFact<T>[]> {
+  const directories = await projectDirectoryNames(options);
+  return Promise.all(
+    directories.map(async (directory) => ({
+      directory: directory.slice(`${options.directory}/`.length),
+      manifest: await projectJsonFile<T>(options.rootPath, `${directory}/package.json`),
+    })),
+  );
 }
 
 export function forbiddenBrowserArchitectureFacts(

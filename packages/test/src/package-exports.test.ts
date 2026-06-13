@@ -19,6 +19,7 @@ import {
   commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
+  conformanceGateFacts,
   loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
@@ -32,6 +33,7 @@ import {
   vpRunTaskName,
   workflowVpRunTaskNames,
   workflowStepCommands,
+  type ConformanceGateFacts,
   type CommandInvocation,
   type NodeTaskCommand,
   type PnpmFilterTestCommand,
@@ -208,12 +210,14 @@ import {
   projectFilePaths,
   projectFileSources,
   projectJsonFile,
+  projectPackageManifestFacts,
   projectSourceLineFacts,
   projectSourceSiteFact,
   type CssScopeRuleFact,
   type ForbiddenBrowserArchitectureFact,
   type ProjectFileSourceFact,
   type ProjectFileTreeOptions,
+  type ProjectPackageManifestFact,
   type ProjectSourceLineFact,
   type ProjectSourceSiteFact,
 } from '@jiso/test/source-fixtures';
@@ -431,11 +435,13 @@ describe('@jiso/test package subpath exports', () => {
     expect(projectFilePaths).toBeTypeOf('function');
     expect(projectFileSources).toBeTypeOf('function');
     expect(projectJsonFile).toBeTypeOf('function');
+    expect(projectPackageManifestFacts).toBeTypeOf('function');
     expect(projectSourceLineFacts).toBeTypeOf('function');
     expect(projectSourceSiteFact('examples/commerce/src/app.ts:7')).toEqual({
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expectTypeOf<ProjectPackageManifestFact>().toHaveProperty('directory').toEqualTypeOf<string>();
     expect(graphFixtureFile).toBeTypeOf('function');
     expectTypeOf<ProjectGraphFixture>().toMatchTypeOf<Record<string, unknown>>();
     expect(touchGraphProvenanceFact).toBeTypeOf('function');
@@ -643,6 +649,8 @@ describe('@jiso/test package subpath exports', () => {
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
     expect(workflowVpRunTaskNames('steps:\n  - run: vp run fw-check')).toEqual(['fw-check']);
     expect(() => assertOrderedItems(['build', 'fw-check'], 'build', 'fw-check')).not.toThrow();
+    expect(conformanceGateFacts).toBeTypeOf('function');
+    expectTypeOf<ConformanceGateFacts>().toHaveProperty('taskName').toEqualTypeOf<string>();
     expect(loadVitePlusConfig).toBeTypeOf('function');
     expect(vitePlusAcceptanceTaskFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputFacts).toBeTypeOf('function');

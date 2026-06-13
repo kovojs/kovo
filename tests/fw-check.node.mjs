@@ -51,11 +51,9 @@ import {
   assertOrderedItems,
   commandOutputLines,
   commandSequenceWithoutLast,
+  conformanceGateFacts,
   nodeTaskCommand,
   loadVitePlusConfig,
-  pnpmFilterTestCommands,
-  pnpmRunScriptNames,
-  requiredVpRunTaskName,
   vitePlusAcceptanceTaskFacts,
   vitePlusTaskInputFacts,
   vitePlusTaskInputPatternEndingWith,
@@ -121,9 +119,9 @@ import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
   cssScopeRules,
   forbiddenBrowserArchitectureFacts,
-  projectDirectoryNames,
   projectFileSources,
   projectJsonFile,
+  projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
 import { touchGraphProvenanceFact } from '../packages/test/src/touch-graph-fixtures.ts';
 import {
@@ -5602,19 +5600,10 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
 });
 
 void test('Conformance suites are an explicit gate', async () => {
-  const conformanceDirectories = await projectDirectoryNames({
+  const conformancePackages = await projectPackageManifestFacts({
     rootPath: projectRootPath,
     directory: 'conformance',
   });
-  const conformancePackages = await Promise.all(
-    conformanceDirectories.map(async (directory) => ({
-      directory: directory.slice('conformance/'.length),
-      manifest: await projectJsonFile(projectRootPath, `${directory}/package.json`),
-    })),
-  );
-  const conformanceManifestsByName = new Map(
-    conformancePackages.map(({ manifest }) => [manifest.name, manifest]),
-  );
   const expectedConformancePackages = {
     'app-shell-spike': '@jiso/conformance-app-shell-spike',
     'auth-spike': '@jiso/conformance-auth-spike',
@@ -5623,36 +5612,34 @@ void test('Conformance suites are an explicit gate', async () => {
     'webhook-spike': '@jiso/conformance-webhook-spike',
   };
 
+  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
+  const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
+  const conformanceFacts = conformanceGateFacts({
+    expectedPackages: expectedConformancePackages,
+    packageJson,
+    packages: conformancePackages,
+    scriptName: 'test:conformance',
+    viteConfig: { run: { tasks: viteTasks } },
+  });
   assert.deepEqual(
-    conformancePackages.map(({ directory, manifest }) => [directory, manifest.name]),
+    conformanceFacts.packageEntries,
     Object.entries(expectedConformancePackages),
     'conformance gate covers the expected suite families',
   );
-  for (const { directory, manifest } of conformancePackages) {
-    assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
-  }
-  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
-  const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
-  const conformanceTaskName = requiredVpRunTaskName('test:conformance', packageJson);
-  const conformanceTask = viteTasks[conformanceTaskName];
-  assert.ok(conformanceTask, `${conformanceTaskName} task is defined`);
-  const conformanceTaskCommands = pnpmFilterTestCommands(conformanceTask.command);
+  assert.equal(conformanceFacts.everyPackageHasTestScript, true);
   assert.equal(
-    conformanceTaskCommands.every((entry) => entry.script === 'test'),
+    conformanceFacts.everyCommandRunsTest,
     true,
     'conformance task runs package tests through pnpm filters',
   );
-  assert.equal(
-    pnpmRunScriptNames(packageJson.scripts.acceptance).includes('test:conformance'),
-    true,
-  );
+  assert.equal(conformanceFacts.presentInAcceptance, true);
   assert.deepEqual(
-    conformanceTaskCommands
+    conformanceFacts.commands
       .map((entry) => entry.packageName)
       .toSorted((left, right) => left.localeCompare(right)),
-    [...conformanceManifestsByName.keys()].toSorted((left, right) => left.localeCompare(right)),
+    conformanceFacts.packageNames,
   );
-  assert.deepEqual(conformanceTask.input, [
+  assert.deepEqual(conformanceFacts.inputFacts, [
     { auto: true },
     { pattern: 'conformance/**/package.json', base: 'workspace' },
     { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
@@ -5662,6 +5649,7 @@ void test('Conformance suites are an explicit gate', async () => {
     { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
     { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
   ]);
+  const conformanceTask = viteTasks[conformanceFacts.taskName];
   const executedTask = await runPnpmFilterTaskCommand(
     conformanceTask.command,
     conformancePackages,
@@ -5675,7 +5663,7 @@ void test('Conformance suites are an explicit gate', async () => {
   );
   assert.deepEqual(
     commandOutputLines(executedTask.output),
-    conformanceTaskCommands.map((entry) => `pnpm-filter-test ${entry.packageName}`),
+    conformanceFacts.commands.map((entry) => `pnpm-filter-test ${entry.packageName}`),
   );
 
   const missingPackageCommand = commandSequenceWithoutLast(conformanceTask.command);

@@ -56,6 +56,23 @@ export interface VitePlusAcceptanceTaskFacts {
   taskName: string;
 }
 
+export interface PackageManifestFact {
+  directory: string;
+  manifest: { name?: unknown; scripts?: Record<string, unknown> };
+}
+
+export interface ConformanceGateFacts {
+  commands: PnpmFilterTestCommand[];
+  everyCommandRunsTest: boolean;
+  everyPackageHasTestScript: boolean;
+  expectedPackages: Record<string, string>;
+  inputFacts: VitePlusTaskInputFact[];
+  packageEntries: Array<[string, unknown]>;
+  packageNames: string[];
+  presentInAcceptance: boolean;
+  taskName: string;
+}
+
 function requireString(value: unknown, message: string): string {
   if (typeof value !== 'string') assert.fail(message);
   return value;
@@ -146,6 +163,41 @@ export function vitePlusAcceptanceTaskFacts(options: {
     presentInCi: ciTaskNames.includes(taskName),
     scriptName: options.scriptName,
     task,
+    taskName,
+  };
+}
+
+export function conformanceGateFacts(options: {
+  expectedPackages: Record<string, string>;
+  packageJson: { scripts?: Record<string, unknown> };
+  packages: readonly PackageManifestFact[];
+  scriptName: string;
+  viteConfig: VitePlusConfig;
+}): ConformanceGateFacts {
+  const taskName = requiredVpRunTaskName(options.scriptName, options.packageJson);
+  const task = options.viteConfig.run?.tasks?.[taskName];
+  assert.ok(task, `${taskName} task is defined`);
+  const commands = pnpmFilterTestCommands(task.command);
+  const packageNames = options.packages.map(({ manifest }) => {
+    if (typeof manifest.name !== 'string') {
+      assert.fail('conformance package manifest has a name');
+    }
+    return manifest.name;
+  });
+
+  return {
+    commands,
+    everyCommandRunsTest: commands.every((entry) => entry.script === 'test'),
+    everyPackageHasTestScript: options.packages.every(({ manifest }) =>
+      Boolean(manifest.scripts?.test),
+    ),
+    expectedPackages: options.expectedPackages,
+    inputFacts: vitePlusTaskInputFacts(task),
+    packageEntries: options.packages.map(({ directory, manifest }) => [directory, manifest.name]),
+    packageNames: packageNames.toSorted((left, right) => left.localeCompare(right)),
+    presentInAcceptance: pnpmRunScriptNames(options.packageJson.scripts?.acceptance).includes(
+      options.scriptName,
+    ),
     taskName,
   };
 }

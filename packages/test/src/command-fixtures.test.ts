@@ -5,6 +5,7 @@ import {
   commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
+  conformanceGateFacts,
   loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
@@ -203,5 +204,65 @@ describe('@jiso/test command fixtures', () => {
     expect(vitePlusTaskInputPatternEndingWith(facts.task, '/browser-acceptance.mjs')).toBe(
       'scripts/browser-acceptance.mjs',
     );
+  });
+
+  it('collects conformance gate facts without local fw-check package parsers', () => {
+    const facts = conformanceGateFacts({
+      expectedPackages: {
+        'auth-spike': '@jiso/conformance-auth-spike',
+        'webhook-spike': '@jiso/conformance-webhook-spike',
+      },
+      packageJson: {
+        scripts: {
+          acceptance: 'pnpm run test:conformance && pnpm run check:fw',
+          'test:conformance': 'vp run conformance',
+        },
+      },
+      packages: [
+        {
+          directory: 'auth-spike',
+          manifest: { name: '@jiso/conformance-auth-spike', scripts: { test: 'vitest --run' } },
+        },
+        {
+          directory: 'webhook-spike',
+          manifest: { name: '@jiso/conformance-webhook-spike', scripts: { test: 'vitest --run' } },
+        },
+      ],
+      scriptName: 'test:conformance',
+      viteConfig: {
+        run: {
+          tasks: {
+            conformance: {
+              command:
+                'pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test',
+              input: [
+                { auto: true },
+                { pattern: 'conformance/**/package.json', base: 'workspace' },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(facts).toMatchObject({
+      everyCommandRunsTest: true,
+      everyPackageHasTestScript: true,
+      packageEntries: [
+        ['auth-spike', '@jiso/conformance-auth-spike'],
+        ['webhook-spike', '@jiso/conformance-webhook-spike'],
+      ],
+      packageNames: ['@jiso/conformance-auth-spike', '@jiso/conformance-webhook-spike'],
+      presentInAcceptance: true,
+      taskName: 'conformance',
+    });
+    expect(facts.commands.map(({ packageName }) => packageName)).toEqual([
+      '@jiso/conformance-auth-spike',
+      '@jiso/conformance-webhook-spike',
+    ]);
+    expect(facts.inputFacts).toEqual([
+      { auto: true },
+      { base: 'workspace', pattern: 'conformance/**/package.json' },
+    ]);
   });
 });

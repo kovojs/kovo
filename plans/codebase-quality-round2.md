@@ -45,6 +45,8 @@ facts, and structured `fw-check/v1` result facts. Shared `@jiso/test/html-fragme
 form-field maps, keyed-element projections, and response-body query/fragment/stylesheet/key
 summaries for commerce app/source-truth tests. Shared markdown fixtures now own SPEC rule-title
 canonicalization for doc gates, so `tests/fw-check.node.mjs` no longer keeps that local normalizer.
+Shared source/command fixtures now own conformance package manifest and Vite+ gate projections for
+the conformance fw-check case.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -81,6 +83,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 2 - Compiler IR
 
@@ -481,6 +488,8 @@ Latest evidence:
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - exact `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 7 - Test Restructuring
@@ -497,7 +506,8 @@ local helpers; commerce source-truth matrix projection now lives in
 `tests/fw-check.node.mjs`. Commerce app-shell tests now consume shared `@jiso/test/html-fragment`
 selected-element counts and named query JSON projections instead of local response-body/shell
 parsing helpers. `fw-check` doc-gate rule-title canonicalization now lives in
-`@jiso/test/markdown-fixtures`.
+`@jiso/test/markdown-fixtures`. The fw-check conformance gate now consumes shared source and command
+fixtures for package manifest, acceptance script, Vite+ task, and pnpm-filter command facts.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -506,6 +516,9 @@ parsing helpers. `fw-check` doc-gate rule-title canonicalization now lives in
 Latest evidence:
 
 - `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
 - `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`
 
 ## Current Gates
