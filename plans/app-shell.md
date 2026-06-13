@@ -522,6 +522,12 @@ Round124 app-shell Vite client-module output evidence:
   export/output orchestration.
 - `packages/server/src/index.ts` exports app-shell owner subpaths directly instead of routing the
   root package through the app-shell aggregate barrel.
+- `packages/server/src/index.ts` now keeps only root static-export compatibility required by the
+  CLI (`exportStaticApp` plus type-only contracts), while app-shell core/node/client-module/Vite
+  helpers resolve through the public `@jiso/server/app-shell/*` subpaths.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/static-export.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`

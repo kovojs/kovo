@@ -420,6 +420,10 @@ The root `@jiso/server` app-shell compatibility surface now star-forwards direct
 public app-shell owner subpaths instead of duplicating a manual symbol inventory; the public API
 test compares local/package app-shell aggregate values and root aliases so split-owner drift is
 observable through module behavior.
+The root `@jiso/server` app-shell compatibility surface is now narrowed to the CLI's static export
+entry point plus type-only static-export/app contracts; app-shell core, node, client-module, Vite,
+manifest, diagnostic, and output-plan helpers resolve only through `@jiso/server/app-shell/*`
+subpaths.
 The `@jiso/server/app-shell/static-export` subpath now forwards diagnostics, manifest/inventory,
 and output-plan helpers from their split owners instead of routing those names through the
 aggregate `static-export.ts` facade.
@@ -445,6 +449,9 @@ targets, so R6 dry-run preview/export introspection cannot be mistaken for an ou
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
