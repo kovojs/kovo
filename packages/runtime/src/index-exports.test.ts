@@ -62,7 +62,6 @@ import {
   applyQueryChunksToRuntime,
   createQueryScriptHydrationLedger,
   hydrateQueryScripts,
-  queryScriptsFromRoot,
 } from './query-apply.js';
 import {
   applyInlineQueryEventToRuntime,
@@ -138,7 +137,6 @@ describe('runtime root exports', () => {
     expect(runtime.applyQueryChunksToRuntime).toBe(applyQueryChunksToRuntime);
     expect(runtime.createQueryScriptHydrationLedger).toBe(createQueryScriptHydrationLedger);
     expect(runtime.hydrateQueryScripts).toBe(hydrateQueryScripts);
-    expect(runtime.queryScriptsFromRoot).toBe(queryScriptsFromRoot);
     expect(runtime.applyInlineQueryEventToRuntime).toBe(applyInlineQueryEventToRuntime);
     expect(runtime.installInlineQueryEventHydration).toBe(installInlineQueryEventHydration);
     expect(runtime.refetchQueries).toBe(refetchQueries);
@@ -146,5 +144,6 @@ describe('runtime root exports', () => {
     expect(runtime.derive).toBe(derive);
     expect(Object.hasOwn(runtime, 'applyQueryChunkToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyQueryChunksToStore')).toBe(false);
+    expect(Object.hasOwn(runtime, 'queryScriptsFromRoot')).toBe(false);
   });
 });

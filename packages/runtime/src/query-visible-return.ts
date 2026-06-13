@@ -1,8 +1,12 @@
 import { definedProps } from './defined-props.js';
-import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
+import type {
+  ListenerTargetLike,
+  OptionalQuerySelectorAllRootLike,
+  VisibilityStateLike,
+} from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
-import { createQueryScriptHydrationLedger, queryScriptsFromRoot } from './query-apply.js';
-import type { QueryScriptRootLike } from './query-apply.js';
+import { createQueryScriptHydrationLedger } from './query-apply.js';
+import type { QueryScriptLike } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { refetchQueries } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
@@ -14,7 +18,10 @@ export interface RefetchQueryLedger {
 }
 
 export interface QueryVisibleReturnRefetchRoot
-  extends ListenerTargetLike<unknown>, QueryScriptRootLike, VisibilityStateLike {}
+  extends
+    ListenerTargetLike<unknown>,
+    OptionalQuerySelectorAllRootLike<QueryScriptLike>,
+    VisibilityStateLike {}
 
 export interface QueryVisibleReturnRefetchOptions {
   onError?: (error: unknown) => void;
@@ -59,6 +66,10 @@ export function createRefetchQueryLedger(
     },
     remember,
   };
+}
+
+function queryScriptsFromRoot(root: QueryVisibleReturnRefetchRoot): Iterable<QueryScriptLike> {
+  return (root.querySelectorAll?.('script[fw-query]') ?? []) as Iterable<QueryScriptLike>;
 }
 
 export function installQueryVisibleReturnRefetch(

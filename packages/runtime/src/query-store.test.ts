@@ -5,7 +5,6 @@ import {
   applyQueryChunksToRuntime,
   createQueryScriptHydrationLedger,
   hydrateQueryScripts,
-  queryScriptsFromRoot,
 } from './query-apply.js';
 import { createQueryStore } from './query-store.js';
 
@@ -252,21 +251,6 @@ describe('query store hydration and refetch', () => {
     expect(cartPlan).toHaveBeenCalledTimes(1);
     expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
     expect(onError).toHaveBeenCalledTimes(1);
-  });
-
-  it('discovers hydrated query scripts through the shared root selector helper', () => {
-    const root = new FakeRoot();
-    const script = {
-      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
-      textContent: '{"count":1}',
-    };
-
-    root.scripts = [script];
-
-    // SPEC.md §9.4: loader hydration and later visible-return scans must use
-    // the same fw-query script discovery contract.
-    expect([...queryScriptsFromRoot(root)]).toEqual([script]);
-    expect([...queryScriptsFromRoot({})]).toEqual([]);
   });
 
   it('applies query chunks through one canonical runtime batch with interposed values', () => {

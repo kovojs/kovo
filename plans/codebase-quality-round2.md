@@ -121,6 +121,20 @@ with same-session file/test evidence.
       pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-store.test.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/query-events.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
       git diff --check
       ```
+      Round106 evidence 2026-06-13: `queryScriptsFromRoot` and `QueryScriptRootLike` were
+      removed from the runtime public barrel and from `packages/runtime/src/query-apply.ts`
+      exports; visible-return hydration now owns root `script[fw-query]` discovery privately
+      while public hydration remains on `hydrateQueryScripts` and
+      `createQueryScriptHydrationLedger`. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index-exports.test.ts
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md
+      git diff --check
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

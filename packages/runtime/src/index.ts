@@ -136,14 +136,12 @@ export {
   applyQueryChunksToRuntime,
   createQueryScriptHydrationLedger,
   hydrateQueryScripts,
-  queryScriptsFromRoot,
 } from './query-apply.js';
 export type {
   ApplyQueryChunksToRuntimeOptions,
   QueryScriptHydrationLedger,
   QueryScriptHydrationOptions,
   QueryScriptLike,
-  QueryScriptRootLike,
 } from './query-apply.js';
 export {
   applyInlineQueryEventToRuntime,

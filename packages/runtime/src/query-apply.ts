@@ -1,5 +1,4 @@
 import { definedProps } from './defined-props.js';
-import type { OptionalQuerySelectorAllRootLike } from './dom-like.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import {
   applyCompiledQueryUpdatePlan,
@@ -18,8 +17,6 @@ import { readQueryScriptChunks } from './wire-parser.js';
 import type { QueryChunk, QueryScriptChunkLike } from './wire-parser.js';
 
 export interface QueryScriptLike extends QueryScriptChunkLike {}
-
-export type QueryScriptRootLike = OptionalQuerySelectorAllRootLike<unknown>;
 
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
@@ -109,10 +106,6 @@ export function hydrateQueryScripts(
       root: options.root,
     }),
   });
-}
-
-export function queryScriptsFromRoot(root: QueryScriptRootLike): Iterable<QueryScriptLike> {
-  return (root.querySelectorAll?.('script[fw-query]') ?? []) as Iterable<QueryScriptLike>;
 }
 
 export function createQueryScriptHydrationLedger(
