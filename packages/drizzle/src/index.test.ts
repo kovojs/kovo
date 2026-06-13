@@ -2506,6 +2506,54 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks local query-loader helpers receiving carrier aliases as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+            '}',
+            '',
+            'function runReport(context: unknown): Promise<unknown[]> {',
+            '  return Promise.resolve([]);',
+            '}',
+            '',
+            'export const productQuery = query("product/local-carrier-helper", {',
+            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '    const context = { db };',
+            '    const fakeContext = { db: fake };',
+            '    await runReport(fakeContext);',
+            '    return runReport(context);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to local helper runReport().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+        ],
+        query: 'product/local-carrier-helper',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('folds local query-loader helper reads into query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -4769,6 +4817,49 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project local helpers receiving typed Drizzle carrier aliases as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '}',
+            '',
+            'function writeAudit(context: unknown): Promise<void> {',
+            '  return Promise.resolve(context);',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase, fake: FakeDb) {',
+            '  const context = { db };',
+            '  const fakeContext = { db: fake };',
+            '  await writeAudit(fakeContext);',
+            '  await writeAudit(context);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:15',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks project unknown direct receiver methods only for typed Drizzle symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -5533,6 +5624,37 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:3',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks source local helpers receiving ambiguous receiver parameters as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'async function writeAudit(client, productId) {',
+          '  return Promise.resolve({ client, productId });',
+          '}',
+          '',
+          'export async function addItem(db, productId) {',
+          '  await writeAudit(db, productId);',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
           },
         ],
       },

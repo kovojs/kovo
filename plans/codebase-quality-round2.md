@@ -287,6 +287,12 @@ Closed evidence so far:
   Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Opaque local helper calls that receive proven Drizzle receivers directly or through body-local
+  carrier aliases now degrade to FW406 when the helper's receiver parameters cannot be folded
+  under the typed receiver proof rules; fake project-mode carrier aliases remain invisible.
+  Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

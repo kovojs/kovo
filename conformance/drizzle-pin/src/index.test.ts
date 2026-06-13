@@ -457,6 +457,54 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins local query-loader helper carrier aliases as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+            '}',
+            '',
+            'function runReport(context: unknown): Promise<unknown[]> {',
+            '  return Promise.resolve([]);',
+            '}',
+            '',
+            "export const productQuery = query('product/local-carrier-helper', {",
+            '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '    const context = { db };',
+            '    const fakeContext = { db: fake };',
+            '    await runReport(fakeContext);',
+            '    return runReport(context);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to local helper runReport().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:11',
+          },
+        ],
+        query: 'product/local-carrier-helper',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('pins query-loader receiver symbols without shadowed lookalike facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1442,6 +1490,49 @@ describe('Drizzle pinned subset conformance', () => {
         },
       ],
       unresolved: [],
+    });
+  });
+
+  it('pins opaque local helper Drizzle carrier aliases as FW406 under real imports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '}',
+            '',
+            'function writeAudit(context: unknown): Promise<void> {',
+            '  return Promise.resolve(context);',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  const context = { db };',
+            '  const fakeContext = { db: fake };',
+            '  await writeAudit(fakeContext);',
+            '  await writeAudit(context);',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:15',
+          },
+        ],
+      },
     });
   });
 
