@@ -208,6 +208,13 @@ receipt-file doubles inline.
 
 Latest evidence:
 
+- Broad mini-wave gate after runtime/app-shell/harness/Drizzle/UI integrations:
+  `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
+  `pnpm run test:conformance`; `pnpm run check:build`. Evidence: main worktree through
+  `fe7e2692` passed 844 formatted files, 744 lint/typechecked files, 7 typechecked
+  example/conformance projects, 248 test files / 2475 tests, 5 browser files / 16 tests,
+  Drizzle/Better Auth/auth/webhook/app-shell conformance suites, and production build / emit
+  checks.
 - Phase 5 Vite manifest/asset helper public boundary slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`;
