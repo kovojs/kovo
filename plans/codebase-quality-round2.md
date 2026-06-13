@@ -79,6 +79,10 @@ Closed evidence so far:
 - The inline loader enhanced-form evidence now uses an internally consistent enhanced-form fixture
   (`closest()` selector match plus `getAttribute('enhance')`), so the assertion proves submit
   behavior against the loader's public form-detection contract instead of a stale test double.
+- `tests/fw-check.node.mjs` no longer executes the generated commerce `touch-graph.ts` source in
+  the P4 gate; the test delegates freshness to `examples/commerce/scripts/emit-graph.mjs --check`
+  and then proves the committed graph through `fw-check`, `fw explain query cart`, and registry
+  invalidation facts.
 
 Open:
 
@@ -102,6 +106,10 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P3 server renders initial query scripts|P2 compiler merges view transition stamps|P3 typed routes validate navigation targets|D1 commerce enhanced fragments carry Tailwind stylesheet hints|P10 starter wires graph assertions into CI|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite|D3 deferred stream responses are consumed by the runtime|P1 typed data param coercion|P1 render-equivalence gate" tests/fw-check.node.mjs`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/test-fixtures.ts packages/test/src/harness-operations.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 2 - Compiler IR
 
@@ -497,6 +505,12 @@ Closed evidence so far:
 - `@jiso/test` verifier tests share `createVerifiedFakeHarness()` and `deferred()` fixtures, and
   query verification now proves AsyncLocalStorage capture isolation while an overlapping mutation
   observes unrelated reads/writes.
+- `packages/test/src/test-fixtures.ts` now shares `createRecordingOperationVerifier()` so harness
+  operation tests assert captured write/read observations, request override merging, and query
+  loader request context through the public operation seam.
+- The commerce P4 fw-check gate now treats `emit-graph.mjs --check` as the generated-artifact
+  freshness proof and verifies the resulting graph behavior with `fw-check`, `fw explain`, and
+  registry facts instead of executing generated TS source.
 
 Open:
 
@@ -532,6 +546,12 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "dispatches shell login and logout mutations before guarded admin routes|exports the public commerce shell while the dynamic session shell stays non-exportable|wires vp run export to the public commerce shell static output|wires npm run static to the public commerce shell static output"`
 - `node --test --test-name-pattern "P3 server renders initial query scripts|P2 compiler merges view transition stamps|P3 typed routes validate navigation targets|D1 commerce enhanced fragments carry Tailwind stylesheet hints|P10 starter wires graph assertions into CI|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite|D3 deferred stream responses are consumed by the runtime|P1 typed data param coercion|P1 render-equivalence gate" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src/harness-operations.test.ts`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/test-fixtures.ts packages/test/src/harness-operations.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -558,6 +578,9 @@ Closed evidence so far:
   fields.
 - `packages/test/src/test-fixtures.ts` now owns shared verified-harness and promise-control helpers
   used by verifier integration/query tests instead of each test file growing local harness setup.
+- `packages/test/src/test-fixtures.ts` also owns the recording operation verifier used by
+  `harness-operations.test.ts`, replacing that file's local recorder and adding request/context
+  seam assertions for mutation and query operation helpers.
 
 Open:
 

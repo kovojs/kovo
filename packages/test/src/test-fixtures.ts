@@ -1,7 +1,8 @@
 import { diagnosticDefinitions, type DiagnosticCode, type TouchGraph } from '@jiso/core';
 
+import type { HarnessOperationVerifier } from './harness-operations.js';
 import { createJisoTestHarness, type JisoTestContext } from './harness.js';
-import type { DbVerificationConfig } from './verifier-observation.js';
+import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
 export interface FakeDb {
   read(table: string, options?: { branch?: string; rowKey?: string }): unknown[];
@@ -14,6 +15,13 @@ export interface VerifiedFakeHarnessOptions {
   request?: Record<string, unknown>;
   touchGraph?: TouchGraph;
   verification: DbVerificationConfig;
+}
+
+export interface RecordingOperationVerifier {
+  coveredKey: string | undefined;
+  reads: readonly string[] | undefined;
+  readonly captured: readonly (readonly ObservedDbOperation[])[];
+  verifier: HarnessOperationVerifier;
 }
 
 export function createFakeDb(): FakeDb {
@@ -44,6 +52,34 @@ export function createVerifiedFakeHarness({
     touchGraph,
     verification,
   });
+}
+
+export function createRecordingOperationVerifier(
+  observed: readonly ObservedDbOperation[],
+): RecordingOperationVerifier {
+  const captured: (readonly ObservedDbOperation[])[] = [];
+  const state: RecordingOperationVerifier = {
+    captured,
+    coveredKey: undefined,
+    reads: undefined,
+    verifier: {
+      assertCoveredOperations(operations, touchGraphKey) {
+        if (operations !== observed) throw new Error('Captured write operations were not reused.');
+        state.coveredKey = touchGraphKey;
+      },
+      assertReadsCoveredOperations(operations, domains) {
+        if (operations !== observed) throw new Error('Captured read operations were not reused.');
+        state.reads = domains;
+      },
+      async capture(callback) {
+        const result = await callback();
+        captured.push(observed);
+        return { observed, result };
+      },
+    },
+  };
+
+  return state;
 }
 
 export function deferred<T = void>(): {

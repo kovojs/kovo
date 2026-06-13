@@ -5,43 +5,14 @@ import {
   executeHarnessMutation,
   executeHarnessQuery,
   loadHarnessPage,
-  type HarnessOperationVerifier,
 } from '@jiso/test/harness-operations';
-import { createFakeDb, expectedDiagnostic, type FakeDb } from './test-fixtures.js';
+import {
+  createFakeDb,
+  createRecordingOperationVerifier,
+  expectedDiagnostic,
+  type FakeDb,
+} from './test-fixtures.js';
 import type { ObservedDbOperation } from './verifier.js';
-
-function createRecordingVerifier(observed: readonly ObservedDbOperation[]): {
-  coveredKey: string | undefined;
-  reads: readonly string[] | undefined;
-  verifier: HarnessOperationVerifier;
-} {
-  const state: {
-    coveredKey: string | undefined;
-    reads: readonly string[] | undefined;
-    verifier: HarnessOperationVerifier;
-  } = {
-    coveredKey: undefined,
-    reads: undefined,
-    verifier: {
-      assertCoveredOperations(operations, touchGraphKey) {
-        expect(operations).toBe(observed);
-        state.coveredKey = touchGraphKey;
-      },
-      assertReadsCoveredOperations(operations, domains) {
-        expect(operations).toBe(observed);
-        state.reads = domains;
-      },
-      async capture(callback) {
-        return {
-          observed,
-          result: await callback(),
-        };
-      },
-    },
-  };
-
-  return state;
-}
 
 describe('@jiso/test harness operations', () => {
   it('runs mutations through captured verification and preserves the harness db request seam', async () => {
@@ -57,7 +28,7 @@ describe('@jiso/test harness operations', () => {
         table: 'cart_items',
       },
     ];
-    const state = createRecordingVerifier(observed);
+    const state = createRecordingOperationVerifier(observed);
     const addToCart = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -81,6 +52,51 @@ describe('@jiso/test harness operations', () => {
       value: ['u1:p1'],
     });
     expect(state.coveredKey).toBe('cart.add');
+    expect(state.captured).toEqual([observed]);
+  });
+
+  it('merges per-mutation request overrides before captured verification', async () => {
+    const db = createFakeDb();
+    const observed: ObservedDbOperation[] = [
+      {
+        branch: undefined,
+        domain: 'cart',
+        kind: 'write',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: undefined,
+        table: 'cart_items',
+      },
+    ];
+    const state = createRecordingOperationVerifier(observed);
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb; session?: { user?: { id: string } } }) {
+        request.db.write('cart_items', `${request.session?.user?.id}:${input.productId}`);
+        return request.db.read('cart_items');
+      },
+    });
+
+    await expect(
+      executeHarnessMutation(
+        addToCart,
+        { productId: 'p1' },
+        db,
+        { session: { user: { id: 'default-user' } } },
+        state.verifier,
+        {
+          request: { session: { user: { id: 'u2' } } },
+          touchGraphKey: 'cart.add',
+        },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: ['u2:p1'],
+    });
+    expect(db.read('cart_items')).toEqual(['u2:p1']);
+    expect(state.coveredKey).toBe('cart.add');
+    expect(state.captured).toEqual([observed]);
   });
 
   it('runs query loaders through captured read verification before output validation', async () => {
@@ -96,7 +112,7 @@ describe('@jiso/test harness operations', () => {
         table: 'cart_items',
       },
     ];
-    const state = createRecordingVerifier(observed);
+    const state = createRecordingOperationVerifier(observed);
     const cartQuery = query('cart', {
       load() {
         return { count: 'two' };
@@ -109,6 +125,46 @@ describe('@jiso/test harness operations', () => {
       executeHarnessQuery(cartQuery, undefined, createFakeDb(), undefined, state.verifier),
     ).rejects.toThrow(expectedDiagnostic('FW410', 'cart Expected number'));
     expect(state.reads).toEqual(['cart']);
+    expect(state.captured).toEqual([observed]);
+  });
+
+  it('passes query request fixtures and db through the captured loader context', async () => {
+    const cart = domain('cart');
+    const db = createFakeDb();
+    const observed: ObservedDbOperation[] = [
+      {
+        branch: undefined,
+        domain: 'cart',
+        kind: 'read',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: undefined,
+        table: 'cart_items',
+      },
+    ];
+    const state = createRecordingOperationVerifier(observed);
+    const cartQuery = query('cart', {
+      load(
+        _input,
+        context?: { db: FakeDb; request: { db: FakeDb; session?: { cartId: string } } },
+      ) {
+        expect(context?.db).toBe(db);
+        expect(context?.request.db).toBe(db);
+        return {
+          cartId: context?.request.session?.cartId,
+          items: context?.db.read('cart_items'),
+        };
+      },
+      reads: [cart],
+    });
+
+    db.write('cart_items', 'p1');
+
+    await expect(
+      executeHarnessQuery(cartQuery, undefined, db, { session: { cartId: 'c1' } }, state.verifier),
+    ).resolves.toEqual({ cartId: 'c1', items: ['p1'] });
+    expect(state.reads).toEqual(['cart']);
+    expect(state.captured).toEqual([observed]);
   });
 
   it('loads page fixtures from literal and lazy HTML sources', async () => {

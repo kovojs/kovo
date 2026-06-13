@@ -690,26 +690,6 @@ const executeGeneratedServerRenderSource = (source) => {
   return exports.renderSource();
 };
 
-const executeTypeScriptModuleSource = async (source) => {
-  const ts = await import('typescript');
-  const module = { exports: {} };
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText;
-
-  runInNewContext(compiled, {
-    exports: module.exports,
-    module,
-    require(specifier) {
-      assert.fail(`unexpected generated TypeScript runtime import ${specifier}`);
-    },
-  });
-  return module.exports;
-};
-
 const assertTypeScriptProgramHasNoDiagnostics = async (files) => {
   const ts = await import('typescript');
   const workspaceRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -6147,8 +6127,17 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   const commerceGraph = JSON.parse(
     await readProjectFile('examples/commerce/src/generated/graph.json'),
   );
-  const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
-  const generatedTouchGraphModule = await executeTypeScriptModuleSource(touchGraphSource);
+  const emitGraphCheck = await execFileAsync('node', ['scripts/emit-graph.mjs', '--check'], {
+    cwd: new URL('../examples/commerce/', import.meta.url),
+    env: { ...process.env, CI: '1' },
+  });
+  assert.deepEqual(
+    {
+      stderr: emitGraphCheck.stderr,
+      stdout: emitGraphCheck.stdout,
+    },
+    { stderr: '', stdout: '' },
+  );
   const touchSummary = Object.fromEntries(
     Object.entries(commerceGraph.touchGraph).map(([key, entry]) => [
       key,
@@ -6193,16 +6182,16 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   );
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
-  assert.deepEqual(
-    jsonClone(generatedTouchGraphModule.commerceTouchGraph),
-    commerceGraph.touchGraph,
+  assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.equal(
+    explainValue(
+      fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output,
+      'domain-writes: ',
+    ),
+    'cart.addItem',
   );
-  assert.deepEqual(jsonClone(generatedTouchGraphModule.commerceInvalidationSets), {
-    'cart/add': [
-      { domains: ['cart'], keys: null, query: 'cart' },
-      { domains: ['order'], keys: null, query: 'orderHistory' },
-      { domains: ['product'], keys: null, query: 'productGrid' },
-    ],
+  assert.deepEqual(deriveRegistryFactsFromGraph(commerceGraph).invalidations, {
+    'cart/add': ['cart', 'orderHistory', 'productGrid'],
   });
 });
 
