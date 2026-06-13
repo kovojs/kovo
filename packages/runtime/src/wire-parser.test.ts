@@ -16,6 +16,10 @@ import {
   unescapeHtml,
 } from './wire-response-scanner.js';
 
+// @ts-expect-error SPEC.md §4.4/§9.1: fragment chunk ownership lives with the shared response scanner.
+// eslint-disable-next-line no-unused-vars -- compile-time compatibility surface removal assertion only.
+type RemovedWireParserFragmentChunkAlias = import('./wire-parser.js').FragmentChunk;
+
 describe('wire parser HTML entity handling', () => {
   it('keeps fragment element internals behind the decoded reader surface', async () => {
     const wireParserModule = await import('./wire-parser.js');

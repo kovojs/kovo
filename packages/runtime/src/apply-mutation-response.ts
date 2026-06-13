@@ -4,7 +4,8 @@ import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import type { FragmentChunk, MutationResponseBodyChunks, QueryChunk } from './wire-parser.js';
+import type { MutationResponseBodyChunks, QueryChunk } from './wire-parser.js';
+import type { FragmentChunk } from './wire-response-scanner.js';
 import type { IslandSignalScope } from './handler-context.js';
 
 export interface AppliedMutationResponse {

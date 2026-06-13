@@ -10,8 +10,6 @@ import {
 } from './wire-response-scanner.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 
-export type { FragmentChunk } from './wire-response-scanner.js';
-
 export interface QueryChunk {
   key?: string;
   name: string;

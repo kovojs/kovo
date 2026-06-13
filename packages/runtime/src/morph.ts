@@ -2,7 +2,7 @@ import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-c
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
 import { applyResponseFragments } from './response-fragment-apply.js';
-import type { FragmentChunk } from './wire-parser.js';
+import type { FragmentChunk } from './wire-response-scanner.js';
 
 export interface MorphTarget {
   appendHtml?(html: string): void;

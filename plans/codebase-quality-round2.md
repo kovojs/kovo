@@ -2306,6 +2306,14 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- Round297 runtime fragment type ownership closure:
+  `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/index-exports.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/index.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/morph.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/runtime/src/wire-parser.ts` no longer re-exports the `FragmentChunk`
+  compatibility type; root `@jiso/runtime` keeps the public type from the canonical
+  `packages/runtime/src/wire-response-scanner.ts` owner, and `packages/runtime/src/wire-parser.test.ts`
+  type-pins the removed parser alias against regression under SPEC.md §4.4/§9.1.
 - Round287c runtime fragment adapter closure:
   `pnpm exec vitest --run packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts`;
   `pnpm exec vitest --run packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/mutation-response-wire-apply.test.ts packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts`;

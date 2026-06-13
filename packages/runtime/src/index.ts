@@ -153,6 +153,7 @@ export type {
 } from './query-refetch.js';
 export { createQueryStore } from './query-store.js';
 export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
-export type { FragmentChunk, QueryChunk } from './wire-parser.js';
+export type { FragmentChunk } from './wire-response-scanner.js';
+export type { QueryChunk } from './wire-parser.js';
 export { derive } from './derive.js';
 export type { DeriveDefinition } from './derive.js';
