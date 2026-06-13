@@ -1,0 +1,146 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { createQueryStore, installPagehideOptimismCleanup } from './index.js';
+import { applyOptimisticTransforms } from './optimism.js';
+import { FakeRoot } from './runtime-test-fakes.js';
+
+// SPEC.md §10.4: hand-written optimistic transforms apply through the query
+// update plans and can commit or restore their snapshot; split from the
+// compile-time typing and rebase seams in the sibling optimism-*.test.ts files.
+describe('optimistic query apply', () => {
+  it('registers pagehide optimism cleanup without unload handlers', () => {
+    const root = new FakeRoot();
+    const discardPendingOptimism = vi.fn();
+
+    installPagehideOptimismCleanup({ discardPendingOptimism, root });
+
+    expect(root.listeners.has('pagehide')).toBe(true);
+    expect(root.listeners.has('unload')).toBe(false);
+
+    void root.listeners.get('pagehide')?.({ target: null, type: 'pagehide' });
+
+    expect(discardPendingOptimism).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies hand-written optimistic transforms through query update plans', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+    store.set('cart', { count: 1 });
+    store.subscribe('cart', plan);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { quantity: 2 },
+      {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+    );
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(plan).toHaveBeenLastCalledWith({ count: 3 });
+    pending.commit();
+    expect(pending.snapshot.size).toBe(0);
+  });
+
+  it('applies hand-written optimistic transforms to keyed query instances', () => {
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const unkeyedPlan = vi.fn();
+    store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+    store.subscribe('reviews', p1Plan, 'product:p1');
+    store.subscribe('reviews', unkeyedPlan);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { reviewId: 'draft' },
+      {
+        keys: { reviews: 'product:p1' },
+        transforms: {
+          reviews(current, input) {
+            const reviews = current as { items: { id: string }[] };
+            return { items: [...reviews.items, { id: input.reviewId }] };
+          },
+        },
+      },
+    );
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'draft' }],
+    });
+    expect(p1Plan).toHaveBeenLastCalledWith({ items: [{ id: 'r1' }, { id: 'draft' }] });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
+
+    pending.restore();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+  });
+
+  it('applies optimistic transforms from unified change records and derives query keys', () => {
+    const store = createQueryStore();
+    const keyedPlan = vi.fn();
+    const unkeyedPlan = vi.fn();
+    store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+    store.subscribe('reviews', keyedPlan, 'product:p1');
+    store.subscribe('reviews', unkeyedPlan);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { reviewId: 'ignored' },
+      {
+        keys: {
+          reviews: (change) => `product:${change.keys?.[0]}`,
+        },
+        transforms: {
+          reviews(current, input) {
+            const reviews = current as { items: { id: string }[] };
+            return { items: [...reviews.items, { id: input.reviewId }] };
+          },
+        },
+      },
+      {
+        domain: 'product',
+        input: { reviewId: 'draft-from-change' },
+        keys: ['p1'],
+      },
+    );
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'draft-from-change' }],
+    });
+    expect(keyedPlan).toHaveBeenLastCalledWith({
+      items: [{ id: 'r1' }, { id: 'draft-from-change' }],
+    });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
+
+    pending.restore();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+  });
+
+  it('restores optimistic snapshots on mutation error', () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { quantity: 2 },
+      {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+    );
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    pending.restore();
+    expect(store.get('cart')).toEqual({ count: 1 });
+  });
+});
