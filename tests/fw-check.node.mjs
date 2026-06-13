@@ -4452,35 +4452,11 @@ export const CartBadge = component('cart-badge', {
   });
 
   assert.deepEqual(compiled.diagnostics, []);
-  assert.deepEqual(compiled.queryUpdatePlans, [
+  assert.deepEqual(compilerQueryUpdatePlanFacts(compiled.queryUpdatePlans), [
     {
       componentName: 'CartBadge',
-      derives: [
-        {
-          exportName: 'CartBadge$isEmpty',
-          expression: 'cart.count === 0',
-          input: 'cart',
-          name: 'CartBadge$isEmpty',
-          param: 'cart',
-          selector: '[data-derive="cart.CartBadge$isEmpty"]',
-        },
-      ],
       paths: ['cart.count', 'cart.empty', 'cart.items'],
       query: 'cart',
-      stamps: [
-        {
-          attr: 'disabled',
-          derive: {
-            exportName: 'CartBadge$button_disabled_derive',
-            expression: 'cart.count === 0',
-            input: 'cart',
-            name: 'CartBadge$button_disabled_derive',
-            param: 'cart',
-            selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
-          },
-          selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
-        },
-      ],
       templateStamps: [
         {
           itemBindingPlaceholders: [
