@@ -475,7 +475,8 @@ facts for exact Postgres receiver proof while fake sibling members remain ignore
 Shorthand query loaders now resolve through ts-morph symbols instead of disappearing. Dynamic or
 otherwise unresolved query-loader and domain-write callback references now degrade to FW406 instead
 of dropping the executable surface. V1 proof remains Postgres-only; SQLite/MySQL conformance is
-deferred to late hardening.
+deferred to late hardening. Tuple-destructured callback containers now resolve through static
+literal aliases and binding-element facts for project query loaders and domain writes.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
@@ -727,6 +728,17 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Evidence 2026-06-13 round273: tuple-destructured static callback containers such as
+      `const [add] = callbacks` and `const [{ load }] = loaders` now resolve through static
+      literal aliases/binding-element facts instead of degrading mutation actions or dropping
+      query-loader facts; `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
+      receiver behavior. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
+      and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`; exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
+      `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -734,6 +746,11 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
 
 Latest evidence:
 
+- round273 tuple callback container slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
+  `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - `pnpm exec vitest --run packages/drizzle/src/index.test.ts`
 - `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`
 - `pnpm exec vitest --run packages/drizzle/src/index.test.ts`

@@ -3163,6 +3163,9 @@ function callbackFunctionFromDeclaration(
   const parent = declaration.getParent();
   if (Node.isFunctionDeclaration(parent) && parent.getNameNode() === declaration) return parent;
   if (Node.isMethodDeclaration(parent) && parent.getNameNode() === declaration) return parent;
+  if (Node.isBindingElement(parent) && parent.getNameNode() === declaration) {
+    return callbackFunctionFromBindingElement(parent, seen);
+  }
   if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
     return callbackFunctionFromVariable(parent, seen);
   }
@@ -3197,8 +3200,20 @@ function callbackFunctionFromBindingElement(
     ?.getInitializer();
   if (!initializer) return undefined;
 
-  const path = bindingElementStaticObjectPath(declaration);
+  const path = bindingElementStaticPath(declaration);
   if (path.length === 0) return undefined;
+
+  const container = staticLiteralContainerExpression(unwrappedStaticExpressionNode(initializer));
+  const literalReference = container
+    ? callbackReferenceFromStaticLiteralPath(container, path)
+    : undefined;
+  if (literalReference) {
+    if (Node.isArrowFunction(literalReference) || Node.isFunctionExpression(literalReference)) {
+      return literalReference;
+    }
+    const callback = callbackFunctionFromReference(literalReference, seen);
+    if (callback) return callback;
+  }
 
   const symbol = symbolForStaticTypePath(
     unwrappedStaticExpressionNode(initializer),
@@ -3213,29 +3228,122 @@ function callbackFunctionFromBindingElement(
   return undefined;
 }
 
-function bindingElementStaticObjectPath(declaration: BindingElement): string[] {
+function bindingElementStaticPath(declaration: BindingElement): string[] {
   const path: string[] = [];
   let current: Node | undefined = declaration;
 
   while (current && Node.isBindingElement(current)) {
     const parent = current.getParent();
-    if (!Node.isObjectBindingPattern(parent)) return [];
+    if (Node.isObjectBindingPattern(parent)) {
+      const property = current.getPropertyNameNode();
+      const name = current.getNameNode();
+      const segment = property
+        ? propertyNameText(property)
+        : Node.isIdentifier(name)
+          ? name.getText()
+          : undefined;
+      if (!segment) return [];
 
-    const property = current.getPropertyNameNode();
-    const name = current.getNameNode();
-    const segment = property
-      ? propertyNameText(property)
-      : Node.isIdentifier(name)
-        ? name.getText()
-        : undefined;
-    if (!segment) return [];
+      path.unshift(segment);
+      const owner = parent.getParent();
+      current = Node.isBindingElement(owner) ? owner : undefined;
+      continue;
+    }
 
-    path.unshift(segment);
+    if (!Node.isArrayBindingPattern(parent)) return [];
+    const index = parent.getElements().indexOf(current);
+    if (index < 0) return [];
+
+    // SPEC §10.2/§11.1: tuple-destructured callback aliases are resolved from ts-morph
+    // property facts, not source-name compatibility guesses.
+    path.unshift(String(index));
     const owner = parent.getParent();
     current = Node.isBindingElement(owner) ? owner : undefined;
   }
 
   return path;
+}
+
+function callbackReferenceFromStaticLiteralPath(
+  root: Node,
+  path: readonly string[],
+): Node | undefined {
+  let current: Node | undefined = root;
+
+  for (const segment of path) {
+    if (!current) return undefined;
+    const expression = unwrappedStaticExpressionNode(current);
+
+    if (Node.isArrayLiteralExpression(expression)) {
+      current = expression.getElements()[Number(segment)];
+      continue;
+    }
+
+    if (Node.isObjectLiteralExpression(expression)) {
+      current = objectLiteralStaticPropertyReference(expression, segment);
+      continue;
+    }
+
+    return undefined;
+  }
+
+  return current ? unwrappedStaticExpressionNode(current) : undefined;
+}
+
+function staticLiteralContainerExpression(
+  node: Node,
+  seen: Set<string> = new Set(),
+): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isArrayLiteralExpression(expression) || Node.isObjectLiteralExpression(expression)) {
+    return expression;
+  }
+
+  const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
+    const initializer = staticLiteralContainerInitializer(declaration);
+    if (!initializer) continue;
+
+    const container = staticLiteralContainerExpression(initializer, seen);
+    if (container) return container;
+  }
+
+  return undefined;
+}
+
+function staticLiteralContainerInitializer(declaration: Node): Node | undefined {
+  if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
+    return declaration.getInitializer();
+  }
+  if (Node.isIdentifier(declaration)) {
+    const parent = declaration.getParent();
+    if (
+      (Node.isVariableDeclaration(parent) || Node.isPropertyAssignment(parent)) &&
+      parent.getNameNode() === declaration
+    ) {
+      return parent.getInitializer();
+    }
+  }
+  return undefined;
+}
+
+function objectLiteralStaticPropertyReference(
+  object: ObjectLiteralExpression,
+  name: string,
+): Node | undefined {
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+    if (Node.isShorthandPropertyAssignment(property)) return property.getNameNode();
+    return property.getInitializer();
+  }
+
+  return undefined;
 }
 
 function symbolForStaticTypePath(

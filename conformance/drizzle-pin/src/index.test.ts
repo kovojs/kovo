@@ -1419,6 +1419,94 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins tuple-destructured static callback containers under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '}',
+          '',
+          'const callbacks = [addItem] as const;',
+          'const loaders = [{ loadProducts }] as const;',
+          'const [addFromContainer] = callbacks;',
+          'const [{ loadProducts: loadFromContainer }] = loaders;',
+          '',
+          'export const productDomain = domain({',
+          '  add: write(addFromContainer),',
+          '});',
+          '',
+          "export const productQuery = query('product/tuple-destructured-callback-container', {",
+          '  load: loadFromContainer,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:13',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/tuple-destructured-callback-container',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:25',
+      },
+    ]);
+  });
+
   it('pins unresolved dynamic callback references as FW406 under real Drizzle imports', () => {
     const files = [
       {
