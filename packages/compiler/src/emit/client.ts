@@ -169,9 +169,7 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
     stamp.itemBindingPlaceholders?.map((placeholder) => [placeholder.path, placeholder]) ?? [],
   );
 
-  return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(
-    stamp.list.split('.').slice(1).join('.'),
-  )}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
+  return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(stamp.listReadPath)}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
       const record = item && typeof item === "object" ? item : {};
       const read = (path) => path.split(".").reduce((value, part) => {
         const key = part.endsWith("?") ? part.slice(0, -1) : part;

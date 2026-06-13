@@ -224,6 +224,7 @@ export interface QueryTemplateStampFact {
   itemBindingPlaceholders?: readonly QueryTemplateStampBindingPlaceholder[];
   key: string;
   list: string;
+  listReadPath: string;
   selector: string;
   template: string;
 }

@@ -338,12 +338,17 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
           itemBindings: itemBindingPlaceholders.map((placeholder) => placeholder.path),
           key,
           list,
+          listReadPath: queryRelativePath(list),
           selector: `[data-bind-list="${list}"]`,
           template,
         },
       ];
     })
     .filter((stamp) => stamp.itemBindings.length > 0);
+}
+
+function queryRelativePath(path: string): string {
+  return path.split('.').slice(1).join('.');
 }
 
 function templateItemBindingPlaceholders(

@@ -150,6 +150,8 @@ Handler element params now carry their parsed source expression through the lowe
 client emission no longer recovers it by slicing braces from the generated `data-p-*` value.
 Template stamp placeholders now carry analyzed relative read paths, so client query-plan emission no
 longer derives item reads by slicing `.field` binding strings while producing source.
+Template stamp list facts now also carry their analyzed relative read path, so client query-plan
+emission no longer derives list reads by splitting `query.path` strings.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -182,6 +184,8 @@ Latest evidence:
 - exact `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/handler-lowering.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts`
 - exact `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/query-update-plans.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/query-update-plans.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

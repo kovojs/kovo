@@ -44,6 +44,7 @@ export const CartBadge = component('cart-badge', {
             itemBindings: ['.name', '.qty'],
             key: 'productId',
             list: 'cart.items',
+            listReadPath: 'items',
             selector: '[data-bind-list="cart.items"]',
             template:
               '<li fw-key="">\n            <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>\n          </li>',
