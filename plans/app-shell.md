@@ -82,6 +82,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/vite-build-assets.ts packages/server/src/vite-build-output.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -877,3 +880,20 @@ Round242 app-shell app contract boundary evidence:
 - `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-document.test.ts packages/server/src/api/app.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite-static-export-options.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/app-types.ts packages/server/src/app.ts packages/server/src/app-request.ts packages/server/src/app-dispatch.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-document.ts packages/server/src/app-mutation-request.ts packages/server/src/node.ts packages/server/src/static-export.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-document.ts packages/server/src/static-export-request.ts packages/server/src/static-export-route-plan.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-request.test.ts packages/server/src/vite-build.ts packages/server/src/vite-dev.ts packages/server/src/vite-plugin.ts packages/server/src/vite-plugin-build.ts packages/server/src/vite-static-export-options.ts packages/server/src/api/app-shell/core.ts packages/server/src/api/app.test.ts`
+
+Round252 static document replay contraction evidence:
+
+- `packages/server/src/static-export-document.ts` now owns SPEC §9.5 synthetic GET construction,
+  route/client response snapshots, and FW229 replay response diagnostics directly alongside route
+  document artifact assembly, client-module replay/dedupe, and L0/L1 endpoint rejection. The
+  private `static-export-request.ts` and `static-export-response.ts` helper module paths were
+  deleted instead of kept as compatibility seams.
+- `packages/server/src/static-export-document.test.ts` now covers route replay, client-module
+  JavaScript replay, and client-module FW229 response diagnostics through the document replay
+  boundary.
+- `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

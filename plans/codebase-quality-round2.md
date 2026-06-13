@@ -741,10 +741,9 @@ Latest evidence:
 
 Current state: static export output target planning, output staging, asset planning, Vite build
 output, document/client-module replay, app request document assembly, mutation request handling,
-and SPEC §9.5 dispatch branches have been split into focused modules. Static export request replay
-now owns synthetic GET construction, static export response replay now owns route/client response
-snapshots and FW229 response diagnostics, and static document replay owns artifact assembly,
-client-module dedupe, and L0/L1 server endpoint rejection while preserving one SPEC §9.5
+and SPEC §9.5 dispatch branches have been split into focused modules. Static document replay owns
+synthetic GET construction, route/client response snapshots, FW229 response diagnostics, artifact
+assembly, client-module dedupe, and L0/L1 server endpoint rejection while preserving one SPEC §9.5
 route/client export pipeline.
 Static export diagnostics have a focused owner for compile-diagnostic blocking, FW229 formatting,
 type guards, and `StaticExportError`, leaving static-export types for artifact/manifest shapes.
@@ -816,6 +815,14 @@ export, and inventory/manifest helpers share the same SPEC §9.5 asset/option ow
 - [ ] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
 
 Latest evidence:
+
+- Round252 static document replay contraction:
+  `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/server/src`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  exact `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
