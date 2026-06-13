@@ -80,6 +80,28 @@ describe('server createApp request shell', () => {
     await expect(method.text()).resolves.toBe('Method Not Allowed');
   });
 
+  it('renders configured error shells through the app request boundary', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        errorShells: {
+          notFound({ request, status }) {
+            const url = new URL(request.url);
+            return {
+              body: `<main>${status}:${url.pathname}</main>`,
+              headers: { 'Content-Type': 'text/html; charset=utf-8' },
+              status,
+            };
+          },
+        },
+      }),
+    );
+
+    const response = await handler(new Request('https://example.test/missing'));
+
+    expect(response.status).toBe(404);
+    await expect(response.text()).resolves.toBe('<main>404:/missing</main>');
+  });
+
   it('dispatches endpoints before routes and strips ambient session from endpoint requests', async () => {
     const statusEndpoint = endpoint('/status', {
       handler(request) {

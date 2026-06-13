@@ -475,6 +475,12 @@ Closed evidence so far:
   Evidence: `packages/server/src/static-replay.ts`, `packages/server/src/static-replay.test.ts`,
   `packages/server/src/static-export.test.ts`, and
   `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`.
+- App request dispatch now lives in `packages/server/src/app-request.ts`, so the public
+  `packages/server/src/app.ts` aggregate no longer owns the SPEC §9.5 dispatch loop, route
+  document assembly, mutation request body/session resolution, or configured error-shell
+  rendering. Evidence: `packages/server/src/app-request.ts`, `packages/server/src/app.ts`,
+  `packages/server/src/app.test.ts`, `pnpm exec vitest --run packages/server/src`, and
+  `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 

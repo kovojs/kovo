@@ -162,6 +162,16 @@ Round87 app-shell static replay evidence:
   module files through the same `Request -> Response` handler used for root-relative refs.
 - `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`
 
+Round88 app request extraction evidence:
+
+- `packages/server/src/app-request.ts` now owns the SPEC §9.5 request dispatch choreography for
+  client modules, query endpoints, mutation POSTs, endpoints, route document assembly, and
+  configured error shells; `app.ts` remains the closed app aggregate/public type surface.
+- `packages/server/src/app.test.ts` pins configured error-shell rendering through the extracted
+  request boundary.
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:
