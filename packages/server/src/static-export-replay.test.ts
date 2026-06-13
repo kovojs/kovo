@@ -63,7 +63,7 @@ describe('server static export app replay boundary', () => {
     });
   });
 
-  it('reports route-plan diagnostics before validating html path style options', async () => {
+  it('reports route-plan diagnostics before replaying route documents', async () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
@@ -72,9 +72,7 @@ describe('server static export app replay boundary', () => {
       ],
     });
 
-    await expect(
-      replayStaticExportApp({ app, htmlPathStyle: 'pretty' as 'directory' }),
-    ).rejects.toMatchObject({
+    await expect(replayStaticExportApp({ app })).rejects.toMatchObject({
       code: 'FW229',
       diagnostics: [
         {
@@ -84,33 +82,5 @@ describe('server static export app replay boundary', () => {
         },
       ],
     });
-  });
-
-  it('rejects invalid html path style options before replaying route documents', async () => {
-    let rendered = false;
-    const app = createApp({
-      routes: [
-        route('/', {
-          page() {
-            rendered = true;
-            return '<main>Home</main>';
-          },
-        }),
-      ],
-    });
-
-    await expect(
-      replayStaticExportApp({ app, htmlPathStyle: 'pretty' as 'directory' }),
-    ).rejects.toMatchObject({
-      code: 'FW229',
-      diagnostics: [
-        {
-          code: 'FW229',
-          message: expect.stringContaining("Expected 'flat' or 'directory'"),
-          routePath: 'htmlPathStyle',
-        },
-      ],
-    });
-    expect(rendered).toBe(false);
   });
 });

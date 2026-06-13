@@ -23,7 +23,6 @@ describe('server static export document boundary', () => {
     await expect(
       replayStaticExportRouteDocumentArtifact({
         context,
-        htmlPathStyle: 'directory',
         routePath: '/docs/intro/?from=route#hash',
       }),
     ).resolves.toEqual({
@@ -49,7 +48,6 @@ describe('server static export document boundary', () => {
     await expect(
       replayStaticExportRouteDocumentArtifact({
         context,
-        htmlPathStyle: 'directory',
         routePath: '/private',
       }),
     ).rejects.toMatchObject({

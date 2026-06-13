@@ -4,20 +4,15 @@ import { StaticExportError, staticExportDiagnostic } from './static-export-diagn
 import { replayStaticExportRequest } from './static-export-request.js';
 import type { StaticExportReplayContext } from './static-export-replay-context.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
-import {
-  type StaticExportArtifact,
-  type StaticExportHtmlPathStyle,
-} from './static-export-types.js';
+import { type StaticExportArtifact } from './static-export-types.js';
 
 export interface StaticExportRouteDocumentReplayOptions {
   context: StaticExportReplayContext;
-  htmlPathStyle: StaticExportHtmlPathStyle;
   routePath: string;
 }
 
 export async function replayStaticExportRouteDocumentArtifact({
   context,
-  htmlPathStyle,
   routePath,
 }: StaticExportRouteDocumentReplayOptions): Promise<StaticExportArtifact> {
   const pathname = normalizePathname(routePath).pathname;
@@ -32,16 +27,13 @@ export async function replayStaticExportRouteDocumentArtifact({
 
   return {
     ...replayed,
-    path: staticExportRouteDocumentArtifactPath(pathname, htmlPathStyle),
+    path: staticExportRouteDocumentArtifactPath(pathname),
   };
 }
 
-export function staticExportRouteDocumentArtifactPath(
-  pathname: string,
-  style: StaticExportHtmlPathStyle,
-): string {
+export function staticExportRouteDocumentArtifactPath(pathname: string): string {
   if (pathname === '/') return '/index.html';
-  return style === 'directory' ? `${pathname}/index.html` : `${pathname}.html`;
+  return `${pathname}/index.html`;
 }
 
 interface StaticExportRouteDocumentL0L1Options {

@@ -6,7 +6,11 @@ import {
   writeStaticExportOutput,
 } from './static-export-output.js';
 import { replayStaticExportApp } from './static-export-replay.js';
-import { assertStaticExportCompileDiagnostics } from './static-export-diagnostics.js';
+import {
+  assertStaticExportCompileDiagnostics,
+  StaticExportError,
+  staticExportDiagnostic,
+} from './static-export-diagnostics.js';
 import { type StaticExportOptions, type StaticExportResult } from './static-export-types.js';
 
 export async function exportStaticApp(
@@ -14,10 +18,10 @@ export async function exportStaticApp(
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
   assertStaticExportCompileDiagnostics(options.diagnostics ?? []);
+  assertNoStaticExportHtmlPathStyleOption(options);
 
   const replay = await replayStaticExportApp({
     app,
-    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
     ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
     ...(options.origin === undefined ? {} : { origin: options.origin }),
   });
@@ -39,4 +43,15 @@ export async function exportStaticApp(
     clientModules: replay.clientModules,
     diagnostics: replay.diagnostics,
   };
+}
+
+function assertNoStaticExportHtmlPathStyleOption(options: object): void {
+  if (!Object.prototype.hasOwnProperty.call(options, 'htmlPathStyle')) return;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      'htmlPathStyle',
+      'FW229 static export refused htmlPathStyle. SPEC §9.5 exports route documents as directory-index HTML; remove this option.',
+    ),
+  ]);
 }

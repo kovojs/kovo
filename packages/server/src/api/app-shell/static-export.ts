@@ -17,7 +17,6 @@ export type {
   StaticExportAssetArtifact,
   StaticExportAssetInput,
   StaticExportClientModuleArtifact,
-  StaticExportHtmlPathStyle,
   StaticExportInventoryItem,
   StaticExportManifest,
   StaticExportManifestAsset,

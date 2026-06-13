@@ -142,6 +142,21 @@ markdown tables inline.
 
 Latest evidence:
 
+- Phase 5 static-export path-style closure slice:
+  `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/static-export-types.ts` removes the stale `htmlPathStyle` public option and
+  `StaticExportHtmlPathStyle` type; `packages/server/src/static-export-document.ts` emits only
+  SPEC §9.5 directory-index route documents; `packages/server/src/static-export.ts` rejects
+  runtime `htmlPathStyle` callers with FW229 before replay or writes; Vite export option tests
+  prove the deleted option no longer crosses the Vite static-export boundary.
+  Starter, commerce, and docs adoption remained green with their focused app-shell export tests.
+  Exact follow-up gates:
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-types.ts packages/server/src/static-export.test.ts packages/server/src/static-export.ts packages/server/src/vite-static-export-options.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Phase 5 static-export replay-context slice:
   `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`. Evidence:

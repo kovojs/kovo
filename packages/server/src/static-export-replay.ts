@@ -3,18 +3,15 @@ import { replayStaticExportClientModuleArtifacts } from './static-export-client-
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
 import { StaticExportError, type StaticExportDiagnostic } from './static-export-diagnostics.js';
-import { normalizeStaticExportHtmlPathStyle } from './static-export-options.js';
 import { createStaticExportReplayContext } from './static-export-replay-context.js';
 import {
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
-  type StaticExportHtmlPathStyle,
   type StaticExportNonExportablePolicy,
 } from './static-export-types.js';
 
 export interface StaticExportAppReplayOptions {
   app: JisoApp;
-  htmlPathStyle?: StaticExportHtmlPathStyle;
   onNonExportable?: StaticExportNonExportablePolicy;
   origin?: string;
 }
@@ -27,7 +24,6 @@ export interface StaticExportReplayResult {
 
 export async function replayStaticExportApp({
   app,
-  htmlPathStyle: htmlPathStyleOption,
   onNonExportable,
   origin: originOption,
 }: StaticExportAppReplayOptions): Promise<StaticExportReplayResult> {
@@ -41,7 +37,6 @@ export async function replayStaticExportApp({
     app,
     ...(originOption === undefined ? {} : { origin: originOption }),
   });
-  const htmlPathStyle = normalizeStaticExportHtmlPathStyle(htmlPathStyleOption);
   const artifacts: StaticExportArtifact[] = [];
 
   for (const routeTarget of routePlan.targets) {
@@ -53,7 +48,6 @@ export async function replayStaticExportApp({
       artifacts.push(
         await replayStaticExportRouteDocumentArtifact({
           context,
-          htmlPathStyle,
           routePath: routeTarget.path,
         }),
       );

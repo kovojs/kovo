@@ -121,63 +121,39 @@ describe('server static export', () => {
     }
   });
 
-  it('can explicitly export legacy flat route document paths', async () => {
+  it('rejects stale html path-style options before replay or writes', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    let rendered = false;
     try {
       const app = createApp({
         routes: [
           route('/', {
-            page: () => '<main>Home</main>',
-          }),
-          route('/docs/intro', {
-            page: () => '<main>Intro</main>',
-          }),
-        ],
-      });
-
-      const result = await exportStaticApp(app, { htmlPathStyle: 'flat', outDir });
-
-      expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
-        '/index.html',
-        '/docs/intro.html',
-      ]);
-      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
-        '<main>Home</main>',
-      );
-      await expect(readFile(path.join(outDir, 'docs', 'intro.html'), 'utf8')).resolves.toContain(
-        '<main>Intro</main>',
-      );
-    } finally {
-      await rm(outDir, { force: true, recursive: true });
-    }
-  });
-
-  it('rejects invalid html path styles before replay or writes', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
-    try {
-      const app = createApp({
-        routes: [
-          route('/', {
-            page: () => '<main>Home</main>',
+            page: () => {
+              rendered = true;
+              return '<main>Home</main>';
+            },
           }),
         ],
       });
 
       await expect(
         exportStaticApp(app, {
-          htmlPathStyle: 'pretty' as unknown as 'flat',
+          htmlPathStyle: 'flat',
           outDir,
-        }),
+        } as Parameters<typeof exportStaticApp>[1]),
       ).rejects.toMatchObject({
         code: 'FW229',
         diagnostics: [
           {
             code: 'FW229',
-            message: expect.stringContaining("Expected 'flat' or 'directory'"),
+            message: expect.stringContaining(
+              'SPEC §9.5 exports route documents as directory-index HTML',
+            ),
             routePath: 'htmlPathStyle',
           },
         ],
       });
+      expect(rendered).toBe(false);
       await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
     } finally {
       await rm(outDir, { force: true, recursive: true });

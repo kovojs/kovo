@@ -61,6 +61,10 @@ Implemented areas:
   export orchestrator creates one `createRequestHandler(app)`/origin pair and document,
   synthetic-request, and client-module replay consume that context instead of accepting loose
   handler/origin wiring.
+- SPEC §9.5 static export now publishes only directory-index route documents. The stale
+  `htmlPathStyle`/flat-output compatibility option and `StaticExportHtmlPathStyle` public type are
+  removed from server and app-shell static-export boundaries, and runtime callers that still pass
+  `htmlPathStyle` fail with FW229 before replay or writes.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting,
   SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export, and a public export
   manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
@@ -129,6 +133,21 @@ Round281 static-export replay-context evidence:
   `static-export-request.ts` consume it for route-document and `/c/` module replay.
 - `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round282 static-export path-style closure evidence:
+
+- `packages/server/src/static-export-types.ts` removes `htmlPathStyle` and
+  `StaticExportHtmlPathStyle` from the public option/type contract; `static-export-document.ts`
+  always maps routes to directory-index artifacts; `static-export.ts` rejects stale runtime
+  `htmlPathStyle` callers with FW229 before replay or writes. Vite export option projection no
+  longer forwards the deleted option.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-types.ts packages/server/src/static-export.test.ts packages/server/src/static-export.ts packages/server/src/vite-static-export-options.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round276 built-root P10 boundary evidence:
 

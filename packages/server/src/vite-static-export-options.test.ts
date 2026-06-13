@@ -51,7 +51,6 @@ describe('server app shell Vite static export options boundary', () => {
         jisoAppShellViteBuildWriteStaticExportOptions(build, {
           assets: [robots],
           distDir,
-          htmlPathStyle: 'flat',
           onNonExportable: 'skip',
           origin: 'https://static.example',
           outDir,
@@ -70,7 +69,6 @@ describe('server app shell Vite static export options boundary', () => {
           },
           robots,
         ],
-        htmlPathStyle: 'flat',
         onNonExportable: 'skip',
         origin: 'https://static.example',
         outDir,
@@ -139,7 +137,6 @@ describe('server app shell Vite static export options boundary', () => {
         build,
         {
           assets: [robots],
-          htmlPathStyle: 'flat',
           origin: 'https://cart.example',
           outDir,
         },
@@ -161,7 +158,6 @@ describe('server app shell Vite static export options boundary', () => {
       ]);
       expect(plan.options).toEqual({
         assets: plan.assets,
-        htmlPathStyle: 'flat',
         origin: 'https://cart.example',
         outDir,
       });
@@ -207,7 +203,6 @@ describe('server app shell Vite static export options boundary', () => {
           base: '/docs/',
           clientModules,
           distDir,
-          htmlPathStyle: 'flat',
           manifestFile: join(distDir, 'manifest.web.json'),
           origin: 'https://docs.example',
           outDir,
@@ -218,7 +213,6 @@ describe('server app shell Vite static export options boundary', () => {
       ).toEqual({
         assets: [robots],
         distDir,
-        htmlPathStyle: 'flat',
         origin: 'https://docs.example',
         outDir,
       });
