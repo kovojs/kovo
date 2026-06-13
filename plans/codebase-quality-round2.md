@@ -23,6 +23,12 @@ with same-session file/test evidence.
       removed; runtime split completed subtractively.
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.
+      Round91 evidence 2026-06-13: `packages/server/src/static-export-request.ts` owns
+      synthetic app-shell replay request construction, and
+      `packages/server/src/static-export-client-modules.ts` owns `/c/` module replay/dedupe
+      diagnostics, subtracting both from `packages/server/src/static-replay.ts`. Same-session
+      evidence: `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;

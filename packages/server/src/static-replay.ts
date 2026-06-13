@@ -1,32 +1,25 @@
 import type { RequestHandler } from './app.js';
 import { normalizePathname } from './match.js';
-import {
-  readStaticExportClientModuleResponse,
-  readStaticExportRouteDocumentResponse,
-} from './static-export-response.js';
-import {
-  collectStaticExportClientModuleHrefs,
-  collectStaticExportServerEndpointRefs,
-} from './static-export-document.js';
+import { replayStaticExportRequest } from './static-export-request.js';
+import { readStaticExportRouteDocumentResponse } from './static-export-response.js';
+import { collectStaticExportServerEndpointRefs } from './static-export-document.js';
 import {
   StaticExportError,
   staticExportDiagnostic,
   type StaticExportArtifact,
-  type StaticExportClientModuleArtifact,
   type StaticExportHtmlPathStyle,
 } from './static-export-types.js';
+
+export {
+  replayStaticExportClientModuleArtifacts,
+  type StaticExportClientModuleReplayOptions,
+} from './static-export-client-modules.js';
 
 export interface StaticExportRouteReplayOptions {
   handler: RequestHandler;
   htmlPathStyle: StaticExportHtmlPathStyle;
   origin: string;
   routePath: string;
-}
-
-export interface StaticExportClientModuleReplayOptions {
-  handler: RequestHandler;
-  origin: string;
-  routeArtifacts: readonly StaticExportArtifact[];
 }
 
 export async function replayStaticExportRouteArtifact({
@@ -36,7 +29,7 @@ export async function replayStaticExportRouteArtifact({
   routePath,
 }: StaticExportRouteReplayOptions): Promise<StaticExportArtifact> {
   const pathname = normalizePathname(routePath).pathname;
-  const response = await handler(new Request(new URL(pathname, origin), { method: 'GET' }));
+  const { response } = await replayStaticExportRequest({ handler, origin, pathname });
   const replayed = await readStaticExportRouteDocumentResponse({ response, routePath });
   const { body } = replayed;
   assertStaticExportRouteDocumentL0L1({ body, origin, routePath });
@@ -44,55 +37,6 @@ export async function replayStaticExportRouteArtifact({
   return {
     ...replayed,
     path: htmlArtifactPath(pathname, htmlPathStyle),
-  };
-}
-
-export async function replayStaticExportClientModuleArtifacts({
-  handler,
-  origin,
-  routeArtifacts,
-}: StaticExportClientModuleReplayOptions): Promise<StaticExportClientModuleArtifact[]> {
-  const artifacts: StaticExportClientModuleArtifact[] = [];
-  const bodyByTargetPath = new Map<string, string>();
-
-  for (const href of collectStaticExportClientModuleHrefs(routeArtifacts, origin)) {
-    const artifact = await replayStaticExportClientModuleArtifact(handler, href, origin);
-    const existingBody = bodyByTargetPath.get(artifact.path);
-    if (existingBody !== undefined && existingBody !== artifact.body) {
-      throw new StaticExportError([
-        staticExportDiagnostic(
-          artifact.path,
-          `FW229 static export found multiple client module versions for '${artifact.path}' with different bytes. Static hosts serve query-string variants from the same file path, so export documents must reference one immutable version per /c/ path.`,
-        ),
-      ]);
-    }
-
-    if (existingBody === undefined) {
-      artifacts.push(artifact);
-      bodyByTargetPath.set(artifact.path, artifact.body);
-    }
-  }
-
-  return artifacts;
-}
-
-async function replayStaticExportClientModuleArtifact(
-  handler: RequestHandler,
-  href: string,
-  origin: string,
-): Promise<StaticExportClientModuleArtifact> {
-  const url = new URL(href, origin);
-  const response = await handler(new Request(url, { method: 'GET' }));
-  const replayed = await readStaticExportClientModuleResponse({
-    href,
-    path: url.pathname,
-    response,
-  });
-
-  return {
-    ...replayed,
-    href,
-    path: url.pathname,
   };
 }
 

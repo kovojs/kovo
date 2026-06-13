@@ -62,6 +62,13 @@ plans/codebase-quality-round2.md`.
 packages/runtime/src/index.browser.test.ts`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
+      Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in
+      `packages/server/src/static-export-request.ts`, and `/c/` client-module replay plus
+      same-output-path FW229 drift diagnostics now live in
+      `packages/server/src/static-export-client-modules.ts`, leaving
+      `packages/server/src/static-replay.ts` to orchestrate route document replay and L0/L1
+      validation. Same-session evidence: `pnpm exec vitest --run packages/server/src
+packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty false`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

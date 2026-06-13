@@ -6,10 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { createRequestHandler, type JisoApp } from './app.js';
-import {
-  replayStaticExportClientModuleArtifacts,
-  replayStaticExportRouteArtifact,
-} from './static-replay.js';
+import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
+import { replayStaticExportRouteArtifact } from './static-replay.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
 import {
   StaticExportError,

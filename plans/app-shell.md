@@ -195,6 +195,17 @@ Round90 app-shell static export boundary evidence:
 - `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round91 app-shell static replay request/client-module evidence:
+
+- `packages/server/src/static-export-request.ts` now owns SPEC §9.5 synthetic GET request
+  construction for route documents and versioned `/c/` module hrefs.
+- `packages/server/src/static-export-client-modules.ts` now owns discovered `/c/` module replay,
+  same-output-path deduplication, and FW229 query-version drift diagnostics, leaving
+  `static-replay.ts` focused on route-document replay and L0/L1 validation.
+- `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:
