@@ -11,7 +11,12 @@ import {
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
+import {
+  applySourceReplacements,
+  escapeAttribute,
+  splitDepValue,
+  type SourceReplacement,
+} from '../shared.js';
 import {
   emitElementParamTypes,
   type HandlerLowering,
@@ -85,9 +90,13 @@ function executableRenderSource(serverSource: string): string | null {
 
   // SPEC 5.2.3 requires render(src) to equal render(compile(src)); execute the emitted
   // renderSource body instead of re-reading its template literal as inert text.
-  return `${serverSource.slice(0, exportModifier.getStart(sourceFile))}${serverSource.slice(
-    exportModifier.getEnd(),
-  )}
+  return `${applySourceReplacements(serverSource, [
+    {
+      end: exportModifier.getEnd(),
+      replacement: '',
+      start: exportModifier.getStart(sourceFile),
+    },
+  ])}
 ;renderSource();`;
 }
 
