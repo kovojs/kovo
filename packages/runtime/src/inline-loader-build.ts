@@ -11,8 +11,27 @@ const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
 const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
-const inlineResponseApplyRootFunctionNames = ['applyInlineMutationResponseBody'] as const;
-const inlineWireParserRootFunctionNames = ['readInlineMutationResponseBodyChunks'] as const;
+
+const inlineHelperSpecs = {
+  responseApply: {
+    label: 'response apply',
+    readableParityLabel: 'canonical response apply helper closure',
+    minifiedParityLabel: 'canonical minified response apply helper closure',
+    rootFunctionNames: ['applyInlineMutationResponseBody'],
+    sourceFileName: 'inline-response-apply.ts',
+    sourcePath: inlineResponseApplySourcePath,
+  },
+  wireParser: {
+    label: 'wire parser',
+    readableParityLabel: 'canonical wire parser helper closure',
+    minifiedParityLabel: 'canonical minified wire parser helper closure',
+    rootFunctionNames: ['readInlineMutationResponseBodyChunks'],
+    sourceFileName: 'wire-parser.ts',
+    sourcePath: wireParserSourcePath,
+  },
+} as const;
+
+type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
 export const inlineJisoLoaderGzipByteBudget = 4096;
 
@@ -176,11 +195,9 @@ function installInlineJisoLoader(importModule) {
 export function buildInlineJisoLoaderInstallerSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
-  assertDefaultInlineJisoLoaderInstallerWireParserParity(source);
-  assertDefaultInlineJisoLoaderInstallerResponseApplyParity(source);
+  assertDefaultInlineJisoLoaderInstallerHelperParity(source);
   const installerSource = minifyInlineJavaScriptSource(source);
-  assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(source, installerSource);
-  assertDefaultMinifiedInlineJisoLoaderInstallerResponseApplyParity(source, installerSource);
+  assertDefaultMinifiedInlineJisoLoaderInstallerHelperParity(source, installerSource);
   return installerSource;
 }
 
@@ -257,44 +274,28 @@ export function assertInlineJisoLoaderGzipBudget(
 }
 
 function readInlineWireParserReadableSource(): string {
-  return extractInlineHelperReadableSource({
-    label: 'wire parser',
-    rootFunctionNames: inlineWireParserRootFunctionNames,
-    source: readFileSync(wireParserSourcePath, 'utf8'),
-    sourceFileName: 'wire-parser.ts',
-  });
+  return readInlineHelperReadableSource(inlineHelperSpecs.wireParser);
 }
 
 function readInlineResponseApplyReadableSource(): string {
-  return extractInlineHelperReadableSource({
-    label: 'response apply',
-    rootFunctionNames: inlineResponseApplyRootFunctionNames,
-    source: readFileSync(inlineResponseApplySourcePath, 'utf8'),
-    sourceFileName: 'inline-response-apply.ts',
-  });
+  return readInlineHelperReadableSource(inlineHelperSpecs.responseApply);
 }
 
 export function extractInlineWireParserReadableSource(
   source: string,
-  rootFunctionNames: readonly string[] = inlineWireParserRootFunctionNames,
+  rootFunctionNames: readonly string[] = inlineHelperSpecs.wireParser.rootFunctionNames,
 ): string {
-  return extractInlineHelperReadableSource({
-    label: 'wire parser',
+  return extractInlineHelperReadableSourceForSpec(inlineHelperSpecs.wireParser, source, {
     rootFunctionNames,
-    source,
-    sourceFileName: 'wire-parser.ts',
   });
 }
 
 export function extractInlineResponseApplyReadableSource(
   source: string,
-  rootFunctionNames: readonly string[] = inlineResponseApplyRootFunctionNames,
+  rootFunctionNames: readonly string[] = inlineHelperSpecs.responseApply.rootFunctionNames,
 ): string {
-  return extractInlineHelperReadableSource({
-    label: 'response apply',
+  return extractInlineHelperReadableSourceForSpec(inlineHelperSpecs.responseApply, source, {
     rootFunctionNames,
-    source,
-    sourceFileName: 'inline-response-apply.ts',
   });
 }
 
@@ -303,6 +304,23 @@ interface ExtractInlineHelperReadableSourceOptions {
   rootFunctionNames: readonly string[];
   source: string;
   sourceFileName: string;
+}
+
+function readInlineHelperReadableSource(spec: InlineHelperSpec): string {
+  return extractInlineHelperReadableSourceForSpec(spec, readFileSync(spec.sourcePath, 'utf8'));
+}
+
+function extractInlineHelperReadableSourceForSpec(
+  spec: InlineHelperSpec,
+  source: string,
+  options: { rootFunctionNames?: readonly string[] } = {},
+): string {
+  return extractInlineHelperReadableSource({
+    label: spec.label,
+    rootFunctionNames: options.rootFunctionNames ?? spec.rootFunctionNames,
+    source,
+    sourceFileName: spec.sourceFileName,
+  });
 }
 
 function extractInlineHelperReadableSource({
@@ -360,86 +378,110 @@ export function assertInlineJisoLoaderInstallerWireParserParity(
   installerSource: string,
   wireParserSource: string = readFileSync(wireParserSourcePath, 'utf8'),
 ): void {
-  const expected = extractInlineWireParserReadableSource(wireParserSource);
-  const count = countSubstring(installerSource, expected);
-
-  if (count !== 1) {
-    throw new Error(
-      `Inline Jiso loader readable source must embed the canonical wire parser helper closure exactly once; found ${count}.`,
-    );
-  }
+  assertInlineJisoLoaderInstallerHelperParity(
+    inlineHelperSpecs.wireParser,
+    installerSource,
+    wireParserSource,
+  );
 }
 
 export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
   installerSource: string,
   wireParserSource: string = readFileSync(wireParserSourcePath, 'utf8'),
 ): void {
-  const expected = minifyInlineJavaScriptSource(
-    extractInlineWireParserReadableSource(wireParserSource),
+  assertMinifiedInlineJisoLoaderInstallerHelperParity(
+    inlineHelperSpecs.wireParser,
+    installerSource,
+    wireParserSource,
   );
-  const count = countSubstring(installerSource, expected);
-
-  if (count !== 1) {
-    throw new Error(
-      `Inline Jiso loader minified source must embed the canonical minified wire parser helper closure exactly once; found ${count}.`,
-    );
-  }
 }
 
 export function assertInlineJisoLoaderInstallerResponseApplyParity(
   installerSource: string,
   responseApplySource: string = readFileSync(inlineResponseApplySourcePath, 'utf8'),
 ): void {
-  const expected = extractInlineResponseApplyReadableSource(responseApplySource);
-  const count = countSubstring(installerSource, expected);
-
-  if (count !== 1) {
-    throw new Error(
-      `Inline Jiso loader readable source must embed the canonical response apply helper closure exactly once; found ${count}.`,
-    );
-  }
+  assertInlineJisoLoaderInstallerHelperParity(
+    inlineHelperSpecs.responseApply,
+    installerSource,
+    responseApplySource,
+  );
 }
 
 export function assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(
   installerSource: string,
   responseApplySource: string = readFileSync(inlineResponseApplySourcePath, 'utf8'),
 ): void {
-  const expected = minifyInlineJavaScriptSource(
-    extractInlineResponseApplyReadableSource(responseApplySource),
+  assertMinifiedInlineJisoLoaderInstallerHelperParity(
+    inlineHelperSpecs.responseApply,
+    installerSource,
+    responseApplySource,
   );
+}
+
+function assertInlineJisoLoaderInstallerHelperParity(
+  spec: InlineHelperSpec,
+  installerSource: string,
+  helperSource: string,
+): void {
+  assertInlineJisoLoaderInstallerHelperContains(
+    installerSource,
+    extractInlineHelperReadableSourceForSpec(spec, helperSource),
+    spec.readableParityLabel,
+    'readable',
+  );
+}
+
+function assertMinifiedInlineJisoLoaderInstallerHelperParity(
+  spec: InlineHelperSpec,
+  installerSource: string,
+  helperSource: string,
+): void {
+  assertInlineJisoLoaderInstallerHelperContains(
+    installerSource,
+    minifyInlineJavaScriptSource(extractInlineHelperReadableSourceForSpec(spec, helperSource)),
+    spec.minifiedParityLabel,
+    'minified',
+  );
+}
+
+function assertInlineJisoLoaderInstallerHelperContains(
+  installerSource: string,
+  expected: string,
+  parityLabel: string,
+  sourceKind: 'minified' | 'readable',
+): void {
   const count = countSubstring(installerSource, expected);
 
   if (count !== 1) {
     throw new Error(
-      `Inline Jiso loader minified source must embed the canonical minified response apply helper closure exactly once; found ${count}.`,
+      `Inline Jiso loader ${sourceKind} source must embed the ${parityLabel} exactly once; found ${count}.`,
     );
   }
 }
 
-function assertDefaultInlineJisoLoaderInstallerWireParserParity(source: string): void {
+function assertDefaultInlineJisoLoaderInstallerHelperParity(source: string): void {
   if (source !== inlineJisoLoaderInstallerReadableSource) return;
-  assertInlineJisoLoaderInstallerWireParserParity(source);
+  for (const spec of Object.values(inlineHelperSpecs)) {
+    assertInlineJisoLoaderInstallerHelperParity(
+      spec,
+      source,
+      readFileSync(spec.sourcePath, 'utf8'),
+    );
+  }
 }
 
-function assertDefaultInlineJisoLoaderInstallerResponseApplyParity(source: string): void {
-  if (source !== inlineJisoLoaderInstallerReadableSource) return;
-  assertInlineJisoLoaderInstallerResponseApplyParity(source);
-}
-
-function assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(
+function assertDefaultMinifiedInlineJisoLoaderInstallerHelperParity(
   readableSource: string,
   installerSource: string,
 ): void {
   if (readableSource !== inlineJisoLoaderInstallerReadableSource) return;
-  assertMinifiedInlineJisoLoaderInstallerWireParserParity(installerSource);
-}
-
-function assertDefaultMinifiedInlineJisoLoaderInstallerResponseApplyParity(
-  readableSource: string,
-  installerSource: string,
-): void {
-  if (readableSource !== inlineJisoLoaderInstallerReadableSource) return;
-  assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(installerSource);
+  for (const spec of Object.values(inlineHelperSpecs)) {
+    assertMinifiedInlineJisoLoaderInstallerHelperParity(
+      spec,
+      installerSource,
+      readFileSync(spec.sourcePath, 'utf8'),
+    );
+  }
 }
 
 function countSubstring(source: string, expected: string): number {

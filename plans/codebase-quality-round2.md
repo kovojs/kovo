@@ -1246,6 +1246,14 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       custom bootstrap expression trimming. Verified by focused inline-loader/minifier tests, full
       runtime tests, inline-loader generation check, TypeScript, browser runtime tests, targeted
       `vp check`, and `git diff --check` commands listed in Latest evidence.
+      Evidence 2026-06-13 round273: `packages/runtime/src/inline-loader-build.ts` now drives
+      inline wire-parser and response-apply extraction/parity checks through one helper-spec path,
+      so readable/minified embed checks no longer maintain duplicated parser/apply plumbing.
+      `packages/runtime/src/inline-loader-artifact-minifier.test.ts` splits shipped minified
+      artifact assertions into parser and response-apply owner checks. Verified by focused
+      inline-loader/minifier tests, full runtime tests, inline-loader generation check, TypeScript,
+      browser runtime tests, exact `vp check`, and `git diff --check` commands listed in Latest
+      evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1321,6 +1329,9 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       Evidence 2026-06-13 round271: browser runtime checks passed after the inline delegated
       handler and minified artifact test ownership split. Command: `pnpm exec vitest --run --config
       vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
+      Evidence 2026-06-13 round273: browser runtime checks passed after the shared inline helper
+      extraction/parity cleanup and minified artifact parser/apply test split. Command: `pnpm exec
+      vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
 
 Latest evidence:
 
@@ -1398,6 +1409,14 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-loader-delegated.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round273 inline helper parity cleanup:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-js-minifier.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 5 - Server And App Shell

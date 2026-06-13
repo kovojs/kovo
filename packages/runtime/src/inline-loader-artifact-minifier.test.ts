@@ -20,8 +20,8 @@ describe('inline loader minified artifact', () => {
     );
   });
 
-  it('keeps minified wire-contract tokens pinned in the extracted installer', () => {
-    // SPEC.md §4.4/§9.1: inline and modular loaders must not drift on query/fragment wire effects.
+  it('keeps minified parser wire-contract tokens pinned in the extracted installer', () => {
+    // SPEC.md §4.4/§9.1: inline and modular loaders must share query/fragment wire scanning.
     expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
     expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
@@ -33,6 +33,21 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function readInlineMutationResponseBodyChunks(',
     );
+    expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
+    expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
+    expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      "element.getAttribute('fw-fragment-target')??element.id",
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
+    expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
+    expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
+  });
+
+  it('keeps minified response-apply tokens pinned in the extracted installer', () => {
+    // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
+    expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
+    expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
     expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineMutationResponseBody(');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function applyInlineMutationResponseChunks(',
@@ -46,18 +61,9 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).toContain(
       'applyInlineMutationResponseBody(body,{dispatchQuery,findFragmentTarget,readBody:readInlineMutationResponseBodyChunks,});',
     );
-    expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
-    expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineJisoLoaderInstallerSource).toContain(
       'detail:{attrs:query.attrs,content:query.content}',
     );
-    expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      "element.getAttribute('fw-fragment-target')??element.id",
-    );
-    expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
-    expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
-    expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
   });
 });
