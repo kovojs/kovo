@@ -1575,6 +1575,16 @@ instead of falling back to source-name compatibility.
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "conditional (query-loader )?option objects|conditional options"` and
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`.
+      Evidence 2026-06-13 round361: `packages/drizzle/src/static.ts` now runs the same
+      project local-helper and unresolved-surface pass for static class member callbacks that
+      function, variable, object-member, and domain callbacks already used. This keeps
+      `ProductHelpers.visibleRead()`/`visibleWrite()` summaries exact through ts-morph receiver
+      proof while degrading class-member `inspect(db)`/`db.execute(...)` surfaces to FW406 instead
+      of fabricating an empty helper summary. `packages/drizzle/src/index.test.ts` covers the
+      package regression; `conformance/drizzle-pin/src/index.test.ts` pins the same behavior
+      against real `drizzle-orm/pg-core` `PgDatabase` imports. Focused proof:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "static class"` and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "static class member helper"`.
       Evidence 2026-06-13: static element-access callback references such as
       `load: loaders["loadProducts"]` and `write(callbacks["addItem"])` are covered as real
       executable callback surfaces instead of invisible aliases; `packages/drizzle/src/index.test.ts`

@@ -13428,6 +13428,146 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForTouchGraph(extractTouchGraphFromProject({ files }))).toEqual([]);
   });
 
+  it('propagates project static class member local helpers and FW406 surfaces', () => {
+    const files = [
+      pgDatabaseTypes([
+        'execute(value: unknown): Promise<void>;',
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'declare function inspect(value: unknown): void;',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function readProducts(db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id }).from(products);',
+          '}',
+          '',
+          'function touchProduct(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'class ProductHelpers {',
+          '  static visibleRead(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return readProducts(db);',
+          '  }',
+          '',
+          '  static opaqueRead(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    inspect(db);',
+          '    return db.execute(sql`select * from products`);',
+          '  }',
+          '',
+          '  static visibleWrite(db: PgDatabase<any, any, any>, productId: string) {',
+          '    return touchProduct(db, productId);',
+          '  }',
+          '',
+          '  static opaqueWrite(db: PgDatabase<any, any, any>) {',
+          '    inspect(db);',
+          '    return db.execute(sql`delete from products`);',
+          '  }',
+          '}',
+          '',
+          'export const productQuery = query("product/static-class-local-helper", {',
+          '  load(input: unknown, db: PgDatabase<any, any, any>) {',
+          '    ProductHelpers.opaqueRead(input, db);',
+          '    return ProductHelpers.visibleRead(input, db);',
+          '  },',
+          '});',
+          '',
+          'export const productDomain = domain({',
+          '  add: write((db: PgDatabase<any, any, any>, productId: string) => {',
+          '    ProductHelpers.opaqueWrite(db);',
+          '    return ProductHelpers.visibleWrite(db, productId);',
+          '  }),',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query local helper has unresolved Drizzle inspect().',
+            severity: 'warn',
+            site: 'product.domain.ts:24',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query local helper has unresolved Drizzle execute().',
+            severity: 'warn',
+            site: 'product.domain.ts:25',
+          },
+        ],
+        query: 'product/static-class-local-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'product.domain.ts:38',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:15',
+            via: 'products',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:33',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:34',
+          },
+        ],
+      },
+      readProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:11',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      touchProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:15',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts project domain action shorthand aliases through destructured static containers', () => {
     const files = [
       pgDatabaseTypes([
