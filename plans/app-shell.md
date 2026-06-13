@@ -54,9 +54,15 @@ Implemented areas:
 - `vite-plugin-build.ts` owns the Vite plugin `writeBundle` build/static-export choreography and
   exposes a public app-shell helper, leaving `vite-plugin.ts` focused on dev middleware and hook
   delegation while preserving plugin `onBuild` output evidence.
+- `vite-static-export-options.ts` owns the Vite export write-vs-inventory option boundary:
+  inventory/manifest dry runs reject `outDir` with FW229 instead of silently discarding a write
+  target, while write exports keep the manifest-backed asset copy plan.
 
 Recent gates:
 
+- `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec vp check packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`

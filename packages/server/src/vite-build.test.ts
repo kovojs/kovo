@@ -293,8 +293,7 @@ describe('server app shell Vite build seam', () => {
 
       const inventory = await staticExportInventoryForJisoAppShellViteBuild(build, {
         distDir,
-        outDir,
-      } as unknown as Parameters<typeof staticExportInventoryForJisoAppShellViteBuild>[1]);
+      });
 
       expect(inventory).toEqual([
         {

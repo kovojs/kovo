@@ -191,7 +191,9 @@ Vite app-shell build output now returns the same compiled `/c/` module output pl
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
 exported from the public app-shell Vite subpath, leaving the plugin module focused on middleware
-and hook delegation.
+and hook delegation. Vite static export inventory/manifest option helpers now reject `outDir`
+with FW229 instead of silently dropping write targets, so R6 dry-run preview/export introspection
+cannot be mistaken for an output write path.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -202,6 +204,9 @@ and hook delegation.
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec vp check packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`

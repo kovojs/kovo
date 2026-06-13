@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
+import { StaticExportError } from './static-export-diagnostics.js';
 import { createJisoAppShellViteBuild } from './vite-build.js';
 import {
   jisoAppShellViteBuildDryRunStaticExportOptions,
@@ -78,8 +79,7 @@ describe('server app shell Vite static export options boundary', () => {
         jisoAppShellViteBuildDryRunStaticExportOptions(build, {
           assets: [robots],
           distDir,
-          outDir,
-        } as unknown as Parameters<typeof jisoAppShellViteBuildDryRunStaticExportOptions>[1]),
+        }),
       ).toEqual({
         assets: [
           {
@@ -158,16 +158,80 @@ describe('server app shell Vite static export options boundary', () => {
         clientModules,
         distDir,
         manifestFile: join(distDir, 'manifest.web.json'),
-        onNonExportable: 'skip',
-        outDir,
+        onNonExportable: 'skip' as const,
         routeEntryMap: {
           '/docs': 'src/docs.client.ts',
         },
-      } as unknown as Parameters<typeof jisoAppShellViteManifestFileDryRunStaticExportOptions>[0];
+      };
       expect(jisoAppShellViteManifestFileDryRunStaticExportOptions(dryRunOptions)).toEqual({
         distDir,
         onNonExportable: 'skip',
       });
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('rejects write targets on dry-run inventory option helpers', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dry-run-reject-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dry-run-reject-out-'));
+
+    try {
+      const app = createApp({
+        routes: [
+          route('/preview', {
+            page() {
+              return '<main>Preview</main>';
+            },
+          }),
+        ],
+      });
+      const build = createJisoAppShellViteBuild({
+        app,
+        manifest: {},
+      });
+      const expectedError = {
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              'Vite app-shell static export inventory/manifest tasks are dry runs and must not receive outDir.',
+            ),
+            routePath: 'vite-static-export',
+          },
+        ],
+      };
+
+      let buildError: unknown;
+      try {
+        jisoAppShellViteBuildDryRunStaticExportOptions(build, {
+          distDir,
+          outDir,
+        } as unknown as Parameters<typeof jisoAppShellViteBuildDryRunStaticExportOptions>[1]);
+      } catch (error) {
+        buildError = error;
+      }
+      expect(buildError).toBeInstanceOf(StaticExportError);
+      expect(buildError).toMatchObject(expectedError);
+
+      let manifestFileError: unknown;
+      try {
+        jisoAppShellViteManifestFileDryRunStaticExportOptions({
+          app,
+          distDir,
+          outDir,
+        } as unknown as Parameters<
+          typeof jisoAppShellViteManifestFileDryRunStaticExportOptions
+        >[0]);
+      } catch (error) {
+        manifestFileError = error;
+      }
+      expect(manifestFileError).toBeInstanceOf(StaticExportError);
+      expect(manifestFileError).toMatchObject(expectedError);
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),

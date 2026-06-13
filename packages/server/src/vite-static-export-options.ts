@@ -1,5 +1,6 @@
 import type { JisoApp } from './app.js';
 import type { StaticExportAssetInput, StaticExportOptions } from './static-export.js';
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
   createJisoAppShellViteBuildFromManifestFile,
   type JisoAppShellBuild,
@@ -85,12 +86,8 @@ export function jisoAppShellViteBuildDryRunStaticExportOptions(
   build: JisoAppShellBuild,
   options: JisoAppShellViteBuildStaticExportInventoryOptions,
 ): StaticExportOptions {
-  const {
-    assets,
-    distDir,
-    outDir: _outDir,
-    ...exportOptions
-  } = options as JisoAppShellViteBuildStaticExportInventoryOptions & { outDir?: unknown };
+  assertViteStaticExportInventoryOptions(options);
+  const { assets, distDir, ...exportOptions } = options;
 
   return {
     ...exportOptions,
@@ -121,17 +118,29 @@ export function jisoAppShellViteManifestFileWriteStaticExportOptions(
 export function jisoAppShellViteManifestFileDryRunStaticExportOptions(
   options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
 ): JisoAppShellViteBuildStaticExportInventoryOptions {
+  assertViteStaticExportInventoryOptions(options);
   const {
     app: _app,
     base: _base,
     clientModules: _clientModules,
     manifestFile: _manifestFile,
-    outDir: _outDir,
     routeEntryMap: _routeEntryMap,
     ...exportOptions
-  } = options as JisoAppShellViteManifestFileBuildStaticExportInventoryOptions & {
-    outDir?: unknown;
-  };
+  } = options;
 
   return exportOptions;
+}
+
+function assertViteStaticExportInventoryOptions(options: object): void {
+  if (!Object.prototype.hasOwnProperty.call(options, 'outDir')) return;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      'vite-static-export',
+      [
+        'Vite app-shell static export inventory/manifest tasks are dry runs and must not receive outDir.',
+        'Use exportJisoAppShellViteBuild() or exportJisoAppShellViteBuildFromManifestFile() to write files.',
+      ].join(' '),
+    ),
+  ]);
 }
