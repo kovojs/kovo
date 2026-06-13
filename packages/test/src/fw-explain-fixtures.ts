@@ -34,6 +34,11 @@ export interface FwExplainScopeAuditFact {
   targetKind: string;
 }
 
+export interface FwExplainResultLike {
+  exitCode: number;
+  output: string;
+}
+
 export interface FwExplainOutput {
   fields: FwExplainField[];
   records: FwExplainRecord[];
@@ -42,6 +47,46 @@ export interface FwExplainOutput {
 }
 
 export type FwExplainSummary = Record<string, string>;
+
+export interface FwExplainMutationAssertionFact {
+  enctype?: string;
+  exitCode: number;
+  fileFields?: string[];
+  guards: string[];
+  inputFields: string[];
+  invalidates: string[];
+  manualInvalidates: string[];
+  optimisticStatuses?: Record<string, string>;
+  optimisticSummary?: FwExplainSummary;
+  session: string;
+  subject: string;
+  updateConsumers: FwExplainUpdateConsumerFact[];
+  version: FwExplainOutput['version'];
+  writes: string[];
+}
+
+export interface FwExplainQueryAssertionFact {
+  consumers: string[];
+  domainWrites: string[];
+  exitCode: number;
+  invalidatedBy: string[];
+  reads: string[];
+  subject: string;
+  version: FwExplainOutput['version'];
+}
+
+export interface FwExplainPageAssertionFact {
+  exitCode: number;
+  i18n: string[];
+  meta: string;
+  modulepreloads: string[];
+  prefetch: string;
+  queries: string[];
+  stylesheets: string[];
+  subject: string;
+  version: FwExplainOutput['version'];
+  viewTransitions: string[];
+}
 
 export function parseFwExplainOutput(output: string): FwExplainOutput {
   const lines = output.trimEnd().split('\n');
@@ -87,12 +132,72 @@ export function parseFwExplainOutput(output: string): FwExplainOutput {
   return { fields, records, subject, version };
 }
 
+export function fwExplainMutationAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainMutationAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+  const fact: FwExplainMutationAssertionFact = {
+    exitCode: result.exitCode,
+    guards: listField(parsed, 'guards'),
+    inputFields: listField(parsed, 'input-fields'),
+    invalidates: listField(parsed, 'invalidates'),
+    manualInvalidates: listField(parsed, 'manual-invalidates'),
+    session: requiredField(parsed, 'session'),
+    subject: parsed.subject,
+    updateConsumers: fwExplainUpdateConsumers(result.output),
+    version: parsed.version,
+    writes: listField(parsed, 'writes'),
+  };
+  const enctype = optionalField(parsed, 'enctype');
+  const fileFields = optionalListField(parsed, 'file-fields');
+  const optimisticSummary = optionalSummary(result.output, 'OPTIMISTIC-SUMMARY');
+  const optimisticStatuses = fwExplainOptimisticStatuses(result.output);
+
+  if (enctype !== undefined) fact.enctype = enctype;
+  if (fileFields !== undefined) fact.fileFields = fileFields;
+  if (Object.keys(optimisticStatuses).length > 0) fact.optimisticStatuses = optimisticStatuses;
+  if (optimisticSummary !== undefined) fact.optimisticSummary = optimisticSummary;
+
+  return fact;
+}
+
+export function fwExplainQueryAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainQueryAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+
+  return {
+    consumers: listField(parsed, 'consumers'),
+    domainWrites: listField(parsed, 'domain-writes'),
+    exitCode: result.exitCode,
+    invalidatedBy: listField(parsed, 'invalidated-by'),
+    reads: listField(parsed, 'reads'),
+    subject: parsed.subject,
+    version: parsed.version,
+  };
+}
+
+export function fwExplainPageAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainPageAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+
+  return {
+    exitCode: result.exitCode,
+    i18n: listField(parsed, 'i18n'),
+    meta: requiredField(parsed, 'meta'),
+    modulepreloads: listField(parsed, 'modulepreloads'),
+    prefetch: requiredField(parsed, 'prefetch'),
+    queries: listField(parsed, 'queries'),
+    stylesheets: listField(parsed, 'stylesheets'),
+    subject: parsed.subject,
+    version: parsed.version,
+    viewTransitions: listField(parsed, 'view-transitions'),
+  };
+}
+
 export function fwExplainField(output: string, key: string): string {
-  const field = parseFwExplainOutput(output).fields.find((entry) => entry.key === key);
-  if (!field) {
-    throw new Error(`fw explain output includes ${key}:`);
-  }
-  return field.value;
+  return requiredField(parseFwExplainOutput(output), key);
 }
 
 export function fwExplainRecords(output: string, key: string): string[] {
@@ -206,6 +311,32 @@ function requiredMatchGroup(groups: Record<string, string | undefined>, key: str
     throw new Error(`fw explain regex match includes ${key}`);
   }
   return value;
+}
+
+function requiredField(output: FwExplainOutput, key: string): string {
+  const field = optionalField(output, key);
+  if (field === undefined) {
+    throw new Error(`fw explain output includes ${key}:`);
+  }
+  return field;
+}
+
+function optionalField(output: FwExplainOutput, key: string): string | undefined {
+  return output.fields.find((entry) => entry.key === key)?.value;
+}
+
+function listField(output: FwExplainOutput, key: string): string[] {
+  return parseList(requiredField(output, key));
+}
+
+function optionalListField(output: FwExplainOutput, key: string): string[] | undefined {
+  const value = optionalField(output, key);
+  return value === undefined ? undefined : parseList(value);
+}
+
+function optionalSummary(output: string, key: string): FwExplainSummary | undefined {
+  const [summary] = fwExplainRecords(output, key);
+  return summary === undefined ? undefined : parseKeyValueFields(summary);
 }
 
 function parseList(value: string): string[] {

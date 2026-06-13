@@ -7,9 +7,11 @@ import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
   fwExplainEndpointFacts,
-  fwExplainField,
   fwExplainListField,
+  fwExplainMutationAssertionFact,
   fwExplainOptimisticStatuses,
+  fwExplainPageAssertionFact,
+  fwExplainQueryAssertionFact,
   fwExplainScopeAuditFacts,
   fwExplainSummary,
   fwExplainUpdateConsumerMap,
@@ -182,61 +184,45 @@ describe('commerce source-truth graph acceptance', () => {
       target: 'order/receipt',
     });
 
-    expect(cartAddExplain.exitCode).toBe(0);
-    expect(parseFwExplainOutput(cartAddExplain.output).subject).toBe('MUTATION cart/add');
-    expect(fwExplainListField(cartAddExplain.output, 'guards')).toEqual([
-      'authed',
-      'rateLimit:session',
-    ]);
-    expect(fwExplainField(cartAddExplain.output, 'session')).toBe('commerceSession');
-    expect(fwExplainListField(cartAddExplain.output, 'input-fields')).toEqual([
-      'productId',
-      'quantity',
-    ]);
-    expect(fwExplainListField(cartAddExplain.output, 'writes')).toEqual([
-      'cart',
-      'product',
-      'order',
-    ]);
-    expect(fwExplainListField(cartAddExplain.output, 'invalidates')).toEqual([
-      'cart',
-      'product',
-      'order',
-    ]);
-    expect(fwExplainListField(cartAddExplain.output, 'manual-invalidates')).toEqual([]);
-    expect(fwExplainUpdateConsumers(cartAddExplain.output)).toEqual(
-      graphMutationUpdateConsumers(commerceGraph, 'cart/add'),
-    );
-    expect(fwExplainOptimisticStatuses(cartAddExplain.output)).toEqual({
-      cart: 'hand-written',
-      orderHistory: 'await-fragment',
-      productGrid: 'await-fragment',
-    });
-    expect(fwExplainSummary(cartAddExplain.output, 'OPTIMISTIC-SUMMARY')).toEqual({
-      UNHANDLED: '0',
-      'await-fragment': '2',
-      'hand-written': '1',
-      total: '3',
+    expect(fwExplainMutationAssertionFact(cartAddExplain)).toEqual({
+      exitCode: 0,
+      guards: ['authed', 'rateLimit:session'],
+      inputFields: ['productId', 'quantity'],
+      invalidates: ['cart', 'product', 'order'],
+      manualInvalidates: [],
+      optimisticStatuses: {
+        cart: 'hand-written',
+        orderHistory: 'await-fragment',
+        productGrid: 'await-fragment',
+      },
+      optimisticSummary: {
+        UNHANDLED: '0',
+        'await-fragment': '2',
+        'hand-written': '1',
+        total: '3',
+      },
+      session: 'commerceSession',
+      subject: 'MUTATION cart/add',
+      updateConsumers: graphMutationUpdateConsumers(commerceGraph, 'cart/add'),
+      version: 'fw-explain/v1',
+      writes: ['cart', 'product', 'order'],
     });
 
-    expect(receiptExplain.exitCode).toBe(0);
-    expect(parseFwExplainOutput(receiptExplain.output).subject).toBe('MUTATION order/receipt');
-    expect(fwExplainListField(receiptExplain.output, 'guards')).toEqual([
-      'authed',
-      'rateLimit:session',
-    ]);
-    expect(fwExplainField(receiptExplain.output, 'session')).toBe('commerceSession');
-    expect(fwExplainField(receiptExplain.output, 'enctype')).toBe('multipart/form-data');
-    expect(fwExplainListField(receiptExplain.output, 'input-fields')).toEqual([
-      'orderId',
-      'receipt',
-    ]);
-    expect(fwExplainListField(receiptExplain.output, 'file-fields')).toEqual(['receipt']);
-    expect(fwExplainListField(receiptExplain.output, 'writes')).toEqual(['attachment']);
-    expect(fwExplainListField(receiptExplain.output, 'invalidates')).toEqual([]);
-    expect(fwExplainListField(receiptExplain.output, 'manual-invalidates')).toEqual([]);
-    expect(fwExplainUpdateConsumers(receiptExplain.output)).toEqual([]);
-    expect(fwExplainSummary(receiptOptimisticExplain.output, 'OPTIMISTIC-SUMMARY')).toEqual({
+    expect(fwExplainMutationAssertionFact(receiptExplain)).toEqual({
+      enctype: 'multipart/form-data',
+      exitCode: 0,
+      fileFields: ['receipt'],
+      guards: ['authed', 'rateLimit:session'],
+      inputFields: ['orderId', 'receipt'],
+      invalidates: [],
+      manualInvalidates: [],
+      session: 'commerceSession',
+      subject: 'MUTATION order/receipt',
+      updateConsumers: [],
+      version: 'fw-explain/v1',
+      writes: ['attachment'],
+    });
+    expect(fwExplainMutationAssertionFact(receiptOptimisticExplain).optimisticSummary).toEqual({
       UNHANDLED: '0',
       'await-fragment': '0',
       'hand-written': '0',
@@ -263,35 +249,30 @@ describe('commerce source-truth graph acceptance', () => {
     for (const [query, expected] of Object.entries(queryExplainExpectations)) {
       const explanation = fwExplain(commerceGraph, { kind: 'query', target: query });
 
-      expect(explanation.exitCode).toBe(0);
-      expect(parseFwExplainOutput(explanation.output).subject).toBe(`QUERY ${query}`);
-      expect(fwExplainListField(explanation.output, 'reads')).toEqual(expected.reads);
-      expect(fwExplainListField(explanation.output, 'consumers')).toEqual(expected.consumers);
-      expect(fwExplainListField(explanation.output, 'invalidated-by')).toEqual(['cart/add']);
-      expect(fwExplainListField(explanation.output, 'domain-writes')).toEqual(
-        expected.domainWrites,
-      );
+      expect(fwExplainQueryAssertionFact(explanation)).toEqual({
+        consumers: expected.consumers,
+        domainWrites: expected.domainWrites,
+        exitCode: 0,
+        invalidatedBy: ['cart/add'],
+        reads: expected.reads,
+        subject: `QUERY ${query}`,
+        version: 'fw-explain/v1',
+      });
     }
 
     const pageExplain = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
-    expect(pageExplain.exitCode).toBe(0);
-    expect(parseFwExplainOutput(pageExplain.output).subject).toBe('PAGE /cart');
-    expect(fwExplainField(pageExplain.output, 'prefetch')).toBe('false');
-    expect(fwExplainField(pageExplain.output, 'meta')).toBe(
-      'title=Jiso Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
-    );
-    expect(fwExplainListField(pageExplain.output, 'i18n')).toEqual([
-      'en-US:cartLabel',
-      'productStock',
-    ]);
-    expect(fwExplainListField(pageExplain.output, 'modulepreloads')).toEqual([]);
-    expect(fwExplainListField(pageExplain.output, 'stylesheets')).toEqual(['/assets/tailwind.css']);
-    expect(fwExplainListField(pageExplain.output, 'queries')).toEqual([
-      'cart',
-      'productGrid',
-      'orderHistory',
-    ]);
-    expect(fwExplainListField(pageExplain.output, 'view-transitions')).toEqual([]);
+    expect(fwExplainPageAssertionFact(pageExplain)).toEqual({
+      exitCode: 0,
+      i18n: ['en-US:cartLabel', 'productStock'],
+      meta: 'title=Jiso Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
+      modulepreloads: [],
+      prefetch: 'false',
+      queries: ['cart', 'productGrid', 'orderHistory'],
+      stylesheets: ['/assets/tailwind.css'],
+      subject: 'PAGE /cart',
+      version: 'fw-explain/v1',
+      viewTransitions: [],
+    });
 
     const unguardedExplain = fwExplain(commerceGraph, { unguarded: true });
     expect(unguardedExplain.exitCode).toBe(0);

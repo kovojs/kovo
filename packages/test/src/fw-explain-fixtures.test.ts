@@ -4,7 +4,10 @@ import {
   fwExplainEndpointFacts,
   fwExplainField,
   fwExplainListField,
+  fwExplainMutationAssertionFact,
   fwExplainOptimisticStatuses,
+  fwExplainPageAssertionFact,
+  fwExplainQueryAssertionFact,
   fwExplainRecords,
   fwExplainScopeAuditFacts,
   fwExplainSummary,
@@ -20,6 +23,9 @@ const fixture = [
   'guards: authed',
   'session: commerceSession',
   'input-fields: productId,quantity',
+  'writes: cart',
+  'invalidates: cart,product',
+  'manual-invalidates: -',
   'updates: cart->component:CartBadge,page:/cart; product->page:/products',
   'OPTIMISTIC cart await-fragment',
   'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0',
@@ -37,6 +43,9 @@ describe('@jiso/test fw explain fixture seam', () => {
           raw: 'input-fields: productId,quantity',
           value: 'productId,quantity',
         },
+        { key: 'writes', raw: 'writes: cart', value: 'cart' },
+        { key: 'invalidates', raw: 'invalidates: cart,product', value: 'cart,product' },
+        { key: 'manual-invalidates', raw: 'manual-invalidates: -', value: '-' },
         {
           key: 'updates',
           raw: 'updates: cart->component:CartBadge,page:/cart; product->page:/products',
@@ -127,6 +136,113 @@ describe('@jiso/test fw explain fixture seam', () => {
         targetKind: 'QUERY',
       },
     ]);
+  });
+
+  it('exposes rawless assertion facts for query, mutation, and page explanations', () => {
+    expect(fwExplainMutationAssertionFact({ exitCode: 0, output: fixture })).toEqual({
+      exitCode: 0,
+      guards: ['authed'],
+      inputFields: ['productId', 'quantity'],
+      invalidates: ['cart', 'product'],
+      manualInvalidates: [],
+      optimisticStatuses: { cart: 'await-fragment' },
+      optimisticSummary: {
+        UNHANDLED: '0',
+        'await-fragment': '1',
+        'hand-written': '0',
+        total: '1',
+      },
+      session: 'commerceSession',
+      subject: 'MUTATION cart/add',
+      updateConsumers: [
+        { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+        { consumers: ['page:/products'], query: 'product' },
+      ],
+      version: 'fw-explain/v1',
+      writes: ['cart'],
+    });
+    expect(
+      fwExplainMutationAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'MUTATION order/receipt',
+          'guards: authed',
+          'session: commerceSession',
+          'enctype: multipart/form-data',
+          'input-fields: orderId,receipt',
+          'file-fields: receipt',
+          'writes: attachment',
+          'invalidates: -',
+          'manual-invalidates: -',
+          'updates: -',
+          '',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      enctype: 'multipart/form-data',
+      exitCode: 0,
+      fileFields: ['receipt'],
+      guards: ['authed'],
+      inputFields: ['orderId', 'receipt'],
+      invalidates: [],
+      manualInvalidates: [],
+      session: 'commerceSession',
+      subject: 'MUTATION order/receipt',
+      updateConsumers: [],
+      version: 'fw-explain/v1',
+      writes: ['attachment'],
+    });
+    expect(
+      fwExplainQueryAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'QUERY cart',
+          'reads: cart',
+          'consumers: component:CartBadge,page:/cart',
+          'invalidated-by: cart/add',
+          'domain-writes: cart.addItem',
+          '',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      consumers: ['component:CartBadge', 'page:/cart'],
+      domainWrites: ['cart.addItem'],
+      exitCode: 0,
+      invalidatedBy: ['cart/add'],
+      reads: ['cart'],
+      subject: 'QUERY cart',
+      version: 'fw-explain/v1',
+    });
+    expect(
+      fwExplainPageAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'PAGE /cart',
+          'prefetch: false',
+          'meta: title=Cart description=Ready image=-',
+          'i18n: en-US:cartTitle',
+          'modulepreloads: -',
+          'stylesheets: /src/styles.css',
+          'queries: cart',
+          'view-transitions: -',
+          '',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      exitCode: 0,
+      i18n: ['en-US:cartTitle'],
+      meta: 'title=Cart description=Ready image=-',
+      modulepreloads: [],
+      prefetch: 'false',
+      queries: ['cart'],
+      stylesheets: ['/src/styles.css'],
+      subject: 'PAGE /cart',
+      version: 'fw-explain/v1',
+      viewTransitions: [],
+    });
   });
 
   it('rejects malformed explain output at the fixture seam', () => {

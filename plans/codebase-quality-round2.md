@@ -49,6 +49,9 @@ Current state:
 - Shared `fw-explain` fixtures now cover list fields, optimistic statuses, update consumers,
   endpoint facts, and scope-audit facts; selected commerce and `fw-check` gates consume those
   facts instead of raw sentinel/string snapshots.
+- Shared `fw-explain` fixtures now expose rawless query, mutation, and page assertion facts for
+  SPEC §10.4/§16.5 graph answerability; commerce source-truth and `fw-check` P10/starter graph
+  gates consume those facts instead of locally parsing each explain field.
 - Shared `fw-check` fixtures now parse `fw-check/v1` OK, diagnostic, and coverage output into
   structured result facts; commerce/starter graph gates assert result facts instead of raw OK
   strings.
@@ -80,6 +83,9 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
@@ -330,6 +336,8 @@ Current state:
   with focused parser tests covering quoted coverage/update fields and unguarded page/query rows.
 - Commerce source-truth no longer owns local `fw-explain` parsing helpers for the currently
   covered graph/update/scope facts.
+- Commerce source-truth now consumes `@jiso/test/fw-explain-fixtures` query, mutation, and page
+  assertion facts for graph answerability instead of locally reassembling those field groups.
 - Commerce source-truth no longer owns local graph page/fragment/invalidation helpers for the
   currently covered commerce graph acceptance checks.
 - Verifier proxy SQL coverage handles string SQL and structured `{ text }`/`{ sql }` statement
@@ -363,6 +371,8 @@ Current state:
 - The remaining `fw-check` monolith checks for update coverage, unguarded audit, verification
   diagnostics, FW235, and render-equivalence now consume `@jiso/test/fw-check-fixtures` assertion
   facts instead of owning local `raw` stripping or full-output comparisons.
+- The P10 commerce and starter graph gates now consume `@jiso/test/fw-explain-fixtures`
+  query/mutation/page assertion facts instead of local field-by-field explain parsing.
 
 Open:
 

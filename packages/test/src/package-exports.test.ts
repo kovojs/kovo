@@ -76,7 +76,10 @@ import {
   fwExplainEndpointFacts,
   fwExplainField,
   fwExplainListField,
+  fwExplainMutationAssertionFact,
   fwExplainOptimisticStatuses,
+  fwExplainPageAssertionFact,
+  fwExplainQueryAssertionFact,
   fwExplainRecords,
   fwExplainScopeAuditFacts,
   fwExplainSummary,
@@ -85,7 +88,11 @@ import {
   fwExplainUpdateTargets,
   parseFwExplainOutput,
   type FwExplainEndpointFact,
+  type FwExplainMutationAssertionFact,
   type FwExplainOutput,
+  type FwExplainPageAssertionFact,
+  type FwExplainQueryAssertionFact,
+  type FwExplainResultLike,
   type FwExplainScopeAuditFact,
   type FwExplainUpdateConsumerFact,
 } from '@jiso/test/fw-explain-fixtures';
@@ -594,6 +601,44 @@ describe('@jiso/test package subpath exports', () => {
         },
       },
     ]);
+    expect(
+      fwExplainMutationAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'MUTATION cart/add',
+          'guards: authed',
+          'session: starterSession',
+          'input-fields: productId,quantity',
+          'writes: cart',
+          'invalidates: cart',
+          'manual-invalidates: -',
+          'updates: cart->component:CartBadge,page:/cart',
+          'OPTIMISTIC cart await-fragment',
+          'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0',
+          '',
+        ].join('\n'),
+      }),
+    ).toMatchObject({
+      inputFields: ['productId', 'quantity'],
+      optimisticStatuses: { cart: 'await-fragment' },
+      subject: 'MUTATION cart/add',
+      updateConsumers: [{ consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' }],
+    });
+    expect(
+      fwExplainQueryAssertionFact({
+        exitCode: 0,
+        output:
+          'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+      }),
+    ).toMatchObject({ consumers: ['page:/cart'], domainWrites: ['cart.addItem'] });
+    expect(
+      fwExplainPageAssertionFact({
+        exitCode: 0,
+        output:
+          'fw-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Cart description=Ready image=-\ni18n: -\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
+      }),
+    ).toMatchObject({ queries: ['cart'], stylesheets: ['/src/styles.css'] });
     expect(executeGeneratedClientModule).toBeTypeOf('function');
     expect(executeGeneratedServerRenderSource).toBeTypeOf('function');
     expect(executeGeneratedBootstrapModule).toBeTypeOf('function');
@@ -655,7 +700,11 @@ type _PublicSubpathTypes = [
   DiagnosticOutputFact,
   ViteDiagnosticMessageFacts,
   FwExplainEndpointFact,
+  FwExplainMutationAssertionFact,
   FwExplainOutput,
+  FwExplainPageAssertionFact,
+  FwExplainQueryAssertionFact,
+  FwExplainResultLike,
   FwExplainScopeAuditFact,
   FwExplainUpdateConsumerFact,
   FwExportError,

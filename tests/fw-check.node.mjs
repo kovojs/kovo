@@ -63,10 +63,10 @@ import {
 } from '../packages/test/src/command-fixtures.ts';
 import { viteDiagnosticMessageFacts } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
-  fwExplainField,
   fwExplainListField,
-  fwExplainOptimisticStatuses,
-  fwExplainSummary,
+  fwExplainMutationAssertionFact,
+  fwExplainPageAssertionFact,
+  fwExplainQueryAssertionFact,
   fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
 import {
@@ -3126,17 +3126,17 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
-  const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output;
+  const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' });
   const cartAddExplain = fwExplain(commerceGraph, {
     kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
-  }).output;
+  });
   const uploadReceiptExplain = fwExplain(commerceGraph, {
     kind: 'mutation',
     optimistic: true,
     target: 'order/receipt',
-  }).output;
+  });
 
   assert.deepEqual(fwCheckOkAssertionFact(fwCheck(commerceGraph)), {
     exitCode: 0,
@@ -3144,29 +3144,62 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     status: 'ok',
     version: 'fw-check/v1',
   });
-  assert.deepEqual(fwExplainListField(cartQueryExplain, 'consumers'), [
-    'component:CartBadge',
-    'page:/cart',
-  ]);
-  assert.deepEqual(fwExplainListField(cartQueryExplain, 'invalidated-by'), ['cart/add']);
-  assert.deepEqual(fwExplainListField(cartQueryExplain, 'domain-writes'), ['cart.addItem']);
-  assert.equal(fwExplainField(cartAddExplain, 'session'), 'commerceSession');
-  assert.deepEqual(fwExplainListField(cartAddExplain, 'input-fields'), ['productId', 'quantity']);
-  assert.deepEqual(fwExplainListField(cartAddExplain, 'writes'), ['cart', 'product', 'order']);
-  assert.deepEqual(fwExplainListField(cartAddExplain, 'invalidates'), ['cart', 'product', 'order']);
-  assert.deepEqual(fwExplainUpdateConsumers(cartAddExplain), [
-    { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
-    { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
-    { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
-  ]);
-  assert.deepEqual(fwExplainOptimisticStatuses(cartAddExplain), {
-    cart: 'hand-written',
-    orderHistory: 'await-fragment',
-    productGrid: 'await-fragment',
+  assert.deepEqual(fwExplainQueryAssertionFact(cartQueryExplain), {
+    consumers: ['component:CartBadge', 'page:/cart'],
+    domainWrites: ['cart.addItem'],
+    exitCode: 0,
+    invalidatedBy: ['cart/add'],
+    reads: ['cart'],
+    subject: 'QUERY cart',
+    version: 'fw-explain/v1',
   });
-  assert.equal(fwExplainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY').UNHANDLED, '0');
-  assert.deepEqual(fwExplainListField(uploadReceiptExplain, 'file-fields'), ['receipt']);
-  assert.deepEqual(fwExplainListField(uploadReceiptExplain, 'invalidates'), []);
+  assert.deepEqual(fwExplainMutationAssertionFact(cartAddExplain), {
+    exitCode: 0,
+    guards: ['authed', 'rateLimit:session'],
+    inputFields: ['productId', 'quantity'],
+    invalidates: ['cart', 'product', 'order'],
+    manualInvalidates: [],
+    optimisticStatuses: {
+      cart: 'hand-written',
+      orderHistory: 'await-fragment',
+      productGrid: 'await-fragment',
+    },
+    optimisticSummary: {
+      UNHANDLED: '0',
+      'await-fragment': '2',
+      'hand-written': '1',
+      total: '3',
+    },
+    session: 'commerceSession',
+    subject: 'MUTATION cart/add',
+    updateConsumers: [
+      { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+      { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
+      { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
+    ],
+    version: 'fw-explain/v1',
+    writes: ['cart', 'product', 'order'],
+  });
+  assert.deepEqual(fwExplainMutationAssertionFact(uploadReceiptExplain), {
+    enctype: 'multipart/form-data',
+    exitCode: 0,
+    fileFields: ['receipt'],
+    guards: ['authed', 'rateLimit:session'],
+    inputFields: ['orderId', 'receipt'],
+    invalidates: [],
+    manualInvalidates: [],
+    optimisticSummary: {
+      UNHANDLED: '0',
+      'await-fragment': '0',
+      'hand-written': '0',
+      total: '0',
+    },
+    session: 'commerceSession',
+    subject: 'MUTATION order/receipt',
+    updateConsumers: [],
+    version: 'fw-explain/v1',
+    writes: ['attachment'],
+  });
   assert.equal(
     diagnosticDefinitions.FW310.message,
     'Invalidated query lacks optimistic transform.',
@@ -3295,13 +3328,13 @@ void test('P10 starter wires graph assertions into CI', async () => {
   const packageFacts = starterFacts.package;
   const viteTasks = starterFacts.viteTasks;
   const starterGraph = starterFacts.graph;
-  const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
+  const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' });
   const cartAddExplain = fwExplain(starterGraph, {
     kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
-  }).output;
-  const cartPageExplain = fwExplain(starterGraph, { kind: 'page', target: '/cart' }).output;
+  });
+  const cartPageExplain = fwExplain(starterGraph, { kind: 'page', target: '/cart' });
 
   assert.equal(packageFacts.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
   assert.equal(packageFacts.scripts['fw-check'], undefined);
@@ -3390,27 +3423,48 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.deepEqual(starterGraph.touchGraph?.['cart.addItem']?.touches, [
     { domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' },
   ]);
-  assert.deepEqual(fwExplainListField(cartQueryExplain, 'consumers'), [
-    'component:CartBadge',
-    'component:CartPanel',
-    'page:/cart',
-  ]);
-  assert.deepEqual(fwExplainListField(cartQueryExplain, 'invalidated-by'), ['cart/add']);
-  assert.deepEqual(fwExplainListField(cartQueryExplain, 'domain-writes'), ['cart.addItem']);
-  assert.equal(fwExplainField(cartAddExplain, 'session'), 'starterSession');
-  assert.deepEqual(fwExplainListField(cartAddExplain, 'input-fields'), ['productId', 'quantity']);
-  assert.deepEqual(fwExplainUpdateConsumers(cartAddExplain), [
-    { consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'], query: 'cart' },
-  ]);
-  assert.deepEqual(fwExplainOptimisticStatuses(cartAddExplain), { cart: 'await-fragment' });
-  assert.equal(fwExplainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY').UNHANDLED, '0');
-  assert.equal(
-    fwExplainField(cartPageExplain, 'meta'),
-    'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
-  );
-  assert.deepEqual(fwExplainListField(cartPageExplain, 'i18n'), ['en-US:cartTitle']);
-  assert.deepEqual(fwExplainListField(cartPageExplain, 'queries'), ['cart']);
-  assert.deepEqual(fwExplainListField(cartPageExplain, 'stylesheets'), ['/src/styles.css']);
+  assert.deepEqual(fwExplainQueryAssertionFact(cartQueryExplain), {
+    consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'],
+    domainWrites: ['cart.addItem'],
+    exitCode: 0,
+    invalidatedBy: ['cart/add'],
+    reads: ['cart'],
+    subject: 'QUERY cart',
+    version: 'fw-explain/v1',
+  });
+  assert.deepEqual(fwExplainMutationAssertionFact(cartAddExplain), {
+    exitCode: 0,
+    guards: ['authed'],
+    inputFields: ['productId', 'quantity'],
+    invalidates: ['cart'],
+    manualInvalidates: [],
+    optimisticStatuses: { cart: 'await-fragment' },
+    optimisticSummary: {
+      UNHANDLED: '0',
+      'await-fragment': '1',
+      'hand-written': '0',
+      total: '1',
+    },
+    session: 'starterSession',
+    subject: 'MUTATION cart/add',
+    updateConsumers: [
+      { consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'], query: 'cart' },
+    ],
+    version: 'fw-explain/v1',
+    writes: ['cart'],
+  });
+  assert.deepEqual(fwExplainPageAssertionFact(cartPageExplain), {
+    exitCode: 0,
+    i18n: ['en-US:cartTitle'],
+    meta: 'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
+    modulepreloads: [],
+    prefetch: 'false',
+    queries: ['cart'],
+    stylesheets: ['/src/styles.css'],
+    subject: 'PAGE /cart',
+    version: 'fw-explain/v1',
+    viewTransitions: [],
+  });
 
   assert.deepEqual(
     {
