@@ -122,6 +122,11 @@ export function assertOrderedItems(items: readonly string[], before: string, aft
   assert.ok(beforeIndex < afterIndex, `${before} precedes ${after}`);
 }
 
+export function commandOutputLines(output: string): string[] {
+  const normalized = output.trimEnd();
+  return normalized.length === 0 ? [] : normalized.split(/\r?\n/);
+}
+
 export function vitePlusAcceptanceTaskFacts(options: {
   ciWorkflowSource: string;
   packageJson: { scripts?: Record<string, unknown> };

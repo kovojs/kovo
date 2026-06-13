@@ -15,6 +15,17 @@ export interface ViteDiagnosticMessageFacts {
   summary: string;
 }
 
+const viteDiagnosticSummaryPrefix = 'Jiso Vite transform failed';
+
+export function viteDiagnosticMessageFactsFromOutput(output: string): ViteDiagnosticMessageFacts {
+  const diagnosticStart = output.indexOf(viteDiagnosticSummaryPrefix);
+  if (diagnosticStart === -1) {
+    throw new Error('Vite diagnostic output includes Jiso transform summary');
+  }
+
+  return viteDiagnosticMessageFacts(output.slice(diagnosticStart).trim());
+}
+
 export function viteDiagnosticMessageFacts(message: string): ViteDiagnosticMessageFacts {
   const [summary = '', ...blocks] = message.trim().split(/\n\s*\n/);
   const diagnostics: DiagnosticOutputFact[] = [];

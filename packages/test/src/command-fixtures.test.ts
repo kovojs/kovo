@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertOrderedItems,
+  commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
   loadVitePlusConfig,
@@ -79,6 +80,14 @@ describe('@jiso/test command fixtures', () => {
       'perf precedes fw-check',
     );
     expect(() => assertOrderedItems(['build'], 'build', 'fw-check')).toThrow('fw-check is present');
+  });
+
+  it('normalizes line-oriented command output without local stdout parsers', () => {
+    expect(commandOutputLines('prod-emit-check/v1\r\nOK\r\n')).toEqual([
+      'prod-emit-check/v1',
+      'OK',
+    ]);
+    expect(commandOutputLines('')).toEqual([]);
   });
 
   it('extracts task-specific command facts used by framework gates', () => {

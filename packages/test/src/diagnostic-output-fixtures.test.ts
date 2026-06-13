@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { viteDiagnosticMessageFacts } from './diagnostic-output-fixtures.js';
+import {
+  viteDiagnosticMessageFacts,
+  viteDiagnosticMessageFactsFromOutput,
+} from './diagnostic-output-fixtures.js';
 
 describe('@jiso/test diagnostic output fixtures', () => {
   it('turns Vite diagnostic message blocks into structured facts', () => {
@@ -49,5 +52,32 @@ describe('@jiso/test diagnostic output fixtures', () => {
         ['summary', '', 'FW201 file.ts:1:1 message', '  note: nope'].join('\n'),
       ),
     ).toThrow('Vite diagnostic help line is structured:   note: nope');
+  });
+
+  it('extracts Vite diagnostic facts from mixed command output', () => {
+    expect(
+      viteDiagnosticMessageFactsFromOutput(
+        [
+          'Command failed: vp build',
+          'Jiso Vite transform failed with 1 error diagnostic.',
+          '',
+          'FW201 routes/card.tsx:1:1 message.',
+          '  help: Element params: -',
+        ].join('\n'),
+      ),
+    ).toEqual({
+      diagnostics: [
+        {
+          code: 'FW201',
+          help: [{ label: 'Element params', text: '-' }],
+          location: 'routes/card.tsx:1:1',
+          message: 'message.',
+        },
+      ],
+      summary: 'Jiso Vite transform failed with 1 error diagnostic.',
+    });
+    expect(() => viteDiagnosticMessageFactsFromOutput('no diagnostics')).toThrow(
+      'Vite diagnostic output includes Jiso transform summary',
+    );
   });
 });

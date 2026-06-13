@@ -6,6 +6,7 @@ import {
   executeGeneratedClientModule,
   executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
+  generatedComponentSourceFacts,
   generatedArtifactFile,
   generatedArtifactSource,
   generatedHandlerReferenceFact,
@@ -38,6 +39,27 @@ describe('@jiso/test generated module fixtures', () => {
         'client',
       ),
     ).toThrow('Expected one generated client artifact; found 2');
+  });
+
+  it('summarizes authored and generated component source facts', () => {
+    expect(
+      generatedComponentSourceFacts({
+        authoredSource: '<cart-badge class="ready"></cart-badge>',
+        generatedSource: '// @jiso-ir\nexport const CartBadge = true;',
+      }),
+    ).toEqual({
+      authoredLoweredStampAttributes: [],
+      generatedHasLoweredIrMarker: true,
+    });
+    expect(
+      generatedComponentSourceFacts({
+        authoredSource: '<cart-badge fw-deps="cart" data-p-id="1"></cart-badge>',
+        generatedSource: 'export const CartBadge = true;',
+      }),
+    ).toEqual({
+      authoredLoweredStampAttributes: ['fw-deps', 'data-p-id'],
+      generatedHasLoweredIrMarker: false,
+    });
   });
 
   it('executes generated client modules through explicit runtime bindings', () => {

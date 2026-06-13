@@ -39,10 +39,10 @@ risks. Check a box only when the exact item is closed with same-session file and
 ## Phase 1 - Gate De-tautologization
 
 Current state: `tests/fw-check.node.mjs` now consumes shared `@jiso/test` fixtures for HTML
-fragments, generated modules, command/Vite facts, markdown/source facts, MCP, static export,
-starter templates, `fw-explain`, TypeScript, wire, touch-graph provenance, graph facts, and
-structured `fw-check/v1` result facts. Shared `@jiso/test/html-fragment` now owns form-field maps
-and keyed-element projections for commerce app/source-truth tests.
+fragments, generated modules/source facts, command output/Vite facts, markdown/source facts, MCP,
+static export, starter templates, `fw-explain`, TypeScript, wire, touch-graph provenance, graph
+facts, and structured `fw-check/v1` result facts. Shared `@jiso/test/html-fragment` now owns
+form-field maps and keyed-element projections for commerce app/source-truth tests.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -63,6 +63,11 @@ Latest evidence:
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`
 - targeted `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -197,12 +202,12 @@ Latest evidence:
 Current state: commerce source-truth tests use shared structured facts for graph, HTML,
 query/fragment/key output, source-site provenance, app-shell command/export behavior, and
 `fw-explain` query/mutation/page assertions. `@jiso/test` owns reusable fixture seams for generated
-modules, fw-explain, TypeScript, fw-check output, source/project facts, commands, starter templates,
-wire, static export, touch graphs, graph invalidation/consumer facts, and reusable HTML fragment
-field/key projections. Commerce app/source-truth tests no longer own local form-field or
-keyed-element projection helpers for currently covered no-JS form, list identity, and enhanced
-fragment assertions. Shared header fixtures now own response header value and Set-Cookie pair
-projection for commerce app/app-shell tests.
+modules/source facts, fw-explain, TypeScript, fw-check output, source/project facts, commands,
+starter templates, wire, static export, touch graphs, graph invalidation/consumer facts, and
+reusable HTML fragment field/key projections. Commerce app/source-truth tests no longer own local
+form-field, keyed-element, or generated-IR source-stamp projection helpers for currently covered
+no-JS form, list identity, enhanced fragment, and committed-IR assertions. Shared header fixtures
+now own response header value and Set-Cookie pair projection for commerce app/app-shell tests.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -222,6 +227,9 @@ Latest evidence:
 - `pnpm exec vitest --run packages/test/src/headers.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts -t "session|sign|cookie|auth|commerce app shell HTTP entry|renders SPEC 6.3 no-JS add-to-cart forms|renders a multipart receipt upload form"`
 - exact `pnpm exec vp check packages/test/package.json packages/test/src/headers.ts packages/test/src/headers.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
+- `git diff --check`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`
+- exact `pnpm exec vp check examples/commerce/src/app.test.ts packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 7 - Test Restructuring
@@ -259,6 +267,13 @@ Focused gates since that broad run:
   `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`;
   `pnpm --filter @jiso/runtime run check:inline-loader`;
   `pnpm exec tsc --noEmit --pretty false`.
+- Harness fixture parser-seam slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|Conformance suites are an explicit gate" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
+  exact `pnpm exec vp check tests/fw-check.node.mjs examples/commerce/src/app.test.ts packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 Stale but useful broad references:
 

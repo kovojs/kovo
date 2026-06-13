@@ -6,6 +6,26 @@ export interface GeneratedArtifactFile {
   source: string;
 }
 
+export interface GeneratedComponentSourceFacts {
+  authoredLoweredStampAttributes: string[];
+  generatedHasLoweredIrMarker: boolean;
+}
+
+const loweredStampAttributePattern = /\b((?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+))=/g;
+
+export function generatedComponentSourceFacts(options: {
+  authoredSource: string;
+  generatedSource: string;
+}): GeneratedComponentSourceFacts {
+  return {
+    authoredLoweredStampAttributes: Array.from(
+      options.authoredSource.matchAll(loweredStampAttributePattern),
+      (match) => match[1] ?? '',
+    ),
+    generatedHasLoweredIrMarker: options.generatedSource.includes('// @jiso-ir'),
+  };
+}
+
 export function generatedArtifactFile(
   files: readonly GeneratedArtifactFile[],
   kind: string,

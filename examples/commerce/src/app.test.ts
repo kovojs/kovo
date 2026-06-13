@@ -5,6 +5,7 @@ import { readFileSync, rmSync } from 'node:fs';
 
 import { storageBodyToBytes } from '@jiso/core';
 import { propertyTest } from '@jiso/test/assertions';
+import { generatedComponentSourceFacts } from '@jiso/test/generated-module-fixtures';
 import { cookiePair, headerValues, setCookieValues } from '@jiso/test/headers';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
@@ -1255,11 +1256,17 @@ describe('commerce example', () => {
     for (const name of ['cart-badge', 'order-history', 'product-grid']) {
       const authored = readFileSync(new URL(`./components/${name}.tsx`, import.meta.url), 'utf8');
       const generated = readFileSync(new URL(`./generated/${name}.tsx`, import.meta.url), 'utf8');
+      const facts = generatedComponentSourceFacts({
+        authoredSource: authored,
+        generatedSource: generated,
+      });
 
       // SPEC.md section 4.8: stamps are compiler-derived, never hand-written
       // in authored sugar (FW222 drift / FW223 duplicates).
-      expect(authored).not.toMatch(/(?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+)=/);
-      expect(generated).toContain('// @jiso-ir');
+      expect(facts).toEqual({
+        authoredLoweredStampAttributes: [],
+        generatedHasLoweredIrMarker: true,
+      });
     }
   });
 });

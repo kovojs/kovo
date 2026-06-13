@@ -50,6 +50,7 @@ import {
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
   assertOrderedItems,
+  commandOutputLines,
   commandSequenceWithoutLast,
   nodeTaskCommand,
   loadVitePlusConfig,
@@ -61,7 +62,7 @@ import {
   vitePlusTaskInputPatternEndingWith,
   vitestTaskCommand,
 } from '../packages/test/src/command-fixtures.ts';
-import { viteDiagnosticMessageFacts } from '../packages/test/src/diagnostic-output-fixtures.ts';
+import { viteDiagnosticMessageFactsFromOutput } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
   fwExplainListField,
   fwExplainMutationAssertionFact,
@@ -4635,7 +4636,7 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
     maxBuffer: 1024 * 1024 * 10,
   });
   assert.equal(prodEmit.stderr, '');
-  assert.deepEqual(prodEmit.stdout.trim().split(/\r?\n/), ['prod-emit-check/v1', 'OK']);
+  assert.deepEqual(commandOutputLines(prodEmit.stdout), ['prod-emit-check/v1', 'OK']);
 
   const plugin = jisoVitePlugin();
   let middleware;
@@ -4754,7 +4755,7 @@ export const DiagnosticCard = component('diagnostic-card', {
 });
 `;
   const assertRedTransformMessage = (message) => {
-    const diagnosticMessage = viteDiagnosticMessageFacts(message);
+    const diagnosticMessage = viteDiagnosticMessageFactsFromOutput(message);
     const redDiagnostic = diagnosticMessage.diagnostics[0];
     const loweringHelp = redDiagnostic?.help.find((entry) => entry.label === 'Would lower to');
     const loweredAttrs = htmlElementFacts(`<button ${loweringHelp?.text ?? ''}></button>`, {
@@ -4898,9 +4899,7 @@ export default {
       }),
       (error) => {
         const output = `${error?.stdout ?? ''}\n${error?.stderr ?? ''}\n${error?.message ?? ''}`;
-        const diagnosticStart = output.indexOf('Jiso Vite transform failed');
-        assert.notEqual(diagnosticStart, -1, 'build output includes Vite diagnostic block');
-        assertRedTransformMessage(output.slice(diagnosticStart).trim());
+        assertRedTransformMessage(output);
         return true;
       },
     );
@@ -5672,7 +5671,7 @@ void test('Conformance suites are an explicit gate', async () => {
     ['test', 'test', 'test', 'test', 'test'],
   );
   assert.deepEqual(
-    executedTask.output.trimEnd().split('\n'),
+    commandOutputLines(executedTask.output),
     conformanceTaskCommands.map((entry) => `pnpm-filter-test ${entry.packageName}`),
   );
 

@@ -16,6 +16,7 @@ import {
 } from '@jiso/test/assertions';
 import {
   assertOrderedItems,
+  commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
   loadVitePlusConfig,
@@ -43,6 +44,7 @@ import {
 } from '@jiso/test/command-fixtures';
 import {
   viteDiagnosticMessageFacts,
+  viteDiagnosticMessageFactsFromOutput,
   type DiagnosticHelpFact,
   type DiagnosticOutputFact,
   type ViteDiagnosticMessageFacts,
@@ -100,7 +102,9 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
+  generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
+  type GeneratedComponentSourceFacts,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -413,6 +417,11 @@ describe('@jiso/test package subpath exports', () => {
         ].join('\n'),
       ).diagnostics[0]?.help,
     ).toEqual([{ label: 'Element params', text: '-' }]);
+    expect(
+      viteDiagnosticMessageFactsFromOutput(
+        'prefix\nJiso Vite transform failed with 1 error diagnostic.\n\nFW201 x.ts:1:1 message.',
+      ).summary,
+    ).toBe('Jiso Vite transform failed with 1 error diagnostic.');
     expect(starterTemplateFacts).toBeTypeOf('function');
     expect(executeStarterClientTemplate).toBeTypeOf('function');
     expect(runStarterTemplateEmitGraph).toBeTypeOf('function');
@@ -438,6 +447,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(commandSequence('vp run fw-check')).toMatchObject([
       { args: ['run', 'fw-check'], executable: 'vp' },
     ]);
+    expect(commandOutputLines('one\r\ntwo\n')).toEqual(['one', 'two']);
     expect(commandSequenceWithoutLast('vp run build && vp run fw-check')).toBe('vp run build');
     expect(pnpmRunScriptNames('pnpm run build && pnpm run test:browser')).toEqual([
       'build',
@@ -666,6 +676,15 @@ describe('@jiso/test package subpath exports', () => {
     expect(executeGeneratedClientModule).toBeTypeOf('function');
     expect(executeGeneratedServerRenderSource).toBeTypeOf('function');
     expect(executeGeneratedBootstrapModule).toBeTypeOf('function');
+    expect(
+      generatedComponentSourceFacts({
+        authoredSource: '<cart-badge></cart-badge>',
+        generatedSource: '// @jiso-ir',
+      }),
+    ).toEqual({
+      authoredLoweredStampAttributes: [],
+      generatedHasLoweredIrMarker: true,
+    } satisfies GeneratedComponentSourceFacts);
     expect(generatedHandlerReferenceFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toMatchObject({
       handlerName: 'Cart$click',
       modulePath: '/c/cart.client.js',
