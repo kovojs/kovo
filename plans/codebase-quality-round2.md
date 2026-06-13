@@ -119,6 +119,8 @@ Current state:
   detached method assignments, property-specific carrier members, direct carrier calls,
   object-spread carrier copies, array-destructured detached methods, and assigned carrier helper
   handoffs.
+- Nested receiver carriers preserve property-specific receiver paths and degrade nested calls,
+  detached methods, helper handoffs, and source destructured carrier members to FW406.
 - Fake/lookalike receivers and overwritten carrier members remain invisible.
 - Real `drizzle-orm` conformance covers the latest degradation surfaces.
 

@@ -423,6 +423,15 @@ conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: nested source/project Drizzle receiver carriers such as
+      `const nested = { inner: carrier }` now preserve property-specific receiver paths, so
+      `nested.inner.db.execute()`, `nested.inner.db.update(...)`, relational query calls,
+      detached methods, and helper handoffs degrade to FW406 while nested fake overrides remain
+      invisible. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`, `pnpm exec vp check
+packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-13: source/project array-destructured detached receiver
       methods such as `const [execute] = [db.execute]` and `[execute] = [db.execute]` now
       degrade touch and query-loader surfaces to FW406 by ts-morph symbol identity, while fake

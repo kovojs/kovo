@@ -458,6 +458,164 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins nested Drizzle receiver carriers as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+              query: any;
+              update(table: unknown): { set(value: unknown): Promise<void> };
+            }
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            declare function runReport(context: unknown): Promise<unknown[]>;
+
+            export const productQuery = query('product/nested-carrier', {
+              async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
+                const carrier = { db, fake };
+                const nested = { inner: carrier };
+                const overwritten = { ...nested, inner: { db: fake } };
+                const execute = nested.inner.db.execute;
+                await nested.inner.db.execute(sql\`select 1\`);
+                await nested.inner.db.update(products).set({ id: 'p1' });
+                await nested.inner.db.query.products.findMany();
+                await execute(sql\`select 1\`);
+                await runReport(nested);
+                await overwritten.inner.db.execute(sql\`select 1\`);
+                await overwritten.inner.db.update(products).set({ id: 'fake' });
+                await overwritten.inner.db.query.products.findMany();
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import { sql } from 'drizzle-orm';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const products = pgTable('products', {}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'declare function audit(context: unknown): Promise<void>;',
+            '',
+            'export async function sync(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  const carrier = { db, fake };',
+            '  const nested = { inner: carrier };',
+            '  const overwritten = { ...nested, inner: { db: fake } };',
+            '  const execute = nested.inner.db.execute;',
+            '  await nested.inner.db.execute(sql`select 1`);',
+            '  await nested.inner.db.update(products).set({});',
+            '  await nested.inner.db.query.products.findMany();',
+            '  await execute(sql`select 1`);',
+            '  await audit(nested);',
+            '  await overwritten.inner.db.execute(sql`select 1`);',
+            '  await overwritten.inner.db.update(products).set({});',
+            '  await overwritten.inner.db.query.products.findMany();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested to helper runReport().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+        ],
+        query: 'product/nested-carrier',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+      },
+    ]);
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:23',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:22',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:19',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:20',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:21',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins local query-loader helper carrier aliases as FW406 under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

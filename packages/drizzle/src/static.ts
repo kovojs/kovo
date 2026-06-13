@@ -4733,13 +4733,26 @@ function appendSourceReceiverAliasesFromCarrierBinding(
 
   for (const element of binding.getElements()) {
     const propertyName = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
-    if (!propertyName || !carrierProperties.has(propertyName)) continue;
+    if (!propertyName) continue;
 
-    appendSourceDestructuredReceiverIdentifier(
-      element.getNameNode(),
-      references.names,
-      references.symbolKeys,
-    );
+    const name = element.getNameNode();
+    if (carrierProperties.has(propertyName)) {
+      appendSourceDestructuredReceiverIdentifier(name, references.names, references.symbolKeys);
+      continue;
+    }
+
+    if (!Node.isIdentifier(name)) continue;
+
+    const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
+    if (nestedProperties.size === 0) continue;
+
+    const bindingSymbolKey = resolvedSymbolKey(name.getSymbol());
+    if (!bindingSymbolKey) continue;
+
+    const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
+    for (const nestedProperty of nestedProperties) {
+      properties.add(nestedProperty);
+    }
   }
 }
 
@@ -4832,10 +4845,13 @@ function receiverCarrierPropertiesFromObjectLiteral(
       continue;
     }
 
-    if (receiverCarrierPropertyCarriesReceiver(property, references, isBaseReceiverIdentifier)) {
-      properties.add(propertyName);
-    } else {
-      properties.delete(propertyName);
+    removeReceiverCarrierPropertyPath(properties, propertyName);
+    for (const path of receiverCarrierPropertyPaths(
+      property,
+      references,
+      isBaseReceiverIdentifier,
+    )) {
+      properties.add(path);
     }
   }
 
@@ -4855,22 +4871,109 @@ function receiverCarrierSpreadProperties(
   return symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
 }
 
-function receiverCarrierPropertyCarriesReceiver(
+function receiverCarrierPropertyPaths(
   property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
   references: QueryReceiverReferences,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
-): boolean {
+): ReadonlySet<string> {
   if (Node.isShorthandPropertyAssignment(property)) {
+    const propertyName = propertyNameText(property.getNameNode());
+    if (!propertyName) return new Set();
+
     const name = property.getNameNode();
-    return isBaseReceiverIdentifier(name) || isSourceReceiverAliasIdentifier(name, references);
+    return receiverCarrierPathsForValue(propertyName, name, references, isBaseReceiverIdentifier);
   }
 
-  if (!Node.isPropertyAssignment(property)) return false;
+  if (!Node.isPropertyAssignment(property)) return new Set();
+
+  const propertyName = propertyNameText(property.getNameNode());
+  if (!propertyName) return new Set();
 
   const initializer = property.getInitializer();
-  if (!initializer) return false;
+  if (!initializer) return new Set();
 
-  return isSourceReceiverAliasExpression(initializer, isBaseReceiverIdentifier, references);
+  return receiverCarrierPathsForValue(
+    propertyName,
+    initializer,
+    references,
+    isBaseReceiverIdentifier,
+  );
+}
+
+function receiverCarrierPathsForValue(
+  propertyName: string,
+  value: Node,
+  references: QueryReceiverReferences,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): ReadonlySet<string> {
+  const expression = unwrappedStaticExpressionNode(value);
+  const paths = new Set<string>();
+
+  const nestedProperties = receiverCarrierPropertiesForExpression(expression, references);
+  if (nestedProperties) {
+    for (const path of prefixedReceiverCarrierProperties(propertyName, nestedProperties)) {
+      paths.add(path);
+    }
+  }
+
+  if (isSourceReceiverAliasExpression(expression, isBaseReceiverIdentifier, references)) {
+    paths.add(propertyName);
+  }
+
+  if (Node.isObjectLiteralExpression(expression)) {
+    for (const path of prefixedReceiverCarrierProperties(
+      propertyName,
+      receiverCarrierPropertiesFromObjectLiteral(
+        expression,
+        references as SourceReceiverAliasReferences,
+        isBaseReceiverIdentifier,
+      ),
+    )) {
+      paths.add(path);
+    }
+  }
+
+  return paths;
+}
+
+function receiverCarrierPropertiesForExpression(
+  expression: Node,
+  references: QueryReceiverReferences,
+): ReadonlySet<string> | undefined {
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(expression));
+  return symbolKey
+    ? (references as SourceReceiverAliasReferences).carrierProperties.get(symbolKey)
+    : undefined;
+}
+
+function prefixedReceiverCarrierProperties(
+  propertyName: string,
+  properties: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set([...properties].map((property) => `${propertyName}.${property}`));
+}
+
+function receiverCarrierNestedProperties(
+  properties: ReadonlySet<string>,
+  propertyName: string,
+): ReadonlySet<string> {
+  const prefix = `${propertyName}.`;
+  return new Set(
+    [...properties]
+      .filter((property) => property.startsWith(prefix))
+      .map((property) => property.slice(prefix.length)),
+  );
+}
+
+function removeReceiverCarrierPropertyPath(properties: Set<string>, propertyName: string): void {
+  properties.delete(propertyName);
+
+  const prefix = `${propertyName}.`;
+  for (const property of properties) {
+    if (property.startsWith(prefix)) properties.delete(property);
+  }
 }
 
 function carrierPropertiesForSymbol(
@@ -4905,14 +5008,20 @@ function isSourceReceiverCarrierMemberExpression(
     return false;
   }
 
-  const property = staticAccessName(node);
-  if (!property) return false;
-
-  const receiver = node.getExpression();
-  if (!Node.isIdentifier(receiver)) return false;
+  const receiver = staticExpressionRootIdentifier(node);
+  if (!receiver || !Node.isIdentifier(receiver)) return false;
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(receiver));
-  return symbolKey ? references.carrierProperties.get(symbolKey)?.has(property) === true : false;
+  if (!symbolKey) return false;
+
+  const carriedProperties = references.carrierProperties.get(symbolKey);
+  if (!carriedProperties) return false;
+
+  const rootPath = receiver.getText();
+  const path = staticExpressionPath(node);
+  if (!path || path === rootPath || !path.startsWith(`${rootPath}.`)) return false;
+
+  return carriedProperties.has(path.slice(rootPath.length + 1));
 }
 
 interface DirectDrizzleReceiverCallSurface {

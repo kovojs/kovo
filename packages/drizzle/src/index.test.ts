@@ -2390,6 +2390,91 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks project query-loader nested receiver carrier members as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const productQuery = query("product/carrier-nested", {',
+            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '    const carrier = { db, fake };',
+            '    const nested = { inner: carrier };',
+            '    const overwritten = { ...nested, inner: { db: fake } };',
+            '    const execute = nested.inner.db.execute;',
+            '    await nested.inner.db.execute("select 1");',
+            '    await nested.inner.db.update(products).set({ id: "p1" });',
+            '    await nested.inner.db.query.products.findMany();',
+            '    await execute("select 1");',
+            '    await runReport(nested);',
+            '    await overwritten.inner.db.execute("select 1");',
+            '    await overwritten.inner.db.update(products).set({ id: "fake" });',
+            '    await overwritten.inner.db.query.products.findMany();',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested to helper runReport().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+        ],
+        query: 'product/carrier-nested',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('marks project query-loader detached receiver method aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -5757,6 +5842,81 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project nested receiver carrier members as FW406 without nested fake overrides', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'execute(query: unknown): Promise<void>;',
+          'query: any;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            '  const carrier = { db, fake };',
+            '  const nested = { inner: carrier };',
+            '  const overwritten = { ...nested, inner: { db: fake } };',
+            '  const execute = nested.inner.db.execute;',
+            '  await nested.inner.db.execute("select 1");',
+            '  await nested.inner.db.update(users).set({});',
+            '  await nested.inner.db.query.users.findMany();',
+            '  await execute("select 1");',
+            '  await audit(nested);',
+            '  await overwritten.inner.db.execute("select 1");',
+            '  await overwritten.inner.db.update(users).set({});',
+            '  await overwritten.inner.db.query.users.findMany();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:20',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:19',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:16',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:18',
+          },
+        ],
+      },
+    });
+  });
+
   it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -6647,6 +6807,60 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks source nested receiver carrier members as FW406 without nested fake overrides', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = { db, fake };',
+          '  const nested = { inner: carrier };',
+          '  const { inner } = nested;',
+          '  const overwritten = { ...nested, inner: { db: fake } };',
+          '  const execute = nested.inner.db.execute;',
+          '  await nested.inner.db.execute("select 1");',
+          '  await inner.db.update(users).set({});',
+          '  await execute("select 1");',
+          '  await sendAudit(nested);',
+          '  await overwritten.inner.db.execute("select 1");',
+          '  await overwritten.inner.db.update(users).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:12',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks source query-loader receiver aliases as FW406 instead of deriving reads', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -6758,6 +6972,72 @@ export interface CommerceInvalidationSets {
           },
         ],
         query: 'users/source-spread-carrier',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
+  });
+
+  it('marks source query-loader nested receiver carriers as FW406', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/source-nested-carrier", {',
+          '  load(_input, db, fake) {',
+          '    const carrier = { db, fake };',
+          '    const nested = { inner: carrier };',
+          '    const { inner } = nested;',
+          '    const overwritten = { ...nested, inner: { db: fake } };',
+          '    const execute = nested.inner.db.execute;',
+          '    nested.inner.db.select({ id: users.id }).from(users);',
+          '    inner.db.execute("select 1");',
+          '    execute("select 1");',
+          '    runReport(nested);',
+          '    overwritten.inner.db.select({ id: users.id }).from(users);',
+          '    return [];',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested to helper runReport().',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/source-nested-carrier',
         reads: [],
         shape: {},
         site: 'user.queries.ts:3',
