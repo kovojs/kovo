@@ -4,13 +4,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import {
-  applySourceReplacements,
-  escapeAttribute,
-  insertOpeningTagAttribute,
-  openingTagAttributeRange,
-  type SourceReplacement,
-} from '../shared.js';
+import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { ViewTransitionStamp } from '../types.js';
 
 export interface ViewTransitionLowering {
@@ -35,10 +29,9 @@ export function viewTransitionLowering(model: ComponentModuleModel): ViewTransit
       } => item.attribute !== undefined,
     );
   const stamps = matches.map((item) => ({ name: item.attribute.value }));
-  const replacements: SourceReplacement[] = matches.map((match) => {
-    const replacement = appendViewTransitionStyle(match.element, match.attribute);
-    return { end: match.element.openingEnd, replacement, start: match.element.start };
-  });
+  const replacements: SourceReplacement[] = matches.flatMap((match) =>
+    viewTransitionStylePatches(match.element, match.attribute),
+  );
 
   return {
     replacements,
@@ -46,11 +39,10 @@ export function viewTransitionLowering(model: ComponentModuleModel): ViewTransit
   };
 }
 
-function appendViewTransitionStyle(
+function viewTransitionStylePatches(
   element: JsxElementModel,
   transitionAttribute: JsxAttributeModel & { value: string },
-): string {
-  const opening = element.openingSource;
+): SourceReplacement[] {
   const styleAttribute = element.attributes.find(
     (attribute): attribute is JsxAttributeModel & { value: string } =>
       attribute.name === 'style' && attribute.value !== undefined,
@@ -58,28 +50,46 @@ function appendViewTransitionStyle(
   const transition = `view-transition-name: ${escapeAttribute(transitionAttribute.value)}`;
   const replacements: SourceReplacement[] = [
     {
-      ...openingTagAttributeRange(opening, element, transitionAttribute, {
-        includeLeadingWhitespace: true,
-      }),
+      end: transitionAttribute.end,
       replacement: '',
+      start: transitionAttribute.leadingStart,
     },
   ];
 
   if (styleAttribute) {
     const style = mergedStyle(styleAttribute.value, transition);
     replacements.push({
-      ...openingTagAttributeRange(opening, element, styleAttribute),
+      end: styleAttribute.end,
       replacement: `style="${style}"`,
+      start: styleAttribute.start,
     });
+    return replacements;
   }
 
-  const nextOpening = applySourceReplacements(opening, replacements);
+  const insertion = openingTagStyleInsertion(element, transition);
+  replacements.push({
+    end: insertion.position,
+    replacement: insertion.replacement,
+    start: insertion.position,
+  });
+  return replacements;
+}
 
-  if (!styleAttribute) {
-    return insertOpeningTagAttribute(nextOpening, element, 'style', transition);
+function openingTagStyleInsertion(
+  element: JsxElementModel,
+  transition: string,
+): { position: number; replacement: string } {
+  const attribute = `style="${transition}"`;
+  if (!element.selfClosing) {
+    return { position: element.openingEnd - 1, replacement: ` ${attribute}` };
   }
 
-  return nextOpening;
+  const position = element.openingEnd - 2;
+  const hasSpaceBeforeSlash = /\s/.test(element.openingSource.at(-3) ?? '');
+  return {
+    position,
+    replacement: hasSpaceBeforeSlash ? `${attribute} ` : ` ${attribute} `,
+  };
 }
 
 function mergedStyle(current: string, transition: string): string {

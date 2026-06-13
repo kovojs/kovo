@@ -73,12 +73,12 @@ Latest evidence:
 ## Phase 2 - Compiler IR
 
 Current state: the compiler threads `ComponentPipelineState` and `SourceOffsetMap`s through ordered
-lowerings. View-transition, platform, navigation, inline-derive, server-render, opening-tag, static
-`href()`, and static `<Link>` lowering use explicit patch helpers in several paths; parsed JSX tag
-name spans now drive static `<Link>` tag and `href` patching without reconstructing child source.
-Server render host stamping now emits parsed attribute replacement/insertion patches for handlers,
-`fw-c`, `fw-deps`, and `fw-state` instead of reconstructing the whole opening tag. Many validators
-now consume parser/model facts instead of regex or source-string facts.
+lowerings. Platform, navigation, inline-derive, server-render, opening-tag, static `href()`,
+static `<Link>`, and view-transition lowering use explicit patch helpers in several paths. Parsed
+JSX spans now drive static `<Link>` tag/`href` patching and view-transition style insertion without
+reconstructing child or opening-tag source. Server render host stamping emits parsed attribute
+replacement/insertion patches for handlers, `fw-c`, `fw-deps`, and `fw-state`. Many validators now
+consume parser/model facts instead of regex or source-string facts.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -97,6 +97,8 @@ Latest evidence:
 - exact `pnpm exec vp check packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/navigation-lowering.test.ts`
 - exact `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `pnpm exec vitest --run packages/compiler/src/view-transitions.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/lower/view-transitions.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/shared.ts`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

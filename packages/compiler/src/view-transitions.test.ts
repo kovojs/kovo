@@ -1,8 +1,36 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
+import { viewTransitionLowering } from './lower/view-transitions.js';
+import { parseComponentModule } from './scan/parse.js';
 
 describe('view transition lowering', () => {
+  it('exposes view transition lowering as parsed source patches', () => {
+    const source = `
+export const ProductCard = component('product-card', {
+  render: () => <img alt="Product" style='opacity: .8;' viewTransitionName="product-p1-image" src="/p1.png" />,
+});
+`;
+    const lowering = viewTransitionLowering(parseComponentModule('product-card.tsx', source));
+    const viewTransitionStart = source.indexOf(' viewTransitionName=');
+    const viewTransitionEnd = source.indexOf(' src="/p1.png"', viewTransitionStart);
+    const styleStart = source.indexOf("style='opacity: .8;'");
+
+    expect(lowering.stamps).toEqual([{ name: 'product-p1-image' }]);
+    expect(lowering.replacements).toEqual([
+      {
+        end: viewTransitionEnd,
+        replacement: '',
+        start: viewTransitionStart,
+      },
+      {
+        end: styleStart + "style='opacity: .8;'".length,
+        replacement: 'style="opacity: .8; view-transition-name: product-p1-image"',
+        start: styleStart,
+      },
+    ]);
+  });
+
   it('stamps cross-document view transition names as real CSS', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',

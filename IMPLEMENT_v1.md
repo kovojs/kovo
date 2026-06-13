@@ -35,6 +35,11 @@ packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-compo
       the entire host opening tag. Same-session evidence: `pnpm exec vitest --run
 packages/compiler/src/stamps.test.ts packages/compiler/src/compile-component.test.ts
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/navigation-lowering.test.ts`.
+      Additional evidence 2026-06-13: view-transition lowering now emits parsed source patches for
+      `viewTransitionName` removal and `style` replacement/insertion; the old shared opening-tag
+      source-string helpers were deleted. Same-session evidence: `pnpm exec vitest --run
+packages/compiler/src/view-transitions.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/model-pipeline.test.ts`.
       Additional evidence 2026-06-11: handler lowering/FW201-FW210 event attribute analysis
       now lives in `packages/compiler/src/lower/handlers.ts`, server IR emission and
       render-equivalence stamping now live in `packages/compiler/src/emit/server.ts`, and
