@@ -49,6 +49,7 @@ import { navigationMenuRootAttributes as primitiveNavigationMenuRootAttributes }
 
 const navigationItems: readonly NavigationMenuItem[] = Object.freeze([
   { hasContent: true, label: 'Products', value: 'products' },
+  { label: 'Pricing', value: 'pricing' },
   { disabled: true, hasContent: true, label: 'Solutions', value: 'solutions' },
   { textValue: 'Resources library', value: 'resources' },
   { label: 'Company', value: 'company' },
@@ -298,8 +299,8 @@ describe('headless-ui navigation-menu primitive', () => {
     expect(
       navigationMenuMove({ activeValue: 'products', items: navigationItems }, 'ArrowRight'),
     ).toEqual({
-      activeIndex: 2,
-      activeValue: 'resources',
+      activeIndex: 1,
+      activeValue: 'pricing',
     });
     expect(navigationMenuMove({ activeValue: 'company', items: navigationItems }, 'Home')).toEqual({
       activeIndex: 0,
@@ -311,8 +312,8 @@ describe('headless-ui navigation-menu primitive', () => {
         'ArrowLeft',
       ),
     ).toEqual({
-      activeIndex: 2,
-      activeValue: 'resources',
+      activeIndex: 1,
+      activeValue: 'pricing',
     });
     expect(
       navigationMenuMove({ disabled: true, items: navigationItems }, 'ArrowRight'),
@@ -337,9 +338,32 @@ describe('headless-ui navigation-menu primitive', () => {
       },
     );
 
-    expect(first).toMatchObject({ activeIndex: 2, activeValue: 'resources' });
-    expect(second).toMatchObject({ activeIndex: 3, activeValue: 'company' });
+    expect(first).toMatchObject({ activeIndex: 3, activeValue: 'resources' });
+    expect(second).toMatchObject({ activeIndex: 4, activeValue: 'company' });
     expect(second.state.buffer).toBe('c');
+  });
+
+  it('cycles enabled navigation items when typeahead repeats the same key', () => {
+    const first = navigationMenuTypeahead(
+      { activeValue: 'products', items: navigationItems },
+      'p',
+      {
+        now: 100,
+      },
+    );
+    const second = navigationMenuTypeahead(
+      { activeValue: 'pricing', items: navigationItems },
+      'p',
+      {
+        now: 300,
+        state: first.state,
+      },
+    );
+
+    expect(first).toMatchObject({ activeIndex: 1, activeValue: 'pricing' });
+    expect(first.state.buffer).toBe('p');
+    expect(second).toMatchObject({ activeIndex: 0, activeValue: 'products' });
+    expect(second.state.buffer).toBe('p');
   });
 
   it('guards primitive handlers when author behavior prevented default', () => {

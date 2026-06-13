@@ -25,10 +25,14 @@ export function nextTypeaheadState(
 ): TypeaheadState {
   if (!isTypeaheadKey(key)) return state ?? { buffer: '', updatedAt: now };
 
+  const normalizedKey = key.toLocaleLowerCase();
   const previousBuffer = state && now - state.updatedAt <= timeoutMs ? state.buffer : '';
+  const buffer = isRepeatedTypeaheadKey(previousBuffer, normalizedKey)
+    ? normalizedKey
+    : `${previousBuffer}${normalizedKey}`;
 
   return {
-    buffer: `${previousBuffer}${key.toLocaleLowerCase()}`,
+    buffer,
     updatedAt: now,
   };
 }
@@ -56,6 +60,10 @@ export function findTypeaheadMatch(options: TypeaheadMatchOptions): number {
 
 function isTypeaheadKey(key: string): boolean {
   return key.length === 1 && key.trim() !== '';
+}
+
+function isRepeatedTypeaheadKey(buffer: string, key: string): boolean {
+  return buffer.length > 0 && buffer.split('').every((char) => char === key);
 }
 
 function range(start: number, end: number): number[] {

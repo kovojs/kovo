@@ -1068,6 +1068,9 @@ Closed evidence so far:
 - `packages/test/src/starter-template-fixtures.ts` now also owns reusable starter graph-task and
   conformance fake-command fixtures; focused package tests, package export tests, and targeted
   starter/conformance `fw-check` node tests pin the seam.
+- D7 UI H3 typeahead evidence: `packages/headless-ui/src/lib/typeahead.test.ts` now pins
+  repeated-key cycling buffers, and the dropdown-menu, context-menu, menubar, and navigation-menu
+  primitive tests prove same-prefix cycling while disabled items stay skipped.
 
 Open:
 

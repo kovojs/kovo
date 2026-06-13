@@ -41,6 +41,7 @@ const menuItems: readonly DropdownMenuItem[] = Object.freeze([
   { label: 'Profile', value: 'profile' },
   { disabled: true, label: 'Billing', value: 'billing' },
   { textValue: 'Team settings', value: 'team' },
+  { label: 'Preferences', value: 'preferences' },
 ]);
 
 describe('headless-ui dropdown-menu primitive', () => {
@@ -256,6 +257,25 @@ describe('headless-ui dropdown-menu primitive', () => {
     expect(first).toMatchObject({ highlightedIndex: -1, highlightedValue: 'profile' });
     expect(second).toMatchObject({ highlightedIndex: 2, highlightedValue: 'team' });
     expect(second.state.buffer).toBe('t');
+  });
+
+  it('cycles enabled menu items when typeahead repeats the same key', () => {
+    const first = dropdownMenuTypeahead({ highlightedValue: 'profile', items: menuItems }, 'p', {
+      now: 100,
+    });
+    const second = dropdownMenuTypeahead(
+      { highlightedValue: 'preferences', items: menuItems },
+      'p',
+      {
+        now: 300,
+        state: first.state,
+      },
+    );
+
+    expect(first).toMatchObject({ highlightedIndex: 3, highlightedValue: 'preferences' });
+    expect(first.state.buffer).toBe('p');
+    expect(second).toMatchObject({ highlightedIndex: 0, highlightedValue: 'profile' });
+    expect(second.state.buffer).toBe('p');
   });
 
   it('guards primitive handlers when author behavior prevented default', () => {

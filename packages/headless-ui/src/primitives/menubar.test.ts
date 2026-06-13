@@ -41,6 +41,7 @@ import { menubarRootAttributes as primitiveMenubarRootAttributes } from './index
 
 const menubarItems: readonly MenubarItem[] = Object.freeze([
   { hasPopup: true, label: 'File', value: 'file' },
+  { hasPopup: true, label: 'Format', value: 'format' },
   { disabled: true, hasPopup: true, label: 'Edit', value: 'edit' },
   { hasPopup: true, textValue: 'View options', value: 'view' },
   { label: 'New', parentValue: 'file', value: 'new' },
@@ -231,8 +232,8 @@ describe('headless-ui menubar primitive', () => {
 
   it('moves through enabled root and submenu items with shared keyboard navigation', () => {
     expect(menubarMove({ activeValue: 'file', items: menubarItems }, 'ArrowRight')).toEqual({
-      activeIndex: 2,
-      activeValue: 'view',
+      activeIndex: 1,
+      activeValue: 'format',
       parentValue: undefined,
     });
     expect(menubarMove({ activeValue: 'view', items: menubarItems }, 'Home')).toEqual({
@@ -263,9 +264,24 @@ describe('headless-ui menubar primitive', () => {
       state: root.state,
     });
 
-    expect(root).toMatchObject({ activeIndex: 2, activeValue: 'view', parentValue: undefined });
+    expect(root).toMatchObject({ activeIndex: 3, activeValue: 'view', parentValue: undefined });
     expect(submenu).toMatchObject({ activeIndex: 2, activeValue: 'save', parentValue: 'file' });
     expect(submenu.state.buffer).toBe('s');
+  });
+
+  it('cycles enabled root menu items when typeahead repeats the same key', () => {
+    const first = menubarTypeahead({ activeValue: 'file', items: menubarItems }, 'f', {
+      now: 100,
+    });
+    const second = menubarTypeahead({ activeValue: 'format', items: menubarItems }, 'f', {
+      now: 300,
+      state: first.state,
+    });
+
+    expect(first).toMatchObject({ activeIndex: 1, activeValue: 'format' });
+    expect(first.state.buffer).toBe('f');
+    expect(second).toMatchObject({ activeIndex: 0, activeValue: 'file' });
+    expect(second.state.buffer).toBe('f');
   });
 
   it('guards primitive handlers when author behavior prevented default', () => {

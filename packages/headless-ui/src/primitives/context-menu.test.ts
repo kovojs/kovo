@@ -43,6 +43,7 @@ import { contextMenuRootAttributes as primitiveContextMenuRootAttributes } from 
 
 const menuItems: readonly ContextMenuItem[] = Object.freeze([
   { label: 'Cut', value: 'cut' },
+  { label: 'Crop', value: 'crop' },
   { disabled: true, label: 'Copy', value: 'copy' },
   { textValue: 'Paste as plain text', value: 'paste-plain' },
 ]);
@@ -247,8 +248,8 @@ describe('headless-ui context-menu primitive', () => {
 
   it('moves through enabled items with shared menu keyboard navigation', () => {
     expect(contextMenuMove({ highlightedValue: 'cut', items: menuItems }, 'ArrowDown')).toEqual({
-      highlightedIndex: 2,
-      highlightedValue: 'paste-plain',
+      highlightedIndex: 1,
+      highlightedValue: 'crop',
     });
     expect(contextMenuMove({ highlightedValue: 'paste-plain', items: menuItems }, 'Home')).toEqual({
       highlightedIndex: 0,
@@ -268,8 +269,23 @@ describe('headless-ui context-menu primitive', () => {
     });
 
     expect(first).toMatchObject({ highlightedIndex: -1, highlightedValue: 'cut' });
-    expect(second).toMatchObject({ highlightedIndex: 2, highlightedValue: 'paste-plain' });
+    expect(second).toMatchObject({ highlightedIndex: 3, highlightedValue: 'paste-plain' });
     expect(second.state.buffer).toBe('p');
+  });
+
+  it('cycles enabled menu items when typeahead repeats the same key', () => {
+    const first = contextMenuTypeahead({ highlightedValue: 'cut', items: menuItems }, 'c', {
+      now: 100,
+    });
+    const second = contextMenuTypeahead({ highlightedValue: 'crop', items: menuItems }, 'c', {
+      now: 300,
+      state: first.state,
+    });
+
+    expect(first).toMatchObject({ highlightedIndex: 1, highlightedValue: 'crop' });
+    expect(first.state.buffer).toBe('c');
+    expect(second).toMatchObject({ highlightedIndex: 0, highlightedValue: 'cut' });
+    expect(second.state.buffer).toBe('c');
   });
 
   it('guards primitive handlers when author behavior prevented default', () => {

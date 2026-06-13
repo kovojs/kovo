@@ -73,9 +73,20 @@ Implemented areas:
 - Field/fieldset integration now includes styled input, textarea, and select controls over the
   shared native field IDREF contract, with `/components/field` static gallery coverage proving
   label, description, error, option, and fieldset wiring.
+- H3 menu/navigation typeahead now handles repeated printable keys as one-key cycling search, so
+  dropdown-menu, context-menu, menubar, and navigation-menu skip disabled items while cycling
+  between same-prefix enabled items.
 
 Recent gates:
 
+- `pnpm --filter @jiso/headless-ui exec vitest --run`
+- `pnpm exec vitest --run packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/navigation-menu.test.ts`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check packages/headless-ui/src/lib/typeahead.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/navigation-menu.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
@@ -159,7 +170,9 @@ H3:
   wrappers, static gallery routes, behavior-contract snippets, catalog sync, and browser-backed
   gallery regression coverage through the existing compiled interactive H3 demos; broader H3
   remains open for full primitive/conformance closure.
-- Close any remaining state/focus/typeahead/menu edge cases with focused tests before checking H3.
+- Repeated-key typeahead cycling is now covered for dropdown-menu, context-menu, menubar, and
+  navigation-menu. Close any remaining state/focus/menu edge cases with focused tests before
+  checking H3.
 
 Styled UI:
 

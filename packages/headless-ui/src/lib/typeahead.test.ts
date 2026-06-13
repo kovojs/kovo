@@ -20,6 +20,15 @@ describe('headless-ui typeahead', () => {
     expect(nextTypeaheadState(previous, 'ArrowDown', 1100)).toEqual(previous);
   });
 
+  it('keeps repeated printable keys as a single-key cycling buffer', () => {
+    const first = nextTypeaheadState(undefined, 'A', 1000);
+    const second = nextTypeaheadState(first, 'a', 1200);
+    const third = nextTypeaheadState(second, 'A', 1400);
+
+    expect(second).toEqual({ buffer: 'a', updatedAt: 1200 });
+    expect(third).toEqual({ buffer: 'a', updatedAt: 1400 });
+  });
+
   it('finds the next enabled item by text prefix with wrapping', () => {
     const items = [
       { textValue: 'Apple' },
