@@ -1664,6 +1664,110 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins direct opaque domain action members as FW406 under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'const addAction = write(addItem);',
+          'declare const dynamicAction: unknown;',
+          'const actionBag = { aliased: addAction, opaque: dynamicAction };',
+          '',
+          'export const productDomain = domain({',
+          '  add: addAction,',
+          '  dynamic: dynamicAction,',
+          '  method(db: PgDatabase<any, any, any>) {',
+          '    db.update(products).set({});',
+          '  },',
+          '  ...actionBag,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.aliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.dynamic': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:17',
+          },
+        ],
+      },
+      'productDomain.method': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:18',
+          },
+        ],
+      },
+      'productDomain.opaque': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:13',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins conditional domain action spreads under real Drizzle imports', () => {
     const files = [
       {

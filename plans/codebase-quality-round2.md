@@ -786,6 +786,12 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       the contained receiver for stable diagnostics. `packages/drizzle/src/index.test.ts` covers the
       package mutation graph surface, and `conformance/drizzle-pin/src/index.test.ts` pins the query
       loader surface against real `drizzle-orm` Postgres receiver imports.
+      Evidence 2026-06-13 round277: direct domain action members now resolve static `write(...)`
+      action aliases through ts-morph symbols and keep opaque direct members, method members, and
+      action-bag members visible as named FW406 mutation graph entries instead of disappearing.
+      `packages/drizzle/src/index.test.ts` covers source/project exact aliases plus direct
+      degradation, and `conformance/drizzle-pin/src/index.test.ts` pins the same surface against
+      real `drizzle-orm` Postgres receiver imports.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -793,6 +799,11 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 
 Latest evidence:
 
+- round277 direct opaque domain action member slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
+  `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - round274 factory-returned typed carrier helper-handoff slice:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
   exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;

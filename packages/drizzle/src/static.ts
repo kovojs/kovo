@@ -649,7 +649,7 @@ function projectDomainWriteCallbacks(
     if (!domainObject.body) continue;
 
     for (const property of domainWriteProperties(domainObject.body)) {
-      const callback = writeCallbackFunction(property.initializer);
+      const callback = writeActionCallbackFunction(property.initializer);
       if (!callback) continue;
 
       const name = `${domainName.getText()}.${property.memberName}`;
@@ -5236,7 +5236,7 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
     if (!domainObject.body) continue;
 
     for (const property of domainWriteProperties(domainObject.body)) {
-      const callback = writeCallbackFunction(property.initializer);
+      const callback = writeActionCallbackFunction(property.initializer);
       if (!callback) continue;
 
       callbacks.push(
@@ -5283,15 +5283,13 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
       }
 
       for (const property of domainWriteProperties(domainObject.body)) {
-        const initializer = property.initializer;
-        if (!initializer || !Node.isCallExpression(initializer)) continue;
-        const callExpression = initializer.getExpression();
-        if (!Node.isIdentifier(callExpression) || callExpression.getText() !== 'write') continue;
-        if (writeCallbackFunction(initializer)) continue;
+        if (writeActionCallbackFunction(property.initializer)) continue;
+
+        const siteNode = property.initializer ?? property.keyNode;
 
         unresolved.push({
           name: `${domainName.getText()}.${property.memberName}`,
-          site: `${file.fileName}:${lineForIndex(file.source, initializer.getStart())}`,
+          site: `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
         });
       }
     }
@@ -5449,6 +5447,33 @@ function domainWriteProperties(
       continue;
     }
 
+    if (Node.isMethodDeclaration(property)) {
+      const memberName = propertyNameText(property.getNameNode());
+      if (!memberName) continue;
+
+      properties.set(memberName, {
+        initializer: undefined,
+        keyNode: property.getNameNode(),
+        memberName,
+      });
+      continue;
+    }
+
+    if (Node.isShorthandPropertyAssignment(property)) {
+      const memberName = propertyNameText(property.getNameNode());
+      if (!memberName) continue;
+
+      properties.set(
+        memberName,
+        domainWritePropertyFromShorthandAssignment(property, seen) ?? {
+          initializer: property.getNameNode(),
+          keyNode: property.getNameNode(),
+          memberName,
+        },
+      );
+      continue;
+    }
+
     if (!Node.isPropertyAssignment(property)) continue;
     const memberName = propertyNameText(property.getNameNode());
     if (!memberName) continue;
@@ -5523,10 +5548,7 @@ function domainWritePropertyFromDeclaration(
     const name = declaration.getNameNode();
     const initializer = declaration.getInitializer();
     if (!Node.isIdentifier(name) || !initializer) return undefined;
-    const expression = unwrappedStaticExpressionNode(initializer);
-    if (!Node.isCallExpression(expression)) return undefined;
-    const callee = expression.getExpression();
-    if (!Node.isIdentifier(callee) || callee.getText() !== 'write') return undefined;
+    if (!writeActionCallbackFunction(initializer, seen)) return undefined;
 
     return {
       initializer,
@@ -5560,6 +5582,25 @@ function domainWritePropertyFromDeclaration(
   return undefined;
 }
 
+function domainWritePropertyFromShorthandAssignment(
+  declaration: Node,
+  seen: Set<string>,
+): DomainWriteProperty | undefined {
+  if (!Node.isShorthandPropertyAssignment(declaration)) return undefined;
+
+  const memberName = propertyNameText(declaration.getNameNode());
+  if (!memberName) return undefined;
+
+  for (const referencedDeclaration of symbolForCallbackReference(
+    declaration.getNameNode(),
+  )?.getDeclarations() ?? []) {
+    const property = domainWritePropertyFromDeclaration(memberName, referencedDeclaration, seen);
+    if (property) return property;
+  }
+
+  return undefined;
+}
+
 function writeCallbackFunction(
   initializer: Node | undefined,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
@@ -5572,6 +5613,56 @@ function writeCallbackFunction(
   for (const argument of writeCall.getArguments().toReversed()) {
     const callback = writeCallbackArgumentFunction(argument);
     if (callback) return callback;
+  }
+
+  return null;
+}
+
+function writeActionCallbackFunction(
+  initializer: Node | undefined,
+  seen: Set<string> = new Set(),
+): ReturnType<CallExpression['getArguments']>[number] | null {
+  if (!initializer) return null;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  const callback = writeCallbackFunction(expression);
+  if (callback) return callback;
+
+  const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
+  if (seen.has(key)) return null;
+  seen.add(key);
+
+  for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
+    const referenced = writeActionCallbackFromDeclaration(declaration, seen);
+    if (referenced) return referenced;
+  }
+
+  return null;
+}
+
+function writeActionCallbackFromDeclaration(
+  declaration: Node,
+  seen: Set<string>,
+): ReturnType<CallExpression['getArguments']>[number] | null {
+  if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
+    return writeActionCallbackFunction(declaration.getInitializer(), seen);
+  }
+
+  if (Node.isShorthandPropertyAssignment(declaration)) {
+    return writeActionCallbackFunction(declaration.getNameNode(), seen);
+  }
+
+  if (!Node.isIdentifier(declaration)) return null;
+
+  const parent = declaration.getParent();
+  if (
+    (Node.isVariableDeclaration(parent) || Node.isPropertyAssignment(parent)) &&
+    parent.getNameNode() === declaration
+  ) {
+    return writeActionCallbackFunction(parent.getInitializer(), seen);
+  }
+  if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+    return writeActionCallbackFunction(parent.getNameNode(), seen);
   }
 
   return null;
