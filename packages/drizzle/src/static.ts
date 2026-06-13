@@ -1707,14 +1707,12 @@ function selectCallFromQueryBody(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
 ): CallExpression | undefined {
-  const selectCalls = body
-    .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .filter(
-      (call) =>
-        isSelectQueryCallName(staticAccessName(call.getExpression())) &&
-        isQueryCallOnReceiver(call, receiverNames),
-    )
-    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
+  const selectCalls = queryBodyCallExpressions(body, (call) =>
+    isSelectQueryCallName(staticAccessName(call.getExpression())) &&
+    isQueryCallOnReceiver(call, receiverNames)
+      ? [call]
+      : [],
+  );
 
   return (
     selectCalls.find((call) => call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) ??
@@ -2371,8 +2369,10 @@ function queryBodyCallExpressions<T>(
   body: ObjectLiteralExpression,
   extract: (call: CallExpression) => readonly T[],
 ): T[] {
-  return body
-    .getDescendantsOfKind(SyntaxKind.CallExpression)
+  // SPEC §10-§11: query facts come from executable query-loader callback surfaces; nested helper
+  // bodies are summarized only when called instead of fabricating reads from declarations.
+  return queryCallbackBodies(body)
+    .flatMap((callbackBody) => touchBodyCallExpressions(callbackBody))
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
     .flatMap(extract);
 }

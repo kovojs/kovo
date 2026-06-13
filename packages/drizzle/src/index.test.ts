@@ -2420,6 +2420,95 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not fabricate project query facts from uncalled nested loader helpers', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const auditLog = pgTable("audit_log", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "audit", key: "id" }));',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/loader-helper", {',
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    function readAudit(reader: PgDatabase<any, any, any>) {',
+            '      return reader.select({ id: auditLog.id }).from(auditLog);',
+            '    }',
+            '',
+            '    function readProducts(reader: PgDatabase<any, any, any>) {',
+            '      return reader.select({ id: products.id }).from(products);',
+            '    }',
+            '',
+            '    return readProducts(db);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/loader-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'product.queries.ts:10',
+      },
+    ]);
+  });
+
+  it('ignores uncalled nested query-loader helper predicates', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const auditLog = pgTable("audit_log", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "audit", key: "id" }));',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/nested-predicate", {',
+            '  load(input, db: PgDatabase<any, any, any>) {',
+            '    function readAudit(reader: PgDatabase<any, any, any>) {',
+            '      return reader.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.id, input.id));',
+            '    }',
+            '',
+            '    return db.select({ id: products.id }).from(products).where(eq(products.id, input.id));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product/nested-predicate',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
     const facts = extractQueryFactsFromSource([
       {

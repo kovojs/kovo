@@ -144,6 +144,12 @@ Closed evidence so far:
   `pnpm exec vitest --run conformance/drizzle-pin` pass.
 - Project query-loader receiver extraction excludes explicitly typed non-Drizzle receiver
   lookalikes and carries transaction callback aliases into FW406 diagnostics.
+- Query-loader read/projection/instance-key extraction scans executable callback bodies only;
+  uncalled nested helper declarations no longer fabricate Drizzle reads, while called local helper
+  summaries still fold into query facts. Evidence: `packages/drizzle/src/index.test.ts` nested
+  helper regression coverage, `conformance/drizzle-pin/src/index.test.ts` real `drizzle-orm`
+  pin, `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

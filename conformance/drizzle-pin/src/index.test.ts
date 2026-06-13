@@ -1813,6 +1813,49 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins uncalled nested query-loader helpers as non-query surfaces under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const auditLog = pgTable('audit_log', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'audit', key: 'id' }));
+            export const users = pgTable('users', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users/nested-helper', {
+              load(_input, db: PgDatabase<any, any, any>) {
+                function readAudit(reader: PgDatabase<any, any, any>) {
+                  return reader.select({ id: auditLog.id }).from(auditLog);
+                }
+
+                function readUsers(reader: PgDatabase<any, any, any>) {
+                  return reader.select({ id: users.id }).from(users);
+                }
+
+                return readUsers(db);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'users/nested-helper',
+        reads: ['user'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:11',
+      },
+    ]);
+  });
+
   it('pins static element-access relational reads as explicit FW406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
