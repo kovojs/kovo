@@ -1,4 +1,4 @@
-import type { DiagnosticCode } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 
 export interface StaticExportResponseSnapshot {
   body: string;
@@ -153,6 +153,26 @@ export function formatStaticExportDiagnostics(
   return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
 }
 
+export function assertStaticExportCompileDiagnostics(
+  diagnostics: readonly StaticExportCompileDiagnostic[],
+): void {
+  const blockingDiagnostics = blockingStaticExportDiagnostics(diagnostics);
+  if (blockingDiagnostics.length > 0) throw new StaticExportError(blockingDiagnostics);
+}
+
+export function blockingStaticExportDiagnostics(
+  diagnostics: readonly StaticExportCompileDiagnostic[],
+): StaticExportDiagnostic[] {
+  // SPEC §11.3: error diagnostics block static export before output is written.
+  return diagnostics
+    .filter((diagnostic) => diagnosticDefinitions[diagnostic.code].severity === 'error')
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      message: staticExportCompileDiagnosticMessage(diagnostic),
+      routePath: diagnostic.fileName,
+    }));
+}
+
 // SPEC §9.5: dry-run export task wiring inspects the same route/module/asset set
 // that a write export would publish, without reaching into replay internals.
 export function staticExportInventory(result: {
@@ -225,4 +245,14 @@ export function sortedHeaders(headers: Headers): Record<string, string> {
 
 function stableDiagnosticText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function staticExportCompileDiagnosticMessage(diagnostic: StaticExportCompileDiagnostic): string {
+  const site = diagnostic.start
+    ? `${diagnostic.fileName}:${diagnostic.start.line}:${diagnostic.start.column}`
+    : diagnostic.fileName;
+  const help = diagnostic.help?.trim();
+  const message = `Static export refused error diagnostic ${diagnostic.code} at ${site}. ${diagnostic.message}`;
+
+  return help ? `${message}\n${help}` : message;
 }

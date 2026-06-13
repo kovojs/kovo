@@ -1,5 +1,4 @@
 import type { JisoApp } from './app.js';
-import { assertStaticExportCompileDiagnostics } from './static-export-diagnostics.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -8,6 +7,7 @@ import {
 } from './static-export-output.js';
 import { replayStaticExportApp } from './static-export-replay.js';
 import {
+  assertStaticExportCompileDiagnostics,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,

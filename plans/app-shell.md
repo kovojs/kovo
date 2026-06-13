@@ -46,10 +46,11 @@ Implemented areas:
   SPEC §9.5 L0/L1 endpoint rejection for exported no-JS documents; it also discovers same-origin
   full-URL `/c/` module refs from route HTML and `Link` headers, preserving SPEC §4.3's full
   module URL contract while publishing static-host `/c/` files.
-- `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting and a
-  public export manifest for directory-index documents, copied assets, and `/c/` modules. The
-  create-jiso starter and commerce export tasks load the diagnostic helpers from `@jiso/server`
-  instead of duplicating local FW229 formatting.
+- `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting,
+  SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export, and a public export
+  manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
+  starter and commerce export tasks load the diagnostic helpers from `@jiso/server` instead of
+  duplicating local FW229 formatting.
 
 Recent gates:
 
@@ -450,16 +451,16 @@ Round108 app-shell Vite plugin/root barrel deletion evidence:
 
 Round109 app-shell static export diagnostic boundary evidence:
 
-- `packages/server/src/static-export-diagnostics.ts` now owns SPEC §11.3 compile-diagnostic
-  blocking for SPEC §9.5 static export; `static-export.ts` stays focused on replay, output
-  planning, and optional writes.
+- `packages/server/src/static-export-types.ts` now owns SPEC §11.3 compile-diagnostic blocking
+  for SPEC §9.5 static export beside the stable static export diagnostic formatting/type surface;
+  `static-export.ts` stays focused on replay, output planning, and optional writes.
 - `packages/server/src/static-export-diagnostics.test.ts` proves error diagnostics stop before
   route replay/output writes while lint diagnostics continue through synthetic document replay.
 - `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-types.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Round117 app-shell dispatch/Vite subpath evidence:
@@ -568,3 +569,16 @@ Round145 app-shell static document/client replay evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round149 app-shell static export diagnostic seam evidence:
+
+- `packages/server/src/static-export-types.ts` now owns both export-task diagnostic
+  formatting/type guards and SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export,
+  deleting the standalone `static-export-diagnostics.ts` module.
+- `packages/server/src/static-export.ts` imports that single diagnostic seam before replay/output
+  orchestration, and `static-export-diagnostics.test.ts` proves error diagnostics stop before
+  route replay or output writes while lint diagnostics continue through synthetic replay.
+- `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "formats generated export task diagnostics|scaffolds real template files|runs .* with the built stylesheet href"`
+- `pnpm exec tsc --noEmit --pretty false`
