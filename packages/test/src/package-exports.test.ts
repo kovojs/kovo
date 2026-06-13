@@ -110,6 +110,10 @@ import {
 } from '@jiso/test/source-fixtures';
 import {
   executeStarterClientTemplate,
+  runPnpmFilterTaskCommand,
+  runStarterTemplateEmitGraph,
+  runStarterTemplateGraphAssertions,
+  runStarterTemplateViteTaskCommand,
   starterTemplateFacts,
   type StarterClientTemplateFixture,
   type StarterTemplateFacts,
@@ -244,6 +248,10 @@ describe('@jiso/test package subpath exports', () => {
     });
     expect(starterTemplateFacts).toBeTypeOf('function');
     expect(executeStarterClientTemplate).toBeTypeOf('function');
+    expect(runStarterTemplateEmitGraph).toBeTypeOf('function');
+    expect(runStarterTemplateGraphAssertions).toBeTypeOf('function');
+    expect(runStarterTemplateViteTaskCommand).toBeTypeOf('function');
+    expect(runPnpmFilterTaskCommand).toBeTypeOf('function');
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');

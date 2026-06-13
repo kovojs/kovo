@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   executeStarterClientTemplate,
+  runPnpmFilterTaskCommand,
+  runStarterTemplateEmitGraph,
+  runStarterTemplateGraphAssertions,
+  runStarterTemplateViteTaskCommand,
   starterTemplateFacts,
 } from '@jiso/test/starter-template-fixtures';
 
@@ -137,5 +145,117 @@ export function applyJisoDeferredStreamResponse(body) {
     expect(fixture.deferredApplications).toMatchObject([
       { body: '<fw-fragment></fw-fragment>', root: loaderOptions.enhancedMutations.root },
     ]);
+  });
+
+  it('runs starter template graph tasks in a copied fixture with compiler and fw shims', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-starter-fixture-'));
+    const templateRoot = join(root, 'template');
+    const compilerRoot = join(root, 'compiler');
+    const graph = { mutations: [{ key: 'cart/add' }], queries: [{ query: 'cart' }] };
+
+    try {
+      await mkdir(join(templateRoot, 'scripts'), { recursive: true });
+      await mkdir(compilerRoot, { recursive: true });
+      await writeFile(
+        join(compilerRoot, 'index.mjs'),
+        `export const graphFixture = ${JSON.stringify(graph)};\n`,
+        'utf8',
+      );
+      await writeFile(
+        join(templateRoot, 'scripts/emit-graph.mjs'),
+        [
+          "import { writeFileSync } from 'node:fs';",
+          "import { graphFixture } from '@jiso/compiler';",
+          "writeFileSync('graph.json', JSON.stringify(graphFixture));",
+          "process.stdout.write('emit-graph/v1\\nOK\\n');",
+        ].join('\n'),
+        'utf8',
+      );
+      await writeFile(
+        join(templateRoot, 'scripts/graph-assertions.mjs'),
+        [
+          "import { execFileSync } from 'node:child_process';",
+          "const output = execFileSync('fw', ['explain', 'query', 'cart', 'graph.json'], { encoding: 'utf8' });",
+          "if (output !== 'fw-explain/v1\\nQUERY cart\\n') throw new Error(output);",
+          "process.stdout.write('graph-assertions/v1\\nOK\\n');",
+        ].join('\n'),
+        'utf8',
+      );
+
+      const paths = {
+        compilerModuleUrl: pathToFileURL(join(compilerRoot, 'index.mjs')).href,
+        projectRoot: root,
+        templateRoot,
+      };
+      const fwOutputs = [
+        { args: ['check', 'graph.json'], output: 'fw-check/v1\nOK\n' },
+        { args: ['explain', 'query', 'cart', 'graph.json'], output: 'fw-explain/v1\nQUERY cart\n' },
+      ];
+
+      await expect(runStarterTemplateEmitGraph(paths)).resolves.toEqual({
+        graph,
+        output: 'emit-graph/v1\nOK\n',
+      });
+      await expect(
+        runStarterTemplateViteTaskCommand(
+          'node scripts/emit-graph.mjs && fw check graph.json',
+          paths,
+          fwOutputs,
+        ),
+      ).resolves.toEqual({
+        graph,
+        output: 'emit-graph/v1\nOK\nfw-check/v1\nOK\n',
+      });
+      await expect(runStarterTemplateGraphAssertions(paths, fwOutputs)).resolves.toBe(
+        'graph-assertions/v1\nOK\n',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('runs pnpm-filter conformance task commands and rejects missing packages', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-conformance-fixture-'));
+    const packages = [
+      {
+        manifest: {
+          name: '@jiso/conformance-auth-spike',
+          scripts: { test: 'vitest --run src/index.test.ts' },
+        },
+      },
+      {
+        manifest: {
+          name: '@jiso/conformance-drizzle-pin',
+          scripts: { test: 'vitest --run src/index.test.ts' },
+        },
+      },
+    ];
+
+    try {
+      await expect(
+        runPnpmFilterTaskCommand(
+          [
+            'pnpm --filter @jiso/conformance-auth-spike test',
+            'pnpm --filter @jiso/conformance-drizzle-pin test',
+          ].join(' && '),
+          packages,
+          { cwd: root },
+        ),
+      ).resolves.toEqual({
+        observed: [
+          { packageName: '@jiso/conformance-auth-spike', script: 'test' },
+          { packageName: '@jiso/conformance-drizzle-pin', script: 'test' },
+        ],
+        output:
+          'pnpm-filter-test @jiso/conformance-auth-spike\npnpm-filter-test @jiso/conformance-drizzle-pin\n',
+      });
+      await expect(
+        runPnpmFilterTaskCommand('pnpm --filter @jiso/conformance-auth-spike test', packages, {
+          cwd: root,
+        }),
+      ).rejects.toThrow('conformance task executes every discovered conformance package test');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 });

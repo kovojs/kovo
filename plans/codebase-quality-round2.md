@@ -153,6 +153,10 @@ Closed evidence so far:
   fact collection or fake browser client-template executor; the SPEC §13.1 stylesheet and §16
   starter acceptance gate consumes `@jiso/test/starter-template-fixtures`, pinned by focused
   package tests and package exports.
+- `tests/fw-check.node.mjs` no longer owns local starter template graph-task or conformance
+  fake-pnpm temp-command runners; `@jiso/test/starter-template-fixtures` now executes copied
+  starter tasks, compiler shims, fake `fw` output maps, and conformance package command coverage
+  for the SPEC §16 starter/conformance gates.
 
 Open:
 
@@ -214,6 +218,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -897,6 +906,10 @@ Closed evidence so far:
   task, Tailwind `@source`, index HTML, graph, and browser client-template facts for the SPEC
   §13.1/§16 starter gate; `fw-check` consumes those facts instead of owning local starter parsing
   or fake DOM execution.
+- `@jiso/test/starter-template-fixtures` also owns copied starter graph-task execution with
+  compiler shims, fake `fw` output maps, and conformance fake-pnpm command verification for the
+  SPEC §16 starter/conformance gates; `fw-check` consumes those seams instead of local temp
+  command runners.
 
 Open:
 
@@ -955,6 +968,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -1021,6 +1039,9 @@ Closed evidence so far:
   field input, textarea, select, and fieldset wrappers over native IDREF control wiring; the
   `/components/field` gallery fixture and behavior-contract tests prove input, textarea, select,
   alert error, and fieldset markup.
+- `packages/test/src/starter-template-fixtures.ts` now also owns reusable starter graph-task and
+  conformance fake-command fixtures; focused package tests, package export tests, and targeted
+  starter/conformance `fw-check` node tests pin the seam.
 
 Open:
 

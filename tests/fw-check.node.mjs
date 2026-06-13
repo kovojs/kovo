@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -55,7 +55,6 @@ import {
   pnpmFilterTestCommands,
   pnpmRunScriptNames,
   requiredVpRunTaskName,
-  runCommandSequenceSync,
   vitestTaskCommand,
   workflowVpRunTaskNames,
 } from '../packages/test/src/command-fixtures.ts';
@@ -90,6 +89,10 @@ import {
 } from '../packages/test/src/source-fixtures.ts';
 import {
   executeStarterClientTemplate,
+  runPnpmFilterTaskCommand,
+  runStarterTemplateEmitGraph,
+  runStarterTemplateGraphAssertions,
+  runStarterTemplateViteTaskCommand,
   starterTemplateFacts,
 } from '../packages/test/src/starter-template-fixtures.ts';
 import {
@@ -247,226 +250,32 @@ const generatedBootstrapRuntime = {
 const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
   loadVitePlusConfig(await readProjectFile(configPath));
 
-const runGraphAssertionsTemplateScript = async () => {
-  const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-fake-fw-'));
-  const fakeFw = join(fakeBin, 'fw');
-  const fakeFwSource = `#!/usr/bin/env node
-const outputs = new Map([
-  [
-    JSON.stringify(['explain', 'query', 'cart', 'graph.json']),
-    'fw-explain/v1\\nQUERY cart\\nreads: cart\\nconsumers: component:CartBadge,component:CartPanel,page:/cart\\ninvalidated-by: cart/add\\ndomain-writes: cart.addItem\\n',
-  ],
-  [
-    JSON.stringify(['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json']),
-    'fw-explain/v1\\nMUTATION cart/add\\nguards: authed\\nsession: starterSession\\ninput-fields: productId,quantity\\nwrites: cart\\ninvalidates: cart\\nmanual-invalidates: -\\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\\nOPTIMISTIC cart await-fragment\\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\\n',
-  ],
-  [
-    JSON.stringify(['explain', 'page', '/cart', 'graph.json']),
-    'fw-explain/v1\\nPAGE /cart\\nprefetch: false\\nmeta: title=Jiso Starter Cart description=Starter cart backed by query data. image=-\\ni18n: en-US:cartTitle\\nmodulepreloads: -\\nstylesheets: /src/styles.css\\nqueries: cart\\nview-transitions: -\\n',
-  ],
-]);
-const output = outputs.get(JSON.stringify(process.argv.slice(2)));
-if (!output) {
-  process.stderr.write(\`unexpected fw args: \${JSON.stringify(process.argv.slice(2))}\\n\`);
-  process.exit(64);
-}
-process.stdout.write(output);
-`;
-
-  try {
-    await writeFile(fakeFw, fakeFwSource, 'utf8');
-    await chmod(fakeFw, 0o755);
-
-    return execFileSync('node', ['scripts/graph-assertions.mjs'], {
-      cwd: new URL('../packages/create-jiso/templates/', import.meta.url),
-      encoding: 'utf8',
-      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
-    });
-  } finally {
-    await rm(fakeBin, { force: true, recursive: true });
-  }
+const projectRootPath = fileURLToPath(new URL('..', import.meta.url));
+const starterTemplatePaths = {
+  projectRoot: projectRootPath,
+  templateRoot: new URL('../packages/create-jiso/templates/', import.meta.url),
 };
-
-const runEmitGraphTemplateScript = async () => {
-  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
-  const templateRoot = new URL('../packages/create-jiso/templates/', import.meta.url);
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-template-emit-graph-'));
-  const compilerShimRoot = join(fixtureRoot, 'node_modules/@jiso/compiler');
-
-  try {
-    await cp(templateRoot, fixtureRoot, { recursive: true });
-    await mkdir(compilerShimRoot, { recursive: true });
-    await writeFile(
-      join(compilerShimRoot, 'package.json'),
-      JSON.stringify({ type: 'module', exports: './index.mjs' }),
-      'utf8',
-    );
-    await writeFile(
-      join(compilerShimRoot, 'index.mjs'),
-      `export * from ${JSON.stringify(
-        pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
-      )};\n`,
-      'utf8',
-    );
-
-    const output = execFileSync('node', ['scripts/emit-graph.mjs'], {
-      cwd: fixtureRoot,
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1' },
-    });
-    const graph = JSON.parse(await readFile(join(fixtureRoot, 'graph.json'), 'utf8'));
-
-    return { graph, output };
-  } finally {
-    await rm(fixtureRoot, { force: true, recursive: true });
-  }
-};
-
-const runTemplateViteTaskCommand = async (command) => {
-  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
-  const templateRoot = new URL('../packages/create-jiso/templates/', import.meta.url);
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-template-task-'));
-  const compilerShimRoot = join(fixtureRoot, 'node_modules/@jiso/compiler');
-  const fakeBin = join(fixtureRoot, '.fake-bin');
-  const fakeFw = join(fakeBin, 'fw');
-
-  try {
-    await cp(templateRoot, fixtureRoot, { recursive: true });
-    await mkdir(compilerShimRoot, { recursive: true });
-    await mkdir(fakeBin, { recursive: true });
-    await writeFile(
-      join(compilerShimRoot, 'package.json'),
-      JSON.stringify({ type: 'module', exports: './index.mjs' }),
-      'utf8',
-    );
-    await writeFile(
-      join(compilerShimRoot, 'index.mjs'),
-      `export * from ${JSON.stringify(
-        pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
-      )};\n`,
-      'utf8',
-    );
-    await writeFile(
-      fakeFw,
-      `#!/usr/bin/env node
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-
-const args = process.argv.slice(2);
-const graph = JSON.parse(readFileSync('graph.json', 'utf8'));
-
-if (JSON.stringify(args) === JSON.stringify(['check', 'graph.json'])) {
-  assert.deepEqual(graph.mutations.map((mutation) => mutation.key), ['cart/add']);
-  process.stdout.write('fw-check/v1\\nOK\\n');
-  process.exit(0);
-}
-
-const explainOutput = new Map([
-  [
-    JSON.stringify(['explain', 'query', 'cart', 'graph.json']),
-    'fw-explain/v1\\nQUERY cart\\nreads: cart\\nconsumers: component:CartBadge,component:CartPanel,page:/cart\\ninvalidated-by: cart/add\\ndomain-writes: cart.addItem\\n',
-  ],
-  [
-    JSON.stringify(['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json']),
-    'fw-explain/v1\\nMUTATION cart/add\\nguards: authed\\nsession: starterSession\\ninput-fields: productId,quantity\\nwrites: cart\\ninvalidates: cart\\nmanual-invalidates: -\\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\\nOPTIMISTIC cart await-fragment\\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\\n',
-  ],
-  [
-    JSON.stringify(['explain', 'page', '/cart', 'graph.json']),
-    'fw-explain/v1\\nPAGE /cart\\nprefetch: false\\nmeta: title=Jiso Starter Cart description=Starter cart backed by query data. image=-\\ni18n: en-US:cartTitle\\nmodulepreloads: -\\nstylesheets: /src/styles.css\\nqueries: cart\\nview-transitions: -\\n',
-  ],
-]);
-
-const output = explainOutput.get(JSON.stringify(args));
-if (output) {
-  process.stdout.write(output);
-  process.exit(0);
-}
-
-process.stderr.write(\`unexpected fw args: \${JSON.stringify(args)}\\n\`);
-process.exit(64);
-`,
-      'utf8',
-    );
-    await chmod(fakeFw, 0o755);
-
-    const output = runCommandSequenceSync(command, {
-      cwd: fixtureRoot,
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1', PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
-    });
-    const graph = JSON.parse(await readFile(join(fixtureRoot, 'graph.json'), 'utf8'));
-
-    return { graph, output };
-  } finally {
-    await rm(fixtureRoot, { force: true, recursive: true });
-  }
-};
-
-const runPnpmFilterTaskCommand = async (command, expectedPackages) => {
-  const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-conformance-pnpm-'));
-  const fakePnpm = join(fakeBin, 'pnpm');
-  const observedPath = join(fakeBin, 'observed.jsonl');
-  const packageScripts = Object.fromEntries(
-    expectedPackages.map(({ manifest }) => [manifest.name, manifest.scripts ?? {}]),
-  );
-  const expectedPackageNames = expectedPackages
-    .map(({ manifest }) => manifest.name)
-    .toSorted((left, right) => left.localeCompare(right));
-
-  try {
-    await writeFile(
-      fakePnpm,
-      `#!/usr/bin/env node
-import assert from 'node:assert/strict';
-import { appendFileSync } from 'node:fs';
-
-const args = process.argv.slice(2);
-const scriptsByPackage = JSON.parse(process.env.JISO_CONFORMANCE_PACKAGE_SCRIPTS ?? '{}');
-assert.deepEqual(args.slice(0, 2), ['--filter', args[1]]);
-assert.equal(args[2], 'test');
-assert.equal(args.length, 3);
-const packageName = args[1];
-assert.equal(
-  scriptsByPackage[packageName]?.test,
-  'vitest --run src/index.test.ts',
-  \`\${packageName} exposes the expected conformance test command\`,
-);
-appendFileSync(process.env.JISO_CONFORMANCE_OBSERVED, JSON.stringify({ packageName, script: args[2] }) + '\\n');
-process.stdout.write(\`pnpm-filter-test \${packageName}\\n\`);
-`,
-      'utf8',
-    );
-    await chmod(fakePnpm, 0o755);
-
-    const output = runCommandSequenceSync(command, {
-      cwd: new URL('..', import.meta.url),
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        JISO_CONFORMANCE_OBSERVED: observedPath,
-        JISO_CONFORMANCE_PACKAGE_SCRIPTS: JSON.stringify(packageScripts),
-        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-      },
-    });
-    const observed = (await readFile(observedPath, 'utf8'))
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
-
-    assert.deepEqual(
-      observed
-        .map((entry) => entry.packageName)
-        .toSorted((left, right) => left.localeCompare(right)),
-      expectedPackageNames,
-      'conformance task executes every discovered conformance package test',
-    );
-
-    return { observed, output };
-  } finally {
-    await rm(fakeBin, { force: true, recursive: true });
-  }
-};
+const starterTemplateFwOutputs = [
+  {
+    args: ['check', 'graph.json'],
+    output: 'fw-check/v1\nOK\n',
+  },
+  {
+    args: ['explain', 'query', 'cart', 'graph.json'],
+    output:
+      'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,component:CartPanel,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+  },
+  {
+    args: ['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json'],
+    output:
+      'fw-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId,quantity\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\n',
+  },
+  {
+    args: ['explain', 'page', '/cart', 'graph.json'],
+    output:
+      'fw-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Jiso Starter Cart description=Starter cart backed by query data. image=-\ni18n: en-US:cartTitle\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
+  },
+];
 
 void test('fw-check wrapper explains the production build prerequisite', () => {
   assert.equal(
@@ -3556,8 +3365,16 @@ void test('P10 starter wires graph assertions into CI', async () => {
   ]);
 
   const taskOutputs = await Promise.all([
-    runTemplateViteTaskCommand(viteTasks['fw-check'].command),
-    runTemplateViteTaskCommand(viteTasks['graph-assertions'].command),
+    runStarterTemplateViteTaskCommand(
+      viteTasks['fw-check'].command,
+      starterTemplatePaths,
+      starterTemplateFwOutputs,
+    ),
+    runStarterTemplateViteTaskCommand(
+      viteTasks['graph-assertions'].command,
+      starterTemplatePaths,
+      starterTemplateFwOutputs,
+    ),
   ]);
   assert.deepEqual(
     taskOutputs.map((taskOutput) => taskOutput.output),
@@ -3568,10 +3385,13 @@ void test('P10 starter wires graph assertions into CI', async () => {
     [starterGraph, starterGraph],
   );
 
-  const emittedGraph = await runEmitGraphTemplateScript();
+  const emittedGraph = await runStarterTemplateEmitGraph(starterTemplatePaths);
   assert.equal(emittedGraph.output, 'emit-graph/v1\nOK\n');
   assert.deepEqual(emittedGraph.graph, starterGraph);
-  assert.equal(await runGraphAssertionsTemplateScript(), 'graph-assertions/v1\nOK\n');
+  assert.equal(
+    await runStarterTemplateGraphAssertions(starterTemplatePaths, starterTemplateFwOutputs),
+    'graph-assertions/v1\nOK\n',
+  );
 
   const starterAppCompile = compileComponentModule({
     fileName: 'src/app.tsx',
@@ -5559,7 +5379,13 @@ void test('Conformance suites are an explicit gate', async () => {
     { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
     { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
   ]);
-  const executedTask = await runPnpmFilterTaskCommand(conformanceTask.command, conformancePackages);
+  const executedTask = await runPnpmFilterTaskCommand(
+    conformanceTask.command,
+    conformancePackages,
+    {
+      cwd: new URL('..', import.meta.url),
+    },
+  );
   assert.deepEqual(
     executedTask.observed.map((entry) => entry.script),
     ['test', 'test', 'test', 'test', 'test'],
@@ -5571,7 +5397,9 @@ void test('Conformance suites are an explicit gate', async () => {
 
   const missingPackageCommand = conformanceTask.command.split(' && ').slice(0, -1).join(' && ');
   await assert.rejects(
-    runPnpmFilterTaskCommand(missingPackageCommand, conformancePackages),
+    runPnpmFilterTaskCommand(missingPackageCommand, conformancePackages, {
+      cwd: new URL('..', import.meta.url),
+    }),
     /conformance task executes every discovered conformance package test/,
   );
 
