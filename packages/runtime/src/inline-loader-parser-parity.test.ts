@@ -19,6 +19,9 @@ describe('inline loader parser parity', () => {
       'function readAttribute(attrs, name) {',
       '  return attrs + ":" + name;',
       '}',
+      'function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
       'function readElementChunks(body) {',
       '  return [{ attrs: readAttribute(body, "target"), content: body }];',
       '}',
@@ -42,6 +45,9 @@ describe('inline loader parser parity', () => {
     expect(alternateReadable).toContain(
       'applyResponseChunks(readMutationResponseElementChunks(body));',
     );
+    expect(alternateReadable).toContain(
+      'chunks.fragments.map(readFragmentElementChunk).filter(Boolean).forEach(applyFragment);',
+    );
   });
 
   it('extracts the inline wire parser dependency closure from the modular parser', () => {
@@ -63,6 +69,9 @@ describe('inline loader parser parity', () => {
       'export function readAttribute(attrs, name) {',
       '  return unescapeHtml(attrs + name);',
       '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
       '}',
@@ -79,6 +88,7 @@ describe('inline loader parser parity', () => {
     expect(extracted).toMatch(
       /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\).*function readMutationResponseElementChunks\(body\)/s,
     );
+    expect(extracted).toContain('function readFragmentElementChunk(fragment)');
     expect(extracted).not.toContain('unusedHelper');
     expect(extracted).not.toContain('export function');
   });
@@ -92,6 +102,9 @@ describe('inline loader parser parity', () => {
       '}',
       'export function readAttribute(attrs, name) {',
       '  return attrs + name;',
+      '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
       '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
@@ -132,6 +145,9 @@ describe('inline loader parser parity', () => {
       'export function readAttribute(attrs) {',
       '  return attrs;',
       '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return readElementChunks(body);',
       '}',
@@ -144,6 +160,9 @@ describe('inline loader parser parity', () => {
       'export function readAttribute(attrs) {',
       '  return parseJsonValue(attrs).value;',
       '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return readElementChunks(body);',
       '}',
@@ -155,6 +174,9 @@ describe('inline loader parser parity', () => {
       '}',
       'export function readAttribute(attrs) {',
       '  return attributePattern.test(attrs) ? attrs : null;',
+      '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
       '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return readElementChunks(body);',

@@ -10,6 +10,7 @@ const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', i
 const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
 const inlineWireParserRootFunctionNames = [
   'readMutationResponseElementChunks',
+  'readFragmentElementChunk',
   'readAttribute',
 ] as const;
 
@@ -60,13 +61,12 @@ function installInlineJisoLoader(importModule) {
     doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
   ${wireParserReadableSource}
   const applyFragment = (fragment) => {
-    const target = readAttribute(fragment.attrs, 'target');
-    const element = target && findFragmentTarget(target);
+    const element = findFragmentTarget(fragment.target);
     if (!element) return;
-    if (readAttribute(fragment.attrs, 'mode') === 'append') {
-      element.insertAdjacentHTML('beforeend', fragment.content);
+    if (fragment.mode === 'append') {
+      element.insertAdjacentHTML('beforeend', fragment.html);
     } else {
-      element.innerHTML = fragment.content;
+      element.innerHTML = fragment.html;
     }
   };
   const applyResponseChunks = (chunks) => {
@@ -80,7 +80,7 @@ function installInlineJisoLoader(importModule) {
         }),
       );
     });
-    chunks.fragments.forEach(applyFragment);
+    chunks.fragments.map(readFragmentElementChunk).filter(Boolean).forEach(applyFragment);
   };
   const applyResponseBody = (body) => {
     applyResponseChunks(readMutationResponseElementChunks(body));
