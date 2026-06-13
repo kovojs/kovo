@@ -1757,10 +1757,11 @@ Inline and modular fragment response apply now share `applyResponseFragment` and
 inline helper supplies tiny DOM append/replace adapters, while `packages/runtime/src/morph.ts`
 supplies the modular morph and island-signal cleanup adapters around the same target/mode and
 applied-target-list decision.
-The inline HTML append/replace adapter has also moved into
-`packages/runtime/src/response-fragment-apply.ts` as `applyHtmlResponseFragments`, so
-`packages/runtime/src/inline-response-apply.ts` only dispatches decoded query events and delegates
-decoded fragment application to the shared fragment helper extracted into the inline loader.
+The inline HTML append/replace adapter now stays private to
+`packages/runtime/src/inline-response-apply.ts`, so
+`packages/runtime/src/response-fragment-apply.ts` exposes only neutral decoded fragment primitives
+while the extracted inline loader still enters `applyResponseFragments` for target filtering and
+applied-target reporting.
 Inline enhanced-response apply now parses response bodies in the generated installer and enters the
 extracted helper at `applyInlineMutationResponseChunks`, deleting the inline-only
 `applyInlineMutationResponseBody` parser/apply wrapper while preserving readable/minified artifact
@@ -2612,6 +2613,18 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- Round330 runtime inline HTML adapter export deletion:
+  `pnpm exec vitest --run packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/morph.test.ts`;
+  `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/mutation-response-dom.browser.test.ts packages/runtime/src/loader.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  exact `pnpm exec vp check packages/runtime/src/response-fragment-apply.ts packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-response-apply.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/runtime/src/response-fragment-apply.ts` no longer exports the inline-only
+  `applyHtmlResponseFragments` wrapper; `packages/runtime/src/inline-response-apply.ts` keeps the
+  SPEC.md §4.4/§9.1 HTML append/replace adapter private while delegating decoded fragments to
+  `applyResponseFragments`, and focused tests prove the removed export plus readable/minified
+  inline response-apply parity.
 - Round326 runtime root decoded query apply export removal:
   `pnpm exec vitest --run packages/runtime/src/index-exports.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/query-events.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
