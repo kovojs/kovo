@@ -22,15 +22,17 @@ export {
   jisoAppShellViteStaticExportAssets,
 } from '../../vite-build-assets.js';
 export {
-  exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
-  exportJisoAppShellViteBuildWithManifestFromManifestFile,
   exportJisoAppShellViteBuildWithManifest,
-  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
-  staticExportManifestForJisoAppShellViteBuild,
-  staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
-} from '../../vite-static-export.js';
+  staticExportManifestForJisoAppShellViteBuild,
+} from '../../vite-static-export-build.js';
+export {
+  exportJisoAppShellViteBuildFromManifestFile,
+  exportJisoAppShellViteBuildWithManifestFromManifestFile,
+  staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+} from '../../vite-static-export-manifest-file.js';
 export {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestAssetsFromFile,
@@ -83,7 +85,7 @@ export type {
   JisoAppShellVitePluginStaticExportOptions,
   JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
   JisoAppShellViteManifestFileBuildStaticExportOptions,
-} from '../../vite-static-export.js';
+} from '../../vite-static-export-options.js';
 export type { JisoAppShellViteStaticExportWithManifestResult } from '../../vite-static-export-result.js';
 export type { JisoAppShellViteBuildOutputStaticExportOptions } from '../../vite-static-export-options.js';
 export type {

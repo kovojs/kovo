@@ -71,17 +71,34 @@ Implemented areas:
 - `exportJisoAppShellViteBuildWithManifest()` and its manifest-file variant are the public
   app-shell Vite bridge for SPEC §9.5 export-task consumers that need both the written export result
   and the matching dry-run manifest; starter, commerce, and docs export scripts use this bridge
-  instead of hand-wiring separate manifest and write-export calls.
+  through `@jiso/server/app-shell/vite` instead of hand-wiring separate manifest and write-export
+  calls.
 - `vite-static-export-result.ts` owns the SPEC §9.5 Vite export-task proof that a dry-run manifest
-  and written static-host result match, leaving `vite-static-export.ts` as the public facade over
-  build/manifest-file export entry points.
+  and written static-host result match.
 - `vite-static-export-build.ts` now owns build-backed SPEC §9.5 export replay, inventory, manifest,
   and manifest/write consistency helpers; `vite-static-export-manifest-file.ts` owns the
-  manifest-file wrappers. `vite-static-export.ts` is only the public facade, and `vite-build.ts`
-  type-imports plugin static-export options from the option owner instead of the facade.
+  manifest-file wrappers. The old internal `vite-static-export.ts` compatibility facade is deleted;
+  `@jiso/server/app-shell/vite` forwards directly from those owners and type-imports plugin
+  static-export options from the option owner.
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
+
+Round274 Vite static-export facade deletion evidence:
+
+- `packages/server/src/vite-static-export.ts` was deleted. `@jiso/server/app-shell/vite` now
+  re-exports SPEC §9.5 build-backed export/inventory/manifest helpers directly from
+  `vite-static-export-build.ts`, manifest-file wrappers directly from
+  `vite-static-export-manifest-file.ts`, and static-export option types from
+  `vite-static-export-options.ts`; `packages/server/src/api/app.test.ts` pins the public package
+  subpath to those focused owners.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/vite-static-export-build.ts packages/server/src/vite-static-export-manifest-file.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-static-export-options.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round273 Vite static-export facade extraction evidence:
 

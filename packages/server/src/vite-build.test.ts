@@ -17,13 +17,15 @@ import {
   writeJisoAppShellViteClientModuleOutput,
 } from './vite-client-module-output.js';
 import {
-  exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
+  staticExportInventoryForJisoAppShellViteBuild,
+} from './vite-static-export-build.js';
+import {
+  exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuildWithManifestFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
-  staticExportInventoryForJisoAppShellViteBuild,
   staticExportManifestForJisoAppShellViteBuildFromManifestFile,
-} from './vite-static-export.js';
+} from './vite-static-export-manifest-file.js';
 import {
   jisoAppShellViteBuildStaticExportAssets,
   jisoAppShellViteManifestFile,
