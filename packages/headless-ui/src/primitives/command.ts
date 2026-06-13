@@ -12,6 +12,7 @@ import {
 
 export interface CommandItem {
   disabled?: boolean;
+  id?: string;
   keywords?: readonly string[];
   label?: string;
   textValue?: string;
@@ -251,13 +252,14 @@ export function commandItemAttributes(
 ): CommandPrimitiveAttributes {
   const disabled = commandItemDisabled(options, options.itemValue);
   const highlighted = commandItemHighlighted(options);
+  const id = options.id ?? commandItemId(options, options.itemValue);
 
   return Object.freeze({
     ...commandItemDataAttributes(options),
     'aria-selected': String(highlighted),
     role: 'option',
     tabIndex: highlighted && !disabled ? 0 : -1,
-    ...(options.id === undefined ? {} : { id: options.id }),
+    ...(id === undefined ? {} : { id }),
     ...(disabled ? { 'aria-disabled': 'true' } : {}),
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
     value: options.itemValue,
@@ -602,6 +604,8 @@ function commandValueDisabled(state: CommandState, value: string | undefined): b
 
 function commandActiveDescendant(options: CommandInputAttributeOptions): string | undefined {
   if (options.highlightedValue === undefined) return undefined;
+  const itemId = commandItemId(options, options.highlightedValue);
+  if (itemId !== undefined) return itemId;
 
   const index = commandFilteredItems(options).findIndex(
     (item) => item.value === options.highlightedValue,
@@ -609,6 +613,10 @@ function commandActiveDescendant(options: CommandInputAttributeOptions): string 
   if (index < 0) return undefined;
 
   return `${options.listboxId ?? options.id ?? 'command'}-item-${index}`;
+}
+
+function commandItemId(state: CommandState, value: string): string | undefined {
+  return state.items?.find((item) => item.value === value)?.id;
 }
 
 function commandItemMatches(item: CommandItem, query: string): boolean {

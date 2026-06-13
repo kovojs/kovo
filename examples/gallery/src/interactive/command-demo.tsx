@@ -20,9 +20,14 @@ export interface GalleryCommandDemoState {
 }
 
 const commandItems: readonly CommandItem[] = Object.freeze([
-  { label: 'Open dashboard', value: 'dashboard' },
-  { label: 'Invite teammate', value: 'invite' },
-  { disabled: true, label: 'Delete project', value: 'delete' },
+  { id: 'gallery-command-listbox-item-0', label: 'Open dashboard', value: 'dashboard' },
+  { id: 'gallery-command-listbox-item-1', label: 'Invite teammate', value: 'invite' },
+  {
+    disabled: true,
+    id: 'gallery-command-listbox-item-2',
+    label: 'Delete project',
+    value: 'delete',
+  },
 ]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the

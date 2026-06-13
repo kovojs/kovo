@@ -261,6 +261,9 @@ describe('compiled interactive gallery demos', () => {
     expect(command).toContain(
       'fw-state=\'{"highlightedValue":"dashboard","inputValue":"","open":false,"value":"dashboard"}\'',
     );
+    expect(command).toContain(
+      "{ id: 'gallery-command-listbox-item-1', label: 'Invite teammate', value: 'invite' }",
+    );
     expect(command).toContain('commandDialogAttributes({');
     expect(command).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$input_input"/,

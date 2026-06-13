@@ -63,6 +63,12 @@ const commandItems: readonly CommandItem[] = Object.freeze([
   { textValue: 'Publish draft', value: 'publish' },
 ]);
 
+const identifiedCommandItems: readonly CommandItem[] = Object.freeze([
+  { id: 'command-item-0', label: 'Open dashboard', value: 'dashboard' },
+  { id: 'command-item-1', label: 'Invite teammate', value: 'invite' },
+  { disabled: true, id: 'command-item-2', label: 'Delete project', value: 'delete' },
+]);
+
 describe('headless-ui command primitive', () => {
   it('builds dialog trigger/content/close attributes for native command palette wiring', () => {
     expect(commandRootAttributes({ id: 'palette-root', inputValue: '', open: true })).toEqual({
@@ -193,6 +199,37 @@ describe('headless-ui command primitive', () => {
     expect(commandEmptyAttributes({ items: commandItems, inputValue: 'open' })).toEqual({
       'data-empty': '',
       hidden: true,
+    });
+  });
+
+  it('keeps aria-activedescendant aligned to stable item ids after filtering', () => {
+    const filteredState = {
+      highlightedValue: 'invite',
+      inputValue: 'invite',
+      items: identifiedCommandItems,
+      listboxId: 'command-list',
+      open: true,
+    };
+
+    expect(commandFilteredItems(filteredState).map(({ value }) => value)).toEqual(['invite']);
+    expect(
+      commandInputAttributes({
+        ...filteredState,
+        id: 'command-input',
+      }),
+    ).toMatchObject({
+      'aria-activedescendant': 'command-item-1',
+      'aria-controls': 'command-list',
+    });
+    expect(
+      commandItemAttributes({
+        ...filteredState,
+        itemValue: 'invite',
+      }),
+    ).toMatchObject({
+      'aria-selected': 'true',
+      id: 'command-item-1',
+      value: 'invite',
     });
   });
 

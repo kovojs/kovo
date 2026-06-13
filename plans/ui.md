@@ -87,6 +87,10 @@ Implemented areas:
   `autocompleteMove`/`comboboxMove` helpers, open-then-move Arrow key handlers, disabled-option
   skipping, and gallery behavior contracts that name the enabled suggestion/option movement
   requirement.
+- H3 command now supports stable item ids in the item inventory, so filtered command palettes keep
+  `aria-activedescendant` aligned with the rendered option id instead of deriving from filtered
+  indexes; the compiled interactive command gallery carries those ids through generated TSX and
+  browser-backed state coverage.
 
 Recent gates:
 
@@ -169,6 +173,13 @@ Recent gates:
 - `pnpm --filter @jiso/example-gallery run test:browser`
 - `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`
+- `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "updates command dialog"`
+- `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`
+- `git diff --check`
 
 ## Open Work
 
@@ -200,6 +211,9 @@ H3:
 - Repeated-key typeahead cycling is now covered for dropdown-menu, context-menu, menubar, and
   navigation-menu. Close any remaining state/focus/menu edge cases with focused tests before
   checking H3.
+- Command now preserves stable option ids across filtering for `aria-activedescendant` and the
+  compiled gallery command demo proves that path; broader H3 remains open until every wave-3
+  primitive is rechecked together.
 
 Styled UI:
 
