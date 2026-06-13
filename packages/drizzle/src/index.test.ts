@@ -2101,6 +2101,47 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('keeps computed query receiver calls visible as FW406 query facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;']),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            type FakeDb = Record<string, (query: unknown) => Promise<void>>;
+
+            export const productQuery = query("product/computed-raw", {
+              load(_input, db: PgDatabase, fake: FakeDb) {
+                const method = "execute";
+                db[method](sql\`select * from products\`);
+                fake[method](sql\`select * from products\`);
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db[method]().',
+            severity: 'warn',
+            site: 'product.queries.ts:4',
+          },
+        ],
+        query: 'product/computed-raw',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
   it('keeps relational query API reads visible as FW406 query facts', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -4999,6 +5040,41 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project computed receiver methods only for typed Drizzle symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'type FakeDb = Record<string, (query: unknown) => Promise<void>>;',
+            '',
+            'export async function sync(db: PgDatabase, fake: FakeDb, method: string) {',
+            '  await db[method]("select 1");',
+            '  await fake[method]("select 1");',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -5637,6 +5713,76 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(graph).toEqual({});
+  });
+
+  it('marks ambient source-mode receiver calls as FW406 instead of extracting table facts', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers() {',
+          '  await db.update(users).set({});',
+          '  await db.select().from(users);',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:4',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks ambient source-mode query receivers as FW406 instead of deriving reads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/ambient", {',
+          '  load() {',
+          '    return db.select({ id: users.id }).from(users);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode ambient Drizzle receiver surface select() without a declared loader receiver.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/ambient',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
   });
 
   it('marks external helpers receiving a Drizzle receiver as FW406', () => {

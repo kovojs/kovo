@@ -68,7 +68,6 @@ export type {
 } from './invalidation.js';
 export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './invalidation.js';
 
-const DEFAULT_DRIZZLE_RECEIVER_NAMES = new Set(['db', 'tx']);
 const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
   'for',
@@ -108,6 +107,7 @@ const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   'transaction',
   'update',
 ]);
+const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
 
 export type QueryShape =
   | 'array'
@@ -867,11 +867,7 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
   const bodyStart = bodySourceStart(body);
 
   for (const call of touchBodyCallExpressions(body)) {
-    const expression = call.getExpression();
-    const name = staticAccessName(expression);
-    if (!name) continue;
-
-    const surface = projectUnclassifiedCallSurface(call, name);
+    const surface = projectUnclassifiedCallSurface(call);
     if (!surface || !isProjectDrizzleReceiverIdentifier(surface.receiver, receivers)) continue;
 
     calls.push({ index: call.getStart() - bodyStart, name: surface.name });
@@ -882,19 +878,18 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
 
 function projectUnclassifiedCallSurface(
   call: CallExpression,
-  name: string,
 ): { name: string; receiver: Node } | undefined {
   // SPEC §10-§11: only the relational query API (`db.query.<table>.find*`) is classified as a
   // read surface. Other typed receiver `find*` calls remain visible as FW406.
+  const surface = directDrizzleReceiverCallSurface(call);
+  if (!surface) return undefined;
+  const { name } = surface;
   if ((name === 'findMany' || name === 'findFirst') && relationalReadCall(call)) {
     return undefined;
   }
 
   if (!isUnclassifiedDirectDrizzleReceiverMethod(name)) return undefined;
-
-  const expression = call.getExpression();
-  const receiver = staticAccessExpression(expression);
-  return receiver ? { name, receiver } : undefined;
+  return surface;
 }
 
 function relationalReadCall(
@@ -1307,6 +1302,9 @@ function isDrizzleReceiver(receiver: Node): boolean {
   if (isDrizzleDatabaseTypeText(typeText)) {
     return true;
   }
+  if (isDrizzleDatabaseTypeAnnotation(receiver)) {
+    return true;
+  }
 
   return (
     type
@@ -1315,6 +1313,12 @@ function isDrizzleReceiver(receiver: Node): boolean {
       .some((declaration) => declaration.getSourceFile().getFilePath().includes('drizzle-orm')) ??
     false
   );
+}
+
+function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {
+  const parameter = receiverParameterDeclaration(receiver);
+  const typeNode = parameter?.getTypeNode();
+  return typeNode ? isDrizzleDatabaseTypeText(typeNode.getText()) : false;
 }
 
 function projectTableNamesBySymbol(
@@ -1823,6 +1827,9 @@ function extractQueryDefinitionsFromSourceFile(
       ...externalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverReferences, readResolutionOptions),
+      ...((options.receiverMode ?? 'source') === 'source'
+        ? ambientSourceQueryReceiverDiagnostics(bodyArgument, localFunctionKeys)
+        : []),
     ];
     const localHelperCalls = queryLocalHelperCalls(
       bodyArgument,
@@ -1937,7 +1944,7 @@ function queryCallbackReceiverReferences(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source',
 ): QueryReceiverReferences {
-  const names = new Set(mode === 'source' ? DEFAULT_DRIZZLE_RECEIVER_NAMES : []);
+  const names = new Set<string>();
   const symbolKeys = new Set<string>();
 
   for (const property of body.getProperties()) {
@@ -2066,18 +2073,16 @@ function unclassifiedQueryReceiverDiagnostics(
   // SPEC §10.2/§11.1: query loaders may not hide raw SQL, writes, transactions, or other
   // unclassified Drizzle receiver work under an empty fact set.
   return queryBodyCallExpressions(body, (call) => {
-    const expression = call.getExpression();
-    const name = staticAccessName(expression);
-    if (!name || isSelectQueryCallName(name)) return [];
+    const surface = directDrizzleReceiverCallSurface(call);
+    if (!surface || isSelectQueryCallName(surface.name)) return [];
 
-    const receiver = staticAccessExpression(expression);
-    if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
-    if (!Node.isIdentifier(receiver)) return [];
+    if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
+    if (!Node.isIdentifier(surface.receiver)) return [];
 
     return [
       {
         code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call ${receiver.getText()}.${name}().`,
+        message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
         severity: diagnosticDefinitions.FW406.severity,
         site: '',
       },
@@ -2205,6 +2210,20 @@ function receiverMethodAliasQueryDiagnostics(
     ).map((call) => ({
       code: 'FW406' as const,
       message: `${diagnosticDefinitions.FW406.message} Query uses detached Drizzle receiver method ${call.name}().`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    })),
+  );
+}
+
+function ambientSourceQueryReceiverDiagnostics(
+  body: ObjectLiteralExpression,
+  localFunctionKeys: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  return queryCallbackBodies(body).flatMap((callbackBody) =>
+    extractAmbientSourceReceiverCallsFromBody(callbackBody, localFunctionKeys).map((call) => ({
+      code: 'FW406' as const,
+      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode ambient Drizzle receiver surface ${call.name}() without a declared loader receiver.`,
       severity: diagnosticDefinitions.FW406.severity,
       site: '',
     })),
@@ -3864,6 +3883,7 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
             isSourceDrizzleReceiverIdentifier(node, receiverNames),
           ),
           ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
+          ...extractAmbientSourceReceiverCallsFromBody(bodyNode, localFunctionKeys),
         ],
         writeCalls: extractDrizzleWriteCallsFromBody(bodyNode, receiverNames),
       };
@@ -4242,18 +4262,161 @@ function extractReceiverMutationCallsFromBody(
   const calls: ExternalDbArgumentCall[] = [];
 
   for (const call of touchBodyCallExpressions(body)) {
-    const expression = call.getExpression();
-    const name = staticAccessName(expression);
-    if (!name || !isUnclassifiedDirectDrizzleReceiverMethod(name)) continue;
+    const surface = directDrizzleReceiverCallSurface(call);
+    if (!surface || !isUnclassifiedDirectDrizzleReceiverMethod(surface.name)) continue;
 
-    const receiver = staticAccessExpression(expression);
-    if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
+    if (!isSourceDrizzleReceiverIdentifier(surface.receiver, receiverNames)) continue;
 
     const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name });
+    if (index >= 0) calls.push({ index, name: surface.name });
   }
 
   return calls;
+}
+
+function extractAmbientSourceReceiverCallsFromBody(
+  body: Node,
+  localFunctionKeys: ReadonlySet<string>,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  // SPEC §11.1: source-mode `db`/`tx` globals are ambiguous; keep the surface visible as FW406
+  // instead of deriving table facts from an undeclared compatibility receiver.
+  const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, isUnboundSourceReceiverName);
+  const aliases = receiverMethodAliasesForBody(body, isUnboundSourceReceiverName);
+  const calls: ExternalDbArgumentCall[] = [];
+
+  for (const call of touchBodyCallExpressions(body)) {
+    const direct = ambientSourceReceiverCallSurface(call, bodyOffset);
+    if (direct) calls.push(direct);
+
+    const alias = receiverMethodAliasCallName(call, aliases);
+    const aliasIndex = call.getStart() - bodyOffset;
+    if (alias && aliasIndex >= 0) calls.push({ index: aliasIndex, name: alias });
+
+    const helper = ambientSourceReceiverHelperCallSurface(
+      call,
+      localFunctionKeys,
+      carrierSymbolKeys,
+      bodyOffset,
+    );
+    if (helper) calls.push(helper);
+  }
+
+  return dedupeExternalDbArgumentCalls(calls).sort(
+    (left, right) => left.index - right.index || left.name.localeCompare(right.name),
+  );
+}
+
+function ambientSourceReceiverCallSurface(
+  call: CallExpression,
+  bodyOffset: number,
+): ExternalDbArgumentCall | null {
+  const index = call.getStart() - bodyOffset;
+  if (index < 0) return null;
+
+  if (isDrizzleWriteCall(call)) {
+    const operation = staticAccessName(call.getExpression());
+    const receiver = staticAccessExpression(call.getExpression());
+    return operation && isUnboundSourceReceiverName(receiver) ? { index, name: operation } : null;
+  }
+
+  const selectRead = selectReadCall(call);
+  if (selectRead && isUnboundSourceReceiverName(selectRead.receiver)) {
+    return { index, name: 'select' };
+  }
+
+  const relationalRead = relationalReadCall(call);
+  if (relationalRead && isUnboundSourceReceiverName(relationalRead.receiver)) {
+    return { index, name: 'relational-query' };
+  }
+
+  const surface = directDrizzleReceiverCallSurface(call);
+  if (
+    surface &&
+    isUnboundSourceReceiverName(surface.receiver) &&
+    (surface.name === 'transaction' || isUnclassifiedDirectDrizzleReceiverMethod(surface.name))
+  ) {
+    return { index, name: surface.displayName ?? surface.name };
+  }
+
+  return null;
+}
+
+function ambientSourceReceiverHelperCallSurface(
+  call: CallExpression,
+  localFunctionKeys: ReadonlySet<string>,
+  carrierSymbolKeys: ReadonlySet<string>,
+  bodyOffset: number,
+): ExternalDbArgumentCall | null {
+  const surface = externalHelperCallSurface(call);
+  if (!surface) return null;
+
+  const { name } = surface;
+  if (IGNORED_LOCAL_CALL_NAMES.has(name)) return null;
+
+  if (
+    !call
+      .getArguments()
+      .some((arg) =>
+        receiverReferenceInArgument(arg, isUnboundSourceReceiverName, carrierSymbolKeys),
+      )
+  ) {
+    return null;
+  }
+
+  const index = call.getStart() - bodyOffset;
+  if (index < 0) return null;
+
+  const key = surface.identifier
+    ? localFunctionKeyForIdentifier(surface.identifier, localFunctionKeys)
+    : undefined;
+  return { index, name: key ? (surface.identifier?.getText() ?? name) : name };
+}
+
+function dedupeExternalDbArgumentCalls(
+  calls: readonly ExternalDbArgumentCall[],
+): ExternalDbArgumentCall[] {
+  const seen = new Set<string>();
+  const deduped: ExternalDbArgumentCall[] = [];
+
+  for (const call of calls) {
+    const key = `${call.index}\0${call.name}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    deduped.push(call);
+  }
+
+  return deduped;
+}
+
+interface DirectDrizzleReceiverCallSurface {
+  displayName?: string;
+  name: string;
+  receiver: Node;
+}
+
+function directDrizzleReceiverCallSurface(
+  call: CallExpression,
+): DirectDrizzleReceiverCallSurface | undefined {
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  const receiver = staticAccessExpression(expression);
+  if (!receiver) return undefined;
+
+  const name = staticAccessName(expression);
+  if (name) return { name, receiver };
+
+  if (Node.isElementAccessExpression(expression)) {
+    // SPEC §10.2/§11.1: a computed method on a proven Drizzle receiver can hide raw SQL or writes,
+    // so it must degrade to FW406 instead of disappearing from the static surface.
+    return {
+      displayName: expression.getText(),
+      name: COMPUTED_DRIZZLE_RECEIVER_METHOD,
+      receiver,
+    };
+  }
+
+  return undefined;
 }
 
 function extractReceiverMethodAliasCallsFromBody(
@@ -4665,6 +4828,27 @@ function isSourceDrizzleReceiverIdentifier(
   return false;
 }
 
+function isUnboundSourceReceiverName(node: Node | undefined): boolean {
+  if (!node || !Node.isIdentifier(node)) return false;
+  if (!isLikelyDrizzleReceiver(node.getText())) return false;
+  const parent = node.getParent();
+  if (
+    Node.isShorthandPropertyAssignment(parent) &&
+    parent.getNameNode() === node &&
+    !parent.getValueSymbol()
+  ) {
+    return true;
+  }
+  const declarations = symbolForIdentifierReference(node)?.getDeclarations() ?? [];
+  return declarations.every(isSelfShorthandPropertyDeclaration);
+}
+
+function isSelfShorthandPropertyDeclaration(declaration: Node): boolean {
+  if (!Node.isIdentifier(declaration)) return false;
+  const parent = declaration.getParent();
+  return Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration;
+}
+
 function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
   if (Node.isIdentifier(node)) {
     const parent = node.getParent();
@@ -4714,7 +4898,7 @@ function receiverParameterDeclaration(declaration: Node): ParameterDeclaration |
 }
 
 function sourceDrizzleReceiverNames(callback: Node): string[] {
-  const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
+  const names = new Set<string>();
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||

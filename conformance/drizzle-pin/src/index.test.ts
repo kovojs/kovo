@@ -1082,6 +1082,47 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins ambient source-mode real Drizzle receiver globals as FW406', () => {
+    const runtimeUsers = pgTable('users', { id: text('id').primaryKey() });
+    expect(runtimeUsers.id).toBeDefined();
+
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+        source: [
+          "import { eq } from 'drizzle-orm';",
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', { id: text('id').primaryKey() }, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'export async function syncUsers() {',
+          "  await db.update(users).set({ id: 'u1' }).where(eq(users.id, 'u1'));",
+          '  await db.select({ id: users.id }).from(users);',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:7',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins source transaction aliases without leaking same-name callback receivers', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -2457,6 +2498,50 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins computed real Drizzle query receiver methods as explicit FW406 surfaces', () => {
+    expect(sql`select * from users`).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+
+            type FakeDb = Record<string, (query: unknown) => Promise<void>>;
+
+            export const usersQuery = query('users/computed-raw', {
+              load(_input, db: PgDatabase, fake: FakeDb) {
+                const method = 'execute';
+                db[method](sql\`select * from users\`);
+                fake[method](sql\`select * from users\`);
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db[method]().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:6',
+          },
+        ],
+        query: 'users/computed-raw',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:6',
+      },
+    ]);
+  });
+
   it('pins non-load query callbacks as non-loader surfaces', () => {
     expect(sql`select * from audit_log`).toBeDefined();
 
@@ -2859,6 +2944,40 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/users.domain.ts:10',
+          },
+        ],
+      },
+    });
+  });
+
+  it('pins computed real Drizzle receiver methods as explicit FW406 surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            type FakeDb = Record<string, (query: unknown) => Promise<void>>;
+
+            export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+              db[method]('active_users');
+              fake[method]('ignored_users');
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      configureUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:7',
           },
         ],
       },

@@ -344,6 +344,13 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Unbound ambient source-mode `db`/`tx` receivers no longer fabricate table reads/writes from
+  compatibility names; visible direct calls, relational/select reads, detached aliases, and helper
+  handoffs degrade to FW406 instead. Computed receiver methods such as `db[method]()` also degrade
+  to FW406 for proven Drizzle receivers while fake/lookalike receivers stay invisible. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 
