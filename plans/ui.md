@@ -58,6 +58,10 @@ Implemented areas:
 - The compiled interactive gallery now includes a scroll-area demo with browser-backed generated
   handler coverage for `scrollTop`, viewport labelling/focusability, scrollbar/thumb data attrs,
   static docs wiring, and generated-client DOM sync.
+- Representative G2 `fw explain component` coverage now lives in
+  `examples/gallery/src/fw-explain-contracts.test.ts`, proving package-prefix provenance,
+  handler records, platform substitutions, and merge diagnostics for H1 dialog, H2 tabs, and H3
+  dropdown-menu primitive families through the public CLI output (SPEC §6.1.1).
 - G5 exported primitive attrs inventory is closed: `examples/gallery/src/merge-fixtures.test.tsx`
   renders inline merge goldens for all 134 exported primitive `*Attributes` builders, with author
   stress attrs, merged HTML, and SPEC §4.6 diagnostic checks.
@@ -189,7 +193,8 @@ Styled UI:
 Gallery:
 
 - Expand route coverage until every primitive/styled component has a gallery fixture.
-- Add G2 `fw explain` coverage for representative primitives.
+- Extend G2 beyond the current representative `fw explain` primitive coverage when more component
+  families need provenance or merge-diagnostic examples.
 - Add G3/G4 once the gallery surface is stable enough to avoid churn-heavy baselines.
 - G5 is closed for the exported primitive attrs inventory and rendered merge goldens; keep future
   merge work scoped to new primitive exports or compiler/runtime diagnostic parity.

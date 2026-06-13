@@ -154,6 +154,12 @@ importers:
       '@jiso/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
+      '@jiso/test':
+        specifier: workspace:*
+        version: link:../../packages/test
+      fw:
+        specifier: workspace:*
+        version: link:../../packages/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

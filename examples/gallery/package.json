@@ -17,6 +17,8 @@
   },
   "devDependencies": {
     "@jiso/compiler": "workspace:*",
+    "@jiso/test": "workspace:*",
+    "fw": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "4.1.8"
   },
