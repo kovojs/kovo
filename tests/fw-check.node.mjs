@@ -66,18 +66,12 @@ import {
   fwExplainComponentAssertionFact,
   fwExplainEndpointAssertionFact,
   fwExplainListField,
-  fwExplainMutationAssertionFact,
   fwExplainQueryAssertionFact,
   fwExplainScopeAuditAssertionFact,
   fwExplainUnguardedAssertionFact,
   fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
-import {
-  fwCheckAssertionFact,
-  fwCheckCoverageAssertionFacts,
-  fwCheckDiagnosticAssertionFacts,
-  fwCheckOkAssertionFact,
-} from '../packages/test/src/fw-check-fixtures.ts';
+import { fwCheckAssertionFact } from '../packages/test/src/fw-check-fixtures.ts';
 import { fwExportStaticBehaviorFact } from '../packages/test/src/fw-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
@@ -97,13 +91,12 @@ import {
   generatedRegistryInterfaceMemberTypes,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
+  commerceGraphBehaviorFact,
   graphFixtureFile,
   generatedGraphArtifactAcceptanceProjectFact,
   graphMutationFact,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
-  graphStaticBehaviorFact,
-  graphTouchGraphKeys,
 } from '../packages/test/src/graph-fixtures.ts';
 import {
   documentQueryScriptBehaviorFact,
@@ -2076,25 +2069,21 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
-  const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' });
-  const cartAddExplain = fwExplain(commerceGraph, {
-    kind: 'mutation',
-    optimistic: true,
-    target: 'cart/add',
-  });
-  const uploadReceiptExplain = fwExplain(commerceGraph, {
-    kind: 'mutation',
-    optimistic: true,
-    target: 'order/receipt',
+  const fact = commerceGraphBehaviorFact({
+    compileComponentModule,
+    deriveAppGraph,
+    fwCheck,
+    fwExplain,
+    graph: commerceGraph,
   });
 
-  assert.deepEqual(fwCheckOkAssertionFact(fwCheck(commerceGraph)), {
+  assert.deepEqual(fact.fwCheck, {
     exitCode: 0,
     issueCount: 0,
     status: 'ok',
     version: 'fw-check/v1',
   });
-  assert.deepEqual(fwExplainQueryAssertionFact(cartQueryExplain), {
+  assert.deepEqual(fact.cartQueryExplain, {
     consumers: ['component:CartBadge', 'page:/cart'],
     domainWrites: ['cart.addItem'],
     exitCode: 0,
@@ -2103,7 +2092,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     subject: 'QUERY cart',
     version: 'fw-explain/v1',
   });
-  assert.deepEqual(fwExplainMutationAssertionFact(cartAddExplain), {
+  assert.deepEqual(fact.cartAddExplain, {
     exitCode: 0,
     guards: ['authed', 'rateLimit:session'],
     inputFields: ['productId', 'quantity'],
@@ -2130,7 +2119,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     version: 'fw-explain/v1',
     writes: ['cart', 'product', 'order'],
   });
-  assert.deepEqual(fwExplainMutationAssertionFact(uploadReceiptExplain), {
+  assert.deepEqual(fact.orderReceiptExplain, {
     enctype: 'multipart/form-data',
     exitCode: 0,
     fileFields: ['receipt'],
@@ -2158,36 +2147,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     diagnosticDefinitions.FW311.message,
     'Query-dependent DOM position has no update status.',
   );
-  const coverageCheck = fwCheck(
-    {
-      mutations: [{ key: 'cart/add', writes: ['cart'] }],
-      optimistic: [{ mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' }],
-      queries: [
-        { domains: ['cart'], query: 'cart' },
-        { domains: ['order'], query: 'orderHistory' },
-      ],
-      touchGraph: {
-        'order.write': {
-          touches: [{ domain: 'order', keys: null, site: 'order.ts:1', via: 'orders' }],
-          unresolved: [],
-        },
-      },
-      updateCoverage: [
-        {
-          component: 'CartBadge',
-          query: 'cart.discount',
-          status: 'UNHANDLED',
-        },
-        {
-          component: 'OrderHistory',
-          query: 'orderHistory',
-          status: 'fragment',
-        },
-      ],
-    },
-    { family: 'all' },
-  );
-  assert.deepEqual(fwCheckDiagnosticAssertionFacts(coverageCheck.output), [
+  assert.deepEqual(fact.coverage.diagnostics, [
     {
       code: 'FW310',
       message: diagnosticDefinitions.FW310.message,
@@ -2214,7 +2174,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       target: 'cart/add',
     },
   ]);
-  assert.deepEqual(fwCheckCoverageAssertionFacts(coverageCheck.output), [
+  assert.deepEqual(fact.coverage.coverage, [
     {
       properties: {
         component: 'OrderHistory',
@@ -2224,7 +2184,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       },
     },
   ]);
-  assert.deepEqual(graphStaticBehaviorFact(commerceGraph), {
+  assert.deepEqual(fact.staticBehavior, {
     components: [
       { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
       { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
@@ -2243,37 +2203,22 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     routes: ['/admin', '/cart'],
     touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
   });
-  const cartBadge = compileComponentModule({
-    fileName: 'cart-badge.tsx',
-    source: `
-export const CartBadge = component('cart-badge', {
-  queries: { cart: cartQuery },
-  render: ({ cart }) => <cart-badge><span data-bind="cart.count">{cart.count}</span></cart-badge>,
-});
-`,
-  });
-  assert.deepEqual(cartBadge.componentGraphFacts, [
+  assert.deepEqual(fact.componentGraphFacts, [
     {
       name: 'CartBadge',
       queries: ['cart'],
     },
   ]);
-  assert.deepEqual(
-    deriveAppGraph({
-      components: [cartBadge],
-      graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
-    }).registryFacts,
-    {
-      components: ['cart-badge'],
-      domainKeys: ['cart'],
-      invalidations: {},
-      routes: [],
-    },
-  );
-  assert.deepEqual(
-    graphTouchGraphKeys(commerceGraph, ['cart.addItem', 'order.receipt', 'payment.webhook']),
-    ['cart.addItem', 'order.receipt', 'payment.webhook'],
-  );
+  assert.deepEqual(fact.registryFacts, {
+    components: ['cart-badge'],
+    domainKeys: ['cart'],
+    invalidations: {},
+    routes: [],
+  });
+  assert.deepEqual(fact.matrix.matrix, graphOptimisticStatusMatrix(commerceGraph));
+  assert.deepEqual(fact.matrix.staticInvalidationMismatches, []);
+  assert.deepEqual(fact.matrix.unhandledMutations, []);
+  assert.deepEqual(fact.touchGraphKeys, ['cart.addItem', 'order.receipt', 'payment.webhook']);
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {

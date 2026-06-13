@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
+import { compileComponentModule, deriveAppGraph } from '@jiso/compiler';
 import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
   fwExplainEndpointAssertionFact,
   fwExplainListField,
   fwExplainMutationAssertionFact,
-  fwExplainMutationQueryMatrixFact,
   fwExplainOptimisticStatuses,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
@@ -18,9 +18,9 @@ import {
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
+  commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceProjectFact,
   graphFragmentTargetForQuery,
-  graphInvalidatedByQueries,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
   graphPageFact,
@@ -363,23 +363,19 @@ describe('commerce source-truth graph acceptance', () => {
   });
 
   it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {
-    const invalidatedBy = graphInvalidatedByQueries(commerceGraph);
-    const matrixFact = fwExplainMutationQueryMatrixFact({
-      explainMutation: (mutationKey) =>
-        fwExplain(commerceGraph, {
-          kind: 'mutation',
-          optimistic: true,
-          target: mutationKey,
-        }),
+    const fact = commerceGraphBehaviorFact({
+      compileComponentModule,
+      deriveAppGraph,
+      fwCheck,
+      fwExplain,
       graph: commerceGraph,
-      invalidatedBy,
     });
 
     // SPEC.md §10.4/§16.5: every mutation/query cell either has an explicit
     // optimistic status or is proven not to be invalidated by that mutation.
-    expect(matrixFact.staticInvalidationMismatches).toEqual([]);
-    expect(matrixFact.unhandledMutations).toEqual([]);
-    expect(matrixFact.matrix).toEqual({
+    expect(fact.matrix.staticInvalidationMismatches).toEqual([]);
+    expect(fact.matrix.unhandledMutations).toEqual([]);
+    expect(fact.matrix.matrix).toEqual({
       'auth/sign-out': {
         cart: 'no-invalidation',
         orderHistory: 'no-invalidation',
@@ -396,7 +392,7 @@ describe('commerce source-truth graph acceptance', () => {
         productGrid: 'no-invalidation',
       },
     });
-    expect(matrixFact.matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
+    expect(fact.matrix.matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
   });
 
   it('accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire', async () => {

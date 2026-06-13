@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import type { ComponentExplain, FwCheckInput, FwExplainInput } from '@jiso/core';
+
 import { projectJsonFile } from './source-fixtures.ts';
 import {
   touchGraphProvenanceHonestyFact,
@@ -12,9 +14,22 @@ import {
 } from './touch-graph-fixtures.ts';
 import {
   fwCheckOkAssertionFact,
+  fwCheckCoverageAssertionFacts,
+  fwCheckDiagnosticAssertionFacts,
+  type FwCheckCoverageAssertionFact,
+  type FwCheckDiagnosticAssertionFact,
   type FwCheckOkAssertionFact,
   type FwCheckResultLike,
 } from './fw-check-fixtures.ts';
+import {
+  fwExplainMutationAssertionFact,
+  fwExplainMutationQueryMatrixFact,
+  fwExplainQueryAssertionFact,
+  type FwExplainMutationAssertionFact,
+  type FwExplainMutationQueryMatrixFact,
+  type FwExplainQueryAssertionFact,
+  type FwExplainResultLike,
+} from './fw-explain-fixtures.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -180,6 +195,57 @@ export interface GeneratedGraphArtifactAcceptanceProjectOptions<T extends Projec
   };
   fwCheck: (graph: T) => FwCheckOkAssertionFact | FwCheckResultLike;
   rootPath: string;
+}
+
+export type CommerceGraphComponentGraphFact = Pick<
+  ComponentExplain,
+  'fragments' | 'name' | 'queries'
+>;
+
+export interface CommerceGraphCompilerComponentFact {
+  componentGraphFacts: readonly CommerceGraphComponentGraphFact[];
+}
+
+export interface CommerceGraphCompilerRegistryFact {
+  registryFacts: unknown;
+}
+
+export interface CommerceGraphBehaviorFact {
+  cartAddExplain: FwExplainMutationAssertionFact;
+  cartQueryExplain: FwExplainQueryAssertionFact;
+  componentGraphFacts: readonly unknown[];
+  coverage: {
+    coverage: FwCheckCoverageAssertionFact[];
+    diagnostics: FwCheckDiagnosticAssertionFact[];
+  };
+  fwCheck: FwCheckOkAssertionFact;
+  matrix: FwExplainMutationQueryMatrixFact;
+  orderReceiptExplain: FwExplainMutationAssertionFact;
+  registryFacts: unknown;
+  staticBehavior: GraphStaticBehaviorFact;
+  touchGraphKeys: string[];
+}
+
+export interface CommerceGraphBehaviorOptions<T extends ProjectGraphFixture> {
+  compileComponentModule: (options: {
+    fileName: string;
+    source: string;
+  }) => CommerceGraphCompilerComponentFact;
+  deriveAppGraph: (options: {
+    components: readonly CommerceGraphCompilerComponentFact[];
+    graph: Pick<
+      FwExplainInput,
+      'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
+    >;
+  }) => CommerceGraphCompilerRegistryFact;
+  fwCheck: (graph: FwCheckInput, options?: { family?: 'all' }) => FwCheckResultLike;
+  fwExplain: (
+    graph: FwExplainInput,
+    options:
+      | { kind: 'mutation'; optimistic?: boolean; target: string }
+      | { kind: 'query'; target: string },
+  ) => FwExplainResultLike;
+  graph: T & FwExplainInput;
 }
 
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
@@ -349,6 +415,96 @@ export function graphStaticBehaviorFact(graph: JisoGraphFixture): GraphStaticBeh
     optimistic: graphOptimisticFacts(graph),
     routes: graphRouteFacts(graph),
     touchGraphKeys: graphTouchGraphKeys(graph),
+  };
+}
+
+export function commerceGraphBehaviorFact<T extends ProjectGraphFixture>(
+  options: CommerceGraphBehaviorOptions<T>,
+): CommerceGraphBehaviorFact {
+  const cartQueryExplain = options.fwExplain(options.graph, { kind: 'query', target: 'cart' });
+  const cartAddExplain = options.fwExplain(options.graph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'cart/add',
+  });
+  const orderReceiptExplain = options.fwExplain(options.graph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'order/receipt',
+  });
+  const invalidatedBy = graphInvalidatedByQueries(options.graph);
+  const coverageCheck = options.fwCheck(
+    {
+      mutations: [{ key: 'cart/add', writes: ['cart'] }],
+      optimistic: [{ mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' }],
+      queries: [
+        { domains: ['cart'], query: 'cart' },
+        { domains: ['order'], query: 'orderHistory' },
+      ],
+      touchGraph: {
+        'order.write': {
+          touches: [{ domain: 'order', keys: null, site: 'order.ts:1', via: 'orders' }],
+          unresolved: [],
+        },
+      },
+      updateCoverage: [
+        {
+          component: 'CartBadge',
+          position: 'undefined',
+          query: 'cart.discount',
+          status: 'UNHANDLED',
+        },
+        {
+          component: 'OrderHistory',
+          position: 'undefined',
+          query: 'orderHistory',
+          status: 'fragment',
+        },
+      ],
+    },
+    { family: 'all' },
+  );
+  const cartBadge = options.compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge><span data-bind="cart.count">{cart.count}</span></cart-badge>,
+});
+`,
+  });
+  const registry = options.deriveAppGraph({
+    components: [cartBadge],
+    graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
+  });
+
+  return {
+    cartAddExplain: fwExplainMutationAssertionFact(cartAddExplain),
+    cartQueryExplain: fwExplainQueryAssertionFact(cartQueryExplain),
+    componentGraphFacts: cartBadge.componentGraphFacts,
+    coverage: {
+      coverage: fwCheckCoverageAssertionFacts(coverageCheck.output),
+      diagnostics: fwCheckDiagnosticAssertionFacts(coverageCheck.output),
+    },
+    fwCheck: fwCheckOkAssertionFact(options.fwCheck(options.graph)),
+    matrix: fwExplainMutationQueryMatrixFact({
+      explainMutation: (mutationKey) =>
+        options.fwExplain(options.graph, {
+          kind: 'mutation',
+          optimistic: true,
+          target: mutationKey,
+        }),
+      graph: options.graph,
+      invalidatedBy,
+    }),
+    orderReceiptExplain: fwExplainMutationAssertionFact(orderReceiptExplain),
+    registryFacts: registry.registryFacts,
+    staticBehavior: graphStaticBehaviorFact(options.graph),
+    touchGraphKeys: graphTouchGraphKeys(options.graph, [
+      'cart.addItem',
+      'order.receipt',
+      'payment.webhook',
+    ]),
   };
 }
 

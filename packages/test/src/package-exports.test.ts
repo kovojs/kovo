@@ -198,6 +198,7 @@ import {
   type InlineEnhancedFormLoaderFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
+  commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceChecklistFact,
   generatedGraphArtifactAcceptanceEvidenceFact,
   generatedGraphArtifactAcceptanceProjectFact,
@@ -219,6 +220,11 @@ import {
   graphRouteFacts,
   graphStaticBehaviorFact,
   graphTouchGraphKeys,
+  type CommerceGraphBehaviorFact,
+  type CommerceGraphBehaviorOptions,
+  type CommerceGraphComponentGraphFact,
+  type CommerceGraphCompilerComponentFact,
+  type CommerceGraphCompilerRegistryFact,
   type GeneratedGraphArtifactAcceptanceChecklistFact,
   type GeneratedGraphArtifactAcceptanceEvidenceFact,
   type GeneratedGraphArtifactHonestyFact,
@@ -766,7 +772,18 @@ describe('@jiso/test package subpath exports', () => {
       .toMatchTypeOf<readonly unknown[]>();
     expectTypeOf<ProjectPackageManifestFact>().toHaveProperty('directory').toEqualTypeOf<string>();
     expect(graphFixtureFile).toBeTypeOf('function');
+    expect(commerceGraphBehaviorFact).toBeTypeOf('function');
     expect(generatedGraphArtifactAcceptanceProjectFact).toBeTypeOf('function');
+    expectTypeOf<CommerceGraphBehaviorFact>().toHaveProperty('fwCheck').toMatchTypeOf<unknown>();
+    expectTypeOf<CommerceGraphBehaviorOptions<ProjectGraphFixture>>()
+      .toHaveProperty('graph')
+      .toMatchTypeOf<ProjectGraphFixture>();
+    expectTypeOf<CommerceGraphCompilerComponentFact>()
+      .toHaveProperty('componentGraphFacts')
+      .toMatchTypeOf<readonly CommerceGraphComponentGraphFact[]>();
+    expectTypeOf<CommerceGraphCompilerRegistryFact>()
+      .toHaveProperty('registryFacts')
+      .toMatchTypeOf<unknown>();
     expectTypeOf<GeneratedGraphArtifactHonestyFact>().toMatchTypeOf<{
       emitCheck: { clean: boolean };
     }>();
@@ -1601,6 +1618,11 @@ type _PublicSubpathTypes = [
   FwCheckOutput,
   FwCheckResultFact,
   DocumentQueryScriptBehaviorFact,
+  CommerceGraphBehaviorFact,
+  CommerceGraphBehaviorOptions<ProjectGraphFixture>,
+  CommerceGraphComponentGraphFact,
+  CommerceGraphCompilerComponentFact,
+  CommerceGraphCompilerRegistryFact,
   GraphInvalidationMatrix,
   GraphQueryConsumerFact,
   ForbiddenBrowserArchitectureFact,

@@ -178,6 +178,10 @@ Shared runtime fixtures now own the D2 commerce keyed append, generated graph ta
 keyed mutation endpoint, and optimistic review behavior projection, so `tests/fw-check.node.mjs`
 asserts one public behavior fact instead of rebuilding those graph, tree, server mutation, and fake
 store mechanics inline.
+Shared graph fixtures now own the commerce graph behavior projection for `fw-check` OK status,
+query/mutation `fw-explain` facts, mutation-query matrix, coverage diagnostics, static graph facts,
+compiler component facts, registry facts, and touch graph keys; both the fw-check monolith and
+commerce source-truth matrix test consume the public fixture.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -270,6 +274,17 @@ Latest evidence:
   initializers through ts-morph branch symbols, over-approximates resolved write/read branches,
   and keeps opaque sibling branches visible as FW406 per SPEC §11.1; package tests and
   `conformance/drizzle-pin/src/index.test.ts` prove the behavior against real Drizzle imports.
+- Phase 1/6/7 commerce graph behavior fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts --testNamePattern "answers the full commerce mutation-query matrix"`;
+  `node --test tests/fw-check.node.mjs --test-name-pattern "P10 commerce graph assertions answer behavior mechanically"`;
+  `pnpm run check:build`; `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/graph-fixtures.ts` now exposes
+  `commerceGraphBehaviorFact`, `packages/test/src/graph-fixtures.test.ts` and
+  `packages/test/src/package-exports.test.ts` prove the public seam, and the fw-check monolith plus
+  commerce source-truth matrix test assert that fixture instead of rebuilding explain/matrix,
+  coverage, compiler, registry, static graph, and touch-key projections inline.
 - Phase 5 static export client-module output boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

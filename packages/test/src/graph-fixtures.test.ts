@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceChecklistFact,
   generatedGraphArtifactAcceptanceProjectFact,
   generatedGraphArtifactHonestyFact,
@@ -134,6 +135,139 @@ describe('@jiso/test graph fixture seam', () => {
       routes: ['/admin', '/cart'],
       touchGraphKeys: ['cart.addItem', 'order.receipt'],
     });
+  });
+
+  it('projects commerce graph behavior through public fw-check and fw-explain callbacks', () => {
+    const commerceGraph = {
+      components: [
+        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+      ],
+      mutations: [
+        { invalidates: ['cart', 'product', 'order'], key: 'cart/add', writes: ['cart'] },
+        { invalidates: [], key: 'order/receipt', writes: ['attachment'] },
+      ],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+      ],
+      pages: [{ queries: ['cart', 'productGrid', 'orderHistory'], route: '/cart' }],
+      queries: [
+        { domains: ['cart'], query: 'cart' },
+        { domains: ['product'], query: 'productGrid' },
+        { domains: ['order'], query: 'orderHistory' },
+      ],
+      touchGraph: {
+        'cart.addItem': { touches: [], unresolved: [] },
+        'order.receipt': { touches: [], unresolved: [] },
+        'payment.webhook': { touches: [], unresolved: [] },
+      },
+    } as const;
+    const fwExplain = (_graph: unknown, options: Record<string, unknown>) => {
+      if (options.kind === 'query' && options.target === 'cart') {
+        return {
+          exitCode: 0,
+          output: [
+            'fw-explain/v1',
+            'QUERY cart',
+            'reads: cart',
+            'domain-writes: cart.addItem',
+            'invalidated-by: cart/add',
+            'consumers: component:CartBadge,page:/cart',
+          ].join('\n'),
+        };
+      }
+      if (options.kind === 'mutation' && options.target === 'cart/add') {
+        return {
+          exitCode: 0,
+          output: [
+            'fw-explain/v1',
+            'MUTATION cart/add',
+            'writes: cart, product, order',
+            'invalidates: cart, product, order',
+            'manual-invalidates: -',
+            'input-fields: productId, quantity',
+            'guards: authed, rateLimit:session',
+            'session: commerceSession',
+            'updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart',
+            'OPTIMISTIC cart hand-written',
+            'OPTIMISTIC orderHistory await-fragment',
+            'OPTIMISTIC productGrid await-fragment',
+            'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0',
+          ].join('\n'),
+        };
+      }
+
+      return {
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'MUTATION order/receipt',
+          'writes: attachment',
+          'invalidates: -',
+          'manual-invalidates: -',
+          'input-fields: orderId, receipt',
+          'file-fields: receipt',
+          'enctype: multipart/form-data',
+          'guards: authed, rateLimit:session',
+          'session: commerceSession',
+          'updates: -',
+          'OPTIMISTIC-SUMMARY total=0 hand-written=0 await-fragment=0 UNHANDLED=0',
+        ].join('\n'),
+      };
+    };
+    const fact = commerceGraphBehaviorFact({
+      compileComponentModule: () => ({
+        componentGraphFacts: [{ name: 'CartBadge', queries: ['cart'] }],
+      }),
+      deriveAppGraph: () => ({
+        registryFacts: {
+          components: ['cart-badge'],
+          domainKeys: ['cart'],
+          invalidations: {},
+          routes: [],
+        },
+      }),
+      fwCheck: (_checkedGraph, options) =>
+        options === undefined
+          ? { exitCode: 0, output: 'fw-check/v1\nOK' }
+          : {
+              exitCode: 1,
+              output: [
+                'fw-check/v1',
+                'WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.',
+                'WARN FW311 component=CartBadge query=cart.discount status=UNHANDLED Query-dependent DOM position has no update status.',
+                'COVERAGE component=OrderHistory query=orderHistory status=fragment',
+              ].join('\n'),
+            },
+      fwExplain,
+      graph: commerceGraph,
+    });
+
+    expect(fact.cartQueryExplain).toEqual({
+      consumers: ['component:CartBadge', 'page:/cart'],
+      domainWrites: ['cart.addItem'],
+      exitCode: 0,
+      invalidatedBy: ['cart/add'],
+      reads: ['cart'],
+      subject: 'QUERY cart',
+      version: 'fw-explain/v1',
+    });
+    expect(fact.matrix.matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
+    expect(fact.coverage.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'FW310',
+      'FW311',
+    ]);
+    expect(fact.componentGraphFacts).toEqual([{ name: 'CartBadge', queries: ['cart'] }]);
+    expect(fact.registryFacts).toEqual({
+      components: ['cart-badge'],
+      domainKeys: ['cart'],
+      invalidations: {},
+      routes: [],
+    });
+    expect(fact.touchGraphKeys).toEqual(['cart.addItem', 'order.receipt', 'payment.webhook']);
   });
 
   it('projects generated graph artifact honesty from emit checks and provenance', () => {
