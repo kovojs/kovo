@@ -34,8 +34,25 @@ export const GalleryToolbarDemo$button_click = handler((event, ctx) => {
       'aria-pressed',
       ctx.state.pressedValue === 'bold' ? 'true' : 'false',
     );
+    Object(bold)['setAttribute']?.call(
+      bold,
+      'data-pressed',
+      ctx.state.pressedValue === 'bold' ? 'true' : 'false',
+    );
   }
-  if (link) link['tabIndex'] = -1;
+  if (link) {
+    link['tabIndex'] = -1;
+    Object(link)['setAttribute']?.call(
+      link,
+      'aria-pressed',
+      ctx.state.pressedValue === 'link' ? 'true' : 'false',
+    );
+    Object(link)['setAttribute']?.call(
+      link,
+      'data-pressed',
+      ctx.state.pressedValue === 'link' ? 'true' : 'false',
+    );
+  }
   if (activeOutput) activeOutput['textContent'] = ctx.state.activeValue;
   if (pressedOutput) pressedOutput['textContent'] = ctx.state.pressedValue || 'none';
 });
@@ -52,12 +69,29 @@ export const GalleryToolbarDemo$button_click_2 = handler((event, ctx) => {
     ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-pressed"]')
     : undefined;
 
-  if (bold) bold['tabIndex'] = -1;
+  if (bold) {
+    bold['tabIndex'] = -1;
+    Object(bold)['setAttribute']?.call(
+      bold,
+      'aria-pressed',
+      ctx.state.pressedValue === 'bold' ? 'true' : 'false',
+    );
+    Object(bold)['setAttribute']?.call(
+      bold,
+      'data-pressed',
+      ctx.state.pressedValue === 'bold' ? 'true' : 'false',
+    );
+  }
   if (link) {
     link['tabIndex'] = 0;
     Object(link)['setAttribute']?.call(
       link,
       'aria-pressed',
+      ctx.state.pressedValue === 'link' ? 'true' : 'false',
+    );
+    Object(link)['setAttribute']?.call(
+      link,
+      'data-pressed',
       ctx.state.pressedValue === 'link' ? 'true' : 'false',
     );
   }

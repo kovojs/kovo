@@ -37,7 +37,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         {...toolbarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="toolbar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=c7554541#GalleryToolbarDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=63f8460e#GalleryToolbarDemo$section_keydown"
         fw-c="gallery-toolbar-demo"
         fw-state='{"activeValue":"bold","pressedValue":"bold"}'
       >
@@ -49,7 +49,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 id: 'gallery-toolbar-bold',
                 pressed: state.pressedValue === 'bold',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=c7554541#GalleryToolbarDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=63f8460e#GalleryToolbarDemo$button_click"
             >
               Bold
             </button>
@@ -72,7 +72,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 id: 'gallery-toolbar-link',
                 pressed: state.pressedValue === 'link',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=c7554541#GalleryToolbarDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=63f8460e#GalleryToolbarDemo$button_click_2"
             >
               Link
             </button>

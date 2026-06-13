@@ -12,7 +12,11 @@ export interface GalleryRadioGroupDemoState {
   value: string;
 }
 
-const radioItems = Object.freeze([{ value: 'email' }, { value: 'sms' }]);
+const radioItems = Object.freeze([
+  { value: 'email' },
+  { disabled: true, value: 'phone' },
+  { value: 'sms' },
+]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
@@ -26,6 +30,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
       value: state.value,
     };
     const emailState = { ...groupState, itemValue: 'email' };
+    const phoneState = { ...groupState, itemValue: 'phone' };
     const smsState = { ...groupState, itemValue: 'sms' };
 
     return (
@@ -50,6 +55,16 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
             {...radioGroupLabelAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
           >
             Email
+          </label>
+        </div>
+        <div {...radioGroupItemAttributes(phoneState)} class="inline-flex items-center gap-2">
+          <input
+            {...radioGroupRadioAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
+          />
+          <label
+            {...radioGroupLabelAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
+          >
+            Phone
           </label>
         </div>
         <div {...radioGroupItemAttributes(smsState)} class="inline-flex items-center gap-2">

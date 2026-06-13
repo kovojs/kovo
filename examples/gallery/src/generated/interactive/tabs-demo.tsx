@@ -12,7 +12,11 @@ export interface GalleryTabsDemoState {
   value: string;
 }
 
-const tabsItems = Object.freeze([{ value: 'overview' }, { value: 'details' }]);
+const tabsItems = Object.freeze([
+  { value: 'overview' },
+  { disabled: true, value: 'audit' },
+  { value: 'details' },
+]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
@@ -34,7 +38,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
       >
         <div
           {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}
-          on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=f173ce55#GalleryTabsDemo$div_keydown"
+          on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=740d7629#GalleryTabsDemo$div_keydown"
         >
           <button
             {...tabsTriggerAttributes({
@@ -43,7 +47,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'overview',
               panelId: 'gallery-tabs-overview-panel',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=f173ce55#GalleryTabsDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=740d7629#GalleryTabsDemo$button_click"
           >
             Overview
           </button>
@@ -54,9 +58,19 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'details',
               panelId: 'gallery-tabs-details-panel',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=f173ce55#GalleryTabsDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=740d7629#GalleryTabsDemo$button_click_2"
           >
             Details
+          </button>
+          <button
+            {...tabsTriggerAttributes({
+              ...rootState,
+              id: 'gallery-tabs-audit-trigger',
+              itemValue: 'audit',
+              panelId: 'gallery-tabs-audit-panel',
+            })}
+          >
+            Audit
           </button>
         </div>
         <section
@@ -78,6 +92,16 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
           })}
         >
           Detailed notes are selected by click or arrow-key activation.
+        </section>
+        <section
+          {...tabsPanelAttributes({
+            ...rootState,
+            id: 'gallery-tabs-audit-panel',
+            itemValue: 'audit',
+            triggerId: 'gallery-tabs-audit-trigger',
+          })}
+        >
+          Disabled audit notes stay out of the roving keyboard path.
         </section>
       </section>
     );

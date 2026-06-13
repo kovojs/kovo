@@ -104,7 +104,9 @@ export function toolbarButtonAttributes(
     tabIndex: toolbarItemTabIndex(options),
     type: 'button',
     value: options.itemValue,
-    ...(options.pressed === undefined ? {} : { 'aria-pressed': String(options.pressed) }),
+    ...(options.pressed === undefined
+      ? {}
+      : { 'aria-pressed': String(options.pressed), 'data-pressed': String(options.pressed) }),
     ...(options.id === undefined ? {} : { id: options.id }),
   });
 }

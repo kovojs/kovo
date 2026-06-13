@@ -35,7 +35,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
         })}
         class="grid gap-2"
         data-gallery-interactive="toast"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=085a0dda#GalleryToastDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=83e6cef5#GalleryToastDemo$section_keydown"
         fw-c="gallery-toast-demo"
         fw-state='{"open":true}'
       >
@@ -46,13 +46,13 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           </p>
           <button
             {...toastActionAttributes({ ...toastState, actionValue: 'undo' })}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=085a0dda#GalleryToastDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=83e6cef5#GalleryToastDemo$button_click"
           >
             Undo
           </button>
           <button
             {...toastCloseAttributes(toastState)}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=085a0dda#GalleryToastDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=83e6cef5#GalleryToastDemo$button_click_2"
           >
             Dismiss
           </button>

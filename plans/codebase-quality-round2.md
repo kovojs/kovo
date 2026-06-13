@@ -242,6 +242,9 @@ Focused gates since that broad run:
   and `git diff --check` passed through `4ff2168` plus integration fix `e88a45d`.
 - Server/app-shell: static-export diagnostics, Vite/static export tests, full server suite,
   `tsc`, exact `vp check`, and `git diff --check` passed through `b980a06`.
+- UI/gallery: toolbar primitive/UI tests, headless primitive lint, gallery generated-artifact
+  check, gallery unit/browser suites, exact `vp check`, and `git diff --check` passed through
+  `2a1917d`.
 
 Stale but useful broad references:
 
@@ -251,6 +254,4 @@ Stale but useful broad references:
 
 ## Integration Queue
 
-- UI worker `round100` has conflicting handoff SHAs and showed a dirty `IMPLEMENT_v1.md` locally;
-  inspect before cherry-picking, then integrate the intended committed slice only.
 - Keep five active worker lanes by refilling integrated lanes from the latest main `HEAD`.

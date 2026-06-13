@@ -9,7 +9,10 @@ export const GalleryToastDemo$section_keydown = handler((event, ctx) => {
   const output = doc
     ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
     : undefined;
-  if (toast) toast['hidden'] = true;
+  if (toast) {
+    toast['hidden'] = true;
+    Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
+  }
   if (output) output['textContent'] = 'closed';
 });
 export const GalleryToastDemo$button_click = handler((event, ctx) => {
@@ -19,7 +22,10 @@ export const GalleryToastDemo$button_click = handler((event, ctx) => {
   const output = doc
     ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
     : undefined;
-  if (toast) toast['hidden'] = true;
+  if (toast) {
+    toast['hidden'] = true;
+    Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
+  }
   if (output) output['textContent'] = 'closed';
 });
 export const GalleryToastDemo$button_click_2 = handler((event, ctx) => {
@@ -29,6 +35,9 @@ export const GalleryToastDemo$button_click_2 = handler((event, ctx) => {
   const output = doc
     ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
     : undefined;
-  if (toast) toast['hidden'] = true;
+  if (toast) {
+    toast['hidden'] = true;
+    Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
+  }
   if (output) output['textContent'] = 'closed';
 });

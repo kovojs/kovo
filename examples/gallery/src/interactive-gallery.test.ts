@@ -1316,11 +1316,11 @@ describe('compiled interactive gallery demos', () => {
       });
       expect(element(document, 'gallery-toggle-group-bold').attrs).toMatchObject({
         'aria-pressed': 'true',
-        'data-state': 'on',
+        'data-state': 'pressed',
       });
       expect(element(document, 'gallery-toggle-group-italic').attrs).toMatchObject({
         'aria-pressed': 'true',
-        'data-state': 'on',
+        'data-state': 'pressed',
       });
       expect(selector(document, '[data-demo-state="toggle-group-value"]').textContent).toBe(
         'bold,italic',
@@ -1338,6 +1338,7 @@ describe('compiled interactive gallery demos', () => {
         { params: {}, signal, state: toastState },
       );
       expect(element(document, 'gallery-toast').hidden).toBe(true);
+      expect(element(document, 'gallery-toast').attrs['data-state']).toBe('closed');
       expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('closed');
     } finally {
       if (hadDocument) {

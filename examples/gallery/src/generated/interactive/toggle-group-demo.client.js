@@ -38,11 +38,11 @@ export const GalleryToggleGroupDemo$button_click = handler((event, ctx) => {
 
   if (bold) {
     Object(bold)['setAttribute']?.call(bold, 'aria-pressed', boldPressed ? 'true' : 'false');
-    Object(bold)['setAttribute']?.call(bold, 'data-state', boldPressed ? 'on' : 'off');
+    Object(bold)['setAttribute']?.call(bold, 'data-state', boldPressed ? 'pressed' : 'off');
   }
   if (italic) {
     Object(italic)['setAttribute']?.call(italic, 'aria-pressed', italicPressed ? 'true' : 'false');
-    Object(italic)['setAttribute']?.call(italic, 'data-state', italicPressed ? 'on' : 'off');
+    Object(italic)['setAttribute']?.call(italic, 'data-state', italicPressed ? 'pressed' : 'off');
   }
   if (output) output['textContent'] = ctx.state.value || 'none';
 });
@@ -70,11 +70,11 @@ export const GalleryToggleGroupDemo$button_click_2 = handler((event, ctx) => {
 
   if (bold) {
     Object(bold)['setAttribute']?.call(bold, 'aria-pressed', boldPressed ? 'true' : 'false');
-    Object(bold)['setAttribute']?.call(bold, 'data-state', boldPressed ? 'on' : 'off');
+    Object(bold)['setAttribute']?.call(bold, 'data-state', boldPressed ? 'pressed' : 'off');
   }
   if (italic) {
     Object(italic)['setAttribute']?.call(italic, 'aria-pressed', italicPressed ? 'true' : 'false');
-    Object(italic)['setAttribute']?.call(italic, 'data-state', italicPressed ? 'on' : 'off');
+    Object(italic)['setAttribute']?.call(italic, 'data-state', italicPressed ? 'pressed' : 'off');
   }
   if (output) output['textContent'] = ctx.state.value || 'none';
 });

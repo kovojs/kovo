@@ -78,6 +78,7 @@ describe('headless-ui toolbar primitive', () => {
       }),
     ).toEqual({
       'aria-pressed': 'true',
+      'data-pressed': 'true',
       disabled: false,
       id: 'bold-button',
       tabIndex: 0,
@@ -90,10 +91,13 @@ describe('headless-ui toolbar primitive', () => {
         activeValue: 'bold',
         itemValue: 'italic',
         items: editorItems,
+        pressed: false,
       }),
     ).toEqual({
       'data-disabled': '',
+      'data-pressed': 'false',
       disabled: true,
+      'aria-pressed': 'false',
       tabIndex: -1,
       type: 'button',
       value: 'italic',

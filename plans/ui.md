@@ -94,6 +94,12 @@ Implemented areas:
 - Native value-backed primitive handlers for select, number-field, and slider now restore the
   submitted control value when SPEC §4.6 cancelable/blocked changes keep primitive state unchanged,
   preventing native DOM state from drifting past the rejected value.
+- H2 compiled interactive coverage now proves disabled-item roving behavior for radio-group, tabs,
+  and toggle-group, keeps toggle-group generated DOM state on the exported `pressed/off` primitive
+  vocabulary, and carries toolbar `data-pressed` through headless attrs, the styled wrapper,
+  merge fixtures, generated handlers, and browser assertions.
+- The compiled toast demo now keeps generated client DOM visibility and `data-state` synchronized
+  when action, close, or Escape handlers dismiss the toast.
 
 Recent gates:
 
@@ -185,6 +191,16 @@ Recent gates:
 - `git diff --check`
 - `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts packages/headless-ui/src/primitives/number-field.test.ts packages/headless-ui/src/primitives/slider.test.ts`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts src/demo-fixtures.test.ts`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/index.test.tsx`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
 
 ## Open Work
 
@@ -193,13 +209,15 @@ H2:
 - Confirm which H2 primitives still need implementation versus only styled/gallery/conformance
   closure, then update the checklist only from code evidence.
 - Toggle-group now has a styled vendorable wrapper, gallery route, behavior-contract snippets,
-  catalog sync, and merge coverage via existing roving-groups fixture; broader H2 remains open for
-  other H2 families.
+  catalog sync, merge coverage via existing roving-groups fixture, and compiled interactive
+  disabled-item plus `pressed/off` DOM-state coverage; broader H2 remains open for other H2
+  families.
 - Checkbox-group, number-field, otp-field, scroll-area, and field/fieldset now have styled
   vendorable wrappers, static gallery routes, behavior-contract snippets, and catalog sync;
   broader H2 remains open until all primitive and conformance evidence is rechecked together.
 - Toolbar now has a styled vendorable wrapper, static gallery route, behavior-contract snippets,
-  and catalog sync; broader H2 remains open for other H2 families.
+  catalog sync, and `data-pressed` parity across headless attrs, styled output, G5 merge, and
+  compiled interactive browser coverage; broader H2 remains open for other H2 families.
 - Field/fieldset now covers styled native input, textarea, and select controls plus fieldset
   grouping, plus compiled interactive gallery coverage for validity and native group state; keep
   future work tied to `form()` integration rather than a standalone styled-only surface.
@@ -247,6 +265,10 @@ Gallery:
 - G6 docs deployment wiring now exports the compiled `/interactive` route and generated client
   module set; continue full browser-backed stateful-family coverage. Generated client DOM
   ref/export inventory is covered for every checked-in compiled interactive demo.
+- H2 roving-family compiled gallery coverage now includes disabled-item inertness for tabs,
+  radio-group, and toggle-group, plus browser-backed tab ARIA/panel sync, toolbar
+  `data-pressed` parity, toggle `data-state="pressed"` sync, and toast close-state DOM sync
+  through app-authored TSX lowered into checked-in artifacts.
 
 ## Rules
 

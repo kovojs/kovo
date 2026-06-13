@@ -951,6 +951,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   it('updates radio-group selection from keyboard and native radio clicks', async () => {
     const root = mountInteractiveDemo(GalleryRadioGroupDemo);
     const email = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
+    const phone = required(root.querySelector<HTMLInputElement>('#gallery-radio-phone'));
     const sms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
     const { imports } = installGeneratedGalleryLoader(root, {
       events: ['click', 'input', 'change', 'keydown'],
@@ -963,6 +964,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(email.required).toBe(true);
     expect(email.checked).toBe(true);
     expect(email.tabIndex).toBe(0);
+    expect(phone.disabled).toBe(true);
+    expect(phone.checked).toBe(false);
+    expect(phone.tabIndex).toBe(-1);
+    expect(phone.getAttribute('data-disabled')).toBe('');
     expect(sms.checked).toBe(false);
     expect(sms.tabIndex).toBe(-1);
 
@@ -970,6 +975,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       const currentEmail = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
+      const currentPhone = required(root.querySelector<HTMLInputElement>('#gallery-radio-phone'));
       const currentSms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
       const currentOutput = required(
         root.querySelector<HTMLOutputElement>('[data-demo-state="radio-value"]'),
@@ -981,6 +987,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"value":"sms"}');
       expect(currentEmail.checked).toBe(false);
       expect(currentEmail.tabIndex).toBe(-1);
+      expect(currentPhone.checked).toBe(false);
+      expect(currentPhone.tabIndex).toBe(-1);
       expect(currentSms.checked).toBe(true);
       expect(currentSms.tabIndex).toBe(0);
       expect(currentOutput.textContent).toBe('sms');
@@ -1191,8 +1199,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     const details = required(
       root.querySelector<HTMLButtonElement>('#gallery-tabs-details-trigger'),
     );
+    const audit = required(root.querySelector<HTMLButtonElement>('#gallery-tabs-audit-trigger'));
     const overviewPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'));
     const detailsPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-details-panel'));
+    const auditPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-audit-panel'));
     const { imports } = installGeneratedGalleryLoader(root);
 
     expect(root.getAttribute('fw-state')).toBe('{"value":"overview"}');
@@ -1200,8 +1210,13 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(overview.tabIndex).toBe(0);
     expect(details.getAttribute('aria-selected')).toBe('false');
     expect(details.tabIndex).toBe(-1);
+    expect(audit.disabled).toBe(true);
+    expect(audit.getAttribute('aria-selected')).toBe('false');
+    expect(audit.getAttribute('data-disabled')).toBe('');
+    expect(audit.tabIndex).toBe(-1);
     expect(overviewPanel.hidden).toBe(false);
     expect(detailsPanel.hidden).toBe(true);
+    expect(auditPanel.hidden).toBe(true);
 
     details.click();
 
@@ -1209,7 +1224,32 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
       ]);
+      const currentOverview = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
+      );
+      const currentDetails = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-details-trigger'),
+      );
+      const currentAudit = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-audit-trigger'),
+      );
+      const currentOverviewPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'),
+      );
+      const currentDetailsPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-details-panel'),
+      );
+      const currentAuditPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-audit-panel'),
+      );
+
       expect(root.getAttribute('fw-state')).toBe('{"value":"details"}');
+      expect(currentOverview.getAttribute('aria-selected')).toBe('false');
+      expect(currentOverviewPanel.hidden).toBe(true);
+      expect(currentDetails.getAttribute('aria-selected')).toBe('true');
+      expect(currentDetailsPanel.hidden).toBe(false);
+      expect(currentAudit.disabled).toBe(true);
+      expect(currentAuditPanel.hidden).toBe(true);
     });
   });
 
@@ -1233,9 +1273,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('fw-state')).toBe('{"activeValue":"bold","pressedValue":"bold"}');
     expect(bold.tabIndex).toBe(0);
     expect(bold.getAttribute('aria-pressed')).toBe('true');
+    expect(bold.getAttribute('data-pressed')).toBe('true');
     expect(italic.disabled).toBe(true);
+    expect(italic.getAttribute('data-pressed')).toBe('false');
     expect(italic.tabIndex).toBe(-1);
     expect(link.tabIndex).toBe(-1);
+    expect(link.getAttribute('data-pressed')).toBe('false');
     expect(activeOutput.textContent).toBe('bold');
     expect(pressedOutput.textContent).toBe('bold');
 
@@ -1255,7 +1298,9 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"activeValue":"link","pressedValue":"link"}');
+      expect(bold.getAttribute('data-pressed')).toBe('false');
       expect(link.getAttribute('aria-pressed')).toBe('true');
+      expect(link.getAttribute('data-pressed')).toBe('true');
       expect(pressedOutput.textContent).toBe('link');
     });
   });
@@ -1263,14 +1308,21 @@ describe('compiled interactive gallery demos in the browser', () => {
   it('updates toggle-group pressed state and roving tabindex through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryToggleGroupDemo);
     const bold = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-bold'));
+    const strike = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-strike'));
     const italic = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic'));
     installGeneratedGalleryLoader(root, { events: ['click', 'input', 'change', 'keydown'] });
 
     expect(root.getAttribute('role')).toBe('group');
     expect(root.getAttribute('fw-state')).toBe('{"activeValue":"bold","value":"bold"}');
     expect(bold.getAttribute('aria-pressed')).toBe('true');
+    expect(bold.getAttribute('data-state')).toBe('pressed');
     expect(bold.tabIndex).toBe(0);
+    expect(strike.disabled).toBe(true);
+    expect(strike.getAttribute('data-disabled')).toBe('');
+    expect(strike.getAttribute('data-state')).toBe('off');
+    expect(strike.tabIndex).toBe(-1);
     expect(italic.getAttribute('aria-pressed')).toBe('false');
+    expect(italic.getAttribute('data-state')).toBe('off');
     expect(italic.tabIndex).toBe(-1);
 
     root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
@@ -1279,12 +1331,16 @@ describe('compiled interactive gallery demos in the browser', () => {
       const currentBold = required(
         root.querySelector<HTMLButtonElement>('#gallery-toggle-group-bold'),
       );
+      const currentStrike = required(
+        root.querySelector<HTMLButtonElement>('#gallery-toggle-group-strike'),
+      );
       const currentItalic = required(
         root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic'),
       );
 
       expect(root.getAttribute('fw-state')).toBe('{"activeValue":"italic","value":"bold"}');
       expect(currentBold.tabIndex).toBe(-1);
+      expect(currentStrike.tabIndex).toBe(-1);
       expect(currentItalic.tabIndex).toBe(0);
     });
 
@@ -1303,7 +1359,9 @@ describe('compiled interactive gallery demos in the browser', () => {
 
       expect(root.getAttribute('fw-state')).toBe('{"activeValue":"italic","value":"bold,italic"}');
       expect(currentBold.getAttribute('aria-pressed')).toBe('true');
+      expect(currentBold.getAttribute('data-state')).toBe('pressed');
       expect(currentItalic.getAttribute('aria-pressed')).toBe('true');
+      expect(currentItalic.getAttribute('data-state')).toBe('pressed');
       expect(currentOutput.textContent).toBe('bold,italic');
     });
   });
@@ -1581,6 +1639,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(toastRoot.getAttribute('role')).toBe('region');
     expect(toast.getAttribute('role')).toBe('status');
     expect(toast.getAttribute('aria-live')).toBe('polite');
+    expect(toast.getAttribute('data-state')).toBe('open');
     expect(toast.hidden).toBe(false);
     expect(toastOutput.textContent).toBe('open');
 
@@ -1589,6 +1648,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(toastRoot.getAttribute('fw-state')).toBe('{"open":false}');
       expect(toast.hidden).toBe(true);
+      expect(toast.getAttribute('data-state')).toBe('closed');
       expect(toastOutput.textContent).toBe('closed');
     });
   });

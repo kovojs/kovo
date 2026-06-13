@@ -42,7 +42,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           const output = doc
             ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
             : undefined;
-          if (toast) toast['hidden'] = true;
+          if (toast) {
+            toast['hidden'] = true;
+            Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
+          }
           if (output) output['textContent'] = 'closed';
         }}
       >
@@ -62,7 +65,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
               const output = doc
                 ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
                 : undefined;
-              if (toast) toast['hidden'] = true;
+              if (toast) {
+                toast['hidden'] = true;
+                Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
+              }
               if (output) output['textContent'] = 'closed';
             }}
           >
@@ -79,7 +85,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
               const output = doc
                 ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
                 : undefined;
-              if (toast) toast['hidden'] = true;
+              if (toast) {
+                toast['hidden'] = true;
+                Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
+              }
               if (output) output['textContent'] = 'closed';
             }}
           >

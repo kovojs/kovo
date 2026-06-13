@@ -86,8 +86,25 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                     'aria-pressed',
                     state.pressedValue === 'bold' ? 'true' : 'false',
                   );
+                  Object(bold)['setAttribute']?.call(
+                    bold,
+                    'data-pressed',
+                    state.pressedValue === 'bold' ? 'true' : 'false',
+                  );
                 }
-                if (link) link['tabIndex'] = -1;
+                if (link) {
+                  link['tabIndex'] = -1;
+                  Object(link)['setAttribute']?.call(
+                    link,
+                    'aria-pressed',
+                    state.pressedValue === 'link' ? 'true' : 'false',
+                  );
+                  Object(link)['setAttribute']?.call(
+                    link,
+                    'data-pressed',
+                    state.pressedValue === 'link' ? 'true' : 'false',
+                  );
+                }
                 if (activeOutput) activeOutput['textContent'] = state.activeValue;
                 if (pressedOutput) pressedOutput['textContent'] = state.pressedValue || 'none';
               }}
@@ -130,12 +147,29 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                   ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-pressed"]')
                   : undefined;
 
-                if (bold) bold['tabIndex'] = -1;
+                if (bold) {
+                  bold['tabIndex'] = -1;
+                  Object(bold)['setAttribute']?.call(
+                    bold,
+                    'aria-pressed',
+                    state.pressedValue === 'bold' ? 'true' : 'false',
+                  );
+                  Object(bold)['setAttribute']?.call(
+                    bold,
+                    'data-pressed',
+                    state.pressedValue === 'bold' ? 'true' : 'false',
+                  );
+                }
                 if (link) {
                   link['tabIndex'] = 0;
                   Object(link)['setAttribute']?.call(
                     link,
                     'aria-pressed',
+                    state.pressedValue === 'link' ? 'true' : 'false',
+                  );
+                  Object(link)['setAttribute']?.call(
+                    link,
+                    'data-pressed',
                     state.pressedValue === 'link' ? 'true' : 'false',
                   );
                 }

@@ -12,7 +12,11 @@ export interface GalleryToggleGroupDemoState {
   value: string;
 }
 
-const toggleItems = Object.freeze([{ value: 'bold' }, { value: 'italic' }]);
+const toggleItems = Object.freeze([
+  { value: 'bold' },
+  { disabled: true, value: 'strike' },
+  { value: 'italic' },
+]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
@@ -28,6 +32,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
       value: selectedValues,
     };
     const boldState = { ...groupState, itemValue: 'bold' };
+    const strikeState = { ...groupState, itemValue: 'strike' };
     const italicState = { ...groupState, itemValue: 'italic' };
 
     return (
@@ -38,7 +43,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         })}
         class="grid gap-2"
         data-gallery-interactive="toggle-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=cf7bea09#GalleryToggleGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=759113ad#GalleryToggleGroupDemo$section_keydown"
         fw-c="gallery-toggle-group-demo"
         fw-state='{"activeValue":"bold","value":"bold"}'
       >
@@ -50,9 +55,19 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=cf7bea09#GalleryToggleGroupDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=759113ad#GalleryToggleGroupDemo$button_click"
             >
               Bold
+            </button>
+          </span>
+          <span {...toggleGroupItemAttributes(strikeState)}>
+            <button
+              {...toggleGroupButtonAttributes({
+                ...strikeState,
+                id: 'gallery-toggle-group-strike',
+              })}
+            >
+              Strike
             </button>
           </span>
           <span {...toggleGroupItemAttributes(italicState)}>
@@ -61,7 +76,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=cf7bea09#GalleryToggleGroupDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=759113ad#GalleryToggleGroupDemo$button_click_2"
             >
               Italic
             </button>

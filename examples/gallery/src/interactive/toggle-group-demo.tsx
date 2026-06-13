@@ -11,7 +11,11 @@ export interface GalleryToggleGroupDemoState {
   value: string;
 }
 
-const toggleItems = Object.freeze([{ value: 'bold' }, { value: 'italic' }]);
+const toggleItems = Object.freeze([
+  { value: 'bold' },
+  { disabled: true, value: 'strike' },
+  { value: 'italic' },
+]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
@@ -27,6 +31,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
       value: selectedValues,
     };
     const boldState = { ...groupState, itemValue: 'bold' };
+    const strikeState = { ...groupState, itemValue: 'strike' };
     const italicState = { ...groupState, itemValue: 'italic' };
 
     return (
@@ -93,7 +98,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                   Object(bold)['setAttribute']?.call(
                     bold,
                     'data-state',
-                    boldPressed ? 'on' : 'off',
+                    boldPressed ? 'pressed' : 'off',
                   );
                 }
                 if (italic) {
@@ -105,13 +110,23 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                   Object(italic)['setAttribute']?.call(
                     italic,
                     'data-state',
-                    italicPressed ? 'on' : 'off',
+                    italicPressed ? 'pressed' : 'off',
                   );
                 }
                 if (output) output['textContent'] = state.value || 'none';
               }}
             >
               Bold
+            </button>
+          </span>
+          <span {...toggleGroupItemAttributes(strikeState)}>
+            <button
+              {...toggleGroupButtonAttributes({
+                ...strikeState,
+                id: 'gallery-toggle-group-strike',
+              })}
+            >
+              Strike
             </button>
           </span>
           <span {...toggleGroupItemAttributes(italicState)}>
@@ -154,7 +169,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                   Object(bold)['setAttribute']?.call(
                     bold,
                     'data-state',
-                    boldPressed ? 'on' : 'off',
+                    boldPressed ? 'pressed' : 'off',
                   );
                 }
                 if (italic) {
@@ -166,7 +181,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                   Object(italic)['setAttribute']?.call(
                     italic,
                     'data-state',
-                    italicPressed ? 'on' : 'off',
+                    italicPressed ? 'pressed' : 'off',
                   );
                 }
                 if (output) output['textContent'] = state.value || 'none';

@@ -928,6 +928,20 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       `pnpm --filter @jiso/example-gallery run test:browser`,
       targeted `pnpm exec vp check` over the touched headless-ui/plan files,
       and `git diff --check`.
+      Additional D7 evidence 2026-06-13: `packages/headless-ui/src/primitives/toolbar.ts`
+      now emits `data-pressed` alongside `aria-pressed`, and `packages/ui/src/toolbar.tsx`
+      consumes that primitive-owned state instead of deriving it in the wrapper. The compiled
+      interactive gallery extends radio-group, tabs, and toggle-group with disabled items,
+      updates tabs/toolbar/toggle-group generated handlers to keep ARIA, `data-state`,
+      `data-pressed`, visibility, and roving tabindex synchronized, and keeps toast generated
+      handlers aligned on hidden plus `data-state="closed"` after action, close, or Escape.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/index.test.tsx`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`, targeted `pnpm exec vp check`
+      over the touched UI/gallery/plan files, and `git diff --check`.
 - [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); SPEC §9.5 and S8/R1/R2/R3/R4 are implemented, R5 has dev middleware and manifest/build planning helpers, R6 static export writes HTML, `/c/` modules, and configured static assets, R7 starter adoption is partially proven, commerce now has a shell-backed HTTP document/query/module serve entry including `/`, shared-shell `/_m/` mutation dispatch is proven by commerce enhanced/no-JS HTTP tests, and the docs site ships through `vp run export`; the flat-HTML compatibility layer is no longer the default export path, while R7 remains open for any remaining starter/serve adoption gaps.
       Evidence 2026-06-12: the create-jiso starter template and commerce Vite configs now
       late-load the shared `jisoAppShellViteSsrDevPlugin()` through Vite SSR, replacing
