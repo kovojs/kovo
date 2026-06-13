@@ -12,9 +12,16 @@ import { defaultIslandSignalScope } from './handlers.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { MutationQueue } from './mutation-queue.js';
 import type { MutationBroadcast } from './broadcast.js';
-import { createMutationIdem, readMutationChangeHeader } from './mutation-response.js';
-import { readLiveTargets, serializeLiveTargetEntries } from './mutation-targets.js';
+import { createMutationIdem } from './mutation-response.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
+import {
+  fetchEnhancedMutation,
+  isFailedMutationResponse,
+  type EnhancedFormLike,
+  type EnhancedMutationFetch,
+  type FetchedEnhancedMutation,
+  type UploadProgress,
+} from './mutation-fetch.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
@@ -23,6 +30,14 @@ import type { MutationChangeRecord, OptimisticChange, OptimisticPlan } from './o
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
 import type { QueryChunk } from './wire-parser.js';
+
+export type {
+  EnhancedFormLike,
+  EnhancedMutationFetch,
+  EnhancedMutationFetchOptions,
+  EnhancedMutationResponseLike,
+  UploadProgress,
+} from './mutation-fetch.js';
 
 export interface EnhancedMutationLoaderOptions {
   broadcast?: MutationBroadcast;
@@ -154,38 +169,6 @@ function updateUploadProgressElements(form: EventElementLike, progress: UploadPr
     element.setAttribute('value', String(value));
   }
 }
-
-export interface EnhancedFormLike {
-  action: string;
-  method?: string;
-}
-
-export interface EnhancedMutationFetchOptions {
-  body: unknown;
-  headers: Record<string, string>;
-  keepalive: boolean;
-  method: string;
-  onUploadProgress?: (progress: UploadProgress) => void;
-}
-
-export interface UploadProgress {
-  loaded: number;
-  total?: number;
-}
-
-export interface EnhancedMutationResponseLike {
-  headers?: {
-    get(name: string): string | null;
-  };
-  ok?: boolean;
-  status?: number;
-  text(): Promise<string>;
-}
-
-export type EnhancedMutationFetch = (
-  url: string,
-  options: EnhancedMutationFetchOptions,
-) => Promise<EnhancedMutationResponseLike>;
 
 export interface EnhancedMutationSubmitOptions {
   broadcast?: MutationBroadcast;
@@ -415,44 +398,4 @@ function stampEnhancedMutationPending(
   }
 
   return stampPendingQueries(options.pendingRoot, options.pendingQueries, pending);
-}
-
-interface FetchedEnhancedMutation {
-  body: string;
-  changes: MutationChangeRecord[];
-  idem: string;
-  response: EnhancedMutationResponseLike;
-  targets: string[];
-}
-
-async function fetchEnhancedMutation(
-  options: EnhancedMutationSubmitOptions,
-  idem = options.idem ?? createMutationIdem(),
-): Promise<FetchedEnhancedMutation> {
-  const targets = readLiveTargets(options.root);
-  const response = await options.fetch(options.form.action, {
-    body: options.formData,
-    headers: {
-      Accept: 'text/vnd.jiso.fragment+html',
-      'FW-Fragment': 'true',
-      'FW-Idem': idem,
-      'FW-Targets': serializeLiveTargetEntries(targets),
-    },
-    keepalive: true,
-    method: (options.form.method ?? 'post').toUpperCase(),
-    ...definedProps({ onUploadProgress: options.onUploadProgress }),
-  });
-  const changes = readMutationChangeHeader(response, options.onError);
-
-  return {
-    body: await response.text(),
-    changes,
-    idem,
-    response,
-    targets,
-  };
-}
-
-function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
-  return response.ok === false || (response.status !== undefined && response.status >= 400);
 }

@@ -320,6 +320,15 @@ packages/runtime/src/index.browser.test.ts`.
   (SPEC.md §9.1/§9.2). Same-session evidence: `pnpm exec vitest --run
 packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts` and `pnpm exec
 vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
+- Enhanced mutation request fetching is split out of the submitter: `mutation-fetch.ts` now owns
+  `FW-Idem`/`FW-Targets` request assembly, keepalive/method/progress fetch options, response body
+  reading, sanitized `FW-Changes` parsing, and HTTP failure classification, while
+  `mutation-submit.ts` keeps submit/optimism/apply orchestration (SPEC.md §9.1/§10.4).
+  Same-session evidence: `pnpm exec vitest --run packages/runtime/src/mutation-fetch.test.ts
+packages/runtime/src/index.test.ts packages/runtime/src/mutation-response.test.ts`, `pnpm exec
+vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
+  `pnpm exec vp check packages/runtime/src/mutation-fetch.ts
+packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-submit.ts`.
 
 Open:
 
@@ -349,6 +358,9 @@ Recent gates:
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec vitest --run packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-response.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/mutation-fetch.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-submit.ts`
 - `git diff --check`
 
 ## Phase 5 - Server
