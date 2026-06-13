@@ -352,6 +352,15 @@ packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp
 check packages/runtime/src/wire-parser.ts packages/runtime/src/apply-mutation-response.ts
 packages/runtime/src/wire-parser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Enhanced mutation apply orchestration is split out of the submitter: `mutation-apply.ts` now owns
+  fetched response body application, validation-failure local fragment application, successful
+  broadcast publication, and optimistic query-truth interposition before morphing; `mutation-submit.ts`
+  stays focused on form dispatch, fetch kickoff, pending state, and optimistic lifecycle decisions
+  (SPEC.md §9.1/§9.2/§10.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts
+packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
@@ -388,6 +397,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/wire-parser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server

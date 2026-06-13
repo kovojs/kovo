@@ -1,9 +1,4 @@
-import {
-  applyMutationResponseToDom,
-  type AppliedMutationResponse,
-  type AppliedMutationResponseToDom,
-  type ApplyMutationResponseToDomOptions,
-} from './apply-mutation-response.js';
+import type { AppliedMutationResponse } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
@@ -19,9 +14,13 @@ import {
   isFailedMutationResponse,
   type EnhancedFormLike,
   type EnhancedMutationFetch,
-  type FetchedEnhancedMutation,
   type UploadProgress,
 } from './mutation-fetch.js';
+import {
+  applyFetchedEnhancedMutationResponseToDom,
+  type EnhancedMutationAppliedResult,
+  type MutationDomApplyHooks,
+} from './mutation-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
@@ -203,38 +202,6 @@ export interface OptimisticEnhancedMutationSubmitOptions<
   rebaser: OptimisticRebaser;
 }
 
-type EnhancedMutationAppliedResult = AppliedMutationResponse & {
-  appliedFragments: string[];
-  changes: MutationChangeRecord[];
-  idem: string;
-  targets: string[];
-};
-
-type MutationDomApplyHooks = Pick<
-  ApplyMutationResponseToDomOptions,
-  'applyQuery' | 'beforeApplyQueries'
->;
-
-function applyEnhancedMutationResponseBodyToDom(
-  options: EnhancedMutationSubmitOptions,
-  body: string,
-  hooks: MutationDomApplyHooks = {},
-): AppliedMutationResponseToDom {
-  return applyMutationResponseToDom({
-    body,
-    ...definedProps({
-      applyQuery: hooks.applyQuery,
-      beforeApplyQueries: hooks.beforeApplyQueries,
-      islandSignalScope: options.islandSignalScope,
-      morph: options.morph,
-      onError: options.onError,
-      queryPlans: options.queryPlans,
-    }),
-    root: options.root,
-    store: options.store,
-  });
-}
-
 export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {
@@ -362,31 +329,6 @@ function uncoveredOptimisticQueries(
 function uncoveredOptimisticQueryError(queryName: string, key?: string): Error {
   const identity = key ? `${queryName}:${key}` : queryName;
   return new Error(`Optimistic transform for ${identity} was not covered by server query truth.`);
-}
-
-function applyFetchedEnhancedMutationResponseToDom(
-  options: EnhancedMutationSubmitOptions,
-  fetched: FetchedEnhancedMutation,
-  hooks: MutationDomApplyHooks = {},
-): EnhancedMutationAppliedResult {
-  const applied = applyEnhancedMutationResponseBodyToDom(options, fetched.body, hooks);
-  publishSuccessfulMutation(options, fetched);
-
-  return {
-    ...applied,
-    changes: fetched.changes,
-    idem: fetched.idem,
-    targets: fetched.targets,
-  };
-}
-
-function publishSuccessfulMutation(
-  options: EnhancedMutationSubmitOptions,
-  fetched: FetchedEnhancedMutation,
-): void {
-  if (isFailedMutationResponse(fetched.response)) return;
-
-  options.broadcast?.publish(fetched.body, fetched.changes);
 }
 
 function stampEnhancedMutationPending(
