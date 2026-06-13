@@ -149,6 +149,22 @@ Round282 static-export path-style closure evidence:
 - `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-types.ts packages/server/src/static-export.test.ts packages/server/src/static-export.ts packages/server/src/vite-static-export-options.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round283 directory-index adoption closure evidence:
+
+- `packages/server/src/static-export-result.ts` now exposes
+  `assertStaticExportManifestUsesDirectoryIndexDocuments()` and the Vite manifest/write bridge
+  calls it before accepting a dry-run/write pair, keeping stale flat `.html` route documents out of
+  SPEC §9.5 export-task manifests.
+- Starter, commerce, and docs adoption tests prove their static-host output stays directory-index
+  shaped: the generated starter template checks the public manifest helper, commerce command
+  exports reject `cart.html`/`login.html` artifacts, and docs command exports reject
+  `docs/installation.html`.
+- `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs .* with the built stylesheet href"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell|wires .* to the public commerce shell static output"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+
 Round276 built-root P10 boundary evidence:
 
 - `packages/server/src/index.ts` forwards the client-module registry constructor and node/http

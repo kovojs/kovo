@@ -147,6 +147,15 @@ markdown tables inline.
 
 Latest evidence:
 
+- Phase 5 directory-index adoption closure slice:
+  `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs .* with the built stylesheet href"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell|wires .* to the public commerce shell static output"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/static-export-result.ts` now rejects non-directory-index route documents at
+  the public manifest/result boundary used by the Vite export bridge; starter, commerce, and docs
+  adoption tests prove their static-host exports do not publish stale flat `.html` route documents.
 - Graph artifact acceptance checklist fixture slice:
   `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
   `pnpm run check:build`;
