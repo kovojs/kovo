@@ -757,6 +757,75 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins nested destructuring assignment receiver aliases under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface FakeContext { nested: { db: FakeDb } }',
+          'interface DrizzleContext { nested: { db: PgDatabase<any, any, any> } }',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'export async function syncProduct(context: DrizzleContext, fake: FakeContext, productId: string) {',
+          '  let writer;',
+          '  ({ nested: { db: writer } } = context);',
+          '  let fakeWriter;',
+          '  ({ nested: { db: fakeWriter } } = fake);',
+          '  await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '  await fakeWriter.update(products).set({ stock: 2 });',
+          '}',
+          '',
+          "export const productQuery = query('product/nested-destructuring-assignment', {",
+          '  load(_input, context: DrizzleContext, fake: FakeContext) {',
+          '    let reader;',
+          '    ({ nested: { db: reader } } = context);',
+          '    let fakeReader;',
+          '    ({ nested: { db: fakeReader } } = fake);',
+          '    fakeReader.select({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:20',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/nested-destructuring-assignment',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:24',
+      },
+    ]);
+  });
+
   it('pins query-loader receiver symbols without shadowed lookalike facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -866,6 +935,102 @@ describe('Drizzle pinned subset conformance', () => {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
+  });
+
+  it('pins source nested carrier destructuring as FW406 under real Drizzle imports', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = { db, fake };',
+          '  const nested = { inner: carrier };',
+          '  const { inner: { db: declaredWriter } } = nested;',
+          '  let assignedWriter;',
+          '  ({ inner: { db: assignedWriter } } = nested);',
+          '  const { inner: { fake: fakeWriter } } = nested;',
+          "  await declaredWriter.execute('select 1');",
+          '  await assignedWriter.update(users).set({});',
+          '  await fakeWriter.update(users).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          "export const usersQuery = query('users/nested-source-destructuring', {",
+          '  load(_input, db, fake) {',
+          '    const carrier = { db, fake };',
+          '    const nested = { inner: carrier };',
+          '    const { inner: { db: declaredReader } } = nested;',
+          '    let assignedReader;',
+          '    ({ inner: { db: assignedReader } } = nested);',
+          '    const { inner: { fake: fakeReader } } = nested;',
+          '    fakeReader.select({ id: users.id }).from(users);',
+          "    declaredReader.execute('select 1');",
+          '    return assignedReader.select({ id: users.id }).from(users);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:14',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:15',
+          },
+        ],
+      },
+    });
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+        ],
+        query: 'users/nested-source-destructuring',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+      },
+    ]);
   });
 
   it('pins spread-copied carrier receiver calls as FW406 under real Drizzle imports', () => {

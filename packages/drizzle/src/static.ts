@@ -24,6 +24,7 @@ import {
   type ParameterDeclaration,
   type SourceFile,
   type Symbol as MorphSymbol,
+  type Type as MorphType,
 } from 'ts-morph';
 export type {
   DomainRegistryInput,
@@ -714,6 +715,20 @@ function appendProjectDrizzleReceiverObjectAssignmentAliases(
 ): void {
   // SPEC §10-§11: destructuring assignment from a typed context is project proof when the
   // assigned property type is a Postgres Drizzle database receiver.
+  appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
+    assignment,
+    source,
+    source.getType(),
+    receivers,
+  );
+}
+
+function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
+  assignment: ObjectLiteralExpression,
+  location: Node,
+  sourceType: MorphType,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
   for (const property of assignment.getProperties()) {
     const propertyName = objectAssignmentPropertyName(property);
     if (!propertyName) continue;
@@ -721,17 +736,33 @@ function appendProjectDrizzleReceiverObjectAssignmentAliases(
     const target = objectAssignmentTargetNode(property);
     if (!target) continue;
 
-    if (!Node.isIdentifier(target)) continue;
-    if (!projectObjectPropertyIsDrizzleReceiver(source, propertyName)) continue;
+    const propertyType = projectObjectPropertyType(sourceType, location, propertyName);
+    if (!propertyType) continue;
 
-    appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
+    if (Node.isIdentifier(target)) {
+      if (!isDrizzleDatabaseTypeText(propertyType.getText(location))) continue;
+
+      appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
+      continue;
+    }
+
+    if (Node.isObjectLiteralExpression(target)) {
+      appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
+        target,
+        location,
+        propertyType,
+        receivers,
+      );
+    }
   }
 }
 
-function projectObjectPropertyIsDrizzleReceiver(source: Node, propertyName: string): boolean {
-  const property = source.getType().getProperty(propertyName);
-  const typeText = property?.getTypeAtLocation(source).getText(source);
-  return typeText ? isDrizzleDatabaseTypeText(typeText) : false;
+function projectObjectPropertyType(
+  sourceType: MorphType,
+  location: Node,
+  propertyName: string,
+): MorphType | undefined {
+  return sourceType.getProperty(propertyName)?.getTypeAtLocation(location);
 }
 
 function appendProjectDrizzleReceiverAliasIdentifier(
@@ -4877,10 +4908,56 @@ function appendSourceReceiverAliasesFromCarrierAssignment(
       continue;
     }
 
+    const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
+    if (nestedProperties.size === 0) continue;
+
+    if (Node.isObjectLiteralExpression(target)) {
+      appendSourceReceiverAliasesFromNestedCarrierAssignment(target, nestedProperties, references);
+      continue;
+    }
+
     if (!Node.isIdentifier(target)) continue;
+
+    const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
+    if (!targetSymbolKey) continue;
+
+    const properties = carrierPropertiesForSymbol(references.carrierProperties, targetSymbolKey);
+    for (const nestedProperty of nestedProperties) {
+      properties.add(nestedProperty);
+    }
+  }
+}
+
+function appendSourceReceiverAliasesFromNestedCarrierAssignment(
+  assignment: ObjectLiteralExpression,
+  carrierProperties: ReadonlySet<string>,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  for (const property of assignment.getProperties()) {
+    const propertyName = objectAssignmentPropertyName(property);
+    if (!propertyName) continue;
+
+    const target = objectAssignmentTargetNode(property);
+    if (!target) continue;
+
+    if (carrierProperties.has(propertyName)) {
+      appendSourceDestructuredReceiverIdentifier(target, references.names, references.symbolKeys);
+      continue;
+    }
 
     const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
     if (nestedProperties.size === 0) continue;
+
+    if (Node.isObjectLiteralExpression(target)) {
+      appendSourceReceiverAliasesFromNestedCarrierAssignment(target, nestedProperties, references);
+      continue;
+    }
+
+    if (!Node.isIdentifier(target)) continue;
 
     const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
     if (!targetSymbolKey) continue;
@@ -4920,10 +4997,56 @@ function appendSourceReceiverAliasesFromCarrierBinding(
       continue;
     }
 
+    const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
+    if (nestedProperties.size === 0) continue;
+
+    if (Node.isObjectBindingPattern(name)) {
+      appendSourceReceiverAliasesFromNestedCarrierBinding(name, nestedProperties, references);
+      continue;
+    }
+
     if (!Node.isIdentifier(name)) continue;
+
+    const bindingSymbolKey = resolvedSymbolKey(name.getSymbol());
+    if (!bindingSymbolKey) continue;
+
+    const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
+    for (const nestedProperty of nestedProperties) {
+      properties.add(nestedProperty);
+    }
+  }
+}
+
+function appendSourceReceiverAliasesFromNestedCarrierBinding(
+  binding: Node,
+  carrierProperties: ReadonlySet<string>,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  if (!Node.isObjectBindingPattern(binding)) return;
+
+  for (const element of binding.getElements()) {
+    const propertyName = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
+    if (!propertyName) continue;
+
+    const name = element.getNameNode();
+    if (carrierProperties.has(propertyName)) {
+      appendSourceDestructuredReceiverIdentifier(name, references.names, references.symbolKeys);
+      continue;
+    }
 
     const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
     if (nestedProperties.size === 0) continue;
+
+    if (Node.isObjectBindingPattern(name)) {
+      appendSourceReceiverAliasesFromNestedCarrierBinding(name, nestedProperties, references);
+      continue;
+    }
+
+    if (!Node.isIdentifier(name)) continue;
 
     const bindingSymbolKey = resolvedSymbolKey(name.getSymbol());
     if (!bindingSymbolKey) continue;

@@ -6456,6 +6456,80 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('uses project nested destructuring assignment receiver aliases from typed contexts', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface FakeContext { nested: { db: FakeDb } }',
+          'interface DrizzleContext { nested: { db: PgDatabase } }',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProduct(context: DrizzleContext, fake: FakeContext, productId: string) {',
+          '  let writer;',
+          '  ({ nested: { db: writer } } = context);',
+          '  let fakeWriter;',
+          '  ({ nested: { db: fakeWriter } } = fake);',
+          '  await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '  await fakeWriter.update(products).set({ stock: 2 });',
+          '}',
+          '',
+          'export const productQuery = query("product/nested-destructuring-assignment", {',
+          '  load(_input, context: DrizzleContext, fake: FakeContext) {',
+          '    let reader;',
+          '    ({ nested: { db: reader } } = context);',
+          '    let fakeReader;',
+          '    ({ nested: { db: fakeReader } } = fake);',
+          '    fakeReader.select({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:20',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/nested-destructuring-assignment',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:24',
+      },
+    ]);
+  });
+
   it('resolves imported table symbols instead of same-name tables from other modules', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -7027,6 +7101,94 @@ export interface CommerceInvalidationSets {
         ],
       },
     });
+  });
+
+  it('marks source nested carrier destructuring aliases as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = { db, fake };',
+          '  const nested = { inner: carrier };',
+          '  const { inner: { db: declaredWriter } } = nested;',
+          '  let assignedWriter;',
+          '  ({ inner: { db: assignedWriter } } = nested);',
+          '  const { inner: { fake: fakeWriter } } = nested;',
+          '  await declaredWriter.execute("select 1");',
+          '  await assignedWriter.update(users).set({});',
+          '  await fakeWriter.update(users).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/nested-source-destructuring", {',
+          '  load(_input, db, fake) {',
+          '    const carrier = { db, fake };',
+          '    const nested = { inner: carrier };',
+          '    const { inner: { db: declaredReader } } = nested;',
+          '    let assignedReader;',
+          '    ({ inner: { db: assignedReader } } = nested);',
+          '    const { inner: { fake: fakeReader } } = nested;',
+          '    fakeReader.select({ id: users.id }).from(users);',
+          '    declaredReader.execute("select 1");',
+          '    return assignedReader.select({ id: users.id }).from(users);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
+          },
+        ],
+      },
+    });
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/nested-source-destructuring',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
   });
 
   it('marks source spread-copied receiver carriers as FW406 without overridden fake facts', () => {
