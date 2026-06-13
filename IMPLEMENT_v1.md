@@ -17,16 +17,20 @@ and `plans/better-docs.md`.
 - [x] Compiler: close Phase 2 by removing compatibility reparses, retiring unjustified
       source-string lowerers/validators, and proving source patches plus offset maps as the lowering
       contract.
-- [ ] Harness/tests: replace fragile generated-source assertions with behavior checks or structured
-      `@jiso/test` fixtures, while preserving intentional wire pins.
-- [ ] Drizzle: close Postgres extraction by deleting bespoke paths in favor of ts-morph/project facts
-      and covering or FW406-degrading remaining invisible loader/mutation surfaces.
+- [x] Harness/tests: replace fragile generated-source assertions with behavior checks or structured
+      `@jiso/test` fixtures, while preserving intentional wire pins. (Phase 1 closed; `check:fw`
+      49 pass — see `plans/codebase-quality-round2.md`.)
+- [x] Drizzle: close Postgres extraction by deleting bespoke paths in favor of ts-morph/project facts
+      and covering or FW406-degrading remaining invisible loader/mutation surfaces. (Phase 3 closed;
+      `test:conformance` + drizzle suite 479 pass.)
 - [ ] Runtime: unify inline-loader minifier/apply paths and finish splitting broad runtime tests across
-      apply, query, loader, and minifier boundaries.
-- [ ] Server/app-shell: finish subtractive extraction across root exports, Vite, static export, replay,
+      apply, query, loader, and minifier boundaries. (Apply-path unification + inline-loader parity +
+      compat-export removal done; opportunistic test-seam splitting continues — ~5 monoliths remain.)
+- [x] Server/app-shell: finish subtractive extraction across root exports, Vite, static export, replay,
       document, and app boundaries; remove compatibility aliases only after replacements are proven.
-- [ ] App-shell adoption: prove Vite build/static export behavior across server, starter, commerce, and
-      docs.
+      (Phase 5 / app-shell R1–R7 closed; `check`, `test`, `check:build` green this session.)
+- [x] App-shell adoption: prove Vite build/static export behavior across server, starter, commerce, and
+      docs. (Starter/commerce/docs export adoption tests green within `pnpm run test` 2508 + `check:build`.)
 - [ ] UI: finish remaining primitive exports, behavior contracts, wrappers, gallery routes, compiled
       demos, state/focus/form/validity behavior, canceled-change restoration, axe checks, and visual
       baselines.

@@ -16,10 +16,11 @@ queue. Do not restore long historical transcripts; preserve durable evidence as 
       artifacts, not source text or its own test names.
 - [x] Phase 2 compiler IR: one parsed model, explicit source patches and offset maps, validators
       consume model facts, no compatibility reparses where parser facts are sufficient.
-- [ ] Phase 3 Drizzle extraction: ts-morph/project facts end-to-end; bespoke lexers deleted;
+- [x] Phase 3 Drizzle extraction: ts-morph/project facts end-to-end; bespoke lexers deleted;
       impossible or indirect surfaces degrade to FW406 instead of fabricated facts.
-- [ ] Phase 4 runtime: one runtime apply path, checked inline-loader parser/minifier parity, no
-      duplicated wire/apply parsers or compatibility exports.
+- [x] Phase 4 runtime: one runtime apply path, checked inline-loader parser/minifier parity, no
+      duplicated wire/apply parsers or compatibility exports. (Test-seam splitting continues
+      opportunistically under Phase 7.)
 - [x] Phase 5 server/app-shell: subtractive server extraction, one request/document/static-export
       path, stable public export boundaries, static export and Vite adoption closed.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams prove behavior through
@@ -128,13 +129,22 @@ Project-mode and static extraction now cover local aliases, factory/project fact
 rest receiver containers, static class callbacks, and several invisible surfaces that degrade with
 FW406 instead of fabricated facts.
 
-- [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph/project facts can
-      replace them.
-- [ ] Cover or FW406-degrade remaining invisible source/project query-loader and mutation surfaces.
-- [ ] Keep conformance tied to real `drizzle-orm` Postgres surfaces, not synthetic facts.
+- [x] Delete remaining bespoke lexer/compat extraction paths where ts-morph/project facts can
+      replace them. (Audit: no hand-rolled lexer remains in `static.ts` — ts-morph/AST throughout;
+      the `createSourceFile` sites are ts-morph project loads; remaining string ops act on
+      already-extracted identifier/type text.)
+- [x] Cover or FW406-degrade remaining invisible source/project query-loader and mutation surfaces.
+      Insert/update/delete predicate-subquery reads are now all covered or FW406-degraded; query
+      loader accessor/getter surfaces were covered in prior rounds. `DELETE ... USING` is absent
+      from the pinned PgDelete surface, so deliberately not fabricated.
+- [x] Keep conformance tied to real `drizzle-orm` Postgres surfaces, not synthetic facts.
 
 Latest evidence:
 
+- [x] `delete().where(subquery)` predicate reads now surface as `delete-predicate` (were silently
+      dropped) and degrade opaque sources to FW406, mirroring `update-predicate`; +3 package tests,
+      +2 conformance tests against real `drizzle-orm`. Verified: `vitest packages/drizzle
+  conformance/drizzle-pin` 479 pass, `pnpm run test:conformance` EXIT=0.
 - [x] Query loader getter options now degrade in source mode and extract returned static callbacks in
       project mode instead of dropping executable accessor loader surfaces. Verified with focused
       Drizzle source/project tests, pinned Drizzle conformance, full Drizzle package tests, `tsc`,
@@ -160,15 +170,23 @@ response apply now share canonical apply seams. Inline loader build checks exist
 tightened around parser/minifier parity. Runtime test files are partially split by apply/query/loader
 boundaries.
 
-- [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
-- [ ] Finish inline-loader parser/minifier parity so readable and minified output are mechanically
-      tied to canonical helpers.
-- [ ] Re-run browser runtime tests after each apply/loader surface change.
-- [ ] Delete remaining compatibility exports or duplicate wire/apply parsers once replacements are
-      proven.
+- [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams. (Next
+      candidates ≥330 lines: `inline-loader-response-apply`, `query-script-hydration`,
+      `query-visible-return`, `delegated-runtime-integration`, `submit-context`.)
+- [x] Finish inline-loader parser/minifier parity so readable and minified output are mechanically
+      tied to canonical helpers. (Parity test asserts canonical `wire-html`/`wire-response-scanner`
+      helper parity, not token pins; `check:inline-loader` EXIT=0.)
+- [ ] Re-run browser runtime tests after each apply/loader surface change. (Ongoing process;
+      this wave: runtime browser suite 16 pass.)
+- [x] Delete remaining compatibility exports or duplicate wire/apply parsers once replacements are
+      proven. (Audit: no compat/legacy/duplicate-parser exports in `packages/runtime/src`; single
+      `wire-html`/`wire-parser`/`wire-response-scanner` family.)
 
 Latest evidence:
 
+- [x] Split `loader-enhanced-mutation`, `optimism`, and `broadcast` monoliths into
+      submit/failure/broadcast, apply/typing/rebase, and publish/replay seam files (59→64 files,
+      306 tests preserved, no loss). Verified: runtime 306 unit + 16 browser, inline-loader parity, tsc.
 - [x] `mutation-optimistic.test.ts` split into focused `mutation-optimistic-failure`,
       `-pagehide`, and `-queue` files along apply/queue/lifecycle seams; all 10 original tests
       preserved (10 before, 10 after). Verified with the four split files plus the full runtime
@@ -299,6 +317,11 @@ Latest evidence:
       test split; stale drizzle worktree confirmed redundant with `77469e2a`/`d4d04e37` and discarded):
       `pnpm run check` EXIT=0 (755 files clean, 7/7 example/conformance projects), runtime suite
       306 tests pass, OTP browser tests pass.
+- [x] Broad gate after parallel wave through `b3027850` (drizzle delete-predicate extraction,
+      runtime test-seam splits, UI G3 axe-per-state, vite-diagnostics closed-aggregate fix, Phase 1
+      close): `pnpm run check`, `pnpm run test` (257 files, 2508 pass), `pnpm run check:build`,
+      `pnpm run test:conformance`, `pnpm run check:fw` (49 pass) all EXIT=0; gallery browser 39 +
+      runtime browser 16 pass. Phases 3 and 4 top-level criteria closed.
 - [ ] After the next mini-wave, run at least `pnpm run check`; add `pnpm run test`,
       `pnpm run test:browser`, `pnpm run test:conformance`, and `pnpm run check:build` when touched
       surfaces justify broader gates.

@@ -22,8 +22,11 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
       and positioning fallback.
 - [x] H1 primitives: dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion,
       separator, progress, meter, avatar, toggle, switch, checkbox.
-- [ ] H2 primitives: tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field,
-      otp-field, scroll-area, field/fieldset integration.
+- [x] H2 primitives: tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field,
+      otp-field, scroll-area, field/fieldset integration. (All nine have headless primitive+tests,
+      styled `@jiso/ui` component, gallery route, G2 behavior contract, and compiled interactive
+      demo with browser + G3 axe-per-state coverage. Verified: `vitest packages/headless-ui
+  packages/ui examples/gallery` 530 pass + gallery browser 39 pass; emit-in-sync.)
 - [ ] H3 primitives: select, combobox, autocomplete, dropdown-menu, context-menu, menubar,
       navigation-menu, slider, toast, command.
 - [x] U1 styled foundation: token sheet, `cn()`, statically analyzable variant helper.
@@ -33,7 +36,8 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
 - [x] U5 styled H3 components.
 - [x] G1 gallery static fixture surface: one route per component with source/markup snapshot.
 - [ ] G2 behavior-contract gates: keyboard, ARIA, native state, and `fw explain` coverage.
-- [ ] G3 axe checks per component state.
+- [ ] G3 axe checks per component state. (H1 + H2 interactive families now run axe on
+      post-transition end-states; H3 axe-per-state audit pending before global close.)
 - [ ] G4 visual regression baseline for `@jiso/ui`.
 - [x] G5 merge fixtures for primitive attrs plus author elements.
 - [ ] G6 compiled interactive gallery authored as app TSX and exercised in browser.
