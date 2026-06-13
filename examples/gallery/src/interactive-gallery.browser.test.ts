@@ -328,7 +328,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(output.textContent).toBe('Standard');
 
     select.value = 'express';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
       const currentSelect = required(
@@ -343,6 +343,27 @@ describe('compiled interactive gallery demos in the browser', () => {
       ]);
       expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
       expect(currentSelect.value).toBe('express');
+      expect(currentOutput.textContent).toBe('Express');
+    });
+
+    const currentSelect = required(
+      root.querySelector<HTMLSelectElement>('#gallery-select-control'),
+    );
+    currentSelect.value = 'drone';
+    const disabledChange = new Event('change', { bubbles: true, cancelable: true });
+    currentSelect.dispatchEvent(disabledChange);
+
+    await vi.waitFor(() => {
+      const restoredSelect = required(
+        root.querySelector<HTMLSelectElement>('#gallery-select-control'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
+      );
+
+      expect(disabledChange.defaultPrevented).toBe(true);
+      expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
+      expect(restoredSelect.value).toBe('express');
       expect(currentOutput.textContent).toBe('Express');
     });
   });

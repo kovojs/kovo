@@ -123,6 +123,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       fixtures, and browser-backed compiled gallery output. Command item selection now restores
       previous value state when dialog close is canceled, and the compiled interactive command demo
       covers keydown selection/close through refreshed generated artifacts and a browser test.
+      Select's compiled interactive gallery handler now reads the native change target instead of
+      toggling synthetic state and restores the previous native value when a disabled option change
+      is attempted.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -132,7 +135,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       selection and value/input restoration when close or input follow-up changes are canceled.
       `examples/gallery/src/interactive/{combobox,autocomplete}-demo.tsx` and refreshed generated
       artifacts prove delegated keydown handlers, with static and browser gallery tests covering
-      the generated behavior.
+      the generated behavior. Evidence 2026-06-13: `examples/gallery/src/interactive/select-demo.tsx`
+      now restores disabled option changes through app-authored TSX; refreshed generated artifacts,
+      `examples/gallery/src/interactive-gallery.test.ts`, and
+      `examples/gallery/src/interactive-gallery.browser.test.ts` prove state and native `<select>`
+      restoration in generated/client and Chromium-backed paths.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -144,6 +151,15 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Select compiled disabled-option restoration slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t select`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t select)`;
+      exact `pnpm exec vp check examples/gallery/src/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Compiled gallery axe and accessibility contract slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/index.test.tsx -t "context-menu|otp-field|toast"`;
       `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;

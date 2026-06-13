@@ -49,12 +49,35 @@ export const GallerySelectDemo = component('gallery-select-demo', {
           })}
           id="gallery-select-control"
           onChange={() => {
-            state.value = state.value === 'standard' ? 'express' : 'standard';
+            const delegatedEvent = event;
+            const target =
+              delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
+            const nextValue =
+              target === null || target === undefined
+                ? state.value
+                : String(Reflect['get'](Object(target), 'value'));
             const doc = Reflect['get'](globalThis, 'document');
+            const select = doc
+              ? Object(doc)['getElementById']?.call(doc, 'gallery-select-control')
+              : undefined;
             const output = doc
               ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="select-value"]')
               : undefined;
 
+            if (nextValue === 'drone' || nextValue === state.value) {
+              if (select) select['value'] = state.value;
+              if (delegatedEvent !== undefined) {
+                Reflect['apply'](
+                  Reflect['get'](delegatedEvent, 'preventDefault'),
+                  delegatedEvent,
+                  [],
+                );
+              }
+              return;
+            }
+
+            state.value = nextValue === 'express' ? 'express' : 'standard';
+            if (select) select['value'] = state.value;
             if (output) output['textContent'] = state.value === 'express' ? 'Express' : 'Standard';
           }}
         >

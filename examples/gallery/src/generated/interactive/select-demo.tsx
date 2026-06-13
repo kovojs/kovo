@@ -51,7 +51,7 @@ export const GallerySelectDemo = component('gallery-select-demo', {
             labelledBy: 'gallery-select-label',
           })}
           id="gallery-select-control"
-          on:change="/c/examples/gallery/src/generated/interactive/select-demo.client.js?v=ec6579eb#GallerySelectDemo$select_change"
+          on:change="/c/examples/gallery/src/generated/interactive/select-demo.client.js?v=d98e8019#GallerySelectDemo$select_change"
         >
           {shippingOptions.map((item) => (
             <option

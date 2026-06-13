@@ -1085,12 +1085,20 @@ describe('compiled interactive gallery demos', () => {
     expect(scrollAreaState).toEqual({ position: 'end' });
 
     const selectState = { value: 'standard' };
-    clientHandler(select, 'GallerySelectDemo$select_change')(new Event('change'), {
+    clientHandler(select, 'GallerySelectDemo$select_change')(changeEvent('express'), {
       params: {},
       signal,
       state: selectState,
     });
     expect(selectState).toEqual({ value: 'express' });
+    const disabledSelectEvent = changeEvent('drone');
+    clientHandler(select, 'GallerySelectDemo$select_change')(disabledSelectEvent, {
+      params: {},
+      signal,
+      state: selectState,
+    });
+    expect(selectState).toEqual({ value: 'express' });
+    expect(disabledSelectEvent.defaultPrevented).toBe(true);
 
     const sliderState = { value: 25 };
     clientHandler(slider, 'GallerySliderDemo$input_input')(inputEvent('63'), {
@@ -1578,6 +1586,12 @@ function clientHandler(exports: ClientExports, name: string): ClientExports[stri
 
 function inputEvent(value: string): Event {
   const event = new Event('input', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'target', { value: { value } });
+  return event;
+}
+
+function changeEvent(value: string): Event {
+  const event = new Event('change', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'target', { value: { value } });
   return event;
 }
