@@ -765,7 +765,10 @@ visible-return refetch, and disposal live in dedicated runtime tests. Inline rea
 parity coverage now owns parser-helper extraction in `inline-loader-parser-parity.test.ts` and
 inline enhanced-submit behavior in `inline-loader-enhanced-submit.test.ts`; delegated handler,
 trigger, response-apply, and minified artifact coverage now live in focused owner suites, leaving
-`inline-loader.test.ts` focused on source installation smoke.
+`inline-loader.test.ts` focused on source installation smoke. Response-apply extraction and
+readable/minified embed parity assertions now live with response-apply behavior in
+`packages/runtime/src/inline-loader-response-apply.test.ts`, leaving parser parity focused on the
+wire-parser helper closure.
 Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
 transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
 decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
@@ -1269,6 +1272,14 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       inline-loader/minifier tests, full runtime tests, inline-loader generation check, TypeScript,
       browser runtime tests, exact `vp check`, and `git diff --check` commands listed in Latest
       evidence.
+      Evidence 2026-06-13 round274: readable response-apply generation plus readable/minified
+      response-apply embed drift assertions moved from
+      `packages/runtime/src/inline-loader-parser-parity.test.ts` into
+      `packages/runtime/src/inline-loader-response-apply.test.ts`. The parser parity suite now
+      owns parser-helper generation/extraction only, while response-apply behavior and helper
+      embed parity share one owner. Verified by focused inline parser/apply/minifier/build tests,
+      inline-loader generation check, browser runtime tests, exact `vp check`, and `git diff
+      --check` commands listed in Latest evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1347,6 +1358,9 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       Evidence 2026-06-13 round273: browser runtime checks passed after the shared inline helper
       extraction/parity cleanup and minified artifact parser/apply test split. Command: `pnpm exec
       vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
+      Evidence 2026-06-13 round274: browser runtime checks passed after moving response-apply
+      extractor/parity assertions into the response-apply owner suite. Command: `pnpm exec vitest
+      --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
 
 Latest evidence:
 
@@ -1432,6 +1446,12 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round274 inline response-apply parity ownership:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-minifier.test.ts`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-response-apply.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 5 - Server And App Shell
