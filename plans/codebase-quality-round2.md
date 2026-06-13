@@ -1387,6 +1387,13 @@ packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-
       full runtime `pnpm exec vitest --run packages/runtime/src`, and `pnpm --filter
       @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+      Evidence 2026-06-13 round287 runtime closure: pure delegated handler dispatch, chaining,
+      state queueing, param coercion, state hydration, and failure-persistence coverage moved from
+      `packages/runtime/src/delegated-runtime-integration.test.ts` into the handler owner suite
+      `packages/runtime/src/handlers.test.ts`, leaving the integration file focused on SPEC.md
+      §4.4/§4.7 island signal lifecycle and loader/morph interactions. Verified by
+      `pnpm exec vitest --run packages/runtime/src/handlers.test.ts
+      packages/runtime/src/delegated-runtime-integration.test.ts`.
       Evidence 2026-06-13 round280: deferred stream apply deleted the runtime-only
       `AppliedDeferredStreamResponseToDom` compatibility type/export in favor of
       `AppliedDeferredStreamResponseWithRoot`, and rootless deferred stream parser/apply assertions
