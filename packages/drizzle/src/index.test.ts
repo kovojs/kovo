@@ -12678,6 +12678,112 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts project tables and column shapes from aliased real Postgres factory imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<void> };']),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import { pgTable as table, text as pgText, integer as pgInteger, type PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = table("products", {',
+            '  id: pgText("id").primaryKey(),',
+            '  stock: pgInteger("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/aliased-imports", {',
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '  },',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/aliased-imports',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'catalog.domain.ts:8',
+      },
+    ]);
+  });
+
+  it('does not fabricate project table facts from local Postgres factory lookalikes', () => {
+    const files = [
+      pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<void> };']),
+      {
+        fileName: 'catalog.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'function pgTable(_name: string, _columns: unknown, _extra: unknown) { return {}; }',
+          'function text(_name: string) { return { primaryKey() { return this; } }; }',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function loadCatalog(db: PgDatabase<any, any, any>) {',
+          '  await db.select({ id: products.id }).from(products);',
+          '}',
+          '',
+          'export const productQuery = query("product/fake-factory", {',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      loadCatalog: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'catalog.domain.ts:11',
+          },
+        ],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product/fake-factory.id could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'catalog.domain.ts:14',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'catalog.domain.ts:14',
+          },
+        ],
+        query: 'product/fake-factory',
+        reads: [],
+        shape: {},
+        site: 'catalog.domain.ts:14',
+      },
+    ]);
+  });
+
   it('extracts project receiver aliases from typed destructured declarations', () => {
     const graph = extractTouchGraphFromProject({
       files: [

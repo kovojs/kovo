@@ -150,6 +150,45 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins aliased real Drizzle Postgres table and column factories in project extraction', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { pgTable as table, text as pgText, integer as pgInteger, type PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const products = table('products', {
+              id: pgText('id').primaryKey(),
+              stock: pgInteger('stock').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/aliased-factories', {
+              load(_input, db: PgDatabase<any, any, any>) {
+                return db.select({
+                  id: products.id,
+                  stock: products.stock,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/aliased-factories',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:9',
+      },
+    ]);
+  });
+
   it('pins project extraction for real Postgres namespace table factories', () => {
     const products = pg.pgTable('products', {
       id: pg.text('id').primaryKey(),

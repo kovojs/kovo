@@ -1336,6 +1336,9 @@ duplicate parenthesis-only projection logic.
 Project Postgres namespace table factories such as `pg.pgTable()` and namespace column builders
 such as `pg.text()` now resolve only when ts-morph proves a `drizzle-orm/pg-core` namespace import;
 source mode keeps that surface opaque and degrades writes to FW406.
+Project Postgres table and column factory identifiers now accept aliased real
+`drizzle-orm/pg-core` named imports through ts-morph import facts, while locally declared
+lookalike factories no longer fabricate project table or query-read facts.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
       Evidence 2026-06-13 round327: `packages/drizzle/src/static.ts` separates project table
@@ -1348,6 +1351,17 @@ source mode keeps that surface opaque and degrades writes to FW406.
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
       `pnpm --filter @jiso/conformance-drizzle-pin test`;
       `pnpm exec tsc --noEmit --pretty false`; exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      `git diff --check`.
+      Evidence 2026-06-13 round348: `packages/drizzle/src/static.ts` uses project
+      `drizzle-orm/pg-core` import facts for named/aliased Postgres table and column factory
+      identifiers and stops project query read extraction from falling back to raw identifier text
+      when table resolution fails. `packages/drizzle/src/index.test.ts` proves aliased real
+      imports extract table reads/shapes and local lookalike factories degrade to FW406;
+      `conformance/drizzle-pin/src/index.test.ts` pins the aliased import surface against real
+      Drizzle. Verified by `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `pnpm exec tsc --noEmit --pretty false`;
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
       `git diff --check`.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.

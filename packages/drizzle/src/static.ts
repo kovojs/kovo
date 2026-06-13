@@ -2338,7 +2338,7 @@ function projectColumnBuilderName(initializer: Node | undefined): string | undef
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  if (Node.isIdentifier(callee)) return callee.getText();
+  if (Node.isIdentifier(callee)) return projectPgCoreIdentifierExportName(callee);
   if (!Node.isPropertyAccessExpression(callee)) return undefined;
 
   const base = unwrappedStaticExpressionNode(callee.getExpression());
@@ -2480,7 +2480,7 @@ function isProjectAnnotatedTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = unwrappedStaticExpressionNode(initializer.getExpression());
   const isTableFactory = Node.isIdentifier(expression)
-    ? isDrizzleTableFactoryName(expression.getText())
+    ? isDrizzleTableFactoryName(projectPgCoreIdentifierExportName(expression) ?? '')
     : Node.isPropertyAccessExpression(expression) &&
       isDrizzleTableFactoryNamespaceMember(expression);
   if (!isTableFactory) return false;
@@ -2518,6 +2518,41 @@ function isDrizzlePgCoreNamespaceMember(access: Node): boolean {
       return importDeclaration?.getModuleSpecifierValue() === 'drizzle-orm/pg-core';
     }) ?? false
   );
+}
+
+function projectPgCoreIdentifierExportName(identifier: Node): string | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+
+  const symbol = identifier.getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  if (declarations.length === 0) return identifier.getText();
+
+  for (const declaration of declarations) {
+    const importName = pgCoreImportSpecifierExportName(declaration);
+    if (importName) return importName;
+  }
+
+  const aliased = symbol?.getAliasedSymbol();
+  if (
+    aliased
+      ?.getDeclarations()
+      .some((declaration) =>
+        declaration.getSourceFile().getFilePath().includes('drizzle-orm/pg-core'),
+      )
+  ) {
+    return aliased.getName();
+  }
+
+  return undefined;
+}
+
+function pgCoreImportSpecifierExportName(declaration: Node): string | undefined {
+  if (!Node.isImportSpecifier(declaration)) return undefined;
+
+  const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+  if (importDeclaration?.getModuleSpecifierValue() !== 'drizzle-orm/pg-core') return undefined;
+
+  return declaration.getNameNode().getText();
 }
 
 function isJisoAnnotationCall(node: Node): boolean {
@@ -4546,7 +4581,12 @@ function queryJoinTableExpressions(
     if (!name || !isQueryReadCallName(name)) return [];
     if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
-    const table = staticExpressionPath(call.getArguments()[0], readTableIdentifier);
+    const tableArgument = call.getArguments()[0];
+    const table = readTableIdentifier
+      ? tableArgument
+        ? readTableIdentifier(tableArgument)
+        : undefined
+      : staticExpressionPath(tableArgument);
     return table ? [table] : [];
   });
 }
@@ -4591,7 +4631,12 @@ function unresolvedQueryReadDiagnostics(
       if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
       const tableArgument = call.getArguments()[0];
-      if (staticExpressionPath(tableArgument, options.readTableIdentifier)) return [];
+      const table = options.readTableIdentifier
+        ? tableArgument
+          ? options.readTableIdentifier(tableArgument)
+          : undefined
+        : staticExpressionPath(tableArgument);
+      if (table) return [];
 
       return [
         {
