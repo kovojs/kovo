@@ -1063,6 +1063,15 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       `pnpm --filter @jiso/ui exec vitest --run`, focused gallery vitest over
       `src/interactive-gallery.test.ts` and `src/behavior-contracts.test.ts`, targeted
       `pnpm exec vp check`, and `git diff --check`.
+      Additional D7 evidence 2026-06-13: `packages/headless-ui/src/primitives/number-field.ts`
+      now aligns off-step primitive step-button changes to the explicit native `min`/`step` grid
+      before clamping, keeping the SPEC §6.3 real number input contract coherent when app state
+      contains an off-grid value. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/number-field.test.ts`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts IMPLEMENT_v1.md plans/ui.md`,
+      and `git diff --check`.
 - [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); SPEC §9.5 and S8/R1/R2/R3/R4 are implemented, R5 has dev middleware and manifest/build planning helpers, R6 static export writes HTML, `/c/` modules, and configured static assets, R7 starter adoption is partially proven, commerce now has a shell-backed HTTP document/query/module serve entry including `/`, shared-shell `/_m/` mutation dispatch is proven by commerce enhanced/no-JS HTTP tests, and the docs site ships through `vp run export`; the flat-HTML compatibility layer is no longer the default export path, while R7 remains open for any remaining starter/serve adoption gaps.
       Evidence 2026-06-12: the create-jiso starter template and commerce Vite configs now
       late-load the shared `jisoAppShellViteSsrDevPlugin()` through Vite SSR, replacing

@@ -261,7 +261,7 @@ function numberFieldStepValue(
   const nextValue =
     currentValue === undefined
       ? numberFieldEmptyStepValue(state, direction)
-      : currentValue + (direction === 'increment' ? step : -step);
+      : numberFieldAlignedStepValue(state, currentValue, step, direction);
 
   return clampNumberFieldValue(nextValue, state);
 }
@@ -287,6 +287,27 @@ function numberFieldCanDecrement(state: NumberFieldState): boolean {
 
   const value = normalizeNumberFieldValue(state.value);
   return value === undefined || !numberFieldFinite(state.min) || value > state.min;
+}
+
+function numberFieldAlignedStepValue(
+  state: NumberFieldState,
+  value: number,
+  step: number,
+  direction: 'decrement' | 'increment',
+): number {
+  if (!numberFieldFinite(state.min)) {
+    return value + (direction === 'increment' ? step : -step);
+  }
+
+  const base = state.min;
+  const offset = (value - base) / step;
+
+  if (Number.isInteger(offset)) {
+    return value + (direction === 'increment' ? step : -step);
+  }
+
+  const alignedOffset = direction === 'increment' ? Math.ceil(offset) : Math.floor(offset);
+  return base + alignedOffset * step;
 }
 
 function clampNumberFieldValue(value: number, state: NumberFieldState): number {

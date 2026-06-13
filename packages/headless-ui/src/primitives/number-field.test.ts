@@ -191,6 +191,25 @@ describe('headless-ui number-field primitive', () => {
     });
   });
 
+  it('aligns off-step values to the native min and step grid before clamping', () => {
+    expect(incrementNumberFieldValue({ max: 10, min: 0, step: 2, value: 1 })).toMatchObject({
+      changed: true,
+      value: 2,
+    });
+    expect(decrementNumberFieldValue({ min: 0, step: 2, value: 3 })).toMatchObject({
+      changed: true,
+      value: 2,
+    });
+    expect(incrementNumberFieldValue({ max: 5, min: 1, step: 2, value: 2 })).toMatchObject({
+      changed: true,
+      value: 3,
+    });
+    expect(decrementNumberFieldValue({ min: 1, step: 2, value: 2 })).toMatchObject({
+      changed: true,
+      value: 1,
+    });
+  });
+
   it('parses input strings into number field values', () => {
     expect(numberFieldValueFromString('42')).toBe(42);
     expect(numberFieldValueFromString(' 3.5 ')).toBe(3.5);

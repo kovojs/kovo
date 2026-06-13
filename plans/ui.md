@@ -65,6 +65,8 @@ risks. Do not append long historical command lists.
 - Native value-backed primitive handlers for select, number-field, slider, toolbar, tabs,
   radio-group, toggle-group, toast, autocomplete, combobox, command, and otp-field have focused
   interactive or unit coverage for recent state synchronization fixes.
+- Number-field step buttons now align off-step values to an explicit native `min`/`step` grid
+  before clamping, preserving the real `type="number"` control contract from SPEC §6.3.
 
 ## Open Work
 
@@ -109,12 +111,10 @@ Gallery:
 
 Latest integrated UI slice:
 
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/command.test.ts packages/headless-ui/src/primitives/otp-field.test.ts`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/number-field.test.ts`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts src/behavior-contracts.test.ts`
-- `pnpm exec vp check packages/headless-ui/src/primitives/autocomplete.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts IMPLEMENT_v1.md plans/ui.md`
 - `git diff --check`
 
 Latest broad gate:
