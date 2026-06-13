@@ -2,19 +2,29 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import { createIslandSignalScope } from './handlers.js';
-import { addLoaderListener, installExecutionTriggers } from './loader-lifecycle.js';
+import {
+  addLoaderListener,
+  installDelegatedEventLifecycle,
+  installExecutionTriggers,
+} from './loader-lifecycle.js';
+import { createQueryStore } from './query-store.js';
 
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
   elements = new Map<string, FakeElement[]>();
 
-  addEventListener(type: string, listener: (event: DelegatedEvent) => void | Promise<void>): void {
+  addEventListener(
+    type: string,
+    listener: (event: DelegatedEvent) => void | Promise<void>,
+    _options?: { capture?: boolean },
+  ): void {
     this.listeners.set(type, listener);
   }
 
   removeEventListener(
     type: string,
     listener: (event: DelegatedEvent) => void | Promise<void>,
+    _options?: { capture?: boolean },
   ): void {
     if (this.listeners.get(type) === listener) {
       this.listeners.delete(type);
@@ -24,26 +34,59 @@ class FakeRoot {
   querySelectorAll(selector: string): Iterable<FakeElement> {
     return this.elements.get(selector) ?? [];
   }
+
+  findFragmentTarget(_target: string): null {
+    return null;
+  }
 }
 
 class FakeElement implements EventElementLike {
   readonly attributes: { name: string; value: string }[];
+  readonly action: string;
+  readonly method?: string;
+  submitted = false;
 
   constructor(private readonly attrs: Record<string, string>) {
     this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
+    this.action = attrs.action ?? '/_m/test';
+    if (attrs.method !== undefined) {
+      this.method = attrs.method;
+    }
+  }
+
+  get id(): string | undefined {
+    return this.attrs.id;
   }
 
   closest(selector: string): FakeElement | null {
     const trigger = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
-    return trigger && Object.hasOwn(this.attrs, `on:${trigger}`) ? this : null;
+    if (trigger && Object.hasOwn(this.attrs, `on:${trigger}`)) return this;
+    if (
+      selector === 'form[enhance],form[data-enhance],form[data-mutation]' &&
+      (this.getAttribute('enhance') !== null ||
+        this.getAttribute('data-enhance') !== null ||
+        this.getAttribute('data-mutation') !== null)
+    ) {
+      return this;
+    }
+
+    return null;
   }
 
   getAttribute(name: string): string | null {
     return this.attrs[name] ?? null;
   }
 
+  querySelectorAll(): Iterable<FakeElement> {
+    return [];
+  }
+
   setAttribute(name: string, value: string): void {
     this.attrs[name] = value;
+  }
+
+  submit(): void {
+    this.submitted = true;
   }
 }
 
@@ -58,6 +101,79 @@ describe('loader lifecycle', () => {
     expect(root.listeners.get('click')).toBe(listener);
     disposers[0]?.();
     expect(root.listeners.has('click')).toBe(false);
+  });
+
+  it('routes delegated event failures through the delegated lifecycle phase', async () => {
+    const root = new FakeRoot();
+    const element = new FakeElement({ 'on:click': '/c/cart.js#missing' });
+    const importModule = vi.fn(async () => ({}));
+    const onError = vi.fn();
+
+    const dispose = installDelegatedEventLifecycle({
+      events: ['click'],
+      importModule,
+      islandSignalScope: createIslandSignalScope(),
+      onError,
+      root,
+    });
+
+    await root.listeners.get('click')?.({ target: element, type: 'click' });
+
+    expect(importModule).toHaveBeenCalledWith('/c/cart.js');
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      event: expect.objectContaining({ type: 'click' }),
+      phase: 'delegated-event',
+    });
+
+    dispose();
+    expect(root.listeners.has('click')).toBe(false);
+  });
+
+  it('intercepts enhanced submits without falling through to delegated handlers', async () => {
+    // SPEC.md section 9.1: enhanced mutations own submitted forms before normal on:* dispatch.
+    const root = new FakeRoot();
+    const form = new FakeElement({
+      action: '/_m/cart/add',
+      enhance: '',
+      method: 'post',
+      'on:submit': '/c/cart.js#submit',
+    });
+    const fetchError = new Error('offline');
+    const fetch = vi.fn(async () => {
+      throw fetchError;
+    });
+    const importModule = vi.fn(async () => ({ submit: vi.fn() }));
+    const onError = vi.fn();
+    const preventDefault = vi.fn();
+
+    installDelegatedEventLifecycle({
+      enhancedMutations: {
+        fetch,
+        formData: () => new URLSearchParams([['sku', 'sku_1']]),
+        root: root as never,
+        store: createQueryStore(),
+      },
+      events: ['submit'],
+      importModule,
+      islandSignalScope: createIslandSignalScope(),
+      onError,
+      root,
+    });
+
+    await root.listeners.get('submit')?.({
+      preventDefault,
+      target: form,
+      type: 'submit',
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('/_m/cart/add', expect.objectContaining({ method: 'POST' }));
+    expect(form.submitted).toBe(true);
+    expect(importModule).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(fetchError, {
+      event: expect.objectContaining({ type: 'submit' }),
+      phase: 'enhanced-mutation',
+    });
   });
 
   it('installs declared load, idle, and visible execution triggers', async () => {

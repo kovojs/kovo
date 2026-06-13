@@ -7,6 +7,11 @@ import { reportRuntimeContextError } from './error-policy.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
+import {
+  dispatchEnhancedFormSubmit,
+  isEnhancedSubmitEvent,
+  type EnhancedMutationLoaderOptions,
+} from './mutation-submit.js';
 import type { QueryScriptLike } from './query-apply.js';
 
 export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
@@ -39,6 +44,16 @@ export interface ExecutionTriggerOptions {
   visibleObserver?: VisibleObserverFactory;
 }
 
+export interface DelegatedEventLifecycleOptions {
+  enhancedMutations?: EnhancedMutationLoaderOptions;
+  events: readonly string[];
+  importModule: ImportHandlerModule;
+  islandSignalScope: IslandSignalScope;
+  onAppliedQueries?: (queries: readonly string[]) => void;
+  onError?: (error: unknown, context: RuntimeErrorContext) => void;
+  root: LoaderRoot;
+}
+
 export function addLoaderListener(
   target: LoaderLifecycleTarget,
   type: string,
@@ -50,6 +65,50 @@ export function addLoaderListener(
   disposers.push(() => {
     target.removeEventListener?.(type, listener, options);
   });
+}
+
+export function installDelegatedEventLifecycle(
+  options: DelegatedEventLifecycleOptions,
+): () => void {
+  const disposers: Array<() => void> = [];
+
+  for (const eventName of options.events) {
+    addLoaderListener(
+      options.root,
+      eventName,
+      async (event) => {
+        const enhancedSubmit = isEnhancedSubmitEvent(event, options.enhancedMutations);
+        try {
+          if (
+            await dispatchEnhancedFormSubmit(
+              event,
+              options.enhancedMutations,
+              options.islandSignalScope,
+              options.onAppliedQueries
+                ? {
+                    onAppliedQueries: options.onAppliedQueries,
+                  }
+                : {},
+            )
+          ) {
+            return;
+          }
+          await dispatchDelegatedEvent(event, options.importModule, options.islandSignalScope);
+        } catch (error) {
+          reportRuntimeContextError(options.onError, error, {
+            event,
+            phase: enhancedSubmit ? 'enhanced-mutation' : 'delegated-event',
+          });
+        }
+      },
+      disposers,
+      { capture: true },
+    );
+  }
+
+  return () => {
+    for (const dispose of disposers.splice(0).reverse()) dispose();
+  };
 }
 
 export function installExecutionTriggers(

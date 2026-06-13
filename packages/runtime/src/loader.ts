@@ -2,19 +2,14 @@ import { withDefaultMutationBroadcast } from './broadcast.js';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
-import {
-  abortIslandSignalScope,
-  createIslandSignalScope,
-  dispatchDelegatedEvent,
-} from './handlers.js';
+import { abortIslandSignalScope, createIslandSignalScope } from './handlers.js';
 import type { ImportHandlerModule } from './handlers.js';
-import { addLoaderListener, installExecutionTriggers } from './loader-lifecycle.js';
+import { installDelegatedEventLifecycle, installExecutionTriggers } from './loader-lifecycle.js';
 import type {
   LoaderLifecycleTarget,
   LoaderRoot,
   VisibleObserverFactory,
 } from './loader-lifecycle.js';
-import { dispatchEnhancedFormSubmit, isEnhancedSubmitEvent } from './mutation-submit.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
 import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
@@ -74,34 +69,21 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
 
-  for (const eventName of events) {
-    addLoaderListener(
-      options.root,
-      eventName,
-      async (event) => {
-        const enhancedSubmit = isEnhancedSubmitEvent(event, enhancedMutations);
-        try {
-          if (
-            await dispatchEnhancedFormSubmit(event, enhancedMutations, islandSignalScope, {
-              onAppliedQueries: (queries) => {
-                queryVisibleReturn.rememberAppliedQueries(queries);
-              },
-            })
-          ) {
-            return;
-          }
-          await dispatchDelegatedEvent(event, options.importModule, islandSignalScope);
-        } catch (error) {
-          reportRuntimeContextError(options.onError, error, {
-            event,
-            phase: enhancedSubmit ? 'enhanced-mutation' : 'delegated-event',
-          });
-        }
+  disposers.push(
+    installDelegatedEventLifecycle({
+      ...definedProps({
+        enhancedMutations,
+        onError: options.onError,
+      }),
+      events,
+      importModule: options.importModule,
+      islandSignalScope,
+      onAppliedQueries(queries) {
+        queryVisibleReturn.rememberAppliedQueries(queries);
       },
-      disposers,
-      { capture: true },
-    );
-  }
+      root: options.root,
+    }),
+  );
 
   disposers.push(() => {
     queryVisibleReturn.dispose();

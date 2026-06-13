@@ -42,6 +42,17 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       `compile.ts` no longer hand-chains each source patch/reparse step and the pipeline tests pin
       latest-model handoff between ordered passes.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
+      Additional evidence 2026-06-12: delegated loader event lifecycle now lives in
+      `packages/runtime/src/loader-lifecycle.ts`, covering capture listener setup,
+      enhanced-submit interception, delegated fallback dispatch, event-phase diagnostics,
+      and listener teardown while `loader.ts` stays composition-only for that path
+      (SPEC §4.4/§9.1). Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
+      `pnpm exec vp check packages/runtime/src/loader.ts
+packages/runtime/src/loader-lifecycle.ts
+packages/runtime/src/loader-lifecycle.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
