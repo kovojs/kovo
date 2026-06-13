@@ -55,6 +55,11 @@ const expectedBehaviorContracts = {
     dataState: 'checked, unchecked, indeterminate, disabled',
     keyboard: 'Space toggles the native checkbox',
   },
+  '/components/checkbox-group': {
+    changeReasons: 'item-click, keyboard, programmatic',
+    dataState: 'checked, unchecked, disabled',
+    keyboard: 'Arrow keys move focus over enabled checkbox items; Space toggles focused item',
+  },
   '/components/dialog': {
     changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle, programmatic',
     dataState: 'open, closed',
@@ -205,6 +210,19 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-checked="mixed"',
     'data-state="indeterminate"',
     'disabled',
+  ],
+  '/components/checkbox-group': [
+    'role="group"',
+    'aria-labelledby="gallery-checkbox-group-label"',
+    'aria-describedby="gallery-checkbox-group-description gallery-checkbox-group-error"',
+    'aria-invalid="true"',
+    'aria-required="true"',
+    'type="checkbox"',
+    'name="gallery-notifications"',
+    'aria-checked="true"',
+    'tabIndex="0"',
+    'data-disabled="" data-state="unchecked" disabled',
+    'tabIndex="-1" type="checkbox" value="security"',
   ],
   '/components/dialog': [
     'command="show-modal"',

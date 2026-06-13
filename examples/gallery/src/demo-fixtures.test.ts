@@ -17,6 +17,7 @@ const expectedRoutes = [
   '/components/button',
   '/components/card',
   '/components/checkbox',
+  '/components/checkbox-group',
   '/components/dialog',
   '/components/drawer',
   '/components/field',
@@ -131,6 +132,29 @@ describe('gallery demo fixtures', () => {
     expect(checkbox.html).toContain('data-state="indeterminate"');
     expect(checkbox.html).toContain('data-fixture-state="disabled"');
     expect(checkbox.html).toContain('disabled');
+  });
+
+  it('renders checkbox-group fixture with native checkbox inputs and roving attributes', () => {
+    const checkboxGroup = findFixture('/components/checkbox-group');
+
+    expect(checkboxGroup.html).toContain('data-gallery-demo="checkbox-group"');
+    expect(checkboxGroup.html).toContain('data-ui-demo="checkbox-group"');
+    expect(checkboxGroup.html).toContain('role="group"');
+    expect(checkboxGroup.html).toContain('aria-labelledby="gallery-checkbox-group-label"');
+    expect(checkboxGroup.html).toContain(
+      'aria-describedby="gallery-checkbox-group-description gallery-checkbox-group-error"',
+    );
+    expect(checkboxGroup.html).toContain('aria-invalid="true"');
+    expect(checkboxGroup.html).toContain('aria-required="true"');
+    expect(checkboxGroup.html).toContain('name="gallery-notifications"');
+    expect(checkboxGroup.html).toContain('type="checkbox"');
+    expect(checkboxGroup.html).toContain('id="gallery-checkbox-group-updates"');
+    expect(checkboxGroup.html).toContain('aria-checked="true"');
+    expect(checkboxGroup.html).toContain('tabIndex="0"');
+    expect(checkboxGroup.html).toContain('data-state="checked"');
+    expect(checkboxGroup.html).toContain('value="security"');
+    expect(checkboxGroup.html).toContain('disabled id="gallery-checkbox-group-security"');
+    expect(checkboxGroup.html).toContain('tabIndex="-1" type="checkbox" value="security"');
   });
 
   it('renders dialog fixture with native invoker and IDREF wiring', () => {
@@ -370,6 +394,7 @@ describe('gallery demo fixtures', () => {
     const badge = findFixture('/components/badge');
     const breadcrumb = findFixture('/components/breadcrumb');
     const card = findFixture('/components/card');
+    const checkboxGroup = findFixture('/components/checkbox-group');
     const drawer = findFixture('/components/drawer');
     const kbd = findFixture('/components/kbd');
     const sheet = findFixture('/components/sheet');
@@ -402,6 +427,11 @@ describe('gallery demo fixtures', () => {
     expect(card.html).toContain('data-ui-demo="card"');
     expect(card.html).toContain('rounded-lg border border-neutral-200');
     expect(card.html).toContain('<h2>Release candidate</h2>');
+
+    expect(checkboxGroup.html).toContain('data-ui-demo="checkbox-group"');
+    expect(checkboxGroup.html).toContain('data-[orientation=horizontal]:flex');
+    expect(checkboxGroup.html).toContain('accent-neutral-950');
+    expect(checkboxGroup.html).toContain('gallery-checkbox-group-updates');
 
     expect(drawer.html).toContain('data-ui-demo="drawer"');
     expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');

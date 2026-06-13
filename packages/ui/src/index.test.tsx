@@ -14,6 +14,10 @@ import {
   Button,
   Card,
   Checkbox,
+  CheckboxGroup,
+  CheckboxGroupControl,
+  CheckboxGroupItem,
+  CheckboxGroupLabel,
   Drawer,
   Kbd,
   RadioGroup,
@@ -39,6 +43,10 @@ import {
   ToggleGroupItem,
   breadcrumbClasses,
   buttonClasses,
+  checkboxGroupClasses,
+  checkboxGroupControlClasses,
+  checkboxGroupItemClasses,
+  checkboxGroupLabelClasses,
   checkboxClasses,
   radioGroupClasses,
   radioGroupItemClasses,
@@ -69,6 +77,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Badge.name).toBe('badge');
     expect(Card.name).toBe('card');
     expect(Checkbox.name).toBe('checkbox');
+    expect(CheckboxGroup.name).toBe('checkbox-group');
     expect(Kbd.name).toBe('kbd');
     expect(Alert.name).toBe('alert');
     expect(Skeleton.name).toBe('skeleton');
@@ -122,11 +131,76 @@ describe('@jiso/ui styled package foundation', () => {
     );
     expect(buttonClasses).toContain('h-9 gap-2 px-3');
     expect(checkboxClasses.join(' ')).toContain('inline-flex items-center gap-2');
+    expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
+  });
+
+  it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {
+    const items = [
+      { value: 'updates' },
+      { value: 'billing' },
+      { disabled: true, value: 'security' },
+    ];
+    const state = {
+      descriptionId: 'notifications-help',
+      items,
+      name: 'notifications',
+      required: true,
+      value: ['updates'] as const,
+    };
+
+    const root = CheckboxGroup.definition.render({
+      ...state,
+      children: 'checkbox options',
+      errorId: 'notifications-error',
+      id: 'notifications',
+      invalid: true,
+      labelledBy: 'notifications-label',
+    });
+    const item = CheckboxGroupItem.definition.render({
+      ...state,
+      children: 'updates input',
+      itemValue: 'updates',
+    });
+    const control = CheckboxGroupControl.definition.render({
+      ...state,
+      controlId: 'notifications-updates',
+      itemValue: 'updates',
+    });
+    const disabledControl = CheckboxGroupControl.definition.render({
+      ...state,
+      controlId: 'notifications-security',
+      itemValue: 'security',
+    });
+    const label = CheckboxGroupLabel.definition.render({
+      ...state,
+      children: 'Product updates',
+      controlId: 'notifications-updates',
+      itemValue: 'updates',
+    });
+
+    expect(CheckboxGroupItem.name).toBe('checkbox-group-item');
+    expect(CheckboxGroupControl.name).toBe('checkbox-group-control');
+    expect(CheckboxGroupLabel.name).toBe('checkbox-group-label');
+    expect(root).toContain('aria-describedby="notifications-help notifications-error"');
+    expect(root).toContain('aria-invalid="true"');
+    expect(root).toContain('aria-required="true"');
+    expect(root).toContain('role="group"');
+    expect(item).toContain('data-state="checked"');
+    expect(control).toContain('aria-checked="true" checked');
+    expect(control).toContain('id="notifications-updates" name="notifications" required');
+    expect(control).toContain('tabIndex="0" type="checkbox" value="updates"');
+    expect(disabledControl).toContain('data-disabled="" data-state="unchecked" disabled');
+    expect(disabledControl).toContain('id="notifications-security"');
+    expect(disabledControl).toContain('tabIndex="-1" type="checkbox" value="security"');
+    expect(label).toContain('for="notifications-updates"');
+    expect(checkboxGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
+    expect(checkboxGroupControlClasses.join(' ')).toContain('accent-neutral-950');
+    expect(checkboxGroupLabelClasses.join(' ')).toContain('select-none');
   });
 
   it('wraps the headless radio-group primitive as styled native radios', () => {
@@ -436,6 +510,7 @@ describe('@jiso/ui styled package foundation', () => {
       'button.tsx',
       'card.tsx',
       'checkbox.tsx',
+      'checkbox-group.tsx',
       'kbd.tsx',
       'sheet.tsx',
       'skeleton.tsx',

@@ -60,6 +60,10 @@ import {
   Button,
   Card,
   Checkbox,
+  CheckboxGroup,
+  CheckboxGroupControl,
+  CheckboxGroupItem,
+  CheckboxGroupLabel,
   Drawer,
   Kbd,
   RadioGroup,
@@ -95,6 +99,7 @@ export type GalleryComponent =
   | 'button'
   | 'card'
   | 'checkbox'
+  | 'checkbox-group'
   | 'dialog'
   | 'drawer'
   | 'field'
@@ -186,6 +191,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/checkbox',
     render: () => CheckboxDemo(),
     title: 'Checkbox',
+  },
+  {
+    component: 'checkbox-group',
+    path: '/components/checkbox-group',
+    render: () => CheckboxGroupDemo(),
+    title: 'Checkbox Group',
   },
   {
     component: 'dialog',
@@ -639,6 +650,65 @@ export function CheckboxDemo(): string {
         changeReasons: 'trigger-click, programmatic',
         dataState: 'checked, unchecked, indeterminate, disabled',
         keyboard: 'Space toggles the native checkbox',
+      })}
+    </section>
+  );
+}
+
+export function CheckboxGroupDemo(): string {
+  const items = [{ value: 'updates' }, { value: 'billing' }, { disabled: true, value: 'security' }];
+  const state = {
+    descriptionId: 'gallery-checkbox-group-description',
+    items,
+    name: 'gallery-notifications',
+    required: true,
+    value: ['updates'] as const,
+  };
+
+  return (
+    <section data-gallery-demo="checkbox-group">
+      <p data-demo-summary="no-js">
+        Checkbox group keeps each choice as a native checkbox while grouping labels, validation, and
+        roving tabindex.
+      </p>
+      <h2 id="gallery-checkbox-group-label">Notifications</h2>
+      <p id="gallery-checkbox-group-description">Choose which account notifications to receive.</p>
+      <p id="gallery-checkbox-group-error">Select at least one notification type.</p>
+      <div data-ui-demo="checkbox-group">
+        {CheckboxGroup.definition.render({
+          ...state,
+          children: items
+            .map((item) =>
+              CheckboxGroupItem.definition.render({
+                ...state,
+                children: (
+                  <>
+                    {CheckboxGroupControl.definition.render({
+                      ...state,
+                      controlId: `gallery-checkbox-group-${item.value}`,
+                      itemValue: item.value,
+                    })}
+                    {CheckboxGroupLabel.definition.render({
+                      ...state,
+                      children: item.value,
+                      controlId: `gallery-checkbox-group-${item.value}`,
+                      itemValue: item.value,
+                    })}
+                  </>
+                ),
+                itemValue: item.value,
+              }),
+            )
+            .join(''),
+          errorId: 'gallery-checkbox-group-error',
+          invalid: true,
+          labelledBy: 'gallery-checkbox-group-label',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'item-click, keyboard, programmatic',
+        dataState: 'checked, unchecked, disabled',
+        keyboard: 'Arrow keys move focus over enabled checkbox items; Space toggles focused item',
       })}
     </section>
   );

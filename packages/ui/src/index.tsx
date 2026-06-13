@@ -31,6 +31,27 @@ export type { AlertProps, AlertVariant } from './alert.js';
 export { Kbd, kbdClassNames, kbdClasses } from './kbd.js';
 export type { KbdProps } from './kbd.js';
 export {
+  CheckboxGroup,
+  CheckboxGroupControl,
+  CheckboxGroupItem,
+  CheckboxGroupLabel,
+  checkboxGroupClassNames,
+  checkboxGroupClasses,
+  checkboxGroupControlClassNames,
+  checkboxGroupControlClasses,
+  checkboxGroupItemClassNames,
+  checkboxGroupItemClasses,
+  checkboxGroupLabelClassNames,
+  checkboxGroupLabelClasses,
+} from './checkbox-group.js';
+export type {
+  CheckboxGroupControlProps,
+  CheckboxGroupItemProps,
+  CheckboxGroupLabelProps,
+  CheckboxGroupProps,
+  CheckboxGroupStateProps,
+} from './checkbox-group.js';
+export {
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,

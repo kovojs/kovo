@@ -42,8 +42,9 @@ conformance. Keep this ledger compact: status, open work, and current gates only
 Implemented areas:
 
 - Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
-- `@jiso/ui` ships vendorable styled source for pure-markup components plus checkbox, switch,
-  tabs, toggle, radio-group, and toggle-group wrappers over the headless primitive attrs.
+- `@jiso/ui` ships vendorable styled source for pure-markup components plus checkbox,
+  checkbox-group, switch, tabs, toggle, radio-group, and toggle-group wrappers over the headless
+  primitive attrs.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
@@ -62,6 +63,9 @@ Recent gates:
 - `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
 - `pnpm exec vp check packages/ui/src/toggle-group.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
 - `pnpm exec vp check packages/ui/src/radio-group.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
 - `git diff --check`
 
 ## Open Work
@@ -73,6 +77,9 @@ H2:
 - Toggle-group now has a styled vendorable wrapper, gallery route, behavior-contract snippets,
   catalog sync, and merge coverage via existing roving-groups fixture; broader H2 remains open for
   other H2 families.
+- Checkbox-group now has a styled vendorable wrapper, static gallery route, behavior-contract
+  snippets, and catalog sync; broader H2 remains open for toolbar, number-field, otp-field,
+  scroll-area, and field/fieldset styled closure.
 - Keep field/fieldset tied to `form()` integration rather than a standalone styled-only surface.
 
 H3:

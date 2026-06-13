@@ -10,6 +10,7 @@
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
     "./checkbox": "./src/checkbox.tsx",
+    "./checkbox-group": "./src/checkbox-group.tsx",
     "./drawer": "./src/drawer.tsx",
     "./kbd": "./src/kbd.tsx",
     "./radio-group": "./src/radio-group.tsx",
