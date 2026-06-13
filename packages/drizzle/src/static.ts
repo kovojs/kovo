@@ -870,8 +870,11 @@ function extractProjectUnresolvedCalls(
       (argument) => isProjectDrizzleReceiverIdentifier(argument, receivers),
       (argument) => projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
     ),
-    ...extractReceiverMethodAliasCallsFromBody(body, (node) =>
-      isProjectDrizzleReceiverIdentifier(node, receivers),
+    ...extractReceiverMethodAliasCallsFromBody(
+      body,
+      receiverOrCarrierMemberPredicateForBody(body, (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      ),
     ),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
   ];
@@ -1890,7 +1893,11 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
-      ...receiverMethodAliasQueryDiagnostics(bodyArgument, receiverReferences),
+      ...receiverMethodAliasQueryDiagnostics(
+        bodyArgument,
+        receiverReferences,
+        options.receiverMode ?? 'source',
+      ),
       ...externalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverReferences, readResolutionOptions),
@@ -2286,11 +2293,17 @@ function opaqueLocalQueryHelperDiagnostics(
 function receiverMethodAliasQueryDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source',
 ): TouchGraphDiagnostic[] {
+  const isReceiverIdentifier =
+    mode === 'project'
+      ? receiverOrCarrierMemberPredicateForBody(body, (node) =>
+          isQueryReceiverIdentifier(node, receiverReferences),
+        )
+      : (node: Node) => isQueryReceiverIdentifier(node, receiverReferences);
+
   return queryCallbackBodies(body).flatMap((callbackBody) =>
-    extractReceiverMethodAliasCallsFromBody(callbackBody, (node) =>
-      isQueryReceiverIdentifier(node, receiverReferences),
-    ).map((call) => ({
+    extractReceiverMethodAliasCallsFromBody(callbackBody, isReceiverIdentifier).map((call) => ({
       code: 'FW406' as const,
       message: `${diagnosticDefinitions.FW406.message} Query uses detached Drizzle receiver method ${call.name}().`,
       severity: diagnosticDefinitions.FW406.severity,
@@ -4697,6 +4710,19 @@ function sourceReceiverReferenceSize(
     symbolKeys.size +
     [...carrierProperties.values()].reduce((sum, properties) => sum + properties.size, 0)
   );
+}
+
+function receiverOrCarrierMemberPredicateForBody(
+  body: Node,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): (node: Node) => boolean {
+  // SPEC §11.1: receiver carriers prove only properties initialized from a proven Drizzle
+  // receiver; sibling lookalike properties stay invisible.
+  const references = sourceReceiverAliasReferencesForBody(body, isBaseReceiverIdentifier);
+  return (node: Node) =>
+    isBaseReceiverIdentifier(node) ||
+    isSourceReceiverAliasIdentifier(node, references) ||
+    isSourceReceiverCarrierMemberExpression(node, references);
 }
 
 function isSourceReceiverAliasExpression(

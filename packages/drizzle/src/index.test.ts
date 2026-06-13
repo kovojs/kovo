@@ -2343,10 +2343,15 @@ export interface CommerceInvalidationSets {
             export const productQuery = query("product/detached-methods", {
               async load(_input, db: PgDatabase, fake: FakeDb) {
                 const { execute, update: write, query: relations } = db;
+                const carrier = { db, fake };
+                const carrierExecute = carrier.db.execute;
+                const carrierFakeExecute = carrier.fake.execute;
                 const fakeExecute = fake.execute;
                 const countProducts = db["$count"];
                 await execute("select 1");
                 await write(products).set({ id: "p1" });
+                await carrierExecute("select 1");
+                await carrierFakeExecute("select 1");
                 await fakeExecute("select 1");
                 await countProducts(products);
                 return relations.products.findMany();
@@ -2371,6 +2376,13 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method update().',
+            severity: 'warn',
+            site: 'product.queries.ts:12',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
             severity: 'warn',
             site: 'product.queries.ts:12',
           },
@@ -5293,10 +5305,18 @@ export interface CommerceInvalidationSets {
             '  fakeExecute = fake.execute;',
             '  let destructuredExecute;',
             '  ({ execute: destructuredExecute } = db);',
+            '  const carrier = { db, fake };',
+            '  const carrierExecute = carrier.db.execute;',
+            '  let carrierComputed;',
+            '  carrierComputed = carrier.db[method];',
+            '  const carrierFakeExecute = carrier.fake.execute;',
             '  await execute("select 1");',
             '  await write(users).set({});',
             '  await computed("select 1");',
             '  await destructuredExecute("select 1");',
+            '  await carrierExecute("select 1");',
+            '  await carrierComputed("select 1");',
+            '  await carrierFakeExecute("select 1");',
             '  await fakeExecute("select 1");',
             '}',
           ].join('\n'),
@@ -5312,22 +5332,32 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:21',
+            site: 'cart.domain.ts:26',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:22',
+            site: 'cart.domain.ts:27',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:23',
+            site: 'cart.domain.ts:28',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:24',
+            site: 'cart.domain.ts:29',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:30',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:31',
           },
         ],
       },

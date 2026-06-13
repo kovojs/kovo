@@ -2737,11 +2737,19 @@ describe('Drizzle pinned subset conformance', () => {
                 assignedComputed = db[method];
                 let objectExecute;
                 ({ execute: objectExecute } = db);
+                const carrier = { db, fake };
+                const carrierExecute = carrier.db.execute;
+                let carrierComputed;
+                carrierComputed = carrier.db[method];
+                const carrierFakeExecute = carrier.fake.execute;
                 execute(sql\`select * from users\`);
                 computed(sql\`select * from users\`);
                 assignedExecute(sql\`select * from users\`);
                 assignedComputed(sql\`select * from users\`);
                 objectExecute(sql\`select * from users\`);
+                carrierExecute(sql\`select * from users\`);
+                carrierComputed(sql\`select * from users\`);
+                carrierFakeExecute(sql\`select * from users\`);
                 fakeExecute(sql\`select * from users\`);
                 return [];
               },
@@ -2786,6 +2794,20 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:9',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:9',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
@@ -3327,10 +3349,18 @@ describe('Drizzle pinned subset conformance', () => {
             '  fakeExecute = fake.execute;',
             '  let objectExecute;',
             '  ({ execute: objectExecute } = db);',
+            '  const carrier = { db, fake };',
+            '  const carrierExecute = carrier.db.execute;',
+            '  let carrierComputed;',
+            '  carrierComputed = carrier.db[method];',
+            '  const carrierFakeExecute = carrier.fake.execute;',
             "  await execute('select 1');",
             '  await write(users).set({});',
             "  await computed('select 1');",
             "  await objectExecute('select 1');",
+            "  await carrierExecute('select 1');",
+            "  await carrierComputed('select 1');",
+            "  await carrierFakeExecute('select 1');",
             "  await fakeExecute('select 1');",
             '}',
           ].join('\n'),
@@ -3346,22 +3376,32 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/users.domain.ts:24',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:29',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/users.domain.ts:25',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:30',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/users.domain.ts:26',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:31',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/users.domain.ts:27',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:32',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:33',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:34',
           },
         ],
       },
