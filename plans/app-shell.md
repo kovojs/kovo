@@ -182,6 +182,20 @@ Round293 Vite manifest hint static-host boundary evidence:
 - `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round294 static export replay origin boundary evidence:
+
+- `packages/server/src/static-export-replay-context.ts` now validates public static-export
+  `origin` options before SPEC §9.5 synthetic replay, accepting only absolute `http(s)` origins
+  without path, search, or hash and normalizing trailing slashes to the URL origin.
+- `packages/server/src/static-export-request.test.ts` proves replay-context origin normalization
+  and FW229 rejection for relative, non-HTTP, pathful, searched, and hashed origins.
+  `packages/server/src/static-export.test.ts` proves `exportStaticApp()` rejects an invalid
+  origin before route replay or output writes.
+- `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-replay-context.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

@@ -175,6 +175,14 @@ checks, so the monolith asserts public diagnostic facts without rebuilding those
 
 Latest evidence:
 
+- Phase 5 static export replay origin boundary slice:
+  `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/static-export-replay-context.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/static-export-replay-context.ts` now
+  validates public SPEC §9.5 static-export `origin` options before synthetic replay, accepting
+  only absolute `http(s)` origins without path, search, or hash and proving `exportStaticApp()`
+  rejects invalid origins before route replay or output writes.
 - Phase 5 Vite manifest hint static-host boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

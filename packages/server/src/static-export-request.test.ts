@@ -71,4 +71,31 @@ describe('server static export synthetic request boundary', () => {
     expect(context.origin).toBe('https://jiso.local');
     expect(url.href).toBe('https://jiso.local/context');
   });
+
+  it('normalizes replay origins to an absolute http(s) origin boundary', () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          page: () => '<main>Home</main>',
+        }),
+      ],
+    });
+
+    expect(
+      createStaticExportReplayContext({ app, origin: 'https://docs.example.test/' }).origin,
+    ).toBe('https://docs.example.test');
+
+    for (const origin of [
+      'docs.example.test',
+      '/relative',
+      'file:///tmp/jiso-export',
+      'https://docs.example.test/base',
+      'https://docs.example.test?preview=1',
+      'https://docs.example.test#preview',
+    ]) {
+      expect(() => createStaticExportReplayContext({ app, origin })).toThrow(
+        /SPEC §9\.5 synthetic replay origin/,
+      );
+    }
+  });
 });

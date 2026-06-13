@@ -160,6 +160,43 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects invalid static export origins before replay or writes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    let rendered = false;
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => {
+              rendered = true;
+              return '<main>Home</main>';
+            },
+          }),
+        ],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          origin: 'https://docs.example.test/base',
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining('SPEC §9.5 synthetic replay origin'),
+            routePath: 'origin',
+          },
+        ],
+      });
+      expect(rendered).toBe(false);
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('rejects duplicate concrete route targets before static replay', async () => {
     let replayed = false;
     const app = createApp({

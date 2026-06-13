@@ -1,5 +1,6 @@
 import { createRequestHandler } from './app.js';
 import type { JisoApp, RequestHandler } from './app-types.js';
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 export interface StaticExportReplayContext {
   handler: RequestHandler;
@@ -17,6 +18,37 @@ export function createStaticExportReplayContext({
 }: StaticExportReplayContextOptions): StaticExportReplayContext {
   return {
     handler: createRequestHandler(app),
-    origin: origin ?? 'https://jiso.local',
+    origin: staticExportReplayOrigin(origin),
   };
+}
+
+function staticExportReplayOrigin(origin: string | undefined): string {
+  if (origin === undefined) return 'https://jiso.local';
+
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    throw invalidStaticExportOrigin(origin);
+  }
+
+  if (
+    (url.protocol === 'https:' || url.protocol === 'http:') &&
+    url.pathname === '/' &&
+    url.search === '' &&
+    url.hash === ''
+  ) {
+    return url.origin;
+  }
+
+  throw invalidStaticExportOrigin(origin);
+}
+
+function invalidStaticExportOrigin(origin: string): StaticExportError {
+  return new StaticExportError([
+    staticExportDiagnostic(
+      'origin',
+      `FW229 static export refused origin '${origin}'. SPEC §9.5 synthetic replay origin must be an absolute http(s) origin without a path, search, or hash.`,
+    ),
+  ]);
 }
