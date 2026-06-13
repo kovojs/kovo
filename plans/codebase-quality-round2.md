@@ -115,6 +115,9 @@ Closed evidence so far:
   parser-owned string-render facts.
 - Server-render replacements now flow through the shared pipeline patch seam instead of directly
   applying source replacements in `compile.ts`.
+- Terminal server-render patching now uses an emit-only pipeline patch helper, so `compile.ts`
+  no longer reparses the server-rendered source after the final source patch when no later model
+  analysis consumes it.
 - Package-prefix discovery now consumes module specifier facts from the primary
   `ComponentModuleModel`; `package-prefixes.ts` no longer reparses TSX source.
 - Client handler rewrites and server param-type emission now share one element-param attribute
@@ -138,6 +141,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/emit/client.ts packages/compiler/src/types.ts`
 - `pnpm run check`
+- `git diff --check`
+- `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/handler-lowering.test.ts`
+- `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/compile.ts packages/compiler/src/model-pipeline.test.ts`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

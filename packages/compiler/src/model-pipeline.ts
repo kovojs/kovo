@@ -15,6 +15,11 @@ export interface ComponentPipelinePatchResult<Model> {
   state: ComponentPipelineState<Model>;
 }
 
+export interface ComponentPipelineSourcePatchResult {
+  source: string;
+  sourceOffsetMap: SourceOffsetMap;
+}
+
 export interface ComponentPipelinePatchOptions {
   prefix?: string;
 }
@@ -47,4 +52,12 @@ export function lowerComponentPipelinePatches<Model>(
       source: patch.source,
     },
   };
+}
+
+export function applyComponentPipelinePatches(
+  previous: Pick<ComponentPipelineState<unknown>, 'source'>,
+  replacements: readonly SourceReplacement[],
+  options: ComponentPipelinePatchOptions = {},
+): ComponentPipelineSourcePatchResult {
+  return applySourceReplacementsWithOffsetMap(previous.source, replacements, options.prefix ?? '');
 }

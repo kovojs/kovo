@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { componentPipelineState, lowerComponentPipelinePatches } from './model-pipeline.js';
+import {
+  applyComponentPipelinePatches,
+  componentPipelineState,
+  lowerComponentPipelinePatches,
+} from './model-pipeline.js';
 
 describe('compiler model pipeline', () => {
   it('carries an empty patch pass through the same parsed model', () => {
@@ -147,5 +151,28 @@ describe('compiler model pipeline', () => {
       originalStart: 0,
     });
     expect(parses).toEqual([`cart-badge.tsx:${lowered.state.source}`]);
+  });
+
+  it('applies terminal source patches without reparsing a model', () => {
+    const state = componentPipelineState(
+      'cart-badge.tsx',
+      'export const CartBadge = component({ render: () => <button onClick={save}>Save</button> });',
+      { spans: ['button'] },
+    );
+    const start = state.source.indexOf('onClick={save}');
+
+    const lowered = applyComponentPipelinePatches(state, [
+      {
+        end: start + 'onClick={save}'.length,
+        replacement: 'on:click="/c/cart-badge.client.js#CartBadge$button_click"',
+        start,
+      },
+    ]);
+
+    expect(lowered.source).toBe(
+      'export const CartBadge = component({ render: () => <button on:click="/c/cart-badge.client.js#CartBadge$button_click">Save</button> });',
+    );
+    expect(lowered.sourceOffsetMap.originalLength).toBe(state.source.length);
+    expect(lowered.sourceOffsetMap.generatedLength).toBe(lowered.source.length);
   });
 });

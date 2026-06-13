@@ -18,7 +18,11 @@ import {
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
-import { componentPipelineState, lowerComponentPipelinePatches } from './model-pipeline.js';
+import {
+  applyComponentPipelinePatches,
+  componentPipelineState,
+  lowerComponentPipelinePatches,
+} from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
@@ -124,12 +128,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverRender = serverRenderLowering(versionedHandlers, model);
-  const serverRenderPatch = lowerComponentPipelinePatches(
+  const serverRenderPatch = applyComponentPipelinePatches(
     derivePatch.state,
     serverRender.replacements,
-    parseComponentModuleModel,
   );
-  const serverRenderedSource = serverRenderPatch.state.source;
+  const serverRenderedSource = serverRenderPatch.source;
   const serverSource = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
     clientFileName: fileNames.client,
