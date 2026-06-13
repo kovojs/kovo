@@ -117,6 +117,7 @@ export interface HandlerArrowBodyReference {
 
 export interface ElementParam {
   attributeName: string;
+  expression: string;
   type: ElementParamType;
   value: string;
 }

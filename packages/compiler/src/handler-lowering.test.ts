@@ -2,6 +2,8 @@ import { diagnosticDefinitions } from '@jiso/core';
 import { describe, expect, it } from 'vitest';
 
 import { collectMinifierReservedNames, compileComponentModule } from './index.js';
+import { lowerEventHandlers } from './lower/handlers.js';
+import { parseComponentModule } from './scan/parse.js';
 
 const fw210 = diagnosticDefinitions.FW210;
 
@@ -16,6 +18,30 @@ function escapeRegExp(value: string): string {
 }
 
 describe('handler lowering', () => {
+  it('keeps element param source expressions as parsed lowering facts', () => {
+    const source = `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => <button onClick={() => state.count += item.quantity}>Add one</button>,
+});
+`;
+    const [handler] = lowerEventHandlers(
+      { fileName: 'components/cart/cart-actions.tsx', source },
+      'CartActions',
+      parseComponentModule('components/cart/cart-actions.tsx', source),
+    );
+
+    expect(handler?.params).toEqual([
+      {
+        attributeName: 'data-p-quantity',
+        expression: 'item.quantity',
+        type: 'number',
+        value: '{item.quantity}',
+      },
+    ]);
+  });
+
   it('collects emitted handler export names for minifier preservation', () => {
     const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',

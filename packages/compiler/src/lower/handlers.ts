@@ -264,6 +264,7 @@ function extractElementParams(
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: elementParamAttributeNameFromExpression(arg),
+    expression: arg,
     type: inferElementParamType(arg, zeroArgArrow, parsedPropertyAccesses),
     value: `{${arg}}`,
   }));

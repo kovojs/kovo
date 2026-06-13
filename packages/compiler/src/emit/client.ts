@@ -74,7 +74,7 @@ function handlerArrowBodyLowering(
   const paramReplacements = params
     .map((param) => ({
       param,
-      sourceExpression: param.value.slice(1, -1),
+      sourceExpression: param.expression,
     }))
     .filter((entry) => entry.sourceExpression.length > 0)
     .sort((left, right) => right.sourceExpression.length - left.sourceExpression.length);
