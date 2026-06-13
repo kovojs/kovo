@@ -18,6 +18,7 @@ registerHooks({
 const { deriveAppGraph } = await import('@jiso/compiler/graph');
 const { deriveInvalidationRegistry, serializeInvalidationRegistry } =
   await import('@jiso/drizzle/static');
+const ts = await import('typescript');
 const { createCommerceGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -27,12 +28,6 @@ const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
 const source = readFileSync(sourcePath, 'utf8');
 const starterCart = { count: 0 };
-
-const lineNumberFor = (needle) => {
-  const index = source.indexOf(needle);
-  assert.notEqual(index, -1, `commerce source contains ${needle}`);
-  return source.slice(0, index).split('\n').length;
-};
 
 const formatJson = (value, indent = 0) => {
   if (Array.isArray(value)) {
@@ -54,26 +49,76 @@ const formatJson = (value, indent = 0) => {
   return JSON.stringify(value);
 };
 
+const writeReceiverName = (expression) => {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'request' &&
+    expression.name.text === 'db'
+  ) {
+    return 'request.db';
+  }
+  return undefined;
+};
+
+const collectCommerceWriteSites = (fileName, fileSource) => {
+  const sourceFile = ts.createSourceFile(fileName, fileSource, ts.ScriptTarget.Latest, true);
+  const sites = new Map();
+
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'write'
+    ) {
+      const receiver = writeReceiverName(node.expression.expression);
+      const tableArg = node.arguments[0];
+      if (receiver && tableArg && ts.isStringLiteralLike(tableArg)) {
+        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+        const key = `${receiver}:${tableArg.text}`;
+        const existing = sites.get(key) ?? [];
+        sites.set(key, [...existing, `${fileName}:${line + 1}`]);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return sites;
+};
+
+const commerceWriteSites = collectCommerceWriteSites('examples/commerce/src/app.ts', source);
+
+const siteFor = (receiver, table) => {
+  const key = `${receiver}:${table}`;
+  const sites = commerceWriteSites.get(key) ?? [];
+  assert.equal(sites.length, 1, `commerce source has one structured write site for ${key}`);
+  const [site] = sites;
+  return site;
+};
+
 const commerceTouchGraph = {
   'cart.addItem': {
     touches: [
       {
         domain: 'cart',
         keys: null,
-        site: `examples/commerce/src/app.ts:${lineNumberFor("request.db.write('cart_items'")}`,
+        site: siteFor('request.db', 'cart_items'),
         via: 'cart_items',
       },
       {
         domain: 'order',
         keys: null,
-        site: `examples/commerce/src/app.ts:${lineNumberFor("request.db.write('orders'")}`,
+        site: siteFor('request.db', 'orders'),
         via: 'orders',
       },
       {
         domain: 'product',
         keys: 'arg:productId',
         predicate: 'eq',
-        site: `examples/commerce/src/app.ts:${lineNumberFor("request.db.write('products'")}`,
+        site: siteFor('request.db', 'products'),
         via: 'products',
       },
     ],
@@ -86,7 +131,7 @@ const commerceTouchGraph = {
         domain: 'order',
         keys: 'arg:data.object.id',
         predicate: 'eq',
-        site: `examples/commerce/src/app.ts:${lineNumberFor("tx.write('orders'")}`,
+        site: siteFor('tx', 'orders'),
         via: 'orders',
       },
     ],
@@ -99,7 +144,7 @@ const commerceTouchGraph = {
         domain: 'attachment',
         keys: 'arg:orderId',
         predicate: 'eq',
-        site: `examples/commerce/src/app.ts:${lineNumberFor("request.db.write('attachments'")}`,
+        site: siteFor('request.db', 'attachments'),
         via: 'attachments',
       },
     ],

@@ -63,6 +63,9 @@ Closed evidence so far:
   removed.
 - Vite task checks now evaluate real config objects through a loader instead of parsing config
   source, and verified commands execute through `execFile` argv calls rather than shell strings.
+- Commerce source-truth graph tests no longer inspect `emit-graph.mjs` or `app.ts` text for
+  membership; `examples/commerce/src/source-truth.test.ts` verifies generated graph behavior,
+  inferred touch facts, and structured line-numbered sites.
 
 Open:
 
@@ -75,6 +78,8 @@ Open:
 Recent gates:
 
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
+- `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -245,6 +250,9 @@ Closed evidence so far:
 - Commerce source-truth and generated graph checks are increasingly behavior/artifact based.
 - Verifier SQL observation now extracts supported statement text from strings and structured
   statement objects while preserving the original adapter argument.
+- `examples/commerce/scripts/emit-graph.mjs` derives commerce memory-DB write sites from
+  TypeScript call-expression structure instead of raw source substring membership, preserving
+  committed generated touch-graph artifacts from SPEC.md §11.1.
 
 Open:
 
@@ -257,6 +265,7 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
+- `node examples/commerce/scripts/emit-graph.mjs --check`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
