@@ -8,12 +8,14 @@ import {
 import { replayStaticExportApp } from './static-export-replay.js';
 import {
   assertStaticExportCompileDiagnostics,
+  type StaticExportCompileDiagnostic,
+  type StaticExportDiagnostic,
+} from './static-export-diagnostics.js';
+import {
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,
   type StaticExportClientModuleArtifact,
-  type StaticExportCompileDiagnostic,
-  type StaticExportDiagnostic,
   type StaticExportHtmlPathStyle,
 } from './static-export-types.js';
 
@@ -23,21 +25,24 @@ export {
   formatStaticExportDiagnostics,
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
-  staticExportInventory,
-  staticExportManifest,
-  type StaticExportArtifact,
-  type StaticExportAssetArtifact,
-  type StaticExportAssetInput,
-  type StaticExportClientModuleArtifact,
-  type StaticExportCompileDiagnostic,
-  type StaticExportDiagnostic,
-  type StaticExportDiagnosticSeverity,
-  type StaticExportHtmlPathStyle,
-  type StaticExportInventoryItem,
-  type StaticExportManifest,
-  type StaticExportManifestAsset,
-  type StaticExportManifestClientModule,
-  type StaticExportManifestRouteDocument,
+} from './static-export-diagnostics.js';
+export { staticExportInventory, staticExportManifest } from './static-export-types.js';
+export type {
+  StaticExportCompileDiagnostic,
+  StaticExportDiagnostic,
+  StaticExportDiagnosticSeverity,
+} from './static-export-diagnostics.js';
+export type {
+  StaticExportArtifact,
+  StaticExportAssetArtifact,
+  StaticExportAssetInput,
+  StaticExportClientModuleArtifact,
+  StaticExportHtmlPathStyle,
+  StaticExportInventoryItem,
+  StaticExportManifest,
+  StaticExportManifestAsset,
+  StaticExportManifestClientModule,
+  StaticExportManifestRouteDocument,
 } from './static-export-types.js';
 export { staticExportOutputPlan } from './static-export-output.js';
 export type {

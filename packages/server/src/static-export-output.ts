@@ -21,8 +21,10 @@ import {
 } from './static-export-output-targets.js';
 import {
   StaticExportError,
-  sortedHeaders,
   staticExportDiagnostic,
+} from './static-export-diagnostics.js';
+import {
+  sortedHeaders,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,

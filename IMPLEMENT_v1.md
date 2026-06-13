@@ -385,17 +385,20 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec vitest --run packages/server/src`,
       `pnpm exec tsc --noEmit --pretty false`, `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/export-static.mjs IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
-      Additional evidence 2026-06-13: static export compile-diagnostic blocking now lives in
-      `packages/server/src/static-export-types.ts` beside the public diagnostic formatting/type
-      guards, deleting the standalone diagnostics compatibility module and leaving
-      `static-export.ts` to orchestrate SPEC §9.5 replay/output while the boundary rejects error
-      diagnostics before route replay or output writes and lets non-blocking diagnostics
-      continue. Same-session evidence:
-      `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`,
-      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "formats generated export task diagnostics|scaffolds real template files|runs .* with the built stylesheet href"`,
-      `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
-      `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-types.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
-      and `git diff --check`.
+      Additional evidence 2026-06-13: static export compile-diagnostic blocking, FW229
+      formatting/type guards, and `StaticExportError` now live in
+      `packages/server/src/static-export-diagnostics.ts`, leaving
+      `packages/server/src/static-export-types.ts` to own only artifact, inventory, manifest, and
+      path-style data shapes. `static-export.ts` still exposes the same public
+      `@jiso/server/app-shell/static-export` API while the boundary rejects error diagnostics
+      before route replay or output writes and lets non-blocking diagnostics continue. Same-session
+      evidence: `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts
+packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`,
+      `pnpm exec tsc --noEmit --pretty false`, `pnpm exec vp check
+packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-types.ts
+packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.test.ts
+packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md
+plans/app-shell.md plans/codebase-quality-round2.md`, and `git diff --check`.
       Additional evidence 2026-06-13: static export document replay was split again so
       `packages/server/src/static-export-document.ts` owns only SPEC §9.5 route-document replay,
       output path selection, and L0/L1 endpoint rejection; `static-export-document-refs.ts` owns

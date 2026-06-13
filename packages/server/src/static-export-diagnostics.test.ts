@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
+import { blockingStaticExportDiagnostics } from './static-export-diagnostics.js';
 import { exportStaticApp } from './static-export.js';
-import { blockingStaticExportDiagnostics } from './static-export-types.js';
 
 describe('server static export diagnostic boundary', () => {
   it('coerces only blocking compiler diagnostics into FW229-compatible export diagnostics', () => {

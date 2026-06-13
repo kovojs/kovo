@@ -7,9 +7,11 @@ import { staticExportRoutePlan } from './static-export-route-plan.js';
 import {
   StaticExportError,
   staticExportDiagnostic,
+  type StaticExportDiagnostic,
+} from './static-export-diagnostics.js';
+import {
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
-  type StaticExportDiagnostic,
   type StaticExportHtmlPathStyle,
 } from './static-export-types.js';
 

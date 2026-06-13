@@ -1,6 +1,9 @@
 import type { JisoApp } from './app.js';
 import { matchRoute, normalizePathname } from './match.js';
-import { staticExportDiagnostic, type StaticExportDiagnostic } from './static-export-types.js';
+import {
+  staticExportDiagnostic,
+  type StaticExportDiagnostic,
+} from './static-export-diagnostics.js';
 
 export interface StaticExportRouteTarget {
   path: string;

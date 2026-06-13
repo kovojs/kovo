@@ -622,3 +622,17 @@ Round163 app-shell static export output target evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round171 app-shell static export diagnostic seam evidence:
+
+- `packages/server/src/static-export-diagnostics.ts` now owns SPEC §11.3 compile-diagnostic
+  blocking, FW229 diagnostic construction/formatting/type guards, and `StaticExportError` for
+  SPEC §9.5 static export; `static-export-types.ts` now only owns artifact, inventory, manifest,
+  header, and path-style data shapes.
+- `packages/server/src/static-export.ts` preserves the public static-export API while importing
+  the diagnostic seam before replay/output orchestration, and route-plan/replay/document/output
+  owners now construct diagnostics through that seam.
+- `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

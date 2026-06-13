@@ -9,6 +9,8 @@ import { readStaticExportReplayedResponse } from './static-export-response.js';
 import {
   StaticExportError,
   staticExportDiagnostic,
+} from './static-export-diagnostics.js';
+import {
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
   type StaticExportHtmlPathStyle,

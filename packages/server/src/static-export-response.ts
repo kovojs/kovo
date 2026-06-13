@@ -1,6 +1,8 @@
 import {
   StaticExportError,
   staticExportDiagnostic,
+} from './static-export-diagnostics.js';
+import {
   sortedHeaders,
   type StaticExportResponseSnapshot,
 } from './static-export-types.js';
