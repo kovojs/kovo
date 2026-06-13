@@ -133,6 +133,8 @@ describe('gallery demo fixtures', () => {
       ['/components/table', 'table.html.txt'],
       ['/components/toast', 'toast.html.txt'],
       ['/components/toggle', 'toggle.html.txt'],
+      ['/components/toggle-group', 'toggle-group.html.txt'],
+      ['/components/toolbar', 'toolbar.html.txt'],
       ['/components/tooltip', 'tooltip.html.txt'],
     ] as const) {
       const route = galleryRoutes.find((candidate) => candidate.path === path);

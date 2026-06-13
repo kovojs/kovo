@@ -141,6 +141,8 @@ import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
 import toastStaticRouteHtml from './visual-fixtures/toast.html.txt?raw';
 import toggleStaticRouteHtml from './visual-fixtures/toggle.html.txt?raw';
+import toggleGroupStaticRouteHtml from './visual-fixtures/toggle-group.html.txt?raw';
+import toolbarStaticRouteHtml from './visual-fixtures/toolbar.html.txt?raw';
 import tooltipStaticRouteHtml from './visual-fixtures/tooltip.html.txt?raw';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 
@@ -193,6 +195,8 @@ type StaticVisualFixturePath =
   | '/components/tabs'
   | '/components/toast'
   | '/components/toggle'
+  | '/components/toggle-group'
+  | '/components/toolbar'
   | '/components/tooltip';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
@@ -237,6 +241,8 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/tabs': tabsStaticRouteHtml,
   '/components/toast': toastStaticRouteHtml,
   '/components/toggle': toggleStaticRouteHtml,
+  '/components/toggle-group': toggleGroupStaticRouteHtml,
+  '/components/toolbar': toolbarStaticRouteHtml,
   '/components/tooltip': tooltipStaticRouteHtml,
 };
 
@@ -663,6 +669,20 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(disclosureRoute)).toBe('0653d48e');
     expect(await visualBaselineHash(switchRoute)).toBe('14372e1a');
     expect(await visualBaselineHash(toggleRoute)).toBe('d9dab2de');
+
+    const toggleGroupRoute = mountStaticGalleryRoute('/components/toggle-group');
+    const toolbarRoute = mountStaticGalleryRoute('/components/toolbar');
+
+    expect(visualGeometry(toggleGroupRoute)).toEqual({
+      height: 635,
+      width: 860,
+    });
+    expect(visualGeometry(toolbarRoute)).toEqual({
+      height: 635,
+      width: 860,
+    });
+    expect(await visualBaselineHash(toggleGroupRoute)).toBe('ad8d5436');
+    expect(await visualBaselineHash(toolbarRoute)).toBe('c1d2d1b8');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

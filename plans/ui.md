@@ -210,6 +210,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       and the Chromium visual gate asserts deterministic route geometry plus screenshot hashes
       `22704a32`, `0de1166f`, `38a73445`, `acf6aad0`, `6bd00d65`, `cd8996f0`, `0653d48e`,
       `14372e1a`, and `d9dab2de`.
+      Evidence 2026-06-13: the static visual baseline now covers the remaining H2 roving-control
+      route family: toggle-group and toolbar. Raw route fixtures are synchronized against
+      `renderGalleryRoute()`, and the Chromium visual gate asserts deterministic `860x635`
+      geometry plus screenshot hashes `ad8d5436` and `c1d2d1b8`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -311,6 +315,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] H2 roving-control static visual-baseline slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/toggle-group.html.txt examples/gallery/src/visual-fixtures/toolbar.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] H1/native toggle static visual-baseline and checkbox form-owner slice:
       `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
