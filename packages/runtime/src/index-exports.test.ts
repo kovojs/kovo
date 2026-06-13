@@ -33,7 +33,6 @@ import {
   readMutationChangeHeader,
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
-import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import {
   dispatchEnhancedFormSubmit,
   isEnhancedSubmitEvent,
@@ -64,6 +63,11 @@ import { derive } from './derive.js';
 // @ts-expect-error SPEC.md §9.1: rooted decoded apply results use the root-aware runtime name.
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedMutationDomResult = import('./index.js').AppliedMutationResponseToDom;
+
+// @ts-expect-error SPEC.md §9.1: DOM body parsing is an internal module seam,
+// not a root runtime compatibility export.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedMutationResponseToDom = typeof import('./index.js').applyMutationResponseToDom;
 
 describe('runtime root exports', () => {
   it('exports loader and handler modules directly from their canonical implementations', () => {
@@ -103,7 +107,6 @@ describe('runtime root exports', () => {
     expect(runtime.applyFetchedEnhancedMutationResponseToDom).toBe(
       applyFetchedEnhancedMutationResponseToDom,
     );
-    expect(runtime.applyMutationResponseToDom).toBe(applyMutationResponseToDom);
     expect(runtime.MutationQueue).toBe(MutationQueue);
     expect(runtime.createMutationIdem).toBe(createMutationIdem);
     expect(runtime.isMutationBroadcastMessage).toBe(isMutationBroadcastMessage);
@@ -124,6 +127,7 @@ describe('runtime root exports', () => {
     expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseBodyToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseChunksToRuntime')).toBe(false);
+    expect(Object.hasOwn(runtime, 'applyMutationResponseToDom')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'AppliedMutationResponseToDom')).toBe(false);

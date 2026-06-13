@@ -7,11 +7,11 @@ import type { IslandSignalScope } from './handler-context.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { MutationBroadcast } from './broadcast.js';
 import { isFailedMutationResponse, type FetchedEnhancedMutation } from './mutation-fetch.js';
-import type { ApplyMutationResponseToDomOptions } from './mutation-response-dom.js';
 import type { MutationChangeRecord } from './optimism.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
+import type { QueryChunk } from './wire-parser.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 export interface EnhancedMutationDomApplyOptions {
@@ -32,10 +32,10 @@ export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   targets: string[];
 };
 
-export type MutationDomApplyHooks = Pick<
-  ApplyMutationResponseToDomOptions,
-  'applyQuery' | 'beforeApplyQueries'
->;
+export interface MutationDomApplyHooks {
+  applyQuery?: QueryApplyInterposition;
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
+}
 
 export function applyFetchedEnhancedMutationResponseToDom(
   options: EnhancedMutationDomApplyOptions,

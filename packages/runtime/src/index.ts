@@ -5,8 +5,6 @@ export type {
   AppliedDeferredStreamResponseWithRoot,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
-export { applyMutationResponseToDom } from './mutation-response-dom.js';
-export type { ApplyMutationResponseToDomOptions } from './mutation-response-dom.js';
 export * from './events.js';
 export {
   abortRemovedIslandSignals,

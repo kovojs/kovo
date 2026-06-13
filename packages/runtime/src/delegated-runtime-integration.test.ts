@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   abortRemovedIslandSignals,
-  applyMutationResponseToDom,
   createQueryStore,
   dispatchDelegatedEvent,
   installJisoLoader,
 } from './index.js';
 import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
+import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import {
   FakeElement,
   FakeFormElement,

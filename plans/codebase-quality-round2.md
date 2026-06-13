@@ -1437,6 +1437,9 @@ DOM mutation response body parsing now lives in `packages/runtime/src/mutation-r
 leaving `packages/runtime/src/apply-mutation-response.ts` as the decoded chunk/query/fragment apply
 primitive used by enhanced submit, broadcast, deferred streams, and mutation-response tests; typed
 read refetch now parses query chunks and calls `applyQueryChunksToRuntime` directly.
+The root runtime barrel no longer re-exports the internal `applyMutationResponseToDom` DOM body
+parser/apply helper; DOM callers import the canonical module seam directly, and the root public
+surface keeps only the higher-level enhanced mutation apply APIs.
 Visible-return typed-read refetch now decodes all successful response bodies for a refetch pass
 before entering `applyQueryChunksToRuntime`, so typed reads share the same batched binding-index
 path as hydrated query scripts while apply-hook failures still report through the runtime error
@@ -2322,6 +2325,16 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- Runtime root DOM body parser export removal:
+  `pnpm exec vitest --run packages/runtime/src/index-exports.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/delegated-runtime-integration.test.ts packages/runtime/src/morph.test.ts`;
+  `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/mutation-response-dom.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/delegated-runtime-integration.test.ts packages/runtime/src/mutation-response-dom.browser.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/runtime/src/index.ts` no longer exports `applyMutationResponseToDom` or
+  `ApplyMutationResponseToDomOptions`; callers and internal tests import
+  `packages/runtime/src/mutation-response-dom.ts` directly, while
+  `packages/runtime/src/index-exports.test.ts` type-pins the removed root compatibility export
+  against regression under SPEC.md §4.4/§9.1.
 - Round297 runtime fragment type ownership closure:
   `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/index-exports.test.ts`;
   exact `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/index.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/morph.ts plans/codebase-quality-round2.md`;
