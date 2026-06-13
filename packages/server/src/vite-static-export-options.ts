@@ -19,6 +19,18 @@ export interface JisoAppShellVitePluginStaticExportOptions extends Omit<
   distDir?: never;
 }
 
+export interface JisoAppShellViteBuildOutputStaticExportOptions extends Omit<
+  JisoAppShellViteBuildStaticExportOptions,
+  'distDir'
+> {
+  distDir?: never;
+}
+
+export interface JisoAppShellViteBuildOutputStaticExportPlan {
+  assets: StaticExportAssetInput[];
+  options: StaticExportOptions;
+}
+
 export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
   StaticExportOptions,
   'assets'
@@ -97,6 +109,28 @@ export function jisoAppShellViteBuildDryRunStaticExportOptions(
       ...(assets === undefined ? {} : { assets }),
       distDir,
     }),
+  };
+}
+
+export function jisoAppShellViteBuildOutputStaticExportPlan(
+  build: Pick<JisoAppShellBuild, 'assets'>,
+  options: JisoAppShellViteBuildOutputStaticExportOptions,
+  distDir: string | URL,
+): JisoAppShellViteBuildOutputStaticExportPlan {
+  const { assets, ...exportOptions } = options;
+  const staticExportAssets = jisoAppShellViteBuildStaticExportAssets(build, {
+    ...(assets === undefined ? {} : { assets }),
+    distDir,
+  });
+
+  return {
+    assets: staticExportAssets,
+    options: {
+      ...exportOptions,
+      // SPEC §9.5: plugin-time build output exports use the same manifest-backed
+      // asset plan that the observable Vite build output reports.
+      assets: staticExportAssets,
+    },
   };
 }
 

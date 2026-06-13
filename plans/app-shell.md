@@ -843,6 +843,17 @@ Round247 server root app aggregate evidence:
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P1 compiler validates component-scoped IDREFs|P1 compiler validates static id uniqueness|P1 compiler validates HTML content-model parser stability|P1 compiler validates declared execution trigger names|P1 compiler validates residual fw-c and fw-deps stamps|P1 compiler emits FW311 update coverage facts|P1 compiler validates binding stamp expression drift|P1 compiler validates primitive composition attribute merges|P1 compiler validates fragment-target child hoisting failures|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
 
+Round250 Vite build-output static-export option boundary evidence:
+
+- `packages/server/src/vite-static-export-options.ts` now owns the SPEC §9.5 Vite build-output
+  static-export plan: the manifest-backed asset list, caller asset merge, and stripped
+  `exportStaticApp()` options are produced once for the observable output summary and write path.
+- `packages/server/src/vite-build-output.ts` consumes that plan instead of open-coding
+  build-output static-export option stripping, keeping plugin-time output writes on the same Vite
+  static-export option boundary as direct export/inventory helpers.
+- `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 Round242 app-shell app contract boundary evidence:
 
 - `packages/server/src/app-types.ts` now owns the SPEC §9.5 closed app aggregate, app-shell

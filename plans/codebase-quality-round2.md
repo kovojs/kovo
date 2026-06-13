@@ -755,6 +755,10 @@ build/static-export execution now lives in a focused helper exported from the pu
 subpath, leaving the plugin module focused on middleware and hook delegation. Vite static export
 inventory/manifest option helpers now reject `outDir` with FW229 instead of silently dropping write
 targets, so R6 dry-run preview/export introspection cannot be mistaken for an output write path.
+Vite build-output static-export option projection now also lives in
+`packages/server/src/vite-static-export-options.ts`, so plugin-time output writes, direct Vite
+export, and inventory/manifest helpers share the same SPEC §9.5 asset/option owner while
+`vite-build-output.ts` consumes the projected write plan.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -765,6 +769,9 @@ targets, so R6 dry-run preview/export introspection cannot be mistaken for an ou
 
 Latest evidence:
 
+- Round250 Vite build-output static-export option boundary:
+  `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`.
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`

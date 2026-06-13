@@ -10,6 +10,7 @@ import { StaticExportError } from './static-export-diagnostics.js';
 import { createJisoAppShellViteBuild } from './vite-build.js';
 import {
   jisoAppShellViteBuildDryRunStaticExportOptions,
+  jisoAppShellViteBuildOutputStaticExportPlan,
   jisoAppShellViteBuildWriteStaticExportOptions,
   jisoAppShellViteManifestFileDryRunStaticExportOptions,
   jisoAppShellViteManifestFileWriteStaticExportOptions,
@@ -95,6 +96,76 @@ describe('server app shell Vite static export options boundary', () => {
           robots,
         ],
       });
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('projects Vite build-output static export through one observable asset plan', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-export-options-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-export-options-out-'));
+
+    try {
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return '<main>Cart</main>';
+              },
+            }),
+          ],
+        }),
+        manifest: {
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      });
+      const robots = {
+        headers: { 'cache-control': 'public, max-age=60' },
+        path: '/robots.txt',
+        source: join(distDir, 'public/robots.txt'),
+      };
+
+      const plan = jisoAppShellViteBuildOutputStaticExportPlan(
+        build,
+        {
+          assets: [robots],
+          htmlPathStyle: 'flat',
+          origin: 'https://cart.example',
+          outDir,
+        },
+        distDir,
+      );
+
+      expect(plan.assets).toEqual([
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/cart.css',
+          source: join(distDir, 'assets/cart.css'),
+        },
+        {
+          contentType: 'text/javascript; charset=utf-8',
+          path: '/assets/cart.js',
+          source: join(distDir, 'assets/cart.js'),
+        },
+        robots,
+      ]);
+      expect(plan.options).toEqual({
+        assets: plan.assets,
+        htmlPathStyle: 'flat',
+        origin: 'https://cart.example',
+        outDir,
+      });
+      expect(plan.options).not.toHaveProperty('distDir');
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),
