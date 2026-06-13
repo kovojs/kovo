@@ -1661,6 +1661,9 @@ those consumers no longer carry local app-shape compatibility helpers.
 The shared guard now also rejects dynamic app exports that are missing the closed `createApp()`
 aggregate's document/error-shell owners, and starter/commerce export tasks require their explicit
 public app exports instead of falling back to stale named-app or shell-object compatibility aliases.
+The public app-shell Vite boundary now keeps the generic `createJisoAppShellBuild()`/`routeEntries`
+constructor internal to the server build owner; public consumers use the Vite-specific
+`createJisoAppShellViteBuild()` route-entry-map path for manifest hint/base wiring.
 
 - [x] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1678,6 +1681,14 @@ Latest evidence:
   subpath absent. `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`; `pnpm run check:build`;
   `node --test --test-name-pattern "P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`.
+
+- Round277 app-shell Vite public boundary:
+  `packages/server/src/api/app-shell/vite.ts` stops forwarding the generic
+  `createJisoAppShellBuild()` value and `JisoAppShellBuildOptions` type; `packages/server/src/vite.test.ts`
+  proves the public Vite-specific route-entry-map helper still wires manifest route hints and base
+  paths, and `packages/server/src/api/app.test.ts` pins the public subpath absence.
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-build.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`.
 
 - Round274 Vite static-export facade deletion:
   `packages/server/src/vite-static-export.ts` was deleted. `@jiso/server/app-shell/vite` now

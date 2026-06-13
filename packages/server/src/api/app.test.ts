@@ -128,6 +128,7 @@ describe('server app-shell public API barrels', () => {
       staticExportDiagnosticsApi.isStaticExportDiagnosticError,
     );
     expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
+    expect(packageViteApi).not.toHaveProperty('createJisoAppShellBuild');
     expect(packageViteApi.writeJisoAppShellVitePluginBuild).toBe(
       viteApi.writeJisoAppShellVitePluginBuild,
     );

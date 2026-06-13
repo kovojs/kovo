@@ -11,7 +11,6 @@ import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import {
   createJisoAppShellDevDiagnosticLedger,
-  createJisoAppShellBuild,
   createJisoAppShellViteBuild,
   createJisoAppShellViteBuildFromBundle,
   createJisoAppShellViteBuildFromManifestFile,
@@ -165,7 +164,7 @@ describe('server app shell Vite plugin', () => {
       },
       stylesheets: ['/assets/manual.css'],
     });
-    const build = createJisoAppShellBuild({
+    const build = createJisoAppShellViteBuild({
       app: createApp({ clientModules: registry, routes: [cartRoute] }),
       clientModules: [
         {
@@ -184,12 +183,9 @@ describe('server app shell Vite plugin', () => {
           imports: ['_shared.js'],
         },
       },
-      routeEntries: jisoAppShellViteRouteEntries(
-        {
-          '/cart': 'src/cart.client.ts',
-        },
-        { routes: [cartRoute] },
-      ),
+      routeEntryMap: {
+        '/cart': 'src/cart.client.ts',
+      },
     });
     const module = build.clientModules[0];
     if (!module) throw new Error('expected a compiled client module');
@@ -515,7 +511,7 @@ describe('server app shell Vite plugin', () => {
   });
 
   it('applies Vite base paths to build route hints and asset planning', () => {
-    const build = createJisoAppShellBuild({
+    const build = createJisoAppShellViteBuild({
       app: createApp({ routes: [route('/cart', {})] }),
       base: '/shop/',
       manifest: {
@@ -524,7 +520,9 @@ describe('server app shell Vite plugin', () => {
           file: 'assets/cart.js',
         },
       },
-      routeEntries: [{ entries: ['src/cart.client.ts'], routePath: '/cart' }],
+      routeEntryMap: {
+        '/cart': 'src/cart.client.ts',
+      },
     });
 
     expect(build.routeHints).toEqual([

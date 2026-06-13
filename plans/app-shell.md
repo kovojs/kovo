@@ -80,6 +80,9 @@ Implemented areas:
   manifest-file wrappers. The old internal `vite-static-export.ts` compatibility facade is deleted;
   `@jiso/server/app-shell/vite` forwards directly from those owners and type-imports plugin
   static-export options from the option owner.
+- `@jiso/server/app-shell/vite` now exposes the Vite-specific build constructors while keeping the
+  lower-level `createJisoAppShellBuild()`/`routeEntries` contract internal to the server build
+  owner; public tests prove route-entry-map hint wiring through `createJisoAppShellViteBuild()`.
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
@@ -98,6 +101,15 @@ Round276 built-root P10 boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`
+
+Round277 app-shell Vite public boundary evidence:
+
+- `packages/server/src/api/app-shell/vite.ts` no longer forwards the generic
+  `createJisoAppShellBuild()` value or `JisoAppShellBuildOptions` type; `packages/server/src/vite.test.ts`
+  proves manifest route hints/base paths through the public Vite-specific route-entry-map helper,
+  and `packages/server/src/api/app.test.ts` pins the absence from `@jiso/server/app-shell/vite`.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
 
 Round274 Vite static-export facade deletion evidence:
 

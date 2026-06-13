@@ -6,7 +6,6 @@ export {
   shouldHandleJisoAppShellViteSsrRequest,
 } from '../../vite-dev.js';
 export {
-  createJisoAppShellBuild,
   createJisoAppShellViteBuild,
   createJisoAppShellViteBuildFromBundle,
   createJisoAppShellViteBuildFromManifestFile,
@@ -59,7 +58,6 @@ export type {
 } from '../../vite-manifest.js';
 export type {
   JisoAppShellBuild,
-  JisoAppShellBuildOptions,
   JisoAppShellBuiltClientModule,
   JisoAppShellCompiledClientModule,
   JisoAppShellRouteBuildHints,
