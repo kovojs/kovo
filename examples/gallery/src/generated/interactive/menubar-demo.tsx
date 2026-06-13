@@ -35,35 +35,36 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
 
     return (
       <section
-        {...menubarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="menubar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$section_keydown"
         fw-c="gallery-menubar-demo"
         fw-state='{"activeValue":"file","openValue":"","value":"new"}'
       >
-        <button
-          {...menubarItemAttributes({
-            ...rootState,
-            contentId: 'gallery-menubar-file-menu',
-            id: 'gallery-menubar-file',
-            itemLabel: 'File',
-            itemValue: 'file',
-          })}
-          on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$button_click"
-        >
-          File
-        </button>
-        <button
-          {...menubarItemAttributes({
-            ...rootState,
-            id: 'gallery-menubar-edit',
-            itemLabel: 'Edit',
-            itemValue: 'edit',
-          })}
-        >
-          Edit
-        </button>
+        <div {...menubarRootAttributes(rootState)} class="flex gap-1">
+          <button
+            {...menubarItemAttributes({
+              ...rootState,
+              contentId: 'gallery-menubar-file-menu',
+              id: 'gallery-menubar-file',
+              itemLabel: 'File',
+              itemValue: 'file',
+            })}
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$button_click"
+          >
+            File
+          </button>
+          <button
+            {...menubarItemAttributes({
+              ...rootState,
+              id: 'gallery-menubar-edit',
+              itemLabel: 'Edit',
+              itemValue: 'edit',
+            })}
+          >
+            Edit
+          </button>
+        </div>
         <div
           {...menubarSubmenuAttributes({
             ...rootState,
@@ -80,8 +81,8 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemParentValue: 'file',
               itemValue: 'new',
             })}
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$button_click_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$button_click_2"
           >
             New file
           </button>

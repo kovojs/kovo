@@ -120,9 +120,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
       gate over all generated demos, with focused rule exceptions documented next to the test for
       native dialog snapshots, current combobox/section role-table drift, DOM-only checkbox
-      indeterminate state, and the menubar state-output fixture. Context-menu triggers now expose
-      `role="button"`, OTP requiredness stays on native inputs instead of unsupported group
-      `aria-required`, and toast live regions render on neutral elements.
+      indeterminate state. Context-menu triggers now expose `role="button"`, OTP requiredness stays
+      on native inputs instead of unsupported group `aria-required`, and toast live regions render
+      on neutral elements. Menubar compiled demos now keep state outputs and popup menu content
+      outside the `role="menubar"` root, so `aria-required-children` is enforced by the route-level
+      axe gate.
       Evidence 2026-06-13: `examples/gallery/src/interactive-gallery.browser.test.ts` now includes
       a deterministic Chromium visual-baseline scaffold for the compiled interactive route plus
       switch and dropdown-menu representative states, asserting viewport geometry and stable
@@ -215,6 +217,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Menubar compiled axe structure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t menubar`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check examples/gallery/src/interactive/menubar-demo.tsx examples/gallery/src/generated/interactive/menubar-demo.tsx examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/interactive-gallery.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Switch native external form ownership slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/switch.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx`;

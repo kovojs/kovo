@@ -34,7 +34,6 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
 
     return (
       <section
-        {...menubarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="menubar"
         onKeyDown={() => {
@@ -54,49 +53,51 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
           if (output) output['textContent'] = 'edit';
         }}
       >
-        <button
-          {...menubarItemAttributes({
-            ...rootState,
-            contentId: 'gallery-menubar-file-menu',
-            id: 'gallery-menubar-file',
-            itemLabel: 'File',
-            itemValue: 'file',
-          })}
-          onClick={() => {
-            state.activeValue = 'file';
-            state.openValue = state.openValue === 'file' ? '' : 'file';
-            const doc = Reflect['get'](globalThis, 'document');
-            const file = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file')
-              : undefined;
-            const menu = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file-menu')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="menubar-open"]')
-              : undefined;
-            if (file)
-              Object(file)['setAttribute']?.call(
-                file,
-                'aria-expanded',
-                String(state.openValue === 'file'),
-              );
-            if (menu) menu['hidden'] = state.openValue !== 'file';
-            if (output) output['textContent'] = state.openValue || 'none';
-          }}
-        >
-          File
-        </button>
-        <button
-          {...menubarItemAttributes({
-            ...rootState,
-            id: 'gallery-menubar-edit',
-            itemLabel: 'Edit',
-            itemValue: 'edit',
-          })}
-        >
-          Edit
-        </button>
+        <div {...menubarRootAttributes(rootState)} class="flex gap-1">
+          <button
+            {...menubarItemAttributes({
+              ...rootState,
+              contentId: 'gallery-menubar-file-menu',
+              id: 'gallery-menubar-file',
+              itemLabel: 'File',
+              itemValue: 'file',
+            })}
+            onClick={() => {
+              state.activeValue = 'file';
+              state.openValue = state.openValue === 'file' ? '' : 'file';
+              const doc = Reflect['get'](globalThis, 'document');
+              const file = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file')
+                : undefined;
+              const menu = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file-menu')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="menubar-open"]')
+                : undefined;
+              if (file)
+                Object(file)['setAttribute']?.call(
+                  file,
+                  'aria-expanded',
+                  String(state.openValue === 'file'),
+                );
+              if (menu) menu['hidden'] = state.openValue !== 'file';
+              if (output) output['textContent'] = state.openValue || 'none';
+            }}
+          >
+            File
+          </button>
+          <button
+            {...menubarItemAttributes({
+              ...rootState,
+              id: 'gallery-menubar-edit',
+              itemLabel: 'Edit',
+              itemValue: 'edit',
+            })}
+          >
+            Edit
+          </button>
+        </div>
         <div
           {...menubarSubmenuAttributes({
             ...rootState,

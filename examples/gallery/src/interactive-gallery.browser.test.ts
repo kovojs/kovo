@@ -1753,18 +1753,19 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates generated menubar and navigation-menu roving/open state', async () => {
-    const menubarRoot = mountInteractiveDemo(GalleryMenubarDemo);
+    const menubarDemo = mountInteractiveDemo(GalleryMenubarDemo);
+    const menubarRoot = required(menubarDemo.querySelector<HTMLElement>('[role="menubar"]'));
     const file = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-file'));
     const edit = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-edit'));
-    const newFile = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-new'));
-    const fileMenu = required(menubarRoot.querySelector<HTMLElement>('#gallery-menubar-file-menu'));
+    const newFile = required(menubarDemo.querySelector<HTMLButtonElement>('#gallery-menubar-new'));
+    const fileMenu = required(menubarDemo.querySelector<HTMLElement>('#gallery-menubar-file-menu'));
     const openOutput = required(
-      menubarRoot.querySelector<HTMLOutputElement>('[data-demo-state="menubar-open"]'),
+      menubarDemo.querySelector<HTMLOutputElement>('[data-demo-state="menubar-open"]'),
     );
     const valueOutput = required(
-      menubarRoot.querySelector<HTMLOutputElement>('[data-demo-state="menubar-value"]'),
+      menubarDemo.querySelector<HTMLOutputElement>('[data-demo-state="menubar-value"]'),
     );
-    const menubarLoader = installGeneratedGalleryLoader(menubarRoot, {
+    const menubarLoader = installGeneratedGalleryLoader(menubarDemo, {
       events: ['click', 'keydown'],
     });
 
@@ -1775,13 +1776,13 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(edit.tabIndex).toBe(-1);
     expect(fileMenu.hidden).toBe(true);
 
-    menubarRoot.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    menubarDemo.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
 
     await vi.waitFor(() => {
       expect(menubarLoader.imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/menubar-demo.client.js',
       );
-      expect(menubarRoot.getAttribute('fw-state')).toBe(
+      expect(menubarDemo.getAttribute('fw-state')).toBe(
         '{"activeValue":"edit","openValue":"","value":"new"}',
       );
       expect(file.tabIndex).toBe(-1);
@@ -1791,7 +1792,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     file.click();
 
     await vi.waitFor(() => {
-      expect(menubarRoot.getAttribute('fw-state')).toBe(
+      expect(menubarDemo.getAttribute('fw-state')).toBe(
         '{"activeValue":"file","openValue":"file","value":"new"}',
       );
       expect(file.getAttribute('aria-expanded')).toBe('true');
@@ -1803,7 +1804,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await userEvent.keyboard('{Space}');
 
     await vi.waitFor(() => {
-      expect(menubarRoot.getAttribute('fw-state')).toBe(
+      expect(menubarDemo.getAttribute('fw-state')).toBe(
         '{"activeValue":"file","openValue":"","value":"new"}',
       );
       expect(file.getAttribute('aria-expanded')).toBe('false');
@@ -2331,9 +2332,6 @@ const interactiveGalleryAxeRules = {
   // Native checkbox indeterminate state is a DOM property, not serializable HTML.
   // The checkbox browser test asserts the runtime mixed state transition.
   'aria-conditional-attr': { enabled: false },
-  // The compiled menubar demo keeps visible state outputs next to the menuitems so
-  // generated state can be inspected; focused tests assert menuitem behavior.
-  'aria-required-children': { enabled: false },
 } as const;
 
 function formatAxeViolations(violations: axe.Result[]): string[] {
