@@ -1,73 +1,56 @@
 # Jiso v1 Execution Index
 
-`SPEC.md` is the source of truth for framework behavior. This file only tracks what still blocks v1
-release and where the detailed work lives.
+`SPEC.md` is the behavior source of truth. This file tracks only what still blocks v1 and where the
+active implementation ledgers live.
 
-Status: active, compacted on 2026-06-13.
+## Ground Rules
 
-## Baseline
+- Use Vite Plus (`vp ...`, `https://viteplus.dev/`) as the workspace check/build/test orchestrator,
+  including configured oxlint/oxfmt and `@typescript/native-preview` static checking.
+- v1 blesses `@jiso/drizzle` Postgres. SQLite/MySQL conformance is late-hardening work.
+- App-authored code stays TSX/JSX; lowered IR, generated stamps, emitted modules, and source patches
+  are compiler artifacts to verify.
 
-- Use Vite Plus (`https://viteplus.dev/`, `vp ...`) for workspace checks, builds, typed example
-  checks, browser gates, conformance gates, and fw-check orchestration.
-- Keep `@typescript/native-preview` as the static checking path for v1. `SPEC.md` describes the
-  contract as TypeScript static checking, not a separate framework-owned typechecker.
-- Use the repo formatter/linter path (`vp check`, oxlint/oxfmt through Vite Plus where configured)
-  instead of adding parallel style tooling.
-- v1 blesses `@jiso/drizzle` Postgres. SQLite/MySQL conformance stays deferred to late hardening.
-- App-authored code is TSX/JSX. Lowered IR, generated stamps, server/client modules, and source
-  patches are compiler artifacts to inspect and test, not application source to hand-author.
+## Active Plans
 
-## Active Ledgers
+- `plans/codebase-quality-round2.md` - compiler, Drizzle, runtime, server, harness, test structure.
+- `plans/ui.md` - headless primitives, wrappers, gallery, UI conformance.
+- `plans/app-shell.md` - request shell, Vite build/dev/export, static export, adoption.
 
-- `plans/codebase-quality-round2.md` - compiler, Drizzle, runtime, server, harness, and test
-  structure.
-- `plans/ui.md` - headless primitives, styled wrappers, gallery, and UI conformance.
-- `plans/app-shell.md` - request shell, Vite build/dev/export, static export, and adoption.
-- `plans/archive.md` - completed or superseded plan history.
+## Remaining v1 Work
 
-## Remaining Blockers
-
-- [ ] Compiler Phase 2 closure.
-  - [ ] Remove compatibility reparses where parser/model facts are sufficient.
+- [ ] Close compiler Phase 2.
+  - [ ] Remove compatibility reparses where model/parser facts are sufficient.
   - [ ] Retire unjustified source-string lowerers and validators.
-  - [ ] Keep explicit source patches and offset maps as the lowering contract.
-
-- [ ] Quality and harness closure.
+  - [ ] Keep source patches and offset maps as the lowering contract.
+- [ ] Close quality and harness cleanup.
   - [ ] Replace fragile generated-source assertions with behavior or structured `@jiso/test`
         fixtures, except intentional wire pins.
   - [ ] Move reusable monolith-test mechanics into package fixtures as those paths change.
-
-- [ ] Drizzle Postgres closure.
-  - [ ] Delete bespoke extraction paths that ts-morph/project facts can replace.
+- [ ] Close Drizzle Postgres support.
+  - [ ] Delete bespoke extraction paths replaced by ts-morph/project facts.
   - [ ] Cover or FW406-degrade remaining invisible query-loader and mutation surfaces.
-
-- [ ] Runtime closure.
+- [ ] Close runtime support.
   - [ ] Finish inline-loader minifier and apply-path unification.
-  - [ ] Split broad runtime tests along apply, query, loader, and minifier boundaries.
-
-- [ ] Server and app-shell closure.
+  - [ ] Split broad runtime tests across apply, query, loader, and minifier boundaries.
+- [ ] Close server and app-shell support.
   - [ ] Finish subtractive extraction across root exports, Vite, static export, replay, document,
         and app boundaries.
   - [ ] Prove Vite build/static export/adoption across server, starter, commerce, and docs.
   - [ ] Remove pinned compatibility modules and aliases once replacements are proven.
-
-- [ ] UI closure.
+- [ ] Close UI support.
   - [ ] Finish remaining primitive exports, behavior contracts, form/validity behavior, wrappers,
         gallery routes, and compiled demos.
   - [ ] Close state, focus, menu, canceled-change restoration, axe, and visual baseline gaps.
 
-- [ ] Final acceptance from a clean checkout.
+## Release Gate
+
+- [ ] Active plans above have no open v1-blocking checklist items.
+- [ ] Final clean-checkout gates pass:
   - [ ] `pnpm run check`
   - [ ] `pnpm run test`
   - [ ] `pnpm run test:browser`
   - [ ] `pnpm run test:conformance`
   - [ ] `pnpm run check:build`
   - [ ] `pnpm run check:fw`
-
-## Done
-
-- [ ] The remaining blockers above are closed with same-session evidence in the active ledgers.
-- [ ] `plans/codebase-quality-round2.md`, `plans/ui.md`, and `plans/app-shell.md` have no open
-      v1-blocking checklist items.
-- [ ] Final gates pass from a clean checkout.
 - [ ] Any conflict between `SPEC.md` and implementation behavior is resolved before release.
