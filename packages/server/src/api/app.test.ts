@@ -89,6 +89,7 @@ describe('server app-shell public API barrels', () => {
 
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {
     expect(packageCoreApi.createApp).toBe(coreApi.createApp);
+    expect(packageCoreApi.isJisoApp).toBe(coreApi.isJisoApp);
     expect(packageClientModulesApi.versionedClientModuleHref).toBe(
       clientModulesApi.versionedClientModuleHref,
     );

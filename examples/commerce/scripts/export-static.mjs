@@ -24,11 +24,13 @@ export async function exportCommerceStaticApp({
   });
 
   try {
-    const [appShellModule, viteModule, staticExportModule] = await Promise.all([
+    const [appShellModule, coreModule, viteModule, staticExportModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
+      viteServer.ssrLoadModule('@jiso/server/app-shell/core'),
       viteServer.ssrLoadModule('@jiso/server/app-shell/vite'),
       viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
     ]);
+    const { isJisoApp } = coreModule;
     const {
       exportJisoAppShellViteBuildFromManifestFile,
       jisoAppShellViteManifestStylesheetHrefFromFile,
@@ -43,6 +45,9 @@ export async function exportCommerceStaticApp({
       throw new Error(
         '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
       );
+    }
+    if (typeof isJisoApp !== 'function') {
+      throw new Error('@jiso/server/app-shell/core must export isJisoApp.');
     }
     if (typeof formatStaticExportDiagnostic !== 'function') {
       throw new Error(
@@ -152,13 +157,4 @@ function parseCliOptions(args) {
   }
 
   return options;
-}
-
-function isJisoApp(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray(value.routes) &&
-    typeof value.clientModules?.resolve === 'function'
-  );
 }

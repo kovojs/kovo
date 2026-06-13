@@ -1278,6 +1278,9 @@ The public app-shell Vite subpaths now expose only the singular built-stylesheet
 the plural `jisoAppShellViteManifestStylesheetHrefs*` compatibility helpers are private/deleted,
 and server/starter/commerce/docs adoption tests pin the singular helper for SPEC §9.5 export-task
 stylesheet evidence.
+The runtime `isJisoApp()` guard for dynamically loaded app-shell modules now lives in the server
+app-shell core boundary and is reused by Vite dev plus starter/commerce static export tasks, so
+those consumers no longer carry local app-shape compatibility helpers.
 
 - [x] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1395,6 +1398,17 @@ Latest evidence:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs`;
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
   exact `pnpm exec vp check packages/server/src/api/app.test.ts site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round266 app-shell dynamic app guard cleanup:
+  `packages/server/src/app-guards.ts` owns the shared runtime `isJisoApp()` guard,
+  `@jiso/server/app-shell/core` exports it for dynamic app-shell loaders, Vite dev reuses it, and
+  starter/commerce export tasks deleted their local app-shape helpers.
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export"`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app-shell/core.ts packages/server/src/vite-dev.ts packages/server/src/api/app.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:

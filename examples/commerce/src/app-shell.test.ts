@@ -90,8 +90,11 @@ describe('commerce app shell HTTP entry', () => {
       path.join(commerceRoot, 'scripts/export-static.mjs'),
       'utf8',
     );
+    expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/core')");
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/vite')");
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/static-export')");
+    expect(exportScriptSource).toContain('isJisoApp');
+    expect(exportScriptSource).not.toContain('function isJisoApp');
     expect(exportScriptSource).not.toContain("ssrLoadModule('@jiso/server')");
 
     const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.ts'), 'utf8');

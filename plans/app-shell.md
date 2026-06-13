@@ -1079,3 +1079,18 @@ Round265 app-shell final cleanup evidence:
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
 - `pnpm exec vp check packages/server/src/api/app.test.ts site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round266 app-shell dynamic app guard cleanup evidence:
+
+- `packages/server/src/app-guards.ts` now owns the runtime `isJisoApp()` guard for dynamically
+  loaded app-shell modules, `@jiso/server/app-shell/core` exports it for R5/R6/R7 consumers, and
+  `packages/server/src/vite-dev.ts` reuses the same guard for SPEC §9.5 dev request dispatch.
+- Starter and commerce static export tasks load `isJisoApp()` from
+  `@jiso/server/app-shell/core` instead of keeping local app-shape compatibility helpers.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export"`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app-shell/core.ts packages/server/src/vite-dev.ts packages/server/src/api/app.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

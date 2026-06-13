@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { diagnosticDefinitions } from '@jiso/core';
+import { isJisoApp } from './app-guards.js';
 import { createRequestHandler } from './app.js';
 import type { JisoApp } from './app-types.js';
 import {
@@ -301,21 +302,6 @@ function readJisoAppShellViteSsrNodeHandler(
   return (request, response) => nodeHandler(request, response);
 }
 
-function isJisoApp(value: unknown): value is JisoApp {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.endpoints) &&
-    Array.isArray(value.mutations) &&
-    Array.isArray(value.queries) &&
-    Array.isArray(value.routes) &&
-    isRecord(value.clientModules)
-  );
-}
-
 function slashPath(fileName: string): string {
   return fileName.replaceAll('\\', '/');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

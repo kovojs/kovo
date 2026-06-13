@@ -12,6 +12,7 @@ let exportJisoAppShellViteBuildFromManifestFile;
 let formatStaticExportDiagnostic;
 let formatStaticExportDiagnostics;
 let isStaticExportDiagnosticError;
+let isJisoApp;
 let jisoAppShellViteManifestStylesheetHrefFromFile;
 let manifest;
 let staticExportManifestForJisoAppShellViteBuildFromManifestFile;
@@ -23,10 +24,12 @@ const server = await createServer({
 });
 
 try {
-  const [viteModule, staticExportModule] = await Promise.all([
+  const [coreModule, viteModule, staticExportModule] = await Promise.all([
+    server.ssrLoadModule('@jiso/server/app-shell/core'),
     server.ssrLoadModule('@jiso/server/app-shell/vite'),
     server.ssrLoadModule('@jiso/server/app-shell/static-export'),
   ]);
+  ({ isJisoApp } = coreModule);
   ({
     exportJisoAppShellViteBuildFromManifestFile,
     jisoAppShellViteManifestStylesheetHrefFromFile,
@@ -39,6 +42,9 @@ try {
     throw new Error(
       '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
     );
+  }
+  if (typeof isJisoApp !== 'function') {
+    throw new Error('@jiso/server/app-shell/core must export isJisoApp.');
   }
   if (typeof formatStaticExportDiagnostic !== 'function') {
     throw new Error(
@@ -125,14 +131,5 @@ if (result) {
       `diagnostics=${result.diagnostics.length}`,
       '',
     ].join('\n'),
-  );
-}
-
-function isJisoApp(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray(value.routes) &&
-    typeof value.clientModules?.resolve === 'function'
   );
 }
