@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  commerceKeyedOptimisticBehaviorFact,
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
   morphFragmentBehaviorFact,
   optimismCleanupBehaviorFact,
+  type CommerceKeyedOptimisticRuntime,
   type EnhancedMutationRuntime,
   type LoaderSmokeRuntime,
   type MorphFragmentRuntime,
@@ -109,6 +111,191 @@ describe('@jiso/test runtime fixture facts', () => {
       listenerEvents: ['click', 'submit'],
       observer: { observedCount: 1, unobservedCount: 1 },
       storeValues: { cart: { count: 2 } },
+    });
+  });
+
+  it('projects commerce keyed morph, endpoint, and optimistic review behavior', async () => {
+    const createQueryStore = () => {
+      const values = new Map<string, unknown>();
+      const keyFor = (name: string, key?: string) => (key === undefined ? name : `${name}:${key}`);
+      return {
+        get(name: string, key?: string) {
+          return values.get(keyFor(name, key));
+        },
+        set(name: string, value: unknown, key?: string) {
+          values.set(keyFor(name, key), value);
+        },
+      };
+    };
+    const runtime: CommerceKeyedOptimisticRuntime = {
+      OptimisticRebaser: class {
+        constructor(private readonly store: ReturnType<typeof createQueryStore>) {}
+        applyOptimistic(query: string, key: string, value: unknown) {
+          this.store.set(query, value, key);
+        }
+        settle(query: string, key: string, value: unknown) {
+          this.store.set(query, value, key);
+        }
+      } as unknown as CommerceKeyedOptimisticRuntime['OptimisticRebaser'],
+      createQueryStore,
+      domain(name: string) {
+        return { name };
+      },
+      morphStructuralTree(current, next) {
+        const existingByKey = new Map(
+          (current.children as Array<Record<string, unknown>>).map((child) => [child.key, child]),
+        );
+        current.children = (next.children as Array<Record<string, unknown>>).map((child) => {
+          const existing = existingByKey.get(child.key);
+          if (existing) {
+            Object.assign(existing, child);
+            return existing;
+          }
+          return child;
+        });
+        return current;
+      },
+      mutation(key, config) {
+        return { ...config, key };
+      },
+      query(key, config) {
+        return { ...config, key };
+      },
+      async renderMutationEndpointResponse(mutation, options) {
+        const fixtureMutation = mutation as {
+          registry: {
+            queries: Array<{
+              instanceKey(): string;
+              key: string;
+              load(): unknown;
+            }>;
+          };
+        };
+        const fixtureOptions = options as { rawInput: { productId: string } };
+        const query = fixtureMutation.registry.queries.find(
+          (candidate) => candidate.instanceKey() === `product:${fixtureOptions.rawInput.productId}`,
+        );
+        return {
+          body: `<fw-query name="${query?.key}" key="${query?.instanceKey()}">${JSON.stringify(
+            query?.load(),
+          )}</fw-query>`,
+          headers: {
+            'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+            'FW-Changes': '[{"domain":"product","keys":["p1"]}]',
+          },
+          status: 200,
+        };
+      },
+      async runMutation(mutation, input) {
+        const fixtureMutation = mutation as {
+          handler(input: { productId: string }): string;
+        };
+        const value = fixtureMutation.handler(input as { productId: string });
+        return {
+          changes: [{ domain: 'product', input, keys: [value] }],
+          ok: true,
+          rerunQueries: ['productDetail'],
+          rerunQueryInstances: [{ instanceKey: `product:${value}`, key: 'productDetail' }],
+          value,
+        };
+      },
+      s: {
+        object(shape) {
+          return shape;
+        },
+        string() {
+          return 'string';
+        },
+      },
+      async submitOptimisticEnhancedMutation(options) {
+        const fixtureOptions = options as {
+          fetch(): Promise<{ text(): Promise<string> }>;
+          input: { reviewId: string };
+          optimistic: {
+            transforms: {
+              reviews(current: { items: unknown[] }, input: { reviewId: string }): unknown;
+            };
+          };
+          rebaser: {
+            applyOptimistic(query: string, key: string, value: unknown): void;
+            settle(query: string, key: string, value: unknown): void;
+          };
+          root: {
+            findFragmentTarget(target: string): { replaceWithHtml(html: string): void } | null;
+          };
+          store: ReturnType<typeof createQueryStore>;
+        };
+        fixtureOptions.rebaser.applyOptimistic(
+          'reviews',
+          'product:p1',
+          fixtureOptions.optimistic.transforms.reviews(
+            fixtureOptions.store.get('reviews', 'product:p1') as { items: unknown[] },
+            { reviewId: 'draft' },
+          ),
+        );
+        const body = await (await fixtureOptions.fetch()).text();
+        fixtureOptions.rebaser.settle('reviews', 'product:p1', {
+          items: [{ id: 'r1' }, { id: 'server' }],
+        });
+        if (body.includes('<section>Reviews ready</section>')) {
+          fixtureOptions.root
+            .findFragmentTarget('reviews:p1')
+            ?.replaceWithHtml('<section>Reviews ready</section>');
+        }
+        return {
+          appliedFragments: ['reviews:p1'],
+          queries: ['reviews:product:p1'],
+        };
+      },
+    };
+
+    await expect(
+      commerceKeyedOptimisticBehaviorFact({
+        graph: {
+          components: [
+            { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+            { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+          ],
+          optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
+        },
+        runtime,
+      }),
+    ).resolves.toEqual({
+      graph: {
+        componentTargets: [
+          { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+          { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        ],
+        optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
+      },
+      keyedMorph: {
+        appendedKeys: ['p1', 'p2', 'p3'],
+        firstProductReusedAfterReorder: true,
+        reorderedBrowserState: { islandState: { pendingMutation: 'cart/add' } },
+        reorderedKeys: ['p3', 'p1', 'p2'],
+      },
+      mutationEndpoint: {
+        body: '<fw-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</fw-query>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Changes': '[{"domain":"product","keys":["p1"]}]',
+        },
+        result: {
+          changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
+          ok: true,
+          rerunQueries: ['productDetail'],
+          rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
+          value: 'p1',
+        },
+        status: 200,
+      },
+      optimisticReview: {
+        appliedFragments: ['reviews:p1'],
+        fetchStoreDuringOptimism: { items: [{ id: 'r1' }, { id: 'draft' }] },
+        fragmentHtml: '<section>Reviews ready</section>',
+        queries: ['reviews:product:p1'],
+        storeAfterResponse: { items: [{ id: 'r1' }, { id: 'server' }] },
+      },
     });
   });
 

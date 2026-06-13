@@ -1,4 +1,11 @@
 import { GeneratedFixtureElement } from './generated-module-fixtures.ts';
+import {
+  graphComponentTargetFacts,
+  graphOptimisticFacts,
+  type GraphComponentTargetFact,
+  type JisoGraphFixture,
+  type JisoGraphOptimisticFact,
+} from './graph-fixtures.ts';
 
 export interface LoaderSmokeRuntime {
   applyCompiledQueryUpdatePlan: (
@@ -72,6 +79,28 @@ export interface MorphFragmentRuntime {
     set(name: string, value: unknown, key?: string): void;
   };
   morphStructuralTree: <T extends { children?: unknown[] }>(current: T, next: T) => T;
+}
+
+export interface CommerceKeyedOptimisticRuntime {
+  OptimisticRebaser: new (store: unknown) => unknown;
+  createQueryStore: () => {
+    get(name: string, key?: string): unknown;
+    set(name: string, value: unknown, key?: string): void;
+  };
+  domain(name: string): unknown;
+  morphStructuralTree: <T extends { children?: unknown[] }>(current: T, next: T) => T;
+  mutation(key: string, config: Record<string, unknown>): unknown;
+  query(key: string, config: Record<string, unknown>): unknown;
+  renderMutationEndpointResponse(...args: any[]): Promise<any>;
+  runMutation(...args: any[]): Promise<any>;
+  s: {
+    object(shape: Record<string, unknown>): unknown;
+    string(): unknown;
+  };
+  submitOptimisticEnhancedMutation: (options: unknown) => Promise<{
+    appliedFragments: string[];
+    queries: string[];
+  }>;
 }
 
 export interface LoaderSmokeBehaviorFact {
@@ -178,6 +207,32 @@ export interface MorphFragmentBehaviorFact {
   queryStoreValue: unknown;
   renderedTargetHtml: string;
   reorderedText: string | undefined;
+}
+
+export interface CommerceKeyedOptimisticBehaviorFact {
+  graph: {
+    componentTargets: GraphComponentTargetFact[];
+    optimistic: JisoGraphOptimisticFact[];
+  };
+  keyedMorph: {
+    appendedKeys: string[];
+    firstProductReusedAfterReorder: boolean;
+    reorderedBrowserState: unknown;
+    reorderedKeys: string[];
+  };
+  mutationEndpoint: {
+    body: string;
+    headers: Record<string, string>;
+    result: Record<string, unknown>;
+    status: number;
+  };
+  optimisticReview: {
+    appliedFragments: string[];
+    fetchStoreDuringOptimism: unknown;
+    fragmentHtml: string;
+    queries: string[];
+    storeAfterResponse: unknown;
+  };
 }
 
 export async function loaderSmokeBehaviorFact(
@@ -427,6 +482,148 @@ export function morphFragmentBehaviorFact(
     queryStoreValue: store.get('productGrid', 'category:all'),
     renderedTargetHtml: target.html,
     reorderedText: current.children[1]?.children?.[0]?.text,
+  };
+}
+
+export async function commerceKeyedOptimisticBehaviorFact(options: {
+  graph: JisoGraphFixture;
+  runtime: CommerceKeyedOptimisticRuntime;
+}): Promise<CommerceKeyedOptimisticBehaviorFact> {
+  // SPEC.md §4.4/§4.8/§9.3: keyed fragments, keyed query instances, and
+  // optimistic transforms preserve browser state while server truth wins.
+  const { graph, runtime } = options;
+  const currentGrid = {
+    children: [
+      { browserState: { islandState: { pendingMutation: 'cart/add' } }, key: 'p1', type: 'card' },
+      { key: 'p2', type: 'card' },
+    ],
+    key: 'product-grid',
+    type: 'section',
+  };
+  const firstProduct = currentGrid.children[0];
+  const appendedGrid = runtime.morphStructuralTree(currentGrid, {
+    children: [
+      { key: 'p1', type: 'card' },
+      { key: 'p2', type: 'card' },
+      { key: 'p3', type: 'card' },
+    ],
+    key: 'product-grid',
+    type: 'section',
+  });
+  const appendedKeys = appendedGrid.children.map((child) => child.key);
+  const reorderedGrid = runtime.morphStructuralTree(appendedGrid, {
+    children: [
+      { key: 'p3', type: 'card' },
+      { key: 'p1', type: 'card' },
+      { key: 'p2', type: 'card' },
+    ],
+    key: 'product-grid',
+    type: 'section',
+  });
+
+  const productDomain = runtime.domain('product');
+  const productP1 = runtime.query('productDetail', {
+    instanceKey: () => 'product:p1',
+    load: () => ({ id: 'p1', stock: 0 }),
+    reads: [productDomain],
+  });
+  const productP2 = runtime.query('productDetail', {
+    instanceKey: () => 'product:p2',
+    load: () => ({ id: 'p2', stock: 10 }),
+    reads: [productDomain],
+  });
+  const reserveProduct = runtime.mutation('product/reserve', {
+    csrf: false,
+    csrfJustification: 'fw-check synthetic keyed invalidation fixture',
+    handler(input: { productId: string }) {
+      return input.productId;
+    },
+    input: runtime.s.object({ productId: runtime.s.string() }),
+    registry: {
+      inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+      queries: [productP1, productP2],
+    },
+  });
+  const mutationResult = await runtime.runMutation(reserveProduct, { productId: 'p1' }, {});
+  const mutationResponse = await runtime.renderMutationEndpointResponse(reserveProduct, {
+    fragmentRenderers: [],
+    headers: { 'FW-Fragment': 'true' },
+    rawInput: { productId: 'p1' },
+    redirectTo: '/products/p1',
+    request: {},
+  });
+
+  const store = runtime.createQueryStore();
+  const rebaser = new runtime.OptimisticRebaser(store);
+  const target = {
+    html: '',
+    replaceWithHtml(html: string) {
+      this.html = html;
+    },
+  };
+  let fetchStoreDuringOptimism: unknown;
+  store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+  const optimisticResult = await runtime.submitOptimisticEnhancedMutation({
+    fetch: async () => {
+      fetchStoreDuringOptimism = store.get('reviews', 'product:p1');
+      return {
+        async text() {
+          return [
+            '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>',
+            '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+          ].join('\n');
+        },
+      };
+    },
+    form: { action: '/_m/reviews/add', method: 'post' },
+    formData: new FormData(),
+    change: { domain: 'product', input: { reviewId: 'draft' }, keys: ['p1'] },
+    idem: 'idem_keyed_optimistic',
+    input: { reviewId: 'ignored' },
+    optimistic: {
+      keys: { reviews: (change: { keys?: string[] }) => `product:${change.keys?.[0]}` },
+      transforms: {
+        reviews(current: { items: unknown[] }, input: { reviewId: string }) {
+          return { items: [...current.items, { id: input.reviewId }] };
+        },
+      },
+    },
+    rebaser,
+    root: {
+      findFragmentTarget(fragmentTarget: string) {
+        return fragmentTarget === 'reviews:p1' ? target : null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+    },
+    store,
+  });
+
+  return {
+    graph: {
+      componentTargets: graphComponentTargetFacts(graph),
+      optimistic: graphOptimisticFacts(graph),
+    },
+    keyedMorph: {
+      appendedKeys,
+      firstProductReusedAfterReorder: reorderedGrid.children[1] === firstProduct,
+      reorderedBrowserState: reorderedGrid.children[1]?.browserState,
+      reorderedKeys: reorderedGrid.children.map((child) => child.key),
+    },
+    mutationEndpoint: {
+      body: mutationResponse.body,
+      headers: mutationResponse.headers,
+      result: mutationResult,
+      status: mutationResponse.status,
+    },
+    optimisticReview: {
+      appliedFragments: optimisticResult.appliedFragments,
+      fetchStoreDuringOptimism,
+      fragmentHtml: target.html,
+      queries: optimisticResult.queries,
+      storeAfterResponse: store.get('reviews', 'product:p1'),
+    },
   };
 }
 

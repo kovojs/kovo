@@ -97,11 +97,9 @@ import {
   generatedRegistryInterfaceMemberTypes,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
-  graphComponentTargetFacts,
   graphFixtureFile,
   generatedGraphArtifactAcceptanceProjectFact,
   graphMutationFact,
-  graphOptimisticFacts,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
   graphStaticBehaviorFact,
@@ -134,6 +132,7 @@ import {
   starterTemplateAcceptanceFact,
 } from '../packages/test/src/starter-template-fixtures.ts';
 import {
+  commerceKeyedOptimisticBehaviorFact,
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
   morphFragmentBehaviorFact,
@@ -1564,154 +1563,64 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
-  assert.deepEqual(graphComponentTargetFacts(commerceGraph), [
-    { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
-    { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
-    { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
-  ]);
-  assert.deepEqual(graphOptimisticFacts(commerceGraph), [
-    { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-    { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-    { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
-  ]);
-
-  const currentGrid = {
-    children: [
-      { browserState: { islandState: { pendingMutation: 'cart/add' } }, key: 'p1', type: 'card' },
-      { key: 'p2', type: 'card' },
-    ],
-    key: 'product-grid',
-    type: 'section',
-  };
-  const firstProduct = currentGrid.children[0];
-  const appendedGrid = morphStructuralTree(currentGrid, {
-    children: [
-      { key: 'p1', type: 'card' },
-      { key: 'p2', type: 'card' },
-      { key: 'p3', type: 'card' },
-    ],
-    key: 'product-grid',
-    type: 'section',
-  });
-  const reorderedGrid = morphStructuralTree(appendedGrid, {
-    children: [
-      { key: 'p3', type: 'card' },
-      { key: 'p1', type: 'card' },
-      { key: 'p2', type: 'card' },
-    ],
-    key: 'product-grid',
-    type: 'section',
-  });
-  assert.strictEqual(reorderedGrid.children[1], firstProduct);
-  assert.deepEqual(reorderedGrid.children[1].browserState, {
-    islandState: { pendingMutation: 'cart/add' },
-  });
-
-  const productDomain = domain('product');
-  const productP1 = query('productDetail', {
-    instanceKey: 'product:p1',
-    load: () => ({ id: 'p1', stock: 0 }),
-    reads: [productDomain],
-  });
-  const productP2 = query('productDetail', {
-    instanceKey: 'product:p2',
-    load: () => ({ id: 'p2', stock: 10 }),
-    reads: [productDomain],
-  });
-  const reserveProduct = mutation('product/reserve', {
-    csrf: false,
-    csrfJustification: 'fw-check synthetic keyed invalidation fixture',
-    handler(input) {
-      return input.productId;
-    },
-    input: s.object({ productId: s.string() }),
-    registry: {
-      inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
-      queries: [productP1, productP2],
+  const fact = await commerceKeyedOptimisticBehaviorFact({
+    graph: commerceGraph,
+    runtime: {
+      OptimisticRebaser,
+      createQueryStore,
+      domain,
+      morphStructuralTree,
+      mutation,
+      query,
+      renderMutationEndpointResponse,
+      runMutation,
+      s,
+      submitOptimisticEnhancedMutation,
     },
   });
-  assert.deepEqual(await runMutation(reserveProduct, { productId: 'p1' }, {}), {
-    changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
-    ok: true,
-    rerunQueries: ['productDetail'],
-    rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
-    value: 'p1',
-  });
-  assert.deepEqual(
-    await renderMutationEndpointResponse(reserveProduct, {
-      fragmentRenderers: [],
-      headers: { 'FW-Fragment': 'true' },
-      rawInput: { productId: 'p1' },
-      redirectTo: '/products/p1',
-      request: {},
-    }),
-    {
+
+  assert.deepEqual(fact, {
+    graph: {
+      componentTargets: [
+        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+      ],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+      ],
+    },
+    keyedMorph: {
+      appendedKeys: ['p1', 'p2', 'p3'],
+      firstProductReusedAfterReorder: true,
+      reorderedBrowserState: { islandState: { pendingMutation: 'cart/add' } },
+      reorderedKeys: ['p3', 'p1', 'p2'],
+    },
+    mutationEndpoint: {
       body: '<fw-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</fw-query>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[{"domain":"product","keys":["p1"]}]',
       },
+      result: {
+        changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
+        ok: true,
+        rerunQueries: ['productDetail'],
+        rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
+        value: 'p1',
+      },
       status: 200,
     },
-  );
-
-  const store = createQueryStore();
-  const rebaser = new OptimisticRebaser(store);
-  const target = {
-    html: '',
-    replaceWithHtml(html) {
-      this.html = html;
+    optimisticReview: {
+      appliedFragments: ['reviews:p1'],
+      fetchStoreDuringOptimism: { items: [{ id: 'r1' }, { id: 'draft' }] },
+      fragmentHtml: '<section>Reviews ready</section>',
+      queries: ['reviews:product:p1'],
+      storeAfterResponse: { items: [{ id: 'r1' }, { id: 'server' }] },
     },
-  };
-  store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
-  const result = await submitOptimisticEnhancedMutation({
-    fetch: async () => {
-      assert.deepEqual(store.get('reviews'), undefined);
-      assert.deepEqual(store.get('reviews', 'product:p1'), {
-        items: [{ id: 'r1' }, { id: 'draft' }],
-      });
-      return {
-        async text() {
-          return [
-            '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>',
-            '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
-          ].join('\n');
-        },
-      };
-    },
-    form: { action: '/_m/reviews/add', method: 'post' },
-    formData: new FormData(),
-    change: { domain: 'product', input: { reviewId: 'draft' }, keys: ['p1'] },
-    idem: 'idem_keyed_optimistic',
-    input: { reviewId: 'ignored' },
-    optimistic: {
-      keys: { reviews: (change) => `product:${change.keys?.[0]}` },
-      transforms: {
-        reviews(current, input) {
-          const reviews = current;
-          return { items: [...reviews.items, { id: input.reviewId }] };
-        },
-      },
-    },
-    rebaser,
-    root: {
-      findFragmentTarget(fragmentTarget) {
-        return fragmentTarget === 'reviews:p1' ? target : null;
-      },
-      querySelectorAll() {
-        return [];
-      },
-    },
-    store,
   });
-
-  assert.deepEqual(result.queries, ['reviews:product:p1']);
-  assert.deepEqual(result.appliedFragments, ['reviews:p1']);
-  assert.deepEqual(store.get('reviews'), undefined);
-  assert.deepEqual(store.get('reviews', 'product:p1'), {
-    items: [{ id: 'r1' }, { id: 'server' }],
-  });
-  assert.equal(target.html, '<section>Reviews ready</section>');
 });
 
 void test('P6 navigation bfcache optimism cleanup acceptance is represented', async () => {

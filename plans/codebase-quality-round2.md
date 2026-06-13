@@ -174,6 +174,10 @@ Shared server fixtures now own the P3 mutation lifecycle, server data-plane, CSR
 response, and commerce transaction rollback fixture mechanics, so `tests/fw-check.node.mjs`
 asserts structured public server behavior facts instead of rebuilding those mutation/query/route
 fixtures inline.
+Shared runtime fixtures now own the D2 commerce keyed append, generated graph target/optimism,
+keyed mutation endpoint, and optimistic review behavior projection, so `tests/fw-check.node.mjs`
+asserts one public behavior fact instead of rebuilding those graph, tree, server mutation, and fake
+store mechanics inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -222,6 +226,15 @@ Latest evidence:
   keeping the separator private and deleting the duplicated `serializeLiveTargets` and
   `serializeLiveTargetEntries` helper exports; focused runtime tests prove the one-read snapshot,
   fetch-path header/metadata parity, and inline-loader enhanced-submit target parity.
+- Phase 1/6/7 D2 commerce keyed optimism fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts`;
+  `pnpm run check:build`;
+  `node --test tests/fw-check.node.mjs --test-name-pattern "D2 commerce validates keyed append and optimistic reorder"`;
+  `pnpm exec tsc --noEmit --pretty false`.
+  Evidence: `packages/test/src/runtime-fixtures.ts` now exposes
+  `commerceKeyedOptimisticBehaviorFact`, `packages/test/src/runtime-fixtures.test.ts` proves its
+  graph, keyed morph, endpoint, and optimistic review projections, and the fw-check harness asserts
+  that public fixture against the checked-in commerce graph and real runtime/server APIs.
 - Phase 5 static export client-module output boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
