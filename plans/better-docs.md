@@ -67,8 +67,7 @@ package sources have no JSDoc — the fix is upstream, not in the markdown.
 
 - [ ] Author verified JSDoc (purpose + `@param`/`@returns` + a real `@example`) at the package
       sources for the app-facing export tier (`component`, `query`, `mutation`, `form`, `route`,
-      `domain`, guards, `respond`, …); one-liners for supporting types. Drafted from implementation
-      + `SPEC §`, committed as source of truth — not LLM-hallucinated and committed blind.
+      `domain`, guards, `respond`, …); one-liners for supporting types. Drafted from implementation + `SPEC §`, committed as source of truth — not LLM-hallucinated and committed blind.
 - [ ] Audit the public surface: demote/remove truly-internal exports from `packages/*/src/index.ts`
       (server alone exports 227); shrink the documented surface to what app authors call.
 - [ ] Upgrade `api-ref.mjs`: render `@param`/`@returns` as tables and `@example` as fenced

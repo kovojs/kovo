@@ -164,6 +164,10 @@ boundaries.
 
 Latest evidence:
 
+- [x] `mutation-optimistic.test.ts` split into focused `mutation-optimistic-failure`,
+      `-pagehide`, and `-queue` files along apply/queue/lifecycle seams; all 10 original tests
+      preserved (10 before, 10 after). Verified with the four split files plus the full runtime
+      suite (59 files, 306 tests) on `main`.
 - [x] Loader query runtime wiring was split into `loader-query.ts`, with focused tests covering
       script hydration, inline query event apply, contextual error reporting, disposal, and
       visible-return ledger handoff. Verified with focused loader-query tests, full runtime tests,
@@ -286,6 +290,10 @@ Latest evidence:
       attrs, added post-transition axe coverage, and tightened the styled thumb prop surface.
       Verified with gallery emit, UI/gallery tests, UI/gallery `tsc`, exact `vp check`, and
       `git diff --check`.
+- [x] Broad gate after salvage mini-wave through `22fc8f19` (otp-field gallery demo + mutation-optimistic
+      test split; stale drizzle worktree confirmed redundant with `77469e2a`/`d4d04e37` and discarded):
+      `pnpm run check` EXIT=0 (755 files clean, 7/7 example/conformance projects), runtime suite
+      306 tests pass, OTP browser tests pass.
 - [ ] After the next mini-wave, run at least `pnpm run check`; add `pnpm run test`,
       `pnpm run test:browser`, `pnpm run test:conformance`, and `pnpm run check:build` when touched
       surfaces justify broader gates.
