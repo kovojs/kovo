@@ -7,7 +7,11 @@ import {
   type JsxElementModel,
   type JsxExpressionModel,
 } from '../scan/parse.js';
-import { knownQueryNames } from '../analyze/query-shapes.js';
+import {
+  knownQueryNames,
+  queryNameFromPath,
+  queryPathUsesKnownQuery,
+} from '../analyze/query-shapes.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
 
@@ -123,8 +127,8 @@ function inlineAttributeDerive(
 
   const queryRoots = new Set(
     (attribute.expressionPropertyAccesses ?? [])
-      .map((path) => path.path.split('.', 1)[0])
-      .filter((query): query is string => query !== undefined && knownQueries.has(query)),
+      .map((path) => queryNameFromPath(path.path))
+      .filter((query): query is string => query !== null && knownQueries.has(query)),
   );
   if (queryRoots.size !== 1) return null;
 
@@ -165,8 +169,7 @@ function inlineTextBinding(
   const expression = soleJsxExpressionChild(element, model)?.solePropertyAccessPath ?? null;
   if (!expression) return null;
 
-  const query = expression.split('.', 1)[0];
-  return query && knownQueries.has(query) ? expression : null;
+  return queryPathUsesKnownQuery(expression, knownQueries) ? expression : null;
 }
 
 function inlineMixedTextBinding(
@@ -199,8 +202,7 @@ function soleKnownQueryPath(
   const path = expression.solePropertyAccessPath ?? null;
   if (!path) return null;
 
-  const query = path.split('.', 1)[0];
-  return query && knownQueries.has(query) ? path : null;
+  return queryPathUsesKnownQuery(path, knownQueries) ? path : null;
 }
 
 function isJsxAttributeExpression(
