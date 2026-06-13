@@ -488,6 +488,7 @@ describe('Drizzle pinned subset conformance', () => {
                 await nested.inner.db.update(products).set({ id: 'p1' });
                 await nested.inner.db.query.products.findMany();
                 await execute(sql\`select 1\`);
+                await runReport(nested.inner.db);
                 await runReport(nested);
                 await overwritten.inner.db.execute(sql\`select 1\`);
                 await overwritten.inner.db.update(products).set({ id: 'fake' });
@@ -526,6 +527,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  await nested.inner.db.update(products).set({});',
             '  await nested.inner.db.query.products.findMany();',
             '  await execute(sql`select 1`);',
+            '  await audit(nested.inner.db);',
             '  await audit(nested);',
             '  await overwritten.inner.db.execute(sql`select 1`);',
             '  await overwritten.inner.db.update(products).set({});',
@@ -570,6 +572,13 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'FW406',
             message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested.inner.db to helper runReport().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+          {
+            code: 'FW406',
+            message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested to helper runReport().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
@@ -590,6 +599,11 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:23',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:24',
           },
           {
             code: 'FW406',

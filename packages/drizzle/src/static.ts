@@ -866,19 +866,29 @@ function extractProjectUnresolvedCalls(
   const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, (node) =>
     isProjectDrizzleReceiverIdentifier(node, receivers),
   );
+  const carrierReferences = sourceReceiverAliasReferencesForBody(body, (node) =>
+    isProjectDrizzleReceiverIdentifier(node, receivers),
+  );
   return [
     ...extractProjectExternalDbArgumentCalls(
       body,
       receivers,
       localFunctionNames,
       carrierSymbolKeys,
+      carrierReferences,
     ),
     ...extractOpaqueLocalHelperReceiverCallsFromBody(
       body,
       localFunctionNames,
       localFunctionsByKey,
       (argument) => isProjectDrizzleReceiverIdentifier(argument, receivers),
-      (argument) => projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
+      (argument) =>
+        projectReceiverReferenceInArgument(
+          argument,
+          receivers,
+          carrierSymbolKeys,
+          carrierReferences,
+        ),
     ),
     ...extractReceiverMethodAliasCallsFromBody(
       body,
@@ -897,6 +907,10 @@ function extractProjectExternalDbArgumentCalls(
   localFunctionNames: ReadonlySet<string>,
   carrierSymbolKeys: ReadonlySet<string> = receiverCarrierSymbolKeysForBody(body, (node) =>
     isProjectDrizzleReceiverIdentifier(node, receivers),
+  ),
+  carrierReferences: SourceReceiverAliasReferences = sourceReceiverAliasReferencesForBody(
+    body,
+    (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
   ),
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
@@ -925,7 +939,9 @@ function extractProjectExternalDbArgumentCalls(
     if (
       !call
         .getArguments()
-        .some((arg) => projectReceiverReferenceInArgument(arg, receivers, carrierSymbolKeys))
+        .some((arg) =>
+          projectReceiverReferenceInArgument(arg, receivers, carrierSymbolKeys, carrierReferences),
+        )
     ) {
       continue;
     }
@@ -2260,6 +2276,7 @@ function externalQueryHelperDiagnostics(
       call,
       receiverReferences,
       carrierSymbolKeys,
+      queryReceiverAliasReferencesForCall(body, call, receiverReferences),
     );
     if (!receiverName) return [];
 
@@ -2296,8 +2313,12 @@ function queryLocalHelperCalls(
         call,
         requirements,
         (argument) =>
-          queryReceiverReferenceInArgument(argument, receiverReferences, carrierSymbolKeys) !==
-          undefined,
+          queryReceiverReferenceInArgument(
+            argument,
+            receiverReferences,
+            carrierSymbolKeys,
+            queryReceiverAliasReferencesForCall(body, call, receiverReferences),
+          ) !== undefined,
       )
     ) {
       continue;
@@ -2327,6 +2348,7 @@ function opaqueLocalQueryHelperDiagnostics(
       call,
       receiverReferences,
       carrierSymbolKeys,
+      queryReceiverAliasReferencesForCall(body, call, receiverReferences),
     );
     if (!receiverName) return [];
     const requirements = localFunctionsByKey.get(key) ?? [];
@@ -2336,8 +2358,12 @@ function opaqueLocalQueryHelperDiagnostics(
         call,
         requirements,
         (argument) =>
-          queryReceiverReferenceInArgument(argument, receiverReferences, carrierSymbolKeys) !==
-          undefined,
+          queryReceiverReferenceInArgument(
+            argument,
+            receiverReferences,
+            carrierSymbolKeys,
+            queryReceiverAliasReferencesForCall(body, call, receiverReferences),
+          ) !== undefined,
       )
     ) {
       return [];
@@ -2468,12 +2494,14 @@ function queryHelperReceiverArgumentName(
   call: CallExpression,
   receiverReferences: QueryReceiverReferences,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
+  carrierReferences?: SourceReceiverAliasReferences,
 ): string | undefined {
   for (const argument of call.getArguments()) {
     const receiverName = queryHelperArgumentReceiverName(
       argument,
       receiverReferences,
       carrierSymbolKeys,
+      carrierReferences,
     );
     if (receiverName) return receiverName;
   }
@@ -2485,13 +2513,38 @@ function queryHelperArgumentReceiverName(
   argument: Node,
   receiverReferences: QueryReceiverReferences,
   carrierSymbolKeys: ReadonlySet<string>,
+  carrierReferences?: SourceReceiverAliasReferences,
 ): string | undefined {
   const receiver = queryReceiverReferenceInArgument(
     argument,
     receiverReferences,
     carrierSymbolKeys,
+    carrierReferences,
   );
   return receiver ? receiver.getText() : undefined;
+}
+
+function queryReceiverAliasReferencesForCall(
+  body: ObjectLiteralExpression,
+  call: CallExpression,
+  receiverReferences: QueryReceiverReferences,
+): SourceReceiverAliasReferences | undefined {
+  const callbackBody = queryCallbackBodyForNode(body, call);
+  return callbackBody
+    ? sourceReceiverAliasReferencesForBody(callbackBody, (node) =>
+        isQueryReceiverIdentifier(node, receiverReferences),
+      )
+    : undefined;
+}
+
+function queryCallbackBodyForNode(body: ObjectLiteralExpression, node: Node): Node | undefined {
+  for (const callbackBody of queryCallbackBodies(body)) {
+    if (node === callbackBody || node.getAncestors().includes(callbackBody)) {
+      return callbackBody;
+    }
+  }
+
+  return undefined;
 }
 
 function appendUntypedQueryReceiverBinding(
@@ -4361,6 +4414,9 @@ function extractExternalDbArgumentCallsFromBody(
   bodyOffset = bodySourceStart(body),
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
+  const carrierReferences = sourceReceiverAliasReferencesForBody(body, (node) =>
+    isSourceDrizzleReceiverIdentifier(node, receiverNames),
+  );
 
   for (const call of touchBodyCallExpressions(body)) {
     if (
@@ -4384,7 +4440,14 @@ function extractExternalDbArgumentCallsFromBody(
     if (
       !call
         .getArguments()
-        .some((arg) => sourceReceiverReferenceInArgument(arg, receiverNames, carrierSymbolKeys))
+        .some((arg) =>
+          sourceReceiverReferenceInArgument(
+            arg,
+            receiverNames,
+            carrierSymbolKeys,
+            carrierReferences,
+          ),
+        )
     ) {
       continue;
     }
@@ -5373,11 +5436,15 @@ function projectReceiverReferenceInArgument(
   argument: Node,
   receivers: ProjectDrizzleReceivers,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
+  carrierReferences?: SourceReceiverAliasReferences,
 ): Node | undefined {
   return receiverReferenceInArgument(
     argument,
     (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
     carrierSymbolKeys,
+    carrierReferences
+      ? (node) => isSourceReceiverCarrierMemberExpression(node, carrierReferences)
+      : undefined,
   );
 }
 
@@ -5385,11 +5452,15 @@ function queryReceiverReferenceInArgument(
   argument: Node,
   receiverReferences: QueryReceiverReferences,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
+  carrierReferences?: SourceReceiverAliasReferences,
 ): Node | undefined {
   return receiverReferenceInArgument(
     argument,
     (node) => isQueryReceiverIdentifier(node, receiverReferences),
     carrierSymbolKeys,
+    carrierReferences
+      ? (node) => isSourceReceiverCarrierMemberExpression(node, carrierReferences)
+      : undefined,
   );
 }
 
@@ -5397,11 +5468,15 @@ function sourceReceiverReferenceInArgument(
   argument: Node,
   receiverNames: ReadonlySet<string>,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
+  carrierReferences?: SourceReceiverAliasReferences,
 ): Node | undefined {
   return receiverReferenceInArgument(
     argument,
     (node) => isSourceDrizzleReceiverIdentifier(node, receiverNames),
     carrierSymbolKeys,
+    carrierReferences
+      ? (node) => isSourceReceiverCarrierMemberExpression(node, carrierReferences)
+      : undefined,
   );
 }
 
@@ -5409,11 +5484,20 @@ function receiverReferenceInArgument(
   argument: Node,
   isReceiverIdentifier: (node: Node) => boolean,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
+  isReceiverMemberExpression?: (node: Node) => boolean,
 ): Node | undefined {
   // SPEC §10-§11: opaque helper handoffs may hide Drizzle work, so receiver values passed inside
   // containers degrade to FW406 while classified receiver call chains remain separately analyzed.
   if (isFunctionLikeNode(argument)) return undefined;
-  if (isReceiverArgumentReference(argument, argument, isReceiverIdentifier, carrierSymbolKeys)) {
+  if (
+    isReceiverArgumentReference(
+      argument,
+      argument,
+      isReceiverIdentifier,
+      carrierSymbolKeys,
+      isReceiverMemberExpression,
+    )
+  ) {
     return argument;
   }
 
@@ -5429,7 +5513,15 @@ function receiverReferenceInArgument(
         return name;
       }
     }
-    if (isReceiverArgumentReference(node, argument, isReceiverIdentifier, carrierSymbolKeys)) {
+    if (
+      isReceiverArgumentReference(
+        node,
+        argument,
+        isReceiverIdentifier,
+        carrierSymbolKeys,
+        isReceiverMemberExpression,
+      )
+    ) {
       return node;
     }
   }
@@ -5442,13 +5534,17 @@ function isReceiverArgumentReference(
   argument: Node,
   isReceiverIdentifier: (node: Node) => boolean,
   carrierSymbolKeys: ReadonlySet<string>,
+  isReceiverMemberExpression?: (node: Node) => boolean,
 ): boolean {
-  if (!Node.isIdentifier(node)) return false;
-  if (!isReceiverIdentifier(node) && !isReceiverCarrierIdentifier(node, carrierSymbolKeys)) {
+  const isIdentifierReference =
+    Node.isIdentifier(node) &&
+    (isReceiverIdentifier(node) || isReceiverCarrierIdentifier(node, carrierSymbolKeys));
+  const isMemberReference = isReceiverMemberExpression?.(node) === true;
+  if (!isIdentifierReference && !isMemberReference) {
     return false;
   }
-  if (isIdentifierDeclarationPosition(node)) return false;
-  if (isPropertyNamePosition(node)) return false;
+  if (Node.isIdentifier(node) && isIdentifierDeclarationPosition(node)) return false;
+  if (Node.isIdentifier(node) && isPropertyNamePosition(node)) return false;
   if (isAccessExpressionReceiver(node)) return false;
   if (isInsideNestedFunction(node, argument)) return false;
   return true;

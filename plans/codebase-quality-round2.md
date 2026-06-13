@@ -126,7 +126,8 @@ Current state:
   object-spread carrier copies, array-destructured detached methods, and assigned carrier helper
   handoffs.
 - Nested receiver carriers preserve property-specific receiver paths and degrade nested calls,
-  detached methods, helper handoffs, and source destructured carrier members to FW406.
+  detached methods, whole-carrier and property-specific helper handoffs, and source destructured
+  carrier members to FW406.
 - Project local helper summaries now fold through typed `{ db }` receiver carriers for both
   write summaries and query-loader reads, while unknown/external carrier handoffs stay FW406.
 - Fake/lookalike receivers and overwritten carrier members remain invisible.

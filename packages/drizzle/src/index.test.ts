@@ -5951,6 +5951,7 @@ export interface CommerceInvalidationSets {
             '  await nested.inner.db.query.users.findMany();',
             '  await execute("select 1");',
             '  await audit(nested);',
+            '  await audit(nested.inner.db);',
             '  await overwritten.inner.db.execute("select 1");',
             '  await overwritten.inner.db.update(users).set({});',
             '  await overwritten.inner.db.query.users.findMany();',
@@ -5969,6 +5970,11 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:20',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:21',
           },
           {
             code: 'FW406',
@@ -6902,6 +6908,7 @@ export interface CommerceInvalidationSets {
           '  await inner.db.update(users).set({});',
           '  await execute("select 1");',
           '  await sendAudit(nested);',
+          '  await sendAudit(nested.inner.db);',
           '  await overwritten.inner.db.execute("select 1");',
           '  await overwritten.inner.db.update(users).set({});',
           '}',
@@ -6918,6 +6925,11 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:12',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:13',
           },
           {
             code: 'FW406',
@@ -7074,6 +7086,7 @@ export interface CommerceInvalidationSets {
           '    nested.inner.db.select({ id: users.id }).from(users);',
           '    inner.db.execute("select 1");',
           '    execute("select 1");',
+          '    runReport(nested.inner.db);',
           '    runReport(nested);',
           '    overwritten.inner.db.select({ id: users.id }).from(users);',
           '    return [];',
@@ -7086,6 +7099,13 @@ export interface CommerceInvalidationSets {
     expect(facts).toEqual([
       {
         diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested.inner.db to helper runReport().',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
           {
             code: 'FW406',
             message:
