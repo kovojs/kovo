@@ -444,7 +444,10 @@ import {
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,
+  verificationLayerFwCheckDiagnosticsFact,
   type VerificationLayerBehaviorFact,
+  type VerificationLayerFwCheckDiagnosticsFact,
+  type VerificationLayerFwCheckDiagnosticsRuntime,
   type VerificationLayerRuntime,
 } from '@jiso/test/verification-fixtures';
 import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
@@ -498,6 +501,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
+    expect(verificationLayerFwCheckDiagnosticsFact).toBeTypeOf('function');
     expect(commerceFixtureFile).toBeTypeOf('function');
     expect(commerceHarnessQueryFact).toBeTypeOf('function');
     expect(commerceMutationQueryAcceptanceFact).toBeTypeOf('function');
@@ -585,6 +589,13 @@ describe('@jiso/test package subpath exports', () => {
     }>();
     expectTypeOf<VerificationLayerRuntime>().toMatchTypeOf<{
       createDbVerifier: (...args: any[]) => unknown;
+    }>();
+    expectTypeOf<VerificationLayerFwCheckDiagnosticsFact>().toMatchTypeOf<{
+      exemptTableDiagnostic: { diagnostics: unknown[] };
+      verificationDiagnostics: { diagnostics: unknown[] };
+    }>();
+    expectTypeOf<VerificationLayerFwCheckDiagnosticsRuntime>().toMatchTypeOf<{
+      fwCheck: (...args: any[]) => { exitCode: number; output: string };
     }>();
     expectTypeOf<CommerceMutationQueryAcceptanceFact>().toMatchTypeOf<{
       addToCart: { updateQueries: string[] };

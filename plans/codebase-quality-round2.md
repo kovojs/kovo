@@ -53,6 +53,10 @@ page hints.
 
 Latest evidence:
 
+- [x] `verificationLayerFwCheckDiagnosticsFact()` extracted P9 verification diagnostic graph
+      construction into `@jiso/test/verification-fixtures`, with package export coverage and
+      fw-check consuming the structured fixture. Verified with fixture/export tests, build,
+      targeted P9 fw-check, exact `vp check`, `tsc`, and `git diff --check`.
 - [x] `serverPageHintsBehaviorFact()` extracted to `@jiso/test/server-fixtures`, with package export
       coverage and `fw-check` consuming the fixture. Verified with server-fixture/package-export
       tests, `pnpm run check:build`, targeted fw-check page-hint gate, commerce source-truth,

@@ -1,3 +1,5 @@
+import { fwCheckAssertionFact, type FwCheckAssertionFact } from './fw-check-fixtures.ts';
+
 export interface VerificationLayerRuntime {
   createDbVerifier: (...args: any[]) => any;
   createJisoTestHarness: (...args: any[]) => any;
@@ -8,6 +10,11 @@ export interface VerificationLayerRuntime {
   mutation: (...args: any[]) => any;
   query: (...args: any[]) => any;
   s: any;
+}
+
+export interface VerificationLayerFwCheckDiagnosticsRuntime {
+  diagnosticDefinitions: Record<string, { message: string }>;
+  fwCheck(graph: Record<string, unknown>): { exitCode: number; output: string };
 }
 
 export interface VerificationLayerBehaviorFact {
@@ -38,6 +45,12 @@ export interface VerificationLayerBehaviorFact {
   verifier: {
     exemptWriteCovered: boolean;
   };
+}
+
+export interface VerificationLayerFwCheckDiagnosticsFact {
+  exemptTableDiagnostic: FwCheckAssertionFact;
+  verificationDiagnosticMessages: Record<string, string>;
+  verificationDiagnostics: FwCheckAssertionFact;
 }
 
 interface FakeDb {
@@ -417,6 +430,82 @@ export async function verificationLayerBehaviorFact(
     verifier: {
       exemptWriteCovered,
     },
+  };
+}
+
+export function verificationLayerFwCheckDiagnosticsFact(
+  runtime: VerificationLayerFwCheckDiagnosticsRuntime,
+): VerificationLayerFwCheckDiagnosticsFact {
+  const verificationDiagnosticMessages = Object.fromEntries(
+    ['FW402', 'FW403', 'FW404', 'FW405', 'FW407', 'FW408', 'FW410', 'FW411'].map((code) => [
+      code,
+      runtime.diagnosticDefinitions[code]?.message ?? '',
+    ]),
+  );
+
+  return {
+    exemptTableDiagnostic: fwCheckAssertionFact(
+      runtime.fwCheck({
+        diagnostics: [{ code: 'FW411', site: 'cart.queries.ts:9' }],
+      }),
+    ),
+    verificationDiagnosticMessages,
+    verificationDiagnostics: fwCheckAssertionFact(
+      runtime.fwCheck({
+        diagnostics: [
+          {
+            code: 'FW410',
+            site: 'cart.queries.ts:5',
+          },
+          {
+            code: 'FW302',
+            message: 'data-bind path is not present in the declared query shape. cart.missing',
+            site: 'cart-badge.tsx',
+            start: { column: 23, line: 3 },
+          },
+        ],
+        verificationDiagnostics: [
+          {
+            branch: 'stock-reserve',
+            code: 'FW405',
+            domain: 'product',
+            site: 'cart.domain.ts:2',
+          },
+          {
+            code: 'FW402',
+            detail: 'observed table audit_log',
+            domain: 'audit',
+          },
+          {
+            code: 'FW403',
+            domain: 'order',
+          },
+          {
+            code: 'FW404',
+            detail: 'observed table unknown_table',
+            domain: 'unknown_table',
+          },
+          {
+            code: 'FW407',
+            detail: 'observed table products',
+            domain: 'product',
+            site: 'cart.queries.ts:7',
+          },
+          {
+            code: 'FW408',
+            detail: 'expected id observed sku',
+            domain: 'product',
+            site: 'product.domain.ts:9',
+          },
+          {
+            code: 'FW410',
+            detail: 'cart Expected number',
+            domain: 'cart',
+            site: 'cart.queries.ts:11',
+          },
+        ],
+      }),
+    ),
   };
 }
 

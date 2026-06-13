@@ -153,7 +153,10 @@ import {
   wireResponseBodyPinFacts,
   wireResponseMetadataFacts,
 } from '../packages/test/src/wire-fixtures.ts';
-import { verificationLayerBehaviorFact } from '../packages/test/src/verification-fixtures.ts';
+import {
+  verificationLayerBehaviorFact,
+  verificationLayerFwCheckDiagnosticsFact,
+} from '../packages/test/src/verification-fixtures.ts';
 import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
   csrfField,
@@ -2326,160 +2329,99 @@ void test('P9 verification layer evidence remains represented', async () => {
     },
   );
 
-  assert.deepEqual(
-    fwCheckAssertionFact(
-      fwCheck({
-        diagnostics: [
-          {
-            code: 'FW410',
-            site: 'cart.queries.ts:5',
-          },
-          {
-            code: 'FW302',
-            message: 'data-bind path is not present in the declared query shape. cart.missing',
-            site: 'cart-badge.tsx',
-            start: { column: 23, line: 3 },
-          },
-        ],
-        verificationDiagnostics: [
-          {
-            branch: 'stock-reserve',
-            code: 'FW405',
-            domain: 'product',
-            site: 'cart.domain.ts:2',
-          },
-          {
-            code: 'FW402',
-            detail: 'observed table audit_log',
-            domain: 'audit',
-          },
-          {
-            code: 'FW403',
-            domain: 'order',
-          },
-          {
-            code: 'FW404',
-            detail: 'observed table unknown_table',
-            domain: 'unknown_table',
-          },
-          {
-            code: 'FW407',
-            detail: 'observed table products',
-            domain: 'product',
-            site: 'cart.queries.ts:7',
-          },
-          {
-            code: 'FW408',
-            detail: 'expected id observed sku',
-            domain: 'product',
-            site: 'product.domain.ts:9',
-          },
-          {
-            code: 'FW410',
-            detail: 'cart Expected number',
-            domain: 'cart',
-            site: 'cart.queries.ts:11',
-          },
-        ],
-      }),
-    ),
-    {
-      coverage: [],
-      diagnostics: [
-        {
-          code: 'FW410',
-          message: 'Query result shape failed declared output schema.',
-          properties: {},
-          severity: 'ERROR',
-          target: 'cart.queries.ts:5',
-        },
-        {
-          code: 'FW302',
-          message: 'data-bind path is not present in the declared query shape. cart.missing',
-          properties: {},
-          severity: 'ERROR',
-          target: 'cart-badge.tsx:3:23',
-        },
-        {
-          code: 'FW405',
-          message:
-            'Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
-          properties: {},
-          severity: 'WARN',
-          target: 'cart.domain.ts:2',
-        },
-        {
-          code: 'FW402',
-          message: 'Write touched an undeclared domain. domain=audit observed table audit_log',
-          properties: {},
-          severity: 'ERROR',
-          target: 'domain:audit',
-        },
-        {
-          code: 'FW403',
-          message: 'Declared domain was never observed written. domain=order',
-          properties: {},
-          severity: 'WARN',
-          target: 'domain:order',
-        },
-        {
-          code: 'FW404',
-          message: 'Write to unmapped table. domain=unknown_table observed table unknown_table',
-          properties: {},
-          severity: 'ERROR',
-          target: 'domain:unknown_table',
-        },
-        {
-          code: 'FW407',
-          message: 'Query read from undeclared domain. domain=product observed table products',
-          properties: {},
-          severity: 'ERROR',
-          target: 'cart.queries.ts:7',
-        },
-        {
-          code: 'FW408',
-          message:
-            'Declared row key differs from observed row predicate. domain=product expected id observed sku',
-          properties: {},
-          severity: 'ERROR',
-          target: 'product.domain.ts:9',
-        },
-        {
-          code: 'FW410',
-          message:
-            'Query result shape failed declared output schema. domain=cart cart Expected number',
-          properties: {},
-          severity: 'ERROR',
-          target: 'cart.queries.ts:11',
-        },
-      ],
-      exitCode: 1,
-      status: 'issues',
-      version: 'fw-check/v1',
-    },
-  );
-  assert.deepEqual(
-    fwCheckAssertionFact(
-      fwCheck({
-        diagnostics: [{ code: 'FW411', site: 'cart.queries.ts:9' }],
-      }),
-    ),
-    {
-      coverage: [],
-      diagnostics: [
-        {
-          code: 'FW411',
-          message: 'Query read set includes an exempt table.',
-          properties: {},
-          severity: 'ERROR',
-          target: 'cart.queries.ts:9',
-        },
-      ],
-      exitCode: 1,
-      status: 'issues',
-      version: 'fw-check/v1',
-    },
-  );
+  const verificationFwCheckFact = verificationLayerFwCheckDiagnosticsFact({
+    diagnosticDefinitions,
+    fwCheck,
+  });
+  assert.deepEqual(verificationFwCheckFact.verificationDiagnostics, {
+    coverage: [],
+    diagnostics: [
+      {
+        code: 'FW410',
+        message: diagnosticDefinitions.FW410.message,
+        properties: {},
+        severity: 'ERROR',
+        target: 'cart.queries.ts:5',
+      },
+      {
+        code: 'FW302',
+        message: 'data-bind path is not present in the declared query shape. cart.missing',
+        properties: {},
+        severity: 'ERROR',
+        target: 'cart-badge.tsx:3:23',
+      },
+      {
+        code: 'FW405',
+        message:
+          'Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
+        properties: {},
+        severity: 'WARN',
+        target: 'cart.domain.ts:2',
+      },
+      {
+        code: 'FW402',
+        message: 'Write touched an undeclared domain. domain=audit observed table audit_log',
+        properties: {},
+        severity: 'ERROR',
+        target: 'domain:audit',
+      },
+      {
+        code: 'FW403',
+        message: 'Declared domain was never observed written. domain=order',
+        properties: {},
+        severity: 'WARN',
+        target: 'domain:order',
+      },
+      {
+        code: 'FW404',
+        message: 'Write to unmapped table. domain=unknown_table observed table unknown_table',
+        properties: {},
+        severity: 'ERROR',
+        target: 'domain:unknown_table',
+      },
+      {
+        code: 'FW407',
+        message: 'Query read from undeclared domain. domain=product observed table products',
+        properties: {},
+        severity: 'ERROR',
+        target: 'cart.queries.ts:7',
+      },
+      {
+        code: 'FW408',
+        message:
+          'Declared row key differs from observed row predicate. domain=product expected id observed sku',
+        properties: {},
+        severity: 'ERROR',
+        target: 'product.domain.ts:9',
+      },
+      {
+        code: 'FW410',
+        message:
+          'Query result shape failed declared output schema. domain=cart cart Expected number',
+        properties: {},
+        severity: 'ERROR',
+        target: 'cart.queries.ts:11',
+      },
+    ],
+    exitCode: 1,
+    status: 'issues',
+    version: 'fw-check/v1',
+  });
+  assert.deepEqual(verificationFwCheckFact.exemptTableDiagnostic, {
+    coverage: [],
+    diagnostics: [
+      {
+        code: 'FW411',
+        message: 'Query read set includes an exempt table.',
+        properties: {},
+        severity: 'ERROR',
+        target: 'cart.queries.ts:9',
+      },
+    ],
+    exitCode: 1,
+    status: 'issues',
+    version: 'fw-check/v1',
+  });
 
   assert.deepEqual(
     await enhancedMutationBehaviorFact({

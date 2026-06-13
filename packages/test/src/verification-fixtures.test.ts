@@ -8,6 +8,7 @@ import { createDbVerifier } from './verifier.js';
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,
+  verificationLayerFwCheckDiagnosticsFact,
 } from './verification-fixtures.js';
 
 describe('@jiso/test verification fixtures', () => {
@@ -90,6 +91,66 @@ describe('@jiso/test verification fixtures', () => {
       verifier: {
         exemptWriteCovered: true,
       },
+    });
+  });
+
+  it('projects fw-check verification diagnostics into a structured public fact', () => {
+    const fact = verificationLayerFwCheckDiagnosticsFact({
+      diagnosticDefinitions,
+      fwCheck(graph) {
+        const diagnostics = [
+          ...(Array.isArray(graph.diagnostics) ? graph.diagnostics : []),
+          ...(Array.isArray(graph.verificationDiagnostics) ? graph.verificationDiagnostics : []),
+        ] as Array<{ code?: string; site?: string; start?: { column?: number; line?: number } }>;
+        return {
+          exitCode: diagnostics.length > 0 ? 1 : 0,
+          output: [
+            'fw-check/v1',
+            ...(diagnostics.length > 0 ? [] : ['OK']),
+            ...diagnostics.map((diagnostic) => {
+              const site =
+                diagnostic.site && diagnostic.start?.line && diagnostic.start?.column
+                  ? `${diagnostic.site}:${diagnostic.start.line}:${diagnostic.start.column}`
+                  : (diagnostic.site ?? 'domain:test');
+              return `ERROR ${diagnostic.code ?? 'UNKNOWN'} ${site} ${diagnostic.code ?? 'UNKNOWN'} message`;
+            }),
+            '',
+          ].join('\n'),
+        };
+      },
+    });
+
+    expect(fact.verificationDiagnosticMessages).toMatchObject({
+      FW402: 'Write touched an undeclared domain.',
+      FW403: 'Declared domain was never observed written.',
+      FW404: 'Write to unmapped table.',
+      FW405: 'Conditional write branch was never executed under instrumentation.',
+      FW407: 'Query read from undeclared domain.',
+      FW408: 'Declared row key differs from observed row predicate.',
+      FW410: 'Query result shape failed declared output schema.',
+      FW411: 'Query read set includes an exempt table.',
+    });
+    expect(fact.verificationDiagnostics).toMatchObject({
+      diagnostics: [
+        { code: 'FW410', severity: 'ERROR', target: 'cart.queries.ts:5' },
+        { code: 'FW302', severity: 'ERROR', target: 'cart-badge.tsx:3:23' },
+        { code: 'FW405', severity: 'ERROR', target: 'cart.domain.ts:2' },
+        { code: 'FW402', severity: 'ERROR', target: 'domain:test' },
+        { code: 'FW403', severity: 'ERROR', target: 'domain:test' },
+        { code: 'FW404', severity: 'ERROR', target: 'domain:test' },
+        { code: 'FW407', severity: 'ERROR', target: 'cart.queries.ts:7' },
+        { code: 'FW408', severity: 'ERROR', target: 'product.domain.ts:9' },
+        { code: 'FW410', severity: 'ERROR', target: 'cart.queries.ts:11' },
+      ],
+      exitCode: 1,
+      status: 'issues',
+      version: 'fw-check/v1',
+    });
+    expect(fact.exemptTableDiagnostic).toMatchObject({
+      diagnostics: [{ code: 'FW411', severity: 'ERROR', target: 'cart.queries.ts:9' }],
+      exitCode: 1,
+      status: 'issues',
+      version: 'fw-check/v1',
     });
   });
 });
