@@ -617,6 +617,65 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
   });
 
+  it('pins spread-copied carrier receiver calls as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '}',
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            "export const productQuery = query('product/spread-carrier', {",
+            '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '    const carrier = { db, fake };',
+            '    const spread = { ...carrier };',
+            '    const overwritten = { ...carrier, db: fake };',
+            "    await spread.db.execute('select 1');",
+            "    await overwritten.db.execute('select 1');",
+            '    return spread.db.query.products.findMany();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+          },
+        ],
+        query: 'product/spread-carrier',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
+  });
+
   it('does not fabricate project query facts from untyped query-loader receiver names', () => {
     const facts = extractQueryFactsFromProject({
       files: [

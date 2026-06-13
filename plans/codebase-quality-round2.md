@@ -51,6 +51,15 @@ with same-session file/test evidence.
       touch/query facts through the carrier boundary, while sibling fake carrier members remain
       invisible. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Round104 Drizzle evidence 2026-06-13: source/project object-spread copies of proven
+      Drizzle receiver carriers now preserve only non-overridden receiver properties, so
+      spread-copied carrier member calls and helper handoffs degrade to FW406 while later
+      `db: fake` overrides remain invisible. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
       Round100 evidence 2026-06-13: `packages/runtime/src/query-events.ts` deleted the legacy

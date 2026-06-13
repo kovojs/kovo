@@ -4793,39 +4793,84 @@ function appendSourceReceiverCarrierProperties(
   const bindingSymbolKey = resolvedSymbolKey(binding.getSymbol());
   if (!bindingSymbolKey) return;
 
-  for (const property of expression.getProperties()) {
-    const propertyName = receiverCarrierPropertyName(
-      property,
-      references,
-      isBaseReceiverIdentifier,
-    );
-    if (!propertyName) continue;
+  const receiverProperties = receiverCarrierPropertiesFromObjectLiteral(
+    expression,
+    references,
+    isBaseReceiverIdentifier,
+  );
+  if (receiverProperties.size === 0) return;
 
-    const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
-    properties.add(propertyName);
+  const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
+  for (const property of receiverProperties) {
+    properties.add(property);
   }
 }
 
-function receiverCarrierPropertyName(
+function receiverCarrierPropertiesFromObjectLiteral(
+  object: ObjectLiteralExpression,
+  references: SourceReceiverAliasReferences,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): ReadonlySet<string> {
+  // SPEC §11.1: object-spread carrier copies preserve only properties still proven to contain a
+  // Drizzle receiver after later object-literal overrides.
+  const properties = new Set<string>();
+
+  for (const property of object.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      const spreadProperties = receiverCarrierSpreadProperties(property, references);
+      if (spreadProperties) {
+        for (const spreadProperty of spreadProperties) properties.add(spreadProperty);
+      } else {
+        properties.clear();
+      }
+      continue;
+    }
+
+    const propertyName = propertyNameText(property.getNameNode());
+    if (!propertyName) {
+      properties.clear();
+      continue;
+    }
+
+    if (receiverCarrierPropertyCarriesReceiver(property, references, isBaseReceiverIdentifier)) {
+      properties.add(propertyName);
+    } else {
+      properties.delete(propertyName);
+    }
+  }
+
+  return properties;
+}
+
+function receiverCarrierSpreadProperties(
+  property: Node,
+  references: SourceReceiverAliasReferences,
+): ReadonlySet<string> | undefined {
+  if (!Node.isSpreadAssignment(property)) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(property.getExpression());
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(expression));
+  return symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
+}
+
+function receiverCarrierPropertyCarriesReceiver(
   property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
   references: QueryReceiverReferences,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
-): string | undefined {
+): boolean {
   if (Node.isShorthandPropertyAssignment(property)) {
     const name = property.getNameNode();
-    return isBaseReceiverIdentifier(name) || isSourceReceiverAliasIdentifier(name, references)
-      ? name.getText()
-      : undefined;
+    return isBaseReceiverIdentifier(name) || isSourceReceiverAliasIdentifier(name, references);
   }
 
-  if (!Node.isPropertyAssignment(property)) return undefined;
+  if (!Node.isPropertyAssignment(property)) return false;
 
   const initializer = property.getInitializer();
-  if (!initializer) return undefined;
+  if (!initializer) return false;
 
-  return isSourceReceiverAliasExpression(initializer, isBaseReceiverIdentifier, references)
-    ? propertyNameText(property.getNameNode())
-    : undefined;
+  return isSourceReceiverAliasExpression(initializer, isBaseReceiverIdentifier, references);
 }
 
 function carrierPropertiesForSymbol(

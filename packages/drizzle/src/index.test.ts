@@ -5490,6 +5490,68 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project spread-copied receiver carrier members as FW406 without overridden fake facts', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'execute(query: unknown): Promise<void>;',
+          'query: any;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            '  const carrier = { db, fake };',
+            '  const spread = { ...carrier };',
+            '  const overwritten = { ...carrier, db: fake };',
+            '  await spread.db.execute("select 1");',
+            '  await spread.db.update(users).set({});',
+            '  await spread.db.query.users.findMany();',
+            '  await overwritten.db.execute("select 1");',
+            '  await overwritten.db.update(users).set({});',
+            '  await overwritten.db.query.users.findMany();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:15',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:16',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
+          },
+        ],
+      },
+    });
+  });
+
   it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -6334,6 +6396,52 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks source spread-copied receiver carriers as FW406 without overridden fake facts', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = { db, fake };',
+          '  const spread = { ...carrier };',
+          '  const overwritten = { ...carrier, db: fake };',
+          '  await spread.db.execute("select 1");',
+          '  await spread.db.update(users).set({});',
+          '  await sendAudit(spread);',
+          '  await overwritten.db.execute("select 1");',
+          '  await overwritten.db.update(users).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks source query-loader receiver aliases as FW406 instead of deriving reads', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -6396,6 +6504,55 @@ export interface CommerceInvalidationSets {
           },
         ],
         query: 'users/source-alias',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
+  });
+
+  it('marks source query-loader spread-copied receiver carriers as FW406', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/source-spread-carrier", {',
+          '  load(_input, db, fake) {',
+          '    const carrier = { db, fake };',
+          '    const spread = { ...carrier };',
+          '    const overwritten = { ...carrier, db: fake };',
+          '    spread.db.select({ id: users.id }).from(users);',
+          '    spread.db.execute("select 1");',
+          '    overwritten.db.select({ id: users.id }).from(users);',
+          '    fake.select({ id: users.id }).from(users);',
+          '    return [];',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/source-spread-carrier',
         reads: [],
         shape: {},
         site: 'user.queries.ts:3',

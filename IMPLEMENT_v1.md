@@ -329,6 +329,15 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       boundary, while sibling fake carrier members remain invisible. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-13: source/project object-spread copies of proven Drizzle
+      receiver carriers now preserve only non-overridden receiver properties, so spread-copied
+      carrier member calls and helper handoffs degrade to FW406 while later `db: fake` overrides
+      remain invisible. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query
