@@ -250,6 +250,8 @@ Relative binding detection is centralized in query-shape helpers and reused by q
 analysis plus data-bind validation. Handler param lowering now consumes parser-provided terminal
 property names for captured member expressions when emitting `data-p-*` names, instead of
 rediscovering the final segment from expression text.
+Zero-argument handler call arguments now carry parser-provided reference facts, and standalone
+identifier params use those facts for `data-p-*` names before falling back to expression text.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -259,6 +261,9 @@ rediscovering the final segment from expression text.
 
 Latest evidence:
 
+- Handler call-argument reference facts: `pnpm exec vitest --run
+packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
+tsc --noEmit --pretty false`.
 - Handler param terminal-name facts: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts
 packages/compiler/src/compile-component.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact

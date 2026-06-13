@@ -130,6 +130,7 @@ export interface ZeroArgArrowModel {
   body: string;
   bodyEnd: number;
   bodyKind: 'block' | 'expression';
+  callArgumentReferences?: readonly (readonly IdentifierReferenceModel[])[];
   callArgumentPropertyAccesses?: readonly (readonly PropertyAccessPathModel[])[];
   callArgumentStaticValues?: readonly (StaticLiteralValue | undefined)[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
@@ -1530,6 +1531,10 @@ function zeroArgArrowModel(
     !ts.isBlock(body) && ts.isCallExpression(body)
       ? body.arguments.map((argument) => propertyAccessPathModels(sourceFile, argument))
       : undefined;
+  const callArgumentReferences =
+    !ts.isBlock(body) && ts.isCallExpression(body)
+      ? body.arguments.map((argument) => referenceIdentifierModels(sourceFile, argument))
+      : undefined;
   const callArgumentStaticValues =
     !ts.isBlock(body) && ts.isCallExpression(body)
       ? body.arguments.map((argument) => staticLiteralValue(argument))
@@ -1540,6 +1545,7 @@ function zeroArgArrowModel(
       body: bodySource,
       bodyEnd,
       bodyKind: ts.isBlock(body) ? 'block' : 'expression',
+      ...(callArgumentReferences === undefined ? {} : { callArgumentReferences }),
       ...(callArgumentPropertyAccesses === undefined ? {} : { callArgumentPropertyAccesses }),
       ...(callArgumentStaticValues === undefined ? {} : { callArgumentStaticValues }),
       bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),

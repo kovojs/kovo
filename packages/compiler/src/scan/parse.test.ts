@@ -599,6 +599,11 @@ export const CartActions = component('cart-actions', {
         paths.map((path) => path.path),
       ),
     ).toEqual([[], ['item.id'], ['item.quantity'], []]);
+    expect(
+      click?.zeroArgArrow?.callArgumentReferences?.map((references) =>
+        references.map((reference) => reference.name),
+      ),
+    ).toEqual([[], ['item'], ['item'], ['state']]);
   });
 
   it('extracts document element method actions from zero-argument arrows', () => {

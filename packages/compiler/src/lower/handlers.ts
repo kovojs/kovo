@@ -4,6 +4,7 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   jsxElements,
   type ComponentModuleModel,
+  type IdentifierReferenceModel,
   type PropertyAccessPathModel,
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
@@ -261,7 +262,13 @@ function extractElementParams(
             zeroArgArrow?.callArgumentPropertyAccesses?.[index]
               ?.filter((access) => serializableMemberExpression(access.path))
               .map(elementParamCandidateFromAccess) ?? [];
-          return members.length > 0 ? members : [{ expression: arg }];
+          const simpleReference = simpleCallArgumentReference(
+            arg,
+            zeroArgArrow?.callArgumentReferences?.[index] ?? [],
+          );
+          return members.length > 0
+            ? members
+            : [{ expression: arg, ...(simpleReference ? { terminalName: simpleReference } : {}) }];
         })
     : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
@@ -283,6 +290,16 @@ function elementParamCandidateFromAccess(access: PropertyAccessPathModel): Eleme
     ...(access.inferredType ? { type: access.inferredType } : {}),
     terminalName: access.terminalName,
   };
+}
+
+function simpleCallArgumentReference(
+  expression: string,
+  references: readonly IdentifierReferenceModel[],
+): string | null {
+  const [reference] = references;
+  return reference && references.length === 1 && reference.name === expression.trim()
+    ? reference.name
+    : null;
 }
 
 function inferElementParamType(

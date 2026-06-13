@@ -392,6 +392,32 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('uses parser reference facts for standalone call argument param names', () => {
+    const source = `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: ({ quantity }) => (
+    <button onClick={() => track(quantity)}>Add</button>
+  ),
+});
+`;
+    const [handler] = lowerEventHandlers(
+      { fileName: 'components/cart/cart-actions.tsx', source },
+      'CartActions',
+      parseComponentModule('components/cart/cart-actions.tsx', source),
+    );
+
+    expect(handler?.params).toEqual([
+      {
+        attributeName: 'data-p-quantity',
+        expression: 'quantity',
+        type: 'string',
+        value: '{quantity}',
+      },
+    ]);
+  });
+
   it('emits typed zero-argument arrow handlers from the TypeScript AST', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
