@@ -545,6 +545,14 @@ plans/codebase-quality-round2.md`.
       classification. Focused verification:
       `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
       and `pnpm exec tsc --noEmit --pretty false`.
+      Evidence 2026-06-13: static-export route planning and replayed response validation moved
+      subtractively into `packages/server/src/static-export-route-plan.ts` and
+      `packages/server/src/static-export-response.ts`, leaving `static-export.ts` to orchestrate
+      export writes and `static-replay.ts` to choreograph synthetic SPEC §9.5 route/module
+      requests plus L0/L1 document validation. Focused verification:
+      `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`,
+      and `pnpm exec tsc --noEmit --pretty false`.
 - [x] D9 TSX-only authoring (commerce TSX migration, FW235 error diagnostic, Constitution #3 payoff rewording, FW226 demotion) is archived in `plans/archive.md` under deleted `plans/block-ir.md`; commerce is TSX-authored, SPEC §5.2/FW235 text is landed, FW235 is implemented at error severity with compiler-emitted provenance exemption, and starter/docs/agent TSX-only constraints are recorded and tested.
 - [x] D10 diagnostics surfacing (blocking Vite dev transform, dev teaching-error documents, `fw mcp` agent surface) is planned in `plans/diagnostics.md`; design agreed 2026-06-11 (severity decided once on shared `diagnosticDefinitions`, surfaces only render; `error` blocks transform/build with no last-good serving; server-rendered dev error documents over the D8 R5 middleware; MCP wraps existing compile/check/explain APIs, stdio-first); SPEC §11.3 surfacing text, V1/V2 Vite transform diagnostics, V3 static-export refusal, E1 dev diagnostic document renderer, E2 page/enhanced-mutation/no-JS middleware failed-module integration, M1a stdio `fw mcp`, M1b SDK-backed MCP lifecycle, M2 `compile/v1` contract, and seeded red/green gate wiring are implemented. Evidence 2026-06-12: `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs` covers Vite transform/lint callback, `vp build`, static export API, `fw export`, MCP object dispatch, and fallback MCP stdio; `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts` covers dev page/enhanced-mutation/no-JS teaching documents.
 - [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.

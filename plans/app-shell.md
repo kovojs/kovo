@@ -184,6 +184,17 @@ Round89 app-shell static document boundary evidence:
 - `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round90 app-shell static export boundary evidence:
+
+- `packages/server/src/static-export-route-plan.ts` now owns exportable route target planning and
+  FW229 route/staticPaths diagnostics, leaving `static-export.ts` to orchestrate the export.
+- `packages/server/src/static-export-response.ts` now owns replayed route-document and `/c/`
+  client-module response validation/body extraction, leaving `static-replay.ts` to choreograph
+  synthetic requests, L0/L1 validation, and artifact assembly.
+- `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:

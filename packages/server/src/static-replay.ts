@@ -1,13 +1,16 @@
 import type { RequestHandler } from './app.js';
 import { normalizePathname } from './match.js';
 import {
+  readStaticExportClientModuleResponse,
+  readStaticExportRouteDocumentResponse,
+} from './static-export-response.js';
+import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
 } from './static-export-document.js';
 import {
   StaticExportError,
   staticExportDiagnostic,
-  sortedHeaders,
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
   type StaticExportHtmlPathStyle,
@@ -34,25 +37,13 @@ export async function replayStaticExportRouteArtifact({
 }: StaticExportRouteReplayOptions): Promise<StaticExportArtifact> {
   const pathname = normalizePathname(routePath).pathname;
   const response = await handler(new Request(new URL(pathname, origin), { method: 'GET' }));
-  const contentType = response.headers.get('content-type');
-
-  if (response.status !== 200 || !contentType?.toLowerCase().includes('text/html')) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        routePath,
-        `FW229 static export can only write successful HTML route documents; '${routePath}' returned status ${response.status} with Content-Type '${contentType ?? 'none'}'.`,
-      ),
-    ]);
-  }
-
-  const body = await response.text();
+  const replayed = await readStaticExportRouteDocumentResponse({ response, routePath });
+  const { body } = replayed;
   assertStaticExportRouteDocumentL0L1({ body, origin, routePath });
 
   return {
-    body,
-    headers: sortedHeaders(response.headers),
+    ...replayed,
     path: htmlArtifactPath(pathname, htmlPathStyle),
-    status: response.status,
   };
 }
 
@@ -92,30 +83,17 @@ async function replayStaticExportClientModuleArtifact(
 ): Promise<StaticExportClientModuleArtifact> {
   const url = new URL(href, origin);
   const response = await handler(new Request(url, { method: 'GET' }));
-  const contentType = response.headers.get('content-type');
-
-  if (response.status !== 200 || !isJavaScriptClientModuleContentType(contentType)) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        url.pathname,
-        `FW229 static export cannot copy client module '${href}' because the app handler returned status ${response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
-      ),
-    ]);
-  }
-
-  return {
-    body: await response.text(),
-    headers: sortedHeaders(response.headers),
+  const replayed = await readStaticExportClientModuleResponse({
     href,
     path: url.pathname,
-    status: response.status,
-  };
-}
+    response,
+  });
 
-function isJavaScriptClientModuleContentType(contentType: string | null): boolean {
-  if (contentType === null) return false;
-  const mime = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-  return mime === 'text/javascript' || mime === 'application/javascript';
+  return {
+    ...replayed,
+    href,
+    path: url.pathname,
+  };
 }
 
 interface StaticExportRouteDocumentL0L1Options {

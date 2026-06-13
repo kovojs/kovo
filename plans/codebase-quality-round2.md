@@ -520,6 +520,15 @@ Closed evidence so far:
   `packages/server/src/static-replay.ts`, `packages/server/src/static-replay.test.ts`, and
   `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`.
+- Static-export route planning and replayed response validation now live in
+  `packages/server/src/static-export-route-plan.ts` and
+  `packages/server/src/static-export-response.ts`, leaving `static-export.ts` and
+  `static-replay.ts` to orchestrate export/replay without owning route FW229 diagnostics or
+  response-shape checks. Evidence:
+  `packages/server/src/static-export-route-plan.test.ts`,
+  `packages/server/src/static-export-response.test.ts`,
+  `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`, and
+  `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 
