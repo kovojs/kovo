@@ -1,7 +1,7 @@
-import type { RequestHandler } from './app-types.js';
 import { collectStaticExportClientModuleHrefs } from './static-export-document-refs.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { replayStaticExportRequest } from './static-export-request.js';
+import type { StaticExportReplayContext } from './static-export-replay-context.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 import {
   type StaticExportArtifact,
@@ -9,21 +9,19 @@ import {
 } from './static-export-types.js';
 
 export interface StaticExportClientModuleReplayOptions {
-  handler: RequestHandler;
-  origin: string;
+  context: StaticExportReplayContext;
   routeArtifacts: readonly StaticExportArtifact[];
 }
 
 export async function replayStaticExportClientModuleArtifacts({
-  handler,
-  origin,
+  context,
   routeArtifacts,
 }: StaticExportClientModuleReplayOptions): Promise<StaticExportClientModuleArtifact[]> {
   const artifacts: StaticExportClientModuleArtifact[] = [];
   const bodyByTargetPath = new Map<string, string>();
 
-  for (const href of collectStaticExportClientModuleHrefs(routeArtifacts, origin)) {
-    const artifact = await replayStaticExportClientModuleArtifact({ handler, href, origin });
+  for (const href of collectStaticExportClientModuleHrefs(routeArtifacts, context.origin)) {
+    const artifact = await replayStaticExportClientModuleArtifact({ context, href });
     const existingBody = bodyByTargetPath.get(artifact.path);
     if (existingBody !== undefined && existingBody !== artifact.body) {
       throw new StaticExportError([
@@ -44,17 +42,15 @@ export async function replayStaticExportClientModuleArtifacts({
 }
 
 interface StaticExportClientModuleArtifactReplayOptions {
-  handler: RequestHandler;
+  context: StaticExportReplayContext;
   href: string;
-  origin: string;
 }
 
 async function replayStaticExportClientModuleArtifact({
-  handler,
+  context,
   href,
-  origin,
 }: StaticExportClientModuleArtifactReplayOptions): Promise<StaticExportClientModuleArtifact> {
-  const { response, url } = await replayStaticExportRequest({ handler, href, origin });
+  const { response, url } = await replayStaticExportRequest({ context, href });
   const replayed = await readStaticExportReplayedResponse({
     href,
     kind: 'client-module',

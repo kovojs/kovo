@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { createApp } from './app.js';
 import type { RequestHandler } from './app-types.js';
+import { route } from './route.js';
 import { replayStaticExportRequest } from './static-export-request.js';
+import { createStaticExportReplayContext } from './static-export-replay-context.js';
 
 describe('server static export synthetic request boundary', () => {
   it('replays route document paths as SPEC §9.5 synthetic GET requests', async () => {
@@ -13,10 +16,10 @@ describe('server static export synthetic request boundary', () => {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     };
+    const context = { handler, origin: 'https://docs.example.test/base?ignored=1' };
 
     const { response, url } = await replayStaticExportRequest({
-      handler,
-      origin: 'https://docs.example.test/base?ignored=1',
+      context,
       pathname: '/guide/intro',
     });
 
@@ -34,11 +37,11 @@ describe('server static export synthetic request boundary', () => {
         headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
       });
     };
+    const context = { handler, origin: 'https://shop.example.test' };
 
     const { response, url } = await replayStaticExportRequest({
-      handler,
+      context,
       href: '/c/cart.client.js?v=cart-1#Cart$add',
-      origin: 'https://shop.example.test',
     });
 
     await expect(response.text()).resolves.toBe('export const version = "cart-1";');
@@ -46,5 +49,26 @@ describe('server static export synthetic request boundary', () => {
     expect(url.search).toBe('?v=cart-1');
     expect(url.hash).toBe('#Cart$add');
     expect(seen).toEqual(['GET /c/cart.client.js?v=cart-1#Cart$add']);
+  });
+
+  it('creates the replay context from the closed app-shell aggregate', async () => {
+    const context = createStaticExportReplayContext({
+      app: createApp({
+        routes: [
+          route('/context', {
+            page: () => '<main>context shell</main>',
+          }),
+        ],
+      }),
+    });
+
+    const { response, url } = await replayStaticExportRequest({
+      context,
+      pathname: '/context',
+    });
+
+    await expect(response.text()).resolves.toContain('<main>context shell</main>');
+    expect(context.origin).toBe('https://jiso.local');
+    expect(url.href).toBe('https://jiso.local/context');
   });
 });

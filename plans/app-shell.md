@@ -57,6 +57,10 @@ Implemented areas:
   content-type/status diagnostics for both route documents and immutable `/c/` modules, leaving
   `static-export-document.ts` focused on document inspection/artifact assembly and
   `static-export-client-modules.ts` focused on client-module replay/dedupe.
+- `static-export-replay-context.ts` owns the SPEC §9.5 closed-app replay context so the static
+  export orchestrator creates one `createRequestHandler(app)`/origin pair and document,
+  synthetic-request, and client-module replay consume that context instead of accepting loose
+  handler/origin wiring.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting,
   SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export, and a public export
   manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
@@ -116,6 +120,14 @@ Round280 Vite plugin app-only boundary evidence:
   pins the compile-time rejection for `createRequestHandler(app)` inputs while existing plugin
   build/dev tests prove app-owned request filtering and writeBundle output remain wired.
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
+Round281 static-export replay-context evidence:
+
+- `packages/server/src/static-export-replay-context.ts` creates the closed-app replay context, and
+  `static-export-replay.ts`, `static-export-document.ts`, `static-export-client-modules.ts`, and
+  `static-export-request.ts` consume it for route-document and `/c/` module replay.
+- `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
 Round276 built-root P10 boundary evidence:

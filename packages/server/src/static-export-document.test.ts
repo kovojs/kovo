@@ -18,12 +18,12 @@ describe('server static export document boundary', () => {
         status: 200,
       });
     };
+    const context = { handler, origin: 'https://jiso.local/root?ignored=1' };
 
     await expect(
       replayStaticExportRouteDocumentArtifact({
-        handler,
+        context,
         htmlPathStyle: 'directory',
-        origin: 'https://jiso.local/root?ignored=1',
         routePath: '/docs/intro/?from=route#hash',
       }),
     ).resolves.toEqual({
@@ -44,12 +44,12 @@ describe('server static export document boundary', () => {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         status: 405,
       });
+    const context = { handler, origin: 'https://jiso.local' };
 
     await expect(
       replayStaticExportRouteDocumentArtifact({
-        handler,
+        context,
         htmlPathStyle: 'directory',
-        origin: 'https://jiso.local',
         routePath: '/private',
       }),
     ).rejects.toMatchObject({

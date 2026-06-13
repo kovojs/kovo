@@ -14,11 +14,11 @@ describe('server static export client module replay boundary', () => {
         status: 200,
       });
     };
+    const context = { handler, origin: 'https://jiso.local' };
 
     await expect(
       replayStaticExportClientModuleArtifacts({
-        handler,
-        origin: 'https://jiso.local',
+        context,
         routeArtifacts: [
           {
             body: '<button on:click="/c/cart.js?v=one#Cart$add /c/cart.js?v=two#Cart$add">',
@@ -54,11 +54,11 @@ describe('server static export client module replay boundary', () => {
         status: 200,
       });
     };
+    const context = { handler, origin: 'https://shop.example.test' };
 
     await expect(
       replayStaticExportClientModuleArtifacts({
-        handler,
-        origin: 'https://shop.example.test',
+        context,
         routeArtifacts: [
           {
             body: [
@@ -109,11 +109,11 @@ describe('server static export client module replay boundary', () => {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status: 200,
       });
+    const context = { handler, origin: 'https://jiso.local' };
 
     await expect(
       replayStaticExportClientModuleArtifacts({
-        handler,
-        origin: 'https://jiso.local',
+        context,
         routeArtifacts: [
           {
             body: '<script type="module" src="/c/missing.client.js?v=build-1"></script>',

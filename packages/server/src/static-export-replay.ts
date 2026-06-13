@@ -1,10 +1,10 @@
-import { createRequestHandler } from './app.js';
 import type { JisoApp } from './app-types.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
 import { StaticExportError, type StaticExportDiagnostic } from './static-export-diagnostics.js';
 import { normalizeStaticExportHtmlPathStyle } from './static-export-options.js';
+import { createStaticExportReplayContext } from './static-export-replay-context.js';
 import {
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
@@ -37,8 +37,10 @@ export async function replayStaticExportApp({
     throw new StaticExportError(diagnostics);
   }
 
-  const handler = createRequestHandler(app);
-  const origin = originOption ?? 'https://jiso.local';
+  const context = createStaticExportReplayContext({
+    app,
+    ...(originOption === undefined ? {} : { origin: originOption }),
+  });
   const htmlPathStyle = normalizeStaticExportHtmlPathStyle(htmlPathStyleOption);
   const artifacts: StaticExportArtifact[] = [];
 
@@ -50,9 +52,8 @@ export async function replayStaticExportApp({
     try {
       artifacts.push(
         await replayStaticExportRouteDocumentArtifact({
-          handler,
+          context,
           htmlPathStyle,
-          origin,
           routePath: routeTarget.path,
         }),
       );
@@ -68,8 +69,7 @@ export async function replayStaticExportApp({
   return {
     artifacts,
     clientModules: await replayStaticExportClientModuleArtifacts({
-      handler,
-      origin,
+      context,
       routeArtifacts: artifacts,
     }),
     diagnostics,

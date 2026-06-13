@@ -1,8 +1,8 @@
-import type { RequestHandler } from './app-types.js';
 import { normalizePathname } from './match.js';
 import { collectStaticExportServerEndpointRefs } from './static-export-document-refs.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { replayStaticExportRequest } from './static-export-request.js';
+import type { StaticExportReplayContext } from './static-export-replay-context.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 import {
   type StaticExportArtifact,
@@ -10,27 +10,25 @@ import {
 } from './static-export-types.js';
 
 export interface StaticExportRouteDocumentReplayOptions {
-  handler: RequestHandler;
+  context: StaticExportReplayContext;
   htmlPathStyle: StaticExportHtmlPathStyle;
-  origin: string;
   routePath: string;
 }
 
 export async function replayStaticExportRouteDocumentArtifact({
-  handler,
+  context,
   htmlPathStyle,
-  origin,
   routePath,
 }: StaticExportRouteDocumentReplayOptions): Promise<StaticExportArtifact> {
   const pathname = normalizePathname(routePath).pathname;
-  const { response } = await replayStaticExportRequest({ handler, origin, pathname });
+  const { response } = await replayStaticExportRequest({ context, pathname });
   const replayed = await readStaticExportReplayedResponse({
     kind: 'route-document',
     response,
     routePath,
   });
   const { body } = replayed;
-  assertStaticExportRouteDocumentL0L1({ body, origin, routePath });
+  assertStaticExportRouteDocumentL0L1({ body, origin: context.origin, routePath });
 
   return {
     ...replayed,

@@ -138,6 +138,12 @@ the P10 fw-check gate no longer stitches those markdown tables locally.
 
 Latest evidence:
 
+- Phase 5 static-export replay-context slice:
+  `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/static-export-replay-context.ts` creates the closed-app SPEC §9.5 replay
+  context, and route-document/client-module replay now consumes that context rather than separate
+  handler/origin pairs.
 - Phase 5 Vite plugin app-only boundary slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`. Evidence: `packages/server/src/vite-plugin.ts`

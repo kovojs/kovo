@@ -1,9 +1,8 @@
-import type { RequestHandler } from './app-types.js';
+import type { StaticExportReplayContext } from './static-export-replay-context.js';
 
 export interface StaticExportReplayRequestOptions {
-  handler: RequestHandler;
+  context: StaticExportReplayContext;
   href?: string;
-  origin: string;
   pathname?: string;
 }
 
@@ -13,17 +12,16 @@ export interface StaticExportReplayRequestResult {
 }
 
 export async function replayStaticExportRequest({
-  handler,
+  context,
   href,
-  origin,
   pathname,
 }: StaticExportReplayRequestOptions): Promise<StaticExportReplayRequestResult> {
   // SPEC §9.5: static export replays synthetic GET requests through the app handler.
-  const url = new URL(href ?? pathname ?? '/', origin);
+  const url = new URL(href ?? pathname ?? '/', context.origin);
   const request = new Request(url, { method: 'GET' });
 
   return {
-    response: await handler(request),
+    response: await context.handler(request),
     url,
   };
 }
