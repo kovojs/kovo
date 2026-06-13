@@ -234,11 +234,15 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).toContain(
         'jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile)',
       );
+      expect(exportStaticScript).toContain('formatStaticExportDiagnostic');
+      expect(exportStaticScript).toContain('formatStaticExportDiagnostics');
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(exportStaticScript).toContain('exportJisoAppShellViteBuildFromManifestFile');
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
+      expect(exportStaticScript).not.toContain('function formatStaticExportDiagnostic');
+      expect(exportStaticScript).not.toContain('function isStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('htmlPathStyle');
       const serveScript = readFileSync(join(root, 'scripts/serve.mjs'), 'utf8');
       expect(serveScript).toContain('createStarterServeServer');

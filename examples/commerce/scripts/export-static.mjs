@@ -7,6 +7,7 @@ import { createServer } from 'vite-plus';
 const commerceRoot = fileURLToPath(new URL('../', import.meta.url));
 const defaultDistDir = path.join(commerceRoot, 'dist');
 const builtDistDir = path.join(commerceRoot, 'dist');
+let staticExportTaskHelpers;
 
 export async function exportCommerceStaticApp({
   createViteServer = createServer,
@@ -29,15 +30,32 @@ export async function exportCommerceStaticApp({
     ]);
     const {
       exportJisoAppShellViteBuildFromManifestFile,
+      formatStaticExportDiagnostic,
+      formatStaticExportDiagnostics,
+      isStaticExportDiagnosticError,
       jisoAppShellViteManifestStylesheetHrefsFromFile,
     } = serverModule;
 
     if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
       throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
     }
+    if (typeof formatStaticExportDiagnostic !== 'function') {
+      throw new Error('@jiso/server must export formatStaticExportDiagnostic.');
+    }
+    if (typeof formatStaticExportDiagnostics !== 'function') {
+      throw new Error('@jiso/server must export formatStaticExportDiagnostics.');
+    }
+    if (typeof isStaticExportDiagnosticError !== 'function') {
+      throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
+    }
     if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
       throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
     }
+    staticExportTaskHelpers = {
+      formatStaticExportDiagnostic,
+      formatStaticExportDiagnostics,
+      isStaticExportDiagnosticError,
+    };
 
     const app =
       appShellModule.commerceStaticExportApp ?? appShellModule.commerceStaticExportShell?.app;
@@ -72,7 +90,9 @@ if (isMainModule()) {
     const result = await exportCommerceStaticApp(parseCliOptions(process.argv.slice(2)));
 
     for (const diagnostic of result.diagnostics) {
-      process.stderr.write(`${formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`);
+      process.stderr.write(
+        `${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`,
+      );
       process.exitCode = 1;
     }
 
@@ -87,12 +107,14 @@ if (isMainModule()) {
       ].join('\n'),
     );
   } catch (error) {
-    if (!isStaticExportDiagnosticError(error)) throw error;
+    if (!staticExportTaskHelpers?.isStaticExportDiagnosticError(error)) throw error;
 
     process.stderr.write(
-      ['commerce-export/v1', ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'), ''].join(
-        '\n',
-      ),
+      [
+        'commerce-export/v1',
+        ...staticExportTaskHelpers.formatStaticExportDiagnostics(error.diagnostics, 'ERROR'),
+        '',
+      ].join('\n'),
     );
     process.exitCode = 1;
   }
@@ -132,37 +154,4 @@ function isJisoApp(value) {
     Array.isArray(value.routes) &&
     typeof value.clientModules?.resolve === 'function'
   );
-}
-
-function isStaticExportDiagnosticError(error) {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    Array.isArray(error.diagnostics) &&
-    error.diagnostics.every(isStaticExportDiagnostic)
-  );
-}
-
-function isStaticExportDiagnostic(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof value.code === 'string' &&
-    typeof value.message === 'string' &&
-    typeof value.routePath === 'string'
-  );
-}
-
-function formatStaticExportDiagnostics(diagnostics, severity) {
-  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
-}
-
-function formatStaticExportDiagnostic(diagnostic, severity) {
-  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableText(
-    diagnostic.message,
-  )}`;
-}
-
-function stableText(value) {
-  return String(value).replace(/\s+/g, ' ').trim();
 }

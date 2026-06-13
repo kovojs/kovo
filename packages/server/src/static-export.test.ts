@@ -10,7 +10,15 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { guards } from './guards.js';
 import { respond } from './response.js';
 import { route } from './route.js';
-import { exportStaticApp, staticExportInventory, StaticExportError } from './static-export.js';
+import {
+  exportStaticApp,
+  formatStaticExportDiagnostic,
+  formatStaticExportDiagnostics,
+  isStaticExportDiagnostic,
+  isStaticExportDiagnosticError,
+  staticExportInventory,
+  StaticExportError,
+} from './static-export.js';
 
 describe('server static export', () => {
   it('exports a simple route through the app request handler to an html artifact', async () => {
@@ -348,6 +356,26 @@ describe('server static export', () => {
         source: '/workspace/dist/assets/app.css',
         status: 200,
       },
+    ]);
+  });
+
+  it('formats static export diagnostics for starter and example export tasks', () => {
+    const diagnostic = {
+      code: 'FW229' as const,
+      message: "FW229 static export cannot export guarded route '/admin'.\nServe dynamically.",
+      routePath: '/admin',
+    };
+    const error = new StaticExportError([diagnostic]);
+
+    expect(isStaticExportDiagnostic(diagnostic)).toBe(true);
+    expect(isStaticExportDiagnostic({ ...diagnostic, message: 42 })).toBe(false);
+    expect(isStaticExportDiagnosticError(error)).toBe(true);
+    expect(isStaticExportDiagnosticError(new Error('plain'))).toBe(false);
+    expect(formatStaticExportDiagnostic(diagnostic, 'ERROR')).toBe(
+      "ERROR FW229 route=/admin FW229 static export cannot export guarded route '/admin'. Serve dynamically.",
+    );
+    expect(formatStaticExportDiagnostics([diagnostic], 'WARN')).toEqual([
+      "WARN FW229 route=/admin FW229 static export cannot export guarded route '/admin'. Serve dynamically.",
     ]);
   });
 

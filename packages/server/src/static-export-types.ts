@@ -57,6 +57,8 @@ export interface StaticExportDiagnostic {
   routePath: string;
 }
 
+export type StaticExportDiagnosticSeverity = 'ERROR' | 'WARN';
+
 export interface StaticExportCompileDiagnostic {
   code: DiagnosticCode;
   fileName: string;
@@ -85,6 +87,43 @@ export class StaticExportError extends Error {
 
 export function staticExportDiagnostic(routePath: string, message: string): StaticExportDiagnostic {
   return { code: 'FW229', message, routePath };
+}
+
+export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as StaticExportDiagnostic).code === 'string' &&
+    typeof (value as StaticExportDiagnostic).message === 'string' &&
+    typeof (value as StaticExportDiagnostic).routePath === 'string'
+  );
+}
+
+export function isStaticExportDiagnosticError(
+  error: unknown,
+): error is { diagnostics: readonly StaticExportDiagnostic[] } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    Array.isArray((error as { diagnostics?: unknown }).diagnostics) &&
+    (error as { diagnostics: unknown[] }).diagnostics.every(isStaticExportDiagnostic)
+  );
+}
+
+export function formatStaticExportDiagnostic(
+  diagnostic: StaticExportDiagnostic,
+  severity: StaticExportDiagnosticSeverity,
+): string {
+  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableDiagnosticText(
+    diagnostic.message,
+  )}`;
+}
+
+export function formatStaticExportDiagnostics(
+  diagnostics: readonly StaticExportDiagnostic[],
+  severity: StaticExportDiagnosticSeverity,
+): string[] {
+  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
 }
 
 // SPEC §9.5: dry-run export task wiring inspects the same route/module/asset set
@@ -122,4 +161,8 @@ export function sortedHeaders(headers: Headers): Record<string, string> {
   return Object.fromEntries(
     [...headers.entries()].sort(([left], [right]) => left.localeCompare(right)),
   );
+}
+
+function stableDiagnosticText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }

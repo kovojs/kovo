@@ -41,6 +41,9 @@ Implemented areas:
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
+- `static-export-types.ts` now owns stable export-task diagnostic type guards and formatting.
+  The create-jiso starter and commerce export tasks load those helpers from `@jiso/server`
+  instead of duplicating local FW229 formatting.
 
 Recent gates:
 
@@ -65,12 +68,21 @@ Round79 slice evidence:
 - `pnpm exec vp check packages/server/src/route.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md`
 - `git diff --check`
 
+Round83 app-shell export-task evidence:
+
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|serves the generated starter app-shell through the vp dev task|runs .*built stylesheet|formats generated export task diagnostics|scaffolds real template files"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
 
-- Wire Vite build outputs into static export tasks used by starter/docs; server plugin wiring is
-  covered, adoption task wiring remains open.
+- Docs-site static export remains the adoption-task gap. Starter and commerce export tasks now
+  reuse the shared server app-shell Vite/export bridge plus server-owned FW229 task formatting.
 - Prove directory-index HTML output, manifest asset copying, duplicate target rejection, and
   L0/L1-only constraints through focused tests.
 - Keep dry-run and write export validation equivalent.

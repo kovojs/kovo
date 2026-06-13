@@ -239,6 +239,8 @@ Closed evidence so far:
   export inventory, and dry-run export target validation have landed.
 - Server static export now validates dry-run target plans the same way as write exports; duplicate
   asset paths produce FW229 even without `outDir`.
+- Server static export now owns the stable FW229 export-task diagnostic type guards/formatting
+  consumed by the create-jiso starter and commerce export scripts.
 - Vite plugin `writeBundle` can now run static export from the built app shell while reusing the
   same manifest asset planner and synthetic request replay path.
 - SSR Vite dev middleware now defaults to deriving its node adapter from the loaded app's
@@ -265,6 +267,12 @@ Recent gates:
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md`
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|serves the generated starter app-shell through the vp dev task|runs .*built stylesheet|formats generated export task diagnostics|scaffolds real template files"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce
 

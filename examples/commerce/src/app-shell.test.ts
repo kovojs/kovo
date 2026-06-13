@@ -40,6 +40,10 @@ describe('commerce app shell HTTP entry', () => {
   it('documents the commerce app-shell dev, serve, and export command matrix', async () => {
     const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
     const packageJson = JSON.parse(await readFile(path.join(commerceRoot, 'package.json'), 'utf8'));
+    const exportScript = await readFile(
+      path.join(commerceRoot, 'scripts/export-static.mjs'),
+      'utf8',
+    );
     const viteConfig = commerceViteConfig as {
       plugins?: Array<{ name?: string }>;
       run?: { tasks?: Record<string, { command?: string }> };
@@ -55,6 +59,10 @@ describe('commerce app shell HTTP entry', () => {
     ).toBe(true);
     expect(viteConfig.run?.tasks?.serve?.command).toBe('node scripts/serve.mjs');
     expect(viteConfig.run?.tasks?.export?.command).toBe('node scripts/export-static.mjs');
+    expect(exportScript).toContain('formatStaticExportDiagnostic');
+    expect(exportScript).toContain('isStaticExportDiagnosticError');
+    expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
+    expect(exportScript).not.toContain('function isStaticExportDiagnostic');
     expect(commerceServeCommands().map((command) => command.label)).toEqual([
       'node scripts/serve.mjs',
       'vp run serve',

@@ -1,4 +1,12 @@
-export { exportStaticApp, staticExportInventory, StaticExportError } from '../../static-export.js';
+export {
+  exportStaticApp,
+  formatStaticExportDiagnostic,
+  formatStaticExportDiagnostics,
+  isStaticExportDiagnostic,
+  isStaticExportDiagnosticError,
+  staticExportInventory,
+  StaticExportError,
+} from '../../static-export.js';
 export type {
   StaticExportArtifact,
   StaticExportAssetArtifact,
@@ -6,6 +14,7 @@ export type {
   StaticExportClientModuleArtifact,
   StaticExportCompileDiagnostic,
   StaticExportDiagnostic,
+  StaticExportDiagnosticSeverity,
   StaticExportHtmlPathStyle,
   StaticExportInventoryItem,
   StaticExportOptions,

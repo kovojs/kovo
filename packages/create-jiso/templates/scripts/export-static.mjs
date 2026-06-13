@@ -8,6 +8,11 @@ execFileSync('vp', ['build'], { stdio: 'inherit' });
 const manifestFile = join(process.cwd(), 'dist/.vite/manifest.json');
 
 let result;
+let exportJisoAppShellViteBuildFromManifestFile;
+let formatStaticExportDiagnostic;
+let formatStaticExportDiagnostics;
+let isStaticExportDiagnosticError;
+let jisoAppShellViteManifestStylesheetHrefsFromFile;
 
 const server = await createServer({
   appType: 'custom',
@@ -17,13 +22,25 @@ const server = await createServer({
 
 try {
   const serverModule = await server.ssrLoadModule('@jiso/server');
-  const {
+  ({
     exportJisoAppShellViteBuildFromManifestFile,
+    formatStaticExportDiagnostic,
+    formatStaticExportDiagnostics,
+    isStaticExportDiagnosticError,
     jisoAppShellViteManifestStylesheetHrefsFromFile,
-  } = serverModule;
+  } = serverModule);
 
   if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
     throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
+  }
+  if (typeof formatStaticExportDiagnostic !== 'function') {
+    throw new Error('@jiso/server must export formatStaticExportDiagnostic.');
+  }
+  if (typeof formatStaticExportDiagnostics !== 'function') {
+    throw new Error('@jiso/server must export formatStaticExportDiagnostics.');
+  }
+  if (typeof isStaticExportDiagnosticError !== 'function') {
+    throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
   }
   if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
     throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
@@ -55,7 +72,10 @@ try {
     outDir: 'dist',
   });
 } catch (error) {
-  if (!isStaticExportDiagnosticError(error)) {
+  if (
+    typeof isStaticExportDiagnosticError !== 'function' ||
+    !isStaticExportDiagnosticError(error)
+  ) {
     throw error;
   }
 
@@ -94,37 +114,4 @@ function isJisoApp(value) {
     Array.isArray(value.routes) &&
     typeof value.clientModules?.resolve === 'function'
   );
-}
-
-function isStaticExportDiagnosticError(error) {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    Array.isArray(error.diagnostics) &&
-    error.diagnostics.every(isStaticExportDiagnostic)
-  );
-}
-
-function isStaticExportDiagnostic(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof value.code === 'string' &&
-    typeof value.message === 'string' &&
-    typeof value.routePath === 'string'
-  );
-}
-
-function formatStaticExportDiagnostics(diagnostics, severity) {
-  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
-}
-
-function formatStaticExportDiagnostic(diagnostic, severity) {
-  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableText(
-    diagnostic.message,
-  )}`;
-}
-
-function stableText(value) {
-  return String(value).replace(/\s+/g, ' ').trim();
 }

@@ -26,6 +26,10 @@ import {
 
 export {
   StaticExportError,
+  formatStaticExportDiagnostic,
+  formatStaticExportDiagnostics,
+  isStaticExportDiagnostic,
+  isStaticExportDiagnosticError,
   staticExportInventory,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
@@ -33,6 +37,7 @@ export {
   type StaticExportClientModuleArtifact,
   type StaticExportCompileDiagnostic,
   type StaticExportDiagnostic,
+  type StaticExportDiagnosticSeverity,
   type StaticExportHtmlPathStyle,
   type StaticExportInventoryItem,
 } from './static-export-types.js';
