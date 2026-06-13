@@ -9021,6 +9021,68 @@ describe('Drizzle pinned subset conformance', () => {
     );
   });
 
+  it('pins project conditional table resolution as a safe over-approximation', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+          source: [
+            "import { eq } from 'drizzle-orm';",
+            "import { pgTable } from 'drizzle-orm/pg-core';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const archivedProducts = pgTable('archived_products', {}, jiso({ domain: 'archive', key: 'id' }));",
+            "export const prices = pgTable('prices', {}, jiso({ domain: 'price', key: 'productId' }));",
+            "export const products = pgTable('products', {}, jiso({ domain: 'product', key: 'id' }));",
+            'const priceSource = useArchive ? archivedProducts : prices;',
+            'const writeTarget = useArchive ? archivedProducts : products;',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db.update(writeTarget).set({ reserved: true }).from(priceSource).where(eq(writeTarget.id, productId));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'archive',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            source: 'update-from',
+            via: 'archived_products',
+          },
+          {
+            domain: 'price',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          {
+            domain: 'archive',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            via: 'archived_products',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins conditional table FW406 when the opaque branch contains string punctuation', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -9054,6 +9116,49 @@ describe('Drizzle pinned subset conformance', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  it('pins project conditional table FW406 when an opaque branch remains', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+          source: [
+            "import { pgTable } from 'drizzle-orm/pg-core';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {}, jiso({ domain: 'product', key: 'id' }));",
+            "const writeTarget = useDynamic ? tableFor('archive:products') : products;",
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.update(writeTarget).set({ reserved: true });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+          },
+        ],
+      },
+    });
   });
 
   it('pins domain write callback extraction for the Jiso authoring surface', () => {

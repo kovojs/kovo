@@ -172,8 +172,9 @@ function extractTouchGraphFromPreparedFiles(
   files: readonly SourceFileInput[],
   functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
   sourceContext: SourceModuleContext = sourceModuleContext(files),
+  extraUnresolvedIdentifiers: ReadonlySet<string> = new Set(),
 ): TouchGraph {
-  const unresolvedIdentifiers = new Set<string>();
+  const unresolvedIdentifiers = new Set<string>(extraUnresolvedIdentifiers);
   const graph: Record<string, TouchGraphEntry> = {};
   const graphSummaries = new Map<string, FunctionTouchSummary>();
 
@@ -253,6 +254,7 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
       extraction.files,
       (file) => projectFunctionsForFile(file, projectFunctionExtractions),
       sourceContext,
+      projectUnresolvedConditionalTableExpressions(extraction),
     );
   } finally {
     extraction.dispose();
@@ -301,6 +303,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
 
 interface ProjectExtraction {
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>;
+  conditionalTableTargetsBySyntheticName: ReadonlyMap<string, readonly string[]>;
   dispose: () => void;
   files: readonly SourceFileInput[];
   sourceFiles: readonly SourceFile[];
@@ -324,11 +327,16 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
   const sourceFiles = options.files.map((file) =>
     project.createSourceFile(file.fileName, file.source, { overwrite: true }),
   );
-  const tableNamesBySymbol = projectTableNamesBySymbol(sourceFiles);
+  const tableNamesBySymbol = new Map(projectTableNamesBySymbol(sourceFiles));
+  const conditionalTableTargetsBySyntheticName = appendProjectConditionalTableNames(
+    sourceFiles,
+    tableNamesBySymbol,
+  );
   const columnShapesByTable = projectColumnShapesByTable(sourceFiles, tableNamesBySymbol);
 
   return {
     columnShapesByTable,
+    conditionalTableTargetsBySyntheticName,
     dispose: () => {
       for (const sourceFile of sourceFiles) sourceFile.forget();
     },
@@ -2041,6 +2049,81 @@ function appendProjectAliasTableNames(
       }
     }
   }
+}
+
+function appendProjectConditionalTableNames(
+  sourceFiles: readonly SourceFile[],
+  namesBySymbol: Map<string, string>,
+): ReadonlyMap<string, readonly string[]> {
+  // SPEC §11.1: conditional table initializers are safe over-approximations. Project mode keeps
+  // exact ts-morph branch symbols and lets unresolved branches degrade separately to FW406.
+  const targetsBySyntheticName = new Map<string, string[]>();
+  let nextConditional = 0;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const sourceFile of sourceFiles) {
+      for (const declaration of sourceFile.getVariableDeclarations()) {
+        const aliasSymbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
+        if (!aliasSymbolKey || namesBySymbol.has(aliasSymbolKey)) continue;
+
+        const targets = projectConditionalTargetTableNames(
+          declaration.getInitializer(),
+          namesBySymbol,
+        );
+        if (targets.length === 0) continue;
+
+        const syntheticName = `__jisoProjectConditional${nextConditional}`;
+        nextConditional += 1;
+        namesBySymbol.set(aliasSymbolKey, syntheticName);
+        targetsBySyntheticName.set(syntheticName, targets);
+        changed = true;
+      }
+    }
+  }
+
+  return targetsBySyntheticName;
+}
+
+function projectUnresolvedConditionalTableExpressions(extraction: ProjectExtraction): Set<string> {
+  const unresolved = new Set<string>();
+
+  for (const sourceFile of extraction.sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const syntheticName = extraction.tableNamesBySymbol.get(
+        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
+      );
+      const initializer = declaration.getInitializer();
+      if (!syntheticName || !initializer) continue;
+
+      const expression = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isConditionalExpression(expression)) continue;
+
+      const targets = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
+        projectTableNameForNode(branch, extraction.tableNamesBySymbol),
+      );
+      const resolvedCount = targets.filter((target) => target !== undefined).length;
+      if (resolvedCount > 0 && resolvedCount < targets.length) unresolved.add(syntheticName);
+    }
+  }
+
+  return unresolved;
+}
+
+function projectConditionalTargetTableNames(
+  initializer: Node | undefined,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): string[] {
+  if (!initializer) return [];
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isConditionalExpression(expression)) return [];
+
+  return [expression.getWhenTrue(), expression.getWhenFalse()]
+    .map((branch) => projectTableNameForNode(branch, tableNamesBySymbol))
+    .filter((target): target is string => target !== undefined);
 }
 
 function projectAliasTargetTableName(
@@ -5129,7 +5212,7 @@ function projectSourceModuleContext(extraction: ProjectExtraction): SourceModule
     const tables = new Map<string, ExtractedTable[]>();
     appendProjectDeclaredTables(tables, sourceFile, extraction, tablesBySyntheticName);
     appendProjectReferencedTables(tables, sourceFile, extraction, tablesBySyntheticName);
-    appendProjectGlobalSyntheticTables(tables, tablesBySyntheticName);
+    appendProjectGlobalSyntheticTables(tables, tablesBySyntheticName, extraction);
     tablesByFileName.set(file.fileName, tables);
   });
 
@@ -5171,6 +5254,22 @@ function projectTablesBySyntheticName(
     }
   }
 
+  for (const [syntheticName, targets] of extraction.conditionalTableTargetsBySyntheticName) {
+    const branchTables = targets.flatMap((target) => {
+      const table = tables.get(target);
+      return table ? [table] : [];
+    });
+    if (branchTables.length === 0) continue;
+
+    const [firstTable] = branchTables;
+    if (!firstTable) continue;
+    tables.set(syntheticName, {
+      annotation: firstTable.annotation,
+      columns: firstTable.columns,
+      exported: false,
+    });
+  }
+
   return tables;
 }
 
@@ -5186,6 +5285,14 @@ function appendProjectDeclaredTables(
     );
     const table = syntheticName ? tablesBySyntheticName.get(syntheticName) : undefined;
     if (syntheticName && table) appendTableEntries(tables, syntheticName, [table]);
+  }
+
+  for (const [syntheticName, targets] of extraction.conditionalTableTargetsBySyntheticName) {
+    const branchTables = targets.flatMap((target) => {
+      const table = tablesBySyntheticName.get(target);
+      return table ? [table] : [];
+    });
+    if (branchTables.length > 0) appendTableEntries(tables, syntheticName, branchTables);
   }
 }
 
@@ -5220,11 +5327,19 @@ function appendProjectReferencedTables(
 function appendProjectGlobalSyntheticTables(
   tables: Map<string, ExtractedTable[]>,
   tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+  extraction: ProjectExtraction,
 ): void {
   // SPEC §10-§11: project-mode table expressions use ts-morph synthetic symbol names, which stay
   // valid when an imported query/domain callback is summarized from the importing module.
   for (const [syntheticName, table] of tablesBySyntheticName) {
     appendTableEntries(tables, syntheticName, [table]);
+  }
+  for (const [syntheticName, targets] of extraction.conditionalTableTargetsBySyntheticName) {
+    const branchTables = targets.flatMap((target) => {
+      const table = tablesBySyntheticName.get(target);
+      return table ? [table] : [];
+    });
+    if (branchTables.length > 0) appendTableEntries(tables, syntheticName, branchTables);
   }
 }
 

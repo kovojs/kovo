@@ -244,6 +244,15 @@ Latest evidence:
   `commerceKeyedOptimisticBehaviorFact`, `packages/test/src/runtime-fixtures.test.ts` proves its
   graph, keyed morph, endpoint, and optimistic review projections, and the fw-check harness asserts
   that public fixture against the checked-in commerce graph and real runtime/server APIs.
+- Phase 3 Drizzle project conditional table slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/drizzle/src/static.ts` now resolves project-mode conditional table
+  initializers through ts-morph branch symbols, over-approximates resolved write/read branches,
+  and keeps opaque sibling branches visible as FW406 per SPEC §11.1; package tests and
+  `conformance/drizzle-pin/src/index.test.ts` prove the behavior against real Drizzle imports.
 - Phase 5 static export client-module output boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

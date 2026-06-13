@@ -13793,6 +13793,111 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('over-approximates project-mode conditional table initializers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): { where(predicate: unknown): Promise<void> } } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const archivedProducts = pgTable("archived_products", {}, jiso({ domain: "archive", key: "id" }));',
+            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'const priceSource = useArchive ? archivedProducts : prices;',
+            'const writeTarget = useArchive ? archivedProducts : products;',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db.update(writeTarget).set({ reserved: true }).from(priceSource).where(eq(writeTarget.id, productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'archive',
+            keys: null,
+            site: 'product.domain.ts:11',
+            source: 'update-from',
+            via: 'archived_products',
+          },
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:11',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          {
+            domain: 'archive',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:11',
+            via: 'archived_products',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('keeps project-mode resolved conditional table branches with opaque branch FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'const writeTarget = useDynamic ? tableFor("archive:products") : products;',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.update(writeTarget).set({ reserved: true });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:7',
+            via: 'products',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('keeps resolved write read sources when the source-mode write target is opaque', () => {
     const graph = extractTouchGraphFromSource([
       {
