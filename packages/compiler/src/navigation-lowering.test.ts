@@ -18,7 +18,7 @@ export const ProductLinks = component('product-links', {
     const paramsStart = source.indexOf(' params={{');
     const closingNameStart = source.indexOf('</Link>') + 2;
 
-    expect(lowering.replacements).toEqual([
+    expect(lowering).toEqual([
       {
         end: tagNameStart + 'Link'.length,
         replacement: 'a href="/products/p%201"',
@@ -40,7 +40,7 @@ export const ProductLinks = component('product-links', {
         start: closingNameStart,
       },
     ]);
-    expect(applySourceReplacements(source, lowering.replacements)).toContain(
+    expect(applySourceReplacements(source, lowering)).toContain(
       '<a href="/products/p%201">Product</a>',
     );
   });
@@ -65,7 +65,7 @@ export const ProductLinks = component('product-links', {
     const paramsStart = source.indexOf('\n      params={{');
     const closingNameStart = source.indexOf('</Link>') + 2;
 
-    expect(lowering.replacements).toEqual([
+    expect(lowering).toEqual([
       {
         end: tagNameStart + 'Link'.length,
         replacement: 'a href="/products/p%201"',
@@ -87,7 +87,7 @@ export const ProductLinks = component('product-links', {
         start: closingNameStart,
       },
     ]);
-    expect(applySourceReplacements(source, lowering.replacements)).toContain(`
+    expect(applySourceReplacements(source, lowering)).toContain(`
     <a href="/products/p%201"
       className="product-link"
     >
@@ -105,7 +105,7 @@ export const ProductLinks = component('product-links', {
     const hrefEnd = source.indexOf(')}>Product') + ')}'.length;
     const lowering = navigationHrefLowering(parseComponentModule('product-links.tsx', source));
 
-    expect(lowering.replacements).toEqual([
+    expect(lowering).toEqual([
       {
         end: hrefEnd,
         replacement: 'href="/products/p1"',

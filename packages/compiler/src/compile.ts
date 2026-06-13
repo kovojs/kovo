@@ -60,8 +60,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
   const viewTransitions = viewTransitionLowering(originalState.model);
   const platformLowering = platformBehaviorLowering(originalState.model);
-  const linkLowering = navigationLinkLowering(originalState.model);
-  const hrefLowering = navigationHrefLowering(originalState.model);
+  const linkReplacements = navigationLinkLowering(originalState.model);
+  const hrefReplacements = navigationHrefLowering(originalState.model);
   const deriveLowering = lowerInlineAttributeDerives(
     originalState.model,
     componentName,
@@ -72,8 +72,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     [
       ...viewTransitions.replacements,
       ...platformLowering.replacements,
-      ...linkLowering.replacements,
-      ...hrefLowering.replacements,
+      ...linkReplacements,
+      ...hrefReplacements,
       ...deriveLowering.replacements,
     ],
     parseComponentModuleModel,

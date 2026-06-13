@@ -7,11 +7,7 @@ import {
 import type { StaticLiteralValue } from '../scan/object.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 
-export interface NavigationLowering {
-  replacements: SourceReplacement[];
-}
-
-export function navigationLinkLowering(model: ComponentModuleModel): NavigationLowering {
+export function navigationLinkLowering(model: ComponentModuleModel): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
 
   for (const link of jsxElements(model).filter(
@@ -28,7 +24,7 @@ export function navigationLinkLowering(model: ComponentModuleModel): NavigationL
     replacements.push(...lowerLinkElementPatches(link, href));
   }
 
-  return { replacements };
+  return replacements;
 }
 
 function lowerLinkElementPatches(link: JsxElementModel, href: string): SourceReplacement[] {
@@ -53,7 +49,7 @@ function lowerLinkElementPatches(link: JsxElementModel, href: string): SourceRep
   ];
 }
 
-export function navigationHrefLowering(model: ComponentModuleModel): NavigationLowering {
+export function navigationHrefLowering(model: ComponentModuleModel): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
   const staticHrefCalls = callExpressions(model)
     .filter((item) => item.name === 'href')
@@ -90,7 +86,7 @@ export function navigationHrefLowering(model: ComponentModuleModel): NavigationL
     replacements.push({ end: call.end, replacement: JSON.stringify(lowered), start: call.start });
   }
 
-  return { replacements };
+  return replacements;
 }
 
 function isWithinReplacement(call: { end: number; start: number }, replacement: SourceReplacement) {
