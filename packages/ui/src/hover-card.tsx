@@ -87,11 +87,12 @@ export const HoverCardTrigger = component('hover-card-trigger', {
     return (
       <a
         aria-controls={attrs['aria-controls']}
+        aria-disabled={props.disabled === true ? 'true' : undefined}
         aria-expanded={attrs['aria-expanded']}
         class={cn(hoverCardTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
-        href={props.href ?? '#'}
+        href={props.disabled === true ? undefined : (props.href ?? '#')}
         id={props.id}
         jiso-hover-card={attrs['jiso-hover-card']}
       >

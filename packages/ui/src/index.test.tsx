@@ -570,6 +570,17 @@ describe('@jiso/ui styled package foundation', () => {
         open: true,
       }),
     ).toContain('jiso-hover-card="profile-card"');
+    const disabledHoverCardTrigger = HoverCardTrigger.definition.render({
+      children: 'Ada',
+      contentId: 'profile-card',
+      disabled: true,
+      href: '/team/ada',
+      open: false,
+    });
+    expect(disabledHoverCardTrigger).toContain('aria-disabled="true"');
+    expect(disabledHoverCardTrigger).toContain('data-disabled="" data-state="closed"');
+    expect(disabledHoverCardTrigger).not.toContain('href=');
+    expect(disabledHoverCardTrigger).not.toContain('jiso-hover-card=');
     expect(HoverCardContent.definition.render({ contentId: 'profile-card', open: true })).toContain(
       'popover="manual"',
     );
@@ -582,6 +593,14 @@ describe('@jiso/ui styled package foundation', () => {
     expect(
       TooltipTrigger.definition.render({ children: 'Help', contentId: 'tip', open: true }),
     ).toContain('jiso-tooltip="tip"');
+    const disabledTooltipTrigger = TooltipTrigger.definition.render({
+      children: 'Help',
+      contentId: 'tip',
+      disabled: true,
+      open: false,
+    });
+    expect(disabledTooltipTrigger).toContain('data-disabled="" data-state="closed" disabled');
+    expect(disabledTooltipTrigger).not.toContain('jiso-tooltip=');
     expect(TooltipContent.definition.render({ contentId: 'tip', open: true })).toContain(
       'role="tooltip"',
     );

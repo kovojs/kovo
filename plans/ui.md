@@ -349,11 +349,23 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       source snapshot facts for autocomplete, combobox, command, and select in
       `examples/gallery/src/demo-fixtures.test.ts`, pinning styled wrapper render calls, native
       form hooks, behavior-contract text, and absence of SPEC §5.2 lowered/generated markers.
+      Evidence 2026-06-13: the overlay trigger family now has broader G2 provenance coverage:
+      `examples/gallery/src/fw-explain-contracts.ts` adds `jiso-hover-card` and `jiso-tooltip`
+      package-prefix `fw explain` cases for focus, pointerenter, keydown, state, and IDREF/ARIA
+      merge records, while `packages/ui/src/hover-card.tsx` and `packages/ui/src/tooltip.tsx`
+      preserve disabled trigger semantics through styled wrappers.
 - [ ] Keep G6 compiled interactive demos app-authored TSX, checked in, generated-artifact fresh,
       and browser-tested when behavior changes.
 
 ## Latest Gates
 
+- [x] Overlay trigger disabled semantics and G2 provenance slice:
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/fw-explain-contracts.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      `pnpm exec tsc --noEmit --pretty false`;
+      exact `pnpm exec vp check packages/ui/src/hover-card.tsx packages/ui/src/tooltip.tsx packages/ui/src/index.test.tsx examples/gallery/src/fw-explain-contracts.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] G1 static route source/markup closure slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
       `pnpm exec tsc --noEmit --pretty false`;

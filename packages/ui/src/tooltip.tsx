@@ -89,6 +89,7 @@ export const TooltipTrigger = component('tooltip-trigger', {
         class={cn(tooltipTriggerClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
+        disabled={props.disabled === true}
         id={props.id}
         jiso-tooltip={attrs['jiso-tooltip']}
         type="button"

@@ -103,6 +103,94 @@ export const galleryFwExplainGraph = Object.freeze({
       name: 'JisoDropdownMenu',
       queries: [],
     },
+    {
+      attributeMerges: [
+        {
+          attr: 'data-state',
+          decision: 'primitive-wins',
+          diagnostics: [],
+          element: 'a',
+          rule: 'state-attribute',
+        },
+        {
+          attr: 'aria-expanded',
+          decision: 'author-wins',
+          diagnostics: ['FW232'],
+          element: 'a',
+          rule: 'aria-author-override',
+        },
+      ],
+      fragments: ['jiso-hover-card'],
+      handlers: [
+        {
+          captures: ['ctx'],
+          event: 'focus',
+          exportName: 'JisoHoverCard$trigger_focus',
+          params: [],
+          ref: '/c/examples/gallery/hover-card.client.js#JisoHoverCard$trigger_focus',
+        },
+        {
+          captures: ['ctx'],
+          event: 'pointerenter',
+          exportName: 'JisoHoverCard$trigger_pointerenter',
+          params: [],
+          ref: '/c/examples/gallery/hover-card.client.js#JisoHoverCard$trigger_pointerenter',
+        },
+        {
+          captures: ['ctx'],
+          event: 'keydown',
+          exportName: 'JisoHoverCard$trigger_keydown',
+          params: [],
+          ref: '/c/examples/gallery/hover-card.client.js#JisoHoverCard$trigger_keydown',
+        },
+      ],
+      name: 'JisoHoverCard',
+      queries: [],
+    },
+    {
+      attributeMerges: [
+        {
+          attr: 'data-state',
+          decision: 'primitive-wins',
+          diagnostics: [],
+          element: 'button',
+          rule: 'state-attribute',
+        },
+        {
+          attr: 'aria-describedby',
+          decision: 'primitive-wins',
+          diagnostics: [],
+          element: 'button',
+          rule: 'idref-state',
+        },
+      ],
+      fragments: ['jiso-tooltip'],
+      handlers: [
+        {
+          captures: ['ctx'],
+          event: 'focus',
+          exportName: 'JisoTooltip$trigger_focus',
+          params: [],
+          ref: '/c/examples/gallery/tooltip.client.js#JisoTooltip$trigger_focus',
+        },
+        {
+          captures: ['ctx'],
+          event: 'pointerenter',
+          exportName: 'JisoTooltip$trigger_pointerenter',
+          params: [],
+          ref: '/c/examples/gallery/tooltip.client.js#JisoTooltip$trigger_pointerenter',
+        },
+        {
+          captures: ['ctx'],
+          event: 'keydown',
+          exportName: 'JisoTooltip$trigger_keydown',
+          params: [],
+          ref: '/c/examples/gallery/tooltip.client.js#JisoTooltip$trigger_keydown',
+        },
+      ],
+      name: 'JisoTooltip',
+      queries: [],
+    },
   ],
   packageComponentPrefixes: [
     {
@@ -134,5 +222,19 @@ export const galleryFwExplainCases = Object.freeze([
     expectedSubject: 'COMPONENT JisoDropdownMenu',
     target: 'jiso-dropdown-menu',
     title: 'H3 dropdown-menu package component',
+  },
+  {
+    expectedHandlers: ['focus', 'pointerenter', 'keydown'],
+    expectedMergeAttrs: ['data-state', 'aria-expanded'],
+    expectedSubject: 'COMPONENT JisoHoverCard',
+    target: 'jiso-hover-card',
+    title: 'H1 hover-card overlay package component',
+  },
+  {
+    expectedHandlers: ['focus', 'pointerenter', 'keydown'],
+    expectedMergeAttrs: ['data-state', 'aria-describedby'],
+    expectedSubject: 'COMPONENT JisoTooltip',
+    target: 'jiso-tooltip',
+    title: 'H1 tooltip overlay package component',
   },
 ]);

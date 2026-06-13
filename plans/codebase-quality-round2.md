@@ -4012,6 +4012,16 @@ Focused gates since that broad run:
   `git diff --check`. Evidence: the SPEC §5.2 app-authored popover TSX now emits a visible
   `data-demo-state="popover-open"` marker, self-contained generated click/Escape handlers, and
   browser-backed native popover open/close plus non-Escape no-op checks.
+- UI/gallery overlay trigger disabled semantics and G2 provenance slice:
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+  `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/fw-explain-contracts.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/ui/src/hover-card.tsx packages/ui/src/tooltip.tsx packages/ui/src/index.test.tsx examples/gallery/src/fw-explain-contracts.ts plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: styled hover-card disabled triggers now expose `aria-disabled`
+  and drop link/behavior wiring, styled tooltip disabled triggers render native disabled buttons,
+  and the gallery `fw explain` matrix covers `jiso-hover-card`/`jiso-tooltip` package-prefix
+  provenance plus focus, pointerenter, keydown, state, and IDREF/ARIA merge records.
 - [x] Runtime body apply closure.
       Evidence: added `applyMutationResponseBodyToRuntime()` as the internal body-string parser/apply
       seam in `packages/runtime/src/apply-mutation-response.ts`; `packages/runtime/src/mutation-apply.ts`,
