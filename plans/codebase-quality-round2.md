@@ -3510,11 +3510,11 @@ Latest evidence:
 
 Latest broad gate:
 
-- `pnpm run check` passed after checkpoint `67f2654e`: inline loader check, 838
+- `pnpm run check` passed after checkpoint `bf2ae49c`: inline loader check, 838
   formatted files, 738 lint/typechecked files, and 7 typechecked example/conformance projects.
-- `pnpm run test` passed after checkpoint `67f2654e`: 247 files and 2448 tests.
-- `pnpm run test:browser` passed after checkpoint `67f2654e`: 5 browser files and 16 tests.
-- `pnpm run test:conformance` passed after checkpoint `67f2654e`: Drizzle, Better Auth,
+- `pnpm run test` passed after checkpoint `bf2ae49c`: 247 files and 2453 tests.
+- `pnpm run test:browser` passed after checkpoint `bf2ae49c`: 5 browser files and 16 tests.
+- `pnpm run test:conformance` passed after checkpoint `bf2ae49c`: Drizzle, Better Auth,
   auth-spike, webhook-spike, and app-shell-spike conformance suites.
 
 Focused gates since that broad run:
