@@ -142,9 +142,10 @@ query/apply/loader/optimism/morph/delegated-handler integration tests; the broad
 focused on loader installation, query hydration, enhanced mutation bridge, and disposal smoke
 coverage. Inline readable/minified/generated/extracted loader parity coverage now owns inline
 enhanced-form, delegated handler, and handler-error behavior in `inline-loader.test.ts`.
-Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now enter
-mutation response bodies through `applyMutationResponseBodyToRuntime`, which owns parsing before the
-decoded chunk helper runs the shared query/fragment apply path.
+Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
+transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
+decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
+body/apply wrapper has been deleted.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -160,7 +161,12 @@ Latest evidence:
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index-exports.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
+- `pnpm exec tsc --noEmit --pretty false`
+- exact `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - exact `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/broadcast.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `pnpm exec vp check packages/runtime/src/index.test.ts packages/runtime/src/delegated-runtime-integration.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
