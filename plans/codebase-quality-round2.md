@@ -226,6 +226,9 @@ Current state:
 - Core optimism/rebase behavior now lives in `optimism.test.ts`, and fragment/structural morph
   behavior now lives in `morph.test.ts`; the broad runtime barrel test dropped those duplicated
   module-owner assertions while preserving SPEC §4.8/§9.1/§10.4 coverage.
+- Query/apply/broadcast/enhanced-submit integration coverage moved out of the broad runtime barrel
+  test into `query-runtime-integration.test.ts`, with reusable fake runtime DOM fixtures in
+  `runtime-test-fakes.ts` preserving the SPEC §9.1/§9.4 query and mutation apply assertions.
 
 Open:
 
@@ -240,6 +243,7 @@ Latest focused evidence:
 - `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/index-exports.test.ts`
 - `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`
 - `pnpm exec vitest --run packages/runtime/src/optimism.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/index.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/index.test.ts packages/runtime/src/query-runtime-integration.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
@@ -352,6 +356,8 @@ Current state:
 
 - Several package tests have been split out of monoliths along module seams, especially runtime,
   server static export, compiler shared/model-pipeline, and `@jiso/test` fixtures.
+- Runtime's broad barrel test is now loader-centered after the query/apply/broadcast/enhanced-submit
+  integration cluster moved to `query-runtime-integration.test.ts` and shared test fakes.
 - `tests/fw-check.node.mjs` is still large but increasingly delegates mechanics to focused
   package fixtures.
 - The remaining `fw-check` monolith checks for update coverage, unguarded audit, verification

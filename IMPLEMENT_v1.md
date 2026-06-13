@@ -168,6 +168,15 @@ packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm --filter @jiso/runtime run check:inline-loader`, and
       `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: the broad runtime barrel test no longer owns the
+      query/apply/broadcast/enhanced-submit integration cluster; those SPEC §9.1/§9.4 assertions
+      now live in `packages/runtime/src/query-runtime-integration.test.ts`, with shared fake
+      runtime DOM fixtures in `packages/runtime/src/runtime-test-fakes.ts` instead of a second
+      local harness copy. Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/index.test.ts packages/runtime/src/query-runtime-integration.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
+      `pnpm exec tsc --noEmit --pretty false`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
       Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in
