@@ -2,7 +2,7 @@ import { withDefaultMutationBroadcast } from './broadcast.js';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
-import { abortIslandSignalScope, createIslandSignalScope } from './handlers.js';
+import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
 import type { ImportHandlerModule } from './handlers.js';
 import { installDelegatedEventLifecycle, installExecutionTriggers } from './loader-lifecycle.js';
 import type {

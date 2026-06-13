@@ -583,6 +583,19 @@ packages/runtime/src/query-visible-return.ts packages/runtime/src/query-events.t
 packages/runtime/src/loader.ts packages/runtime/src/query-refetch.test.ts
 packages/runtime/src/query-store.test.ts packages/runtime/src/index.browser.test.ts
 IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Delegated handler context construction is split out of the dispatcher: `handler-context.ts` now
+  owns `data-p-*` parameter coercion, `fw-state` host discovery/read/write, ctx.signal island
+  scope allocation/abort, and removed-island signal cleanup, while `handlers.ts` only queues
+  state-host dispatches and imports/invokes handler references (SPEC.md §4.7/§9.1). Focused tests
+  moved param/state assertions out of `index.test.ts` into `handler-context.test.ts`.
+  Same-session evidence: `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest
+--config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm
+exec vp check packages/runtime/src/handler-context.ts packages/runtime/src/handlers.ts
+packages/runtime/src/handler-context.test.ts packages/runtime/src/loader-api.ts
+packages/runtime/src/loader.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/morph.ts
+packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-apply.ts
+packages/runtime/src/apply-mutation-response.ts packages/runtime/src/index.test.ts
+packages/runtime/src/loader-lifecycle.test.ts`.
 
 Open:
 

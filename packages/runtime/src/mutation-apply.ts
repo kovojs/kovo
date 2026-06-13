@@ -5,7 +5,7 @@ import {
   type ApplyMutationResponseToDomOptions,
 } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
-import type { IslandSignalScope } from './handlers.js';
+import type { IslandSignalScope } from './handler-context.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { MutationBroadcast } from './broadcast.js';
 import { isFailedMutationResponse, type FetchedEnhancedMutation } from './mutation-fetch.js';

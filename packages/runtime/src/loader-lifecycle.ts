@@ -6,7 +6,8 @@ import type {
 import { reportRuntimeContextError } from './error-policy.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
 import { dispatchDelegatedEvent } from './handlers.js';
-import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
+import type { IslandSignalScope } from './handler-context.js';
+import type { ImportHandlerModule } from './handlers.js';
 import {
   dispatchEnhancedFormSubmit,
   isEnhancedSubmitEvent,

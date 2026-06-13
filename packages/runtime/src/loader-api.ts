@@ -1,21 +1,18 @@
 export * from './events.js';
 export {
   abortRemovedIslandSignals,
+  readElementParams,
+  readElementState,
+  writeElementState,
+} from './handler-context.js';
+export {
   dispatchDelegatedEvent,
   handler,
   parseHandlerReference,
   parseHandlerReferences,
-  readElementParams,
-  readElementState,
-  writeElementState,
 } from './handlers.js';
-export type {
-  ClientHandler,
-  ElementParamValue,
-  HandlerContext,
-  ImportHandlerModule,
-  IslandSignalScope,
-} from './handlers.js';
+export type { ElementParamValue, HandlerContext, IslandSignalScope } from './handler-context.js';
+export type { ClientHandler, ImportHandlerModule } from './handlers.js';
 export type {
   LoaderLifecycleTarget,
   LoaderRoot,

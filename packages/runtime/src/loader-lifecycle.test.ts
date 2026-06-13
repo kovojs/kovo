@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DelegatedEvent, EventElementLike } from './events.js';
-import { createIslandSignalScope } from './handlers.js';
+import { createIslandSignalScope } from './handler-context.js';
 import {
   addLoaderListener,
   installDelegatedEventLifecycle,

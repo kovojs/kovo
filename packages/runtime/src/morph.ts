@@ -1,5 +1,5 @@
-import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handlers.js';
-import type { IslandSignalScope } from './handlers.js';
+import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-context.js';
+import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
 import type { FragmentChunk } from './wire-parser.js';
 

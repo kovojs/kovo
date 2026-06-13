@@ -25,8 +25,6 @@ import {
   OptimisticRebaser,
   parseHandlerReference,
   parseHandlerReferences,
-  readElementParams,
-  readElementState,
   stampPendingQueries,
   submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
@@ -37,7 +35,7 @@ import {
   type OptimisticFor,
   type StructuralMorphNode,
 } from './index.js';
-import { abortIslandSignalScope, createIslandSignalScope } from './handlers.js';
+import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
 
 declare module '@jiso/core' {
   interface InvalidationSets {
@@ -1788,12 +1786,7 @@ describe('runtime loader', () => {
     });
   });
 
-  it('defaults missing or malformed serialized state to an empty object', () => {
-    expect(readElementState(new FakeElement({}))).toEqual({});
-    expect(readElementState(new FakeElement({ 'fw-state': '{' }))).toEqual({});
-  });
-
-  it('parses full handler references and data params', () => {
+  it('parses full handler references', () => {
     expect(parseHandlerReference('/c/cart.client.js?v=1#Cart$remove')).toEqual({
       exportName: 'Cart$remove',
       url: '/c/cart.client.js?v=1',
@@ -1803,23 +1796,6 @@ describe('runtime loader', () => {
       '/b.js#two',
       '/c.js#three',
     ]);
-    expect(readElementParams(new FakeElement({ 'data-p-product-id': 'p1' }))).toEqual({
-      productId: 'p1',
-    });
-    expect(
-      readElementParams(
-        new FakeElement({
-          'data-p-featured': 'false',
-          'data-p-product-id': 'p1',
-          'data-p-quantity': '2',
-          'fw-param-types': 'quantity:number featured:boolean',
-        }),
-      ),
-    ).toEqual({
-      featured: false,
-      productId: 'p1',
-      quantity: 2,
-    });
   });
 
   it('disposes loader listeners, visible observers, and auto-created broadcasts', () => {

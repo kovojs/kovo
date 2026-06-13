@@ -6,7 +6,7 @@ import type { MorphFragment, MorphRoot } from './morph.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 import type { FragmentChunk, QueryChunk } from './wire-parser.js';
-import type { IslandSignalScope } from './handlers.js';
+import type { IslandSignalScope } from './handler-context.js';
 
 export interface AppliedMutationResponse {
   fragments: FragmentChunk[];
