@@ -116,8 +116,7 @@ describe('query hydration browser runtime', () => {
     window.dispatchEvent(
       new CustomEvent('jiso:query', {
         detail: {
-          attrs: ' name="cart"',
-          content: '{"count":5}',
+          queries: [{ attrs: ' name="cart"', content: '{"count":5}' }],
         },
       }),
     );
@@ -134,8 +133,7 @@ describe('query hydration browser runtime', () => {
     window.dispatchEvent(
       new CustomEvent('jiso:query', {
         detail: {
-          attrs: ' name="cart"',
-          content: '{"count":6}',
+          queries: [{ attrs: ' name="cart"', content: '{"count":6}' }],
         },
       }),
     );
@@ -171,8 +169,7 @@ describe('query hydration browser runtime', () => {
     window.dispatchEvent(
       new CustomEvent('jiso:query', {
         detail: {
-          attrs: ' name="cart"',
-          content: '{"count":5}',
+          queries: [{ attrs: ' name="cart"', content: '{"count":5}' }],
         },
       }),
     );
