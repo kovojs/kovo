@@ -2704,10 +2704,22 @@ function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Nod
 function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
   if (Node.isIdentifier(node)) return aliasedSymbol(symbolForIdentifierReference(node));
   if (Node.isPropertyAccessExpression(node)) {
-    return aliasedSymbol(node.getNameNode().getSymbol());
+    return aliasedSymbol(symbolForStaticMemberReference(node) ?? node.getNameNode().getSymbol());
   }
-  if (Node.isElementAccessExpression(node)) return aliasedSymbol(node.getSymbol());
+  if (Node.isElementAccessExpression(node)) {
+    return aliasedSymbol(symbolForStaticMemberReference(node) ?? node.getSymbol());
+  }
   return undefined;
+}
+
+function symbolForStaticMemberReference(node: Node): MorphSymbol | undefined {
+  // SPEC §10.2/§11.1: static callback containers are resolved from ts-morph member facts before
+  // local object compatibility walking, so namespace imports and re-export barrels remain exact.
+  const member = staticAccessName(node);
+  const receiver = staticAccessExpression(node);
+  if (!member || !receiver) return undefined;
+
+  return receiver.getType().getProperty(member);
 }
 
 function aliasedSymbol(symbol: MorphSymbol | undefined): MorphSymbol | undefined {

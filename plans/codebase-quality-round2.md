@@ -269,6 +269,18 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       same surfaces against real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13: static callback references such as
+      `LoaderBarrel.loaders["loadProducts"]` and `CallbackBarrel.callbacks["addItem"]` now resolve
+      through ts-morph receiver type member symbols before falling back to local object walking, so
+      namespace-imported query-loader and domain-write callback containers survive re-export
+      barrels without source-name compatibility lookup. `packages/drizzle/src/index.test.ts` covers
+      the package project surfaces, and `conformance/drizzle-pin/src/index.test.ts` pins the same
+      paths against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

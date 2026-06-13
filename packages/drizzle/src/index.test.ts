@@ -2740,6 +2740,63 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts namespace-imported project query-loader callback containers through barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'schema.ts',
+          source: [
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  name: text("name").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+          ].join('\n'),
+        },
+        {
+          fileName: 'loaders.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { products } from "./schema";',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, name: products.name }).from(products);',
+            '}',
+            '',
+            'export const loaders = { loadProducts };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'barrel.ts',
+          source: ['export { loaders } from "./loaders";'].join('\n'),
+        },
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import * as LoaderBarrel from "./barrel";',
+            '',
+            'export const productQuery = query("product/namespace-barrel-loader", {',
+            '  load: LoaderBarrel.loaders["loadProducts"],',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/namespace-barrel-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'product.queries.ts:3',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -7342,6 +7399,76 @@ export interface CommerceInvalidationSets {
             '',
             'export const cart = domain({',
             '  addItem: write(addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'callbacks.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts namespace-imported project write callback containers through barrels', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'schema.ts',
+          source: [
+            'export const cartItems = pgTable("cart_items", {',
+            '  productId: text("product_id").primaryKey(),',
+            '}, jiso({ domain: "cart", key: "productId" }));',
+          ].join('\n'),
+        },
+        {
+          fileName: 'callbacks.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { cartItems } from "./schema";',
+            '',
+            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export const callbacks = { addItem };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'barrel.ts',
+          source: ['export { callbacks } from "./callbacks";'].join('\n'),
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import * as CallbackBarrel from "./barrel";',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(CallbackBarrel.callbacks["addItem"]),',
             '});',
           ].join('\n'),
         },

@@ -1680,6 +1680,64 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins namespace-imported query-loader callback containers through barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: [
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  name: text('name').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+          ].join('\n'),
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/loaders.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { products } from './schema';",
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, name: products.name }).from(products);',
+            '}',
+            '',
+            'export const loaders = { loadProducts };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/barrel.ts',
+          source: ["export { loaders } from './loaders';"].join('\n'),
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import * as LoaderBarrel from './barrel';",
+            '',
+            "export const productQuery = query('product/namespace-barrel-loader', {",
+            "  load: LoaderBarrel.loaders['loadProducts'],",
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/namespace-barrel-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:3',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins member-referenced query-loader functions under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -3374,6 +3432,77 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             'export const cart = domain({',
             '  addItem: write(addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/callbacks.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins namespace-imported domain write callback containers through barrels', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: [
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {",
+            "  productId: text('product_id').primaryKey(),",
+            "}, jiso({ domain: 'cart', key: 'productId' }));",
+          ].join('\n'),
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/callbacks.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { cartItems } from './schema';",
+            '',
+            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export const callbacks = { addItem };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/barrel.ts',
+          source: ["export { callbacks } from './callbacks';"].join('\n'),
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import * as CallbackBarrel from './barrel';",
+            '',
+            'export const cart = domain({',
+            "  addItem: write(CallbackBarrel.callbacks['addItem']),",
             '});',
           ].join('\n'),
         },
