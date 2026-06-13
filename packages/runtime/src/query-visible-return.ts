@@ -68,7 +68,12 @@ export function createRefetchQueryLedger(
   };
 }
 
-function queryScriptsFromRoot(root: QueryVisibleReturnRefetchRoot): Iterable<QueryScriptLike> {
+export function readVisibleReturnQueryScripts(
+  root: QueryVisibleReturnRefetchRoot,
+): Iterable<QueryScriptLike> {
+  // SPEC.md §4.4/§9.4: visible-return refetch only follows server-authored
+  // query hydration scripts; DOM binding scans stay inside the shared query
+  // apply path.
   return (root.querySelectorAll?.('script[fw-query]') ?? []) as Iterable<QueryScriptLike>;
 }
 
@@ -89,7 +94,7 @@ export function installQueryVisibleReturnRefetch(
     if (!hydrationLedger) return;
 
     ledger.remember(
-      hydrationLedger.hydrate(queryScriptsFromRoot(options.root), {
+      hydrationLedger.hydrate(readVisibleReturnQueryScripts(options.root), {
         onError(error) {
           reportRuntimeError(options.onError, error);
         },

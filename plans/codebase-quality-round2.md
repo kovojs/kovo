@@ -581,6 +581,15 @@ packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser
 packages/runtime/src`, and browser runtime tests `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: visible-return hydration/refetch coverage moved from
+      `packages/runtime/src/query-refetch.test.ts` into
+      `packages/runtime/src/query-visible-return.test.ts`; `packages/runtime/src/query-refetch.test.ts`
+      now owns typed-read fetch/apply behavior, while `packages/runtime/src/query-visible-return.ts`
+      exposes the hydration script reader so the installer tests pin the exact query-script source.
+      Verified by `pnpm exec vitest --run packages/runtime/src/query-visible-return.test.ts
+packages/runtime/src/query-refetch.test.ts`, `pnpm exec vitest --run packages/runtime/src`, and
+      browser runtime tests `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -616,6 +625,11 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 packages/runtime/src/query-hydration.browser.test.ts`.
       Evidence 2026-06-13: browser runtime checks passed after inline fragment apply moved to the
       shared decoded `readFragmentElementChunk` helper. Command: `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after visible-return hydration/refetch
+      coverage moved into `packages/runtime/src/query-visible-return.test.ts` and the hydration
+      script reader became an explicit runtime seam. Command: `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
 
