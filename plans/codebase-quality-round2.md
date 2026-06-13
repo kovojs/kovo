@@ -612,6 +612,11 @@ inventory drift cannot hide behind the compatibility barrel.
 The internal `static-export.ts` orchestration facade now exports only `exportStaticApp`;
 compile/static-export diagnostics, manifest/inventory helpers, and output-plan helpers stay on
 their focused owner modules and the public `@jiso/server/app-shell/static-export` replacement seam.
+The root `@jiso/server` CLI compatibility alias for `exportStaticApp` now forwards directly from
+the focused SPEC §9.5 `static-export.ts` orchestrator instead of routing through the wider
+app-shell static-export barrel; public API tests pin the exact root value surface and prove
+document/data query-script aliases share the single `wire-html.ts` emitter while static-export
+diagnostic helpers resolve to `static-export-diagnostics.ts`.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite app-shell build output also reuses one planned SPEC §9.5 static-export asset list
@@ -631,6 +636,11 @@ targets, so R6 dry-run preview/export introspection cannot be mistaken for an ou
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`

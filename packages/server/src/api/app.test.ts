@@ -17,6 +17,7 @@ import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
 import * as renderingApi from './rendering.js';
+import * as routingApi from './routing.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
@@ -33,10 +34,14 @@ describe('server app-shell public API barrels', () => {
     const packageAppShellValues = packageAppShellApi as Record<string, unknown>;
     const publicValues = publicApi as Record<string, unknown>;
     const rootStaticExportCompatibility = new Set(['exportStaticApp']);
+    const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
+      exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
+    });
 
     expect(Object.keys(packageAppShellValues).sort()).toEqual(
       Object.keys(localAppShellValues).sort(),
     );
+    expect(Object.keys(publicValues).sort()).toEqual(rootValues);
     expect(Object.keys(localAppShellValues).sort()).toEqual(
       aggregateValueKeys(clientModulesApi, coreApi, nodeApi, staticExportApi, viteApi),
     );
@@ -62,8 +67,10 @@ describe('server app-shell public API barrels', () => {
       documentDiagnosticsApi.renderDiagnosticDocument,
     );
     expect(dataApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
+    expect(renderingApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(publicApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(publicApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
+    expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
 
     expect(appShellApi.createApp).toBe(coreApi.createApp);
     expect(appShellApi.createMemoryVersionedClientModuleRegistry).toBe(
@@ -77,7 +84,9 @@ describe('server app-shell public API barrels', () => {
     expect(appShellApi.formatStaticExportDiagnostics).toBe(
       staticExportDiagnosticsApi.formatStaticExportDiagnostics,
     );
-    expect(appShellApi.isStaticExportDiagnostic).toBe(staticExportApi.isStaticExportDiagnostic);
+    expect(appShellApi.isStaticExportDiagnostic).toBe(
+      staticExportDiagnosticsApi.isStaticExportDiagnostic,
+    );
     expect(appShellApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
     expect(appShellApi.writeJisoAppShellVitePluginBuild).toBe(
       viteApi.writeJisoAppShellVitePluginBuild,

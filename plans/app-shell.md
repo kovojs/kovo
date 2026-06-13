@@ -812,3 +812,18 @@ Round236 static-export facade closure evidence:
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-static-export-options.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+
+Round240 server root/app-shell boundary evidence:
+
+- `packages/server/src/index.ts` now preserves the CLI `exportStaticApp` compatibility alias by
+  forwarding directly from the focused SPEC §9.5 `static-export.ts` orchestrator instead of the
+  wider app-shell static-export barrel.
+- `packages/server/src/api/app.test.ts` pins the exact root runtime value surface to data,
+  rendering, routing, and the direct static-export alias; it also proves both public query-script
+  names point at the single `wire-html.ts` emitter and that app-shell static-export diagnostics
+  resolve to the focused diagnostic owner.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
