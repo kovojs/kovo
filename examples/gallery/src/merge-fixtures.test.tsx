@@ -3905,7 +3905,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="fieldsetRootAttributes" data-invalid="author-fieldsetRootAttributes" data-required="author-fieldsetRootAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" id="author-fieldsetRootAttributes" class="primitive-fieldsetRootAttributes author-fieldsetRootAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="fieldsetRootAttributes" data-invalid="author-fieldsetRootAttributes" data-required="author-fieldsetRootAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" id="author-fieldsetRootAttributes" name="author-fieldsetRootAttributes" class="primitive-fieldsetRootAttributes author-fieldsetRootAttributes">merged</div>",
           "name": "fieldsetRootAttributes",
         },
         {
