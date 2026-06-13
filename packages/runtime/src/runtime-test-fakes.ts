@@ -1,6 +1,7 @@
 import type { DelegatedEvent, EventElementLike } from './index.js';
 
 export class FakeRoot {
+  bindings: FakeQueryBindingElement[] = [];
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
   elements = new Map<string, FakeElement[]>();
   scripts: QueryScript[] = [];
@@ -19,8 +20,14 @@ export class FakeRoot {
     }
   }
 
-  querySelectorAll(selector: string): Iterable<QueryScript | FakeElement> {
-    return selector === 'script[fw-query]' ? this.scripts : (this.elements.get(selector) ?? []);
+  querySelectorAll(
+    selector: string,
+  ): Iterable<QueryScript | FakeElement | FakeQueryBindingElement> {
+    if (selector === 'script[fw-query]') return this.scripts;
+    if (selector === '[data-bind]') return this.bindings;
+    if (selector === '*') return this.bindings;
+
+    return this.elements.get(selector) ?? [];
   }
 }
 

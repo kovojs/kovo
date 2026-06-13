@@ -1,31 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { stampPendingQueries as stampPendingQueriesFromIndex } from './index.js';
-import { readDeps, stampPendingQueries, type PendingElementLike } from './pending.js';
-
-class FakePendingElement implements PendingElementLike {
-  constructor(readonly attributes: Record<string, string>) {}
-
-  getAttribute(name: string): string | null {
-    return this.attributes[name] ?? null;
-  }
-
-  removeAttribute(name: string): void {
-    delete this.attributes[name];
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attributes[name] = value;
-  }
-}
-
-class FakePendingRoot {
-  constructor(private readonly elements: readonly FakePendingElement[]) {}
-
-  querySelectorAll(selector: string): Iterable<FakePendingElement> {
-    return selector === '[fw-deps]' ? this.elements : [];
-  }
-}
+import { readDeps, stampPendingQueries } from './pending.js';
+import { FakePendingElement, FakePendingRoot } from './runtime-test-fakes.js';
 
 describe('pending query stamps', () => {
   it('exports the pending stamper through the runtime barrel', () => {

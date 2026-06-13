@@ -339,6 +339,18 @@ packages/runtime/src/mutation-optimistic.test.ts`.
       Verified by `pnpm exec vitest --run packages/runtime/src/query-runtime-integration.test.ts
 packages/runtime/src/broadcast.test.ts packages/runtime/src/mutation-submit.test.ts
 packages/runtime/src/morph.test.ts`.
+      Evidence 2026-06-13: duplicate local query-store hydration/refetch and pending-stamp fake
+      classes were deleted from `packages/runtime/src/query-store.test.ts` and
+      `packages/runtime/src/pending.test.ts`; shared
+      `packages/runtime/src/runtime-test-fakes.ts` now owns binding-aware loader roots,
+      enhanced-form, morph, broadcast, and pending fakes used by those runtime suites. Verified by
+      `pnpm exec vitest --run packages/runtime/src/query-store.test.ts
+packages/runtime/src/loader-query-hydration.test.ts
+packages/runtime/src/query-runtime-integration.test.ts
+packages/runtime/src/loader-disposal.test.ts
+packages/runtime/src/delegated-runtime-integration.test.ts` and `pnpm exec vitest --run
+packages/runtime/src/pending.test.ts packages/runtime/src/mutation-submit.test.ts
+packages/runtime/src/mutation-optimistic.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted

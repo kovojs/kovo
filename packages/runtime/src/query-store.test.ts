@@ -1,114 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installJisoLoader, type DelegatedEvent } from './index.js';
+import { installJisoLoader } from './index.js';
 import { createQueryStore } from './query-store.js';
-
-class FakeRoot {
-  bindings: QueryBinding[] = [];
-  listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
-  scripts: QueryScript[] = [];
-  visibilityState: 'hidden' | 'visible' = 'visible';
-
-  addEventListener(type: string, listener: (event: DelegatedEvent) => void | Promise<void>): void {
-    this.listeners.set(type, listener);
-  }
-
-  removeEventListener(
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-  ): void {
-    if (this.listeners.get(type) === listener) {
-      this.listeners.delete(type);
-    }
-  }
-
-  querySelectorAll(selector: string): Iterable<QueryScript | QueryBinding> {
-    if (selector === 'script[fw-query]') return this.scripts;
-    if (selector === '[data-bind]') return this.bindings;
-    if (selector === '*') return [];
-
-    return [];
-  }
-}
-
-interface QueryScript {
-  getAttribute(name: string): string | null;
-  textContent: string | null;
-}
-
-interface QueryBinding {
-  getAttribute(name: string): string | null;
-  textContent: string | null;
-}
-
-class FakeFormElement {
-  attributes: { name: string; value: string }[];
-  action: string;
-  method: string | undefined;
-
-  constructor(attributes: Record<string, string>, options: { action: string; method?: string }) {
-    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
-    this.action = options.action;
-    this.method = options.method;
-  }
-
-  closest(_selector: string): FakeFormElement {
-    return this;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
-  }
-}
-
-class FakeMorphTarget {
-  html = '';
-
-  replaceWithHtml(html: string): void {
-    this.html = html;
-  }
-}
-
-interface FakeTargetElement {
-  getAttribute(name: string): string | null;
-  id?: string;
-}
-
-class FakeMorphRoot {
-  deps: { deps?: string; id?: string; target?: string }[] = [];
-  targets = new Map<string, FakeMorphTarget>();
-
-  findFragmentTarget(target: string): FakeMorphTarget | null {
-    return this.targets.get(target) ?? null;
-  }
-
-  querySelectorAll(selector: string): Iterable<FakeTargetElement> {
-    return selector === '[fw-deps]'
-      ? this.deps.map((dep) => ({
-          getAttribute: (name) => {
-            if (name === 'fw-fragment-target') return dep.target ?? null;
-            if (name === 'fw-deps') return dep.deps ?? null;
-            return null;
-          },
-          ...(dep.id ? { id: dep.id } : {}),
-        }))
-      : [];
-  }
-}
-
-class FakeBroadcastChannel {
-  closed = false;
-  messages: unknown[] = [];
-  onmessage: ((event: { data: unknown }) => void) | null = null;
-
-  postMessage(message: unknown): void {
-    this.messages.push(message);
-  }
-
-  close(): void {
-    this.closed = true;
-  }
-}
+import {
+  FakeBroadcastChannel,
+  FakeFormElement,
+  FakeMorphRoot,
+  FakeQueryBindingElement,
+  FakeRoot,
+} from './runtime-test-fakes.js';
 
 describe('query store hydration and refetch', () => {
   it('runs update plans whenever a query value changes', () => {
@@ -344,14 +244,8 @@ describe('query store hydration and refetch', () => {
     const cartPlan = vi.fn();
     const reviewsPlan = vi.fn();
     const refetchOnFocus = vi.fn();
-    const cartBinding = {
-      textContent: '',
-      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
-    };
-    const reviewsBinding = {
-      textContent: '',
-      getAttribute: (name: string) => (name === 'data-bind' ? 'reviews.total' : null),
-    };
+    const cartBinding = new FakeQueryBindingElement('cart.count', { textContent: '' });
+    const reviewsBinding = new FakeQueryBindingElement('reviews.total', { textContent: '' });
     const fetch = vi.fn(async (url: string) => ({
       status: 200,
       text: async () =>
