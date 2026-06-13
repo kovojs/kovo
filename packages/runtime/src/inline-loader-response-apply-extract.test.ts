@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   assertInlineJisoLoaderInstallerResponseApplyParity,
@@ -9,15 +9,13 @@ import {
   inlineResponseApplyReadableSource,
   inlineWireParserReadableSource,
 } from './inline-loader-build.js';
-import { expectInlineResponseApplyParity } from './inline-loader-response-apply-fixture.js';
-import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
-import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 
+// SPEC.md §4.4/§9.1: inline query-event handoff and fragment application are
+// generated from a single runtime-owned apply helper closure that is extracted,
+// closure-checked, and minified before embedding. The decoded runtime apply and
+// modular parity behavior lives in sibling inline-loader-response-apply-runtime.test.ts.
 describe('inline loader response apply source', () => {
   it('generates readable inline loader source around the canonical response apply helper', () => {
-    // SPEC.md §4.4/§9.1: inline query-event handoff and fragment application
-    // are generated from the runtime-owned apply helper closure, while parser
-    // extraction remains owned by the parser parity suite.
     const alternateReadableApply = [
       'function applyInlineMutationResponseChunks(chunks, options) {',
       '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
@@ -59,9 +57,6 @@ describe('inline loader response apply source', () => {
   });
 
   it('extracts and checks readable and minified inline response apply embeds', () => {
-    // SPEC.md §4.4/§9.1: inline query-event and fragment application is owned
-    // by a canonical runtime helper closure before minification, not by a
-    // second hand-written apply function inside the generated bootstrap.
     const canonicalApply = [
       'export function applyInlineMutationResponseChunks(chunks, options) {',
       '  dispatchInlineMutationQueries(chunks.queries, options);',
@@ -147,9 +142,6 @@ describe('inline loader response apply source', () => {
   });
 
   it('includes response apply dependencies from destructured computed keys and defaults', () => {
-    // SPEC.md §4.4/§9.1: response-apply extraction uses the same closed
-    // binding-pattern dependency walk as parser extraction before the inline
-    // bootstrap is minified.
     const source = [
       'export function applyInlineMutationResponseChunks({ fragments = defaultFragments(), [readQueryKey()]: queries = defaultQueries() }, options) {',
       '  dispatchInlineMutationQueries(queries, options);',
@@ -190,13 +182,6 @@ describe('inline loader response apply source', () => {
     expect(extracted).toContain('queries = defaultQueries()');
   });
 
-  it.each(inlineSourceInstallCases)(
-    'keeps inline response application in parity with the modular DOM apply path through %s',
-    async (_name, installSource) => {
-      await expectInlineResponseApplyParity(installSource, { expect, vi });
-    },
-  );
-
   it('keeps freshly minified response apply source compact before parity execution', () => {
     // SPEC.md §4.4/§9.1: minification cannot fork the inline mutation response
     // scanner or the batched `jiso:query` event handoff used by runtime query apply.
@@ -204,66 +189,6 @@ describe('inline loader response apply source', () => {
 
     expect(minifiedSource).toBe(minifiedSource.trim());
     expect(minifiedSource).not.toMatch(/\n|\s{2,}/);
-  });
-
-  it('applies decoded inline query events and fragments through the runtime-owned helper', () => {
-    // SPEC.md §4.4/§9.1: the helper extracted into the inline loader owns the
-    // tiny response apply step that bridges raw query chunks to modular query
-    // event hydration and applies fragment patches.
-    const dispatched: unknown[] = [];
-    const targets = new Map([
-      [
-        'replace-target',
-        {
-          html: '',
-          innerHTML: '',
-          insertAdjacentHTML(_position: 'beforeend', html: string) {
-            this.html += html;
-          },
-        },
-      ],
-      [
-        'append-target',
-        {
-          html: '<li>existing</li>',
-          innerHTML: '',
-          insertAdjacentHTML(_position: 'beforeend', html: string) {
-            this.html += html;
-          },
-        },
-      ],
-    ]);
-
-    const appliedFragments = applyInlineMutationResponseChunks(
-      {
-        fragments: [
-          { html: '<p>replace</p>', target: 'replace-target' },
-          { html: '<li>new</li>', mode: 'append', target: 'append-target' },
-          { html: '<p>ignored</p>', target: 'missing-target' },
-        ],
-        queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
-      },
-      {
-        dispatchQueryEvent(type, init) {
-          dispatched.push({ type, ...init });
-        },
-        findFragmentTarget(target) {
-          return targets.get(target) ?? null;
-        },
-      },
-    );
-
-    expect(dispatched).toEqual([
-      {
-        detail: {
-          queries: [{ attrs: ' name="cart"', content: 'decoded query' }],
-        },
-        type: 'jiso:query',
-      },
-    ]);
-    expect(appliedFragments).toEqual(['replace-target', 'append-target']);
-    expect(targets.get('replace-target')?.innerHTML).toBe('<p>replace</p>');
-    expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');
   });
 
   it('rejects inline response apply helpers that reach outside the function closure', () => {
