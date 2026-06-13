@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, command, context-menu, drawer, dropdown-menu, field, kbd, menubar, navigation-menu, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar',
+      'accordion, alert, alert-dialog, autocomplete, avatar, badge, breadcrumb, button, card, checkbox, checkbox-group, collapsible, combobox, command, context-menu, dialog, disclosure, drawer, dropdown-menu, field, hover-card, kbd, menubar, meter, navigation-menu, number-field, otp-field, popover, progress, radio-group, scroll-area, select, separator, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar, tooltip',
     );
 
     const manifest = JSON.parse(
@@ -364,11 +364,11 @@ describe('fw add', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'dialog'])).toBe(1);
+      expect(main(['add', 'calendar'])).toBe(1);
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, command, context-menu, drawer, dropdown-menu, field, kbd, menubar, navigation-menu, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar.\n',
+        'fw: unknown component "calendar". available: accordion, alert, alert-dialog, autocomplete, avatar, badge, breadcrumb, button, card, checkbox, checkbox-group, collapsible, combobox, command, context-menu, dialog, disclosure, drawer, dropdown-menu, field, hover-card, kbd, menubar, meter, navigation-menu, number-field, otp-field, popover, progress, radio-group, scroll-area, select, separator, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar, tooltip.\n',
       );
     } finally {
       stdout.mockRestore();
