@@ -1306,6 +1306,9 @@ Deferred stream part detection now uses the canonical mutation response element 
 a regex-only `fw-query`/`fw-fragment` filter, and the remaining broad
 `packages/runtime/src/query-runtime-integration.test.ts` assertions have moved to derive,
 optimism, mutation response, and deferred-stream owner suites.
+Deferred stream boundary scanning now accepts CRLF multipart framing and line-start boundaries
+before handing each part to `readMutationResponseBodyChunks`, so query/fragment application still
+enters `applyMutationResponseChunksToRuntime` without a deferred-only parser/apply fork.
 Fragment element decoding/error helpers are now private inside `wire-parser.ts`; the checked
 decoded body readers remain the shared parser surface used by modular apply and the extracted
 inline-loader parser closure. Delegated handler reference parsing is now private inside
@@ -1405,6 +1408,26 @@ packages/runtime/src/**/*.browser.test.ts`; inline-loader parity
 packages/runtime/src/query-script-hydration.ts
 packages/runtime/src/query-script-hydration.test.ts
 packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`; and
+      `git diff --check`.
+- [x] Keep CRLF deferred stream parts on the shared mutation response apply path.
+      Evidence 2026-06-13 round291 runtime: `packages/runtime/src/wire-parser.ts` now detects
+      deferred stream boundaries only at line starts, accepts CRLF boundary lines, trims boundary
+      prelude line endings, and leaves each part to `readMutationResponseBodyChunks` before
+      `packages/runtime/src/apply-deferred-stream.ts` enters the existing
+      `applyMutationResponseChunksToRuntime` primitive. `packages/runtime/src/wire-parser.test.ts`
+      proves multipart-ish CRLF parts decode through the mutation parser,
+      `packages/runtime/src/apply-deferred-stream.test.ts` proves preamble/trailing data is ignored
+      while query truth and fragments apply through rooted runtime apply, and
+      `packages/runtime/src/apply-deferred-stream.browser.test.ts` proves real browser DOM
+      fragment morphing shares query truth through the separate query root. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/apply-deferred-stream.test.ts
+packages/runtime/src/apply-deferred-stream-rootless.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, browser runtime
+      `pnpm exec vitest --run --config vitest.browser.config.ts`, exact `pnpm exec vp check
+packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/apply-deferred-stream.test.ts
+packages/runtime/src/apply-deferred-stream.browser.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.

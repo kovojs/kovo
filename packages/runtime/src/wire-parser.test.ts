@@ -221,6 +221,38 @@ describe('wire parser HTML entity handling', () => {
     ]);
   });
 
+  it('extracts CRLF deferred stream parts before the shared mutation parser', () => {
+    // SPEC.md §9.1: deferred streams carry the same fw-query/fw-fragment
+    // mutation vocabulary; multipart boundary framing must not create a
+    // transport-specific apply/parser fork.
+    expect(
+      deferredStreamChunks(
+        [
+          'HTTP/1.1 200 OK\r\n',
+          '--jiso-boundary\r\n',
+          'Content-Type: text/vnd.jiso.fragment+html\r\n',
+          '\r\n',
+          '<fw-query name="cart">{"count":1}</fw-query>\r\n',
+          '--jiso-boundary\r\n',
+          'Content-Type: text/vnd.jiso.fragment+html\r\n',
+          '\r\n',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>\r\n',
+          '--jiso-boundary--\r\n',
+        ].join(''),
+        'jiso-boundary',
+      ).map((chunk) => readMutationResponseBodyChunks(chunk)),
+    ).toEqual([
+      {
+        fragments: [],
+        queries: [{ name: 'cart', value: { count: 1 } }],
+      },
+      {
+        fragments: [{ html: '<cart-badge>1</cart-badge>', target: 'cart-badge' }],
+        queries: [],
+      },
+    ]);
+  });
+
   it('shares mutation response element scanning with the inline loader parser root', () => {
     const malformedQuery = vi.fn();
     const malformedFragment = vi.fn();

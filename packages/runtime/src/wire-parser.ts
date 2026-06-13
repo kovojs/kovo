@@ -39,18 +39,18 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
   let cursor = 0;
 
   while (true) {
-    const markerStart = body.indexOf(marker, cursor);
+    const markerStart = nextBoundaryMarker(body, marker, cursor);
     if (markerStart === -1) return chunks;
 
-    const chunkStart = body.indexOf('\n', markerStart);
-    if (chunkStart === -1) return chunks;
     if (body.startsWith(`${marker}--`, markerStart)) return chunks;
 
-    const nextMarkerStart = body.indexOf(`\n${marker}`, chunkStart + 1);
-    const chunk =
-      nextMarkerStart === -1
-        ? body.slice(chunkStart + 1)
-        : body.slice(chunkStart + 1, nextMarkerStart);
+    const chunkStart = boundaryLineEnd(body, markerStart + marker.length);
+    if (chunkStart === undefined) return chunks;
+
+    const nextMarkerStart = nextBoundaryMarker(body, marker, chunkStart);
+    const chunkEnd =
+      nextMarkerStart === -1 ? body.length : trimBoundaryPrelude(body, nextMarkerStart);
+    const chunk = body.slice(chunkStart, chunkEnd);
     let containsMutationResponseElement = false;
     const responseElements = readMutationResponseElementChunks(chunk, {
       onMalformedFragment() {
@@ -67,8 +67,32 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
     ) {
       chunks.push(chunk);
     }
-    cursor = nextMarkerStart === -1 ? body.length : nextMarkerStart + 1;
+    cursor = nextMarkerStart === -1 ? body.length : nextMarkerStart;
   }
+}
+
+function nextBoundaryMarker(body: string, marker: string, start: number): number {
+  let cursor = start;
+
+  while (cursor < body.length) {
+    const markerStart = body.indexOf(marker, cursor);
+    if (markerStart === -1) return -1;
+    if (markerStart === 0 || body[markerStart - 1] === '\n') return markerStart;
+    cursor = markerStart + marker.length;
+  }
+
+  return -1;
+}
+
+function boundaryLineEnd(body: string, start: number): number | undefined {
+  if (body[start] === '\r' && body[start + 1] === '\n') return start + 2;
+  if (body[start] === '\n') return start + 1;
+  return undefined;
+}
+
+function trimBoundaryPrelude(body: string, markerStart: number): number {
+  if (body[markerStart - 1] !== '\n') return markerStart;
+  return body[markerStart - 2] === '\r' ? markerStart - 2 : markerStart - 1;
 }
 
 export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): QueryChunk[] {

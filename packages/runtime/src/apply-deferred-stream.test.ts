@@ -191,4 +191,51 @@ describe('deferred stream response apply', () => {
       '<section>Recommendations ready</section>',
     );
   });
+
+  it('applies CRLF multipart deferred parts through the shared mutation response path', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    // SPEC.md §9.1: deferred transport framing is decoded before runtime
+    // query/fragment application, which remains the mutation response path.
+    const applied = applyDeferredStreamResponseToRuntime({
+      body: [
+        'preamble ignored\r\n',
+        '--jiso-boundary\r\n',
+        'Content-Type: text/vnd.jiso.fragment+html\r\n',
+        '\r\n',
+        '<fw-query name="cart">{"count":3}</fw-query>\r\n',
+        '--jiso-boundary\r\n',
+        'Content-Type: text/vnd.jiso.fragment+html\r\n',
+        '\r\n',
+        '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>\r\n',
+        '--jiso-boundary--\r\n',
+        '<fw-query name="stale">{"count":99}</fw-query>',
+      ].join(''),
+      onError,
+      root,
+      store,
+    });
+
+    expect(applied.queries).toEqual(['cart']);
+    expect(applied.appliedFragments).toEqual(['cart-badge']);
+    expect(applied.chunks).toEqual([
+      {
+        appliedFragments: [],
+        fragments: [],
+        queries: ['cart'],
+      },
+      {
+        appliedFragments: ['cart-badge'],
+        fragments: [{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }],
+        queries: [],
+      },
+    ]);
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(store.get('stale')).toBeUndefined();
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>3</cart-badge>');
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
