@@ -76,6 +76,14 @@ export interface FieldSelectProps extends FieldStateProps {
   value?: string;
 }
 
+export interface FieldSelectOptionProps {
+  children?: string;
+  class?: ClassValue;
+  disabled?: boolean;
+  selected?: boolean;
+  value?: string;
+}
+
 export interface FieldMessageProps extends FieldStateProps {
   children?: string;
   class?: ClassValue;
@@ -124,6 +132,11 @@ export const fieldSelectClassNames = defineVariants({
   variants: {},
 });
 
+export const fieldSelectOptionClassNames = defineVariants({
+  base: 'text-neutral-950 disabled:text-neutral-400',
+  variants: {},
+});
+
 export const fieldDescriptionClassNames = defineVariants({
   base: 'text-sm text-neutral-500',
   variants: {},
@@ -149,6 +162,7 @@ export const fieldLabelClasses = fieldLabelClassNames.classes;
 export const fieldControlClasses = fieldControlClassNames.classes;
 export const fieldTextareaClasses = fieldTextareaClassNames.classes;
 export const fieldSelectClasses = fieldSelectClassNames.classes;
+export const fieldSelectOptionClasses = fieldSelectOptionClassNames.classes;
 export const fieldDescriptionClasses = fieldDescriptionClassNames.classes;
 export const fieldErrorClasses = fieldErrorClassNames.classes;
 export const fieldsetClasses = fieldsetClassNames.classes;
@@ -319,6 +333,21 @@ export const FieldSelect = component('field-select', {
       >
         {props.children}
       </select>
+    );
+  },
+});
+
+export const FieldSelectOption = component('field-select-option', {
+  render(props: FieldSelectOptionProps) {
+    return (
+      <option
+        class={cn(fieldSelectOptionClassNames(), props.class)}
+        disabled={props.disabled}
+        selected={props.selected}
+        value={props.value}
+      >
+        {props.children}
+      </option>
     );
   },
 });

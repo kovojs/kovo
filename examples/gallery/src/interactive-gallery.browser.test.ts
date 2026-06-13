@@ -111,6 +111,7 @@ import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
 import drawerStaticRouteHtml from './visual-fixtures/drawer.html.txt?raw';
 import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
+import fieldStaticRouteHtml from './visual-fixtures/field.html.txt?raw';
 import hoverCardStaticRouteHtml from './visual-fixtures/hover-card.html.txt?raw';
 import kbdStaticRouteHtml from './visual-fixtures/kbd.html.txt?raw';
 import menubarStaticRouteHtml from './visual-fixtures/menubar.html.txt?raw';
@@ -148,6 +149,7 @@ type StaticVisualFixturePath =
   | '/components/context-menu'
   | '/components/drawer'
   | '/components/dropdown-menu'
+  | '/components/field'
   | '/components/hover-card'
   | '/components/kbd'
   | '/components/menubar'
@@ -177,6 +179,7 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/context-menu': contextMenuStaticRouteHtml,
   '/components/drawer': drawerStaticRouteHtml,
   '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
+  '/components/field': fieldStaticRouteHtml,
   '/components/hover-card': hoverCardStaticRouteHtml,
   '/components/kbd': kbdStaticRouteHtml,
   '/components/menubar': menubarStaticRouteHtml,
@@ -522,6 +525,14 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
     expect(await visualBaselineHash(drawerRoute)).toBe('d6203776');
     expect(await visualBaselineHash(sheetRoute)).toBe('538e1a6e');
+
+    const fieldRoute = mountStaticGalleryRoute('/components/field');
+
+    expect(visualGeometry(fieldRoute)).toEqual({
+      height: 874,
+      width: 860,
+    });
+    expect(await visualBaselineHash(fieldRoute)).toBe('d1dab468');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

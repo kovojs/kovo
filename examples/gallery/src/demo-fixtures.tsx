@@ -76,6 +76,7 @@ import {
   FieldError,
   FieldLabel,
   FieldSelect,
+  FieldSelectOption,
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
@@ -1445,7 +1446,17 @@ export function FieldDemo(): string {
               })}
               {FieldSelect.definition.render({
                 children:
-                  '<option value="starter">Starter</option><option value="team" selected>Team</option>',
+                  FieldSelectOption.definition.render({ children: 'Starter', value: 'starter' }) +
+                  FieldSelectOption.definition.render({
+                    children: 'Team',
+                    selected: true,
+                    value: 'team',
+                  }) +
+                  FieldSelectOption.definition.render({
+                    children: 'Enterprise',
+                    disabled: true,
+                    value: 'enterprise',
+                  }),
                 descriptionId: 'gallery-field-plan-description',
                 form: 'gallery-field-external-form',
                 id: 'gallery-field-plan',

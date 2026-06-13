@@ -103,6 +103,7 @@ describe('gallery demo fixtures', () => {
       ['/components/context-menu', 'context-menu.html.txt'],
       ['/components/drawer', 'drawer.html.txt'],
       ['/components/dropdown-menu', 'dropdown-menu.html.txt'],
+      ['/components/field', 'field.html.txt'],
       ['/components/hover-card', 'hover-card.html.txt'],
       ['/components/menubar', 'menubar.html.txt'],
       ['/components/navigation-menu', 'navigation-menu.html.txt'],
@@ -383,7 +384,12 @@ describe('gallery demo fixtures', () => {
     expect(field.html).toContain('for="gallery-field-plan"');
     expect(field.html).toContain('<select aria-describedby="gallery-field-plan-description"');
     expect(field.html).toContain('id="gallery-field-plan" name="plan" required value="team"');
-    expect(field.html).toContain('<option value="team" selected>Team</option>');
+    expect(field.html).toContain(
+      '<option class="text-neutral-950 disabled:text-neutral-400" selected value="team">Team</option>',
+    );
+    expect(field.html).toContain(
+      '<option class="text-neutral-950 disabled:text-neutral-400" disabled value="enterprise">Enterprise</option>',
+    );
     expect(field.html).toContain('aria-describedby="gallery-fieldset-description"');
     expect(field.html).toContain(
       'disabled form="gallery-field-external-form" id="gallery-fieldset"',

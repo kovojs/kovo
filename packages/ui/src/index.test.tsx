@@ -75,6 +75,7 @@ import {
   FieldError,
   FieldLabel,
   FieldSelect,
+  FieldSelectOption,
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
@@ -207,6 +208,7 @@ import {
   fieldErrorClasses,
   fieldLabelClasses,
   fieldSelectClasses,
+  fieldSelectOptionClasses,
   fieldTextareaClasses,
   fieldsetClasses,
   fieldsetLegendClasses,
@@ -1117,6 +1119,12 @@ describe('@jiso/ui styled package foundation', () => {
       required: true,
       value: 'team',
     });
+    const selectOption = FieldSelectOption.definition.render({
+      children: 'Enterprise',
+      disabled: true,
+      selected: true,
+      value: 'enterprise',
+    });
     const description = FieldDescription.definition.render({
       children: 'Used for notifications.',
       id: 'email-description',
@@ -1143,6 +1151,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(FieldControl.name).toBe('field-control');
     expect(FieldTextarea.name).toBe('field-textarea');
     expect(FieldSelect.name).toBe('field-select');
+    expect(FieldSelectOption.name).toBe('field-select-option');
     expect(FieldDescription.name).toBe('field-description');
     expect(FieldError.name).toBe('field-error');
     expect(Fieldset.name).toBe('fieldset');
@@ -1177,6 +1186,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(select).toContain('id="plan" name="plan" required value="team"');
     expect(select).toContain('<option value="team" selected>Team</option>');
     expect(select).not.toMatch(/\sdisabled(?:\s|>|=)/);
+    expect(selectOption).toContain(
+      '<option class="text-neutral-950 disabled:text-neutral-400" disabled selected value="enterprise">Enterprise</option>',
+    );
     expect(description).toContain('id="email-description"');
     expect(error).toContain('role="alert"');
     expect(fieldset).toContain('aria-describedby="plan-description"');
@@ -1192,6 +1204,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(fieldControlClasses.join(' ')).toContain('aria-[invalid=true]:border-red-500');
     expect(fieldTextareaClasses.join(' ')).toContain('min-h-24');
     expect(fieldSelectClasses.join(' ')).toContain('h-9 w-full');
+    expect(fieldSelectOptionClasses.join(' ')).toContain('disabled:text-neutral-400');
     expect(fieldDescriptionClasses.join(' ')).toContain('text-neutral-500');
     expect(fieldErrorClasses.join(' ')).toContain('text-red-600');
     expect(fieldsetClasses.join(' ')).toContain('rounded-md border border-neutral-200');

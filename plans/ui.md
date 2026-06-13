@@ -189,6 +189,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       route family; raw route fixtures are synchronized against `renderGalleryRoute()`, and the
       Chromium browser gate asserts deterministic `860x503` geometry plus hashes `d6203776` and
       `538e1a6e`.
+      Evidence 2026-06-13: `packages/ui/src/field.tsx` now exports `FieldSelectOption` plus
+      option class helpers so field select options can be authored as vendorable TSX while
+      preserving SPEC §3.1 light-DOM/native form participation. The field static route now uses
+      authored option wrappers, `examples/gallery/src/visual-fixtures/field.html.txt` is
+      synchronized against `renderGalleryRoute()`, and the Chromium visual gate asserts
+      deterministic `860x874` geometry plus hash `d1dab468`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
