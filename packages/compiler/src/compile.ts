@@ -114,10 +114,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssAssets = cssSource
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
-  const serverRender = serverRenderLowering(versionedHandlers, model);
+  const serverRenderReplacements = serverRenderLowering(versionedHandlers, model);
   const serverRenderedSource = applyComponentPipelineEmitPatches(
     modelPatch.state,
-    serverRender.replacements,
+    serverRenderReplacements,
   );
   const serverModule = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({

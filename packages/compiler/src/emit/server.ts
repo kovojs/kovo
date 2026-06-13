@@ -17,10 +17,6 @@ import {
   type RenderEquivalenceCheck,
 } from '../types.js';
 
-export interface ServerRenderLowering {
-  replacements: SourceReplacement[];
-}
-
 export interface EmittedServerModule {
   executableSource: string;
   source: string;
@@ -36,8 +32,8 @@ export function emitServerModule(renderedSource: string): EmittedServerModule {
 export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
-): ServerRenderLowering {
-  return { replacements: serverRenderPatches(handlers, model) };
+): SourceReplacement[] {
+  return serverRenderPatches(handlers, model);
 }
 
 export function renderEquivalenceCheck(

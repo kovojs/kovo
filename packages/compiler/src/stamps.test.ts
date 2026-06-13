@@ -22,7 +22,7 @@ export const Recommendations = component('recommendations', {
     const fwDepsStart = source.indexOf("fw-deps='product:p1'");
     const insertPosition = source.indexOf('>', fwDepsStart);
 
-    expect(lowering.replacements).toEqual([
+    expect(lowering).toEqual([
       {
         end: fwDepsStart + "fw-deps='product:p1'".length,
         replacement: 'fw-deps="product:p1 cart"',
