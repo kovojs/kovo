@@ -234,6 +234,16 @@ check packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-test-utils.ts plans/codebase-quality-round2.md`; `git diff
 --check`.
+      Evidence 2026-06-13: inline response-apply parity moved from
+      `packages/runtime/src/inline-loader.test.ts` into
+      `packages/runtime/src/inline-loader-response-apply.test.ts`, leaving the broad inline-loader
+      test focused on install, delegated handler, and trigger behavior. Verified by `pnpm exec
+vitest --run packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-js-minifier.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
