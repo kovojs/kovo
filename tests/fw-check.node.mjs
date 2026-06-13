@@ -59,6 +59,15 @@ import {
   workflowStepCommands,
 } from '../packages/test/src/command-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
+import {
+  executeGeneratedBootstrapModule,
+  executeGeneratedClientModule,
+  executeGeneratedServerRenderSource,
+  GeneratedFixtureElement,
+  GeneratedFixtureMorphRoot,
+  GeneratedFixtureMorphTarget,
+  GeneratedFixtureTemplateStampHost,
+} from '../packages/test/src/generated-module-fixtures.ts';
 import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
   markdownFields,
@@ -244,123 +253,18 @@ const canonicalDocRuleTitle = (title) =>
     .replace('One-to-one file mapping', '1:1 file mapping')
     .replace('Platform behavior emission', 'Platform-behavior emission');
 
-class GateMorphTarget {
-  constructor(html = '') {
-    this.html = html;
-  }
-
-  appendHtml(html) {
-    this.html += html;
-  }
-
-  readHtml() {
-    return this.html;
-  }
-
-  replaceWithHtml(html) {
-    this.html = html;
-  }
-}
-
-class GateQueryElement {
-  constructor(attributes, options = {}) {
-    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
-    this.textContent = options.textContent ?? null;
-    if (options.value !== undefined) this.value = options.value;
-  }
-
-  getAttribute(name) {
-    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
-  }
-
-  matches(selector) {
-    const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
-    if (exactAttribute) return this.getAttribute(exactAttribute[1]) === exactAttribute[2];
-
-    const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
-    return presentAttribute ? this.getAttribute(presentAttribute[1]) !== null : false;
-  }
-
-  removeAttribute(name) {
-    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
-  }
-
-  setAttribute(name, value) {
-    const existing = this.attributes.find((attribute) => attribute.name === name);
-    if (existing) {
-      existing.value = value;
-      return;
-    }
-    this.attributes.push({ name, value });
-  }
-}
-
-class GateTemplateStampHost extends GateQueryElement {
-  items = [];
-
-  reconcileTemplateStamp(items) {
-    this.items = items.map((item) => ({ ...item }));
-    this.textContent = items.map((item) => item.html).join('');
-  }
-}
-
-class GateMorphRoot {
-  constructor() {
-    this.bindings = [];
-    this.elements = [];
-    this.targets = new Map();
-  }
-
-  findFragmentTarget(target) {
-    return this.targets.get(target) ?? null;
-  }
-
-  querySelectorAll(selector) {
-    if (selector === '[data-bind]') {
-      return this.bindings.filter((element) => element.getAttribute('data-bind') !== null);
-    }
-    if (selector === '*') return [...this.bindings, ...this.elements];
-
-    return [...this.bindings, ...this.elements].filter((element) => element.matches(selector));
-  }
-}
-
-const executeGeneratedClientModule = (source, context = {}) => {
-  const exports = {};
-  const moduleSource = source
-    .replace(/import\s+\{([^}]+)\}\s+from\s+['"]@jiso\/runtime['"];\n?/g, (_match, names) => {
-      const bindings = names
-        .split(',')
-        .map((name) => name.trim())
-        .filter(Boolean)
-        .join(', ');
-      return `const { ${bindings} } = runtime;\n`;
-    })
-    .replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');
-
-  runInNewContext(moduleSource, {
-    ...context,
-    exports,
-    runtime: {
-      applyCompiledQueryUpdatePlan,
-      derive,
-      handler: (callback) => (event, ctx) => callback(event, ctx),
-    },
-  });
-
-  return exports;
+const generatedModuleRuntime = {
+  applyCompiledQueryUpdatePlan,
+  applyDeferredStreamResponseToDom,
+  createQueryStore,
+  derive,
+  handler: (callback) => (event, ctx) => callback(event, ctx),
+  installJisoLoader,
 };
 
-const executeGeneratedServerRenderSource = (source) => {
-  const exports = {};
-  const moduleSource = source.replace(
-    /export function ([A-Za-z_$][\w$]*)/g,
-    'exports.$1 = function $1',
-  );
-
-  runInNewContext(moduleSource, { exports });
-
-  return exports.renderSource();
+const generatedBootstrapRuntime = {
+  ...generatedModuleRuntime,
+  installJisoLoader() {},
 };
 
 const assertTypeScriptProgramHasNoDiagnostics = async (files) => {
@@ -503,46 +407,6 @@ const loadVitePlusConfig = async (configPath = 'vite.config.ts') => {
 };
 
 const jsonClone = (value) => JSON.parse(JSON.stringify(value));
-
-const executeGeneratedBootstrapModule = (source, planModules) => {
-  const calls = [];
-  const deferredApplications = [];
-  const exports = {};
-  const store = createQueryStore();
-  const documentRoot = new GateMorphRoot();
-  const moduleSource = source
-    .replace(
-      /import\s+\{ applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader \}\s+from\s+['"]@jiso\/runtime['"];\n?/,
-      'const { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } = runtime;\n',
-    )
-    .replace(
-      /import\s+\{ ([A-Za-z_$][\w$]*) \}\s+from\s+['"]([^'"]+)['"];\n?/g,
-      (_match, exportName, importPath) =>
-        `const { ${exportName} } = planModules[${JSON.stringify(importPath)}];\n`,
-    )
-    .replace(/export function ([A-Za-z_$][\w$]*)/g, 'exports.$1 = function $1');
-
-  runInNewContext(moduleSource, {
-    document: documentRoot,
-    exports,
-    fetch() {},
-    planModules,
-    runtime: {
-      applyDeferredStreamResponseToDom(options) {
-        deferredApplications.push(options);
-        return applyDeferredStreamResponseToDom(options);
-      },
-      createQueryStore() {
-        return store;
-      },
-      installJisoLoader(options) {
-        calls.push(options);
-      },
-    },
-  });
-
-  return { calls, deferredApplications, documentRoot, exports, store };
-};
 
 const executeStarterClientTemplate = async (source) => {
   const ts = await import('typescript');
@@ -5039,10 +4903,13 @@ export const ProductCard = component('product-card', {
   assert.equal(headers.get('Content-Type'), 'text/javascript');
   const cartEvents = [];
   const clientExports = executeGeneratedClientModule(body, {
-    addToCart(id) {
-      cartEvents.push(id);
-      return `added:${id}`;
+    context: {
+      addToCart(id) {
+        cartEvents.push(id);
+        return `added:${id}`;
+      },
     },
+    runtime: generatedModuleRuntime,
   });
   const handlerName = handlerUrl.hash.slice(1);
   assert.equal(typeof clientExports[handlerName], 'function');
@@ -6029,22 +5896,27 @@ export const CartBadge = component('cart-badge', {
     },
   ]);
 
-  const clientExports = executeGeneratedClientModule(compiled.files[1]?.source ?? '');
-  const countBinding = new GateQueryElement({ 'data-bind': 'cart.count' }, { textContent: '0' });
-  const emptyButton = new GateQueryElement({
+  const clientExports = executeGeneratedClientModule(compiled.files[1]?.source ?? '', {
+    runtime: generatedModuleRuntime,
+  });
+  const countBinding = new GeneratedFixtureElement(
+    { 'data-bind': 'cart.count' },
+    { textContent: '0' },
+  );
+  const emptyButton = new GeneratedFixtureElement({
     'data-bind:hidden': 'cart.empty',
     hidden: 'true',
   });
-  const namedDerive = new GateQueryElement(
+  const namedDerive = new GeneratedFixtureElement(
     { 'data-derive': 'cart.CartBadge$isEmpty' },
     { textContent: 'true' },
   );
-  const disabledStamp = new GateQueryElement({
+  const disabledStamp = new GeneratedFixtureElement({
     'data-derive': 'cart.CartBadge$button_disabled_derive',
     disabled: 'true',
   });
-  const itemStamp = new GateTemplateStampHost({ 'data-bind-list': 'cart.items' });
-  const compiledRoot = new GateMorphRoot();
+  const itemStamp = new GeneratedFixtureTemplateStampHost({ 'data-bind-list': 'cart.items' });
+  const compiledRoot = new GeneratedFixtureMorphRoot();
   compiledRoot.bindings.push(countBinding);
   compiledRoot.elements.push(emptyButton, namedDerive, disabledStamp, itemStamp);
 
@@ -6083,16 +5955,16 @@ export const CartBadge = component('cart-badge', {
   );
 
   const order = [];
-  const orderedRoot = new GateMorphRoot();
-  const orderedBinding = new GateQueryElement(
+  const orderedRoot = new GeneratedFixtureMorphRoot();
+  const orderedBinding = new GeneratedFixtureElement(
     { 'data-bind': 'cart.count' },
     { textContent: 'stale' },
   );
-  const orderedDerive = new GateQueryElement(
+  const orderedDerive = new GeneratedFixtureElement(
     { 'data-derive': 'cart.summary' },
     { textContent: 'stale' },
   );
-  const orderedStamp = new GateQueryElement({ 'data-derive': 'cart.disabled' });
+  const orderedStamp = new GeneratedFixtureElement({ 'data-derive': 'cart.disabled' });
   orderedRoot.bindings.push(orderedBinding);
   orderedRoot.elements.push(orderedDerive, orderedStamp);
   applyCompiledQueryUpdatePlan(
@@ -6131,16 +6003,20 @@ export const CartBadge = component('cart-badge', {
       importPath: '../components/cart-badge.client.js',
     },
   ]);
-  const bootstrapRoot = new GateMorphRoot();
-  bootstrapRoot.targets.set('cart-badge', new GateMorphTarget());
+  const bootstrapRoot = new GeneratedFixtureMorphRoot();
+  bootstrapRoot.targets.set('cart-badge', new GeneratedFixtureMorphTarget());
   bootstrapRoot.bindings.push(
-    new GateQueryElement({ 'data-bind': 'cart.count' }, { textContent: '0' }),
+    new GeneratedFixtureElement({ 'data-bind': 'cart.count' }, { textContent: '0' }),
   );
-  const bootstrapRuntime = executeGeneratedBootstrapModule(bootstrap.source, {
-    '../components/cart-badge.client.js': {
-      CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+  const bootstrapRuntime = executeGeneratedBootstrapModule(
+    bootstrap.source,
+    {
+      '../components/cart-badge.client.js': {
+        CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+      },
     },
-  });
+    generatedBootstrapRuntime,
+  );
   assert.equal(bootstrapRuntime.calls.length, 1);
   assert.equal(bootstrapRuntime.calls[0].queryStore, bootstrapRuntime.store);
   assert.equal(
@@ -6150,11 +6026,15 @@ export const CartBadge = component('cart-badge', {
   assert.equal(bootstrapRuntime.calls[0].enhancedMutations.store, bootstrapRuntime.store);
   const deferredApplyResult = bootstrapRuntime.deferredApplications.length;
   assert.equal(deferredApplyResult, 0);
-  const bootstrapApplyRuntime = executeGeneratedBootstrapModule(bootstrap.source, {
-    '../components/cart-badge.client.js': {
-      CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+  const bootstrapApplyRuntime = executeGeneratedBootstrapModule(
+    bootstrap.source,
+    {
+      '../components/cart-badge.client.js': {
+        CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+      },
     },
-  });
+    generatedBootstrapRuntime,
+  );
   const applyResult = bootstrapApplyRuntime.exports.applyJisoDeferredStreamResponse(
     [
       '<!doctype html><main><fw-defer target="cart-badge"></fw-defer></main>',
@@ -6208,9 +6088,9 @@ export const CartBadge = component('cart-badge', {
     closeHtml: '',
     shell: '<!doctype html><main><fw-defer target="reviews"></fw-defer></main>',
   });
-  const serverRoot = new GateMorphRoot();
-  serverRoot.targets.set('reviews', new GateMorphTarget('<article>Initial</article>'));
-  serverRoot.targets.set('summary', new GateMorphTarget('<section>Old</section>'));
+  const serverRoot = new GeneratedFixtureMorphRoot();
+  serverRoot.targets.set('reviews', new GeneratedFixtureMorphTarget('<article>Initial</article>'));
+  serverRoot.targets.set('summary', new GeneratedFixtureMorphTarget('<section>Old</section>'));
   const serverStore = createQueryStore();
   const serverApplied = applyDeferredStreamResponseToDom({
     body: serverStream.body,
@@ -6241,9 +6121,9 @@ export const CartBadge = component('cart-badge', {
   assert.equal(serverRoot.targets.get('summary').html, '<section>Replace</section>');
 
   const fixtureBody = parseWireResponses(await readWireFixture('defer-stream.http'))[0].body;
-  const fixtureRoot = new GateMorphRoot();
-  fixtureRoot.targets.set('reviews:p1', new GateMorphTarget());
-  fixtureRoot.targets.set('recommendations:p1', new GateMorphTarget());
+  const fixtureRoot = new GeneratedFixtureMorphRoot();
+  fixtureRoot.targets.set('reviews:p1', new GeneratedFixtureMorphTarget());
+  fixtureRoot.targets.set('recommendations:p1', new GeneratedFixtureMorphTarget());
   const fixtureStore = createQueryStore();
   const fixtureApplied = applyDeferredStreamResponseToDom({
     body: fixtureBody,
@@ -6331,10 +6211,13 @@ export const CartDrawer = component('cart-drawer', {
   ]);
   const removeItemCalls = [];
   const cartBadgeClient = executeGeneratedClientModule(cartBadgeClientFile.source, {
-    removeItem(event, ctx) {
-      removeItemCalls.push({ ctx, event });
-      return 'removed';
+    context: {
+      removeItem(event, ctx) {
+        removeItemCalls.push({ ctx, event });
+        return 'removed';
+      },
     },
+    runtime: generatedModuleRuntime,
   });
   assert.equal(typeof cartBadgeClient.CartBadge$removeItem, 'function');
   assert.equal(typeof cartBadgeClient.CartBadge$button_click, 'function');
@@ -6386,8 +6269,11 @@ export const CartActions = component('cart-actions', {
   assert.equal(buttons[1]?.attrs['data-p-id'], '{item.id}');
 
   const cartActions = executeGeneratedClientModule(clientFile.source, {
-    deselect: (id) => `deselect:${id}`,
-    select: (id) => `select:${id}`,
+    context: {
+      deselect: (id) => `deselect:${id}`,
+      select: (id) => `select:${id}`,
+    },
+    runtime: generatedModuleRuntime,
   });
   const addParams = readElementParams({
     attributes: [{ name: 'data-p-quantity', value: '2' }],

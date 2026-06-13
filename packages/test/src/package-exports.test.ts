@@ -38,6 +38,15 @@ import {
   type FwExportSummary,
 } from '@jiso/test/fw-export-fixtures';
 import {
+  executeGeneratedBootstrapModule,
+  executeGeneratedClientModule,
+  executeGeneratedServerRenderSource,
+  GeneratedFixtureElement,
+  GeneratedFixtureMorphRoot,
+  GeneratedFixtureMorphTarget,
+  GeneratedFixtureTemplateStampHost,
+} from '@jiso/test/generated-module-fixtures';
+import {
   createJisoTestHarness,
   type JisoTestContext,
   type JisoTestExecOptions,
@@ -252,6 +261,17 @@ describe('@jiso/test package subpath exports', () => {
     expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
       summary: { html: '0' },
     });
+    expect(executeGeneratedClientModule).toBeTypeOf('function');
+    expect(executeGeneratedServerRenderSource).toBeTypeOf('function');
+    expect(executeGeneratedBootstrapModule).toBeTypeOf('function');
+    expect(new GeneratedFixtureMorphRoot().querySelectorAll('*')).toEqual([]);
+    expect(new GeneratedFixtureMorphTarget('ready').readHtml()).toBe('ready');
+    expect(
+      new GeneratedFixtureElement({ 'data-bind': 'cart.count' }).getAttribute('data-bind'),
+    ).toBe('cart.count');
+    expect(
+      new GeneratedFixtureTemplateStampHost({ 'data-bind-list': 'cart.items' }),
+    ).toBeInstanceOf(GeneratedFixtureElement);
     const wireFixture = [
       '### Cart read',
       '>>> REQUEST',

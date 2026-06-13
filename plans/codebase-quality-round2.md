@@ -111,6 +111,10 @@ Closed evidence so far:
 - `tests/fw-check.node.mjs` no longer owns its local `fw-export/v1` CLI-output parser; the D10
   static export gate consumes `@jiso/test/fw-export-fixtures` facts pinned by focused package and
   package-export tests.
+- `tests/fw-check.node.mjs` no longer owns local generated server/client/bootstrap module
+  executors or DOM fixture shims for compiler-output behavior checks; those checks consume
+  `@jiso/test/generated-module-fixtures`, keeping SPEC.md §5.2 emitted artifacts as verification
+  inputs rather than app-authored source.
 
 Open:
 
@@ -159,6 +163,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "D10 seeded diagnostics gate Vite" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|D3 deferred stream responses are consumed by the runtime|P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented|P2 compiler merges view transition stamps|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 2 - Compiler IR
 
