@@ -1,4 +1,5 @@
 import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
 import { compilerIrHeader } from '../ir.js';
 import {
@@ -64,17 +65,28 @@ function emittedServerRenderSource(serverSource: string): string {
 }
 
 function executableRenderSource(serverSource: string): string | null {
-  const exportDeclaration = 'export function renderSource()';
-  const exportIndex = serverSource.indexOf(exportDeclaration);
-  if (exportIndex < 0) return null;
+  const sourceFile = ts.createSourceFile('render.server.ts', serverSource, ts.ScriptTarget.Latest);
+  const declaration = sourceFile.statements.find(
+    (statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === 'renderSource' &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ===
+        true,
+  );
+  if (!declaration) return null;
 
-  const prelude = serverSource.slice(0, exportIndex).trim();
+  const exportModifier = declaration.modifiers?.find(
+    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+  );
+  if (!exportModifier) return null;
+
+  const prelude = serverSource.slice(0, exportModifier.getStart(sourceFile)).trim();
   if (prelude !== compilerIrHeader) return null;
 
   // SPEC 5.2.3 requires render(src) to equal render(compile(src)); execute the emitted
   // renderSource body instead of re-reading its template literal as inert text.
-  return `${serverSource.slice(0, exportIndex)}function renderSource()${serverSource.slice(
-    exportIndex + exportDeclaration.length,
+  return `${serverSource.slice(0, exportModifier.getStart(sourceFile))}${serverSource.slice(
+    exportModifier.getEnd(),
   )}
 ;renderSource();`;
 }

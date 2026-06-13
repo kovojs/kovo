@@ -89,7 +89,8 @@ replacement/insertion patches for handlers, `fw-c`, `fw-deps`, and `fw-state`. M
 consume parser/model facts instead of regex or source-string facts. Inline text binding and
 data-bind drift validation now consume parser-provided sole JSX child facts instead of re-reading
 trimmed child source. Self-closing opening-tag insertions now consume parser-provided slash spacing
-facts instead of re-inspecting opening-tag source.
+facts instead of re-inspecting opening-tag source. Render-equivalence execution now finds exported
+`renderSource` with the TypeScript AST instead of searching for one exact export string.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -114,6 +115,8 @@ Latest evidence:
 - exact `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/compile-component.test.ts`
 - exact `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/emit/server.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/compile-component.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

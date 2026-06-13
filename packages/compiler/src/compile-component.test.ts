@@ -142,7 +142,7 @@ export const CartBadge = component('cart-badge', {
     const expected = '<cart-badge>u0032</cart-badge>';
     const serverSource = [
       '// @jiso-ir',
-      'export function renderSource() {',
+      'export   /* generated */ function renderSource() {',
       '  return `<cart-badge>\\u0032</cart-badge>`;',
       '}',
       '',
