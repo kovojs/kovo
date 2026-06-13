@@ -269,6 +269,32 @@ describe('headless-ui toggle-group primitive', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it('does not trap keyboard events for disabled, empty, or fully disabled collections', () => {
+    const disabledEvent = toggleGroupKeyboardEvent('ArrowRight');
+    expect(
+      toggleGroupKeyDown(disabledEvent, {
+        activeValue: 'left',
+        disabled: true,
+        items: alignmentItems,
+        value: 'left',
+      }),
+    ).toBeUndefined();
+    expect(disabledEvent.defaultPrevented).toBe(false);
+
+    const emptyEvent = toggleGroupKeyboardEvent('ArrowRight');
+    expect(toggleGroupKeyDown(emptyEvent, { activeValue: 'left', items: [] })).toBeUndefined();
+    expect(emptyEvent.defaultPrevented).toBe(false);
+
+    const allDisabledEvent = toggleGroupKeyboardEvent('ArrowRight');
+    expect(
+      toggleGroupKeyDown(allDisabledEvent, {
+        items: [{ disabled: true, value: 'only' }],
+        value: 'only',
+      }),
+    ).toBeUndefined();
+    expect(allDisabledEvent.defaultPrevented).toBe(false);
+  });
+
   it('returns frozen attribute records and exposes selection helpers', () => {
     expect(Object.isFrozen(toggleGroupRootAttributes())).toBe(true);
     expect(Object.isFrozen(toggleGroupButtonAttributes({ itemValue: 'left' }))).toBe(true);

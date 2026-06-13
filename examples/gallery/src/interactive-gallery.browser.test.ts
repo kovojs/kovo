@@ -1486,6 +1486,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentBold.tabIndex).toBe(-1);
       expect(currentStrike.tabIndex).toBe(-1);
       expect(currentItalic.tabIndex).toBe(0);
+      expect(document.activeElement).toBe(currentItalic);
     });
 
     required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic')).click();

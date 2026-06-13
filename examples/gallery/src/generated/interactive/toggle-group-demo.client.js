@@ -13,6 +13,8 @@ export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
 
   if (bold) bold['tabIndex'] = ctx.state.activeValue === 'bold' ? 0 : -1;
   if (italic) italic['tabIndex'] = ctx.state.activeValue === 'italic' ? 0 : -1;
+  if (ctx.state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
+  if (ctx.state.activeValue === 'italic' && italic) Object(italic)['focus']?.call(italic);
 });
 export const GalleryToggleGroupDemo$button_click = handler((event, ctx) => {
   ctx.state.value =

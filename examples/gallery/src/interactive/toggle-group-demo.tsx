@@ -54,6 +54,8 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
 
           if (bold) bold['tabIndex'] = state.activeValue === 'bold' ? 0 : -1;
           if (italic) italic['tabIndex'] = state.activeValue === 'italic' ? 0 : -1;
+          if (state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
+          if (state.activeValue === 'italic' && italic) Object(italic)['focus']?.call(italic);
         }}
       >
         <h3 id="gallery-toggle-group-label">Text style</h3>

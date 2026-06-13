@@ -66,6 +66,8 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       browser `FormData` inclusion/omission for grouped controls as fieldset disabled state changes.
       Number-field now preserves native input `form` ownership through headless/styled wrappers and
       proves generated direct input plus stepper updates keep browser `FormData` current.
+      Toggle-group keydown no longer traps disabled, empty, or fully disabled collections, and the
+      compiled gallery now proves generated roving tabindex plus DOM focus movement.
 
 ## Open Work
 
@@ -85,6 +87,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `FormData` checks for input and stepper paths. Radio-group native form ownership is covered
       by headless/styled tests, static gallery contracts, refreshed generated artifacts, and a
       browser-backed `FormData` check across generated keyboard and click selection paths.
+      Toggle-group disabled/empty keyboard no-op behavior is covered by headless tests, while
+      refreshed generated toggle-group artifacts and browser tests prove roving tabindex plus DOM
+      focus movement.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -133,6 +138,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Toggle-group keyboard/focus closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/toggle-group.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toggle-group`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t toggle-group)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/toggle-group.ts packages/headless-ui/src/primitives/toggle-group.test.ts packages/ui/src/index.test.tsx examples/gallery/src/interactive/toggle-group-demo.tsx examples/gallery/src/generated/interactive/toggle-group-demo.tsx examples/gallery/src/generated/interactive/toggle-group-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Number-field native form/input slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/number-field.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t number-field`;

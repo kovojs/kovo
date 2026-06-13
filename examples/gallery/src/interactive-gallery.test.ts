@@ -178,6 +178,7 @@ describe('compiled interactive gallery demos', () => {
     const toolbar = readGenerated('toolbar-demo.tsx');
     const tooltip = readGenerated('tooltip-demo.tsx');
     const toggleGroup = readGenerated('toggle-group-demo.tsx');
+    const toggleGroupClient = readGenerated('toggle-group-demo.client.js');
     const toast = readGenerated('toast-demo.tsx');
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
@@ -530,6 +531,7 @@ describe('compiled interactive gallery demos', () => {
     expect(toggleGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleGroupDemo\$button_click_2"/,
     );
+    expect(toggleGroupClient).toContain("Object(italic)['focus']?.call(italic)");
 
     expect(toast).toContain('data-gallery-interactive="toast"');
     expect(toast).toContain('fw-state=\'{"open":true}\'');

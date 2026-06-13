@@ -43,7 +43,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         })}
         class="grid gap-2"
         data-gallery-interactive="toggle-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=759113ad#GalleryToggleGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=fc92efe7#GalleryToggleGroupDemo$section_keydown"
         fw-c="gallery-toggle-group-demo"
         fw-state='{"activeValue":"bold","value":"bold"}'
       >
@@ -55,7 +55,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=759113ad#GalleryToggleGroupDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=fc92efe7#GalleryToggleGroupDemo$button_click"
             >
               Bold
             </button>
@@ -76,7 +76,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=759113ad#GalleryToggleGroupDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=fc92efe7#GalleryToggleGroupDemo$button_click_2"
             >
               Italic
             </button>

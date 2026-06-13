@@ -247,6 +247,8 @@ export function toggleGroupKeyDown(
   if (intent === undefined) return;
 
   const result = toggleGroupMoveFocus(state, intent);
+  if (result.index < 0) return;
+
   event.preventDefault();
 
   return result;
