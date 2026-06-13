@@ -349,9 +349,9 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the compiler/Round133/Round135/Round136/Round137 integration
-  wave through `d29049c`: inline loader check, 778 formatted files, 679 lint/typechecked
-  files, and 7 typechecked example/conformance projects.
+- `pnpm run check` passed after the Round138/Round139 integration wave through `386e5ad`:
+  inline loader check, 778 formatted files, 679 lint/typechecked files, and 7 typechecked
+  example/conformance projects.
   example/conformance projects.
 
 Focused gates since that broad run:
@@ -397,6 +397,10 @@ Focused gates since that broad run:
   `vp check`, and `git diff --check` passed in Round136.
 - Server/app-shell: generated starter static preview proof, server/create-jiso tests, `tsc`, exact
   `vp check`, and `git diff --check` passed in Round137.
+- Drizzle: destructuring assignment receiver aliases, package suite, pinned conformance, exact
+  `vp check`, and `git diff --check` passed in Round138.
+- Harness: `fwCheckOkAssertionFact` empty-OK fixture assertions, commerce source-truth, targeted
+  `fw-check`, `check:build`, exact `vp check`, and `git diff --check` passed in Round139.
 
 Stale but useful broad references:
 
