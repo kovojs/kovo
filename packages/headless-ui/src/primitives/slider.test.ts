@@ -59,6 +59,7 @@ describe('headless-ui slider primitive', () => {
       sliderInputAttributes({
         descriptionId: 'price-help',
         errorId: 'price-error',
+        form: 'pricing-form',
         id: 'price',
         invalid: true,
         label: 'Price',
@@ -84,6 +85,7 @@ describe('headless-ui slider primitive', () => {
       'data-required': '',
       'data-value': '250',
       disabled: false,
+      form: 'pricing-form',
       id: 'price',
       max: 500,
       min: 100,

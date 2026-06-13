@@ -18,6 +18,7 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
   state: () => ({ value: 25 }),
   render: (_queries: Record<string, never>, state: GallerySliderDemoState) => {
     const sliderState = {
+      form: 'gallery-slider-form',
       label: 'Completion',
       max: 100,
       min: 0,
@@ -33,6 +34,7 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
         class="grid gap-2"
         data-gallery-interactive="slider"
       >
+        <form id="gallery-slider-form" data-gallery-form="slider" />
         <label for="gallery-slider-input">Completion</label>
         <input
           {...sliderInputAttributes(sliderState)}

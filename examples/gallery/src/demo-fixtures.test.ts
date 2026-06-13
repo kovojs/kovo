@@ -559,8 +559,10 @@ describe('gallery demo fixtures', () => {
     expect(slider.html).toContain('data-gallery-demo="slider"');
     expect(slider.html).toContain('data-ui-demo="slider"');
     expect(slider.html).toContain('id="gallery-slider"');
+    expect(slider.html).toContain('<form id="gallery-slider-form" data-gallery-form="slider">');
     expect(slider.html).toContain('for="gallery-slider-input"');
     expect(slider.html).toContain('type="range"');
+    expect(slider.html).toContain('form="gallery-slider-form"');
     expect(slider.html).toContain('name="gallery-coverage"');
     expect(slider.html).toContain('min="0"');
     expect(slider.html).toContain('max="100"');

@@ -28,6 +28,7 @@ export interface SliderRootAttributeOptions extends SliderState {
 export interface SliderInputAttributeOptions extends SliderState {
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
@@ -110,6 +111,7 @@ export function sliderInputAttributes(
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(options.valueText === undefined ? {} : { 'aria-valuetext': options.valueText }),
     disabled: options.disabled === true,
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.id === undefined ? {} : { id: options.id }),
     max: state.max,
     min: state.min,

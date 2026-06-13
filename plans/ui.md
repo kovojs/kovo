@@ -70,7 +70,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       compiled gallery now proves generated roving tabindex plus DOM focus movement.
       Checkbox-group now preserves native checkbox `form` ownership through headless/styled
       wrappers, avoids trapping keyboard navigation for disabled/empty collections, and proves
-      generated roving focus plus browser `FormData` updates.
+      generated roving focus plus browser `FormData` updates. Slider now preserves native range
+      input `form` ownership through headless/styled wrappers, static gallery contracts, refreshed
+      generated artifacts, and browser-backed external `FormData` evidence.
 
 ## Open Work
 
@@ -99,7 +101,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       generated artifacts, and browser-backed `FormData` plus roving DOM focus evidence.
       Tabs activation keys now no-op without trapping default behavior when the tab set is
       disabled, empty, or focused on a disabled value; refreshed generated artifacts and browser
-      coverage prove manual roving focus remains separate from selected panel activation.
+      coverage prove manual roving focus remains separate from selected panel activation. Slider
+      external form ownership is covered by headless/styled tests, static gallery contracts,
+      refreshed generated artifacts, and a browser-backed `FormData` check across the generated
+      native range input update path.
 - [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
       churn-heavy baselines.
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
@@ -162,6 +167,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       close change is canceled; context-menu also preserves its previous anchor point. Verified by
       focused headless tests, styled wrapper smoke coverage, static/generated gallery contracts,
       and browser route tests for generated dropdown/context menu and menubar demos.
+      Evidence 2026-06-13: `sliderInputAttributes()` and styled `SliderInput` now preserve native
+      external `form` ownership for the range control; static and compiled gallery routes prove the
+      authored TSX remains generated-artifact fresh and Chromium `FormData` follows the generated
+      input handler from `25` to `75`.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -173,6 +182,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Slider native external form ownership slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/slider.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t slider`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t slider)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/slider.ts packages/headless-ui/src/primitives/slider.test.ts packages/ui/src/slider.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Checkbox-group form ownership and keyboard/focus closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox-group.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t checkbox-group`;

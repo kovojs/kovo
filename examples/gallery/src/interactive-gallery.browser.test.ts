@@ -1200,6 +1200,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   it('updates slider stamped state while the native range input moves', async () => {
     const root = mountInteractiveDemo(GallerySliderDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-slider-input'));
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-slider-form'));
     const range = required(root.querySelector<HTMLElement>('[data-part="range"]'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
@@ -1209,8 +1210,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('fw-state')).toBe('{"value":25}');
     expect(root.getAttribute('data-value')).toBe('25');
     expect(input.type).toBe('range');
+    expect(input.form).toBe(form);
     expect(input.name).toBe('gallery-completion');
     expect(input.value).toBe('25');
+    expect(new FormData(form).get('gallery-completion')).toBe('25');
     expect(input.getAttribute('aria-valuetext')).toBe('25 percent');
     expect(range.getAttribute('data-value-ratio')).toBe('0.25');
     expect(output.textContent).toBe('25');
@@ -1231,6 +1234,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       ]);
       expect(root.getAttribute('data-value')).toBe('75');
       expect(currentInput.value).toBe('75');
+      expect(new FormData(form).get('gallery-completion')).toBe('75');
       expect(currentInput.getAttribute('data-value')).toBe('75');
       expect(currentInput.getAttribute('aria-valuetext')).toBe('75 percent');
       expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');

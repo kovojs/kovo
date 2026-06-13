@@ -34,6 +34,7 @@ export interface SliderInputProps extends SliderStateProps {
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
@@ -116,6 +117,7 @@ export const SliderInput = component('slider-input', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.label === undefined ? {} : { label: props.label }),
@@ -147,6 +149,7 @@ export const SliderInput = component('slider-input', {
         data-required={attrs['data-required']}
         data-value={attrs['data-value']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         max={attrs.max}
         min={attrs.min}

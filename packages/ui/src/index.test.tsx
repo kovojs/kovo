@@ -1394,6 +1394,7 @@ describe('@jiso/ui styled package foundation', () => {
       children: `${SliderInput.definition.render({
         ...state,
         descriptionId: 'coverage-help',
+        form: 'coverage-form',
         id: 'coverage',
         label: 'Coverage',
         valueText: '65 percent',
@@ -1413,7 +1414,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(root).toContain('aria-describedby="coverage-help"');
     expect(root).toContain('aria-label="Coverage"');
     expect(root).toContain('aria-valuetext="65 percent"');
-    expect(root).toContain('id="coverage" max="100" min="0" name="coverage" required');
+    expect(root).toContain(
+      'form="coverage-form" id="coverage" max="100" min="0" name="coverage" required',
+    );
     expect(root).toContain('step="5" type="range" value="65"');
     expect(root).toContain('data-part="track"');
     expect(root).toContain('data-part="range"');

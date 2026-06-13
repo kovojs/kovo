@@ -480,6 +480,8 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(slider).toContain('data-gallery-interactive="slider"');
+    expect(slider).toContain('id="gallery-slider-form" data-gallery-form="slider"');
+    expect(slider).toContain("form: 'gallery-slider-form'");
     expect(slider).toContain('fw-state=\'{"value":25}\'');
     expect(slider).toContain('sliderInputAttributes(sliderState)');
     expect(slider).toMatch(

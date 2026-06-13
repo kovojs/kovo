@@ -2297,6 +2297,7 @@ export function SkeletonDemo(): string {
 
 export function SliderDemo(): string {
   const state = {
+    form: 'gallery-slider-form',
     invalid: true,
     max: 100,
     min: 0,
@@ -2312,6 +2313,7 @@ export function SliderDemo(): string {
         Slider keeps a native range input for keyboard, form, and validation behavior while exposing
         decorative track parts.
       </p>
+      <form id="gallery-slider-form" data-gallery-form="slider" />
       <label id="gallery-slider-label" for="gallery-slider-input">
         Coverage
       </label>
