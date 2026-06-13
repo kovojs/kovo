@@ -15,8 +15,18 @@ export type {
   TemplateStampHost,
   TemplateStampItem,
 } from './query-bindings.js';
-export { createQueryStore, hydrateQueryScripts } from './query-store.js';
-export type { QueryScriptLike, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
+export {
+  createQueryScriptHydrationLedger,
+  createQueryStore,
+  hydrateQueryScripts,
+} from './query-store.js';
+export type {
+  QueryScriptHydrationLedger,
+  QueryScriptLike,
+  QuerySnapshot,
+  QueryStore,
+  QueryUpdatePlan,
+} from './query-store.js';
 export { refetchQueries } from './query-refetch.js';
 export type {
   QueryRefetchFetch,

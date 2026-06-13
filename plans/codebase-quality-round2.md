@@ -188,6 +188,9 @@ Closed evidence so far:
   freshly minified, generated, and extracted installer sources.
 - Hydrated `script[fw-query]` parsing now shares `wire-parser.ts` query chunk construction, and the
   runtime barrel exports the canonical apply path directly after deleting the `apply.ts` shim.
+- Hydrated query script replay tracking now lives in `query-store.ts` as a reusable hydration
+  ledger; visible-return refetch uses that shared helper, with node and browser tests proving new
+  scripts are discovered without replaying already observed server script nodes.
 
 Open:
 
@@ -204,6 +207,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-store.ts packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
 
 ## Phase 5 - Server
 

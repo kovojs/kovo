@@ -20,6 +20,13 @@ export interface QueryScriptLike extends QueryScriptChunkLike {}
 
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
+export interface QueryScriptHydrationLedger {
+  hydrate(
+    scripts: Iterable<QueryScriptLike>,
+    options?: { onError?: RuntimeErrorReporter },
+  ): readonly string[];
+}
+
 export interface ApplyQueryChunksToStoreOptions {
   afterApplyQuery?: (query: QueryChunk, value: unknown) => void;
   applyQuery?: QueryApplyInterposition;
@@ -131,4 +138,29 @@ export function hydrateQueryScripts(
   // SPEC.md §9.1/§9.4: initial hydration uses the same batched query chunk
   // application path as mutation responses, deferred streams, and typed reads.
   return applyQueryChunksToStore(store, readQueryScriptChunks(scripts, options.onError));
+}
+
+export function createQueryScriptHydrationLedger(store: QueryStore): QueryScriptHydrationLedger {
+  const seen = new Set<QueryScriptLike>();
+
+  return {
+    hydrate(
+      scripts: Iterable<QueryScriptLike>,
+      options: { onError?: RuntimeErrorReporter } = {},
+    ): readonly string[] {
+      const pending: QueryScriptLike[] = [];
+
+      for (const script of scripts) {
+        if (seen.has(script)) continue;
+
+        seen.add(script);
+        pending.push(script);
+      }
+
+      // SPEC.md §9.1/§9.4: browser hydration, mutation responses, and typed
+      // refetches must converge on the same query-store apply path without
+      // replaying already observed server-provided scripts.
+      return hydrateQueryScripts(store, pending, options);
+    },
+  };
 }

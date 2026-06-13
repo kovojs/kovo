@@ -4,6 +4,7 @@ import { installJisoLoader, type DelegatedEvent } from './index.js';
 import {
   applyQueryChunksToStore,
   applyQueryChunkToStore,
+  createQueryScriptHydrationLedger,
   createQueryStore,
   hydrateQueryScripts,
 } from './query-store.js';
@@ -181,6 +182,34 @@ describe('query store hydration and refetch', () => {
     expect(appliedStore.get('product')).toBeUndefined();
     expect(hydratedPlan).toHaveBeenCalledWith({ stock: 4 });
     expect(appliedPlan).toHaveBeenCalledWith({ stock: 4 });
+  });
+
+  it('hydrates each server query script once while accepting later script nodes', () => {
+    const store = createQueryStore();
+    const ledger = createQueryScriptHydrationLedger(store);
+    const cartPlan = vi.fn();
+    const originalScript = {
+      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{"count":1}',
+    };
+    const laterScript = {
+      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{"count":2}',
+    };
+
+    store.subscribe('cart', cartPlan);
+
+    expect(ledger.hydrate([originalScript])).toEqual(['cart']);
+    originalScript.textContent = '{"count":99}';
+    expect(ledger.hydrate([originalScript])).toEqual([]);
+    expect(ledger.hydrate([laterScript])).toEqual(['cart']);
+
+    // SPEC.md §9.1/§9.4: later browser hydration discoveries share the query
+    // apply path, but already observed server script nodes are not replayed.
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(cartPlan).toHaveBeenNthCalledWith(1, { count: 1 });
+    expect(cartPlan).toHaveBeenNthCalledWith(2, { count: 2 });
+    expect(cartPlan).toHaveBeenCalledTimes(2);
   });
 
   it('applies query chunks in one canonical batch with interposed values', () => {

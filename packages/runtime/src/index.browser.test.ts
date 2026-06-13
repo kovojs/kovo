@@ -207,6 +207,51 @@ describe('runtime browser suite', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('hydrates newly inserted query scripts on visible return without replaying originals', async () => {
+    document.body.innerHTML =
+      '<script fw-query="cart" type="application/json">{"count":1}</script>';
+    const store = createQueryStore();
+    const cartPlan = vi.fn();
+    const recommendationsPlan = vi.fn();
+    const refetchOnFocus = vi.fn();
+
+    store.subscribe('cart', cartPlan);
+    store.subscribe('recommendations', recommendationsPlan);
+
+    const loader = installJisoLoader({
+      importModule: vi.fn(),
+      queryStore: store,
+      refetchOnFocus,
+      root: document,
+    });
+
+    const originalScript = document.querySelector('script[fw-query="cart"]');
+    if (!originalScript) throw new Error('missing original query script');
+
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    originalScript.textContent = '{"count":99}';
+    const laterScript = document.createElement('script');
+    laterScript.type = 'application/json';
+    laterScript.setAttribute('fw-query', 'recommendations');
+    laterScript.textContent = '{"items":["p1"]}';
+    document.body.append(laterScript);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => {
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations']);
+    });
+
+    // SPEC.md §9.1/§9.4: browser-visible hydration discoveries use the shared
+    // query apply path without replaying already observed server script nodes.
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('recommendations')).toEqual({ items: ['p1'] });
+    expect(cartPlan).toHaveBeenCalledTimes(1);
+    expect(recommendationsPlan).toHaveBeenCalledWith({ items: ['p1'] });
+
+    loader.dispose();
+  });
+
   it('preserves L0 light-DOM IDREF and form behavior without handler imports', async () => {
     const root = document.createElement('main');
     root.innerHTML = [

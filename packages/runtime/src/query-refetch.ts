@@ -3,7 +3,7 @@ import type { AppliedMutationResponse } from './apply-path.js';
 import { definedProps } from './defined-props.js';
 import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
-import { hydrateQueryScripts } from './query-store.js';
+import { createQueryScriptHydrationLedger } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
 
 export interface QueryRefetchOptions {
@@ -90,21 +90,15 @@ export function installQueryVisibleReturnRefetch(
   options: QueryVisibleReturnRefetchOptions,
 ): InstalledQueryVisibleReturnRefetch {
   const ledger = createRefetchQueryLedger();
-  const seenQueryScripts = new Set<QueryScriptLike>();
+  const hydrationLedger = options.queryStore
+    ? createQueryScriptHydrationLedger(options.queryStore)
+    : undefined;
 
   const hydrateNewQueryScripts = () => {
-    if (!options.queryStore || !options.queryScripts) return;
-
-    const scripts: QueryScriptLike[] = [];
-    for (const script of options.queryScripts()) {
-      if (seenQueryScripts.has(script)) continue;
-
-      seenQueryScripts.add(script);
-      scripts.push(script);
-    }
+    if (!hydrationLedger || !options.queryScripts) return;
 
     ledger.remember(
-      hydrateQueryScripts(options.queryStore, scripts, {
+      hydrationLedger.hydrate(options.queryScripts(), {
         onError(error) {
           reportRuntimeError(options.onError, error);
         },
