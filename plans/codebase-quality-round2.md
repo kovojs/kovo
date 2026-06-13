@@ -186,6 +186,14 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       same surfaces against real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13: static element-access callback references such as
+      `load: loaders["loadProducts"]` and `write(callbacks["addItem"])` are covered as real
+      executable callback surfaces instead of invisible aliases; `packages/drizzle/src/index.test.ts`
+      pins source query-loader and domain write extraction, and
+      `conformance/drizzle-pin/src/index.test.ts` pins the same aliases against real
+      `drizzle-orm` Postgres receivers. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

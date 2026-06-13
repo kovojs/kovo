@@ -1606,6 +1606,63 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins static element-access query-loader aliases under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  name: text('name').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, name: products.name }).from(products);',
+            '}',
+            '',
+            'const loaders = {',
+            '  aliased: loadProducts,',
+            '  loadProducts,',
+            '};',
+            '',
+            "export const aliasedQuery = query('product/static-member-aliased-loader', {",
+            '  load: loaders["aliased"],',
+            '});',
+            '',
+            "export const shorthandQuery = query('product/static-member-shorthand-loader', {",
+            '  load: loaders["loadProducts"],',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/static-member-aliased-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:17',
+      },
+      {
+        query: 'product/static-member-shorthand-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:21',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',
@@ -3119,6 +3176,79 @@ describe('Drizzle pinned subset conformance', () => {
             'export const cart = domain({',
             '  addAliased: write(callbacks.aliased),',
             '  addShorthand: write(callbacks.addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addShorthand': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins static element-access domain write callback aliases with real Drizzle receiver types', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'const callbacks = {',
+            '  aliased: addItem,',
+            '  addItem,',
+            '};',
+            '',
+            'export const cart = domain({',
+            '  addAliased: write(callbacks["aliased"]),',
+            '  addShorthand: write(callbacks["addItem"]),',
             '});',
           ].join('\n'),
         },
