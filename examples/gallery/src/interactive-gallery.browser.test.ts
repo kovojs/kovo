@@ -716,6 +716,34 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(new FormData(switchForm).get('gallery-notifications')).toBeNull();
   });
 
+  it('preserves styled radio-group native form ownership in static routes', async () => {
+    const radioRoute = mountStaticGalleryRoute('/components/radio-group');
+    const radioForm = required(radioRoute.querySelector<HTMLFormElement>('#gallery-radio-form'));
+    const radioGroup = required(
+      radioRoute.querySelector<HTMLElement>('#gallery-radio-group[role="radiogroup"]'),
+    );
+    const standard = required(
+      radioRoute.querySelector<HTMLInputElement>('#gallery-radio-standard'),
+    );
+    const express = required(radioRoute.querySelector<HTMLInputElement>('#gallery-radio-express'));
+    const freight = required(radioRoute.querySelector<HTMLInputElement>('#gallery-radio-freight'));
+
+    expect(radioGroup.getAttribute('aria-labelledby')).toBe('gallery-radio-label');
+    expect(radioGroup.getAttribute('aria-describedby')).toBe(
+      'gallery-radio-description gallery-radio-error',
+    );
+    expect(radioGroup.getAttribute('aria-invalid')).toBe('true');
+    expect(express.form).toBe(radioForm);
+    expect(new FormData(radioForm).get('gallery-shipping-speed')).toBe('express');
+
+    standard.checked = true;
+    expect(new FormData(radioForm).get('gallery-shipping-speed')).toBe('standard');
+
+    expect(freight.disabled).toBe(true);
+    freight.checked = true;
+    expect(new FormData(radioForm).get('gallery-shipping-speed')).toBeNull();
+  });
+
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAccordionDemo);
     const shipping = required(

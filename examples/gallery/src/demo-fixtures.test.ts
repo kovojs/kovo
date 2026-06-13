@@ -559,8 +559,17 @@ describe('gallery demo fixtures', () => {
   it('renders radio-group fixture with native radio inputs and roving attributes', () => {
     const radioGroup = findFixture('/components/radio-group');
 
+    expect(radioGroup.html).toContain('data-ui-demo="radio-group"');
+    expect(radioGroup.html).toContain('id="gallery-radio-label"');
+    expect(radioGroup.html).toContain('id="gallery-radio-error"');
+    expect(radioGroup.html).toContain('id="gallery-radio-group"');
     expect(radioGroup.html).toContain('role="radiogroup"');
-    expect(radioGroup.html).toContain('aria-describedby="gallery-radio-description"');
+    expect(radioGroup.html).toContain('aria-labelledby="gallery-radio-label"');
+    expect(radioGroup.html).toContain(
+      'aria-describedby="gallery-radio-description gallery-radio-error"',
+    );
+    expect(radioGroup.html).toContain('aria-invalid="true"');
+    expect(radioGroup.html).toContain('aria-required="true"');
     expect(radioGroup.html).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');
     expect(radioGroup.html).toContain('form="gallery-radio-form"');
     expect(radioGroup.html).toContain('name="gallery-shipping-speed"');

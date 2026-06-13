@@ -106,6 +106,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `FormData` checks for input and stepper paths. Radio-group native form ownership is covered
       by headless/styled tests, static gallery contracts, refreshed generated artifacts, and a
       browser-backed `FormData` check across generated keyboard and click selection paths.
+      The styled static radio-group route now exposes a `data-ui-demo` wrapper plus labelled,
+      described, invalid, required radiogroup state, and Chromium proves its external native radio
+      `FormData` behavior while keeping the existing `860x545` visual hash `80d7704e`.
       Toggle-group disabled/empty keyboard no-op behavior is covered by headless tests, while
       refreshed generated toggle-group artifacts and browser tests prove roving tabindex plus DOM
       focus movement. Radio-group keyboard handling now no-ops without trapping keys for disabled,
@@ -320,6 +323,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "preserves styled checkbox and switch native form ownership in static routes")`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "keeps stable visual baselines for representative styled static gallery routes")`;
       exact `pnpm exec vp check packages/ui/src/checkbox.tsx packages/ui/src/switch.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/checkbox.html.txt examples/gallery/src/visual-fixtures/switch.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
+- [x] Styled radio-group static ARIA/form-owner slice:
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t radio-group`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "radio-group fixture|static visual fixture"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "radio-group native form|representative styled static gallery routes")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/radio-group.html.txt plans/ui.md plans/codebase-quality-round2.md`;
       `git diff --check`.
 - [x] H2 roving-control static visual-baseline slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;

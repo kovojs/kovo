@@ -2073,8 +2073,11 @@ export function RadioGroupDemo(): string {
   const items = [{ value: 'standard' }, { value: 'express' }, { disabled: true, value: 'freight' }];
   const state = {
     descriptionId: 'gallery-radio-description',
+    errorId: 'gallery-radio-error',
     form: 'gallery-radio-form',
+    invalid: true,
     items,
+    labelledBy: 'gallery-radio-label',
     name: 'gallery-shipping-speed',
     required: true,
     value: 'express',
@@ -2086,35 +2089,44 @@ export function RadioGroupDemo(): string {
       <p data-demo-summary="no-js">
         Radio group keeps native radio inputs while adding roving-focus attributes.
       </p>
-      {RadioGroup.definition.render({
-        ...state,
-        children: (
-          <>
-            <p id="gallery-radio-description">Choose a fulfillment speed.</p>
-            {items.map((item) =>
-              RadioGroupItem.definition.render({
-                ...state,
-                children: (
-                  <>
-                    {RadioGroupRadio.definition.render({
-                      ...state,
-                      controlId: `gallery-radio-${item.value}`,
-                      itemValue: item.value,
-                    })}
-                    {RadioGroupLabel.definition.render({
-                      ...state,
-                      children: item.value,
-                      controlId: `gallery-radio-${item.value}`,
-                      itemValue: item.value,
-                    })}
-                  </>
-                ),
-                itemValue: item.value,
-              }),
-            )}
-          </>
-        ),
-      })}
+      <h2 hidden id="gallery-radio-label">
+        Shipping speed
+      </h2>
+      <p hidden id="gallery-radio-error">
+        Freight requires a quoted delivery window.
+      </p>
+      <div data-ui-demo="radio-group">
+        {RadioGroup.definition.render({
+          ...state,
+          children: (
+            <>
+              <p id="gallery-radio-description">Choose a fulfillment speed.</p>
+              {items.map((item) =>
+                RadioGroupItem.definition.render({
+                  ...state,
+                  children: (
+                    <>
+                      {RadioGroupRadio.definition.render({
+                        ...state,
+                        controlId: `gallery-radio-${item.value}`,
+                        itemValue: item.value,
+                      })}
+                      {RadioGroupLabel.definition.render({
+                        ...state,
+                        children: item.value,
+                        controlId: `gallery-radio-${item.value}`,
+                        itemValue: item.value,
+                      })}
+                    </>
+                  ),
+                  itemValue: item.value,
+                }),
+              )}
+            </>
+          ),
+          id: 'gallery-radio-group',
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'item-click, keyboard, programmatic',
         dataState: 'checked, unchecked, disabled',
