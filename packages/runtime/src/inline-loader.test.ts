@@ -10,6 +10,7 @@ import {
   buildInlineJisoLoaderModuleSource,
   buildInlineJisoLoaderInstallerSource,
   emitInlineJisoLoaderModule,
+  inlineJisoLoaderGzipByteBudget,
   inlineJisoLoaderInstallerReadableSource,
   inlineWireParserReadableSource,
 } from './inline-loader-build.js';
@@ -108,6 +109,21 @@ class InlineParityRoot {
   }
 }
 
+function createOversizedInlineLoaderSource(): string {
+  let state = 0x12345678;
+  const payload = Array.from({ length: 1800 }, () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return `'${state.toString(36).padStart(7, '0')}'`;
+  }).join(',');
+
+  return [
+    'function installInlineJisoLoader(importModule) {',
+    `  const payload = [${payload}];`,
+    '  return payload.length + Boolean(importModule);',
+    '}',
+  ].join('\n');
+}
+
 describe('inline loader source', () => {
   it('pins the shipped minified installer to the deterministic source helper', () => {
     // SPEC.md §4.4: drift checks must compare the shipped bootstrap to readable source.
@@ -199,11 +215,25 @@ describe('inline loader source', () => {
     // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
     expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);
     expect(createPublicInlineJisoLoaderSource()).toBe(jisoLoaderSource);
-    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(4096);
+    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(
+      inlineJisoLoaderGzipByteBudget,
+    );
     expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
     expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
     expect(jisoLoaderSource).toMatch(
       /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
+    );
+  });
+
+  it('rejects generated inline loader modules that exceed the gzip budget', () => {
+    // SPEC.md §4.4: the package build/check path enforces the always-loaded 4KB bootstrap budget.
+    const source = createOversizedInlineLoaderSource();
+    const minifiedSource = buildInlineJisoLoaderInstallerSource(source);
+    const bootstrapSource = `(${minifiedSource})((url)=>import(url));`;
+
+    expect(gzipSync(bootstrapSource).byteLength).toBeGreaterThan(inlineJisoLoaderGzipByteBudget);
+    expect(() => buildInlineJisoLoaderModuleSource(source)).toThrow(
+      'exceeds SPEC.md §4.4 gzip budget',
     );
   });
 

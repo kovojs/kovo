@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 import ts from 'typescript';
 
@@ -15,6 +16,8 @@ const inlineWireParserFunctionNames = [
   'readAttribute',
   'unescapeHtml',
 ] as const;
+
+export const inlineJisoLoaderGzipByteBudget = 4096;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 
@@ -193,6 +196,7 @@ export function buildInlineJisoLoaderModuleSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
   const installerSource = buildInlineJisoLoaderInstallerSource(source);
+  assertInlineJisoLoaderGzipBudget(installerSource, 'Generated inline Jiso loader module');
 
   const moduleSource = `${[
     '// @ts-nocheck',
@@ -234,6 +238,18 @@ export function buildInlineJisoLoaderModuleSource(
   assertInlineJisoLoaderModuleArtifactParity(moduleSource, 'Generated inline Jiso loader module');
 
   return moduleSource;
+}
+
+export function assertInlineJisoLoaderGzipBudget(
+  installerSource: string,
+  label = 'Inline Jiso loader',
+): void {
+  const bytes = gzipSync(createInlineJisoLoaderBootstrapSource(installerSource)).byteLength;
+  if (bytes <= inlineJisoLoaderGzipByteBudget) return;
+
+  throw new Error(
+    `${label} exceeds SPEC.md §4.4 gzip budget: ${bytes} bytes > ${inlineJisoLoaderGzipByteBudget} bytes.`,
+  );
 }
 
 function readInlineWireParserReadableSource(): string {
@@ -315,6 +331,7 @@ export function assertInlineJisoLoaderModuleArtifactParity(
       `${label} embedded installer artifacts drifted: inlineJisoLoaderInstallerSource does not match inlineJisoLoaderInstaller.`,
     );
   }
+  assertInlineJisoLoaderGzipBudget(installerLiteralSource, label);
 }
 
 function parseInlineJisoLoaderModuleSource(moduleSource: string, label: string): ts.SourceFile {
@@ -388,6 +405,13 @@ export function emitInlineJisoLoaderModule(
 
 function inlineJavaScriptTemplateLiteral(value: string): string {
   return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
+}
+
+function createInlineJisoLoaderBootstrapSource(
+  installerSource: string,
+  importModuleExpression = '(url)=>import(url)',
+): string {
+  return `(${installerSource})(${importModuleExpression});`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -386,6 +386,13 @@ Closed evidence so far:
 - Inline-loader `--check` now parses the checked-in generated module and fails when the exported
   source literal drifts from the executable installer artifact, with tests mutating only one
   embedded artifact to prove the check.
+- Inline-loader generation and `--check` now enforce the SPEC.md §4.4 4KB gzip budget at build
+  time, and `inline-loader.test.ts` proves an oversized generated bootstrap is rejected before a
+  checked-in artifact can ship. Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, `pnpm --filter @jiso/runtime run
+check:inline-loader`, and `pnpm exec vp check packages/runtime/src/inline-loader-build.ts
+packages/runtime/src/inline-loader.test.ts`.
 - Inline-loader response parsing now embeds helper declarations extracted from the canonical
   `wire-parser.ts` implementation at build/check time instead of maintaining a standalone
   `readChunks` scanner; the generated artifact calls `readElementChunks` for query and fragment
@@ -509,7 +516,7 @@ IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
-- Decide whether any inline-loader budget/minifier gaps remain after artifact-parity checking.
+- Decide whether any inline-loader minifier gaps remain after artifact-parity and budget checking.
 - Complete subtractive runtime split of the remaining high-churn root module areas.
 - Expand browser/runtime gates where shared wire parsing can affect hydrated query behavior.
 
