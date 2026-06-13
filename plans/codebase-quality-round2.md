@@ -309,7 +309,7 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the Round119-134 integration wave through `e597da6`: inline
+- `pnpm run check` passed after the Round134/131/132 integration wave through `4b81f3e`: inline
   loader check, 776 formatted files, 678 lint/typechecked files, and 7 typechecked
   example/conformance projects.
 
@@ -339,6 +339,12 @@ Focused gates since that broad run:
   `fw-check`, exact `vp check`, and `git diff --check` passed in Round125.
 - UI: number-field off-grid step alignment, focused/full headless-ui tests, primitive lint, exact
   `vp check`, and `git diff --check` passed in Round129.
+- UI: checkbox-group rejected native state restoration, merge fixture correction, full
+  headless-ui tests, primitive lint, exact `vp check`, and `git diff --check` passed in Round134.
+- Server/app-shell: create-jiso starter app-shell subpath adoption, focused server/create-jiso
+  tests, full server suite, `tsc`, exact `vp check`, and `git diff --check` passed in Round131.
+- Drizzle: Postgres-only v1 proof, package suite, pinned conformance, exact `vp check`, and
+  `git diff --check` passed in Round132.
 
 Stale but useful broad references:
 
