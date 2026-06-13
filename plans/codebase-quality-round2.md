@@ -197,7 +197,8 @@ Current state:
   dispatcher.
 - Matched SPEC §9.5 dispatch branches now live in `app-dispatch.ts`, leaving `app-request.ts`
   focused on URL normalization and outer error fallback.
-- Vite app-shell plugin code lives in `vite-plugin.ts`; `vite.ts` is closer to an aggregate.
+- Vite app-shell plugin code lives in `vite-plugin.ts`; the obsolete internal `vite.ts` and
+  `document.ts` aggregates were deleted after public barrels and tests moved to split owners.
 - Root exports now point at the app-shell owner directly instead of an internal compatibility
   barrel.
 - App-shell Vite subpath exports now route directly to split owner modules instead of through
@@ -214,6 +215,11 @@ Open:
 
 Latest focused evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/rendering.ts packages/server/src/app.ts packages/server/src/app-document.ts packages/server/src/vite-dev.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
 - `pnpm exec vitest --run packages/server/src`

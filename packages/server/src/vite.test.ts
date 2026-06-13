@@ -32,7 +32,7 @@ import {
   type JisoAppShellViteBuildOutput,
   type JisoAppShellViteMiddleware,
   writeJisoAppShellViteBuildOutput,
-} from './vite.js';
+} from './api/app-shell/vite.js';
 import { jisoAppShellVitePlugin as splitJisoAppShellVitePlugin } from './vite-plugin.js';
 
 describe('server app shell Vite plugin', () => {

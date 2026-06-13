@@ -14,6 +14,9 @@ import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
 import * as dataApi from './data.js';
+import * as documentCoreApi from '../document-core.js';
+import * as documentDiagnosticsApi from '../document-diagnostics.js';
+import * as renderingApi from './rendering.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 import type {
@@ -49,6 +52,16 @@ describe('server app-shell public API barrels', () => {
 
     expect(publicApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(publicApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
+    expect(publicApi.renderDocument).toBe(documentCoreApi.renderDocument);
+    expect(publicApi.renderDeferredDocument).toBe(documentCoreApi.renderDeferredDocument);
+    expect(publicApi.renderRouteDocumentResponse).toBe(documentCoreApi.renderRouteDocumentResponse);
+    expect(publicApi.renderDiagnosticDocument).toBe(
+      documentDiagnosticsApi.renderDiagnosticDocument,
+    );
+    expect(renderingApi.renderDocument).toBe(documentCoreApi.renderDocument);
+    expect(renderingApi.renderDiagnosticDocument).toBe(
+      documentDiagnosticsApi.renderDiagnosticDocument,
+    );
     expect(dataApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
 

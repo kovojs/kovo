@@ -5,7 +5,7 @@ import {
 } from './client-modules.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
-import type { DocumentTemplate } from './document.js';
+import type { DocumentTemplate } from './document-core.js';
 import { handleAppRequest } from './app-request.js';
 import type { RoutePageResponse } from './response.js';
 import type { RouteDeclaration } from './route.js';

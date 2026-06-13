@@ -8,7 +8,7 @@ import {
   createJisoAppShellDevDiagnosticLedger,
   jisoAppShellVitePlugin,
   type JisoAppShellViteMiddleware,
-} from './vite.js';
+} from './api/app-shell/vite.js';
 
 describe('server app shell Vite diagnostics', () => {
   it('gates page-route diagnostics red and green through the dev middleware ledger', async () => {

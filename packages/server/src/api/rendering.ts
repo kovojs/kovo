@@ -10,21 +10,18 @@ export type {
 export { escapeAttribute, escapeHtml } from '../html.js';
 export {
   renderDeferredDocument,
-  renderDiagnosticDocument,
   renderDocument,
   renderDocumentQueryScript,
   renderErrorDocument,
   renderRouteDocumentResponse,
-} from '../document.js';
+} from '../document-core.js';
+export { renderDiagnosticDocument } from '../document-diagnostics.js';
 export type {
   DeferredDocumentAssemblyOptions,
   DeferredDocumentFrame,
   DeferredDocumentRenderResult,
   DeferredDocumentTemplate,
   DeferredDocumentTemplateContext,
-  DiagnosticDocumentDiagnostic,
-  DiagnosticDocumentOptions,
-  DiagnosticDocumentSource,
   DocumentAssemblyOptions,
   DocumentParts,
   DocumentRenderResult,
@@ -34,7 +31,12 @@ export type {
   DocumentTemplateContext,
   ErrorDocumentOptions,
   QueryScriptRenderOptions as DocumentQueryScriptRenderOptions,
-} from '../document.js';
+} from '../document-core.js';
+export type {
+  DiagnosticDocumentDiagnostic,
+  DiagnosticDocumentOptions,
+  DiagnosticDocumentSource,
+} from '../document-diagnostics.js';
 export { renderPageHints, stylesheetsForTargets } from '../hints.js';
 export type {
   I18nCatalog,

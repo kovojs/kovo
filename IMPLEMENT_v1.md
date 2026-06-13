@@ -299,6 +299,11 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
       `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: the unused internal `packages/server/src/vite.ts` and
+      `packages/server/src/document.ts` aggregates were deleted; tests and public barrels now
+      target `api/app-shell/vite.ts`, `document-core.ts`, and `document-diagnostics.ts` directly
+      while preserving root and subpath exports for SPEC §9.5 consumers. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`.
       Additional evidence 2026-06-13: static export compile-diagnostic blocking now lives in
       `packages/server/src/static-export-diagnostics.ts`, leaving `static-export.ts` to
       orchestrate SPEC §9.5 replay/output while the boundary rejects error diagnostics before
@@ -1170,6 +1175,12 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
       `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Evidence 2026-06-13: the leftover internal `packages/server/src/vite.ts` and
+      `packages/server/src/document.ts` aggregates were deleted. Vite tests now import the
+      public `api/app-shell/vite.ts` subpath, and rendering/app/dev imports go directly to
+      `document-core.ts` or `document-diagnostics.ts`, keeping the R5/R6/R7 package boundaries
+      subtractive. Focused verification:
+      `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`.
       Evidence 2026-06-13: static-export route planning and replayed response validation moved
       subtractively into `packages/server/src/static-export-route-plan.ts` and
       `packages/server/src/static-export-response.ts`, leaving `static-export.ts` to orchestrate

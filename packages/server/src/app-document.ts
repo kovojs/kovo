@@ -1,5 +1,5 @@
 import { reportServerError } from './diagnostics.js';
-import { renderErrorDocument, renderRouteDocumentResponse } from './document.js';
+import { renderErrorDocument, renderRouteDocumentResponse } from './document-core.js';
 import { routeResponseToDocumentResponse, type RoutePageResponse } from './response.js';
 import { renderRoutePageResponse, type RouteDeclaration, type RouteRequestInput } from './route.js';
 import type { JisoApp } from './app.js';

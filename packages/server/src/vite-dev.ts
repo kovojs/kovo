@@ -1,7 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { diagnosticDefinitions } from '@jiso/core';
 import { createRequestHandler, type JisoApp } from './app.js';
-import { renderDiagnosticDocument, type DiagnosticDocumentDiagnostic } from './document.js';
+import {
+  renderDiagnosticDocument,
+  type DiagnosticDocumentDiagnostic,
+} from './document-diagnostics.js';
 import { toNodeHandler } from './node.js';
 import { readHeader, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
