@@ -815,6 +815,9 @@ function extractProjectUnresolvedCalls(
       (argument) => isProjectDrizzleReceiverIdentifier(argument, receivers),
       (argument) => projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
     ),
+    ...extractReceiverMethodAliasCallsFromBody(body, (node) =>
+      isProjectDrizzleReceiverIdentifier(node, receivers),
+    ),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
   ];
 }
@@ -1816,6 +1819,7 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
+      ...receiverMethodAliasQueryDiagnostics(bodyArgument, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverReferences, readResolutionOptions),
@@ -2189,6 +2193,22 @@ function opaqueLocalQueryHelperDiagnostics(
       },
     ];
   });
+}
+
+function receiverMethodAliasQueryDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): TouchGraphDiagnostic[] {
+  return queryCallbackBodies(body).flatMap((callbackBody) =>
+    extractReceiverMethodAliasCallsFromBody(callbackBody, (node) =>
+      isQueryReceiverIdentifier(node, receiverReferences),
+    ).map((call) => ({
+      code: 'FW406' as const,
+      message: `${diagnosticDefinitions.FW406.message} Query uses detached Drizzle receiver method ${call.name}().`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    })),
+  );
 }
 
 function queryExecutableCallExpressions(body: ObjectLiteralExpression): CallExpression[] {
@@ -2776,6 +2796,18 @@ function staticExpressionPath(
     const base = staticExpressionPath(node.getExpression(), resolveIdentifier);
     const name = staticAccessName(node);
     return base && name ? `${base}.${name}` : undefined;
+  }
+  return undefined;
+}
+
+function staticExpressionRootIdentifier(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isIdentifier(expression)) return expression;
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    return staticExpressionRootIdentifier(expression.getExpression());
+  }
+  if (Node.isCallExpression(expression)) {
+    return staticExpressionRootIdentifier(expression.getExpression());
   }
   return undefined;
 }
@@ -3828,6 +3860,9 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
             (argument) =>
               sourceReceiverReferenceInArgument(argument, receiverNames, carrierSymbolKeys),
           ),
+          ...extractReceiverMethodAliasCallsFromBody(bodyNode, (node) =>
+            isSourceDrizzleReceiverIdentifier(node, receiverNames),
+          ),
           ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
         ],
         writeCalls: extractDrizzleWriteCallsFromBody(bodyNode, receiverNames),
@@ -4219,6 +4254,117 @@ function extractReceiverMutationCallsFromBody(
   }
 
   return calls;
+}
+
+function extractReceiverMethodAliasCallsFromBody(
+  body: Node,
+  isReceiverIdentifier: (node: Node) => boolean,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const aliases = receiverMethodAliasesForBody(body, isReceiverIdentifier);
+  if (aliases.symbols.size === 0 && aliases.names.size === 0) return [];
+
+  const calls: ExternalDbArgumentCall[] = [];
+  for (const call of touchBodyCallExpressions(body)) {
+    const method = receiverMethodAliasCallName(call, aliases);
+    if (!method) continue;
+
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name: method });
+  }
+
+  return calls;
+}
+
+function receiverMethodAliasCallName(
+  call: CallExpression,
+  aliases: ReceiverMethodAliases,
+): string | undefined {
+  const expression = call.getExpression();
+  if (Node.isIdentifier(expression)) {
+    return receiverMethodAliasName(expression, aliases);
+  }
+
+  const root = staticExpressionRootIdentifier(expression);
+  if (!root) return undefined;
+  const alias = receiverMethodAliasName(root, aliases);
+  if (alias !== 'query') return undefined;
+
+  const method = staticAccessName(expression);
+  return method === 'findFirst' || method === 'findMany' ? 'query' : undefined;
+}
+
+function receiverMethodAliasName(
+  identifier: Node,
+  aliases: ReceiverMethodAliases,
+): string | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(identifier));
+  return (
+    (symbolKey ? aliases.symbols.get(symbolKey) : undefined) ??
+    aliases.names.get(identifier.getText())
+  );
+}
+
+interface ReceiverMethodAliases {
+  names: ReadonlyMap<string, string>;
+  symbols: ReadonlyMap<string, string>;
+}
+
+function receiverMethodAliasesForBody(
+  body: Node,
+  isReceiverIdentifier: (node: Node) => boolean,
+): ReceiverMethodAliases {
+  const names = new Map<string, string>();
+  const symbols = new Map<string, string>();
+
+  for (const declaration of touchBodyVariableDeclarations(body)) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+
+    const binding = declaration.getNameNode();
+    if (Node.isObjectBindingPattern(binding) && isReceiverIdentifier(initializer)) {
+      for (const element of binding.getElements()) {
+        const alias = element.getNameNode();
+        if (!Node.isIdentifier(alias)) continue;
+
+        const method = propertyNameText(element.getPropertyNameNode() ?? alias);
+        if (!method) continue;
+        appendReceiverMethodAlias(names, symbols, alias, method);
+      }
+      continue;
+    }
+
+    if (!Node.isIdentifier(binding)) continue;
+    const method = receiverMethodAccessName(initializer, isReceiverIdentifier);
+    if (!method) continue;
+    appendReceiverMethodAlias(names, symbols, binding, method);
+  }
+
+  return { names, symbols };
+}
+
+function receiverMethodAccessName(
+  node: Node,
+  isReceiverIdentifier: (node: Node) => boolean,
+): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  const receiver = staticAccessExpression(expression);
+  if (!receiver || !isReceiverIdentifier(receiver)) return undefined;
+  return staticAccessName(expression);
+}
+
+function appendReceiverMethodAlias(
+  names: Map<string, string>,
+  symbols: Map<string, string>,
+  alias: Node,
+  method: string,
+): void {
+  if (!Node.isIdentifier(alias)) return;
+  names.set(alias.getText(), method);
+  const symbolKey = resolvedSymbolKey(alias.getSymbol());
+  if (symbolKey) symbols.set(symbolKey, method);
 }
 
 function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {

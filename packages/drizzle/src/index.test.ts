@@ -2264,6 +2264,79 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks project query-loader detached receiver method aliases as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+              query: any;
+              update(table: unknown): { set(value: unknown): Promise<void> };
+            }
+
+            export const productQuery = query("product/detached-methods", {
+              async load(_input, db: PgDatabase, fake: FakeDb) {
+                const { execute, update: write, query: relations } = db;
+                const fakeExecute = fake.execute;
+                const countProducts = db["$count"];
+                await execute("select 1");
+                await write(products).set({ id: "p1" });
+                await fakeExecute("select 1");
+                await countProducts(products);
+                return relations.products.findMany();
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:12',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method update().',
+            severity: 'warn',
+            site: 'product.queries.ts:12',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method $count().',
+            severity: 'warn',
+            site: 'product.queries.ts:12',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method query().',
+            severity: 'warn',
+            site: 'product.queries.ts:12',
+          },
+        ],
+        query: 'product/detached-methods',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:12',
+      },
+    ]);
+  });
+
   it('does not fabricate project query facts from explicitly typed non-Drizzle receivers', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -5811,6 +5884,57 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks source detached Drizzle receiver method aliases as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const { execute, update: write, query } = db;',
+          '  const fakeExecute = fake.execute;',
+          '  const countUsers = db["$count"];',
+          '  await execute("select 1");',
+          '  await write(users).set({});',
+          '  await fakeExecute("select 1");',
+          '  await countUsers(users);',
+          '  await query.users.findMany();',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:8',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
           },
         ],
       },

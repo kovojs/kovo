@@ -318,6 +318,12 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Detached Drizzle receiver method aliases such as destructured `execute`/`update` and
+  `db["$count"]` assignments now degrade to FW406 in source/project touch extraction and project
+  query-loader diagnostics, while fake/lookalike method aliases stay invisible. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

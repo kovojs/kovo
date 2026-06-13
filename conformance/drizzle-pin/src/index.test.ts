@@ -554,6 +554,64 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins detached query-loader receiver methods as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+              query: any;
+            }
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/detached-methods', {
+              async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
+                const { execute, query: relations } = db;
+                const fakeExecute = fake.execute;
+                await execute('select 1');
+                await fakeExecute('select 1');
+                return relations.products.findMany();
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:13',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method query().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:13',
+          },
+        ],
+        query: 'product/detached-methods',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:13',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
+  });
+
   it('does not fabricate project query facts from untyped query-loader receiver names', () => {
     const facts = extractQueryFactsFromProject({
       files: [
