@@ -205,6 +205,8 @@ derive those names from raw attribute text.
 Data-bind path classification is centralized into analysis/validator facts, so plan collection,
 coverage, template placeholder extraction, and binding validation consume query/relative-read facts
 instead of reparsing each binding at every use site.
+Template stamp facts now carry structured read segments for list/item paths; client query-plan
+emission consumes those analyzed segments for item reads instead of splitting encoded path strings.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -214,6 +216,16 @@ instead of reparsing each binding at every use site.
 
 Latest evidence:
 
+- Structured template-stamp read segments: `pnpm exec vitest --run
+packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
+packages/test/src/compiler-fixtures.test.ts packages/test/src/generated-module-fixtures.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; `pnpm run check:build`; targeted `node --test
+--test-name-pattern "D3 deferred stream responses are consumed by the runtime|P5 data-bind paths
+are checked against generated query shape facts" tests/fw-check.node.mjs`; exact `pnpm exec vp
+check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts
+packages/compiler/src/emit/client.ts packages/compiler/src/query-update-plans.test.ts
+packages/compiler/src/query-coverage.test.ts packages/test/src/compiler-fixtures.ts
+packages/test/src/compiler-fixtures.test.ts tests/fw-check.node.mjs`; `git diff --check`.
 - `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/execution-triggers.test.ts packages/compiler/src/compile-component.test.ts`

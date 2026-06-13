@@ -225,6 +225,7 @@ export interface QueryTemplateStampFact {
   key: string;
   list: string;
   listReadPath: string;
+  listReadSegments: readonly BindingPathSegmentFact[];
   selector: string;
   template: string;
 }
@@ -232,7 +233,13 @@ export interface QueryTemplateStampFact {
 export interface QueryTemplateStampBindingPlaceholder {
   path: string;
   readPath: string;
+  readSegments: readonly BindingPathSegmentFact[];
   value: string;
+}
+
+export interface BindingPathSegmentFact {
+  name: string;
+  optional: boolean;
 }
 
 export interface QueryUpdateCoverageFact {

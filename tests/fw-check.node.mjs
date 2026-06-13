@@ -4197,11 +4197,13 @@ export const CartBadge = component('cart-badge', {
             {
               path: '.name',
               readPath: 'name',
+              readSegments: [{ name: 'name', optional: false }],
               value: 'Item',
             },
             {
               path: '.qty',
               readPath: 'qty',
+              readSegments: [{ name: 'qty', optional: false }],
               value: '0',
             },
           ],
@@ -4209,6 +4211,7 @@ export const CartBadge = component('cart-badge', {
           key: 'productId',
           list: 'cart.items',
           listReadPath: 'items',
+          listReadSegments: [{ name: 'items', optional: false }],
           selector: '[data-bind-list="cart.items"]',
           template:
             '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
@@ -5197,11 +5200,13 @@ export const CartBadge = component('cart-badge', {
             {
               path: '.name',
               readPath: 'name',
+              readSegments: [{ name: 'name', optional: false }],
               value: 'Item',
             },
             {
               path: '.qty',
               readPath: 'qty',
+              readSegments: [{ name: 'qty', optional: false }],
               value: '0',
             },
           ],
@@ -5209,6 +5214,7 @@ export const CartBadge = component('cart-badge', {
           key: 'productId',
           list: 'cart.items',
           listReadPath: 'items',
+          listReadSegments: [{ name: 'items', optional: false }],
           selector: '[data-bind-list="cart.items"]',
           template:
             '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',

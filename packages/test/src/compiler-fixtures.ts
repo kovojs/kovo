@@ -47,6 +47,7 @@ export interface CompilerTemplateStampLike {
   key: string;
   list: string;
   listReadPath?: string;
+  listReadSegments?: readonly CompilerBindingPathSegmentLike[];
   selector: string;
   template: string;
   [field: string]: unknown;
@@ -55,7 +56,14 @@ export interface CompilerTemplateStampLike {
 export interface CompilerTemplateStampPlaceholderLike {
   path: string;
   readPath?: string;
+  readSegments?: readonly CompilerBindingPathSegmentLike[];
   value: string;
+  [field: string]: unknown;
+}
+
+export interface CompilerBindingPathSegmentLike {
+  name: string;
+  optional: boolean;
   [field: string]: unknown;
 }
 
@@ -72,6 +80,7 @@ export interface CompilerTemplateStampFact {
   key: string;
   list: string;
   listReadPath?: string;
+  listReadSegments?: CompilerBindingPathSegmentFact[];
   selector: string;
   template: string;
 }
@@ -79,7 +88,13 @@ export interface CompilerTemplateStampFact {
 export interface CompilerTemplateStampPlaceholderFact {
   path: string;
   readPath?: string;
+  readSegments?: CompilerBindingPathSegmentFact[];
   value: string;
+}
+
+export interface CompilerBindingPathSegmentFact {
+  name: string;
+  optional: boolean;
 }
 
 export type CompilerQueryShape =
@@ -140,15 +155,30 @@ export function compilerQueryUpdatePlanFacts(
       itemBindingPlaceholders: (stamp.itemBindingPlaceholders ?? []).map((placeholder) => ({
         path: placeholder.path,
         ...(placeholder.readPath === undefined ? {} : { readPath: placeholder.readPath }),
+        ...(placeholder.readSegments === undefined
+          ? {}
+          : { readSegments: compilerBindingPathSegmentFacts(placeholder.readSegments) }),
         value: placeholder.value,
       })),
       itemBindings: [...(stamp.itemBindings ?? [])],
       key: stamp.key,
       list: stamp.list,
       ...(stamp.listReadPath === undefined ? {} : { listReadPath: stamp.listReadPath }),
+      ...(stamp.listReadSegments === undefined
+        ? {}
+        : { listReadSegments: compilerBindingPathSegmentFacts(stamp.listReadSegments) }),
       selector: stamp.selector,
       template: stamp.template,
     })),
+  }));
+}
+
+function compilerBindingPathSegmentFacts(
+  segments: readonly CompilerBindingPathSegmentLike[],
+): CompilerBindingPathSegmentFact[] {
+  return segments.map((segment) => ({
+    name: segment.name,
+    optional: segment.optional,
   }));
 }
 

@@ -16,6 +16,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import type {
+  BindingPathSegmentFact,
   CompileComponentOptions,
   QueryDeriveFact,
   QueryTemplateStampBindingPlaceholder,
@@ -351,6 +352,7 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
           key,
           list,
           listReadPath: queryRelativePath(list),
+          listReadSegments: queryRelativeSegments(list),
           selector: `[data-bind-list="${list}"]`,
           template,
         },
@@ -360,8 +362,15 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
 }
 
 function queryRelativePath(path: string): string {
-  return parseBindingPath(path)
-    .slice(1)
+  return bindingPathSegmentsToPath(queryRelativeSegments(path));
+}
+
+function queryRelativeSegments(path: string): BindingPathSegmentFact[] {
+  return parseBindingPath(path).slice(1);
+}
+
+function bindingPathSegmentsToPath(segments: readonly BindingPathSegmentFact[]): string {
+  return segments
     .map((segment) => (segment.optional ? `${segment.name}?` : segment.name))
     .join('.');
 }
@@ -386,6 +395,7 @@ function templateItemBindingPlaceholders(
           return {
             path: fact.path,
             readPath: fact.relativeReadPath ?? '',
+            readSegments: parseBindingPath(fact.relativeReadPath ?? ''),
             value: jsxElementChildBody(candidate)?.source ?? '',
           };
         }),

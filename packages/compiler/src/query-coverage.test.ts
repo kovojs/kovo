@@ -369,11 +369,21 @@ export const CartBadge = component('cart-badge', {
     const clientSource = result.files[1]?.source ?? '';
 
     expect(result.queryUpdatePlans[0]?.templateStamps?.[0]?.itemBindingPlaceholders).toEqual([
-      { path: '.name', readPath: 'name', value: 'Item' },
-      { path: '.qty', readPath: 'qty', value: `{'<span data-bind=".qty">wrong</span>'}` },
+      {
+        path: '.name',
+        readPath: 'name',
+        readSegments: [{ name: 'name', optional: false }],
+        value: 'Item',
+      },
+      {
+        path: '.qty',
+        readPath: 'qty',
+        readSegments: [{ name: 'qty', optional: false }],
+        value: `{'<span data-bind=".qty">wrong</span>'}`,
+      },
     ]);
     expect(clientSource).toContain(
-      `html = html.replace("{'<span data-bind=\\".qty\\">wrong</span>'}", String(read("qty") ?? ""));`,
+      `html = html.replace("{'<span data-bind=\\".qty\\">wrong</span>'}", String(read(["qty"]) ?? ""));`,
     );
   });
 

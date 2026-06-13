@@ -122,12 +122,19 @@ describe('@jiso/test compiler fixture facts', () => {
           templateStamps: [
             {
               itemBindingPlaceholders: [
-                { path: '.name', readPath: 'name', sourceSpan: { start: 2 }, value: 'Item' },
+                {
+                  path: '.name',
+                  readPath: 'name',
+                  readSegments: [{ extra: 'ignored', name: 'name', optional: false }],
+                  sourceSpan: { start: 2 },
+                  value: 'Item',
+                },
               ],
               itemBindings: ['.name'],
               key: 'productId',
               list: 'cart.items',
               listReadPath: 'items',
+              listReadSegments: [{ extra: 'ignored', name: 'items', optional: false }],
               selector: '[data-bind-list="cart.items"]',
               template: '<li>Item</li>',
             },
@@ -141,11 +148,19 @@ describe('@jiso/test compiler fixture facts', () => {
         query: 'cart',
         templateStamps: [
           {
-            itemBindingPlaceholders: [{ path: '.name', readPath: 'name', value: 'Item' }],
+            itemBindingPlaceholders: [
+              {
+                path: '.name',
+                readPath: 'name',
+                readSegments: [{ name: 'name', optional: false }],
+                value: 'Item',
+              },
+            ],
             itemBindings: ['.name'],
             key: 'productId',
             list: 'cart.items',
             listReadPath: 'items',
+            listReadSegments: [{ name: 'items', optional: false }],
             selector: '[data-bind-list="cart.items"]',
             template: '<li>Item</li>',
           },

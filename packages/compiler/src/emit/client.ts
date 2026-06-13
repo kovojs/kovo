@@ -171,15 +171,12 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
 
   return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(stamp.listReadPath)}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
       const record = item && typeof item === "object" ? item : {};
-      const read = (path) => path.split(".").reduce((value, part) => {
-        const key = part.endsWith("?") ? part.slice(0, -1) : part;
-        return value && typeof value === "object" ? value[key] : undefined;
-      }, record);
+      const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
       let html = ${JSON.stringify(stamp.template)};
 ${stamp.itemBindings
   .map((binding) => {
     const placeholder = placeholders.get(binding);
-    return `      html = html.replace(${JSON.stringify(placeholder?.value ?? '')}, String(read(${JSON.stringify(placeholder?.readPath ?? '')}) ?? ""));`;
+    return `      html = html.replace(${JSON.stringify(placeholder?.value ?? '')}, String(read(${JSON.stringify(placeholder?.readSegments.map((segment) => segment.name) ?? [])}) ?? ""));`;
   })
   .join('\n')}
       return html;
