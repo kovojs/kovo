@@ -3,9 +3,26 @@ import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js'
 
 export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
 
-export const liveTargetHeaderSeparator = '; ';
+const liveTargetHeaderSeparator = '; ';
+
+export interface LiveTargetSnapshot {
+  header: string;
+  targets: string[];
+}
 
 export function readLiveTargets(root: TargetCollectorRoot): string[] {
+  return collectLiveTargets(root);
+}
+
+export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSnapshot {
+  const targets = collectLiveTargets(root);
+  return {
+    header: targets.join(liveTargetHeaderSeparator),
+    targets,
+  };
+}
+
+function collectLiveTargets(root: TargetCollectorRoot): string[] {
   const targets = new Set<string>();
 
   for (const element of root.querySelectorAll('[fw-deps]')) {
@@ -18,12 +35,4 @@ export function readLiveTargets(root: TargetCollectorRoot): string[] {
   }
 
   return [...targets];
-}
-
-export function serializeLiveTargets(root: TargetCollectorRoot): string {
-  return serializeLiveTargetEntries(readLiveTargets(root));
-}
-
-export function serializeLiveTargetEntries(targets: readonly string[]): string {
-  return targets.join(liveTargetHeaderSeparator);
 }

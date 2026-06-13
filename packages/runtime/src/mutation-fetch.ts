@@ -1,6 +1,6 @@
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { createMutationIdem, readMutationChangeHeader } from './mutation-response.js';
-import { readLiveTargets, serializeLiveTargetEntries } from './mutation-targets.js';
+import { readLiveTargetSnapshot } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
@@ -59,14 +59,14 @@ export async function fetchEnhancedMutation(
   options: FetchEnhancedMutationOptions,
   idem = options.idem ?? createMutationIdem(),
 ): Promise<FetchedEnhancedMutation> {
-  const targets = readLiveTargets(options.root);
+  const targetSnapshot = readLiveTargetSnapshot(options.root);
   const response = await options.fetch(options.form.action, {
     body: options.formData,
     headers: {
       Accept: 'text/vnd.jiso.fragment+html',
       'FW-Fragment': 'true',
       'FW-Idem': idem,
-      'FW-Targets': serializeLiveTargetEntries(targets),
+      'FW-Targets': targetSnapshot.header,
     },
     keepalive: true,
     method: (options.form.method ?? 'post').toUpperCase(),
@@ -79,7 +79,7 @@ export async function fetchEnhancedMutation(
     changes,
     idem,
     response,
-    targets,
+    targets: targetSnapshot.targets,
   };
 }
 

@@ -24,9 +24,12 @@ class FakeTargetElement {
 }
 
 class FakeTargetRoot {
+  queries = 0;
+
   constructor(readonly elements: FakeTargetElement[]) {}
 
   querySelectorAll(selector: string): Iterable<FakeTargetElement> {
+    this.queries += 1;
     return selector === '[fw-deps]' ? this.elements : [];
   }
 }
@@ -88,6 +91,7 @@ describe('enhanced mutation fetch', () => {
       response: expect.any(Object),
       targets: ['cart-badge=cart product:p1', 'recommendations:p1=recommendations'],
     });
+    expect(root.queries).toBe(1);
   });
 
   it('defaults to POST and omits upload progress when no progress hook is configured', async () => {

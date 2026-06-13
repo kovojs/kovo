@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { readLiveTargets, serializeLiveTargets } from './mutation-targets.js';
+import * as mutationTargetsModule from './mutation-targets.js';
+import { readLiveTargetSnapshot, readLiveTargets } from './mutation-targets.js';
 
 class FakeTargetRoot {
+  queries = 0;
+
   constructor(private readonly elements: FakeTargetElement[]) {}
 
   querySelectorAll(selector: string): Iterable<FakeTargetElement> {
+    this.queries += 1;
     return selector === '[fw-deps]' ? this.elements : [];
   }
 }
@@ -59,8 +63,28 @@ describe('mutation targets', () => {
       'empty-deps',
       'cart-summary=cart summary',
     ]);
-    expect(serializeLiveTargets(root)).toBe(
+    expect(readLiveTargetSnapshot(root).header).toBe(
       'cart-badge=cart; inventory=inventory stock; empty-deps; cart-summary=cart summary',
     );
+  });
+
+  it('reads one live target snapshot for enhanced mutation request headers', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({ 'fw-deps': 'cart', 'fw-fragment-target': null }, { id: 'cart' }),
+      new FakeTargetElement({ 'fw-deps': 'reviews', 'fw-fragment-target': 'reviews:p1' }),
+    ]);
+
+    const snapshot = readLiveTargetSnapshot(root);
+
+    // SPEC.md §9.1: the enhanced mutation request and returned metadata use one
+    // live FW-Targets snapshot, not separate compatibility serialization passes.
+    expect(snapshot).toEqual({
+      header: 'cart=cart; reviews:p1=reviews',
+      targets: ['cart=cart', 'reviews:p1=reviews'],
+    });
+    expect(root.queries).toBe(1);
+    expect(Object.hasOwn(mutationTargetsModule, 'serializeLiveTargets')).toBe(false);
+    expect(Object.hasOwn(mutationTargetsModule, 'serializeLiveTargetEntries')).toBe(false);
+    expect(Object.hasOwn(mutationTargetsModule, 'liveTargetHeaderSeparator')).toBe(false);
   });
 });

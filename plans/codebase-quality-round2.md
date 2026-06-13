@@ -203,6 +203,17 @@ Latest evidence:
   before plugin-time static export writes, and `packages/server/src/vite-build.test.ts` proves a
   blocked Vite dist `/c` parent rejects before route documents or `/c/` modules are published to
   the static export output.
+- Phase 4 runtime live target snapshot apply-header slice:
+  `pnpm exec vitest --run packages/runtime/src/mutation-targets.test.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-submit.test.ts packages/runtime/src/inline-loader-enhanced-submit.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vp check packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/mutation-fetch.ts packages/runtime/src/mutation-fetch.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/runtime/src/mutation-targets.ts` now reads one SPEC §9.1 live
+  `FW-Targets` snapshot for enhanced mutation request headers and returned target metadata,
+  keeping the separator private and deleting the duplicated `serializeLiveTargets` and
+  `serializeLiveTargetEntries` helper exports; focused runtime tests prove the one-read snapshot,
+  fetch-path header/metadata parity, and inline-loader enhanced-submit target parity.
 - Phase 5 static export client-module output boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
