@@ -27,7 +27,7 @@ interface InlineAttributeDerive {
   query: string;
 }
 
-export interface InlineAttributeDeriveLowering {
+interface InlineAttributeDeriveLowering {
   prefix: string;
   replacements: SourceReplacement[];
 }

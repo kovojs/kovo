@@ -13,7 +13,7 @@ export interface PlatformSubstitution {
   target: string;
 }
 
-export interface PlatformBehaviorLowering {
+interface PlatformBehaviorLowering {
   replacements: SourceReplacement[];
   substitutions: PlatformSubstitution[];
 }

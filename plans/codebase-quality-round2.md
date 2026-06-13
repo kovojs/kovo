@@ -1141,6 +1141,15 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Lowerer result-wrapper surface cleanup: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts
+packages/compiler/src/view-transitions.test.ts packages/compiler/src/query-bindings.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/lower/inline-derives.ts packages/compiler/src/lower/platform.ts
+packages/compiler/src/lower/view-transitions.ts packages/compiler/src/lower/navigation.ts`;
+  `git diff --check`. Evidence: inline-derive, platform, and view-transition lowering result
+  wrapper types are internal-only, and the dead navigation object wrapper is deleted.
 - Source patch offset-map result naming: `pnpm exec vitest --run
 packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts
 packages/compiler/src/compile-component.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact

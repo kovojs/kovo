@@ -125,10 +125,6 @@ function objectRecordValue(
   value: StaticLiteralValue | undefined,
 ): StaticNavigationObject | null | undefined {
   if (value === undefined) return undefined;
-  return navigationObjectValue(value);
-}
-
-function navigationObjectValue(value: StaticLiteralValue | null): StaticNavigationObject | null {
   return staticNavigationObjectValue(value, { nested: false });
 }
 

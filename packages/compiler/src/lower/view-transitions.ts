@@ -7,7 +7,7 @@ import {
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { ViewTransitionStamp } from '../types.js';
 
-export interface ViewTransitionLowering {
+interface ViewTransitionLowering {
   replacements: SourceReplacement[];
   stamps: ViewTransitionStamp[];
 }
