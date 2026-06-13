@@ -118,6 +118,75 @@ describe('@jiso/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('keeps deferred SQLite/MySQL database receiver types out of v1 project proof', () => {
+    const files = [
+      {
+        fileName: 'deferred-engine-types.d.ts',
+        source: [
+          'declare module "drizzle-orm/sqlite-core" {',
+          '  export class BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {}',
+          '}',
+          'declare module "drizzle-orm/mysql-core" {',
+          '  export class MySqlDatabase<TQueryResult = unknown, TPreparedQuery = unknown, TFullSchema = unknown, TSchema = unknown> {}',
+          '}',
+        ].join('\n'),
+      },
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { MySqlDatabase } from "drizzle-orm/mysql-core";',
+          'import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function writeSqlite(db: BaseSQLiteDatabase, productId: string) {',
+          '  await db.update(products).set({ id: productId });',
+          '}',
+          '',
+          'export const productQuery = query("product/mysql", {',
+          '  load(_input, db: MySqlDatabase) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({});
+    expect(extractQueryFactsFromProject({ files })).toEqual([]);
+  });
+
+  it('degrades deferred SQLite table factories instead of extracting exact v1 source writes', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'user.domain.ts',
+        source: [
+          'export const users = sqliteTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db) {',
+          '  await db.update(users).set({ active: true });',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'user.domain.ts:4',
+          },
+        ],
+      },
+    });
+  });
+
   it('creates deterministic touch graph entries from annotated tables and read domains', () => {
     const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
     const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));

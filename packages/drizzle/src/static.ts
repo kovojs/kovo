@@ -1421,13 +1421,9 @@ function isDrizzleReceiver(receiver: Node): boolean {
     return true;
   }
 
-  return (
-    type
-      .getSymbol()
-      ?.getDeclarations()
-      .some((declaration) => declaration.getSourceFile().getFilePath().includes('drizzle-orm')) ??
-    false
-  );
+  // SPEC §11.1 and IMPLEMENT_v1 v1 scope: project receiver proof is restricted to known
+  // Postgres Drizzle database types. SQLite/MySQL conformance is deferred to late hardening.
+  return false;
 }
 
 function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {

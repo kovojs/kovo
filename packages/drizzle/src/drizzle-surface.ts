@@ -1,7 +1,7 @@
-export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable', 'sqliteTable', 'mysqlTable']);
+export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable']);
 
 export const DRIZZLE_DATABASE_TYPE_PATTERN =
-  /\b(?:PgDatabase|NodePgDatabase|PostgresJsDatabase|PgliteDatabase|Neon.*Database|BaseSQLiteDatabase|MySql2Database|MySqlDatabase)\b/;
+  /\b(?:PgDatabase|NodePgDatabase|PostgresJsDatabase|PgliteDatabase|Neon.*Database)\b/;
 
 export const JISO_EXTRA_CONFIG_CALL_NAME = 'jiso';
 

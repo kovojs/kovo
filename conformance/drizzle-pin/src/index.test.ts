@@ -62,6 +62,35 @@ describe('Drizzle pinned subset conformance', () => {
     expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
   });
 
+  it('does not promote deferred real SQLite/MySQL database receivers to v1 project proof', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/deferred-engine.domain.ts',
+        source: [
+          "import type { MySqlDatabase } from 'drizzle-orm/mysql-core';",
+          "import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'export async function writeSqlite(db: BaseSQLiteDatabase<any, any, any, any>, productId: string) {',
+          '  await db.update(products).set({ id: productId });',
+          '}',
+          '',
+          "export const productQuery = query('product/deferred-mysql', {",
+          '  load(_input, db: MySqlDatabase<any, any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({});
+    expect(extractQueryFactsFromProject({ files })).toEqual([]);
+  });
+
   it('pins project query shapes for real Drizzle column builders and static element access', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -143,19 +143,28 @@ Current state:
 - Project local helper summaries now fold through typed `{ db }` receiver carriers for both
   write summaries and query-loader reads, while unknown/external carrier handoffs stay FW406.
 - Fake/lookalike receivers and overwritten carrier members remain invisible.
+- V1 project receiver proof is Postgres-only: the broad `drizzle-orm` package-declaration
+  fallback and SQLite/MySQL database type compatibility names were removed, and deferred
+  SQLite table factories now degrade instead of producing exact source touch facts.
 - Real `drizzle-orm` conformance covers the latest degradation surfaces.
 
 Open:
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade any remaining invisible source/project query-loader and mutation surfaces.
-- [ ] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
+- [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
+      Evidence 2026-06-13: `packages/drizzle/src/drizzle-surface.ts` only blesses `pgTable`
+      and Postgres database receiver type names, `packages/drizzle/src/static.ts` no longer
+      accepts arbitrary `drizzle-orm` package declarations as project receiver proof,
+      `packages/drizzle/src/index.test.ts` covers deferred SQLite/MySQL project receivers and
+      SQLite table-factory FW406 degradation, and `conformance/drizzle-pin/src/index.test.ts`
+      pins real Drizzle SQLite/MySQL database imports as invisible to v1 project extraction.
 
 Latest focused evidence:
 
 - `pnpm exec vitest --run packages/drizzle/src`
 - `pnpm exec vitest --run conformance/drizzle-pin`
-- `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 4 - Runtime

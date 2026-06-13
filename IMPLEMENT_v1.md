@@ -491,6 +491,14 @@ conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality
       boundary, while sibling fake carrier members remain invisible. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-13: v1 Drizzle receiver/table proof is now Postgres-focused:
+      `packages/drizzle/src/drizzle-surface.ts` blesses `pgTable` plus Postgres database type
+      names only, `packages/drizzle/src/static.ts` deleted the broad `drizzle-orm`
+      package-declaration receiver fallback, deferred SQLite/MySQL project receivers stay
+      invisible, and deferred SQLite source table factories degrade to FW406 instead of exact
+      touch facts. Package and real `drizzle-orm` conformance tests pin the behavior.
+      Same-session evidence: `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
       Additional evidence 2026-06-13: source/project object-spread copies of proven Drizzle
       receiver carriers now preserve only non-overridden receiver properties, so spread-copied
       carrier member calls and helper handoffs degrade to FW406 while later `db: fake` overrides
