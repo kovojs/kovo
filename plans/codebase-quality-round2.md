@@ -648,7 +648,10 @@ of dropping the executable surface. V1 proof remains Postgres-only; SQLite/MySQL
 deferred to late hardening. Tuple-destructured callback containers now resolve through static
 literal aliases and binding-element facts for project query loaders and domain writes. Static
 computed callback/action keys resolve only on executable Drizzle surfaces; unresolved computed
-loader/action keys remain visible as FW406.
+loader/action keys remain visible as FW406. Project Postgres receiver proof now uses ts-morph
+type/symbol names plus exact unresolved type-reference parsing instead of broad printed type-text
+membership, so similarly named fake types such as `PgDatabaseLike` stay invisible while real
+`PgDatabase` carriers and destructured helper parameters remain exact.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
@@ -965,6 +968,16 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       `pnpm --filter @jiso/conformance-drizzle-pin test`, exact
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Evidence 2026-06-13 round284 worker B: `packages/drizzle/src/static.ts` replaced the broad
+      Drizzle database type-text pattern with ts-morph symbol/name receiver proof and an anchored
+      unresolved type-reference fallback, and now applies that proof to destructured project
+      receiver parameters and local-helper carrier satisfaction. `packages/drizzle/src/index.test.ts`
+      and `conformance/drizzle-pin/src/index.test.ts` pin that fake `PgDatabaseLike` query/mutation
+      receivers do not fabricate facts while real `PgDatabase` carriers still emit exact facts or
+      FW406 for raw surfaces. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
+      exact `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -972,6 +985,10 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 
 Latest evidence:
 
+- round284 worker B project receiver type proof slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
+  exact `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - round278 direct conditional loader/action member slice:
   `pnpm exec vitest --run packages/drizzle/src`;
   `pnpm --filter @jiso/conformance-drizzle-pin test`;

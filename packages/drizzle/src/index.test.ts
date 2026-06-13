@@ -6641,6 +6641,56 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not promote project receivers from PgDatabase-like type names', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface PgDatabaseLike {',
+            '  execute(query: unknown): Promise<void>;',
+            '}',
+            'interface FakeContext { db: PgDatabaseLike }',
+            'interface RealContext { db: PgDatabase }',
+            '',
+            'declare function audit(context: unknown): Promise<void>;',
+            '',
+            'export async function sync(fake: PgDatabaseLike, fakeContext: FakeContext, realContext: RealContext) {',
+            '  await fake.execute("select 1");',
+            '  await fakeContext.db.execute("select 1");',
+            '  await audit({ db: fake });',
+            '  await audit(fakeContext);',
+            '  await realContext.db.execute("select 1");',
+            '  await audit(realContext);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:16',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks project unresolved helper surfaces only for typed Drizzle receiver symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [

@@ -6673,6 +6673,33 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('does not promote PgDatabase-like query receiver names under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            interface PgDatabaseLike {
+              execute(query: unknown): Promise<void>;
+            }
+
+            declare function runReport(context: unknown): Promise<unknown[]>;
+
+            export const usersQuery = query('users/fake-db-like', {
+              load(_input, db: PgDatabaseLike) {
+                db.execute(sql\`select * from users\`);
+                return runReport({ db });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins computed real Drizzle query receiver methods as explicit FW406 surfaces', () => {
     expect(sql`select * from users`).toBeDefined();
 

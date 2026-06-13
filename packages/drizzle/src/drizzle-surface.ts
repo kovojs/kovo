@@ -1,7 +1,11 @@
 export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable']);
 
-export const DRIZZLE_DATABASE_TYPE_PATTERN =
-  /\b(?:PgDatabase|NodePgDatabase|PostgresJsDatabase|PgliteDatabase|Neon.*Database)\b/;
+export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
+  'NodePgDatabase',
+  'PgDatabase',
+  'PgliteDatabase',
+  'PostgresJsDatabase',
+]);
 
 export const JISO_EXTRA_CONFIG_CALL_NAME = 'jiso';
 
@@ -28,8 +32,8 @@ export function jiso(annotation: JisoTableAnnotation): JisoTableExtraConfig {
   return Object.assign((() => []) as (self: unknown) => [], annotation) as JisoTableExtraConfig;
 }
 
-export function isDrizzleDatabaseTypeText(typeText: string): boolean {
-  return DRIZZLE_DATABASE_TYPE_PATTERN.test(typeText);
+export function isDrizzleDatabaseTypeName(name: string): boolean {
+  return DRIZZLE_DATABASE_TYPE_NAMES.has(name) || /^Neon.*Database$/.test(name);
 }
 
 export function isDrizzleTableFactoryName(name: string): boolean {

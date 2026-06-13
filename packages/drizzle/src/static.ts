@@ -54,7 +54,7 @@ export type {
 export { jiso } from './drizzle-surface.js';
 import {
   isDomainTableAnnotation,
-  isDrizzleDatabaseTypeText,
+  isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
   isExemptTableAnnotation,
   isJisoExtraConfigCallName,
@@ -739,7 +739,7 @@ function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
   for (const param of callback.getParameters()) {
-    appendProjectDrizzleReceiverBinding(param.getNameNode(), names, symbolKeys);
+    appendProjectDrizzleReceiverParameterBinding(param, names, symbolKeys);
   }
   appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), { names, symbolKeys });
   appendProjectTransactionReceiverAliases(callback, { names, symbolKeys });
@@ -759,10 +759,25 @@ function projectReceiverParameterRequirements(callback: Node): ReceiverParameter
   return callback.getParameters().flatMap((parameter, index) => {
     const names = new Set<string>();
     const symbolKeys = new Set<string>();
-    appendProjectDrizzleReceiverBinding(parameter.getNameNode(), names, symbolKeys);
+    appendProjectDrizzleReceiverParameterBinding(parameter, names, symbolKeys);
     return names.size > 0 || symbolKeys.size > 0
       ? [{ index, names: [...names], symbolKeys: [...symbolKeys] }]
       : [];
+  });
+}
+
+function appendProjectDrizzleReceiverParameterBinding(
+  parameter: ParameterDeclaration,
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
+  const name = parameter.getNameNode();
+  appendProjectDrizzleReceiverBinding(name, names, symbolKeys);
+  if (Node.isIdentifier(name)) return;
+
+  appendProjectDrizzleReceiverBindingAliasForType(name, parameter, parameter.getType(), {
+    names,
+    symbolKeys,
   });
 }
 
@@ -944,7 +959,7 @@ function appendProjectDrizzleReceiverBindingAliasForType(
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
   if (Node.isIdentifier(target)) {
-    if (!isDrizzleDatabaseTypeText(targetType.getText(location))) return;
+    if (!isDrizzleDatabaseType(targetType)) return;
 
     appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
     return;
@@ -1010,7 +1025,7 @@ function appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
     if (!elementType) return;
 
     if (Node.isIdentifier(target)) {
-      if (!isDrizzleDatabaseTypeText(elementType.getText(location))) return;
+      if (!isDrizzleDatabaseType(elementType)) return;
 
       appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
       return;
@@ -1054,7 +1069,7 @@ function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
     if (!propertyType) continue;
 
     if (Node.isIdentifier(target)) {
-      if (!isDrizzleDatabaseTypeText(propertyType.getText(location))) continue;
+      if (!isDrizzleDatabaseType(propertyType)) continue;
 
       appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
       continue;
@@ -1271,7 +1286,9 @@ function extractProjectUnresolvedCalls(
       body,
       localFunctionNames,
       localFunctionsByKey,
-      (argument) => isProjectDrizzleReceiverIdentifier(argument, receivers),
+      (argument) =>
+        projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !== undefined ||
+        isDrizzleReceiver(argument),
       (argument) => projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
     ),
     ...extractReceiverMethodAliasCallsFromBody(body, (node) =>
@@ -1800,8 +1817,7 @@ function isDrizzleWriteCall(call: CallExpression): boolean {
 
 function isDrizzleReceiver(receiver: Node): boolean {
   const type = receiver.getType();
-  const typeText = type.getText(receiver);
-  if (isDrizzleDatabaseTypeText(typeText)) {
+  if (isDrizzleDatabaseType(type)) {
     return true;
   }
   if (isDrizzleDatabaseTypeAnnotation(receiver)) {
@@ -1816,7 +1832,58 @@ function isDrizzleReceiver(receiver: Node): boolean {
 function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {
   const parameter = receiverParameterDeclaration(receiver);
   const typeNode = parameter?.getTypeNode();
-  return typeNode ? isDrizzleDatabaseTypeText(typeNode.getText()) : false;
+  return typeNode ? isDrizzleDatabaseTypeNode(typeNode) : false;
+}
+
+function isDrizzleDatabaseType(type: MorphType): boolean {
+  // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
+  // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
+  return drizzleDatabaseTypeNames(type, new Set()).some(isDrizzleDatabaseTypeName);
+}
+
+function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] {
+  const key =
+    type.getAliasSymbol()?.getFullyQualifiedName() ??
+    type.getSymbol()?.getFullyQualifiedName() ??
+    type.getText();
+  if (seen.has(key)) return [];
+  seen.add(key);
+
+  const names = new Set<string>();
+  const aliasName = type.getAliasSymbol()?.getName();
+  const symbolName = type.getSymbol()?.getName();
+  const apparentSymbolName = type.getApparentType().getSymbol()?.getName();
+  const exactTextName = drizzleDatabaseTypeNameFromExactTypeText(type.getText());
+  if (aliasName) names.add(aliasName);
+  if (symbolName) names.add(symbolName);
+  if (apparentSymbolName) names.add(apparentSymbolName);
+  if (exactTextName) names.add(exactTextName);
+
+  for (const baseType of type.getBaseTypes()) {
+    for (const name of drizzleDatabaseTypeNames(baseType, seen)) names.add(name);
+  }
+
+  return [...names];
+}
+
+function drizzleDatabaseTypeNameFromExactTypeText(typeText: string): string | undefined {
+  // SPEC §11.1: unresolved imported annotations can print as exact type references even when
+  // ts-morph has no declaration symbol. Keep this anchored to the whole type reference so
+  // similarly named structural fakes such as `PgDatabaseLike` are not promoted.
+  const match = /^(?:import\("[^"]+"\)\.)?([A-Za-z_$][\w$]*)(?:<.*>)?$/.exec(typeText);
+  return match?.[1];
+}
+
+function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
+  if (typeNode.getKind() !== SyntaxKind.TypeReference) return false;
+  const typeReference = typeNode.asKind(SyntaxKind.TypeReference);
+  const typeName = typeReference?.getTypeName();
+  const name = typeName
+    ? Node.isIdentifier(typeName)
+      ? typeName.getText()
+      : staticAccessName(typeName)
+    : undefined;
+  return name ? isDrizzleDatabaseTypeName(name) : false;
 }
 
 function projectTableNamesBySymbol(
@@ -2572,7 +2639,7 @@ function appendQueryReceiverParameterReferences(
   if (mode === 'project') {
     // SPEC §11.1: project query facts require a proven Drizzle receiver. Untyped loader
     // parameters stay invisible instead of falling back to source-mode db/tx name guesses.
-    appendProjectDrizzleReceiverBinding(name, names, symbolKeys);
+    appendProjectDrizzleReceiverParameterBinding(parameter, names, symbolKeys);
     return;
   }
 
@@ -7679,14 +7746,13 @@ function projectTypeContainsDrizzleReceiver(
   // ts-morph proves a Postgres Drizzle database member, instead of relying on source carrier paths.
   if (depth > 4) return false;
   const typeText = type.getText(location);
-  if (isDrizzleDatabaseTypeText(typeText)) return true;
+  if (isDrizzleDatabaseType(type)) return true;
   if (seen.has(typeText)) return false;
   seen.add(typeText);
 
   for (const property of type.getProperties()) {
     const propertyType = property.getTypeAtLocation(location);
-    const propertyText = propertyType.getText(location);
-    if (isDrizzleDatabaseTypeText(propertyText)) return true;
+    if (isDrizzleDatabaseType(propertyType)) return true;
     if (projectTypeContainsDrizzleReceiver(propertyType, location, seen, depth + 1)) {
       return true;
     }
