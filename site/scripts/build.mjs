@@ -31,6 +31,7 @@ const SECTIONS = [
 // docs/prelaunch-checklist.md tracks jiso.dev confirmation; mirrors stay
 // origin-relative in HTML, so only llms.txt bakes this in.
 const SITE_ORIGIN = 'https://jiso.dev';
+const ROUTE_MANIFEST_FILE = '.jiso-site-routes.json';
 
 async function loadSection(section) {
   const directory = path.join(siteRoot, section.dir);
@@ -219,6 +220,11 @@ async function main() {
   const sections = [];
   for (const section of SECTIONS) sections.push(await loadSection(section));
   const galleryRoutes = await loadGalleryRoutes();
+  const routeManifest = [];
+  async function writeRoutePage(urlPath, html) {
+    routeManifest.push(urlPath);
+    await writePage(urlPath, html);
+  }
   const gallerySection = {
     key: 'gallery',
     pages: [
@@ -244,7 +250,7 @@ async function main() {
   const searchIndex = [];
 
   for (const section of sections) {
-    await writePage(
+    await writeRoutePage(
       `/${section.key}/`,
       finishPage(
         renderDocument({
@@ -268,7 +274,7 @@ async function main() {
       const prev = section.pages[position - 1];
       const next = section.pages[position + 1];
 
-      await writePage(
+      await writeRoutePage(
         page.url,
         finishPage(
           renderDocument({
@@ -303,7 +309,7 @@ async function main() {
     }
   }
 
-  await writePage(
+  await writeRoutePage(
     '/gallery/',
     finishPage(
       renderDocument({
@@ -320,7 +326,7 @@ async function main() {
     ),
   );
 
-  await writePage(
+  await writeRoutePage(
     '/gallery/interactive/',
     finishPage(
       renderDocument({
@@ -349,7 +355,7 @@ async function main() {
     const html = renderGalleryPage(route, galleryRoutes);
     const url = galleryUrl(route.path);
 
-    await writePage(
+    await writeRoutePage(
       url,
       finishPage(
         renderDocument({
@@ -384,7 +390,7 @@ async function main() {
   });
 
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
-  await writePage(
+  await writeRoutePage(
     '/spec/',
     finishPage(
       renderDocument({
@@ -412,7 +418,7 @@ async function main() {
 
   // Landing (W4). Chromeless: the landing ships its own always-dark header
   // and footer; the docs chrome (and the Jiso name) stay everywhere else.
-  await writePage(
+  await writeRoutePage(
     '/',
     finishPage(
       renderDocument({
@@ -424,6 +430,15 @@ async function main() {
         title: 'Kovo — the web framework that hands your agent the fix',
       }),
     ),
+  );
+
+  // SPEC.md section 9.5 static export replays declared route documents. The
+  // docs-site app shell consumes this manifest so stale files in dist/ cannot
+  // silently become exported routes.
+  await writeFile(
+    path.join(outDir, ROUTE_MANIFEST_FILE),
+    `${JSON.stringify({ routes: routeManifest }, null, 2)}\n`,
+    'utf8',
   );
 
   // W8 search index.

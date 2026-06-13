@@ -9,7 +9,7 @@ import * as server from '@jiso/server';
 import * as serverAppShell from '@jiso/server/app-shell';
 import { describe, expect, it } from 'vitest';
 
-import { createSiteDistApp } from './app-shell.mjs';
+import { createSiteDistApp, siteDocumentRouteEntries } from './app-shell.mjs';
 import { exportSiteStaticApp } from './export-static.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -23,6 +23,7 @@ describe('site app-shell export adoption', () => {
     const outDir = path.join(root, 'dist-out');
 
     await mkdir(path.join(distDir, 'docs', 'installation'), { recursive: true });
+    await mkdir(path.join(distDir, 'stale'), { recursive: true });
     await mkdir(path.join(publicDir, 'c'), { recursive: true });
     await writeFile(
       path.join(distDir, 'index.html'),
@@ -40,6 +41,14 @@ describe('site app-shell export adoption', () => {
       '<!doctype html><html><body><h1>Installation</h1></body></html>',
     );
     await writeFile(
+      path.join(distDir, 'stale', 'index.html'),
+      '<!doctype html><html><body><h1>Stale</h1></body></html>',
+    );
+    await writeFile(
+      path.join(distDir, '.jiso-site-routes.json'),
+      `${JSON.stringify({ routes: ['/docs/installation/', '/'] })}\n`,
+    );
+    await writeFile(
       path.join(publicDir, 'c', 'search.js'),
       'export function open() { document.body.dataset.search = "open"; }\n',
     );
@@ -53,6 +62,10 @@ describe('site app-shell export adoption', () => {
     );
 
     const serverApi = { ...server, ...serverAppShell };
+    expect(siteDocumentRouteEntries(distDir).map((entry) => entry.routePath)).toEqual([
+      '/docs/installation',
+      '/',
+    ]);
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
     const handler = serverApi.createRequestHandler(app);
     const shellResponse = await handler(new Request('https://jiso.test/'));
@@ -62,6 +75,9 @@ describe('site app-shell export adoption', () => {
     const codeModuleHref = shellHtml.match(/\/c\/code\.js\?v=site-r7-[a-f0-9]+/)?.[0];
 
     expect(shellResponse.status).toBe(200);
+    await expect(handler(new Request('https://jiso.test/stale'))).resolves.toMatchObject({
+      status: 404,
+    });
     expect(shellHtml).not.toContain('<!doctype html><html lang=');
     expect(searchModuleHref).toBeTruthy();
     expect(themeModuleHref).toBeTruthy();
@@ -144,6 +160,10 @@ describe('site app-shell export adoption', () => {
     await writeFile(
       path.join(distDir, 'docs', 'installation', 'index.html'),
       '<!doctype html><html><body><h1>Installation</h1></body></html>',
+    );
+    await writeFile(
+      path.join(distDir, '.jiso-site-routes.json'),
+      `${JSON.stringify({ routes: ['/docs/installation/', '/'] })}\n`,
     );
     await writeFile(
       path.join(publicDir, 'c', 'search.js'),
@@ -252,6 +272,10 @@ describe('site app-shell export adoption', () => {
       '<!doctype html><html><body><h1>Installation</h1></body></html>',
     );
     await writeFile(
+      path.join(distDir, '.jiso-site-routes.json'),
+      `${JSON.stringify({ routes: ['/docs/installation/', '/'] })}\n`,
+    );
+    await writeFile(
       path.join(publicDir, 'c', 'search.js'),
       'export function open() { document.body.dataset.search = "open"; }\n',
     );
@@ -302,5 +326,29 @@ describe('site app-shell export adoption', () => {
     await expect(readFile(path.join(outDir, 'assets', 'site.css'), 'utf8')).resolves.toBe(
       '.docs{color:seagreen}\n',
     );
+  });
+
+  it('fails docs route-manifest mistakes before app-shell export replay', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-manifest-'));
+    const distDir = path.join(root, 'dist-source');
+    const publicDir = path.join(root, 'public');
+
+    await mkdir(distDir, { recursive: true });
+    await mkdir(path.join(publicDir, 'c'), { recursive: true });
+    await writeFile(
+      path.join(distDir, '.jiso-site-routes.json'),
+      `${JSON.stringify({ routes: ['/', '/missing'] })}\n`,
+    );
+    await writeFile(
+      path.join(distDir, 'index.html'),
+      '<!doctype html><html><body><h1>Home</h1></body></html>',
+    );
+
+    expect(() => siteDocumentRouteEntries(distDir)).toThrow(
+      ".jiso-site-routes.json declares '/missing'",
+    );
+    await expect(
+      createSiteDistApp({ distDir, publicDir, server: { ...server, ...serverAppShell } }),
+    ).rejects.toThrow(".jiso-site-routes.json declares '/missing'");
   });
 });

@@ -912,6 +912,10 @@ Static export inventory/manifest projection now lives in `packages/server/src/st
 and response-header snapshots in `static-export-headers.ts`, leaving `static-export-types.ts` as a
 type/contract module while the app-shell static-export public subpath forwards from the focused
 result owner.
+Docs-site app-shell adoption now has a build-authored `.jiso-site-routes.json` route manifest:
+`site/scripts/build.mjs` records the exact HTML routes it writes, and `site/scripts/app-shell.mjs`
+uses that manifest for SPEC §9.5 export replay before falling back to recursive fixture discovery,
+so stale `index.html` files in `dist` cannot silently become exported docs routes.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -934,6 +938,14 @@ Latest evidence:
   `pnpm exec tsc --noEmit --pretty false`;
   `pnpm run check:build`;
   exact `pnpm exec vp check packages/server/src/static-export-headers.ts packages/server/src/static-export-result.ts packages/server/src/static-export-types.ts packages/server/src/static-export-document.ts packages/server/src/static-export-output.ts packages/server/src/vite-static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`.
+- Round254 docs-site route-manifest export adoption:
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm run check:build`;
+  `pnpm --filter @jiso/site run build`;
+  `node site/scripts/export-static.mjs --skip-build --skip-gallery`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs site/scripts/build.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

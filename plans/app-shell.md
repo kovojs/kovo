@@ -910,3 +910,21 @@ Round253 static-export result boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm run check:build`
 - `pnpm exec vp check packages/server/src/static-export-headers.ts packages/server/src/static-export-result.ts packages/server/src/static-export-types.ts packages/server/src/static-export-document.ts packages/server/src/static-export-output.ts packages/server/src/vite-static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+
+Round254 docs-site route-manifest export adoption evidence:
+
+- The docs build now emits `.jiso-site-routes.json` with the exact route documents it wrote, and
+  `site/scripts/app-shell.mjs` consumes that manifest before falling back to recursive fixture
+  discovery. SPEC §9.5 static export replay therefore exports the built docs route set rather than
+  stale `index.html` files left in `dist/`; malformed or missing manifest targets fail before
+  app-shell replay.
+- `site/scripts/app-shell.test.mjs` proves manifest-backed docs export ignores stale route files,
+  rewrites/copies `/c/` modules through the public app-shell path, runs the docs export command,
+  and rejects bad manifest entries before export.
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm run check:build`
+- `pnpm --filter @jiso/site run build`
+- `node site/scripts/export-static.mjs --skip-build --skip-gallery`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs site/scripts/build.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

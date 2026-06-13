@@ -12,6 +12,7 @@ const defaultServerAppShellModulePath = path.join(
   repoRoot,
   'dist/server/src/api/app-shell/index.mjs',
 );
+const routeManifestFile = '.jiso-site-routes.json';
 
 const textEncoder = new TextEncoder();
 
@@ -42,9 +43,7 @@ async function loadDefaultServerApi() {
 }
 
 export function siteDocumentRoutes(distDir = defaultDistDir, moduleHrefs = new Map(), server) {
-  return findHtmlIndexFiles(distDir).map((file) => {
-    const routePath = routePathForIndexFile(distDir, file);
-
+  return siteDocumentRouteEntries(distDir).map(({ file, routePath }) => {
     return server.route(routePath, {
       meta: { title: routePath === '/' ? 'Jiso' : `Jiso ${routePath}` },
       page() {
@@ -63,6 +62,16 @@ export function siteDocumentRoutes(distDir = defaultDistDir, moduleHrefs = new M
       },
     });
   });
+}
+
+export function siteDocumentRouteEntries(distDir = defaultDistDir) {
+  const manifest = siteRouteManifestEntries(distDir);
+  if (manifest) return manifest;
+
+  return findHtmlIndexFiles(distDir).map((file) => ({
+    file,
+    routePath: routePathForIndexFile(distDir, file),
+  }));
 }
 
 function registerPublicClientModules(clientModules, publicDir) {
@@ -105,6 +114,7 @@ function findHtmlIndexFiles(root) {
     for (const entry of sortedDirectoryEntries(directory)) {
       const fullPath = path.join(directory, entry.name);
       if (entry.isDirectory()) {
+        if (entry.name.startsWith('.')) continue;
         walk(fullPath);
         continue;
       }
@@ -117,6 +127,41 @@ function findHtmlIndexFiles(root) {
   return found;
 }
 
+function siteRouteManifestEntries(root) {
+  const manifestPath = path.join(root, routeManifestFile);
+  if (!existsSync(manifestPath)) return undefined;
+
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (!manifest || !Array.isArray(manifest.routes)) {
+    throw new Error(`site app shell: ${routeManifestFile} must contain a routes array.`);
+  }
+
+  const entries = [];
+  const seen = new Set();
+
+  for (const route of manifest.routes) {
+    const routePath = normalizeManifestRoute(route);
+    if (seen.has(routePath)) {
+      throw new Error(`site app shell: duplicate route '${routePath}' in ${routeManifestFile}.`);
+    }
+    seen.add(routePath);
+
+    const file = indexFileForRoutePath(root, routePath);
+    if (!existsSync(file)) {
+      throw new Error(
+        `site app shell: ${routeManifestFile} declares '${routePath}' but ${path.relative(
+          root,
+          file,
+        )} does not exist.`,
+      );
+    }
+
+    entries.push({ file, routePath });
+  }
+
+  return entries;
+}
+
 function sortedDirectoryEntries(directory) {
   return readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
     left.name.localeCompare(right.name),
@@ -127,6 +172,28 @@ function routePathForIndexFile(root, file) {
   const relativeDir = path.relative(root, path.dirname(file));
   if (!relativeDir) return '/';
   return `/${relativeDir.split(path.sep).join('/')}`;
+}
+
+function indexFileForRoutePath(root, routePath) {
+  return path.join(root, routePath.replace(/^\//, ''), 'index.html');
+}
+
+function normalizeManifestRoute(route) {
+  if (typeof route !== 'string') {
+    throw new Error('site app shell: route manifest entries must be strings.');
+  }
+  if (!route.startsWith('/') || route.includes('?') || route.includes('#')) {
+    throw new Error(
+      `site app shell: route manifest entry '${route}' must be an absolute pathname without search or hash.`,
+    );
+  }
+
+  const normalized = route.replace(/\/+$/, '') || '/';
+  if (normalized.includes('//') || normalized.split('/').includes('..')) {
+    throw new Error(`site app shell: route manifest entry '${route}' is not a safe route path.`);
+  }
+
+  return normalized;
 }
 
 function contentHash(source) {
