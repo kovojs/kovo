@@ -9,18 +9,14 @@ import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
 
 export interface InlineQueryEventDetail {
-  queries?: unknown;
+  queries: QueryElementChunkLike[];
 }
 
 export interface InlineQueryEvent {
-  detail?: unknown;
+  detail?: InlineQueryEventDetail;
 }
 
 export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQueryEvent> {}
-
-interface InlineQueryWireEventDetail {
-  queries: QueryElementChunkLike[];
-}
 
 export interface ApplyInlineQueryEventOptions {
   applyQuery?: QueryApplyInterposition;
@@ -88,7 +84,7 @@ function queryChunksFromInlineEvent(
   return chunks;
 }
 
-function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryWireEventDetail {
+function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryEventDetail {
   if (typeof value !== 'object' || value === null) return false;
 
   const detail = value as InlineQueryEventDetail;

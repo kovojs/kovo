@@ -1,7 +1,7 @@
 import { createQueryStore } from './index.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
 import { applyMutationResponseToDom } from './mutation-response-dom.js';
-import { applyInlineQueryEventToRuntime } from './query-events.js';
+import { applyInlineQueryEventToRuntime, type InlineQueryEvent } from './query-events.js';
 
 interface InlineResponseApplyAssertions {
   expect: typeof import('vitest').expect;
@@ -81,7 +81,7 @@ export async function expectInlineResponseApplyParity(
     importModule: globalRecord.__jisoInlineImport,
   };
   const listeners = new Map<string, (event: unknown) => void>();
-  const dispatched: Array<{ detail?: unknown }> = [];
+  const dispatched: InlineQueryEvent[] = [];
   interface InlineParityTarget {
     html?: string;
     innerHTML?: string;
@@ -107,7 +107,7 @@ export async function expectInlineResponseApplyParity(
       readonly detail: unknown;
       readonly type: string;
 
-      constructor(type: string, init?: { detail?: unknown }) {
+      constructor(type: string, init?: InlineQueryEvent) {
         this.detail = init?.detail;
         this.type = type;
       }
@@ -123,7 +123,7 @@ export async function expectInlineResponseApplyParity(
     globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
       listeners.set(type, listener);
     };
-    globalRecord.dispatchEvent = (event: { detail?: unknown }) => {
+    globalRecord.dispatchEvent = (event: InlineQueryEvent) => {
       dispatched.push(event);
       return true;
     };

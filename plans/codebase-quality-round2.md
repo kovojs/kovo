@@ -1851,6 +1851,20 @@ packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-
       full runtime `pnpm exec vitest --run packages/runtime/src`, and `pnpm --filter
       @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+      Evidence 2026-06-13 round301 runtime: `packages/runtime/src/query-events.ts` now types
+      `InlineQueryEventDetail` as the batched `fw-query` element-chunk payload emitted by the
+      inline response helper, instead of the old `queries?: unknown` compatibility shape.
+      `packages/runtime/src/query-events.test.ts` type-pins removed runtime-value and single-query
+      event payloads while preserving runtime ignores for malformed external events, and
+      `packages/runtime/src/inline-loader-response-apply-fixture.ts` now consumes the narrowed
+      event type in the readable/minified/generated inline response parity fixture. Verified by
+      `pnpm exec vitest --run packages/runtime/src/query-events.test.ts
+packages/runtime/src/loader-query-hydration.test.ts
+packages/runtime/src/loader-query-apply-interposition.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts`, `pnpm exec tsc --noEmit --pretty
+false`, and exact `pnpm exec vp check packages/runtime/src/query-events.ts
+packages/runtime/src/query-events.test.ts
+packages/runtime/src/inline-loader-response-apply-fixture.ts`.
       Evidence 2026-06-13 round287 runtime closure: pure delegated handler dispatch, chaining,
       state queueing, param coercion, state hydration, and failure-persistence coverage moved from
       `packages/runtime/src/delegated-runtime-integration.test.ts` into the handler owner suite

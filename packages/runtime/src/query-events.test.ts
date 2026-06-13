@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyInlineQueryEventToRuntime,
   installInlineQueryEventHydration,
+  type InlineQueryEvent,
   type QueryEventHydrationTarget,
 } from './query-events.js';
 import { applyQueryChunksToRuntime } from './query-apply.js';
@@ -191,28 +192,31 @@ describe('inline query events', () => {
   it('ignores removed inline query compatibility events', () => {
     const store = createQueryStore();
 
+    const removedRuntimeShape: InlineQueryEvent = {
+      detail: {
+        // @ts-expect-error SPEC.md §9.1: inline query events carry batched
+        // fw-query element chunks, not runtime query values.
+        body: '{"count":3}',
+        key: 'cart:c1',
+        name: 'cart',
+      },
+    };
+    const removedSingleQueryShape: InlineQueryEvent = {
+      detail: {
+        // @ts-expect-error SPEC.md §9.1: a lone fw-query element-like payload
+        // is not the batched inline loader event contract.
+        attrs: ' name="cart" key="cart:c1"',
+        content: '{"count":3}',
+      },
+    };
+
     expect(
-      applyInlineQueryEventToRuntime(
-        {
-          detail: {
-            body: '{"count":3}',
-            key: 'cart:c1',
-            name: 'cart',
-          },
-        },
-        { store },
-      ),
+      applyInlineQueryEventToRuntime(removedRuntimeShape as unknown as InlineQueryEvent, { store }),
     ).toEqual([]);
     expect(
-      applyInlineQueryEventToRuntime(
-        {
-          detail: {
-            attrs: ' name="cart" key="cart:c1"',
-            content: '{"count":3}',
-          },
-        },
-        { store },
-      ),
+      applyInlineQueryEventToRuntime(removedSingleQueryShape as unknown as InlineQueryEvent, {
+        store,
+      }),
     ).toEqual([]);
 
     // SPEC.md §9.1/§9.4: the inline query event contract is the batched
@@ -224,12 +228,12 @@ describe('inline query events', () => {
   it('installs disposable inline query event hydration listeners', () => {
     const store = createQueryStore();
     const onAppliedQueries = vi.fn();
-    const listeners = new Map<string, (event: { detail?: unknown }) => void>();
+    const listeners = new Map<string, (event: InlineQueryEvent) => void>();
     const target: QueryEventHydrationTarget = {
-      addEventListener(type: string, listener: (event: { detail?: unknown }) => void) {
+      addEventListener(type: string, listener: (event: InlineQueryEvent) => void) {
         listeners.set(type, listener);
       },
-      removeEventListener(type: string, listener: (event: { detail?: unknown }) => void) {
+      removeEventListener(type: string, listener: (event: InlineQueryEvent) => void) {
         if (listeners.get(type) === listener) listeners.delete(type);
       },
     };
