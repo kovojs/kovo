@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { applyMutationResponseToDom, createQueryStore } from './index.js';
 import * as runtime from './index.js';
 import {
+  applyMutationResponseBodyToRuntime,
   applyMutationResponseChunksToRuntime,
   applyMutationResponseToDom as applyMutationResponseToDomFromMutationModule,
 } from './apply-mutation-response.js';
@@ -133,6 +134,7 @@ describe('mutation response wire chunks', () => {
 
   it('exports only the DOM mutation response helper through the runtime barrel', () => {
     expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
+    expect(Object.hasOwn(runtime, 'applyMutationResponseBodyToRuntime')).toBe(false);
     expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromMutationModule);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);
   });
@@ -195,10 +197,7 @@ describe('mutation response wire chunks', () => {
     ].join('');
 
     // SPEC.md §9.1: mutation responses carry query patches and fragment patches together.
-    const storeOnlyApplied = applyMutationResponseChunksToRuntime(
-      readMutationResponseBodyChunks(body),
-      { store: storeOnly },
-    );
+    const storeOnlyApplied = applyMutationResponseBodyToRuntime({ body, store: storeOnly });
     const domApplied = applyMutationResponseToDom({ body, root, store: domStore });
 
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
@@ -251,11 +250,12 @@ describe('mutation response wire chunks', () => {
     // SPEC.md §9.1: store-only mutation responses and runtime apply consume the
     // same fw-query wire chunks, so interposed values must not drift by entrypoint.
     const body = '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>';
-    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
+    const applied = applyMutationResponseBodyToRuntime({
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };
       },
+      body,
       beforeApplyQueries,
       store,
     });
@@ -302,10 +302,10 @@ describe('mutation response wire chunks', () => {
     const plan = vi.fn();
 
     store.subscribe('cart', plan);
-    const applied = applyMutationResponseChunksToRuntime(
-      readMutationResponseBodyChunks('<fw-query name="cart">{"count":6}</fw-query>'),
-      { store },
-    );
+    const applied = applyMutationResponseBodyToRuntime({
+      body: '<fw-query name="cart">{"count":6}</fw-query>',
+      store,
+    });
 
     expect(applied).toEqual({ fragments: [], queries: ['cart'] });
     expect(store.get('cart')).toEqual({ count: 6 });

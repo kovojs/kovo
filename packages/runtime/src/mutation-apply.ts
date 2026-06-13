@@ -1,5 +1,5 @@
 import {
-  applyMutationResponseChunksToRuntime,
+  applyMutationResponseBodyToRuntime,
   type AppliedMutationResponse,
   type ApplyMutationResponseToDomOptions,
 } from './apply-mutation-response.js';
@@ -11,7 +11,6 @@ import { isFailedMutationResponse, type FetchedEnhancedMutation } from './mutati
 import type { MutationChangeRecord } from './optimism.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
-import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 export interface EnhancedMutationDomApplyOptions {
   broadcast?: MutationBroadcast;
@@ -42,21 +41,19 @@ export function applyFetchedEnhancedMutationResponseToDom(
 ): EnhancedMutationAppliedResult {
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
   // same-user broadcast all share the mutation response body application path.
-  const applied = applyMutationResponseChunksToRuntime(
-    readMutationResponseBodyChunks(fetched.body, options.onError),
-    {
-      ...definedProps({
-        applyQuery: hooks.applyQuery,
-        beforeApplyQueries: hooks.beforeApplyQueries,
-        islandSignalScope: options.islandSignalScope,
-        morph: options.morph,
-        onError: options.onError,
-        queryPlans: options.queryPlans,
-      }),
-      root: options.root,
-      store: options.store,
-    },
-  );
+  const applied = applyMutationResponseBodyToRuntime({
+    ...definedProps({
+      applyQuery: hooks.applyQuery,
+      beforeApplyQueries: hooks.beforeApplyQueries,
+      islandSignalScope: options.islandSignalScope,
+      morph: options.morph,
+      onError: options.onError,
+      queryPlans: options.queryPlans,
+    }),
+    body: fetched.body,
+    root: options.root,
+    store: options.store,
+  });
   publishSuccessfulMutation(options, fetched);
 
   return {

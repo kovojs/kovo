@@ -40,6 +40,11 @@ type ApplyMutationResponseChunksToRuntimeBaseOptions = Omit<
 export type ApplyMutationResponseChunksToRuntimeOptions =
   ApplyMutationResponseChunksToRuntimeBaseOptions;
 
+export type ApplyMutationResponseBodyToRuntimeOptions =
+  ApplyMutationResponseChunksToRuntimeBaseOptions & {
+    body: string;
+  };
+
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions & { root: MorphRoot },
@@ -85,12 +90,27 @@ export function applyMutationResponseChunksToRuntime(
   };
 }
 
-export function applyMutationResponseToDom(
-  options: ApplyMutationResponseToDomOptions,
-): AppliedMutationResponseToDom {
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions & { root: MorphRoot },
+): AppliedMutationResponseToDom;
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions & { root?: undefined },
+): AppliedMutationResponse;
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions,
+): AppliedMutationResponse | AppliedMutationResponseToDom;
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions,
+): AppliedMutationResponse | AppliedMutationResponseToDom {
   const { body, ...applyOptions } = options;
   return applyMutationResponseChunksToRuntime(
     readMutationResponseBodyChunks(body, options.onError),
     applyOptions,
   );
+}
+
+export function applyMutationResponseToDom(
+  options: ApplyMutationResponseToDomOptions,
+): AppliedMutationResponseToDom {
+  return applyMutationResponseBodyToRuntime(options);
 }
