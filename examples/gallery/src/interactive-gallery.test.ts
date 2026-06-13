@@ -22,6 +22,7 @@ interface FakeElement {
   close?: () => void;
   hidden?: boolean;
   readonly setAttribute: (name: string, value: string) => void;
+  scrollTop?: number;
   tabIndex?: number;
   textContent?: string;
   value?: string;
@@ -166,6 +167,7 @@ describe('compiled interactive gallery demos', () => {
     const popover = readGenerated('popover-demo.tsx');
     const progress = readGenerated('progress-demo.tsx');
     const radioGroup = readGenerated('radio-group-demo.tsx');
+    const scrollArea = readGenerated('scroll-area-demo.tsx');
     const select = readGenerated('select-demo.tsx');
     const slider = readGenerated('slider-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
@@ -411,6 +413,14 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$input_click_2"/,
     );
 
+    expect(scrollArea).toContain('data-gallery-interactive="scroll-area"');
+    expect(scrollArea).toContain('fw-state=\'{"position":"top"}\'');
+    expect(scrollArea).toContain('scrollAreaViewportAttributes({');
+    expect(scrollArea).toContain('scrollAreaThumbAttributes({');
+    expect(scrollArea).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js\?v=[0-9a-f]{8}#GalleryScrollAreaDemo\$button_click"/,
+    );
+
     expect(select).toContain('data-gallery-interactive="select"');
     expect(select).toContain('fw-state=\'{"value":"standard"}\'');
     expect(select).toContain('selectTriggerAttributes({');
@@ -508,6 +518,7 @@ describe('compiled interactive gallery demos', () => {
     const popover = evaluateClientModule('popover-demo.client.js');
     const progress = evaluateClientModule('progress-demo.client.js');
     const radioGroup = evaluateClientModule('radio-group-demo.client.js');
+    const scrollArea = evaluateClientModule('scroll-area-demo.client.js');
     const select = evaluateClientModule('select-demo.client.js');
     const slider = evaluateClientModule('slider-demo.client.js');
     const switchDemo = evaluateClientModule('switch-demo.client.js');
@@ -903,6 +914,14 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(radioGroupState).toEqual({ value: 'email' });
 
+    const scrollAreaState = { position: 'top' };
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: scrollAreaState,
+    });
+    expect(scrollAreaState).toEqual({ position: 'end' });
+
     const selectState = { value: 'standard' };
     clientHandler(select, 'GallerySelectDemo$select_change')(new Event('change'), {
       params: {},
@@ -1017,6 +1036,9 @@ describe('compiled interactive gallery demos', () => {
           'gallery-navigation-docs-link',
           'gallery-navigation-products-content',
           'gallery-navigation-viewport',
+          'gallery-scroll-area-toggle',
+          'gallery-scroll-area-thumb',
+          'gallery-scroll-area-viewport',
           'gallery-command-input',
           'gallery-command-listbox-item-1',
           'gallery-command-dialog',
@@ -1035,6 +1057,7 @@ describe('compiled interactive gallery demos', () => {
           '[data-demo-state="menubar-open"]',
           '[data-demo-state="navigation-open"]',
           '[data-demo-state="navigation-value"]',
+          '[data-demo-state="scroll-area-position"]',
           '[data-demo-state="command-input"]',
           '[data-demo-state="command-value"]',
           '[data-demo-state="toolbar-active"]',
@@ -1152,6 +1175,28 @@ describe('compiled interactive gallery demos', () => {
       });
       expect(navClick.defaultPrevented).toBe(true);
       expect(selector(document, '[data-demo-state="navigation-value"]').textContent).toBe('docs');
+
+      const scrollArea = evaluateClientModule('scroll-area-demo.client.js', { document });
+      const scrollAreaState = { position: 'top' };
+      clientHandler(scrollArea, 'GalleryScrollAreaDemo$button_click')(new Event('click'), {
+        params: {},
+        signal,
+        state: scrollAreaState,
+      });
+      expect(scrollAreaState).toEqual({ position: 'end' });
+      expect(element(document, 'gallery-scroll-area-viewport')).toMatchObject({
+        scrollTop: 160,
+      });
+      expect(element(document, 'gallery-scroll-area-viewport').attrs['data-scroll-position']).toBe(
+        'end',
+      );
+      expect(element(document, 'gallery-scroll-area-thumb').attrs['data-scroll-position']).toBe(
+        'end',
+      );
+      expect(element(document, 'gallery-scroll-area-toggle').attrs['aria-pressed']).toBe('true');
+      expect(selector(document, '[data-demo-state="scroll-area-position"]').textContent).toBe(
+        'end',
+      );
 
       const command = evaluateClientModule('command-demo.client.js', { document });
       const commandState = {

@@ -45,6 +45,7 @@ const demos = [
   'popover-demo',
   'progress-demo',
   'radio-group-demo',
+  'scroll-area-demo',
   'select-demo',
   'slider-demo',
   'switch-demo',

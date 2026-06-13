@@ -55,7 +55,11 @@ Implemented areas:
 - The compiled interactive gallery now has static docs deployment wiring:
   `examples/gallery/src/app-shell.ts` serves `/interactive`, registers the checked-in generated
   client modules under their versioned `/c/` refs, and `examples/gallery/vite.config.ts` exposes a
-  `vp run export` task that writes the route plus all generated client modules to `dist/`.
+  `vp run export` task that writes the route plus all generated client modules to `dist/` while
+  tracking generated `.js` client modules as task inputs.
+- The compiled interactive gallery now includes a scroll-area demo with browser-backed generated
+  handler coverage for `scrollTop`, viewport labelling/focusability, scrollbar/thumb data attrs,
+  static docs wiring, and generated-client DOM sync.
 - G5 exported primitive attrs inventory is closed: `examples/gallery/src/merge-fixtures.test.tsx`
   renders inline merge goldens for all 134 exported primitive `*Attributes` builders, with author
   stress attrs, merged HTML, and SPEC §4.6 diagnostic checks.
@@ -103,6 +107,10 @@ Recent gates:
 - `pnpm --filter @jiso/example-gallery run test:browser`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`
 - `pnpm exec vp check examples/gallery/scripts/export-static.mjs examples/gallery/src/app-shell.ts examples/gallery/src/index.ts examples/gallery/src/interactive-gallery.test.ts examples/gallery/vite.config.ts plans/ui.md IMPLEMENT_v1.md`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/scroll-area-demo.tsx examples/gallery/src/generated/interactive/scroll-area-demo.tsx examples/gallery/src/generated/interactive/scroll-area-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/vite.config.ts plans/ui.md IMPLEMENT_v1.md`
 
 ## Open Work
 
@@ -147,6 +155,8 @@ Gallery:
   merge work scoped to new primitive exports or compiler/runtime diagnostic parity.
 - Progress and meter now have compiled interactive gallery coverage; continue extending remaining
   non-commanding display/native families only where browser-observable state can move.
+- Scroll-area now has compiled interactive gallery and Chromium coverage for browser-observable
+  viewport scroll movement plus generated-client DOM sync.
 - G6 docs deployment wiring now exports the compiled `/interactive` route and generated client
   module set; continue full browser-backed stateful-family coverage. Generated client DOM
   ref/export inventory is covered for every checked-in compiled interactive demo.

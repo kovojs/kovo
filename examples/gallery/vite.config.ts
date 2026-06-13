@@ -7,6 +7,7 @@ export default defineConfig({
         command: 'node scripts/export-static.mjs',
         input: [
           { pattern: 'scripts/export-static.mjs', base: 'workspace' },
+          { pattern: 'src/**/*.js', base: 'workspace' },
           { pattern: 'src/**/*.ts', base: 'workspace' },
           { pattern: 'src/**/*.tsx', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },

@@ -66,6 +66,9 @@ import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
 import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as scrollAreaClient from './generated/interactive/scroll-area-demo.client.js';
+import { GalleryScrollAreaDemo } from './generated/interactive/scroll-area-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as selectClient from './generated/interactive/select-demo.client.js';
 import { GallerySelectDemo } from './generated/interactive/select-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -124,6 +127,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
   '/c/examples/gallery/src/generated/interactive/progress-demo.client.js': progressClient,
   '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
+  '/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js': scrollAreaClient,
   '/c/examples/gallery/src/generated/interactive/select-demo.client.js': selectClient,
   '/c/examples/gallery/src/generated/interactive/slider-demo.client.js': sliderClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
@@ -908,6 +912,61 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentInput.getAttribute('aria-valuetext')).toBe('75 percent');
       expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');
       expect(currentOutput.textContent).toBe('75');
+    });
+  });
+
+  it('updates scroll-area viewport position and primitive state through a generated handler', async () => {
+    const root = mountInteractiveDemo(GalleryScrollAreaDemo);
+    const viewport = required(root.querySelector<HTMLElement>('#gallery-scroll-area-viewport'));
+    const scrollbar = required(root.querySelector<HTMLElement>('#gallery-scroll-area-scrollbar'));
+    const thumb = required(root.querySelector<HTMLElement>('#gallery-scroll-area-thumb'));
+    const corner = required(root.querySelector<HTMLElement>('#gallery-scroll-area-corner'));
+    const button = required(root.querySelector<HTMLButtonElement>('#gallery-scroll-area-toggle'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="scroll-area-position"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"position":"top"}');
+    expect(root.getAttribute('data-scrollbars')).toBe('vertical');
+    expect(viewport.getAttribute('role')).toBe('region');
+    expect(viewport.getAttribute('aria-label')).toBe('Release notes');
+    expect(viewport.tabIndex).toBe(0);
+    expect(viewport.scrollTop).toBe(0);
+    expect(viewport.getAttribute('data-scroll-position')).toBe('top');
+    expect(scrollbar.getAttribute('aria-hidden')).toBe('true');
+    expect(scrollbar.getAttribute('data-orientation')).toBe('vertical');
+    expect(scrollbar.getAttribute('data-state')).toBe('visible');
+    expect(thumb.getAttribute('data-scroll-position')).toBe('top');
+    expect(corner.hidden).toBe(true);
+    expect(button.getAttribute('aria-controls')).toBe('gallery-scroll-area-viewport');
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(output.textContent).toBe('top');
+
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentViewport = required(
+        root.querySelector<HTMLElement>('#gallery-scroll-area-viewport'),
+      );
+      const currentThumb = required(root.querySelector<HTMLElement>('#gallery-scroll-area-thumb'));
+      const currentButton = required(
+        root.querySelector<HTMLButtonElement>('#gallery-scroll-area-toggle'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="scroll-area-position"]'),
+      );
+
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"position":"end"}');
+      expect(currentViewport.scrollTop).toBe(160);
+      expect(currentViewport.getAttribute('data-scroll-position')).toBe('end');
+      expect(currentThumb.getAttribute('data-scroll-position')).toBe('end');
+      expect(currentButton.getAttribute('aria-pressed')).toBe('true');
+      expect(currentButton.textContent).toBe('Back to top');
+      expect(currentOutput.textContent).toBe('end');
     });
   });
 

@@ -20,6 +20,7 @@ import { GalleryOtpFieldDemo } from './generated/interactive/otp-field-demo.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
+import { GalleryScrollAreaDemo } from './generated/interactive/scroll-area-demo.js';
 import { GallerySelectDemo } from './generated/interactive/select-demo.js';
 import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
 import { GallerySwitchDemo } from './generated/interactive/switch-demo.js';
@@ -141,6 +142,11 @@ export const interactiveGalleryDemos = Object.freeze([
     name: 'radio-group-demo',
     render: renderInteractiveDemo(GalleryRadioGroupDemo),
     title: 'Radio Group',
+  },
+  {
+    name: 'scroll-area-demo',
+    render: renderInteractiveDemo(GalleryScrollAreaDemo),
+    title: 'Scroll Area',
   },
   {
     name: 'select-demo',
