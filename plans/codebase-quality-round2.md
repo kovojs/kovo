@@ -569,6 +569,17 @@ parity.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
+      Evidence 2026-06-13 round259: `packages/runtime/src/wire-parser.ts` deleted the unused
+      standalone `readFragmentChunks` decoded-body helper, leaving fragment response decoding on
+      `readMutationResponseBodyChunks` and private fragment element helpers only.
+      `packages/runtime/src/wire-parser.test.ts` now asserts `readFragmentChunks` is not exported
+      from the parser module and proves malformed/target-filtered fragment decoding through the
+      canonical mutation response body reader. Focused parser/apply/inline-loader files were
+      verified with `pnpm exec vitest --run`; the full runtime source suite was verified with
+      `pnpm exec vitest --run packages/runtime/src`. Inline generation was verified with
+      `pnpm --filter @jiso/runtime run check:inline-loader`. Formatting/lint/type evidence:
+      targeted `pnpm exec vp check`, `pnpm exec tsc --noEmit --pretty false`, and
+      `git diff --check`.
 - [x] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
       Evidence 2026-06-13: `packages/runtime/src/inline-loader-build.ts` generates
       `inlineJisoLoaderInstallerReadableSource` through

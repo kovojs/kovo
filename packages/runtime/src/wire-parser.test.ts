@@ -4,7 +4,6 @@ import {
   deferredStreamChunks,
   readAttribute,
   readElementChunks,
-  readFragmentChunks,
   readInlineMutationResponseBodyChunks,
   readMutationResponseBodyChunks,
   readMutationResponseElementChunks,
@@ -22,7 +21,7 @@ describe('wire parser HTML entity handling', () => {
     // readers; individual fragment element decoding is not a compatibility API.
     expect(Object.hasOwn(wireParserModule, 'readFragmentElementChunk')).toBe(false);
     expect(Object.hasOwn(wireParserModule, 'malformedFragmentError')).toBe(false);
-    expect(wireParserModule.readFragmentChunks).toBe(readFragmentChunks);
+    expect(Object.hasOwn(wireParserModule, 'readFragmentChunks')).toBe(false);
     expect(wireParserModule.readMutationResponseBodyChunks).toBe(readMutationResponseBodyChunks);
   });
 
@@ -294,13 +293,13 @@ describe('wire parser HTML entity handling', () => {
     const onError = vi.fn();
 
     expect(
-      readFragmentChunks(
+      readMutationResponseBodyChunks(
         [
           '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
           '<fw-fragment target="cart-list"><li>stale</li>',
         ].join('\n'),
         onError,
-      ),
+      ).fragments,
     ).toEqual([{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
@@ -317,8 +316,7 @@ describe('wire parser HTML entity handling', () => {
 
     // SPEC.md §9.1: response apply and fragment-only readers consume the same
     // decoded fragment shape so target filtering and modes cannot drift.
-    expect(readMutationResponseBodyChunks(body).fragments).toEqual(readFragmentChunks(body));
-    expect(readFragmentChunks(body)).toEqual([
+    expect(readMutationResponseBodyChunks(body).fragments).toEqual([
       { html: '<li>new</li>', mode: 'append', target: 'cart-list' },
       { html: '<span>$7</span>', target: 'cart-total' },
     ]);

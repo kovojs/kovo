@@ -249,17 +249,6 @@ function malformedQueryError(reason: string): Error {
   return new Error(`Malformed fw-query chunk: ${reason}`);
 }
 
-export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter): FragmentChunk[] {
-  return readFragmentChunksFromElements(
-    readElementChunks(body, 'fw-fragment', {
-      nested: true,
-      onMalformed(reason) {
-        reportRuntimeError(onError, malformedFragmentError(reason));
-      },
-    }),
-  );
-}
-
 function readFragmentElementChunk(
   chunk: Pick<ElementChunk, 'attrs' | 'content'>,
 ): FragmentChunk | undefined {
