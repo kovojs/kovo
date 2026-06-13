@@ -2817,6 +2817,56 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks local query-loader helpers receiving assigned carrier aliases as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+            '}',
+            '',
+            'function runReport(context: unknown): Promise<unknown[]> {',
+            '  return Promise.resolve([]);',
+            '}',
+            '',
+            'export const productQuery = query("product/local-assigned-carrier-helper", {',
+            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '    let context;',
+            '    context = { db };',
+            '    let fakeContext;',
+            '    fakeContext = { db: fake };',
+            '    await runReport(fakeContext);',
+            '    return runReport(context);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to local helper runReport().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+        ],
+        query: 'product/local-assigned-carrier-helper',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('folds local query-loader helper reads into query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -5138,6 +5188,51 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project helpers receiving assigned typed Drizzle carrier aliases as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'declare const auditServices: {',
+            '  write(context: unknown): Promise<void>;',
+            '};',
+            '',
+            'export async function addItem(db: PgDatabase, fake: FakeDb) {',
+            '  let context;',
+            '  context = { db };',
+            '  let fakeContext;',
+            '  fakeContext = { db: fake };',
+            '  await auditServices.write(fakeContext);',
+            '  await auditServices.write(context);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks project local helpers receiving typed Drizzle carrier aliases as FW406', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -5175,6 +5270,51 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:15',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks project local helpers receiving assigned typed Drizzle carrier aliases as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '}',
+            '',
+            'function writeAudit(context: unknown): Promise<void> {',
+            '  return Promise.resolve(context);',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase, fake: FakeDb) {',
+            '  let context;',
+            '  context = { db };',
+            '  let fakeContext;',
+            '  fakeContext = { db: fake };',
+            '  await writeAudit(fakeContext);',
+            '  await writeAudit(context);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
           },
         ],
       },
@@ -6625,6 +6765,44 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks source query-loader helpers receiving assigned carrier aliases as FW406', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const usersQuery = query("users/source-assigned-carrier-helper", {',
+          '  load(_input, db, fake) {',
+          '    let context;',
+          '    context = { db };',
+          '    let fakeContext;',
+          '    fakeContext = { db: fake };',
+          '    runReport(fakeContext);',
+          '    return runReport(context);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to helper runReport().',
+            severity: 'warn',
+            site: 'user.queries.ts:1',
+          },
+        ],
+        query: 'users/source-assigned-carrier-helper',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:1',
+      },
+    ]);
+  });
+
   it('marks external helpers receiving a Drizzle receiver as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -6683,6 +6861,38 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:3',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks external helpers receiving assigned Drizzle carrier aliases as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export async function addItem(db, fake) {',
+          '  let context;',
+          '  context = { db };',
+          '  let fakeContext;',
+          '  fakeContext = { db: fake };',
+          '  await writeAudit(fakeContext);',
+          '  await writeAudit(context);',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
           },
         ],
       },

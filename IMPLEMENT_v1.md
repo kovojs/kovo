@@ -338,6 +338,15 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       extraction and project query-loader diagnostics. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-13: helper handoffs through assigned receiver carrier variables
+      such as `let context; context = { db }` now degrade to FW406 in source/project touch
+      extraction and query-loader diagnostics, while assigned fake/lookalike carriers remain
+      invisible. Package and real `drizzle-orm` conformance tests pin the behavior. Same-session
+      evidence: `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-13: source-mode body-local receiver aliases such as
       `const writer = db`, assignment aliases, and first-level carrier member aliases now degrade
       visible touch/query-loader surfaces to FW406 instead of fabricating reads/writes, while fake

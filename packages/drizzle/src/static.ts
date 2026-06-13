@@ -5355,6 +5355,24 @@ function receiverCarrierSymbolKeysForBody(
         changed = true;
       }
     }
+
+    for (const expression of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      if (!isTouchBodyNode(expression, body)) continue;
+      if (expression.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+
+      const left = unwrappedStaticExpressionNode(expression.getLeft());
+      if (!Node.isIdentifier(left)) continue;
+
+      const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(left));
+      if (!symbolKey || carrierSymbolKeys.has(symbolKey)) continue;
+
+      if (
+        receiverReferenceInArgument(expression.getRight(), isReceiverIdentifier, carrierSymbolKeys)
+      ) {
+        carrierSymbolKeys.add(symbolKey);
+        changed = true;
+      }
+    }
   }
 
   return carrierSymbolKeys;
