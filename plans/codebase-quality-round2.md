@@ -253,9 +253,10 @@ Latest focused evidence:
 
 Current state:
 
-- Static export output, asset planning, Vite build output, request construction, document replay,
-  document reference discovery, client-module replay, and compile-diagnostic blocking have been
-  split into focused modules.
+- Static export output, asset planning, Vite build output, request construction,
+  compile-diagnostic blocking, and document/client-module replay have been split into focused
+  modules. `static-export-document.ts` owns route-document plus discovered `/c/` module replay,
+  while `static-export-document-refs.ts` owns HTML/Link reference discovery.
 - App request document assembly and mutation request handling have been subtracted from the main
   dispatcher.
 - Matched SPEC §9.5 dispatch branches now live in `app-dispatch.ts`, leaving `app-request.ts`
@@ -304,7 +305,11 @@ Latest focused evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 - `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/deferred-stream.test.ts`
 

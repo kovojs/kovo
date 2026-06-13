@@ -358,6 +358,18 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
       `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: `packages/server/src/static-export-document.ts` now owns
+      both SPEC §9.5 route-document replay and discovered same-origin `/c/` client-module replay
+      plus same-output-path query-version drift diagnostics, while
+      `static-export-document-refs.ts` remains the shared HTML/Link reference scanner. The
+      redundant `static-export-client-module-artifacts.ts` module was deleted and the document
+      boundary test was renamed to `static-export-document.test.ts`. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src`,
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`,
+      `pnpm exec tsc --noEmit --pretty false`,
+      `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-13: Vite compiled `/c/` output writes now live in
       `packages/server/src/vite-client-module-output.ts`, leaving
       `packages/server/src/vite-build-output.ts` to orchestrate static export plus output

@@ -1,6 +1,8 @@
 import { createRequestHandler, type JisoApp } from './app.js';
-import { replayStaticExportClientModuleArtifacts } from './static-export-client-module-artifacts.js';
-import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
+import {
+  replayStaticExportClientModuleArtifacts,
+  replayStaticExportRouteDocumentArtifact,
+} from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
 import {
   StaticExportError,

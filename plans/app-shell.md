@@ -552,3 +552,19 @@ Round142 app-shell wire-html emitter evidence:
 - `packages/server/src/wire-html.test.ts` pins fragment stylesheet dedupe and href escaping at
   the emitter boundary while existing mutation/deferred tests prove byte-compatible output.
 - `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/deferred-stream.test.ts`
+
+Round145 app-shell static document/client replay evidence:
+
+- `packages/server/src/static-export-document.ts` now owns both SPEC §9.5 route-document replay
+  and the discovered same-origin `/c/` client-module replay, including same-output-path
+  query-version drift diagnostics; `static-export-document-refs.ts` remains the shared HTML/Link
+  reference scanner.
+- The redundant `static-export-client-module-artifacts.ts` module was deleted, and the stale
+  `static-replay.test.ts` document-boundary test was renamed to
+  `static-export-document.test.ts`.
+- `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
