@@ -4614,9 +4614,15 @@ function sourceReceiverAliasReferencesForBody(
     for (const declaration of touchBodyVariableDeclarations(body)) {
       const binding = declaration.getNameNode();
       const initializer = declaration.getInitializer();
-      if (!initializer || !Node.isIdentifier(binding)) continue;
+      if (!initializer) continue;
 
       const references = { carrierProperties, names, symbolKeys };
+      if (Node.isObjectBindingPattern(binding)) {
+        appendSourceReceiverAliasesFromCarrierBinding(binding, initializer, references);
+        continue;
+      }
+
+      if (!Node.isIdentifier(binding)) continue;
       if (isSourceReceiverAliasExpression(initializer, isBaseReceiverIdentifier, references)) {
         appendSourceDestructuredReceiverIdentifier(binding, names, symbolKeys);
       }
@@ -4649,6 +4655,36 @@ function sourceReceiverAliasReferencesForBody(
   }
 
   return { carrierProperties, names, symbolKeys };
+}
+
+function appendSourceReceiverAliasesFromCarrierBinding(
+  binding: Node,
+  initializer: Node,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  if (!Node.isObjectBindingPattern(binding)) return;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isIdentifier(expression)) return;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(expression));
+  const carrierProperties = symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
+  if (!carrierProperties) return;
+
+  for (const element of binding.getElements()) {
+    const propertyName = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
+    if (!propertyName || !carrierProperties.has(propertyName)) continue;
+
+    appendSourceDestructuredReceiverIdentifier(
+      element.getNameNode(),
+      references.names,
+      references.symbolKeys,
+    );
+  }
 }
 
 function sourceReceiverReferenceSize(

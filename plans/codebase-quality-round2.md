@@ -29,6 +29,11 @@ with same-session file/test evidence.
       deriving fabricated reads/writes, while fake carrier members remain invisible. Same-session
       evidence: `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Round100 evidence 2026-06-13: source-mode destructuring from receiver carrier objects now
+      degrades visible touch/query-loader surfaces to FW406 instead of disappearing or producing
+      exact facts, while fake carrier destructuring remains invisible. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
       Round100 evidence 2026-06-13: `packages/runtime/src/query-events.ts` deleted the legacy
