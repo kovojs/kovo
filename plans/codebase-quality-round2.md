@@ -204,6 +204,13 @@ asserts one public `@jiso/test` behavior fact instead of rebuilding those mechan
 
 Latest evidence:
 
+- Broad mini-wave gate after UI/runtime/harness/Drizzle integrations:
+  `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
+  `pnpm run test:conformance`; `pnpm run check:build`. Evidence: clean main worktree at
+  `11bd4e37` plus subsequent integrated commits passed 844 formatted files, 744 lint/typechecked
+  files, 7 typechecked example/conformance projects, 248 test files / 2469 tests, 5 browser files /
+  16 tests, Drizzle/Better Auth/auth/webhook/app-shell conformance suites, and production build /
+  emit checks.
 - Phase 6/7 commerce mutation-query acceptance fixture slice:
   `pnpm exec vitest --run packages/test/src/commerce-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
   `pnpm run check:build`;
