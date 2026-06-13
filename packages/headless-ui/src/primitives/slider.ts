@@ -71,13 +71,14 @@ export type SliderInputEvent = Event & {
 export function sliderValueState(options: SliderState = {}): SliderComputedState {
   const min = normalizeSliderMin(options.min);
   const max = normalizeSliderMax(options.max, min);
-  const value = normalizeSliderValue(options.value, min, max);
+  const step = normalizeSliderStep(options.step);
+  const value = normalizeSliderValue(options.value, min, max, options.step);
 
   return Object.freeze({
     max,
     min,
     orientation: sliderOrientation(options.orientation),
-    step: normalizeSliderStep(options.step),
+    step,
     value,
     valueRatio: (value - min) / (max - min),
   });
@@ -141,7 +142,7 @@ export function sliderThumbAttributes(
 export function sliderValueFromString(value: string, state: SliderState = {}): number {
   const parsed = Number(value.trim());
   const computed = sliderValueState(state);
-  return normalizeSliderValue(parsed, computed.min, computed.max);
+  return normalizeSliderValue(parsed, computed.min, computed.max, state.step);
 }
 
 export function setSliderValue(
@@ -151,7 +152,7 @@ export function setSliderValue(
   options: SliderChangeOptions = {},
 ): SliderChangeResult {
   const current = sliderValueState(state);
-  const nextValue = normalizeSliderValue(value, current.min, current.max);
+  const nextValue = normalizeSliderValue(value, current.min, current.max, state.step);
 
   if (state.disabled || current.value === nextValue) {
     return { changed: false, value: current.value };
@@ -238,9 +239,18 @@ function normalizeSliderStep(step: number | undefined): number {
   return sliderFinite(step) && step > 0 ? step : 1;
 }
 
-function normalizeSliderValue(value: number | undefined, min: number, max: number): number {
+function normalizeSliderValue(
+  value: number | undefined,
+  min: number,
+  max: number,
+  step?: number,
+): number {
   if (!sliderFinite(value)) return min;
-  return Math.min(Math.max(value, min), max);
+  const bounded = Math.min(Math.max(value, min), max);
+  if (!sliderFinite(step) || step <= 0) return bounded;
+
+  const stepped = min + Math.round((bounded - min) / step) * step;
+  return Math.min(Math.max(roundSliderValue(stepped, step), min), max);
 }
 
 function sliderOrientation(orientation: SliderOrientation | undefined): SliderOrientation {
@@ -249,6 +259,13 @@ function sliderOrientation(orientation: SliderOrientation | undefined): SliderOr
 
 function sliderFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function roundSliderValue(value: number, step: number): number {
+  const stepText = String(step);
+  const decimalIndex = stepText.indexOf('.');
+  const precision = decimalIndex === -1 ? 0 : stepText.length - decimalIndex - 1;
+  return Number(value.toFixed(Math.min(precision, 12)));
 }
 
 function sliderDescribedBy(options: {

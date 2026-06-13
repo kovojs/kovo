@@ -1042,7 +1042,7 @@ describe('compiled interactive gallery demos', () => {
     expect(selectState).toEqual({ value: 'express' });
 
     const sliderState = { value: 25 };
-    clientHandler(slider, 'GallerySliderDemo$input_input')(new Event('input'), {
+    clientHandler(slider, 'GallerySliderDemo$input_input')(inputEvent('63'), {
       params: {},
       signal,
       state: sliderState,
@@ -1510,6 +1510,12 @@ function clientHandler(exports: ClientExports, name: string): ClientExports[stri
   if (fn === undefined) throw new Error(`Missing generated handler export: ${name}`);
 
   return fn;
+}
+
+function inputEvent(value: string): Event {
+  const event = new Event('input', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'target', { value: { value } });
+  return event;
 }
 
 function fakeDocument(options: {

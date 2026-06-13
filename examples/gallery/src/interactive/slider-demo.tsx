@@ -38,10 +38,33 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
           {...sliderInputAttributes(sliderState)}
           id="gallery-slider-input"
           onInput={() => {
-            state.value = state.value === 25 ? 75 : 25;
             const doc = Reflect['get'](globalThis, 'document');
+            const delegatedEvent = event;
+            const eventTarget =
+              delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
+            const eventValue =
+              eventTarget === null || eventTarget === undefined
+                ? state.value
+                : +Reflect['get'](Object(eventTarget), 'value');
+            const nextValue = eventValue === eventValue ? eventValue : state.value;
+            state.value =
+              nextValue <= 12.5
+                ? 0
+                : nextValue <= 37.5
+                  ? 25
+                  : nextValue <= 62.5
+                    ? 50
+                    : nextValue <= 87.5
+                      ? 75
+                      : 100;
+            const root = doc
+              ? Object(doc)['querySelector']?.call(doc, '[data-gallery-interactive="slider"]')
+              : undefined;
             const input = doc
               ? Object(doc)['getElementById']?.call(doc, 'gallery-slider-input')
+              : undefined;
+            const track = doc
+              ? Object(doc)['querySelector']?.call(doc, '[data-part="track"]')
               : undefined;
             const range = doc
               ? Object(doc)['querySelector']?.call(doc, '[data-part="range"]')
@@ -54,6 +77,7 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
               : undefined;
             const ratio = String(state.value / 100);
 
+            if (root) Object(root)['setAttribute']?.call(root, 'data-value', String(state.value));
             if (input) {
               input['value'] = String(state.value);
               Object(input)['setAttribute']?.call(
@@ -62,6 +86,10 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
                 `${state.value} percent`,
               );
               Object(input)['setAttribute']?.call(input, 'data-value', String(state.value));
+            }
+            if (track) {
+              Object(track)['setAttribute']?.call(track, 'data-value', String(state.value));
+              Object(track)['setAttribute']?.call(track, 'data-value-ratio', ratio);
             }
             if (range) {
               Object(range)['setAttribute']?.call(range, 'data-value', String(state.value));

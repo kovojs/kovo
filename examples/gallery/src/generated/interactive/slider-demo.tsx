@@ -40,7 +40,7 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
         <input
           {...sliderInputAttributes(sliderState)}
           id="gallery-slider-input"
-          on:input="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=03639a86#GallerySliderDemo$input_input"
+          on:input="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=a96ffe28#GallerySliderDemo$input_input"
         />
         <div {...sliderTrackAttributes(sliderState)}>
           <span {...sliderRangeAttributes(sliderState)} />

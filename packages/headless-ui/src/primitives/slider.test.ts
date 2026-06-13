@@ -157,6 +157,43 @@ describe('headless-ui slider primitive', () => {
     expect(sliderValueFromString('nope', { min: 3 })).toBe(3);
   });
 
+  it('snaps explicit step values before exposing state or committing changes', () => {
+    expect(sliderValueState({ max: 100, min: 10, step: 25, value: 63 })).toEqual({
+      max: 100,
+      min: 10,
+      orientation: 'horizontal',
+      step: 25,
+      value: 60,
+      valueRatio: 0.5555555555555556,
+    });
+
+    expect(
+      sliderInputAttributes({
+        max: 1,
+        min: 0,
+        step: 0.25,
+        value: 0.62,
+        valueText: '0.5 units',
+      }),
+    ).toMatchObject({
+      'data-value': '0.5',
+      'aria-valuetext': '0.5 units',
+      step: 0.25,
+      value: 0.5,
+    });
+    expect(sliderValueFromString('63', { max: 100, min: 10, step: 25 })).toBe(60);
+    expect(setSliderValue({ max: 100, min: 0, step: 25, value: 25 }, 63, 'programmatic')).toEqual({
+      changed: true,
+      detail: {
+        defaultPrevented: false,
+        preventDefault: expect.any(Function),
+        reason: 'programmatic',
+        value: 75,
+      },
+      value: 75,
+    });
+  });
+
   it('dispatches cancelable value changes before committing state', () => {
     const seen: string[] = [];
     const result = setSliderValue({ value: 2 }, 4, 'programmatic', {
@@ -255,6 +292,11 @@ describe('headless-ui slider primitive', () => {
     expect(canceledResult?.detail?.defaultPrevented).toBe(true);
     expect(canceledEvent.currentTarget?.value).toBe('1');
     expect(canceledEvent.defaultPrevented).toBe(true);
+
+    const snappedEvent = sliderInputEvent('63');
+    const snappedResult = sliderInput(snappedEvent, { max: 100, min: 0, step: 25, value: 25 });
+
+    expect(snappedResult).toMatchObject({ changed: true, value: 75 });
   });
 
   it('returns frozen records', () => {

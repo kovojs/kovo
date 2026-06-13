@@ -1033,7 +1033,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
     );
-    installGeneratedGalleryLoader(root);
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['input'] });
 
     expect(root.getAttribute('fw-state')).toBe('{"value":25}');
     expect(root.getAttribute('data-value')).toBe('25');
@@ -1044,7 +1044,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(range.getAttribute('data-value-ratio')).toBe('0.25');
     expect(output.textContent).toBe('25');
 
-    input.value = '75';
+    input.value = '63';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -1055,7 +1055,12 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
 
       expect(root.getAttribute('fw-state')).toBe('{"value":75}');
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/slider-demo.client.js',
+      ]);
+      expect(root.getAttribute('data-value')).toBe('75');
       expect(currentInput.value).toBe('75');
+      expect(currentInput.getAttribute('data-value')).toBe('75');
       expect(currentInput.getAttribute('aria-valuetext')).toBe('75 percent');
       expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');
       expect(currentOutput.textContent).toBe('75');

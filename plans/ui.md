@@ -52,7 +52,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 - [x] Recent native-state coverage includes number-field off-grid stepping, checkbox-group canceled
       restoration, OTP delete/paste restoration and constraints, scroll-area viewport state, H3
       typeahead/movement/disabled-option handling, command option ids, and navigation-menu
-      Enter/Space trigger activation.
+      Enter/Space trigger activation. Slider now snaps explicit step values before exposing state
+      or committing input/programmatic changes, restores rejected native input values, and proves
+      delegated gallery input handling through refreshed generated artifacts and a browser test.
 
 ## Open Work
 
@@ -133,6 +135,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t command)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`;
+      `git diff --check`.
+- [x] Slider step-state and compiled input slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/slider.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t slider`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t slider)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/slider.ts packages/headless-ui/src/primitives/slider.test.ts examples/gallery/src/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
       `git diff --check`.
 - [x] Field native form ownership slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`;
