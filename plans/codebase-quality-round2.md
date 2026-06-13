@@ -174,6 +174,9 @@ Shared server fixtures now own the P3 mutation lifecycle, server data-plane, CSR
 response, and commerce transaction rollback fixture mechanics, so `tests/fw-check.node.mjs`
 asserts structured public server behavior facts instead of rebuilding those mutation/query/route
 fixtures inline.
+Shared server fixtures now also own page-hint speculation-rule behavior, including empty opt-in
+suppression, deduplicated prerender URLs, script attributes, and parsed JSON rules, so the P2
+fw-check gate no longer calls `renderPageHints` inline for that reusable mechanic.
 Shared runtime fixtures now own the D2 commerce keyed append, generated graph target/optimism,
 keyed mutation endpoint, and optimistic review behavior projection, so `tests/fw-check.node.mjs`
 asserts one public behavior fact instead of rebuilding those graph, tree, server mutation, and fake
@@ -211,6 +214,18 @@ instead of patching process streams inside the monolith.
 
 Latest evidence:
 
+- Phase 1/6/7 page-hint fixture slice:
+  `pnpm exec vitest --run packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P2 page hints keep speculation rules opt-in and non-empty" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/test/src/server-fixtures.ts packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/server-fixtures.ts` exposes
+  `serverPageHintsBehaviorFact()` as the public `@jiso/test` seam for SPEC §9.3 page-hint
+  speculation-rule behavior, `packages/test/src/server-fixtures.test.ts` asserts the structured
+  behavior fact, `packages/test/src/package-exports.test.ts` pins the subpath export/types, and
+  `tests/fw-check.node.mjs` consumes the fixture instead of rebuilding the server calls inline.
 - Broad mini-wave gate after compiler/app-shell/harness/Drizzle/runtime/UI integrations:
   `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
   `pnpm run test:conformance`; `pnpm run check:build`. Evidence: main worktree through

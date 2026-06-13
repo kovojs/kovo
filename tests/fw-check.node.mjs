@@ -134,6 +134,7 @@ import {
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
+  serverPageHintsBehaviorFact,
 } from '../packages/test/src/server-fixtures.ts';
 import {
   viteHandlerTransformFact,
@@ -823,14 +824,15 @@ void test('P3 server renders initial query scripts for document-load hydration',
 });
 
 void test('P2 page hints keep speculation rules opt-in and non-empty', async () => {
-  assert.equal(renderPageHints({ prefetch: 'moderate', prerenderUrls: ['', ''] }).html, '');
-  assert.equal(
-    renderPageHints({
-      prefetch: 'moderate',
-      prerenderUrls: ['', '/products', '/products', '/cart'],
-    }).html,
-    '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
-  );
+  assert.deepEqual(serverPageHintsBehaviorFact({ renderPageHints }), {
+    deduplicatedRules: {
+      prerender: [{ eagerness: 'moderate', urls: ['/products', '/cart'] }],
+    },
+    emptyOptInHtml: '',
+    renderedHtml:
+      '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
+    scriptAttrs: { type: 'speculationrules' },
+  });
 });
 
 void test('P2 compiler merges view transition stamps into existing styles', async () => {

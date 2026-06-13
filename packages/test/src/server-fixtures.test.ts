@@ -34,6 +34,7 @@ import {
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
+  serverPageHintsBehaviorFact,
 } from './server-fixtures.ts';
 
 const mutationRuntime = {
@@ -81,6 +82,18 @@ const commerceStylesheetRuntime = {
 };
 
 describe('@jiso/test server fixture facts', () => {
+  it('projects page-hint speculation rules through public server APIs', () => {
+    expect(serverPageHintsBehaviorFact({ renderPageHints })).toEqual({
+      deduplicatedRules: {
+        prerender: [{ eagerness: 'moderate', urls: ['/products', '/cart'] }],
+      },
+      emptyOptInHtml: '',
+      renderedHtml:
+        '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
+      scriptAttrs: { type: 'speculationrules' },
+    });
+  });
+
   it('projects mutation transaction and fragment behavior through public server APIs', async () => {
     await expect(serverMutationLifecycleBehaviorFact(mutationRuntime)).resolves.toEqual({
       failedTransaction: {

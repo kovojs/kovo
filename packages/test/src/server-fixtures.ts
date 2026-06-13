@@ -58,6 +58,17 @@ export interface ServerDataPlaneRuntime extends ServerMutationLifecycleRuntime {
   runRoutePage(...args: any[]): Promise<any>;
 }
 
+export interface ServerPageHintsRuntime {
+  renderPageHints(...args: any[]): { earlyHints?: Record<string, string>; html: string };
+}
+
+export interface ServerPageHintsBehaviorFact {
+  deduplicatedRules: unknown;
+  emptyOptInHtml: string;
+  renderedHtml: string;
+  scriptAttrs: Record<string, string>;
+}
+
 export interface ServerMutationLifecycleBehaviorFact {
   failedTransaction: {
     events: string[];
@@ -138,6 +149,32 @@ export interface ServerCommerceStylesheetBehaviorFact {
   failure: Record<string, unknown>;
   pageHints: Record<string, unknown>;
   selectedStylesheets: Array<Record<string, unknown>>;
+}
+
+export function serverPageHintsBehaviorFact(
+  runtime: ServerPageHintsRuntime,
+): ServerPageHintsBehaviorFact {
+  // SPEC.md §9.3: prerender/speculation hints are explicit opt-in page hints.
+  const emptyOptIn = runtime.renderPageHints({ prefetch: 'moderate', prerenderUrls: ['', ''] });
+  const rendered = runtime.renderPageHints({
+    prefetch: 'moderate',
+    prerenderUrls: ['', '/products', '/products', '/cart'],
+  });
+  const script = htmlElementFacts(rendered.html, {
+    attrs: { type: 'speculationrules' },
+    tag: 'script',
+  })[0];
+
+  if (!script) {
+    throw new Error('Expected renderPageHints to emit a speculationrules script');
+  }
+
+  return {
+    deduplicatedRules: JSON.parse(script.innerHtml),
+    emptyOptInHtml: emptyOptIn.html,
+    renderedHtml: rendered.html,
+    scriptAttrs: script.attrs,
+  };
 }
 
 export async function serverMutationLifecycleBehaviorFact(

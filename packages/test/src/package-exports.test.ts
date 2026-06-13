@@ -344,6 +344,7 @@ import {
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
+  serverPageHintsBehaviorFact,
   type ServerCommerceAdoptDontInventBehaviorFact,
   type ServerCommerceAdoptDontInventRuntime,
   type ServerCommerceStylesheetBehaviorFact,
@@ -353,6 +354,8 @@ import {
   type ServerDataPlaneRuntime,
   type ServerMutationLifecycleBehaviorFact,
   type ServerMutationLifecycleRuntime,
+  type ServerPageHintsBehaviorFact,
+  type ServerPageHintsRuntime,
 } from '@jiso/test/server-fixtures';
 import {
   cssScopeRules,
@@ -508,6 +511,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(serverCommerceTransactionBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceStylesheetBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceAdoptDontInventBehaviorFact).toBeTypeOf('function');
+    expect(serverPageHintsBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
     ]);
@@ -517,6 +521,13 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<HeaderRecord>().toEqualTypeOf<Record<string, string | string[] | undefined>>();
     expectTypeOf<LoaderSmokeBehaviorFact>().toMatchTypeOf<{
       calls: Array<[string, boolean]>;
+    }>();
+    expectTypeOf<ServerPageHintsBehaviorFact>().toMatchTypeOf<{
+      deduplicatedRules: unknown;
+      emptyOptInHtml: string;
+    }>();
+    expectTypeOf<ServerPageHintsRuntime>().toMatchTypeOf<{
+      renderPageHints(...args: any[]): { html: string };
     }>();
     expectTypeOf<LoaderSmokeRuntime>().toMatchTypeOf<{
       createQueryStore: () => unknown;
