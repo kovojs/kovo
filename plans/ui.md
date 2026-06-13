@@ -59,9 +59,16 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 - [ ] Re-audit H2 exports, tests, styled wrappers, gallery routes, behavior contracts, merge
       fixtures, and compiled interactive coverage before checking H2 complete.
       Evidence so far: scroll-area native scroll-state coverage is closed; field controls preserve
-      disabled/native constraint/autofill attributes and gallery validity hints.
+      disabled/native constraint/autofill attributes and gallery validity hints; field controls
+      and fieldsets now preserve native `form` owner attributes through headless helpers, styled
+      wrappers, static gallery contracts, generated interactive artifacts, and browser-backed
+      `FormData`/`checkValidity()` evidence.
 - [ ] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
+      Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
+      `packages/ui/src/field.tsx` expose native `form` ownership for controls and fieldsets;
+      `examples/gallery/src/interactive/field-demo.tsx` proves named field submission and pattern
+      validity through generated artifacts and a browser test.
 - [ ] Re-audit H3 exports, tests, styled wrappers, gallery routes, behavior contracts, and
       browser-backed interactive coverage before checking H3 complete.
       Evidence so far: navigation-menu trigger keyboard activation covers Enter, Space, legacy
@@ -126,6 +133,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t command)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`;
+      `git diff --check`.
+- [x] Field native form ownership slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t field`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t field)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.tsx examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
       `git diff --check`.
 - [x] Broad gate after `0cac62d`: `pnpm run check` passed with 782 formatted files, 682
       lint/typechecked files, and 7 typechecked example/conformance projects.

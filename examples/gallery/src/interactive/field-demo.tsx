@@ -37,7 +37,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
     };
 
     return (
-      <form data-gallery-interactive="field">
+      <form data-gallery-interactive="field" id="gallery-interactive-field-form">
         <div
           {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           class="grid gap-2"
@@ -56,8 +56,10 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               ...emailFieldState,
               descriptionId: 'gallery-interactive-field-email-description',
               errorId: 'gallery-interactive-field-email-error',
+              form: 'gallery-interactive-field-form',
               id: 'gallery-interactive-field-email-input',
               name: 'gallery-email',
+              pattern: '.+@jiso\\.dev',
             })}
             type="email"
             value={state.email}
@@ -120,6 +122,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           <textarea
             {...fieldControlAttributes({
               descriptionId: 'gallery-interactive-field-bio-description',
+              form: 'gallery-interactive-field-form',
               id: 'gallery-interactive-field-bio',
               name: 'gallery-bio',
             })}
@@ -144,6 +147,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           <select
             {...fieldControlAttributes({
               descriptionId: 'gallery-interactive-field-plan-description',
+              form: 'gallery-interactive-field-form',
               id: 'gallery-interactive-field-plan-select',
               name: 'gallery-plan',
               required: true,
@@ -180,6 +184,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           {...fieldsetRootAttributes({
             ...fieldsetState,
             descriptionId: 'gallery-interactive-fieldset-description',
+            form: 'gallery-interactive-field-form',
             id: 'gallery-interactive-fieldset',
           })}
         >

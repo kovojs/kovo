@@ -37,6 +37,7 @@ export interface FieldControlProps extends FieldStateProps {
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   inputMode?: string;
   maxLength?: number;
@@ -54,6 +55,7 @@ export interface FieldTextareaProps extends FieldStateProps {
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   inputMode?: string;
   maxLength?: number;
@@ -68,6 +70,7 @@ export interface FieldSelectProps extends FieldStateProps {
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   name?: string;
   value?: string;
@@ -85,6 +88,7 @@ export interface FieldsetProps extends FieldStateProps {
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
 }
 
@@ -204,6 +208,7 @@ export const FieldControl = component('field-control', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputMode === undefined ? {} : { inputMode: props.inputMode }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -224,6 +229,7 @@ export const FieldControl = component('field-control', {
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         inputMode={attrs.inputMode}
         maxLength={attrs.maxLength}
@@ -246,6 +252,7 @@ export const FieldTextarea = component('field-textarea', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputMode === undefined ? {} : { inputMode: props.inputMode }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -265,6 +272,7 @@ export const FieldTextarea = component('field-textarea', {
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         inputMode={attrs.inputMode}
         maxLength={attrs.maxLength}
@@ -286,6 +294,7 @@ export const FieldSelect = component('field-select', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.name === undefined ? {} : { name: props.name }),
@@ -301,6 +310,7 @@ export const FieldSelect = component('field-select', {
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         name={attrs.name}
         required={attrs.required}
@@ -369,6 +379,7 @@ export const Fieldset = component('fieldset', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.required === undefined ? {} : { required: props.required }),
@@ -383,6 +394,7 @@ export const Fieldset = component('fieldset', {
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
       >
         {props.children}

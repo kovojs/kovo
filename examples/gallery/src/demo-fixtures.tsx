@@ -1352,6 +1352,7 @@ export function FieldDemo(): string {
       <p data-demo-summary="no-js">
         Field helpers wire labels, descriptions, errors, and native controls without hidden inputs.
       </p>
+      <form id="gallery-field-external-form" method="post" action="/gallery/field" />
       <div data-ui-demo="field">
         {Field.definition.render({
           ...fieldState,
@@ -1368,6 +1369,7 @@ export function FieldDemo(): string {
                 autoComplete: 'email',
                 descriptionId: 'gallery-field-description',
                 errorId: 'gallery-field-error',
+                form: 'gallery-field-external-form',
                 id: 'gallery-field-email',
                 inputMode: 'email',
                 maxLength: 80,
@@ -1401,6 +1403,7 @@ export function FieldDemo(): string {
                 autoComplete: 'off',
                 children: 'Prefers changelog emails and release candidate previews.',
                 descriptionId: 'gallery-field-bio-description',
+                form: 'gallery-field-external-form',
                 id: 'gallery-field-bio',
                 maxLength: 240,
                 name: 'bio',
@@ -1427,6 +1430,7 @@ export function FieldDemo(): string {
                 children:
                   '<option value="starter">Starter</option><option value="team" selected>Team</option>',
                 descriptionId: 'gallery-field-plan-description',
+                form: 'gallery-field-external-form',
                 id: 'gallery-field-plan',
                 name: 'plan',
                 required: true,
@@ -1455,6 +1459,7 @@ export function FieldDemo(): string {
               })}
               {FieldControl.definition.render({
                 descriptionId: 'gallery-fieldset-description',
+                form: 'gallery-field-external-form',
                 id: 'gallery-fieldset-seat',
                 name: 'seat',
                 value: 'window',
@@ -1467,6 +1472,7 @@ export function FieldDemo(): string {
           ),
           descriptionId: 'gallery-fieldset-description',
           disabled: true,
+          form: 'gallery-field-external-form',
           id: 'gallery-fieldset',
           invalid: true,
         })}

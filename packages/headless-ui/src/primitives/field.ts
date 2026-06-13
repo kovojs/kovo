@@ -11,6 +11,7 @@ export interface FieldControlAttributeOptions extends FieldAttributeOptions {
   autoComplete?: string;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   inputMode?: string;
   maxLength?: number;
   minLength?: number;
@@ -29,6 +30,7 @@ export interface FieldMessageAttributeOptions extends FieldAttributeOptions {
 export interface FieldsetAttributeOptions extends FieldAttributeOptions {
   descriptionId?: string;
   errorId?: string;
+  form?: string;
 }
 
 export type FieldPrimitiveAttributes = PrimitiveDataAttributes &
@@ -64,6 +66,7 @@ export function fieldControlAttributes(
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
     ...(options.disabled === true ? { disabled: true } : {}),
     ...(options.autoComplete === undefined ? {} : { autoComplete: options.autoComplete }),
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.inputMode === undefined ? {} : { inputMode: options.inputMode }),
     ...(options.maxLength === undefined ? {} : { maxLength: options.maxLength }),
@@ -105,6 +108,7 @@ export function fieldsetRootAttributes(
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
     ...(options.disabled === true ? { disabled: true } : {}),
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.id === undefined ? {} : { id: options.id }),
   });
 }

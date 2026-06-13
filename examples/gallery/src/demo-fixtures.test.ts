@@ -310,6 +310,8 @@ describe('gallery demo fixtures', () => {
 
     expect(field.html).toContain('for="gallery-field-email"');
     expect(field.html).toContain('name="email"');
+    expect(field.html).toContain('id="gallery-field-external-form"');
+    expect(field.html).toContain('form="gallery-field-external-form"');
     expect(field.html).toContain('autoComplete="email"');
     expect(field.html).toContain('inputMode="email"');
     expect(field.html).toContain('maxLength="80"');
@@ -333,7 +335,9 @@ describe('gallery demo fixtures', () => {
     expect(field.html).toContain('id="gallery-field-plan" name="plan" required value="team"');
     expect(field.html).toContain('<option value="team" selected>Team</option>');
     expect(field.html).toContain('aria-describedby="gallery-fieldset-description"');
-    expect(field.html).toContain('disabled id="gallery-fieldset"');
+    expect(field.html).toContain(
+      'disabled form="gallery-field-external-form" id="gallery-fieldset"',
+    );
     expect(field.html).toContain('for="gallery-fieldset-seat"');
     expect(field.html).toContain('id="gallery-fieldset-seat" name="seat"');
     expect(field.html).toContain('value="window"');

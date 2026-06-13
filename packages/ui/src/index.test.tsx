@@ -1061,6 +1061,7 @@ describe('@jiso/ui styled package foundation', () => {
       autoComplete: 'email',
       descriptionId: 'email-description',
       errorId: 'email-error',
+      form: 'profile-form',
       id: 'email',
       inputMode: 'email',
       maxLength: 80,
@@ -1074,6 +1075,7 @@ describe('@jiso/ui styled package foundation', () => {
     const textarea = FieldTextarea.definition.render({
       autoComplete: 'off',
       descriptionId: 'bio-description',
+      form: 'profile-form',
       id: 'bio',
       maxLength: 240,
       name: 'bio',
@@ -1084,6 +1086,7 @@ describe('@jiso/ui styled package foundation', () => {
       children:
         '<option value="starter">Starter</option><option value="team" selected>Team</option>',
       descriptionId: 'plan-description',
+      form: 'profile-form',
       id: 'plan',
       name: 'plan',
       required: true,
@@ -1099,11 +1102,13 @@ describe('@jiso/ui styled package foundation', () => {
         FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }) +
         FieldControl.definition.render({
           id: 'seat',
+          form: 'profile-form',
           name: 'seat',
           value: 'window',
         }),
       descriptionId: 'plan-description',
       disabled: true,
+      form: 'profile-form',
       id: 'plan-fieldset',
       invalid: true,
     });
@@ -1126,6 +1131,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(control).toContain('minLength="3"');
     expect(control).toContain('pattern=".+@example\\.com"');
     expect(control).toContain('placeholder="ada@example.com"');
+    expect(control).toContain('form="profile-form"');
     expect(control).toContain('id="email"');
     expect(control).toContain('name="email"');
     expect(control).toContain('required type="email"');
@@ -1133,6 +1139,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(control).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(textarea).toContain('<textarea aria-describedby="bio-description"');
     expect(textarea).toContain('autoComplete="off"');
+    expect(textarea).toContain('form="profile-form"');
     expect(textarea).toContain('id="bio"');
     expect(textarea).toContain('name="bio"');
     expect(textarea).toContain('placeholder="Short bio"');
@@ -1140,6 +1147,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(textarea).toContain('maxLength="240"');
     expect(textarea).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(select).toContain('<select aria-describedby="plan-description"');
+    expect(select).toContain('form="profile-form"');
     expect(select).toContain('id="plan" name="plan" required value="team"');
     expect(select).toContain('<option value="team" selected>Team</option>');
     expect(select).not.toMatch(/\sdisabled(?:\s|>|=)/);
@@ -1148,7 +1156,8 @@ describe('@jiso/ui styled package foundation', () => {
     expect(fieldset).toContain('aria-describedby="plan-description"');
     expect(fieldset).toContain('aria-invalid="true"');
     expect(fieldset).toContain('data-disabled=""');
-    expect(fieldset).toContain('disabled id="plan-fieldset"');
+    expect(fieldset).toContain('disabled form="profile-form" id="plan-fieldset"');
+    expect(fieldset).toContain('form="profile-form"');
     expect(fieldset).toContain('id="seat" name="seat"');
     expect(fieldset).toContain('id="plan-fieldset"');
     expect(fieldset).toContain('id="plan-legend"');

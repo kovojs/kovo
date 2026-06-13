@@ -640,6 +640,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
   it('updates field IDREF, native select, and fieldset state through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryFieldDemo);
+    const form = root as HTMLFormElement;
     const email = required(
       root.querySelector<HTMLInputElement>('#gallery-interactive-field-email-input'),
     );
@@ -668,9 +669,13 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('fw-state')).toBe(
       '{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}',
     );
+    expect(root.id).toBe('gallery-interactive-field-form');
     expect(email.name).toBe('gallery-email');
+    expect(email.form).toBe(form);
+    expect(email.pattern).toBe('.+@jiso\\.dev');
     expect(email.required).toBe(true);
     expect(email.value).toBe('ada@example');
+    expect(email.checkValidity()).toBe(false);
     expect(email.getAttribute('aria-describedby')).toBe(
       'gallery-interactive-field-email-description gallery-interactive-field-email-error',
     );
@@ -679,13 +684,17 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(emailError.hidden).toBe(false);
     expect(emailOutput.textContent).toBe('ada@example');
     expect(plan.name).toBe('gallery-plan');
+    expect(plan.form).toBe(form);
     expect(plan.required).toBe(true);
     expect(plan.value).toBe('team');
     expect(planOutput.textContent).toBe('team');
     expect(fieldset.getAttribute('aria-describedby')).toBe(
       'gallery-interactive-fieldset-description',
     );
+    expect(fieldset.form).toBe(form);
     expect(fieldset.disabled).toBe(false);
+    expect(new FormData(form).get('gallery-email')).toBe('ada@example');
+    expect(new FormData(form).get('gallery-plan')).toBe('team');
 
     email.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -707,6 +716,8 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"email":"ada@jiso.dev","invalid":false,"plan":"team","shippingDisabled":false}',
       );
       expect(currentEmail.value).toBe('ada@jiso.dev');
+      expect(currentEmail.checkValidity()).toBe(true);
+      expect(new FormData(form).get('gallery-email')).toBe('ada@jiso.dev');
       expect(currentEmail.getAttribute('aria-describedby')).toBe(
         'gallery-interactive-field-email-description',
       );
@@ -731,6 +742,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":false}',
       );
       expect(currentPlan.value).toBe('enterprise');
+      expect(new FormData(form).get('gallery-plan')).toBe('enterprise');
       expect(currentOutput.textContent).toBe('enterprise');
     });
 

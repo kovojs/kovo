@@ -56,6 +56,7 @@ describe('headless-ui field primitive', () => {
         autoComplete: 'email',
         descriptionId: 'email-help',
         errorId: 'email-error',
+        form: 'profile-form',
         id: 'email',
         inputMode: 'email',
         invalid: true,
@@ -71,6 +72,7 @@ describe('headless-ui field primitive', () => {
       autoComplete: 'email',
       'data-invalid': '',
       'data-required': '',
+      form: 'profile-form',
       id: 'email',
       inputMode: 'email',
       maxLength: 80,
@@ -78,6 +80,35 @@ describe('headless-ui field primitive', () => {
       name: 'email',
       pattern: '.+@example\\.com',
       required: true,
+    });
+  });
+
+  it('preserves native external form ownership for controls and fieldsets', () => {
+    expect(
+      fieldControlAttributes({
+        form: 'checkout-form',
+        id: 'seat',
+        name: 'seat',
+        required: true,
+      }),
+    ).toEqual({
+      'data-required': '',
+      form: 'checkout-form',
+      id: 'seat',
+      name: 'seat',
+      required: true,
+    });
+
+    expect(
+      fieldsetRootAttributes({
+        descriptionId: 'shipping-help',
+        form: 'checkout-form',
+        id: 'shipping',
+      }),
+    ).toEqual({
+      'aria-describedby': 'shipping-help',
+      form: 'checkout-form',
+      id: 'shipping',
     });
   });
 
