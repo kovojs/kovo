@@ -150,6 +150,10 @@ boundaries.
 
 Latest evidence:
 
+- [x] Loader query runtime wiring was split into `loader-query.ts`, with focused tests covering
+      script hydration, inline query event apply, contextual error reporting, disposal, and
+      visible-return ledger handoff. Verified with focused loader-query tests, full runtime tests,
+      browser runtime tests, inline-loader check, `tsc`, exact `vp check`, and `git diff --check`.
 - [x] Shipped inline-loader minified artifact tests now assert canonical minified wire-parser and
       response-apply helper parity directly, replacing broad token pins for those helpers. Verified
       with focused inline-loader artifact/minifier/runtime build checks, runtime tests, `tsc`, exact

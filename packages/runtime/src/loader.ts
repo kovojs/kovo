@@ -10,13 +10,13 @@ import type {
   LoaderRoot,
   VisibleObserverFactory,
 } from './loader-lifecycle.js';
+import { installLoaderQueryRuntime } from './loader-query.js';
+import type { InstalledLoaderQueryRuntime } from './loader-query.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
-import { installInlineQueryEventHydration } from './query-events.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 
@@ -50,20 +50,10 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
   const disposers: Array<() => void> = [];
-  const queryVisibleReturn = installQueryVisibleReturnRefetch({
-    onError(error) {
-      reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
-    },
-    ...definedProps({
-      applyQuery: options.applyQuery,
-      queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
-      queryRefetch: options.queryRefetch,
-      queryStore: options.queryStore,
-      refetchOnFocus: options.refetchOnFocus,
-      refetchOnFocusOptOut: options.refetchOnFocusOptOut,
-    }),
-    root: options.root,
-  });
+  let queryRuntime: InstalledLoaderQueryRuntime | undefined;
+  const rememberAppliedQueries = (queries: readonly string[]): void => {
+    queryRuntime?.rememberAppliedQueries(queries);
+  };
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast({
         ...options.enhancedMutations,
@@ -75,9 +65,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
               }
             : undefined,
         }),
-        onAppliedQueries(queries) {
-          queryVisibleReturn.rememberAppliedQueries(queries);
-        },
+        onAppliedQueries: rememberAppliedQueries,
       })
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
@@ -91,15 +79,27 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       events,
       importModule: options.importModule,
       islandSignalScope,
-      onAppliedQueries(queries) {
-        queryVisibleReturn.rememberAppliedQueries(queries);
-      },
+      onAppliedQueries: rememberAppliedQueries,
       root: options.root,
     }),
   );
 
+  queryRuntime = installLoaderQueryRuntime({
+    root: options.root,
+    ...definedProps({
+      applyQuery: options.applyQuery,
+      onError: options.onError,
+      queryEventTarget: options.queryEventTarget,
+      queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
+      queryRefetch: options.queryRefetch,
+      queryStore: options.queryStore,
+      refetchOnFocus: options.refetchOnFocus,
+      refetchOnFocusOptOut: options.refetchOnFocusOptOut,
+    }),
+  });
+
   disposers.push(() => {
-    queryVisibleReturn.dispose();
+    queryRuntime?.dispose();
   });
 
   if (options.discardPendingOptimism) {
@@ -107,29 +107,6 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       installPagehideOptimismCleanup({
         discardPendingOptimism: options.discardPendingOptimism,
         root: options.root,
-      }),
-    );
-  }
-
-  if (options.queryStore) {
-    disposers.push(
-      installInlineQueryEventHydration({
-        onError(error) {
-          reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
-        },
-        onAppliedQueries(queries) {
-          queryVisibleReturn.rememberAppliedQueries(queries);
-        },
-        root: options.root,
-        store: options.queryStore,
-        target:
-          options.queryEventTarget ??
-          globalQueryEventTarget() ??
-          (options.root as unknown as QueryEventHydrationTarget),
-        ...definedProps({
-          applyQuery: options.applyQuery,
-          queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
-        }),
       }),
     );
   }
@@ -148,8 +125,4 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     },
     events,
   };
-}
-
-function globalQueryEventTarget(): QueryEventHydrationTarget | undefined {
-  return typeof globalThis.addEventListener === 'function' ? globalThis : undefined;
 }
