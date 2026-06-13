@@ -82,6 +82,8 @@ Current state:
 - Shared opening-tag helpers now own parser-span attribute replacement/insertion; server emit,
   view-transition lowering, and static `<Link>` lowering use those helpers.
 - Obsolete `removeJsxAttribute(s)` compatibility helpers were deleted.
+- Literal route validation now compares parsed route/path segments directly instead of compiling
+  route strings into regular expressions.
 
 Open:
 
@@ -95,6 +97,8 @@ Latest focused evidence:
 
 - `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
 - `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/lower/view-transitions.ts`
+- `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vp check packages/compiler/src/validate/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

@@ -208,6 +208,37 @@ export const ProductLinks = component('product-links', {
     ]);
   });
 
+  it('matches declared routes by path segments without regex expansion', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/docs/v1.0/:slug', '/files/[raw]'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href="/docs/v1.0/intro?tab=api">Docs</a>
+      <a href="/files/[raw]">Raw</a>
+      <a href="/docs/v1x0/intro">Wrong</a>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW220',
+        fileName: 'product-links.tsx',
+        message: 'Literal href or form action matches no declared route. /docs/v1x0/intro',
+        severity: 'error',
+        start: { column: 10, line: 7 },
+        length: 23,
+      },
+    ]);
+  });
+
   it('ignores literal navigation target text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',

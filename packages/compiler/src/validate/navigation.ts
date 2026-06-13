@@ -57,10 +57,12 @@ function isExternalNavigationTarget(target: string): boolean {
 
 function routePathMatchesUrl(routePath: string, target: string): boolean {
   const pathname = target.split(/[?#]/, 1)[0] ?? '';
-  const pattern = `^${routePath
-    .split('/')
-    .map((part) => (part.startsWith(':') ? '[^/]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    .join('/')}$`;
+  const routeSegments = routePath.split('/');
+  const pathSegments = pathname.split('/');
+  if (routeSegments.length !== pathSegments.length) return false;
 
-  return new RegExp(pattern).test(pathname);
+  return routeSegments.every((segment, index) => {
+    const pathSegment = pathSegments[index] ?? '';
+    return segment.startsWith(':') ? pathSegment !== '' : segment === pathSegment;
+  });
 }
