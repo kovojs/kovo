@@ -75,6 +75,18 @@ describe('commerce app shell HTTP entry', () => {
       'vp run export',
       'npm run static',
     ]);
+
+    const viteConfigSource = await readFile(path.join(commerceRoot, 'vite.config.ts'), 'utf8');
+    expect(viteConfigSource).toContain("server.ssrLoadModule('@jiso/server/app-shell/vite')");
+    expect(viteConfigSource).not.toContain("server.ssrLoadModule('@jiso/server')");
+
+    const exportScriptSource = await readFile(
+      path.join(commerceRoot, 'scripts/export-static.mjs'),
+      'utf8',
+    );
+    expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/vite')");
+    expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/static-export')");
+    expect(exportScriptSource).not.toContain("ssrLoadModule('@jiso/server')");
   });
 
   it('delegates Vite dev middleware to the shared app-shell plugin through public config seams', async () => {
@@ -89,7 +101,7 @@ describe('commerce app shell HTTP entry', () => {
         },
       },
       async ssrLoadModule(id) {
-        expect(id).toBe('@jiso/server');
+        expect(id).toBe('@jiso/server/app-shell/vite');
         return {
           jisoAppShellViteSsrDevPlugin(options: unknown) {
             delegatedOptions.push(options);

@@ -219,6 +219,8 @@ The create-jiso starter imports app-shell dev/export/static-export helpers from 
 includes a static preview task that serves exported `dist` output without Vite source fallback;
 the preview serves exported files for `GET`/`HEAD` only and rejects unsupported methods before any
 dynamic app route fallback.
+Commerce Vite dev/export adoption now uses the public `@jiso/server/app-shell/vite` and
+`@jiso/server/app-shell/static-export` subpaths instead of the root package app-shell aliases.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
@@ -263,6 +265,8 @@ Latest evidence:
 - `git diff --check`
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs .* with the built stylesheet href|scaffolds real template files"`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|delegates Vite dev middleware|wires .* public commerce shell static output"`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts -t "server app-shell public API barrels"`
 
 ## Phase 6 - Verification Harness And Commerce
 

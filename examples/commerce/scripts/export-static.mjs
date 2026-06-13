@@ -24,32 +24,45 @@ export async function exportCommerceStaticApp({
   });
 
   try {
-    const [appShellModule, serverModule] = await Promise.all([
+    const [appShellModule, viteModule, staticExportModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@jiso/server'),
+      viteServer.ssrLoadModule('@jiso/server/app-shell/vite'),
+      viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
     ]);
     const {
       exportJisoAppShellViteBuildFromManifestFile,
+      jisoAppShellViteManifestStylesheetHrefFromFile,
+    } = viteModule;
+    const {
       formatStaticExportDiagnostic,
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
-      jisoAppShellViteManifestStylesheetHrefFromFile,
-    } = serverModule;
+    } = staticExportModule;
 
     if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
-      throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
+      throw new Error(
+        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
+      );
     }
     if (typeof formatStaticExportDiagnostic !== 'function') {
-      throw new Error('@jiso/server must export formatStaticExportDiagnostic.');
+      throw new Error(
+        '@jiso/server/app-shell/static-export must export formatStaticExportDiagnostic.',
+      );
     }
     if (typeof formatStaticExportDiagnostics !== 'function') {
-      throw new Error('@jiso/server must export formatStaticExportDiagnostics.');
+      throw new Error(
+        '@jiso/server/app-shell/static-export must export formatStaticExportDiagnostics.',
+      );
     }
     if (typeof isStaticExportDiagnosticError !== 'function') {
-      throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
+      throw new Error(
+        '@jiso/server/app-shell/static-export must export isStaticExportDiagnosticError.',
+      );
     }
     if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
+      throw new Error(
+        '@jiso/server/app-shell/vite must export jisoAppShellViteManifestStylesheetHrefFromFile.',
+      );
     }
     staticExportTaskHelpers = {
       formatStaticExportDiagnostic,

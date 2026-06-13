@@ -49,8 +49,8 @@ Implemented areas:
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting,
   SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export, and a public export
   manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
-  starter and commerce export tasks load the diagnostic helpers from `@jiso/server` instead of
-  duplicating local FW229 formatting.
+  starter and commerce export tasks load the diagnostic helpers from public app-shell subpaths
+  instead of duplicating local FW229 formatting.
 - `vite-plugin-build.ts` owns the Vite plugin `writeBundle` build/static-export choreography and
   exposes a public app-shell helper, leaving `vite-plugin.ts` focused on dev middleware and hook
   delegation while preserving plugin `onBuild` output evidence.
@@ -652,3 +652,11 @@ Round181 starter static preview method-boundary evidence:
   and rejects a mutation-style `POST /_m/*` after SPEC §9.5 static export.
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs .* with the built stylesheet href|scaffolds real template files"`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
+
+Round185 commerce app-shell subpath adoption evidence:
+
+- Commerce Vite dev now loads the shared R5 dev helper from `@jiso/server/app-shell/vite`, and
+  commerce static export loads Vite/export helpers from `@jiso/server/app-shell/vite` plus FW229
+  diagnostic helpers from `@jiso/server/app-shell/static-export` for SPEC §9.5 replay/export.
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|delegates Vite dev middleware|wires .* public commerce shell static output"`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts -t "server app-shell public API barrels"`
