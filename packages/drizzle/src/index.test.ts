@@ -2741,6 +2741,51 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks string-indexed project query config spreads as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'type LoaderConfig = {',
+            '  [name: string]: (input: unknown, db: PgDatabase<any, any, any>) => Promise<unknown[]>;',
+            '};',
+            'declare const indexedConfig: LoaderConfig;',
+            '',
+            'export const indexedQuery = query("product/project-indexed-config-loader", {',
+            '  ...indexedConfig,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.queries.ts:12',
+          },
+        ],
+        query: 'product/project-indexed-config-loader',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:12',
+      },
+    ]);
+  });
+
   it('extracts project query loaders from conditional config spreads and degrades opaque branches', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -8879,6 +8924,45 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks string-indexed project domain action spreads as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'type ActionBag = {',
+            '  [name: string]: ReturnType<typeof write>;',
+            '};',
+            'declare const indexedActions: ActionBag;',
+            '',
+            'export const cart = domain({',
+            '  ...indexedActions,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
           },
         ],
       },

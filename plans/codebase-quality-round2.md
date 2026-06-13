@@ -951,6 +951,14 @@ duplicate parenthesis-only projection logic.
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round292: `packages/drizzle/src/static.ts` now treats project
+      string-indexed query config and domain action spreads as opaque executable surfaces, so
+      `Record<string, ...>`/index-signature bags degrade to FW406 instead of being accepted as
+      empty static objects per SPEC §10.2/§11.1. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin the package and real `drizzle-orm`
+      query-loader/domain-action behavior. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "string-indexed"` and
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`.
       Evidence 2026-06-13 round245: `packages/drizzle/src/static.ts` removed the remaining
       local object callback-container walker from query-loader and domain-write callback
       resolution; `symbolForCallbackReference` is now the only member-reference path for these

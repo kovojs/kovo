@@ -2587,6 +2587,44 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins string-indexed domain action spreads as FW406 under real Drizzle imports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'type ActionBag = {',
+            '  [name: string]: ReturnType<typeof write>;',
+            '};',
+            'declare const indexedActions: ActionBag;',
+            '',
+            'export const cart = domain({',
+            '  ...indexedActions,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:11',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins nested destructuring assignment receiver aliases under real Drizzle imports', () => {
     const files = [
       {
@@ -3960,6 +3998,50 @@ describe('Drizzle pinned subset conformance', () => {
           stock: 'number',
         },
         site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+      },
+    ]);
+  });
+
+  it('pins string-indexed query-loader config spreads as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'type LoaderConfig = {',
+            '  [name: string]: (input: unknown, db: PgDatabase<any, any, any>) => Promise<unknown[]>;',
+            '};',
+            'declare const indexedConfig: LoaderConfig;',
+            '',
+            "export const indexedQuery = query('product/indexed-config-loader', {",
+            '  ...indexedConfig,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+          },
+        ],
+        query: 'product/indexed-config-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:12',
       },
     ]);
   });

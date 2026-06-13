@@ -3276,7 +3276,9 @@ function queryLoadCallbackFromSpreadExpression(
   const loadSymbol = symbolForStaticTypePath(expression, ['load'], location);
   if (!loadSymbol) {
     const type = expression.getType();
-    return type.isAny() || type.isUnknown() ? { kind: 'unresolved' } : { kind: 'none' };
+    return type.isAny() || type.isUnknown() || typeHasOpaqueStringMembers(type)
+      ? { kind: 'unresolved' }
+      : { kind: 'none' };
   }
 
   for (const declaration of loadSymbol.getDeclarations()) {
@@ -5803,7 +5805,7 @@ function unresolvedDomainWriteSpreads(
     );
     const type = expression.getType();
     const hasUnresolvedBranch = domainWriteSpreadHasUnresolvedBranch(expression);
-    if (hasUnresolvedBranch) {
+    if (hasUnresolvedBranch || typeHasOpaqueStringMembers(type)) {
       unresolved.push({
         memberName: UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER,
         siteNode: property,
@@ -5811,6 +5813,7 @@ function unresolvedDomainWriteSpreads(
     }
     if (
       !hasUnresolvedBranch &&
+      !typeHasOpaqueStringMembers(type) &&
       spreadProperties.length === 0 &&
       (type.isAny() || type.isUnknown())
     ) {
@@ -5841,12 +5844,18 @@ function unresolvedDomainWriteSpreads(
 function domainWriteSpreadHasUnresolvedBranch(expression: Node): boolean {
   if (!Node.isConditionalExpression(expression)) {
     const type = expression.getType();
-    return type.isAny() || type.isUnknown();
+    return type.isAny() || type.isUnknown() || typeHasOpaqueStringMembers(type);
   }
 
   return [expression.getWhenTrue(), expression.getWhenFalse()].some((branch) =>
     domainWriteSpreadHasUnresolvedBranch(unwrappedStaticExpressionNode(branch)),
   );
+}
+
+function typeHasOpaqueStringMembers(type: MorphType): boolean {
+  // SPEC §10.2/§11.1: string-indexed objects can hide arbitrary loader/action members. Without
+  // concrete property declarations, keep that surface visible as FW406 instead of assuming empty.
+  return type.getStringIndexType() !== undefined;
 }
 
 function domainWriteProperties(
