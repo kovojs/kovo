@@ -34,7 +34,7 @@ conformance. Keep this ledger compact: status, open work, and current gates only
 - [ ] G2 behavior-contract gates: keyboard/ARIA/native state checks and `fw explain` coverage.
 - [ ] G3 axe checks per component state.
 - [ ] G4 visual regression baseline for `@jiso/ui`.
-- [ ] G5 merge fixtures for primitive attrs plus author elements.
+- [x] G5 merge fixtures for primitive attrs plus author elements.
 - [ ] G6 compiled interactive gallery authored as app TSX and exercised in browser.
 
 ## Current Evidence Rollup
@@ -50,6 +50,9 @@ Implemented areas:
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
   fixtures, compiled interactive demos, and generated-client DOM ref/export contracts.
+- G5 exported primitive attrs inventory is closed: `examples/gallery/src/merge-fixtures.test.tsx`
+  renders inline merge goldens for all 134 exported primitive `*Attributes` builders, with author
+  stress attrs, merged HTML, and SPEC §4.6 diagnostic checks.
 
 Recent gates:
 
@@ -88,6 +91,7 @@ Recent gates:
 - `pnpm --filter @jiso/example-gallery run test:browser`
 - `pnpm exec vp check examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`
 - `git diff --check`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`
 
 ## Open Work
 
@@ -128,7 +132,8 @@ Gallery:
 - Expand route coverage until every primitive/styled component has a gallery fixture.
 - Add G2 `fw explain` coverage for representative primitives.
 - Add G3/G4 once the gallery surface is stable enough to avoid churn-heavy baselines.
-- Expand G5 merge fixtures to every exported primitive attrs record.
+- G5 is closed for the exported primitive attrs inventory and rendered merge goldens; keep future
+  merge work scoped to new primitive exports or compiler/runtime diagnostic parity.
 - Finish G6 deployment/docs wiring and full browser-backed stateful-family coverage. Generated
   client DOM ref/export inventory is covered for every checked-in compiled interactive demo.
 
