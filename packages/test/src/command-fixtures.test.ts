@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertOrderedItems,
   commandSequence,
+  commandSequenceWithoutLast,
   loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
@@ -33,6 +34,17 @@ describe('@jiso/test command fixtures', () => {
         raw: 'pnpm --filter @jiso/conformance-auth-spike test',
       },
     ]);
+  });
+
+  it('derives command prefixes through parsed command facts', () => {
+    expect(
+      commandSequenceWithoutLast(
+        'pnpm --filter @jiso/one test && pnpm --filter @jiso/two test && pnpm --filter @jiso/three test',
+      ),
+    ).toBe('pnpm --filter @jiso/one test && pnpm --filter @jiso/two test');
+    expect(() => commandSequenceWithoutLast('pnpm --filter @jiso/one test')).toThrow(
+      'task command has more than one entry',
+    );
   });
 
   it('rejects command strings that need shell parsing', () => {

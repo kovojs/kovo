@@ -186,6 +186,15 @@ export function commandSequence(command: unknown): CommandInvocation[] {
   });
 }
 
+export function commandSequenceWithoutLast(command: unknown): string {
+  const commands = commandSequence(command);
+  assert.ok(commands.length > 1, 'task command has more than one entry');
+  return commands
+    .slice(0, -1)
+    .map(({ raw }) => raw)
+    .join(' && ');
+}
+
 export function runCommandSequenceSync(command: unknown, options: ExecFileSyncOptions): string {
   return commandSequence(command)
     .map(({ args, executable }) => execFileSync(executable, [...args], options))

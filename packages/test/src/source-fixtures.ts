@@ -25,6 +25,12 @@ export interface ForbiddenBrowserArchitectureFact {
   site: string;
 }
 
+export interface CssScopeRuleFact {
+  limit: string;
+  raw: string;
+  scope: string;
+}
+
 type TypeScriptModule = typeof import('typescript');
 
 export function cssSourceDirectives(source: string): string[] {
@@ -33,6 +39,23 @@ export function cssSourceDirectives(source: string): string[] {
     .map((line) => line.trim())
     .filter((line) => line.startsWith('@source '))
     .map((line) => line.slice('@source '.length).replace(/;$/, ''));
+}
+
+export function cssScopeRules(source: string): CssScopeRuleFact[] {
+  return source
+    .split('\n')
+    .map((line) => line.trim())
+    .map((line) => {
+      const match = /^@scope\s+\((.+)\)\s+to\s+\((.+)\)\s+\{$/.exec(line);
+      return match
+        ? {
+            limit: match[2] ?? '',
+            raw: line,
+            scope: match[1] ?? '',
+          }
+        : undefined;
+    })
+    .filter((rule): rule is CssScopeRuleFact => rule !== undefined);
 }
 
 export function projectSourceSiteFact(site: string): ProjectSourceSiteFact {

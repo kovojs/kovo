@@ -202,6 +202,11 @@ Closed evidence so far:
   fake-pnpm temp-command runners; `@jiso/test/starter-template-fixtures` now executes copied
   starter tasks, compiler shims, fake `fw` output maps, and conformance package command coverage
   for the SPEC §16 starter/conformance gates.
+- Round98 evidence 2026-06-13: docs/CSS contract, D10 Vite diagnostic, and conformance
+  missing-package checks in `tests/fw-check.node.mjs` consume `@jiso/test` markdown, source,
+  diagnostic-output, and command fixture facts instead of local parsers. Same-session evidence:
+  `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts`
+  and `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|Conformance suites are an explicit gate" tests/fw-check.node.mjs`.
 
 Open:
 

@@ -1,6 +1,11 @@
 export type MarkdownFields = Map<string, string>;
 export type MarkdownTableRow = Record<string, string>;
 
+export interface MarkdownBoldSectionHeading {
+  number: string;
+  title: string;
+}
+
 export function normalizeMarkdownCell(value: string): string {
   return value
     .replace(/`([^`]+)`/g, '$1')
@@ -47,6 +52,17 @@ export function markdownNumberedListTitles(source: string): string[] {
   return markdownNumberedListItems(source).map((item) =>
     normalizeMarkdownCell(item.split('.')[0]!),
   );
+}
+
+export function markdownBoldSectionHeadings(source: string): MarkdownBoldSectionHeading[] {
+  return source
+    .split('\n')
+    .map((line) => /^\s*\*\*(\d+(?:\.\d+)*)\s+(.+?)[.:]\*\*(?:\s+.*)?$/.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => ({
+      number: match[1] ?? '',
+      title: normalizeMarkdownCell(match[2] ?? ''),
+    }));
 }
 
 export function markdownLeadingTitle(value: string): string {

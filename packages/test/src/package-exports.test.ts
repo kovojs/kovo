@@ -17,6 +17,7 @@ import {
 import {
   assertOrderedItems,
   commandSequence,
+  commandSequenceWithoutLast,
   loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
@@ -35,6 +36,12 @@ import {
   type VitePlusTask,
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
+import {
+  viteDiagnosticMessageFacts,
+  type DiagnosticHelpFact,
+  type DiagnosticOutputFact,
+  type ViteDiagnosticMessageFacts,
+} from '@jiso/test/diagnostic-output-fixtures';
 import {
   parseFwExportOutput,
   type FwExportError,
@@ -89,6 +96,7 @@ import {
   htmlTextContent,
 } from '@jiso/test/html-fragment';
 import {
+  markdownBoldSectionHeadings,
   markdownFields,
   markdownLeadingTitle,
   markdownNumberedListItems,
@@ -96,12 +104,14 @@ import {
   markdownSection,
   markdownTableRows,
   normalizeMarkdownCell,
+  type MarkdownBoldSectionHeading,
   type MarkdownFields,
   type MarkdownTableRow,
 } from '@jiso/test/markdown-fixtures';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
+  cssScopeRules,
   cssSourceDirectives,
   forbiddenBrowserArchitectureFacts,
   projectDirectoryNames,
@@ -109,6 +119,7 @@ import {
   projectFileSources,
   projectJsonFile,
   projectSourceSiteFact,
+  type CssScopeRuleFact,
   type ForbiddenBrowserArchitectureFact,
   type ProjectFileSourceFact,
   type ProjectFileTreeOptions,
@@ -246,7 +257,13 @@ describe('@jiso/test package subpath exports', () => {
     expect(markdownNumberedListTitles('1. **One.** Details')).toEqual(['One']);
     expect(markdownLeadingTitle('**One.** Details')).toBe('One');
     expect(normalizeMarkdownCell('`one` **two**')).toBe('one two');
+    expect(markdownBoldSectionHeadings('**13.1 CSS:** details')).toEqual([
+      { number: '13.1', title: 'CSS' },
+    ]);
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
+    expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
+      { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
+    ]);
     expect(forbiddenBrowserArchitectureFacts).toBeTypeOf('function');
     expect(projectDirectoryNames).toBeTypeOf('function');
     expect(projectFilePaths).toBeTypeOf('function');
@@ -256,6 +273,16 @@ describe('@jiso/test package subpath exports', () => {
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expect(
+      viteDiagnosticMessageFacts(
+        [
+          'Jiso Vite transform failed with 1 error diagnostic.',
+          '',
+          'FW201 routes/card.tsx:1:1 message.',
+          '  help: Element params: -',
+        ].join('\n'),
+      ).diagnostics[0]?.help,
+    ).toEqual([{ label: 'Element params', text: '-' }]);
     expect(starterTemplateFacts).toBeTypeOf('function');
     expect(executeStarterClientTemplate).toBeTypeOf('function');
     expect(runStarterTemplateEmitGraph).toBeTypeOf('function');
@@ -281,6 +308,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(commandSequence('vp run fw-check')).toMatchObject([
       { args: ['run', 'fw-check'], executable: 'vp' },
     ]);
+    expect(commandSequenceWithoutLast('vp run build && vp run fw-check')).toBe('vp run build');
     expect(pnpmRunScriptNames('pnpm run build && pnpm run test:browser')).toEqual([
       'build',
       'test:browser',
@@ -379,6 +407,9 @@ type _PublicSubpathTypes = [
   VitePlusConfig,
   VitePlusTask,
   WorkflowStepCommand,
+  DiagnosticHelpFact,
+  DiagnosticOutputFact,
+  ViteDiagnosticMessageFacts,
   FwExplainOutput,
   FwExportError,
   FwExportHtmlArtifact,
@@ -399,6 +430,8 @@ type _PublicSubpathTypes = [
   HarnessOperationVerifier,
   MarkdownFields,
   MarkdownTableRow,
+  MarkdownBoldSectionHeading,
+  CssScopeRuleFact,
   ProjectSourceSiteFact,
   StarterClientTemplateFixture,
   StarterTemplateFacts,

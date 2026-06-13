@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  markdownBoldSectionHeadings,
   markdownFields,
   markdownLeadingTitle,
   markdownNumberedListItems,
@@ -54,6 +55,22 @@ describe('@jiso/test markdown fixture seam', () => {
     expect(markdownLeadingTitle('**Platform behavior emission.** Details')).toBe(
       'Platform behavior emission',
     );
+  });
+
+  it('extracts bold numbered section headings used by SPEC open-area gates', () => {
+    expect(
+      markdownBoldSectionHeadings(
+        [
+          '**13.1 CSS:** details',
+          'body text',
+          '**13.2 Lists at scale.** more details',
+          '**Not numbered:** ignored',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      { number: '13.1', title: 'CSS' },
+      { number: '13.2', title: 'Lists at scale' },
+    ]);
   });
 
   it('extracts front-matter style fields with wrapped continuation lines', () => {

@@ -50,6 +50,7 @@ import {
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
   assertOrderedItems,
+  commandSequenceWithoutLast,
   nodeTaskCommand,
   loadVitePlusConfig,
   pnpmFilterTestCommands,
@@ -58,6 +59,7 @@ import {
   vitestTaskCommand,
   workflowVpRunTaskNames,
 } from '../packages/test/src/command-fixtures.ts';
+import { viteDiagnosticMessageFacts } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
   fwExplainField,
   fwExplainRecords,
@@ -76,6 +78,7 @@ import {
 } from '../packages/test/src/generated-module-fixtures.ts';
 import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
+  markdownBoldSectionHeadings,
   markdownFields,
   markdownLeadingTitle,
   markdownNumberedListItems,
@@ -84,6 +87,7 @@ import {
   markdownTableRows,
 } from '../packages/test/src/markdown-fixtures.ts';
 import {
+  cssScopeRules,
   forbiddenBrowserArchitectureFacts,
   projectDirectoryNames,
   projectFileSources,
@@ -486,11 +490,9 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   ).map(canonicalDocRuleTitle);
   const compilerRuleTitles = markdownNumberedListTitles(compilerRules).map(canonicalDocRuleTitle);
   const compilerRuleItems = markdownNumberedListItems(compilerRules);
-  const cssContractHeadings = markdownSection(spec, '13. Open Design Areas (named, not hand-waved)')
-    .split('\n')
-    .map((line) => /^\*\*(\d+\.\d+) (.+?)[.:]\*\*/.exec(line))
-    .filter(Boolean)
-    .map((match) => ({ number: match[1], title: match[2] }));
+  const cssContractHeadings = markdownBoldSectionHeadings(
+    markdownSection(spec, '13. Open Design Areas (named, not hand-waved)'),
+  );
   const behaviorFixture = compileComponentModule({
     fileName: 'components/docs/doc-card.tsx',
     source: `
@@ -553,13 +555,9 @@ export const DocCard = component('doc-card', {
   assert.doesNotThrow(() => assertRenderEquivalence(behaviorFixture));
   assert.equal(cssManifest.stylesheets[0]?.href, '/_jiso/components/docs/doc-card.css');
   assert.deepEqual(cssManifest.stylesheets[0]?.fragmentTargets, ['doc-card']);
-  assert.deepEqual(
-    cssSource
-      .split('\n')
-      .filter((line) => line.includes('@scope'))
-      .map((line) => line.trim()),
-    ['@scope (doc-card) to (:scope [fw-c]) {'],
-  );
+  assert.deepEqual(cssScopeRules(cssSource), [
+    { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
+  ]);
 });
 
 void test('P10 legibility study packet is ready but not claimed complete', async () => {
@@ -4517,29 +4515,37 @@ export const DiagnosticCard = component('diagnostic-card', {
 });
 `;
   const assertRedTransformMessage = (message) => {
-    const [summary, diagnosticBlock] = message.split('\n\n');
-    const diagnosticLines = diagnosticBlock?.split('\n') ?? [];
-    const loweringPrefix = '  help: Would lower to: on:click="';
-
-    assert.equal(summary, 'Jiso Vite transform failed with 1 error diagnostic.');
-    assert.equal(
-      diagnosticLines[0],
-      `FW201 ${fileName}:5:25 ${diagnosticDefinitions.FW201.message}`,
-    );
-    assert.equal(diagnosticLines[1]?.startsWith(loweringPrefix), true);
-    assert.equal(diagnosticLines[1]?.endsWith('"'), true);
-
-    const loweredHref = diagnosticLines[1]?.slice(loweringPrefix.length, -1) ?? '';
+    const diagnosticMessage = viteDiagnosticMessageFacts(message);
+    const redDiagnostic = diagnosticMessage.diagnostics[0];
+    const loweringHelp = redDiagnostic?.help.find((entry) => entry.label === 'Would lower to');
+    const loweredAttrs = htmlElementFacts(`<button ${loweringHelp?.text ?? ''}></button>`, {
+      tag: 'button',
+    })[0]?.attrs;
+    const loweredHref = loweredAttrs?.['on:click'] ?? '';
     const loweredUrl = new URL(loweredHref, 'http://jiso.test');
+
+    assert.equal(diagnosticMessage.summary, 'Jiso Vite transform failed with 1 error diagnostic.');
+    assert.deepEqual(
+      redDiagnostic && {
+        code: redDiagnostic.code,
+        location: redDiagnostic.location,
+        message: redDiagnostic.message,
+      },
+      { code: 'FW201', location: `${fileName}:5:25`, message: diagnosticDefinitions.FW201.message },
+    );
     assert.equal(loweredUrl.pathname, '/c/routes/diagnostic-card.client.js');
     assert.equal(loweredUrl.searchParams.get('v')?.length, 8);
     assert.equal(isLowerHex(loweredUrl.searchParams.get('v') ?? ''), true);
     assert.equal(loweredUrl.hash, '#DiagnosticCard$button_click');
-    assert.deepEqual(diagnosticLines.slice(2, 6), [
-      "  help: Blocked expression: () => window.alert('x')",
-      '  help: Element params: -',
-      `  help: ${diagnosticDefinitions.FW201.help.split('\n')[0]}`,
-      `  help: ${diagnosticDefinitions.FW201.help.split('\n')[1]}`,
+    assert.deepEqual(redDiagnostic?.help, [
+      { label: 'Would lower to', text: loweringHelp?.text },
+      { label: 'Blocked expression', text: "() => window.alert('x')" },
+      { label: 'Element params', text: '-' },
+      {
+        label: 'Fixes',
+        text: diagnosticDefinitions.FW201.help.split('\n')[0]?.replace(/^Fixes:\s+/, ''),
+      },
+      { label: 'help', text: diagnosticDefinitions.FW201.help.split('\n')[1] },
     ]);
   };
   const expectedStaticExportError = [
@@ -5380,7 +5386,7 @@ void test('Conformance suites are an explicit gate', async () => {
     conformanceTaskCommands.map((entry) => `pnpm-filter-test ${entry.packageName}`),
   );
 
-  const missingPackageCommand = conformanceTask.command.split(' && ').slice(0, -1).join(' && ');
+  const missingPackageCommand = commandSequenceWithoutLast(conformanceTask.command);
   await assert.rejects(
     runPnpmFilterTaskCommand(missingPackageCommand, conformancePackages, {
       cwd: new URL('..', import.meta.url),

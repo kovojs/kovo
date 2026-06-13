@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import * as ts from 'typescript';
 
 import {
+  cssScopeRules,
   cssSourceDirectives,
   forbiddenBrowserArchitectureFacts,
   projectDirectoryNames,
@@ -26,6 +27,25 @@ describe('@jiso/test source fixture seam', () => {
         ].join('\n'),
       ),
     ).toEqual(['"../index.html"', 'inline("bg-emerald-50 text-emerald-700")']);
+  });
+
+  it('extracts structured CSS scope rules from generated component styles', () => {
+    expect(
+      cssScopeRules(
+        [
+          '.global { color: red; }',
+          '  @scope (doc-card) to (:scope [fw-c]) {',
+          '    .title { color: teal; }',
+          '  }',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        limit: ':scope [fw-c]',
+        raw: '@scope (doc-card) to (:scope [fw-c]) {',
+        scope: 'doc-card',
+      },
+    ]);
   });
 
   it('turns generated graph source sites into path and line facts', () => {
