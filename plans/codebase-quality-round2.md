@@ -85,6 +85,10 @@ scope rules locally.
 Shared runtime fixtures now also own pagehide optimism cleanup lifecycle, pending-stamp, fetch,
 and rebase behavior projections for the P6 fw-check gate, so the monolith no longer rebuilds that
 fake lifecycle root locally.
+Shared graph fixtures now own generated graph artifact honesty projections for commerce emitted
+graph checks, invalidations, and source-derived touch-graph provenance, so the P4 fw-check commerce
+gate asserts one structured artifact fact instead of assembling provenance and invalidation
+summaries inline.
 Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
 component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
 output comparison against SPEC.md section 5.2 provenance.
@@ -227,6 +231,13 @@ Latest evidence:
   `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P6 navigation bfcache optimism cleanup acceptance is represented" tests/fw-check.node.mjs`.
+- Generated graph artifact honesty fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 2 - Compiler IR
 

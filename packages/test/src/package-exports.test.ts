@@ -159,6 +159,7 @@ import {
   type InlineEnhancedFormLoaderFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
+  generatedGraphArtifactHonestyFact,
   graphFixtureFile,
   graphComponentTargetFacts,
   graphDomainFacts,
@@ -176,6 +177,7 @@ import {
   graphRouteFacts,
   graphStaticBehaviorFact,
   graphTouchGraphKeys,
+  type GeneratedGraphArtifactHonestyFact,
   type GraphInvalidationMatrix,
   type GraphQueryConsumerFact,
   type ProjectGraphFixture,
@@ -582,6 +584,9 @@ describe('@jiso/test package subpath exports', () => {
       .toMatchTypeOf<readonly unknown[]>();
     expectTypeOf<ProjectPackageManifestFact>().toHaveProperty('directory').toEqualTypeOf<string>();
     expect(graphFixtureFile).toBeTypeOf('function');
+    expectTypeOf<GeneratedGraphArtifactHonestyFact>().toMatchTypeOf<{
+      emitCheck: { clean: boolean };
+    }>();
     expectTypeOf<ProjectGraphFixture>().toMatchTypeOf<Record<string, unknown>>();
     expect(touchGraphProvenanceFact).toBeTypeOf('function');
     expect(
@@ -826,6 +831,18 @@ describe('@jiso/test package subpath exports', () => {
     ]);
     expect(graphDomainFacts(graph)).toEqual(['cart']);
     expect(graphInvalidationFacts(graph)).toEqual({ 'cart/add': ['cart'] });
+    expect(
+      generatedGraphArtifactHonestyFact({
+        emitCheck: { stderr: '', stdout: '' },
+        graph,
+        provenance: {
+          entries: {},
+          siteSummary: { count: 0, linesArePositive: true, paths: [] },
+          sourceLineMismatches: [],
+          unresolvedMutations: [],
+        },
+      }).emitCheck.clean,
+    ).toBe(true);
     expect(graphMutationKeys(graph)).toEqual(['cart/add']);
     expect(graphPageFact(graph, '/cart')).toMatchObject({ route: '/cart' });
     expect(graphMutationFact(graph, 'cart/add')).toMatchObject({ key: 'cart/add' });

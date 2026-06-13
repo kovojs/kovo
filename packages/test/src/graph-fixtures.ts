@@ -1,4 +1,10 @@
 import { projectJsonFile } from './source-fixtures.ts';
+import {
+  touchGraphProvenanceHonestyFact,
+  type TouchGraphProvenanceEntryFact,
+  type TouchGraphProvenanceHonestyFact,
+  type TouchGraphProvenanceFact,
+} from './touch-graph-fixtures.ts';
 
 export interface JisoGraphComponentFact {
   fragments?: readonly string[];
@@ -61,6 +67,24 @@ export interface GraphStaticBehaviorFact {
   optimistic: JisoGraphOptimisticFact[];
   routes: string[];
   touchGraphKeys: string[];
+}
+
+export interface GeneratedGraphEmitCheckResult {
+  stderr: string;
+  stdout: string;
+}
+
+export interface GeneratedGraphArtifactHonestyFact {
+  emitCheck: {
+    clean: boolean;
+    stderr: string;
+    stdout: string;
+  };
+  invalidations: Record<string, string[]>;
+  touchGraph: {
+    entries: Record<string, TouchGraphProvenanceEntryFact>;
+    honesty: TouchGraphProvenanceHonestyFact;
+  };
 }
 
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
@@ -230,6 +254,25 @@ export function graphStaticBehaviorFact(graph: JisoGraphFixture): GraphStaticBeh
     optimistic: graphOptimisticFacts(graph),
     routes: graphRouteFacts(graph),
     touchGraphKeys: graphTouchGraphKeys(graph),
+  };
+}
+
+export function generatedGraphArtifactHonestyFact(options: {
+  emitCheck: GeneratedGraphEmitCheckResult;
+  graph: JisoGraphFixture;
+  provenance: TouchGraphProvenanceFact;
+}): GeneratedGraphArtifactHonestyFact {
+  return {
+    emitCheck: {
+      clean: options.emitCheck.stderr === '' && options.emitCheck.stdout === '',
+      stderr: options.emitCheck.stderr,
+      stdout: options.emitCheck.stdout,
+    },
+    invalidations: graphInvalidationFacts(options.graph),
+    touchGraph: {
+      entries: options.provenance.entries,
+      honesty: touchGraphProvenanceHonestyFact(options.provenance),
+    },
   };
 }
 

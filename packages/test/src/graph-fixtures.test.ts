@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  generatedGraphArtifactHonestyFact,
   graphFixtureFile,
   graphComponentTargetFacts,
   graphDomainFacts,
@@ -127,6 +128,78 @@ describe('@jiso/test graph fixture seam', () => {
       ],
       routes: ['/admin', '/cart'],
       touchGraphKeys: ['cart.addItem', 'order.receipt'],
+    });
+  });
+
+  it('projects generated graph artifact honesty from emit checks and provenance', () => {
+    expect(
+      generatedGraphArtifactHonestyFact({
+        emitCheck: { stderr: '', stdout: '' },
+        graph,
+        provenance: {
+          entries: {
+            'cart.addItem': {
+              reads: [],
+              touches: [
+                {
+                  domain: 'cart',
+                  keys: null,
+                  predicate: undefined,
+                  sitePath: 'src/app.ts',
+                  via: 'cart_items',
+                },
+              ],
+              unresolved: [],
+            },
+          },
+          siteSummary: {
+            count: 1,
+            linesArePositive: true,
+            paths: ['src/app.ts'],
+          },
+          sourceLineMismatches: [],
+          unresolvedMutations: [],
+        },
+      }),
+    ).toEqual({
+      emitCheck: {
+        clean: true,
+        stderr: '',
+        stdout: '',
+      },
+      invalidations: {
+        'cart/add': ['cart', 'productGrid'],
+      },
+      touchGraph: {
+        entries: {
+          'cart.addItem': {
+            reads: [],
+            touches: [
+              {
+                domain: 'cart',
+                keys: null,
+                predicate: undefined,
+                sitePath: 'src/app.ts',
+                via: 'cart_items',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+        honesty: {
+          entryKeys: ['cart.addItem'],
+          sourceLineMismatches: [],
+          sourceSites: {
+            count: 1,
+            linesArePositive: true,
+            paths: ['src/app.ts'],
+          },
+          touchCountsByMutation: {
+            'cart.addItem': 1,
+          },
+          unresolvedMutations: [],
+        },
+      },
     });
   });
 

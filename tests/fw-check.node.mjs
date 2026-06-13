@@ -100,7 +100,7 @@ import {
 import {
   graphComponentTargetFacts,
   graphFixtureFile,
-  graphInvalidationFacts,
+  generatedGraphArtifactHonestyFact,
   graphMutationFact,
   graphOptimisticFacts,
   graphMutationUpdateConsumers,
@@ -135,10 +135,7 @@ import {
   projectJsonFile,
   projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
-import {
-  touchGraphProvenanceFact,
-  touchGraphProvenanceHonestyFact,
-} from '../packages/test/src/touch-graph-fixtures.ts';
+import { touchGraphProvenanceFact } from '../packages/test/src/touch-graph-fixtures.ts';
 import {
   loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
@@ -4883,76 +4880,98 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     { stderr: '', stdout: '' },
   );
   const provenance = await touchGraphProvenanceFact(projectRootPath, commerceGraph.touchGraph);
-  assert.deepEqual(touchGraphProvenanceHonestyFact(provenance), {
-    entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
-    sourceLineMismatches: [],
-    sourceSites: {
-      count: 5,
-      linesArePositive: true,
-      paths: ['examples/commerce/src/app.ts'],
-    },
-    touchCountsByMutation: {
-      'cart.addItem': 3,
-      'order.receipt': 1,
-      'payment.webhook': 1,
-    },
-    unresolvedMutations: [],
-  });
-  assert.deepEqual(provenance.entries, {
-    'cart.addItem': {
-      reads: [],
-      touches: [
-        {
-          domain: 'cart',
-          keys: null,
-          predicate: undefined,
-          sitePath: 'examples/commerce/src/app.ts',
-          via: 'cart_items',
+  assert.deepEqual(
+    generatedGraphArtifactHonestyFact({
+      emitCheck: {
+        stderr: emitGraphCheck.stderr,
+        stdout: emitGraphCheck.stdout,
+      },
+      graph: commerceGraph,
+      provenance,
+    }),
+    {
+      emitCheck: {
+        clean: true,
+        stderr: '',
+        stdout: '',
+      },
+      invalidations: {
+        'cart/add': ['cart', 'orderHistory', 'productGrid'],
+      },
+      touchGraph: {
+        entries: {
+          'cart.addItem': {
+            reads: [],
+            touches: [
+              {
+                domain: 'cart',
+                keys: null,
+                predicate: undefined,
+                sitePath: 'examples/commerce/src/app.ts',
+                via: 'cart_items',
+              },
+              {
+                domain: 'order',
+                keys: null,
+                predicate: undefined,
+                sitePath: 'examples/commerce/src/app.ts',
+                via: 'orders',
+              },
+              {
+                domain: 'product',
+                keys: 'arg:productId',
+                predicate: 'eq',
+                sitePath: 'examples/commerce/src/app.ts',
+                via: 'products',
+              },
+            ],
+            unresolved: [],
+          },
+          'payment.webhook': {
+            reads: [],
+            touches: [
+              {
+                domain: 'order',
+                keys: 'arg:data.object.id',
+                predicate: 'eq',
+                sitePath: 'examples/commerce/src/app.ts',
+                via: 'orders',
+              },
+            ],
+            unresolved: [],
+          },
+          'order.receipt': {
+            reads: [],
+            touches: [
+              {
+                domain: 'attachment',
+                keys: 'arg:orderId',
+                predicate: 'eq',
+                sitePath: 'examples/commerce/src/app.ts',
+                via: 'attachments',
+              },
+            ],
+            unresolved: [],
+          },
         },
-        {
-          domain: 'order',
-          keys: null,
-          predicate: undefined,
-          sitePath: 'examples/commerce/src/app.ts',
-          via: 'orders',
+        honesty: {
+          entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+          sourceLineMismatches: [],
+          sourceSites: {
+            count: 5,
+            linesArePositive: true,
+            paths: ['examples/commerce/src/app.ts'],
+          },
+          touchCountsByMutation: {
+            'cart.addItem': 3,
+            'order.receipt': 1,
+            'payment.webhook': 1,
+          },
+          unresolvedMutations: [],
         },
-        {
-          domain: 'product',
-          keys: 'arg:productId',
-          predicate: 'eq',
-          sitePath: 'examples/commerce/src/app.ts',
-          via: 'products',
-        },
-      ],
-      unresolved: [],
+      },
     },
-    'payment.webhook': {
-      reads: [],
-      touches: [
-        {
-          domain: 'order',
-          keys: 'arg:data.object.id',
-          predicate: 'eq',
-          sitePath: 'examples/commerce/src/app.ts',
-          via: 'orders',
-        },
-      ],
-      unresolved: [],
-    },
-    'order.receipt': {
-      reads: [],
-      touches: [
-        {
-          domain: 'attachment',
-          keys: 'arg:orderId',
-          predicate: 'eq',
-          sitePath: 'examples/commerce/src/app.ts',
-          via: 'attachments',
-        },
-      ],
-      unresolved: [],
-    },
-  });
+  );
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
   assert.deepEqual(fwCheckOkAssertionFact(fwCheck(commerceGraph)), {
@@ -4968,9 +4987,6 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     ),
     ['cart.addItem'],
   );
-  assert.deepEqual(graphInvalidationFacts(commerceGraph), {
-    'cart/add': ['cart', 'orderHistory', 'productGrid'],
-  });
 });
 
 void test('Conformance suites are an explicit gate', async () => {
