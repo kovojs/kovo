@@ -51,7 +51,7 @@ export interface SourceOffsetMap {
   segments: readonly SourceOffsetSegment[];
 }
 
-export interface SourcePatchResult {
+export interface SourcePatchWithOffsetMap {
   source: string;
   sourceOffsetMap: SourceOffsetMap;
 }
@@ -170,7 +170,7 @@ export function applySourceReplacementsWithOffsetMap(
   source: string,
   replacements: readonly SourceReplacement[],
   prefix = '',
-): SourcePatchResult {
+): SourcePatchWithOffsetMap {
   return {
     source: `${prefix}${applySourceReplacements(source, replacements)}`,
     sourceOffsetMap: sourceReplacementOffsetMap(source.length, replacements, prefix.length),
