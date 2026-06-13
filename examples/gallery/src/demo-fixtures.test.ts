@@ -246,7 +246,8 @@ describe('gallery demo fixtures', () => {
     expect(radioGroup.html).toContain('tabIndex="0"');
     expect(radioGroup.html).toContain('data-state="checked"');
     expect(radioGroup.html).toContain('value="freight"');
-    expect(radioGroup.html).toContain('disabled tabIndex="-1"');
+    expect(radioGroup.html).toContain('disabled id="gallery-radio-freight"');
+    expect(radioGroup.html).toContain('tabIndex="-1" type="radio" value="freight"');
   });
 
   it('renders scroll-area fixture with native viewport and decorative scrollbar parts', () => {

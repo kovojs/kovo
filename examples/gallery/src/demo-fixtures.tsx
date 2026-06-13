@@ -33,10 +33,6 @@ import {
   otpFieldInputAttributes,
   otpFieldRootAttributes,
   progressRootAttributes,
-  radioGroupItemAttributes,
-  radioGroupLabelAttributes,
-  radioGroupRadioAttributes,
-  radioGroupRootAttributes,
   scrollAreaCornerAttributes,
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
@@ -66,6 +62,10 @@ import {
   Checkbox,
   Drawer,
   Kbd,
+  RadioGroup,
+  RadioGroupItem,
+  RadioGroupLabel,
+  RadioGroupRadio,
   Sheet,
   Skeleton,
   Switch,
@@ -957,34 +957,35 @@ export function RadioGroupDemo(): string {
       <p data-demo-summary="no-js">
         Radio group keeps native radio inputs while adding roving-focus attributes.
       </p>
-      <div {...radioGroupRootAttributes(state)}>
-        <p id="gallery-radio-description">Choose a fulfillment speed.</p>
-        {items.map((item) => (
-          <div
-            {...radioGroupItemAttributes({
-              ...state,
-              itemValue: item.value,
-            })}
-          >
-            <input
-              {...radioGroupRadioAttributes({
+      {RadioGroup.definition.render({
+        ...state,
+        children: (
+          <>
+            <p id="gallery-radio-description">Choose a fulfillment speed.</p>
+            {items.map((item) =>
+              RadioGroupItem.definition.render({
                 ...state,
-                controlId: `gallery-radio-${item.value}`,
+                children: (
+                  <>
+                    {RadioGroupRadio.definition.render({
+                      ...state,
+                      controlId: `gallery-radio-${item.value}`,
+                      itemValue: item.value,
+                    })}
+                    {RadioGroupLabel.definition.render({
+                      ...state,
+                      children: item.value,
+                      controlId: `gallery-radio-${item.value}`,
+                      itemValue: item.value,
+                    })}
+                  </>
+                ),
                 itemValue: item.value,
-              })}
-            />
-            <label
-              {...radioGroupLabelAttributes({
-                ...state,
-                controlId: `gallery-radio-${item.value}`,
-                itemValue: item.value,
-              })}
-            >
-              {item.value}
-            </label>
-          </div>
-        ))}
-      </div>
+              }),
+            )}
+          </>
+        ),
+      })}
       {renderBehaviorContract({
         changeReasons: 'item-click, keyboard, programmatic',
         dataState: 'checked, unchecked, disabled',

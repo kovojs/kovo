@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, sheet, skeleton, switch, table, tabs, toggle',
+      'alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle',
     );
 
     const manifest = JSON.parse(
@@ -113,6 +113,7 @@ describe('fw add', () => {
           'card',
           'checkbox',
           'kbd',
+          'radio-group',
           'sheet',
           'skeleton',
           'switch',
@@ -148,6 +149,9 @@ describe('fw add', () => {
         `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD radio-group path=${JSON.stringify(join(outDir, 'radio-group.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD sheet path=${JSON.stringify(join(outDir, 'sheet.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -170,6 +174,7 @@ describe('fw add', () => {
       const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
       const checkbox = readFileSync(join(outDir, 'checkbox.tsx'), 'utf8');
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
+      const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
       const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
       const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
       const switchSource = readFileSync(join(outDir, 'switch.tsx'), 'utf8');
@@ -190,6 +195,8 @@ describe('fw add', () => {
       expect(checkbox).toContain('export const checkboxClassNames = defineVariants');
       expect(kbd).toContain("export const Kbd = component('kbd'");
       expect(kbd).toContain('export const kbdClassNames =');
+      expect(radioGroup).toContain("export const RadioGroup = component('radio-group'");
+      expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
       expect(sheet).toContain("export const Sheet = component('sheet'");
       expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
       expect(skeleton).toContain("export const Skeleton = component('skeleton'");
@@ -208,6 +215,7 @@ describe('fw add', () => {
         card,
         checkbox,
         kbd,
+        radioGroup,
         sheet,
         skeleton,
         switchSource,
@@ -256,7 +264,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, sheet, skeleton, switch, table, tabs, toggle.\n',
+        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle.\n',
       );
     } finally {
       stdout.mockRestore();

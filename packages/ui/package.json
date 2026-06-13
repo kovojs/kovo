@@ -12,6 +12,7 @@
     "./checkbox": "./src/checkbox.tsx",
     "./drawer": "./src/drawer.tsx",
     "./kbd": "./src/kbd.tsx",
+    "./radio-group": "./src/radio-group.tsx",
     "./sheet": "./src/sheet.tsx",
     "./skeleton": "./src/skeleton.tsx",
     "./switch": "./src/switch.tsx",

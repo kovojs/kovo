@@ -30,6 +30,27 @@ export { Alert, alertClassNames, alertClasses } from './alert.js';
 export type { AlertProps, AlertVariant } from './alert.js';
 export { Kbd, kbdClassNames, kbdClasses } from './kbd.js';
 export type { KbdProps } from './kbd.js';
+export {
+  RadioGroup,
+  RadioGroupItem,
+  RadioGroupLabel,
+  RadioGroupRadio,
+  radioGroupClassNames,
+  radioGroupClasses,
+  radioGroupItemClassNames,
+  radioGroupItemClasses,
+  radioGroupLabelClassNames,
+  radioGroupLabelClasses,
+  radioGroupRadioClassNames,
+  radioGroupRadioClasses,
+} from './radio-group.js';
+export type {
+  RadioGroupItemProps,
+  RadioGroupLabelProps,
+  RadioGroupProps,
+  RadioGroupRadioProps,
+  RadioGroupStateProps,
+} from './radio-group.js';
 export { Drawer, Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
 export type { DrawerProps, DrawerSide, SheetProps, SheetSide } from './sheet.js';
 export { Skeleton, skeletonClassNames, skeletonClasses } from './skeleton.js';

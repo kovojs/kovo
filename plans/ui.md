@@ -43,7 +43,7 @@ Implemented areas:
 
 - Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
 - `@jiso/ui` ships vendorable styled source for pure-markup components plus checkbox, switch,
-  tabs, and toggle wrappers over the headless primitive attrs.
+  tabs, toggle, and radio-group wrappers over the headless primitive attrs.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
@@ -54,9 +54,10 @@ Recent gates:
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts src/merge-fixtures.test.tsx`
 - `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components"`
-- `pnpm exec vp check packages/ui/src/tabs.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md`
+- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized"`
+- `pnpm exec vp check packages/ui/src/radio-group.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md`
 - `git diff --check`
 
 ## Open Work

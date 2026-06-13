@@ -266,7 +266,8 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'type="radio"',
     'aria-checked="true"',
     'tabIndex="0"',
-    'disabled tabIndex="-1"',
+    'disabled id="gallery-radio-freight"',
+    'tabIndex="-1" type="radio" value="freight"',
   ],
   '/components/scroll-area': [
     'role="region"',

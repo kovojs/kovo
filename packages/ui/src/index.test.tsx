@@ -16,6 +16,10 @@ import {
   Checkbox,
   Drawer,
   Kbd,
+  RadioGroup,
+  RadioGroupItem,
+  RadioGroupLabel,
+  RadioGroupRadio,
   Sheet,
   Skeleton,
   Switch,
@@ -33,6 +37,10 @@ import {
   breadcrumbClasses,
   buttonClasses,
   checkboxClasses,
+  radioGroupClasses,
+  radioGroupItemClasses,
+  radioGroupLabelClasses,
+  radioGroupRadioClasses,
   tabsClasses,
   tabsListClasses,
   tabsPanelClasses,
@@ -59,6 +67,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Alert.name).toBe('alert');
     expect(Skeleton.name).toBe('skeleton');
     expect(Switch.name).toBe('switch');
+    expect(RadioGroup.name).toBe('radio-group');
     expect(Tabs.name).toBe('tabs');
     expect(Toggle.name).toBe('toggle');
 
@@ -106,9 +115,72 @@ describe('@jiso/ui styled package foundation', () => {
     );
     expect(buttonClasses).toContain('h-9 gap-2 px-3');
     expect(checkboxClasses.join(' ')).toContain('inline-flex items-center gap-2');
+    expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
+  });
+
+  it('wraps the headless radio-group primitive as styled native radios', () => {
+    const items = [
+      { value: 'standard' },
+      { value: 'express' },
+      { disabled: true, value: 'freight' },
+    ];
+    const state = {
+      descriptionId: 'shipping-help',
+      items,
+      name: 'shipping-speed',
+      required: true,
+      value: 'express',
+    };
+
+    const root = RadioGroup.definition.render({
+      ...state,
+      children: 'radio options',
+      id: 'shipping-speed',
+      invalid: true,
+    });
+    const item = RadioGroupItem.definition.render({
+      ...state,
+      children: 'express input',
+      itemValue: 'express',
+    });
+    const radio = RadioGroupRadio.definition.render({
+      ...state,
+      controlId: 'shipping-express',
+      itemValue: 'express',
+    });
+    const disabledRadio = RadioGroupRadio.definition.render({
+      ...state,
+      controlId: 'shipping-freight',
+      itemValue: 'freight',
+    });
+    const label = RadioGroupLabel.definition.render({
+      ...state,
+      children: 'Express',
+      controlId: 'shipping-express',
+      itemValue: 'express',
+    });
+
+    expect(RadioGroupItem.name).toBe('radio-group-item');
+    expect(RadioGroupRadio.name).toBe('radio-group-radio');
+    expect(RadioGroupLabel.name).toBe('radio-group-label');
+    expect(root).toContain('aria-describedby="shipping-help"');
+    expect(root).toContain('aria-invalid="true"');
+    expect(root).toContain('aria-required="true"');
+    expect(root).toContain('role="radiogroup"');
+    expect(item).toContain('data-state="checked"');
+    expect(radio).toContain('aria-checked="true" checked');
+    expect(radio).toContain('id="shipping-express" name="shipping-speed" required');
+    expect(radio).toContain('tabIndex="0" type="radio" value="express"');
+    expect(disabledRadio).toContain('data-disabled=""');
+    expect(disabledRadio).toContain('disabled id="shipping-freight"');
+    expect(disabledRadio).toContain('tabIndex="-1" type="radio" value="freight"');
+    expect(label).toContain('for="shipping-express"');
+    expect(radioGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
+    expect(radioGroupRadioClasses.join(' ')).toContain('accent-neutral-950');
+    expect(radioGroupLabelClasses.join(' ')).toContain('select-none');
   });
 
   it('wraps headless form-control primitives as styled native controls', () => {
