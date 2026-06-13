@@ -16,9 +16,9 @@ work, and proving commands.
 - [x] R3 `createApp()` aggregate and `createRequestHandler(app)` over `Request -> Response`.
 - [x] R4 node:http adapter including Early Hints; perf proof migrated to the adapter.
 - [x] R5 Vite+ plugin: dev middleware over the same handler plus build wiring.
-- [ ] R6 static export: synthetic-request replay to directory-index HTML with L0/L1 constraints
+- [x] R6 static export: synthetic-request replay to directory-index HTML with L0/L1 constraints
       and teaching errors for non-exportable routes.
-- [ ] R7 adoption: starter served by `vp dev`, commerce over HTTP, docs site exported as an
+- [x] R7 adoption: starter served by `vp dev`, commerce over HTTP, docs site exported as an
       outside consumer.
 
 ## Current Evidence Rollup
@@ -47,14 +47,16 @@ Implemented areas:
 - `static-export-types.ts` owns export artifact/manifest shapes plus static export option/result
   contracts, leaving Vite build/export helpers independent of the `static-export.ts` orchestrator
   facade for type-only dependencies.
-- `static-export-document.ts` owns synthetic route-document replay, artifact path selection, and
-  SPEC §9.5 L0/L1 endpoint rejection for exported no-JS documents; it also discovers same-origin
-  full-URL `/c/` module refs from route HTML and `Link` headers, preserving SPEC §4.3's full
-  module URL contract while publishing static-host `/c/` files.
+- `static-export-request.ts` owns SPEC §9.5 synthetic GET construction for route documents and
+  versioned `/c/` module hrefs. `static-export-document.ts` owns route-document replay, artifact
+  path selection, and SPEC §9.5 L0/L1 endpoint rejection for exported no-JS documents.
+  `static-export-client-modules.ts` owns same-origin full-URL `/c/` module replay from route HTML
+  and `Link` headers, preserving SPEC §4.3's full module URL contract while publishing
+  static-host `/c/` files and rejecting query-version drift.
 - `static-export-response.ts` owns the shared SPEC §9.5 replay response reader and FW229
   content-type/status diagnostics for both route documents and immutable `/c/` modules, leaving
-  `static-export-document.ts` focused on synthetic requests, document inspection, artifact
-  assembly, and client-module dedupe.
+  `static-export-document.ts` focused on document inspection/artifact assembly and
+  `static-export-client-modules.ts` focused on client-module replay/dedupe.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting,
   SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export, and a public export
   manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
@@ -1033,3 +1035,18 @@ Round259 Vite stylesheet helper contraction evidence:
 - `pnpm run check:build`
 - `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round263 app-shell replay/request closure evidence:
+
+- `packages/server/src/static-export-request.ts` owns SPEC §9.5 synthetic GET construction for
+  route-document paths and versioned `/c/` module hrefs, and
+  `packages/server/src/static-export-client-modules.ts` owns discovered client-module replay,
+  same-output-path dedupe, and FW229 query-version drift diagnostics. `static-export-document.ts`
+  no longer exports the client-module compatibility replay helper.
+- `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-request.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-client-modules.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`

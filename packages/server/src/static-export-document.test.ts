@@ -5,10 +5,7 @@ import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
 } from './static-export-document-refs.js';
-import {
-  replayStaticExportClientModuleArtifacts,
-  replayStaticExportRouteDocumentArtifact,
-} from './static-export-document.js';
+import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 
 describe('server static export document boundary', () => {
   it('replays route documents as synthetic GET requests at normalized pathnames', async () => {
@@ -64,80 +61,6 @@ describe('server static export document boundary', () => {
             "successful HTML route documents; '/private' returned status 405",
           ),
           routePath: '/private',
-        },
-      ],
-    });
-  });
-
-  it('accepts JavaScript client-module replay through the same document boundary', async () => {
-    const seen: string[] = [];
-    const handler: RequestHandler = async (request) => {
-      const url = new URL(request.url);
-      seen.push(`${request.method} ${url.pathname}${url.search}${url.hash}`);
-      return new Response('export const cart = true;', {
-        headers: {
-          'Content-Type': 'application/javascript; charset=utf-8',
-          'X-Module': url.pathname,
-        },
-      });
-    };
-
-    await expect(
-      replayStaticExportClientModuleArtifacts({
-        handler,
-        origin: 'https://jiso.local',
-        routeArtifacts: [
-          {
-            body: '<button on:click="/c/cart.client.js?v=build-1#Cart$add">Add</button>',
-            headers: {},
-            path: '/cart/index.html',
-            status: 200,
-          },
-        ],
-      }),
-    ).resolves.toEqual([
-      {
-        body: 'export const cart = true;',
-        headers: {
-          'content-type': 'application/javascript; charset=utf-8',
-          'x-module': '/c/cart.client.js',
-        },
-        href: '/c/cart.client.js?v=build-1#Cart$add',
-        path: '/c/cart.client.js',
-        status: 200,
-      },
-    ]);
-    expect(seen).toEqual(['GET /c/cart.client.js?v=build-1#Cart$add']);
-  });
-
-  it('raises FW229 when client-module replay returns a non-JavaScript response', async () => {
-    const handler: RequestHandler = async () =>
-      new Response('<main>Missing</main>', {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
-
-    await expect(
-      replayStaticExportClientModuleArtifacts({
-        handler,
-        origin: 'https://jiso.local',
-        routeArtifacts: [
-          {
-            body: '<script type="module" src="/c/missing.client.js?v=build-1"></script>',
-            headers: {},
-            path: '/missing/index.html',
-            status: 200,
-          },
-        ],
-      }),
-    ).rejects.toMatchObject({
-      code: 'FW229',
-      diagnostics: [
-        {
-          code: 'FW229',
-          message: expect.stringContaining(
-            "cannot copy client module '/c/missing.client.js?v=build-1'",
-          ),
-          routePath: '/c/missing.client.js',
         },
       ],
     });

@@ -1,9 +1,7 @@
 import { createRequestHandler } from './app.js';
 import type { JisoApp } from './app-types.js';
-import {
-  replayStaticExportClientModuleArtifacts,
-  replayStaticExportRouteDocumentArtifact,
-} from './static-export-document.js';
+import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
+import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
 import { StaticExportError, type StaticExportDiagnostic } from './static-export-diagnostics.js';
 import { normalizeStaticExportHtmlPathStyle } from './static-export-options.js';

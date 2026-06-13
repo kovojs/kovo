@@ -20,7 +20,7 @@ risks. Check a box only when the exact item is closed with same-session file and
       impossible or indirect surfaces degrade to FW406 instead of fabricated facts.
 - [ ] Phase 4 runtime: one runtime apply path, checked inline-loader parser/minifier parity, no
       duplicated wire/apply parsers or compatibility exports.
-- [ ] Phase 5 server/app-shell: subtractive server extraction, one request/document/static-export
+- [x] Phase 5 server/app-shell: subtractive server extraction, one request/document/static-export
       path, stable public export boundaries, static export and Vite adoption closed.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams prove behavior through
       public fixtures; commerce source/dependency/generated-artifact story is honest.
@@ -1115,11 +1115,13 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
 ## Phase 5 - Server And App Shell
 
 Current state: static export output target planning, output staging, asset planning, Vite build
-output, document/client-module replay, app request document assembly, mutation request handling,
-and SPEC §9.5 dispatch branches have been split into focused modules. Static document replay owns
-synthetic GET construction, route/client response snapshots, FW229 response diagnostics, artifact
-assembly, client-module dedupe, and L0/L1 server endpoint rejection while preserving one SPEC §9.5
-route/client export pipeline.
+output, synthetic replay requests, route-document replay, client-module replay, app request
+document assembly, mutation request handling, and SPEC §9.5 dispatch branches have been split into
+focused modules. Static export replay preserves one SPEC §9.5 route/client export pipeline:
+`static-export-request.ts` owns synthetic GET construction, `static-export-response.ts` owns
+route/client response snapshots and FW229 response diagnostics, `static-export-document.ts` owns
+route artifact assembly and L0/L1 server endpoint rejection, and
+`static-export-client-modules.ts` owns discovered `/c/` module replay and dedupe.
 Static export diagnostics have a focused owner for compile-diagnostic blocking, FW229 formatting,
 type guards, and `StaticExportError`, leaving static-export types for artifact/manifest shapes.
 The create-jiso starter imports app-shell dev/export/static-export helpers from public subpaths and
@@ -1187,8 +1189,9 @@ and response-header snapshots in `static-export-headers.ts`, leaving `static-exp
 type/contract module while the app-shell static-export public subpath forwards from the focused
 result owner. Static export replay response validation now lives in
 `packages/server/src/static-export-response.ts`, so route documents and `/c/` client modules share
-one SPEC §9.5 status/content-type/body snapshot path while `static-export-document.ts` owns
-synthetic request replay, document inspection, artifact assembly, and client-module dedupe.
+one SPEC §9.5 status/content-type/body snapshot path while `static-export-request.ts`,
+`static-export-document.ts`, and `static-export-client-modules.ts` own request construction,
+document artifact assembly, and client-module replay/dedupe respectively.
 Docs-site app-shell adoption now has a build-authored `.jiso-site-routes.json` route manifest:
 `site/scripts/build.mjs` records the exact HTML routes it writes, and `site/scripts/app-shell.mjs`
 uses that manifest for SPEC §9.5 export replay before falling back to recursive fixture discovery,
@@ -1207,12 +1210,12 @@ the plural `jisoAppShellViteManifestStylesheetHrefs*` compatibility helpers are 
 and server/starter/commerce/docs adoption tests pin the singular helper for SPEC §9.5 export-task
 stylesheet evidence.
 
-- [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
+- [x] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
-- [ ] Finish R5/R6/R7 closure: Vite build/static export/adoption should be proven through server,
+- [x] Finish R5/R6/R7 closure: Vite build/static export/adoption should be proven through server,
       commerce, and starter surfaces.
-- [ ] Keep one wire-html emitter and one compile/static-export diagnostic seam.
-- [ ] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
+- [x] Keep one wire-html emitter and one compile/static-export diagnostic seam.
+- [x] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
 
 Latest evidence:
 
@@ -1288,6 +1291,20 @@ Latest evidence:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs`;
   `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs packages/create-jiso/src/index.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`.
+- Round263 app-shell request/client-module closure:
+  `packages/server/src/static-export-request.ts` owns SPEC §9.5 synthetic GET construction for
+  route-document paths and versioned `/c/` module hrefs, and
+  `packages/server/src/static-export-client-modules.ts` owns discovered client-module replay,
+  same-output-path dedupe, and FW229 query-version drift diagnostics. The stale document-level
+  client-module replay compatibility export was deleted, and `plans/app-shell.md` now marks R6/R7
+  closed with starter, commerce, and docs adoption evidence.
+  `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/server/src`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/static-export-request.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-client-modules.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
