@@ -22,6 +22,7 @@ export interface CheckboxGroupState {
   activeValue?: string;
   dir?: TextDirection;
   disabled?: boolean;
+  form?: string;
   invalid?: boolean;
   items?: readonly CheckboxGroupItem[];
   loop?: boolean;
@@ -151,6 +152,7 @@ export function checkboxGroupControlAttributes(
     type: 'checkbox',
     value: options.itemValue,
     ...(options.controlId === undefined ? {} : { id: options.controlId }),
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.required === true ? { required: true } : {}),
   });
@@ -272,6 +274,8 @@ export function checkboxGroupKeyDown(
   if (intent === undefined) return;
 
   const result = checkboxGroupMoveFocus(state, intent);
+  if (result.index < 0) return result;
+
   event.preventDefault();
 
   return result;

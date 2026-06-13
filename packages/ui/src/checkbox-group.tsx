@@ -19,6 +19,7 @@ export interface CheckboxGroupStateProps {
   dir?: TextDirection;
   disabled?: boolean;
   errorId?: string;
+  form?: string;
   invalid?: boolean;
   items?: readonly HeadlessCheckboxGroupItem[];
   loop?: boolean;
@@ -92,6 +93,7 @@ export const CheckboxGroup = component('checkbox-group', {
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
@@ -132,6 +134,7 @@ export const CheckboxGroupItem = component('checkbox-group-item', {
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.items === undefined ? {} : { items: props.items }),
       itemValue: props.itemValue,
@@ -162,6 +165,7 @@ export const CheckboxGroupControl = component('checkbox-group-control', {
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.items === undefined ? {} : { items: props.items }),
       itemValue: props.itemValue,
@@ -181,6 +185,7 @@ export const CheckboxGroupControl = component('checkbox-group-control', {
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         name={attrs.name}
         required={attrs.required}
@@ -200,6 +205,7 @@ export const CheckboxGroupLabel = component('checkbox-group-label', {
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.items === undefined ? {} : { items: props.items }),
       itemValue: props.itemValue,

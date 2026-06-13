@@ -68,6 +68,7 @@ describe('headless-ui checkbox-group primitive', () => {
 
   it('builds item, native checkbox input, and label attributes', () => {
     const state = {
+      form: 'preferences-form',
       items: preferenceItems,
       name: 'preferences',
       required: true,
@@ -89,6 +90,7 @@ describe('headless-ui checkbox-group primitive', () => {
       checked: true,
       'data-state': 'checked',
       disabled: false,
+      form: 'preferences-form',
       id: 'email-checkbox',
       name: 'preferences',
       required: true,
@@ -107,6 +109,7 @@ describe('headless-ui checkbox-group primitive', () => {
       'data-disabled': '',
       'data-state': 'unchecked',
       disabled: true,
+      form: 'preferences-form',
       name: 'preferences',
       required: true,
       tabIndex: -1,
@@ -336,6 +339,37 @@ describe('headless-ui checkbox-group primitive', () => {
 
     expect(result).toEqual({ index: 2, value: 'push' });
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('does not trap keyboard navigation for disabled, empty, or fully disabled groups', () => {
+    const disabledEvent = checkboxGroupKeyboardEvent('ArrowRight');
+    expect(
+      checkboxGroupKeyDown(disabledEvent, {
+        disabled: true,
+        items: preferenceItems,
+        value: ['email'],
+      }),
+    ).toEqual({ index: -1, value: undefined });
+    expect(disabledEvent.defaultPrevented).toBe(false);
+
+    const emptyEvent = checkboxGroupKeyboardEvent('ArrowRight');
+    expect(checkboxGroupKeyDown(emptyEvent, { items: [] })).toEqual({
+      index: -1,
+      value: undefined,
+    });
+    expect(emptyEvent.defaultPrevented).toBe(false);
+
+    const fullyDisabledEvent = checkboxGroupKeyboardEvent('ArrowRight');
+    expect(
+      checkboxGroupKeyDown(fullyDisabledEvent, {
+        items: [
+          { disabled: true, value: 'email' },
+          { disabled: true, value: 'sms' },
+        ],
+        value: ['email'],
+      }),
+    ).toEqual({ index: -1, value: undefined });
+    expect(fullyDisabledEvent.defaultPrevented).toBe(false);
   });
 
   it('returns frozen attribute records and exposes selection helpers', () => {

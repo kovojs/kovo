@@ -894,6 +894,7 @@ export function CheckboxGroupDemo(): string {
   const items = [{ value: 'updates' }, { value: 'billing' }, { disabled: true, value: 'security' }];
   const state = {
     descriptionId: 'gallery-checkbox-group-description',
+    form: 'gallery-checkbox-group-form',
     items,
     name: 'gallery-notifications',
     required: true,
@@ -909,6 +910,7 @@ export function CheckboxGroupDemo(): string {
       <h2 id="gallery-checkbox-group-label">Notifications</h2>
       <p id="gallery-checkbox-group-description">Choose which account notifications to receive.</p>
       <p id="gallery-checkbox-group-error">Select at least one notification type.</p>
+      <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
       <div data-ui-demo="checkbox-group">
         {CheckboxGroup.definition.render({
           ...state,

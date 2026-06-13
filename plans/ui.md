@@ -68,6 +68,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       proves generated direct input plus stepper updates keep browser `FormData` current.
       Toggle-group keydown no longer traps disabled, empty, or fully disabled collections, and the
       compiled gallery now proves generated roving tabindex plus DOM focus movement.
+      Checkbox-group now preserves native checkbox `form` ownership through headless/styled
+      wrappers, avoids trapping keyboard navigation for disabled/empty collections, and proves
+      generated roving focus plus browser `FormData` updates.
 
 ## Open Work
 
@@ -91,7 +94,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       refreshed generated toggle-group artifacts and browser tests prove roving tabindex plus DOM
       focus movement. Radio-group keyboard handling now no-ops without trapping keys for disabled,
       empty, or fully disabled collections, with existing static/generated/browser gallery gates
-      re-run for the radio route.
+      re-run for the radio route. Checkbox-group native form ownership and disabled/empty keyboard
+      no-trap behavior are covered by headless/styled tests, static gallery contracts, refreshed
+      generated artifacts, and browser-backed `FormData` plus roving DOM focus evidence.
 - [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
       churn-heavy baselines.
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
@@ -157,6 +162,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Checkbox-group form ownership and keyboard/focus closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox-group.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t checkbox-group`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t checkbox-group)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/checkbox-group.ts packages/headless-ui/src/primitives/checkbox-group.test.ts packages/ui/src/checkbox-group.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/checkbox-group-demo.tsx examples/gallery/src/generated/interactive/checkbox-group-demo.tsx examples/gallery/src/generated/interactive/checkbox-group-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Radio-group disabled/empty keyboard no-trap slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/radio-group.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t radio-group`;

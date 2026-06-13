@@ -27,6 +27,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
           : [state.value];
     const groupState = {
       activeValue: state.activeValue,
+      form: 'gallery-checkbox-group-form',
       items: checkboxItems,
       name: 'gallery-notifications',
       value: selectedValues,
@@ -43,6 +44,18 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         class="grid gap-2"
         data-gallery-interactive="checkbox-group"
         onKeyDown={() => {
+          if (
+            event &&
+            Object(event)['key'] !== 'ArrowDown' &&
+            Object(event)['key'] !== 'ArrowLeft' &&
+            Object(event)['key'] !== 'ArrowRight' &&
+            Object(event)['key'] !== 'ArrowUp' &&
+            Object(event)['key'] !== 'End' &&
+            Object(event)['key'] !== 'Home'
+          ) {
+            return;
+          }
+          if (event) Object(event)['preventDefault']?.call(event);
           state.activeValue = state.activeValue === 'updates' ? 'billing' : 'updates';
           const doc = Reflect['get'](globalThis, 'document');
           const updates = doc
@@ -53,9 +66,14 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
             : undefined;
 
           if (updates) updates['tabIndex'] = state.activeValue === 'updates' ? 0 : -1;
-          if (billing) billing['tabIndex'] = state.activeValue === 'billing' ? 0 : -1;
+          if (billing) {
+            billing['tabIndex'] = state.activeValue === 'billing' ? 0 : -1;
+            if (state.activeValue === 'billing') Object(billing)['focus']?.call(billing);
+          }
+          if (updates && state.activeValue === 'updates') Object(updates)['focus']?.call(updates);
         }}
       >
+        <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
         <h3 id="gallery-checkbox-group-label">Notifications</h3>
         <div {...checkboxGroupItemAttributes(updatesState)} class="inline-flex items-center gap-2">
           <input

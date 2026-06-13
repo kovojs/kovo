@@ -651,7 +651,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('role')).toBe('group');
     expect(root.getAttribute('aria-labelledby')).toBe('gallery-checkbox-group-label');
     expect(root.getAttribute('fw-state')).toBe('{"activeValue":"updates","value":"updates"}');
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-checkbox-group-form'));
+    expect(new FormData(form).getAll('gallery-notifications')).toEqual(['updates']);
     expect(updates.name).toBe('gallery-notifications');
+    expect(updates.form).toBe(form);
     expect(updates.checked).toBe(true);
     expect(updates.getAttribute('aria-checked')).toBe('true');
     expect(updates.tabIndex).toBe(0);
@@ -672,6 +675,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"updates"}');
       expect(currentUpdates.tabIndex).toBe(-1);
       expect(currentBilling.tabIndex).toBe(0);
+      expect(document.activeElement).toBe(currentBilling);
     });
 
     required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing')).click();
@@ -694,6 +698,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentBilling.checked).toBe(true);
       expect(currentBilling.getAttribute('aria-checked')).toBe('true');
       expect(currentOutput.textContent).toBe('updates,billing');
+      expect(new FormData(form).getAll('gallery-notifications')).toEqual(['updates', 'billing']);
     });
   });
 

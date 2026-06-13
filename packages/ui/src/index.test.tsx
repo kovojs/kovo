@@ -588,6 +588,7 @@ describe('@jiso/ui styled package foundation', () => {
     ];
     const state = {
       descriptionId: 'notifications-help',
+      form: 'notifications-form',
       items,
       name: 'notifications',
       required: true,
@@ -633,7 +634,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(root).toContain('role="group"');
     expect(item).toContain('data-state="checked"');
     expect(control).toContain('aria-checked="true" checked');
-    expect(control).toContain('id="notifications-updates" name="notifications" required');
+    expect(control).toContain(
+      'form="notifications-form" id="notifications-updates" name="notifications" required',
+    );
     expect(control).toContain('tabIndex="0" type="checkbox" value="updates"');
     expect(disabledControl).toContain('data-disabled="" data-state="unchecked" disabled');
     expect(disabledControl).toContain('id="notifications-security"');

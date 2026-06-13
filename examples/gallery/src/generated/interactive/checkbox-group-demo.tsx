@@ -28,6 +28,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
           : [state.value];
     const groupState = {
       activeValue: state.activeValue,
+      form: 'gallery-checkbox-group-form',
       items: checkboxItems,
       name: 'gallery-notifications',
       value: selectedValues,
@@ -43,10 +44,11 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         })}
         class="grid gap-2"
         data-gallery-interactive="checkbox-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=d8151e65#GalleryCheckboxGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=3949a76f#GalleryCheckboxGroupDemo$section_keydown"
         fw-c="gallery-checkbox-group-demo"
         fw-state='{"activeValue":"updates","value":"updates"}'
       >
+        <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
         <h3 id="gallery-checkbox-group-label">Notifications</h3>
         <div {...checkboxGroupItemAttributes(updatesState)} class="inline-flex items-center gap-2">
           <input
@@ -54,7 +56,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               ...updatesState,
               controlId: 'gallery-checkbox-group-updates',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=d8151e65#GalleryCheckboxGroupDemo$input_click"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=3949a76f#GalleryCheckboxGroupDemo$input_click"
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -71,7 +73,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               ...billingState,
               controlId: 'gallery-checkbox-group-billing',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=d8151e65#GalleryCheckboxGroupDemo$input_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=3949a76f#GalleryCheckboxGroupDemo$input_click_2"
           />
           <label
             {...checkboxGroupLabelAttributes({

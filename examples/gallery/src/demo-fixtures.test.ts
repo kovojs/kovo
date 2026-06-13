@@ -184,6 +184,8 @@ describe('gallery demo fixtures', () => {
     );
     expect(checkboxGroup.html).toContain('aria-invalid="true"');
     expect(checkboxGroup.html).toContain('aria-required="true"');
+    expect(checkboxGroup.html).toContain('id="gallery-checkbox-group-form"');
+    expect(checkboxGroup.html).toContain('form="gallery-checkbox-group-form"');
     expect(checkboxGroup.html).toContain('name="gallery-notifications"');
     expect(checkboxGroup.html).toContain('type="checkbox"');
     expect(checkboxGroup.html).toContain('id="gallery-checkbox-group-updates"');
@@ -191,7 +193,8 @@ describe('gallery demo fixtures', () => {
     expect(checkboxGroup.html).toContain('tabIndex="0"');
     expect(checkboxGroup.html).toContain('data-state="checked"');
     expect(checkboxGroup.html).toContain('value="security"');
-    expect(checkboxGroup.html).toContain('disabled id="gallery-checkbox-group-security"');
+    expect(checkboxGroup.html).toContain('disabled form="gallery-checkbox-group-form"');
+    expect(checkboxGroup.html).toContain('id="gallery-checkbox-group-security"');
     expect(checkboxGroup.html).toContain('tabIndex="-1" type="checkbox" value="security"');
   });
 

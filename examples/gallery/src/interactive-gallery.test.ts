@@ -242,6 +242,8 @@ describe('compiled interactive gallery demos', () => {
 
     expect(checkboxGroup).toContain('data-gallery-interactive="checkbox-group"');
     expect(checkboxGroup).toContain('fw-state=\'{"activeValue":"updates","value":"updates"}\'');
+    expect(checkboxGroup).toContain('id="gallery-checkbox-group-form"');
+    expect(checkboxGroup).toContain("form: 'gallery-checkbox-group-form'");
     expect(checkboxGroup).toContain('checkboxGroupControlAttributes({');
     expect(checkboxGroup).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$section_keydown"/,
@@ -683,11 +685,16 @@ describe('compiled interactive gallery demos', () => {
     expect(checkboxState).toEqual({ checked: true });
 
     const checkboxGroupState = { activeValue: 'updates', value: 'updates' };
-    clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$section_keydown')(new Event('keydown'), {
-      params: {},
-      signal,
-      state: checkboxGroupState,
-    });
+    const checkboxGroupKeyboardEvent = keyEvent('ArrowRight');
+    clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$section_keydown')(
+      checkboxGroupKeyboardEvent,
+      {
+        params: {},
+        signal,
+        state: checkboxGroupState,
+      },
+    );
+    expect(checkboxGroupKeyboardEvent.defaultPrevented).toBe(true);
     expect(checkboxGroupState).toEqual({ activeValue: 'billing', value: 'updates' });
     clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_2')(new Event('click'), {
       params: {},
@@ -1597,7 +1604,7 @@ function changeEvent(value: string): Event {
 }
 
 function keyEvent(key: string): Event {
-  const event = new Event('keydown');
+  const event = new Event('keydown', { cancelable: true });
   Object.defineProperty(event, 'key', { value: key });
   return event;
 }
