@@ -69,6 +69,11 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
         ...options.enhancedMutations,
         ...definedProps({
           applyQuery: options.enhancedMutations.applyQuery ?? options.applyQuery,
+          broadcastOnError: options.onError
+            ? (error: unknown) => {
+                reportRuntimeContextError(options.onError, error, { phase: 'mutation-broadcast' });
+              }
+            : undefined,
         }),
         onAppliedQueries(queries) {
           queryVisibleReturn.rememberAppliedQueries(queries);

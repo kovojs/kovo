@@ -1,5 +1,6 @@
 import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
+import type { RuntimeErrorReporter } from './error-policy.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { isMutationBroadcastMessage, sanitizeMutationChangeRecord } from './mutation-response.js';
@@ -22,6 +23,7 @@ export interface InstallMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   channel: BroadcastLike;
   morph?: MorphFragment;
+  onError?: RuntimeErrorReporter;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
   onAppliedQueries?: (queries: readonly string[]) => void;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -32,6 +34,7 @@ export interface InstallMutationBroadcastOptions {
 export interface DefaultMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
+  broadcastOnError?: RuntimeErrorReporter;
   morph?: MorphFragment;
   onAppliedQueries?: (queries: readonly string[]) => void;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -53,6 +56,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
       channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
       ...definedProps({
         applyQuery: options.applyQuery,
+        onError: options.broadcastOnError,
         morph: options.morph,
         onAppliedQueries: options.onAppliedQueries,
         queryPlans: options.queryPlans,
@@ -90,6 +94,7 @@ export function installMutationBroadcast(
       ...definedProps({
         applyQuery: options.applyQuery,
         morph: options.morph,
+        onError: options.onError,
         queryPlans: options.queryPlans,
         root: options.root,
       }),

@@ -133,6 +133,65 @@ describe('mutation broadcast', () => {
     expect(unkeyedPlan).not.toHaveBeenCalled();
   });
 
+  it('reports malformed replay wire while applying later broadcast chunks', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const onError = vi.fn();
+
+    installMutationBroadcast({ channel, onError, store });
+
+    channel.onmessage?.({
+      data: {
+        body: [
+          '<fw-query name="cart">{</fw-query>',
+          '<fw-query name="product:p1">{"stock":8}</fw-query>',
+        ].join('\n'),
+        changes: [],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    // SPEC.md §9.1/§9.2: same-user broadcast replay enters the canonical
+    // mutation response apply path, including its tolerant per-chunk error seam.
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('product', 'p1')).toEqual({ stock: 8 });
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+  });
+
+  it('reports broadcast apply hook failures without aborting later chunks', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const onError = vi.fn();
+    const applyError = new Error('broadcast apply failed');
+
+    installMutationBroadcast({
+      applyQuery(query) {
+        if (query.name === 'cart') throw applyError;
+      },
+      channel,
+      onError,
+      store,
+    });
+
+    channel.onmessage?.({
+      data: {
+        body: [
+          '<fw-query name="cart">{"count":2}</fw-query>',
+          '<fw-query name="product:p1">{"stock":8}</fw-query>',
+        ].join('\n'),
+        changes: [],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    // SPEC.md §9.2: broadcast replay is not a separate compatibility apply
+    // path; query hook failures use the same decoded response error behavior.
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('product', 'p1')).toEqual({ stock: 8 });
+    expect(onError).toHaveBeenCalledWith(applyError);
+  });
+
   it('morphs rebroadcast mutation fragments when a root is configured', () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();

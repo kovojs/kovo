@@ -226,6 +226,16 @@ Latest evidence:
   speculation-rule behavior, `packages/test/src/server-fixtures.test.ts` asserts the structured
   behavior fact, `packages/test/src/package-exports.test.ts` pins the subpath export/types, and
   `tests/fw-check.node.mjs` consumes the fixture instead of rebuilding the server calls inline.
+- Runtime Phase 4 broadcast apply error-seam slice:
+  `pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/loader-enhanced-mutation.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/runtime/src/broadcast.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/events.ts packages/runtime/src/loader.ts packages/runtime/src/loader-enhanced-mutation.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/runtime/src/broadcast.ts`
+  now threads `onError` into the canonical mutation response apply path for same-user broadcast
+  replay, and `packages/runtime/src/loader.ts` routes default BroadcastChannel replay errors to
+  the loader error hook with `mutation-broadcast` phase context under SPEC §9.2. Runtime tests pin
+  malformed broadcast wire and apply-hook failures reporting while later chunks continue applying.
 - Broad mini-wave gate after compiler/app-shell/harness/Drizzle/runtime/UI integrations:
   `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
   `pnpm run test:conformance`; `pnpm run check:build`. Evidence: main worktree through

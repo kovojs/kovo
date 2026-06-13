@@ -401,4 +401,58 @@ describe('loader enhanced mutations', () => {
       globalRecord.BroadcastChannel = originalBroadcastChannel;
     }
   });
+
+  it('reports default broadcast replay apply failures through the loader error hook', () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const channels: FakeBroadcastChannel[] = [];
+    class TestBroadcastChannel extends FakeBroadcastChannel {
+      constructor() {
+        super();
+        channels.push(this);
+      }
+    }
+    globalRecord.BroadcastChannel = TestBroadcastChannel;
+
+    try {
+      const loaderRoot = new FakeRoot();
+      const mutationRoot = new FakeMorphRoot();
+      const store = createQueryStore();
+      const onError = vi.fn();
+      const applyError = new Error('default broadcast apply failed');
+
+      installJisoLoader({
+        enhancedMutations: {
+          applyQuery(query) {
+            if (query.name === 'cart') throw applyError;
+          },
+          fetch: vi.fn(),
+          root: mutationRoot,
+          store,
+        },
+        importModule: vi.fn(),
+        onError,
+        root: loaderRoot,
+      });
+
+      channels[0]?.onmessage?.({
+        data: {
+          body: [
+            '<fw-query name="cart">{"count":2}</fw-query>',
+            '<fw-query name="product:p1">{"stock":8}</fw-query>',
+          ].join('\n'),
+          changes: [],
+          type: 'jiso:mutation-response',
+        },
+      });
+
+      // SPEC.md §9.2: loader-installed BroadcastChannel replay uses the same
+      // mutation apply path and loader error seam as enhanced submit failures.
+      expect(store.get('cart')).toBeUndefined();
+      expect(store.get('product', 'p1')).toEqual({ stock: 8 });
+      expect(onError).toHaveBeenCalledWith(applyError, { phase: 'mutation-broadcast' });
+    } finally {
+      globalRecord.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
 });

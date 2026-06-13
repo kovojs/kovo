@@ -67,6 +67,7 @@ export interface RuntimeErrorContext {
     | 'event-listener'
     | 'execution-trigger'
     | 'enhanced-mutation'
+    | 'mutation-broadcast'
     | 'query-hydration';
 }
 
