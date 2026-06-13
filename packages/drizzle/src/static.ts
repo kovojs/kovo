@@ -2708,20 +2708,31 @@ function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
   return undefined;
 }
 
-function localObjectMemberCallbackFunction(node: Node): Node | undefined {
+function localObjectMemberCallbackFunction(
+  node: Node,
+  seen: Set<string> = new Set(),
+): Node | undefined {
   const member = staticAccessName(node);
   const receiver = staticAccessExpression(node);
   if (!member || !receiver || !Node.isIdentifier(receiver)) return undefined;
 
+  return localObjectMemberCallbackForReceiver(receiver, member, seen);
+}
+
+function localObjectMemberCallbackForReceiver(
+  receiver: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  if (!Node.isIdentifier(receiver)) return undefined;
+
+  const receiverKey = resolvedSymbolKey(symbolForIdentifierReference(receiver));
+  const key = receiverKey ? `${receiverKey}:${member}` : `${receiver.getText()}:${member}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
   const symbol = symbolForIdentifierReference(receiver);
-  const declaredVariable = receiver
-    .getSourceFile()
-    .getVariableDeclarations()
-    .find((declaration) => declaration.getNameNode().getText() === receiver.getText());
-  const declarations = [
-    ...(symbol?.getDeclarations() ?? []),
-    ...(declaredVariable ? [declaredVariable] : []),
-  ];
+  const declarations = symbol?.getDeclarations() ?? [];
 
   for (const declaration of declarations) {
     const variable = Node.isIdentifier(declaration)
@@ -2729,28 +2740,65 @@ function localObjectMemberCallbackFunction(node: Node): Node | undefined {
       : Node.isVariableDeclaration(declaration)
         ? declaration
         : undefined;
-    const initializer = variable?.getInitializer();
-    if (!initializer) continue;
-
-    const expression = unwrappedStaticExpressionNode(initializer);
-    if (!Node.isObjectLiteralExpression(expression)) continue;
-
-    for (const property of expression.getProperties()) {
-      if (
-        !Node.isMethodDeclaration(property) &&
-        !Node.isPropertyAssignment(property) &&
-        !Node.isShorthandPropertyAssignment(property)
-      ) {
-        continue;
-      }
-      if (propertyNameText(property.getNameNode()) !== member) continue;
-
-      const callback = callbackFunctionFromDeclaration(property);
-      if (callback) return callback;
-    }
+    const callback = localObjectMemberCallbackFromVariable(variable, member, seen);
+    if (callback) return callback;
   }
 
   return undefined;
+}
+
+function localObjectMemberCallbackFromVariable(
+  variable: ReturnType<SourceFile['getVariableDeclarations']>[number] | undefined,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  const initializer = variable?.getInitializer();
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isIdentifier(expression)) {
+    return localObjectMemberCallbackForReceiver(expression, member, seen);
+  }
+
+  if (!Node.isObjectLiteralExpression(expression)) return undefined;
+
+  // SPEC §10.2/§11.1: static local callback containers may be resolved only when the exact member
+  // remains executable after object-spread order and later overrides are applied.
+  for (const property of expression.getProperties().toReversed()) {
+    if (Node.isSpreadAssignment(property)) {
+      const callback = localObjectMemberCallbackFromSpread(property, member, seen);
+      if (callback) return callback;
+      continue;
+    }
+
+    if (
+      !Node.isMethodDeclaration(property) &&
+      !Node.isPropertyAssignment(property) &&
+      !Node.isShorthandPropertyAssignment(property)
+    ) {
+      continue;
+    }
+    if (propertyNameText(property.getNameNode()) !== member) continue;
+
+    const callback = callbackFunctionFromDeclaration(property);
+    if (callback) return callback;
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function localObjectMemberCallbackFromSpread(
+  property: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  if (!Node.isSpreadAssignment(property)) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(property.getExpression());
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  return localObjectMemberCallbackForReceiver(expression, member, seen);
 }
 
 function queryHelperReceiverArgumentName(

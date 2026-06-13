@@ -2545,6 +2545,71 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts project query-loader callbacks through static object aliases and spreads', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  select(): { from(table: unknown): Promise<unknown> };',
+            '}',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id }).from(products);',
+            '}',
+            'function fakeLoad(_input: unknown, fake: FakeDb) {',
+            '  return fake.select().from(products);',
+            '}',
+            '',
+            'const base = { loadProducts };',
+            'const alias = base;',
+            'const spread = { ...base };',
+            'const overridden = { ...base, loadProducts: fakeLoad };',
+            '',
+            'export const aliasedQuery = query("product/project-object-alias-loader", {',
+            '  load: alias.loadProducts,',
+            '});',
+            '',
+            'export const spreadQuery = query("product/project-object-spread-loader", {',
+            '  load: spread["loadProducts"],',
+            '});',
+            '',
+            'export const overriddenQuery = query("product/project-overridden-object-spread-loader", {',
+            '  load: overridden.loadProducts,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/project-object-alias-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:23',
+      },
+      {
+        query: 'product/project-object-spread-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:27',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -6754,6 +6819,74 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source write callbacks through static object aliases and spreads', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          'function noop() {',
+          '  return undefined;',
+          '}',
+          '',
+          'const base = { addItem };',
+          'const alias = base;',
+          'const spread = { ...base };',
+          'const overridden = { ...base, addItem: noop };',
+          '',
+          'export const cart = domain({',
+          '  addAliased: write(alias.addItem),',
+          '  addSpread: write(spread["addItem"]),',
+          '  addOverridden: write(overridden.addItem),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addSpread': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts member-referenced project write callbacks from typed receiver symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -6793,6 +6926,84 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: null,
             site: 'cart.domain.ts:11',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts project write callbacks through static object aliases and spreads', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            'function fakeAdd(db: FakeDb, productId: string) {',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'const base = { addItem };',
+            'const alias = base;',
+            'const spread = { ...base };',
+            'const overridden = { ...base, addItem: fakeAdd };',
+            '',
+            'export const cart = domain({',
+            '  addAliased: write(alias.addItem),',
+            '  addSpread: write(spread["addItem"]),',
+            '  addOverridden: write(overridden.addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addSpread': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
             via: 'cart_items',
           },
         ],
@@ -8274,6 +8485,61 @@ export interface CommerceInvalidationSets {
           id: 'string',
         },
         site: 'user.queries.ts:16',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('extracts source query-loader callbacks through static object aliases and spreads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function loadUsers(_input, db) {',
+          '  return db.select({ id: users.id }).from(users);',
+          '}',
+          'function emptyLoad() {',
+          '  return [];',
+          '}',
+          '',
+          'const base = { loadUsers };',
+          'const alias = base;',
+          'const spread = { ...base };',
+          'const overridden = { ...base, loadUsers: emptyLoad };',
+          '',
+          'export const aliasedQuery = query("users/source-object-alias-loader", {',
+          '  load: alias.loadUsers,',
+          '});',
+          '',
+          'export const spreadQuery = query("users/source-object-spread-loader", {',
+          '  load: spread["loadUsers"],',
+          '});',
+          '',
+          'export const overriddenQuery = query("users/source-overridden-object-spread-loader", {',
+          '  load: overridden.loadUsers,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'users/source-object-alias-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'user.queries.ts:15',
+      },
+      {
+        query: 'users/source-object-spread-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'user.queries.ts:19',
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);

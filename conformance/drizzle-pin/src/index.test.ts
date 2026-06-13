@@ -1663,6 +1663,74 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins object alias and spread query-loader callbacks under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  select(): { from(table: unknown): Promise<unknown> };',
+            '}',
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  name: text('name').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, name: products.name }).from(products);',
+            '}',
+            'function fakeLoad(_input: unknown, fake: FakeDb) {',
+            '  return fake.select().from(products);',
+            '}',
+            '',
+            'const base = { loadProducts };',
+            'const alias = base;',
+            'const spread = { ...base };',
+            'const overridden = { ...base, loadProducts: fakeLoad };',
+            '',
+            "export const aliasedQuery = query('product/object-alias-loader', {",
+            '  load: alias.loadProducts,',
+            '});',
+            '',
+            "export const spreadQuery = query('product/object-spread-loader', {",
+            '  load: spread["loadProducts"],',
+            '});',
+            '',
+            "export const overriddenQuery = query('product/overridden-object-spread-loader', {",
+            '  load: overridden.loadProducts,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/object-alias-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:24',
+      },
+      {
+        query: 'product/object-spread-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:28',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',
@@ -3269,6 +3337,83 @@ describe('Drizzle pinned subset conformance', () => {
         unresolved: [],
       },
       'cart.addShorthand': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins object alias and spread domain write callbacks with real Drizzle receiver types', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            'function fakeAdd(db: FakeDb, productId: string) {',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'const base = { addItem };',
+            'const alias = base;',
+            'const spread = { ...base };',
+            'const overridden = { ...base, addItem: fakeAdd };',
+            '',
+            'export const cart = domain({',
+            '  addAliased: write(alias.addItem),',
+            '  addSpread: write(spread["addItem"]),',
+            '  addOverridden: write(overridden.addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addSpread': {
         reads: [],
         touches: [
           {
