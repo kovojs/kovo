@@ -3411,13 +3411,7 @@ function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
 }
 
 function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
-  const symbol = symbolForCallbackReference(identifier);
-  for (const declaration of symbol?.getDeclarations() ?? []) {
-    const callback = callbackFunctionFromDeclaration(declaration);
-    if (callback) return callback;
-  }
-
-  return undefined;
+  return callbackFunctionFromReference(identifier, new Set());
 }
 
 function callbackFunctionFromDeclaration(
@@ -3746,6 +3740,13 @@ function callbackFunctionFromProperty(declaration: Node, seen: Set<string>): Nod
 }
 
 function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Node | undefined {
+  const boundTarget = boundCallbackTarget(identifier);
+  if (boundTarget) {
+    const target = unwrappedStaticExpressionNode(boundTarget);
+    if (Node.isArrowFunction(target) || Node.isFunctionExpression(target)) return target;
+    return callbackFunctionFromReference(target, seen);
+  }
+
   const symbol = symbolForCallbackReference(identifier);
   for (const declaration of symbol?.getDeclarations() ?? []) {
     const callback = callbackFunctionFromDeclaration(declaration, seen);
@@ -3764,6 +3765,22 @@ function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
     return aliasedSymbol(symbolForStaticMemberReference(node) ?? node.getSymbol());
   }
   return undefined;
+}
+
+function boundCallbackTarget(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const callee = expression.getExpression();
+  if (!Node.isPropertyAccessExpression(callee) && !Node.isElementAccessExpression(callee)) {
+    return undefined;
+  }
+  if (staticAccessName(callee) !== 'bind') return undefined;
+
+  // `fn.bind(thisArg)` preserves the callback parameter list, while additional bound arguments
+  // shift loader/write parameters and must remain FW406 instead of fabricating Drizzle facts.
+  if (expression.getArguments().length > 1) return undefined;
+  return callee.getExpression();
 }
 
 function symbolForStaticMemberReference(node: Node): MorphSymbol | undefined {
@@ -6259,15 +6276,9 @@ function writeCallbackArgumentFunction(argument: Node): Node | null {
 }
 
 function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
-  const symbol = symbolForCallbackReference(identifier);
-  for (const declaration of symbol?.getDeclarations() ?? []) {
-    // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
-    // module project references are followed through ts-morph aliases instead of by-name fallback.
-    const callback = callbackFunctionFromDeclaration(declaration);
-    if (callback) return callback;
-  }
-
-  return undefined;
+  // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
+  // module project references are followed through ts-morph aliases instead of by-name fallback.
+  return callbackFunctionFromReference(identifier, new Set());
 }
 
 function extractedFunctionFromCallback(

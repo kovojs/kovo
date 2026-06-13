@@ -12793,6 +12793,111 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts bound project query loaders and domain callbacks without pre-bound arguments', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function readProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id }).from(products);',
+          '}',
+          '',
+          'function touchProduct(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'declare const fakeDb: PgDatabase<any, any, any>;',
+          '',
+          'export const productQuery = query("product/bound-loader", {',
+          '  load: readProducts.bind(undefined),',
+          '});',
+          '',
+          'export const unsafeQuery = query("product/prebound-loader", {',
+          '  load: readProducts.bind(undefined, { productId: "p1" }),',
+          '});',
+          '',
+          'export const productDomain = domain({',
+          '  add: write(touchProduct.bind(null)),',
+          '  unsafe: write(touchProduct.bind(null, fakeDb)),',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/bound-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.domain.ts:18',
+      },
+      unresolvedQueryLoadFact('product/prebound-loader', 'product.domain.ts:22'),
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.unsafe': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:28',
+          },
+        ],
+      },
+      readProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      touchProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts project query loaders and domain actions through static computed keys', () => {
     const files = [
       pgDatabaseTypes([

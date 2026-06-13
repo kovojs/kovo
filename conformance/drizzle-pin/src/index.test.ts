@@ -3611,6 +3611,123 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins bound query-loader and domain write callbacks under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import { eq } from 'drizzle-orm';",
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  name: text('name').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, name: products.name }).from(products);',
+          '}',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'declare const fakeDb: PgDatabase<any, any, any>;',
+          '',
+          "export const productQuery = query('product/bound-loader', {",
+          '  load: loadProducts.bind(undefined),',
+          '});',
+          '',
+          "export const unsafeQuery = query('product/prebound-loader', {",
+          "  load: loadProducts.bind(undefined, { productId: 'p1' }),",
+          '});',
+          '',
+          'export const productDomain = domain({',
+          '  add: write(addItem.bind(null)),',
+          '  unsafe: write(addItem.bind(null, fakeDb)),',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/bound-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:19',
+      },
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:23',
+          },
+        ],
+        query: 'product/prebound-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.domain.ts:23',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.unsafe': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:29',
+          },
+        ],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:10',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins imported query-loader callbacks under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

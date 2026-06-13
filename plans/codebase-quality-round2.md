@@ -1053,6 +1053,13 @@ duplicate parenthesis-only projection logic.
       `drizzle-orm` conformance tests pin the source/project behavior. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round295: `packages/drizzle/src/static.ts` resolves
+      non-argument-shifting bound callback references such as `loadProducts.bind(undefined)` and
+      `write(addItem.bind(null))` through the existing ts-morph callback declaration path, while
+      pre-bound positional arguments stay visible as FW406 per SPEC §10.2/§11.1.
+      `packages/drizzle/src/index.test.ts` and `conformance/drizzle-pin/src/index.test.ts` pin
+      exact project query-loader/domain-write extraction plus pre-bound degradation against real
+      `drizzle-orm` Postgres receiver types.
       Evidence 2026-06-13: static callback references such as
       `LoaderBarrel.loaders["loadProducts"]` and `CallbackBarrel.callbacks["addItem"]` now resolve
       through ts-morph receiver type member symbols before falling back to local object walking, so
