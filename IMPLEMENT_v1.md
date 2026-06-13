@@ -48,13 +48,16 @@ separately and do not gate the v1 framework freeze.
 
 ## Final Acceptance
 
-- [ ] Active implementation ledgers (`codebase-quality-round2`, `ui`, `app-shell`) have no open
-      v1-blocking items. (Operating-rule checkboxes, `better-docs`, and `react-interop` are excluded
-      per the Deferred section above.)
-- [ ] Clean checkout passes `pnpm run check`.
-- [ ] Clean checkout passes `pnpm run test`.
-- [ ] Clean checkout passes `pnpm run test:browser`.
-- [ ] Clean checkout passes `pnpm run test:conformance`.
-- [ ] Clean checkout passes `pnpm run check:build`.
-- [ ] Clean checkout passes `pnpm run check:fw`.
-- [ ] No unresolved `SPEC.md` behavior conflict remains.
+- [x] Active implementation ledgers (`codebase-quality-round2`, `ui`, `app-shell`) have no open
+      v1-blocking items. (Phases 0–7 closed; UI H1–H3 + G1–G6 closed. Remaining `- [ ]` entries are
+      standing Operating Rules / on-touch practices / launch-readiness sweeps. Operating-rule
+      checkboxes, `better-docs`, and `react-interop` are excluded per the Deferred section above.)
+- [x] Clean checkout passes `pnpm run check`. (via `pnpm run acceptance` 2026-06-13, EXIT=0)
+- [x] Clean checkout passes `pnpm run test`. (262 files)
+- [x] Clean checkout passes `pnpm run test:browser`. (5 files)
+- [x] Clean checkout passes `pnpm run test:conformance`.
+- [x] Clean checkout passes `pnpm run check:build`.
+- [x] Clean checkout passes `pnpm run check:fw`. (49)
+- [x] `pnpm run test:p10-perf` passes (clean-environment perf gate, in the acceptance chain).
+- [x] No unresolved `SPEC.md` behavior conflict remains. (No `SPEC.md` changes this session;
+      all implementation conforms to existing SPEC, with phase work citing the relevant sections.)

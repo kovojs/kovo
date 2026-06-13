@@ -316,20 +316,8 @@ Latest evidence:
 
 ## Current Gates
 
-- [x] Broad gate after mini-wave through `9575927c`: `pnpm run check` passed on 852 formatted
-      files, 752 lint/typechecked files, and 7 example/conformance typecheck projects.
-- [x] Broad gate after mini-wave through `8d4b595f`: `pnpm run check` passed on 850 formatted
-      files, 750 lint/typechecked files, and 7 example/conformance typecheck projects.
-- [x] Broad gate after first integration wave through `ea06b9c7`: `pnpm run check` passed on
-      844 formatted files, 744 lint/typechecked files, and 7 example/conformance typecheck projects.
-- [x] UI G6 sheet/drawer compiled gallery slice added app-authored demos, generated artifacts,
-      manifest/docs wiring, browser `commandfor`/`request-close` coverage, and visual baseline
-      update. Verified with gallery emit check, UI/gallery tests, full gallery browser test, gallery
-      `tsc`, exact `vp check`, and `git diff --check`.
-- [x] UI scroll-area G3/G6 slice refreshed compiled gallery artifacts with headless scroll state
-      attrs, added post-transition axe coverage, and tightened the styled thumb prop surface.
-      Verified with gallery emit, UI/gallery tests, UI/gallery `tsc`, exact `vp check`, and
-      `git diff --check`.
+- [x] Earlier broad `pnpm run check` gates (through `9575927c`, `8d4b595f`, `ea06b9c7`) and the UI
+      G6 sheet/drawer + scroll-area G3/G6 slices all passed in prior sessions (history summarized).
 - [x] Broad gate after salvage mini-wave through `22fc8f19` (otp-field gallery demo + mutation-optimistic
       test split; stale drizzle worktree confirmed redundant with `77469e2a`/`d4d04e37` and discarded):
       `pnpm run check` EXIT=0 (755 files clean, 7/7 example/conformance projects), runtime suite
@@ -339,12 +327,11 @@ Latest evidence:
       close): `pnpm run check`, `pnpm run test` (257 files, 2508 pass), `pnpm run check:build`,
       `pnpm run test:conformance`, `pnpm run check:fw` (49 pass) all EXIT=0; gallery browser 39 +
       runtime browser 16 pass. Phases 3 and 4 top-level criteria closed.
-- [ ] After the next mini-wave, run at least `pnpm run check`; add `pnpm run test`,
-      `pnpm run test:browser`, `pnpm run test:conformance`, and `pnpm run check:build` when touched
-      surfaces justify broader gates.
+- [x] Full acceptance chain on clean `main` through `815dce2a`: `pnpm run acceptance`
+      (`check → test → test:browser → check:build → p10-perf → conformance → fw-check`) EXIT=0 —
+      test 262 files, test:browser 5 files, conformance all suites, fw-check 49, p10-perf passed.
 
 ## Integration Queue
 
-- [ ] Continue polling active workers:
-      refill worker lanes after current integrations settle.
-- [ ] Refill toward five large-slice worker lanes when disjoint ownership and capacity allow.
+- [x] All worker lanes integrated; Phases 0–7 closed. No active worker lanes remain. Residual open
+      items in this ledger are standing Operating Rules / on-touch practices, not deliverables.
