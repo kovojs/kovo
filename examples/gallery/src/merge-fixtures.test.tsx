@@ -537,7 +537,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="false" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
+      '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" autocomplete="off" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="false" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
     );
   });
 
@@ -3755,7 +3755,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 8,
-          "html": "<div data-gallery-merge-builder="commandInputAttributes" data-state="open" aria-autocomplete="author-aria" aria-expanded="false" role="presentation" type="author-commandInputAttributes" value="author-commandInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" aria-describedby="author-aria-describedby" id="author-commandInputAttributes" aria-labelledby="author-aria-labelledby" disabled placeholder="author-commandInputAttributes" class="primitive-commandInputAttributes author-commandInputAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="commandInputAttributes" data-state="open" aria-autocomplete="author-aria" aria-expanded="false" autocomplete="author-commandInputAttributes" role="presentation" type="author-commandInputAttributes" value="author-commandInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" aria-describedby="author-aria-describedby" id="author-commandInputAttributes" aria-labelledby="author-aria-labelledby" disabled placeholder="author-commandInputAttributes" class="primitive-commandInputAttributes author-commandInputAttributes">merged</div>",
           "name": "commandInputAttributes",
         },
         {
