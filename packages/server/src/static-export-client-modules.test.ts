@@ -47,7 +47,10 @@ describe('server static export document client module replay boundary', () => {
       const url = new URL(request.url);
       seen.push(`${url.pathname}${url.search}${url.hash}`);
       return new Response(`export const modulePath = ${JSON.stringify(url.pathname)};`, {
-        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+        headers: {
+          'Content-Type': 'application/javascript; charset=utf-8',
+          'X-Static-Module': url.pathname,
+        },
         status: 200,
       });
     };
@@ -78,14 +81,20 @@ describe('server static export document client module replay boundary', () => {
     ).resolves.toEqual([
       {
         body: 'export const modulePath = "/c/cart.client.js";',
-        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        headers: {
+          'content-type': 'application/javascript; charset=utf-8',
+          'x-static-module': '/c/cart.client.js',
+        },
         href: '/c/cart.client.js?v=cart-1#Cart$add',
         path: '/c/cart.client.js',
         status: 200,
       },
       {
         body: 'export const modulePath = "/c/menu.client.js";',
-        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        headers: {
+          'content-type': 'application/javascript; charset=utf-8',
+          'x-static-module': '/c/menu.client.js',
+        },
         href: '/c/menu.client.js?v=menu-1',
         path: '/c/menu.client.js',
         status: 200,

@@ -699,3 +699,16 @@ Round201 root app-shell export inventory evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round205 static document replay consolidation evidence:
+
+- `packages/server/src/static-export-document.ts` now owns the private SPEC §9.5 synthetic GET
+  construction and route-document/client-module response validation used by static export replay,
+  deleting the standalone `static-export-request.ts` and `static-export-response.ts` module path.
+- `packages/server/src/static-export-client-modules.test.ts` pins accepted JavaScript MIME/header
+  projection through the document replay boundary after the private response-unit test deletion.
+- `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-client-modules.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

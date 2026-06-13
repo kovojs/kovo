@@ -4,13 +4,13 @@ import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
 } from './static-export-document-refs.js';
-import { replayStaticExportRequest } from './static-export-request.js';
-import { readStaticExportReplayedResponse } from './static-export-response.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
+  sortedHeaders,
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
   type StaticExportHtmlPathStyle,
+  type StaticExportResponseSnapshot,
 } from './static-export-types.js';
 
 export interface StaticExportRouteDocumentReplayOptions {
@@ -109,6 +109,101 @@ async function replayStaticExportClientModuleArtifact({
     href,
     path: url.pathname,
   };
+}
+
+interface StaticExportReplayRequestOptions {
+  handler: RequestHandler;
+  href?: string;
+  origin: string;
+  pathname?: string;
+}
+
+interface StaticExportReplayRequestResult {
+  response: Response;
+  url: URL;
+}
+
+async function replayStaticExportRequest({
+  handler,
+  href,
+  origin,
+  pathname,
+}: StaticExportReplayRequestOptions): Promise<StaticExportReplayRequestResult> {
+  const url = new URL(href ?? pathname ?? '/', origin);
+  const request = new Request(url, { method: 'GET' });
+
+  return {
+    response: await handler(request),
+    url,
+  };
+}
+
+interface StaticExportRouteDocumentResponseOptions {
+  response: Response;
+  routePath: string;
+}
+
+interface StaticExportClientModuleResponseOptions {
+  href: string;
+  path: string;
+  response: Response;
+}
+
+type StaticExportReplayedResponseReadOptions =
+  | (StaticExportRouteDocumentResponseOptions & { kind: 'route-document' })
+  | (StaticExportClientModuleResponseOptions & { kind: 'client-module' });
+
+async function readStaticExportReplayedResponse(
+  options: StaticExportReplayedResponseReadOptions,
+): Promise<StaticExportResponseSnapshot> {
+  const { response } = options;
+  const contentType = response.headers.get('content-type');
+
+  if (response.status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
+    throw new StaticExportError([staticExportReplayResponseDiagnostic(options, contentType)]);
+  }
+
+  return {
+    body: await response.text(),
+    headers: sortedHeaders(response.headers),
+    status: response.status,
+  };
+}
+
+function staticExportReplayResponseDiagnostic(
+  options: StaticExportReplayedResponseReadOptions,
+  contentType: string | null,
+) {
+  if (options.kind === 'route-document') {
+    return staticExportDiagnostic(
+      options.routePath,
+      `FW229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'.`,
+    );
+  }
+
+  return staticExportDiagnostic(
+    options.path,
+    `FW229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
+  );
+}
+
+function isExpectedStaticExportContentType(
+  options: StaticExportReplayedResponseReadOptions,
+  contentType: string | null,
+): boolean {
+  return options.kind === 'route-document'
+    ? isHtmlDocumentContentType(contentType)
+    : isJavaScriptClientModuleContentType(contentType);
+}
+
+function isHtmlDocumentContentType(contentType: string | null): boolean {
+  return contentType?.toLowerCase().includes('text/html') ?? false;
+}
+
+function isJavaScriptClientModuleContentType(contentType: string | null): boolean {
+  if (contentType === null) return false;
+  const mime = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return mime === 'text/javascript' || mime === 'application/javascript';
 }
 
 interface StaticExportRouteDocumentL0L1Options {
