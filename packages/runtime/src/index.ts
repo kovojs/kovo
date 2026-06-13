@@ -19,12 +19,7 @@ export {
   writeElementState,
 } from './handler-context.js';
 export type { ElementParamValue, HandlerContext, IslandSignalScope } from './handler-context.js';
-export {
-  dispatchDelegatedEvent,
-  handler,
-  parseHandlerReference,
-  parseHandlerReferences,
-} from './handlers.js';
+export { dispatchDelegatedEvent, handler } from './handlers.js';
 export type { ClientHandler, ImportHandlerModule } from './handlers.js';
 export {
   createInlineJisoLoaderSource,

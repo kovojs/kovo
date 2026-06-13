@@ -6,8 +6,6 @@ import {
   createQueryStore,
   dispatchDelegatedEvent,
   installJisoLoader,
-  parseHandlerReference,
-  parseHandlerReferences,
 } from './index.js';
 import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
 import {
@@ -515,17 +513,5 @@ describe('delegated runtime integration', () => {
       event: { target: element, type: 'click' },
       phase: 'delegated-event',
     });
-  });
-
-  it('parses full handler references', () => {
-    expect(parseHandlerReference('/c/cart.client.js?v=1#Cart$remove')).toEqual({
-      exportName: 'Cart$remove',
-      url: '/c/cart.client.js?v=1',
-    });
-    expect(parseHandlerReferences('/a.js#one  /b.js#two\n/c.js#three')).toEqual([
-      '/a.js#one',
-      '/b.js#two',
-      '/c.js#three',
-    ]);
   });
 });

@@ -78,11 +78,11 @@ async function dispatchDelegatedEventForElement(
   }
 }
 
-export function parseHandlerReferences(refs: string | null): string[] {
+function parseHandlerReferences(refs: string | null): string[] {
   return refs?.split(/\s+/).filter(Boolean) ?? [];
 }
 
-export function parseHandlerReference(ref: string): { exportName: string; url: string } {
+function parseHandlerReference(ref: string): { exportName: string; url: string } {
   const hashIndex = ref.lastIndexOf('#');
   if (hashIndex <= 0 || hashIndex === ref.length - 1) {
     throw new Error(`Invalid handler reference: ${ref}`);

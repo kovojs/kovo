@@ -9,12 +9,7 @@ import {
   readElementState,
   writeElementState,
 } from './handler-context.js';
-import {
-  dispatchDelegatedEvent,
-  handler,
-  parseHandlerReference,
-  parseHandlerReferences,
-} from './handlers.js';
+import { dispatchDelegatedEvent, handler } from './handlers.js';
 import {
   createInlineJisoLoaderSource,
   installInlineJisoLoader,
@@ -81,9 +76,9 @@ describe('runtime root exports', () => {
     expect(runtime.writeElementState).toBe(writeElementState);
     expect(runtime.dispatchDelegatedEvent).toBe(dispatchDelegatedEvent);
     expect(runtime.handler).toBe(handler);
-    expect(runtime.parseHandlerReference).toBe(parseHandlerReference);
-    expect(runtime.parseHandlerReferences).toBe(parseHandlerReferences);
     expect(runtime.installJisoLoader).toBe(installJisoLoader);
+    expect(Object.hasOwn(runtime, 'parseHandlerReference')).toBe(false);
+    expect(Object.hasOwn(runtime, 'parseHandlerReferences')).toBe(false);
   });
 
   it('exports inline loader and morph modules without private compatibility barrels', () => {

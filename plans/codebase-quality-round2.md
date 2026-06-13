@@ -451,7 +451,9 @@ a regex-only `fw-query`/`fw-fragment` filter, and the remaining broad
 optimism, mutation response, and deferred-stream owner suites.
 Fragment element decoding/error helpers are now private inside `wire-parser.ts`; the checked
 decoded body readers remain the shared parser surface used by modular apply and the extracted
-inline-loader parser closure.
+inline-loader parser closure. Delegated handler reference parsing is now private inside
+`handlers.ts`; dispatch behavior remains covered through focused handler tests instead of root
+barrel exports.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -704,6 +706,23 @@ packages/runtime/src/inline-js-minifier.test.ts`, `pnpm exec vitest --run packag
       `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec tsc --noEmit --pretty
 false`, and browser runtime tests `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round254: `parseHandlerReference` and `parseHandlerReferences` were
+      removed from the runtime root barrel and made private in `packages/runtime/src/handlers.ts`.
+      New `packages/runtime/src/handlers.test.ts` proves chained `url#export` dispatch and malformed
+      reference rejection through `dispatchDelegatedEvent`; the direct parser assertion was removed
+      from `packages/runtime/src/delegated-runtime-integration.test.ts`, and
+      `packages/runtime/src/index-exports.test.ts` pins the negative public export boundary.
+      Verified by `pnpm exec vitest --run packages/runtime/src/handlers.test.ts
+packages/runtime/src/delegated-runtime-integration.test.ts
+packages/runtime/src/index-exports.test.ts`, `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, browser runtime tests `pnpm exec
+vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`, `pnpm exec tsc --noEmit --pretty false`,
+      exact `pnpm exec vp check packages/runtime/src/handlers.ts
+packages/runtime/src/handlers.test.ts packages/runtime/src/index.ts
+packages/runtime/src/index-exports.test.ts
+packages/runtime/src/delegated-runtime-integration.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
