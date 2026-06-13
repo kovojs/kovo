@@ -755,3 +755,17 @@ Round214 app-shell Vite build-output asset-plan evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round222 app-shell replay/request boundary evidence:
+
+- `packages/server/src/static-export-request.ts` owns SPEC §9.5 synthetic GET request construction
+  for route documents and immutable `/c/` module refs, while
+  `packages/server/src/static-export-response.ts` owns replayed route/client response snapshots and
+  FW229 response diagnostics.
+- `packages/server/src/static-export-document.ts` now stays focused on route-document artifact
+  paths, `/c/` client-module artifact assembly/dedupe, and L0/L1 server endpoint rejection; the
+  app-shell aggregate barrel explicitly lists its public exports instead of `export *` forwarding.
+- `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-request.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/api/app-shell/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

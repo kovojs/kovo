@@ -452,10 +452,11 @@ Latest evidence:
 
 Current state: static export output target planning, output staging, asset planning, Vite build
 output, document/client-module replay, app request document assembly, mutation request handling,
-and SPEC §9.5 dispatch branches have been split into focused modules. Static document replay now
-owns its private synthetic GET construction and replayed route/client response validation directly,
-deleting the extra request/response module path while preserving one SPEC §9.5 route/client export
-pipeline.
+and SPEC §9.5 dispatch branches have been split into focused modules. Static export request replay
+now owns synthetic GET construction, static export response replay now owns route/client response
+snapshots and FW229 response diagnostics, and static document replay owns artifact assembly,
+client-module dedupe, and L0/L1 server endpoint rejection while preserving one SPEC §9.5
+route/client export pipeline.
 Static export diagnostics have a focused owner for compile-diagnostic blocking, FW229 formatting,
 type guards, and `StaticExportError`, leaving static-export types for artifact/manifest shapes.
 The create-jiso starter imports app-shell dev/export/static-export helpers from public subpaths and
@@ -500,6 +501,10 @@ targets, so R6 dry-run preview/export introspection cannot be mistaken for an ou
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-request.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/api/app-shell/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
