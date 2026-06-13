@@ -1,9 +1,9 @@
 import type { AppliedMutationResponse } from './apply-mutation-response.js';
 import { reportRuntimeError } from './error-policy.js';
 import {
-  applyFetchedEnhancedMutationResponseToDom,
+  applyFetchedEnhancedMutationResponseToRuntime,
   type EnhancedMutationAppliedResult,
-  type MutationDomApplyHooks,
+  type MutationRuntimeApplyHooks,
 } from './mutation-apply.js';
 import { fetchEnhancedMutation, isFailedMutationResponse } from './mutation-fetch.js';
 import type { MutationQueue } from './mutation-queue.js';
@@ -74,13 +74,13 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
         stampPendingQueries(options.pendingRoot, queryNames, false);
       }
 
-      return applyFetchedEnhancedMutationResponseToDom(options, fetched);
+      return applyFetchedEnhancedMutationResponseToRuntime(options, fetched);
     }
 
-    const applied = applyFetchedEnhancedMutationResponseToDom(
+    const applied = applyFetchedEnhancedMutationResponseToRuntime(
       options,
       fetched,
-      optimisticMutationDomApplyHooks(options, idem, queryNames, optimisticKeys),
+      optimisticMutationRuntimeApplyHooks(options, idem, queryNames, optimisticKeys),
     );
     const settledQueries = queryNames.filter(
       (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
@@ -102,12 +102,12 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   }
 }
 
-function optimisticMutationDomApplyHooks<Input>(
+function optimisticMutationRuntimeApplyHooks<Input>(
   options: OptimisticEnhancedMutationSubmitOptions<Input>,
   idem: string,
   queryNames: readonly string[],
   optimisticKeys: Readonly<Record<string, string | undefined>>,
-): MutationDomApplyHooks {
+): MutationRuntimeApplyHooks {
   return {
     applyQuery(query) {
       options.rebaser.applyServerTruth(query.name, query.value, query.key);

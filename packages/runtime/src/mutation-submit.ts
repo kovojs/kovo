@@ -19,7 +19,7 @@ import {
   type EnhancedFormElementLike,
 } from './mutation-form.js';
 import {
-  applyFetchedEnhancedMutationResponseToDom,
+  applyFetchedEnhancedMutationResponseToRuntime,
   type EnhancedMutationAppliedResult,
 } from './mutation-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
@@ -153,7 +153,7 @@ export async function submitEnhancedMutation(
 
   try {
     const fetched = await fetchEnhancedMutation(options);
-    return applyFetchedEnhancedMutationResponseToDom(options, fetched);
+    return applyFetchedEnhancedMutationResponseToRuntime(options, fetched);
   } catch (error) {
     reportRuntimeError(options.onError, error);
     throw error;

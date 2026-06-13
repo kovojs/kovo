@@ -51,12 +51,7 @@ export type {
   InstallMutationBroadcastOptions,
   MutationBroadcast,
 } from './broadcast.js';
-export { applyFetchedEnhancedMutationResponseToDom } from './mutation-apply.js';
-export type {
-  EnhancedMutationAppliedResult,
-  EnhancedMutationDomApplyOptions,
-  MutationDomApplyHooks,
-} from './mutation-apply.js';
+export type { EnhancedMutationAppliedResult } from './mutation-apply.js';
 export { MutationQueue } from './mutation-queue.js';
 export type { MutationTask } from './mutation-queue.js';
 export {

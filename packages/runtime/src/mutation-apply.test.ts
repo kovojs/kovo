@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  applyFetchedEnhancedMutationResponseToDom,
-  type EnhancedMutationDomApplyOptions,
+  applyFetchedEnhancedMutationResponseToRuntime,
+  type EnhancedMutationRuntimeApplyOptions,
 } from './mutation-apply.js';
 import type { FetchedEnhancedMutation } from './mutation-fetch.js';
 import { createQueryStore } from './query-store.js';
@@ -23,8 +23,8 @@ function fetchedMutation(
 }
 
 function applyOptions(
-  options: Partial<EnhancedMutationDomApplyOptions> = {},
-): EnhancedMutationDomApplyOptions {
+  options: Partial<EnhancedMutationRuntimeApplyOptions> = {},
+): EnhancedMutationRuntimeApplyOptions {
   const root = new FakeMorphRoot();
 
   return {
@@ -41,7 +41,7 @@ describe('enhanced mutation response apply orchestration', () => {
     const broadcast = { close: vi.fn(), publish: vi.fn() };
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    const applied = applyFetchedEnhancedMutationResponseToDom(
+    const applied = applyFetchedEnhancedMutationResponseToRuntime(
       applyOptions({ broadcast, root, store }),
       fetchedMutation(
         [
@@ -82,7 +82,7 @@ describe('enhanced mutation response apply orchestration', () => {
     const broadcast = { close: vi.fn(), publish: vi.fn() };
     root.targets.set('cart-form', new FakeMorphTarget());
 
-    const applied = applyFetchedEnhancedMutationResponseToDom(
+    const applied = applyFetchedEnhancedMutationResponseToRuntime(
       applyOptions({ broadcast, root }),
       fetchedMutation('<fw-fragment target="cart-form"><form>Invalid</form></fw-fragment>', {
         response: { ok: false, status: 422, text: async () => '' },
@@ -104,7 +104,7 @@ describe('enhanced mutation response apply orchestration', () => {
     root.bindings.push(count);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    applyFetchedEnhancedMutationResponseToDom(
+    applyFetchedEnhancedMutationResponseToRuntime(
       applyOptions({
         morph(target, html) {
           observedDuringMorph.push(count.textContent ?? '');

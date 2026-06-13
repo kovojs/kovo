@@ -14,7 +14,7 @@ import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
-export interface EnhancedMutationDomApplyOptions {
+export interface EnhancedMutationRuntimeApplyOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   islandSignalScope?: IslandSignalScope;
@@ -32,15 +32,15 @@ export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   targets: string[];
 };
 
-export interface MutationDomApplyHooks {
+export interface MutationRuntimeApplyHooks {
   applyQuery?: QueryApplyInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
 }
 
-export function applyFetchedEnhancedMutationResponseToDom(
-  options: EnhancedMutationDomApplyOptions,
+export function applyFetchedEnhancedMutationResponseToRuntime(
+  options: EnhancedMutationRuntimeApplyOptions,
   fetched: FetchedEnhancedMutation,
-  hooks: MutationDomApplyHooks = {},
+  hooks: MutationRuntimeApplyHooks = {},
 ): EnhancedMutationAppliedResult {
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
   // same-user broadcast all parse mutation bodies before entering the canonical
@@ -71,7 +71,7 @@ export function applyFetchedEnhancedMutationResponseToDom(
 }
 
 function publishSuccessfulMutation(
-  options: EnhancedMutationDomApplyOptions,
+  options: EnhancedMutationRuntimeApplyOptions,
   fetched: FetchedEnhancedMutation,
 ): void {
   if (isFailedMutationResponse(fetched.response)) return;

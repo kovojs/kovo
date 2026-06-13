@@ -1895,6 +1895,9 @@ Mutation response decoded runtime apply now also forwards `onError` into the sha
 primitive, so enhanced mutation responses, DOM body apply, deferred stream chunks, and broadcast
 replay report per-query apply failures without forking fragment apply or blocking later decoded
 query truth.
+Fetched enhanced mutation response apply no longer carries the public `ToDom` compatibility name:
+submit and optimistic mutation internals call the runtime-named helper directly, while the root
+runtime barrel keeps only the higher-level submit APIs and the submit result type.
 
 - [x] Normalize canonical query instance wire identities at the shared runtime parser boundary.
       Evidence 2026-06-13 round276: `packages/runtime/src/wire-parser.ts` now decodes
@@ -1978,6 +1981,22 @@ packages/runtime/src/apply-mutation-response.ts
 packages/runtime/src/mutation-response-apply.test.ts
 packages/runtime/src/mutation-response-dom.browser.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
+- [x] Delete the fetched enhanced mutation apply `ToDom` root compatibility export.
+      Evidence 2026-06-13 round342 runtime: `packages/runtime/src/mutation-apply.ts` now exposes
+      internal `applyFetchedEnhancedMutationResponseToRuntime`,
+      `EnhancedMutationRuntimeApplyOptions`, and `MutationRuntimeApplyHooks`, while
+      `packages/runtime/src/mutation-submit.ts` and `packages/runtime/src/mutation-optimistic.ts`
+      call that runtime helper directly. `packages/runtime/src/index.ts` no longer re-exports
+      `applyFetchedEnhancedMutationResponseToDom`, `EnhancedMutationDomApplyOptions`, or
+      `MutationDomApplyHooks`, and `packages/runtime/src/index-exports.test.ts` pins those removed
+      SPEC.md §9.1 root compatibility names. Verified by focused `pnpm exec vitest --run
+packages/runtime/src/mutation-apply.test.ts packages/runtime/src/mutation-submit.test.ts
+packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/index-exports.test.ts`, full
+      runtime `pnpm exec vitest --run packages/runtime/src`, `pnpm exec tsc --noEmit --pretty
+false`, and targeted `pnpm exec vp check packages/runtime/src/mutation-apply.ts
+packages/runtime/src/mutation-apply.test.ts packages/runtime/src/mutation-submit.ts
+packages/runtime/src/mutation-optimistic.ts packages/runtime/src/index.ts
+packages/runtime/src/index-exports.test.ts plans/codebase-quality-round2.md`.
 - [x] Keep component-stamp fragment targets in parity across enhanced submit headers and inline apply.
       Evidence 2026-06-13 round293 runtime: `packages/runtime/src/mutation-targets.ts` and the
       generated inline loader now fall back from `fw-fragment-target`/`id` to `fw-c` when collecting

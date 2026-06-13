@@ -25,7 +25,6 @@ import {
   morphStructuralTree,
 } from './morph.js';
 import { installMutationBroadcast } from './broadcast.js';
-import { applyFetchedEnhancedMutationResponseToDom } from './mutation-apply.js';
 import { MutationQueue } from './mutation-queue.js';
 import {
   createMutationIdem,
@@ -93,6 +92,23 @@ type RemovedRootQueryChunk = import('./index.js').QueryChunk;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootApplyQueryChunksToRuntime = typeof import('./index.js').applyQueryChunksToRuntime;
 
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootApplyFetchedEnhancedMutationResponseToDom =
+  // @ts-expect-error SPEC.md §9.1: fetched response body apply is an internal runtime seam,
+  // not a root runtime compatibility export.
+  typeof import('./index.js').applyFetchedEnhancedMutationResponseToDom;
+
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootEnhancedMutationDomApplyOptions =
+  // @ts-expect-error SPEC.md §9.1: fetched response apply options use the runtime helper name
+  // inside the mutation-apply module, not the old root ToDom compatibility alias.
+  import('./index.js').EnhancedMutationDomApplyOptions;
+
+// @ts-expect-error SPEC.md §9.1: mutation apply hooks belong to the internal runtime helper,
+// not the old root DOM compatibility alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMutationDomApplyHooks = import('./index.js').MutationDomApplyHooks;
+
 describe('runtime root exports', () => {
   it('exports loader and handler modules directly from their canonical implementations', () => {
     // SPEC.md §4.4/§4.7: the public runtime loader surface composes the same
@@ -128,9 +144,6 @@ describe('runtime root exports', () => {
     // pending, and optimism stay split while the root package remains stable.
     expect(runtime.applyDeferredStreamResponseToRuntime).toBe(applyDeferredStreamResponseToRuntime);
     expect(runtime.installMutationBroadcast).toBe(installMutationBroadcast);
-    expect(runtime.applyFetchedEnhancedMutationResponseToDom).toBe(
-      applyFetchedEnhancedMutationResponseToDom,
-    );
     expect(runtime.MutationQueue).toBe(MutationQueue);
     expect(runtime.createMutationIdem).toBe(createMutationIdem);
     expect(runtime.isMutationBroadcastMessage).toBe(isMutationBroadcastMessage);
@@ -148,6 +161,7 @@ describe('runtime root exports', () => {
     expect(Object.hasOwn(runtime, 'applyDeferredStreamResponseToDom')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyEnhancedMutationResponseBodyToDom')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyFragmentQueryBody')).toBe(false);
+    expect(Object.hasOwn(runtime, 'applyFetchedEnhancedMutationResponseToDom')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseBodyToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseChunksToRuntime')).toBe(false);
