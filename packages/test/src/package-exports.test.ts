@@ -16,6 +16,8 @@ import {
 } from '@jiso/test/assertions';
 import {
   assertOrderedItems,
+  browserSuiteAcceptanceGateFact,
+  browserSuiteAcceptanceModulePath,
   commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
@@ -24,6 +26,8 @@ import {
   nodeTaskCommand,
   pnpmFilterTestCommands,
   pnpmRunScriptNames,
+  p10PerfAcceptanceGateFact,
+  p10PerfAcceptanceModulePath,
   requiredVpRunTaskName,
   runCommandSequenceSync,
   vitePlusAcceptanceTaskFacts,
@@ -33,9 +37,13 @@ import {
   vpRunTaskName,
   workflowVpRunTaskNames,
   workflowStepCommands,
+  type BrowserSuiteAcceptanceGateFact,
+  type BrowserSuiteAcceptanceShape,
   type ConformanceGateFacts,
   type CommandInvocation,
   type NodeTaskCommand,
+  type P10PerfAcceptanceGateFact,
+  type P10PerfAcceptanceShape,
   type PnpmFilterTestCommand,
   type VitePlusAcceptanceTaskFacts,
   type VitePlusTaskInputFact,
@@ -945,9 +953,13 @@ describe('@jiso/test package subpath exports', () => {
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
     expect(workflowVpRunTaskNames('steps:\n  - run: vp run fw-check')).toEqual(['fw-check']);
     expect(() => assertOrderedItems(['build', 'fw-check'], 'build', 'fw-check')).not.toThrow();
+    expect(browserSuiteAcceptanceGateFact).toBeTypeOf('function');
+    expect(browserSuiteAcceptanceModulePath).toBeTypeOf('function');
     expect(conformanceGateFacts).toBeTypeOf('function');
     expectTypeOf<ConformanceGateFacts>().toHaveProperty('taskName').toEqualTypeOf<string>();
     expect(loadVitePlusConfig).toBeTypeOf('function');
+    expect(p10PerfAcceptanceGateFact).toBeTypeOf('function');
+    expect(p10PerfAcceptanceModulePath).toBeTypeOf('function');
     expect(vitePlusAcceptanceTaskFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputPatternEndingWith).toBeTypeOf('function');
@@ -1197,8 +1209,12 @@ type _PublicSubpathTypes = [
   MutationErrorExpectation<Record<'invalid', { parse(value: unknown): unknown }>, 'invalid'>,
   PropertyTestOptions<{ count: number }, { by: number }>,
   PropertyTestResult,
+  BrowserSuiteAcceptanceGateFact,
+  BrowserSuiteAcceptanceShape,
   CommandInvocation,
   NodeTaskCommand,
+  P10PerfAcceptanceGateFact,
+  P10PerfAcceptanceShape,
   PnpmFilterTestCommand,
   VitePlusAcceptanceTaskFacts,
   VitePlusTaskInputFact,

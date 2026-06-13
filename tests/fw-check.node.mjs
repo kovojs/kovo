@@ -47,16 +47,14 @@ import {
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
-  assertOrderedItems,
+  browserSuiteAcceptanceGateFact,
+  browserSuiteAcceptanceModulePath,
   commandOutputLines,
   commandSequenceWithoutLast,
   conformanceGateFacts,
-  nodeTaskCommand,
   loadVitePlusConfig,
-  vitePlusAcceptanceTaskFacts,
-  vitePlusTaskInputFacts,
-  vitePlusTaskInputPatternEndingWith,
-  vitestTaskCommand,
+  p10PerfAcceptanceGateFact,
+  p10PerfAcceptanceModulePath,
 } from '../packages/test/src/command-fixtures.ts';
 import {
   compilerDiagnosticFacts,
@@ -5100,70 +5098,83 @@ export const CartTotal = component('cart-total', {
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const browserGate = vitePlusAcceptanceTaskFacts({
-    ciWorkflowSource: ciWorkflow,
-    packageJson,
-    scriptName: 'test:browser',
-    viteConfig: await loadProjectVitePlusConfig(),
-  });
-  const { configPath } = vitestTaskCommand(browserGate.task.command);
-  const browserAcceptancePattern = vitePlusTaskInputPatternEndingWith(
-    browserGate.task,
-    '/browser-acceptance.mjs',
-  );
+  const viteConfig = await loadProjectVitePlusConfig();
+  const browserAcceptancePattern = browserSuiteAcceptanceModulePath({ packageJson, viteConfig });
   const { browserSuiteAcceptance } = await import(
     new URL(`../${browserAcceptancePattern}`, import.meta.url).href
   );
 
-  assert.equal(browserGate.presentInAcceptance, true);
-  assert.equal(browserGate.presentInCi, true);
-  assert.deepEqual(vitePlusTaskInputFacts(browserGate.task), [
-    { auto: true },
-    { base: 'workspace', pattern: configPath },
-    { base: 'workspace', pattern: browserAcceptancePattern },
-    { base: 'workspace', pattern: browserSuiteAcceptance.include[0] },
-  ]);
-  assert.deepEqual(browserSuiteAcceptance, {
-    browser: 'chromium',
-    headless: true,
-    include: ['packages/runtime/src/**/*.browser.test.ts'],
-    providerPackage: '@vitest/browser-playwright',
-  });
+  assert.deepEqual(
+    browserSuiteAcceptanceGateFact({
+      acceptance: browserSuiteAcceptance,
+      ciWorkflowSource: ciWorkflow,
+      packageJson,
+      viteConfig,
+    }),
+    {
+      acceptance: {
+        browser: 'chromium',
+        headless: true,
+        include: ['packages/runtime/src/**/*.browser.test.ts'],
+        providerPackage: '@vitest/browser-playwright',
+      },
+      inputFacts: [
+        { auto: true },
+        { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+        { base: 'workspace', pattern: browserAcceptancePattern },
+        { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+      ],
+      presentInAcceptance: true,
+      presentInCi: true,
+      scriptName: 'test:browser',
+      taskName: 'browser',
+    },
+  );
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
   const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const perfGate = vitePlusAcceptanceTaskFacts({
-    ciWorkflowSource: ciWorkflow,
-    packageJson,
-    scriptName: 'test:p10-perf',
-    viteConfig: await loadProjectVitePlusConfig(),
-  });
-  const { modulePath } = nodeTaskCommand(perfGate.task.command);
+  const viteConfig = await loadProjectVitePlusConfig();
+  const modulePath = p10PerfAcceptanceModulePath({ packageJson, viteConfig });
   const { p10PerfAcceptance, runP10PerfAcceptance } = await import(
     new URL(`../${modulePath}`, import.meta.url).href
   );
 
-  assert.equal(typeof runP10PerfAcceptance, 'function');
-  assert.equal(perfGate.presentInAcceptance, true);
-  assertOrderedItems(perfGate.acceptanceScripts, 'check:build', 'test:p10-perf');
-  assertOrderedItems(perfGate.acceptanceScripts, 'test:p10-perf', 'check:fw');
-  assertOrderedItems(perfGate.ciTaskNames, 'build', perfGate.taskName);
-  assertOrderedItems(perfGate.ciTaskNames, perfGate.taskName, 'fw-check');
-  assert.equal(perfGate.presentInCi, true);
-  assert.deepEqual(vitePlusTaskInputFacts(perfGate.task), [
-    { auto: true },
-    { base: 'workspace', pattern: modulePath },
-    { base: 'workspace', pattern: 'dist/**' },
-  ]);
-  assert.deepEqual(p10PerfAcceptance, {
-    browser: 'chromium',
-    cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
-    heapNoiseBudget: 65536,
-    navigationCount: 100,
-    paintEntry: 'first-contentful-paint',
-    prerenderTimingField: 'activationStart',
-    ttiMetric: 'ttiMinusFcpMs',
-  });
+  assert.deepEqual(
+    p10PerfAcceptanceGateFact({
+      acceptance: p10PerfAcceptance,
+      ciWorkflowSource: ciWorkflow,
+      packageJson,
+      runFunction: runP10PerfAcceptance,
+      viteConfig,
+    }),
+    {
+      acceptance: {
+        browser: 'chromium',
+        cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
+        heapNoiseBudget: 65536,
+        navigationCount: 100,
+        paintEntry: 'first-contentful-paint',
+        prerenderTimingField: 'activationStart',
+        ttiMetric: 'ttiMinusFcpMs',
+      },
+      inputFacts: [
+        { auto: true },
+        { base: 'workspace', pattern: modulePath },
+        { base: 'workspace', pattern: 'dist/**' },
+      ],
+      ordering: {
+        acceptanceAfterBuild: true,
+        acceptanceBeforeFwCheck: true,
+        ciAfterBuild: true,
+        ciBeforeFwCheck: true,
+      },
+      presentInAcceptance: true,
+      presentInCi: true,
+      runFunction: true,
+      scriptName: 'test:p10-perf',
+      taskName: 'p10-perf',
+    },
+  );
 });

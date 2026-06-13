@@ -56,6 +56,61 @@ export interface VitePlusAcceptanceTaskFacts {
   taskName: string;
 }
 
+export interface BrowserSuiteAcceptanceShape {
+  browser?: unknown;
+  headless?: unknown;
+  include?: unknown;
+  providerPackage?: unknown;
+}
+
+export interface BrowserSuiteAcceptanceGateFact {
+  acceptance: {
+    browser: unknown;
+    headless: unknown;
+    include: unknown;
+    providerPackage: unknown;
+  };
+  inputFacts: VitePlusTaskInputFact[];
+  presentInAcceptance: boolean;
+  presentInCi: boolean;
+  scriptName: string;
+  taskName: string;
+}
+
+export interface P10PerfAcceptanceShape {
+  browser?: unknown;
+  cdpMethods?: unknown;
+  heapNoiseBudget?: unknown;
+  navigationCount?: unknown;
+  paintEntry?: unknown;
+  prerenderTimingField?: unknown;
+  ttiMetric?: unknown;
+}
+
+export interface P10PerfAcceptanceGateFact {
+  acceptance: {
+    browser: unknown;
+    cdpMethods: unknown;
+    heapNoiseBudget: unknown;
+    navigationCount: unknown;
+    paintEntry: unknown;
+    prerenderTimingField: unknown;
+    ttiMetric: unknown;
+  };
+  inputFacts: VitePlusTaskInputFact[];
+  ordering: {
+    acceptanceAfterBuild: true;
+    acceptanceBeforeFwCheck: true;
+    ciAfterBuild: true;
+    ciBeforeFwCheck: true;
+  };
+  presentInAcceptance: boolean;
+  presentInCi: boolean;
+  runFunction: boolean;
+  scriptName: string;
+  taskName: string;
+}
+
 export interface PackageManifestFact {
   directory: string;
   manifest: { name?: unknown; scripts?: Record<string, unknown> };
@@ -76,6 +131,13 @@ export interface ConformanceGateFacts {
 function requireString(value: unknown, message: string): string {
   if (typeof value !== 'string') assert.fail(message);
   return value;
+}
+
+function firstString(value: unknown, message: string): string {
+  assert.ok(Array.isArray(value), `${message} is an array`);
+  const first = value[0];
+  if (typeof first !== 'string') assert.fail(`${message} first entry is a string`);
+  return first;
 }
 
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -165,6 +227,118 @@ export function vitePlusAcceptanceTaskFacts(options: {
     task,
     taskName,
   };
+}
+
+export function browserSuiteAcceptanceGateFact(options: {
+  acceptance: BrowserSuiteAcceptanceShape;
+  ciWorkflowSource: string;
+  packageJson: { scripts?: Record<string, unknown> };
+  scriptName?: string;
+  viteConfig: VitePlusConfig;
+}): BrowserSuiteAcceptanceGateFact {
+  const scriptName = options.scriptName ?? 'test:browser';
+  const gate = vitePlusAcceptanceTaskFacts({
+    ciWorkflowSource: options.ciWorkflowSource,
+    packageJson: options.packageJson,
+    scriptName,
+    viteConfig: options.viteConfig,
+  });
+  vitestTaskCommand(gate.task.command);
+  vitePlusTaskInputPatternEndingWith(gate.task, '/browser-acceptance.mjs');
+  const inputFacts = vitePlusTaskInputFacts(gate.task);
+  const suiteInputFact = {
+    base: 'workspace',
+    pattern: firstString(options.acceptance.include, 'browser include'),
+  };
+
+  return {
+    acceptance: {
+      browser: options.acceptance.browser,
+      headless: options.acceptance.headless,
+      include: options.acceptance.include,
+      providerPackage: options.acceptance.providerPackage,
+    },
+    inputFacts: inputFacts.some(
+      (fact) => fact.base === suiteInputFact.base && fact.pattern === suiteInputFact.pattern,
+    )
+      ? inputFacts
+      : [...inputFacts, suiteInputFact],
+    presentInAcceptance: gate.presentInAcceptance,
+    presentInCi: gate.presentInCi,
+    scriptName: gate.scriptName,
+    taskName: gate.taskName,
+  };
+}
+
+export function browserSuiteAcceptanceModulePath(options: {
+  packageJson: { scripts?: Record<string, unknown> };
+  scriptName?: string;
+  viteConfig: VitePlusConfig;
+}): string {
+  const scriptName = options.scriptName ?? 'test:browser';
+  const taskName = requiredVpRunTaskName(scriptName, options.packageJson);
+  const task = options.viteConfig.run?.tasks?.[taskName];
+  assert.ok(task, `${taskName} task is defined`);
+  vitestTaskCommand(task.command);
+  return vitePlusTaskInputPatternEndingWith(task, '/browser-acceptance.mjs');
+}
+
+export function p10PerfAcceptanceGateFact(options: {
+  acceptance: P10PerfAcceptanceShape;
+  ciWorkflowSource: string;
+  packageJson: { scripts?: Record<string, unknown> };
+  runFunction: unknown;
+  scriptName?: string;
+  viteConfig: VitePlusConfig;
+}): P10PerfAcceptanceGateFact {
+  const scriptName = options.scriptName ?? 'test:p10-perf';
+  const gate = vitePlusAcceptanceTaskFacts({
+    ciWorkflowSource: options.ciWorkflowSource,
+    packageJson: options.packageJson,
+    scriptName,
+    viteConfig: options.viteConfig,
+  });
+  nodeTaskCommand(gate.task.command);
+  assertOrderedItems(gate.acceptanceScripts, 'check:build', scriptName);
+  assertOrderedItems(gate.acceptanceScripts, scriptName, 'check:fw');
+  assertOrderedItems(gate.ciTaskNames, 'build', gate.taskName);
+  assertOrderedItems(gate.ciTaskNames, gate.taskName, 'fw-check');
+
+  return {
+    acceptance: {
+      browser: options.acceptance.browser,
+      cdpMethods: options.acceptance.cdpMethods,
+      heapNoiseBudget: options.acceptance.heapNoiseBudget,
+      navigationCount: options.acceptance.navigationCount,
+      paintEntry: options.acceptance.paintEntry,
+      prerenderTimingField: options.acceptance.prerenderTimingField,
+      ttiMetric: options.acceptance.ttiMetric,
+    },
+    inputFacts: vitePlusTaskInputFacts(gate.task),
+    ordering: {
+      acceptanceAfterBuild: true,
+      acceptanceBeforeFwCheck: true,
+      ciAfterBuild: true,
+      ciBeforeFwCheck: true,
+    },
+    presentInAcceptance: gate.presentInAcceptance,
+    presentInCi: gate.presentInCi,
+    runFunction: typeof options.runFunction === 'function',
+    scriptName: gate.scriptName,
+    taskName: gate.taskName,
+  };
+}
+
+export function p10PerfAcceptanceModulePath(options: {
+  packageJson: { scripts?: Record<string, unknown> };
+  scriptName?: string;
+  viteConfig: VitePlusConfig;
+}): string {
+  const scriptName = options.scriptName ?? 'test:p10-perf';
+  const taskName = requiredVpRunTaskName(scriptName, options.packageJson);
+  const task = options.viteConfig.run?.tasks?.[taskName];
+  assert.ok(task, `${taskName} task is defined`);
+  return nodeTaskCommand(task.command).modulePath;
 }
 
 export function conformanceGateFacts(options: {

@@ -115,6 +115,9 @@ fake DB and assertion harness locally.
 Shared runtime fixtures now own enhanced mutation broadcast, malformed change-header, keyed query
 state, and optimistic pending-stamp behavior projections for the P9 verification-layer fw-check gate, so the monolith
 no longer defines that fake DOM/mutation root harness inline.
+Shared command fixtures now own browser-suite and P10 perf acceptance-gate projections, including
+Vite+ task input facts, CI/acceptance membership, ordering, and acceptance module shapes, so the
+P10 fw-check cases no longer rebuild that gate mechanic locally.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -126,6 +129,16 @@ no longer defines that fake DOM/mutation root harness inline.
 
 Latest evidence:
 
+- P10 acceptance command-fixture slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "framework-owned browser suite is wired into acceptance" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Targeted `node --test --test-name-pattern "P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`
+  is blocked before fixture assertions by outside-ownership server export state:
+  `TypeError: createMemoryVersionedClientModuleRegistry is not a function` from
+  `tests/p10-perf.node.mjs`.
 - Enhanced mutation runtime fixture slice:
   `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

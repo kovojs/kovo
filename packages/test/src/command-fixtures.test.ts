@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertOrderedItems,
+  browserSuiteAcceptanceGateFact,
+  browserSuiteAcceptanceModulePath,
   commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
@@ -11,6 +13,8 @@ import {
   pnpmFilterTestCommands,
   pnpmRunScriptName,
   pnpmRunScriptNames,
+  p10PerfAcceptanceGateFact,
+  p10PerfAcceptanceModulePath,
   requiredVpRunTaskName,
   vitePlusAcceptanceTaskFacts,
   vitePlusTaskInputFacts,
@@ -204,6 +208,169 @@ describe('@jiso/test command fixtures', () => {
     expect(vitePlusTaskInputPatternEndingWith(facts.task, '/browser-acceptance.mjs')).toBe(
       'scripts/browser-acceptance.mjs',
     );
+  });
+
+  it('projects browser suite acceptance wiring as a reusable gate fact', () => {
+    const fact = browserSuiteAcceptanceGateFact({
+      acceptance: {
+        browser: 'chromium',
+        headless: true,
+        include: ['packages/runtime/src/**/*.browser.test.ts'],
+        providerPackage: '@vitest/browser-playwright',
+      },
+      ciWorkflowSource: [
+        'steps:',
+        '  - run: vp run build',
+        '  - run: vp run browser',
+        '  - run: vp run fw-check',
+      ].join('\n'),
+      packageJson: {
+        scripts: {
+          acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:fw',
+          'test:browser': 'vp run browser',
+        },
+      },
+      viteConfig: {
+        run: {
+          tasks: {
+            browser: {
+              command: 'vitest --run --config vitest.browser.config.ts',
+              input: [
+                { auto: true },
+                { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+                { base: 'workspace', pattern: 'scripts/browser-acceptance.mjs' },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(fact).toEqual({
+      acceptance: {
+        browser: 'chromium',
+        headless: true,
+        include: ['packages/runtime/src/**/*.browser.test.ts'],
+        providerPackage: '@vitest/browser-playwright',
+      },
+      inputFacts: [
+        { auto: true },
+        { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+        { base: 'workspace', pattern: 'scripts/browser-acceptance.mjs' },
+        { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+      ],
+      presentInAcceptance: true,
+      presentInCi: true,
+      scriptName: 'test:browser',
+      taskName: 'browser',
+    });
+    expect(
+      browserSuiteAcceptanceModulePath({
+        packageJson: {
+          scripts: {
+            'test:browser': 'vp run browser',
+          },
+        },
+        viteConfig: {
+          run: {
+            tasks: {
+              browser: {
+                command: 'vitest --run --config vitest.browser.config.ts',
+                input: [{ base: 'workspace', pattern: 'scripts/browser-acceptance.mjs' }],
+              },
+            },
+          },
+        },
+      }),
+    ).toBe('scripts/browser-acceptance.mjs');
+  });
+
+  it('projects P10 perf acceptance wiring and ordering as a reusable gate fact', () => {
+    const fact = p10PerfAcceptanceGateFact({
+      acceptance: {
+        browser: 'chromium',
+        cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
+        heapNoiseBudget: 65536,
+        navigationCount: 100,
+        paintEntry: 'first-contentful-paint',
+        prerenderTimingField: 'activationStart',
+        ttiMetric: 'ttiMinusFcpMs',
+      },
+      ciWorkflowSource: [
+        'steps:',
+        '  - run: vp run build',
+        '  - run: vp run p10-perf',
+        '  - run: vp run fw-check',
+      ].join('\n'),
+      packageJson: {
+        scripts: {
+          acceptance: 'pnpm run check:build && pnpm run test:p10-perf && pnpm run check:fw',
+          'test:p10-perf': 'vp run p10-perf',
+        },
+      },
+      runFunction: () => undefined,
+      viteConfig: {
+        run: {
+          tasks: {
+            'p10-perf': {
+              command: 'node scripts/p10-perf.mjs',
+              input: [
+                { auto: true },
+                { base: 'workspace', pattern: 'scripts/p10-perf.mjs' },
+                { base: 'workspace', pattern: 'dist/**' },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(fact).toEqual({
+      acceptance: {
+        browser: 'chromium',
+        cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
+        heapNoiseBudget: 65536,
+        navigationCount: 100,
+        paintEntry: 'first-contentful-paint',
+        prerenderTimingField: 'activationStart',
+        ttiMetric: 'ttiMinusFcpMs',
+      },
+      inputFacts: [
+        { auto: true },
+        { base: 'workspace', pattern: 'scripts/p10-perf.mjs' },
+        { base: 'workspace', pattern: 'dist/**' },
+      ],
+      ordering: {
+        acceptanceAfterBuild: true,
+        acceptanceBeforeFwCheck: true,
+        ciAfterBuild: true,
+        ciBeforeFwCheck: true,
+      },
+      presentInAcceptance: true,
+      presentInCi: true,
+      runFunction: true,
+      scriptName: 'test:p10-perf',
+      taskName: 'p10-perf',
+    });
+    expect(
+      p10PerfAcceptanceModulePath({
+        packageJson: {
+          scripts: {
+            'test:p10-perf': 'vp run p10-perf',
+          },
+        },
+        viteConfig: {
+          run: {
+            tasks: {
+              'p10-perf': {
+                command: 'node scripts/p10-perf.mjs',
+                input: [{ base: 'workspace', pattern: 'scripts/p10-perf.mjs' }],
+              },
+            },
+          },
+        },
+      }),
+    ).toBe('scripts/p10-perf.mjs');
   });
 
   it('collects conformance gate facts without local fw-check package parsers', () => {
