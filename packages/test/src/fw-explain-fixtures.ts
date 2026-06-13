@@ -39,6 +39,34 @@ export interface FwExplainResultLike {
   output: string;
 }
 
+export interface FwExplainMatrixGraphMutationFact {
+  key: string;
+}
+
+export interface FwExplainMatrixGraphQueryFact {
+  query: string;
+}
+
+export interface FwExplainMutationQueryMatrixGraph {
+  mutations?: readonly FwExplainMatrixGraphMutationFact[];
+  queries?: readonly FwExplainMatrixGraphQueryFact[];
+}
+
+export interface FwExplainMutationQueryMatrixOptions {
+  explainMutation: (mutationKey: string) => FwExplainResultLike;
+  graph: FwExplainMutationQueryMatrixGraph;
+  invalidatedBy?: ReadonlyMap<string, readonly string[]>;
+}
+
+export type FwExplainMutationQueryMatrix = Record<string, Record<string, string>>;
+
+export interface FwExplainMutationQueryMatrixFact {
+  matrix: FwExplainMutationQueryMatrix;
+  staticInvalidationMismatches: string[];
+  unhandledMutations: string[];
+  updateQueriesByMutation: Record<string, string[]>;
+}
+
 export interface FwExplainOutput {
   fields: FwExplainField[];
   records: FwExplainRecord[];
@@ -253,6 +281,52 @@ export function fwExplainUpdateConsumers(output: string): FwExplainUpdateConsume
 
 export function fwExplainUpdateConsumerMap(output: string): Map<string, string[]> {
   return new Map(fwExplainUpdateConsumers(output).map((entry) => [entry.query, entry.consumers]));
+}
+
+export function fwExplainMutationQueryMatrixFact(
+  options: FwExplainMutationQueryMatrixOptions,
+): FwExplainMutationQueryMatrixFact {
+  const matrix: FwExplainMutationQueryMatrix = {};
+  const staticInvalidationMismatches: string[] = [];
+  const unhandledMutations: string[] = [];
+  const updateQueriesByMutation: Record<string, string[]> = {};
+
+  for (const mutation of options.graph.mutations ?? []) {
+    const explanation = options.explainMutation(mutation.key);
+    const statuses = fwExplainOptimisticStatuses(explanation.output);
+    const affectedQueries = [...fwExplainUpdateConsumerMap(explanation.output).keys()];
+    const affectedQuerySet = new Set(affectedQueries);
+    const summary = optionalSummary(explanation.output, 'OPTIMISTIC-SUMMARY');
+    const mutationMatrix: Record<string, string> = {};
+
+    matrix[mutation.key] = mutationMatrix;
+    updateQueriesByMutation[mutation.key] = affectedQueries;
+
+    if (summary?.UNHANDLED !== undefined && summary.UNHANDLED !== '0') {
+      unhandledMutations.push(mutation.key);
+    }
+
+    for (const query of options.graph.queries ?? []) {
+      const invalidated = affectedQuerySet.has(query.query);
+      const staticInvalidators = options.invalidatedBy?.get(query.query);
+      const staticallyInvalidated = staticInvalidators?.includes(mutation.key);
+
+      if (staticallyInvalidated !== undefined && staticallyInvalidated !== invalidated) {
+        staticInvalidationMismatches.push(`${mutation.key}->${query.query}`);
+      }
+
+      mutationMatrix[query.query] = invalidated
+        ? (statuses[query.query] ?? 'UNHANDLED')
+        : 'no-invalidation';
+    }
+  }
+
+  return {
+    matrix,
+    staticInvalidationMismatches,
+    unhandledMutations,
+    updateQueriesByMutation,
+  };
 }
 
 export function fwExplainEndpointFacts(output: string): FwExplainEndpointFact[] {

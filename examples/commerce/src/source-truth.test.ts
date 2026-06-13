@@ -9,6 +9,7 @@ import {
   fwExplainEndpointFacts,
   fwExplainListField,
   fwExplainMutationAssertionFact,
+  fwExplainMutationQueryMatrixFact,
   fwExplainOptimisticStatuses,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
@@ -398,39 +399,22 @@ describe('commerce source-truth graph acceptance', () => {
 
   it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {
     const invalidatedBy = graphInvalidatedByQueries(commerceGraph);
-    const matrix: Record<string, Record<string, string>> = {};
-
-    for (const mutation of commerceGraph.mutations) {
-      const explanation = fwExplain(commerceGraph, {
-        kind: 'mutation',
-        optimistic: true,
-        target: mutation.key,
-      });
-      const statuses = fwExplainOptimisticStatuses(explanation.output);
-      const affectedQueries = [...fwExplainUpdateConsumerMap(explanation.output).keys()];
-      const mutationMatrix: Record<string, string> = {};
-      matrix[mutation.key] = mutationMatrix;
-
-      for (const query of commerceGraph.queries) {
-        const queryInvalidators = invalidatedBy.get(query.query) ?? [];
-        const invalidated = affectedQueries.includes(query.query);
-
-        expect(queryInvalidators.includes(mutation.key)).toBe(invalidated);
-        if (invalidated) {
-          expect(statuses[query.query]).toBeDefined();
-          expect(statuses[query.query]).not.toBe('UNHANDLED');
-          mutationMatrix[query.query] = statuses[query.query] ?? 'missing';
-        } else {
-          expect(statuses[query.query]).toBeUndefined();
-          mutationMatrix[query.query] = 'no-invalidation';
-        }
-      }
-      expect(fwExplainSummary(explanation.output, 'OPTIMISTIC-SUMMARY').UNHANDLED).toBe('0');
-    }
+    const matrixFact = fwExplainMutationQueryMatrixFact({
+      explainMutation: (mutationKey) =>
+        fwExplain(commerceGraph, {
+          kind: 'mutation',
+          optimistic: true,
+          target: mutationKey,
+        }),
+      graph: commerceGraph,
+      invalidatedBy,
+    });
 
     // SPEC.md §10.4/§16.5: every mutation/query cell either has an explicit
     // optimistic status or is proven not to be invalidated by that mutation.
-    expect(matrix).toEqual({
+    expect(matrixFact.staticInvalidationMismatches).toEqual([]);
+    expect(matrixFact.unhandledMutations).toEqual([]);
+    expect(matrixFact.matrix).toEqual({
       'auth/sign-out': {
         cart: 'no-invalidation',
         orderHistory: 'no-invalidation',
@@ -447,7 +431,7 @@ describe('commerce source-truth graph acceptance', () => {
         productGrid: 'no-invalidation',
       },
     });
-    expect(matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
+    expect(matrixFact.matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
   });
 
   it('accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire', async () => {

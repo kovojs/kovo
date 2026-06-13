@@ -229,6 +229,8 @@ reusable HTML fragment field/key projections. Commerce app/source-truth tests no
 form-field, keyed-element, or generated-IR source-stamp projection helpers for currently covered
 no-JS form, list identity, enhanced fragment, and committed-IR assertions. Shared header fixtures
 now own response header value and Set-Cookie pair projection for commerce app/app-shell tests.
+Shared `fw-explain` fixtures now own the commerce mutation/query optimistic matrix projection and
+static-invalidation mismatch facts.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -237,6 +239,10 @@ now own response header value and Set-Cookie pair projection for commerce app/ap
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - targeted `node --test --test-name-pattern ... tests/fw-check.node.mjs`
@@ -261,7 +267,8 @@ enhanced-submit, and delegated handler integration coverage now lives in focused
 `tests/fw-check.node.mjs` is still large but increasingly delegates mechanics to package fixtures
 and structured facts. Commerce app tests now consume shared `@jiso/test/html-fragment` form and
 keyed-element projections and shared `@jiso/test/headers` response/cookie projections instead of
-local helpers.
+local helpers; commerce source-truth matrix projection now lives in
+`@jiso/test/fw-explain-fixtures`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.

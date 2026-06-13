@@ -5,6 +5,7 @@ import {
   fwExplainField,
   fwExplainListField,
   fwExplainMutationAssertionFact,
+  fwExplainMutationQueryMatrixFact,
   fwExplainOptimisticStatuses,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
@@ -242,6 +243,102 @@ describe('@jiso/test fw explain fixture seam', () => {
       subject: 'PAGE /cart',
       version: 'fw-explain/v1',
       viewTransitions: [],
+    });
+  });
+
+  it('derives mutation-query matrix facts from fw-explain outputs', () => {
+    const graph = {
+      mutations: [{ key: 'cart/add' }, { key: 'order/receipt' }],
+      queries: [{ query: 'cart' }, { query: 'productGrid' }],
+    };
+    const outputs = new Map([
+      [
+        'cart/add',
+        [
+          'fw-explain/v1',
+          'MUTATION cart/add',
+          'updates: cart->component:CartBadge,page:/cart; productGrid->component:ProductGrid,page:/cart',
+          'OPTIMISTIC cart hand-written',
+          'OPTIMISTIC productGrid await-fragment',
+          'OPTIMISTIC-SUMMARY total=2 hand-written=1 await-fragment=1 UNHANDLED=0',
+          '',
+        ].join('\n'),
+      ],
+      [
+        'order/receipt',
+        [
+          'fw-explain/v1',
+          'MUTATION order/receipt',
+          'updates: -',
+          'OPTIMISTIC-SUMMARY total=0 hand-written=0 await-fragment=0 UNHANDLED=0',
+          '',
+        ].join('\n'),
+      ],
+    ]);
+
+    expect(
+      fwExplainMutationQueryMatrixFact({
+        explainMutation: (mutationKey) => ({
+          exitCode: 0,
+          output: outputs.get(mutationKey) ?? '',
+        }),
+        graph,
+        invalidatedBy: new Map([
+          ['cart', ['cart/add']],
+          ['productGrid', ['cart/add']],
+        ]),
+      }),
+    ).toEqual({
+      matrix: {
+        'cart/add': {
+          cart: 'hand-written',
+          productGrid: 'await-fragment',
+        },
+        'order/receipt': {
+          cart: 'no-invalidation',
+          productGrid: 'no-invalidation',
+        },
+      },
+      staticInvalidationMismatches: [],
+      unhandledMutations: [],
+      updateQueriesByMutation: {
+        'cart/add': ['cart', 'productGrid'],
+        'order/receipt': [],
+      },
+    });
+  });
+
+  it('reports matrix mismatches and unhandled optimistic statuses as facts', () => {
+    expect(
+      fwExplainMutationQueryMatrixFact({
+        explainMutation: () => ({
+          exitCode: 0,
+          output: [
+            'fw-explain/v1',
+            'MUTATION cart/add',
+            'updates: cart->page:/cart',
+            'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=0 UNHANDLED=1',
+            '',
+          ].join('\n'),
+        }),
+        graph: {
+          mutations: [{ key: 'cart/add' }],
+          queries: [{ query: 'cart' }, { query: 'productGrid' }],
+        },
+        invalidatedBy: new Map([
+          ['cart', []],
+          ['productGrid', ['cart/add']],
+        ]),
+      }),
+    ).toMatchObject({
+      matrix: {
+        'cart/add': {
+          cart: 'UNHANDLED',
+          productGrid: 'no-invalidation',
+        },
+      },
+      staticInvalidationMismatches: ['cart/add->cart', 'cart/add->productGrid'],
+      unhandledMutations: ['cart/add'],
     });
   });
 

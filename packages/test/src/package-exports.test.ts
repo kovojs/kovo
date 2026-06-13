@@ -79,6 +79,7 @@ import {
   fwExplainField,
   fwExplainListField,
   fwExplainMutationAssertionFact,
+  fwExplainMutationQueryMatrixFact,
   fwExplainOptimisticStatuses,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
@@ -506,6 +507,16 @@ describe('@jiso/test package subpath exports', () => {
         fwExplainUpdateConsumerMap('fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\n'),
       ),
     ).toEqual({ cart: ['page:/cart'] });
+    expect(
+      fwExplainMutationQueryMatrixFact({
+        explainMutation: () => ({
+          exitCode: 0,
+          output:
+            'fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\nOPTIMISTIC cart hand-written\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
+        }),
+        graph: { mutations: [{ key: 'cart/add' }], queries: [{ query: 'cart' }] },
+      }).matrix,
+    ).toEqual({ 'cart/add': { cart: 'hand-written' } });
     expect(
       fwExplainEndpointFacts(
         [
