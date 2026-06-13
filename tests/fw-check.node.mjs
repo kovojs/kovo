@@ -24,7 +24,6 @@ import {
   collectMinifierReservedNames,
   compileComponentModule,
   deriveAppGraph,
-  deriveRegistryFactsFromGraph,
   emitQueryPlanBootstrapModule,
   jisoVitePlugin,
   queryShapesFromFacts,
@@ -91,9 +90,15 @@ import {
   GeneratedFixtureTemplateStampHost,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
+  graphComponentTargetFacts,
   graphFixtureFile,
+  graphInvalidationFacts,
+  graphMutationFact,
+  graphOptimisticFacts,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
+  graphStaticBehaviorFact,
+  graphTouchGraphKeys,
 } from '../packages/test/src/graph-fixtures.ts';
 import {
   fwQueryFacts,
@@ -483,17 +488,14 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
     target: 'cart/add',
   }).output;
 
-  assert.deepEqual(
-    commerceGraph.mutations.find((mutationFact) => mutationFact.key === 'cart/add'),
-    {
-      guards: ['authed', 'rateLimit:session'],
-      invalidates: ['cart', 'product', 'order'],
-      inputFields: ['productId', 'quantity'],
-      key: 'cart/add',
-      session: 'commerceSession',
-      writes: ['cart', 'product', 'order'],
-    },
-  );
+  assert.deepEqual(graphMutationFact(commerceGraph, 'cart/add'), {
+    guards: ['authed', 'rateLimit:session'],
+    invalidates: ['cart', 'product', 'order'],
+    inputFields: ['productId', 'quantity'],
+    key: 'cart/add',
+    session: 'commerceSession',
+    writes: ['cart', 'product', 'order'],
+  });
   assert.deepEqual(fwExplainListField(cartAddExplain, 'manual-invalidates'), []);
   assert.deepEqual(
     fwExplainUpdateConsumers(cartAddExplain),
@@ -2416,22 +2418,15 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
-  assert.deepEqual(
-    commerceGraph.components.map((component) => [
-      component.name,
-      component.fragments,
-      component.queries,
-    ]),
-    [
-      ['CartBadge', ['cart-badge'], ['cart']],
-      ['ProductGrid', ['product-grid'], ['productGrid']],
-      ['OrderHistory', ['order-history'], ['orderHistory']],
-    ],
-  );
-  assert.deepEqual(commerceGraph.optimistic, [
+  assert.deepEqual(graphComponentTargetFacts(commerceGraph), [
+    { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+    { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+    { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+  ]);
+  assert.deepEqual(graphOptimisticFacts(commerceGraph), [
     { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-    { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
     { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+    { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
   ]);
 
   const currentGrid = {
@@ -3276,16 +3271,25 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       },
     },
   ]);
-  const registryFacts = deriveRegistryFactsFromGraph(commerceGraph);
-  assert.deepEqual(registryFacts.components, ['cart-badge', 'order-history', 'product-grid']);
-  assert.deepEqual(
-    registryFacts.domainKeys.toSorted((left, right) => left.localeCompare(right)),
-    ['attachment', 'auth', 'cart', 'order', 'product'],
-  );
-  assert.deepEqual(registryFacts.invalidations, {
-    'cart/add': ['cart', 'orderHistory', 'productGrid'],
+  assert.deepEqual(graphStaticBehaviorFact(commerceGraph), {
+    components: [
+      { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+      { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+      { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+    ],
+    domains: ['attachment', 'auth', 'cart', 'order', 'product'],
+    invalidations: {
+      'cart/add': ['cart', 'orderHistory', 'productGrid'],
+    },
+    mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
+    optimistic: [
+      { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+      { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+      { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+    ],
+    routes: ['/admin', '/cart'],
+    touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
   });
-  assert.deepEqual(registryFacts.routes, ['/admin', '/cart']);
   const cartBadge = compileComponentModule({
     fileName: 'cart-badge.tsx',
     source: `
@@ -3314,9 +3318,7 @@ export const CartBadge = component('cart-badge', {
     },
   );
   assert.deepEqual(
-    Object.keys(commerceGraph.touchGraph)
-      .filter((key) => ['cart.addItem', 'order.receipt', 'payment.webhook'].includes(key))
-      .sort(),
+    graphTouchGraphKeys(commerceGraph, ['cart.addItem', 'order.receipt', 'payment.webhook']),
     ['cart.addItem', 'order.receipt', 'payment.webhook'],
   );
 });
@@ -5594,7 +5596,7 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     ),
     ['cart.addItem'],
   );
-  assert.deepEqual(deriveRegistryFactsFromGraph(commerceGraph).invalidations, {
+  assert.deepEqual(graphInvalidationFacts(commerceGraph), {
     'cart/add': ['cart', 'orderHistory', 'productGrid'],
   });
 });

@@ -2,14 +2,22 @@ import { describe, expect, it } from 'vitest';
 
 import {
   graphFixtureFile,
+  graphComponentTargetFacts,
+  graphDomainFacts,
   graphFragmentTargetForQuery,
+  graphInvalidationFacts,
   graphInvalidatedByQueries,
   graphInvalidatedQueries,
   graphMutationFact,
+  graphMutationKeys,
   graphMutationUpdateConsumers,
+  graphOptimisticFacts,
   graphOptimisticStatusMatrix,
   graphPageFact,
   graphQueryConsumers,
+  graphRouteFacts,
+  graphStaticBehaviorFact,
+  graphTouchGraphKeys,
 } from './graph-fixtures.js';
 
 const graph = {
@@ -34,6 +42,10 @@ const graph = {
     { domains: ['product'], query: 'productGrid' },
     { domains: ['order'], query: 'orderHistory' },
   ],
+  touchGraph: {
+    'cart.addItem': {},
+    'order.receipt': {},
+  },
 };
 
 describe('@jiso/test graph fixture seam', () => {
@@ -79,6 +91,42 @@ describe('@jiso/test graph fixture seam', () => {
         orderHistory: 'no-invalidation',
         productGrid: 'no-invalidation',
       },
+    });
+  });
+
+  it('projects stable graph behavior summaries for monolith and commerce tests', () => {
+    expect(graphComponentTargetFacts(graph)).toEqual([
+      { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+      { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+    ]);
+    expect(graphDomainFacts(graph)).toEqual(['attachment', 'cart', 'order', 'product']);
+    expect(graphInvalidationFacts(graph)).toEqual({
+      'cart/add': ['cart', 'productGrid'],
+    });
+    expect(graphMutationKeys(graph)).toEqual(['cart/add', 'order/receipt']);
+    expect(graphOptimisticFacts(graph)).toEqual([
+      { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+      { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+    ]);
+    expect(graphRouteFacts(graph)).toEqual(['/admin', '/cart']);
+    expect(graphTouchGraphKeys(graph)).toEqual(['cart.addItem', 'order.receipt']);
+    expect(graphTouchGraphKeys(graph, ['cart.addItem'])).toEqual(['cart.addItem']);
+    expect(graphStaticBehaviorFact(graph)).toEqual({
+      components: [
+        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+      ],
+      domains: ['attachment', 'cart', 'order', 'product'],
+      invalidations: {
+        'cart/add': ['cart', 'productGrid'],
+      },
+      mutations: ['cart/add', 'order/receipt'],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+      ],
+      routes: ['/admin', '/cart'],
+      touchGraphKeys: ['cart.addItem', 'order.receipt'],
     });
   });
 

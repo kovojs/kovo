@@ -9,6 +9,7 @@ export interface JisoGraphComponentFact {
 export interface JisoGraphMutationFact {
   invalidates?: readonly string[];
   key: string;
+  writes?: readonly string[];
 }
 
 export interface JisoGraphOptimisticFact {
@@ -34,6 +35,7 @@ export interface JisoGraphFixture {
   optimistic?: readonly JisoGraphOptimisticFact[];
   pages?: readonly JisoGraphPageFact[];
   queries?: readonly JisoGraphQueryFact[];
+  touchGraph?: Record<string, unknown>;
 }
 
 export type ProjectGraphFixture = JisoGraphFixture & Record<string, unknown>;
@@ -44,6 +46,22 @@ export interface GraphQueryConsumerFact {
 }
 
 export type GraphInvalidationMatrix = Record<string, Record<string, string>>;
+
+export interface GraphComponentTargetFact {
+  fragments: string[];
+  name: string;
+  queries: string[];
+}
+
+export interface GraphStaticBehaviorFact {
+  components: GraphComponentTargetFact[];
+  domains: string[];
+  invalidations: Record<string, string[]>;
+  mutations: string[];
+  optimistic: JisoGraphOptimisticFact[];
+  routes: string[];
+  touchGraphKeys: string[];
+}
 
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
   const page = graph.pages?.find((item) => item.route === route);
@@ -62,6 +80,52 @@ export function graphFragmentTargetForQuery(graph: JisoGraphFixture, query: stri
   const fragment = component?.fragments?.[0];
   if (!fragment) throw new Error(`Graph includes a fragment target for query ${query}`);
   return fragment;
+}
+
+export function graphComponentTargetFacts(graph: JisoGraphFixture): GraphComponentTargetFact[] {
+  return (graph.components ?? []).map((component) => ({
+    fragments: [...(component.fragments ?? [])],
+    name: component.name,
+    queries: [...(component.queries ?? [])],
+  }));
+}
+
+export function graphMutationKeys(graph: JisoGraphFixture): string[] {
+  return (graph.mutations ?? [])
+    .map((mutation) => mutation.key)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export function graphRouteFacts(graph: JisoGraphFixture): string[] {
+  return (graph.pages ?? [])
+    .map((page) => page.route)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export function graphDomainFacts(graph: JisoGraphFixture): string[] {
+  const domains = new Set<string>();
+
+  for (const query of graph.queries ?? []) {
+    for (const domain of query.domains ?? []) domains.add(domain);
+  }
+
+  for (const mutation of graph.mutations ?? []) {
+    for (const domain of mutation.invalidates ?? []) domains.add(domain);
+    for (const domain of mutation.writes ?? []) domains.add(domain);
+  }
+
+  return [...domains].sort((left, right) => left.localeCompare(right));
+}
+
+export function graphTouchGraphKeys(
+  graph: JisoGraphFixture,
+  onlyKeys?: readonly string[],
+): string[] {
+  const allowed = onlyKeys === undefined ? undefined : new Set(onlyKeys);
+
+  return Object.keys(graph.touchGraph ?? {})
+    .filter((key) => allowed?.has(key) ?? true)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 export function graphQueryConsumers(graph: JisoGraphFixture): GraphQueryConsumerFact[] {
@@ -138,6 +202,35 @@ export function graphOptimisticStatusMatrix(graph: JisoGraphFixture): GraphInval
   }
 
   return matrix;
+}
+
+export function graphOptimisticFacts(graph: JisoGraphFixture): JisoGraphOptimisticFact[] {
+  return [...(graph.optimistic ?? [])].sort((left, right) =>
+    `${left.mutation}\0${left.query}`.localeCompare(`${right.mutation}\0${right.query}`),
+  );
+}
+
+export function graphInvalidationFacts(graph: JisoGraphFixture): Record<string, string[]> {
+  const invalidations: Record<string, string[]> = {};
+
+  for (const mutation of graph.mutations ?? []) {
+    const queries = graphInvalidatedQueries(graph, mutation.key);
+    if (queries.length > 0) invalidations[mutation.key] = queries;
+  }
+
+  return invalidations;
+}
+
+export function graphStaticBehaviorFact(graph: JisoGraphFixture): GraphStaticBehaviorFact {
+  return {
+    components: graphComponentTargetFacts(graph),
+    domains: graphDomainFacts(graph),
+    invalidations: graphInvalidationFacts(graph),
+    mutations: graphMutationKeys(graph),
+    optimistic: graphOptimisticFacts(graph),
+    routes: graphRouteFacts(graph),
+    touchGraphKeys: graphTouchGraphKeys(graph),
+  };
 }
 
 export async function graphFixtureFile<T extends ProjectGraphFixture = ProjectGraphFixture>(

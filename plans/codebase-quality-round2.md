@@ -264,7 +264,9 @@ now own response header value and Set-Cookie pair projection for commerce app/ap
 Shared `fw-explain` fixtures now own the commerce mutation/query optimistic matrix projection and
 static-invalidation mismatch facts.
 Shared graph fixtures now own checked-in graph artifact loading so commerce source-truth and
-`fw-check` graph gates no longer parse commerce generated graph JSON locally.
+`fw-check` graph gates no longer parse commerce generated graph JSON locally. Shared graph fixtures
+also own static behavior summaries for component targets, domains, routes, invalidations,
+optimistic rows, and touch-graph keys.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -296,6 +298,10 @@ Latest evidence:
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact|D2 commerce validates keyed append and optimistic reorder|D4 commerce adopt-dont-invent features stay represented" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|D2 commerce validates keyed append and optimistic reorder|P10 commerce graph assertions answer behavior mechanically|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 
 ## Phase 7 - Test Restructuring
 
@@ -307,7 +313,8 @@ and structured facts. Commerce app tests now consume shared `@jiso/test/html-fra
 keyed-element projections and shared `@jiso/test/headers` response/cookie projections instead of
 local helpers; commerce source-truth matrix projection now lives in
 `@jiso/test/fw-explain-fixtures`; checked-in graph artifact loading now lives in
-`@jiso/test/graph-fixtures`.
+`@jiso/test/graph-fixtures`, along with graph static behavior projections consumed by
+`tests/fw-check.node.mjs`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.

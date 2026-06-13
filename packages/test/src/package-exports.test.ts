@@ -114,14 +114,22 @@ import {
 } from '@jiso/test/generated-module-fixtures';
 import {
   graphFixtureFile,
+  graphComponentTargetFacts,
+  graphDomainFacts,
   graphFragmentTargetForQuery,
+  graphInvalidationFacts,
   graphInvalidatedByQueries,
   graphInvalidatedQueries,
   graphMutationFact,
+  graphMutationKeys,
   graphMutationUpdateConsumers,
+  graphOptimisticFacts,
   graphOptimisticStatusMatrix,
   graphPageFact,
   graphQueryConsumers,
+  graphRouteFacts,
+  graphStaticBehaviorFact,
+  graphTouchGraphKeys,
   type GraphInvalidationMatrix,
   type GraphQueryConsumerFact,
   type ProjectGraphFixture,
@@ -562,7 +570,14 @@ describe('@jiso/test package subpath exports', () => {
       optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
       pages: [{ queries: ['cart'], route: '/cart' }],
       queries: [{ domains: ['cart'], query: 'cart' }],
+      touchGraph: { 'cart.addItem': {} },
     };
+    expect(graphComponentTargetFacts(graph)).toEqual([
+      { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+    ]);
+    expect(graphDomainFacts(graph)).toEqual(['cart']);
+    expect(graphInvalidationFacts(graph)).toEqual({ 'cart/add': ['cart'] });
+    expect(graphMutationKeys(graph)).toEqual(['cart/add']);
     expect(graphPageFact(graph, '/cart')).toMatchObject({ route: '/cart' });
     expect(graphMutationFact(graph, 'cart/add')).toMatchObject({ key: 'cart/add' });
     expect(graphFragmentTargetForQuery(graph, 'cart')).toBe('cart-badge');
@@ -576,6 +591,20 @@ describe('@jiso/test package subpath exports', () => {
     ]);
     expect(graphOptimisticStatusMatrix(graph)).toEqual({
       'cart/add': { cart: 'hand-written' },
+    });
+    expect(graphOptimisticFacts(graph)).toEqual([
+      { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+    ]);
+    expect(graphRouteFacts(graph)).toEqual(['/cart']);
+    expect(graphTouchGraphKeys(graph)).toEqual(['cart.addItem']);
+    expect(graphStaticBehaviorFact(graph)).toEqual({
+      components: [{ fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] }],
+      domains: ['cart'],
+      invalidations: { 'cart/add': ['cart'] },
+      mutations: ['cart/add'],
+      optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
+      routes: ['/cart'],
+      touchGraphKeys: ['cart.addItem'],
     });
     expect(assertTypeScriptProgramHasNoDiagnostics).toBeTypeOf('function');
     expect(typeScriptInterfaceMemberTypes).toBeTypeOf('function');

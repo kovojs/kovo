@@ -26,6 +26,7 @@ import {
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
   graphPageFact,
+  graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
 import {
   fwFragmentFacts,
@@ -80,6 +81,25 @@ describe('commerce source-truth graph acceptance', () => {
 
     expect(graphArtifact).toEqual(commerceGraph);
     expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
+    expect(graphStaticBehaviorFact(graphArtifact)).toEqual({
+      components: [
+        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+      ],
+      domains: ['attachment', 'auth', 'cart', 'order', 'product'],
+      invalidations: {
+        'cart/add': ['cart', 'orderHistory', 'productGrid'],
+      },
+      mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+      ],
+      routes: ['/admin', '/cart'],
+      touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+    });
     expect(graphPageFact(graphArtifact, '/cart').meta).toEqual(cartMeta);
     expect(graphPageFact(commerceGraph, '/cart').meta).toEqual(cartMeta);
     expect(pageHints.title).toBe(cartMeta.title);
