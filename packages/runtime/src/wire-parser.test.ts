@@ -238,6 +238,22 @@ describe('wire parser HTML entity handling', () => {
     );
   });
 
+  it('keeps mutation-body and standalone fragment chunk decoding in parity', () => {
+    const body = [
+      '<fw-fragment target="cart-list" mode="append"><li>new</li></fw-fragment>',
+      '<fw-fragment><li>missing target</li></fw-fragment>',
+      '<fw-fragment target="cart-total" mode="replace"><span>$7</span></fw-fragment>',
+    ].join('');
+
+    // SPEC.md §9.1: response apply and fragment-only readers consume the same
+    // decoded fragment shape so target filtering and modes cannot drift.
+    expect(readMutationResponseBodyChunks(body).fragments).toEqual(readFragmentChunks(body));
+    expect(readFragmentChunks(body)).toEqual([
+      { html: '<li>new</li>', mode: 'append', target: 'cart-list' },
+      { html: '<span>$7</span>', target: 'cart-total' },
+    ]);
+  });
+
   it('keeps nested fw-fragment chunks inside the parent fragment content', () => {
     // SPEC.md §9.1: fragment wire chunks may carry HTML that itself contains
     // inert fw-fragment markup; shared scanning must not split that parent.

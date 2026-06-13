@@ -457,6 +457,18 @@ packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-response-apply.test.ts
 packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader.ts
 plans/codebase-quality-round2.md`; `git diff --check`.
+      Evidence 2026-06-13: `packages/runtime/src/wire-parser.ts` now decodes mutation-body and
+      standalone `fw-fragment` element chunks through `readFragmentElementChunk`, and
+      `packages/runtime/src/wire-parser.test.ts` pins target filtering plus append-mode parity
+      between `readMutationResponseBodyChunks(body).fragments` and `readFragmentChunks(body)`.
+      Verified by `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/mutation-response.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts`, broader apply-adjacent checks `pnpm exec vitest
+--run packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts
+packages/runtime/src/broadcast.test.ts`, `pnpm --filter @jiso/runtime run check:inline-loader`, and
+      exact `pnpm exec vp check packages/runtime/src/wire-parser.ts
+packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -482,6 +494,10 @@ packages/runtime/src/index.browser.test.ts`.
       to the shared `readMutationResponseElementChunks` helper. Command: `pnpm exec vitest
 --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after fragment element decoding was
+      unified behind `readFragmentElementChunk` for mutation-body and standalone fragment readers.
+      Command: `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 

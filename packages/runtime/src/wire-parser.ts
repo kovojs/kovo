@@ -192,14 +192,8 @@ export function readMutationResponseBodyChunks(
     reportRuntimeError(onError, malformedFragmentError(reason));
   }
   for (const chunk of chunks.fragments) {
-    const target = readAttribute(chunk.attrs, 'target');
-    if (!target) continue;
-
-    fragments.push({
-      html: chunk.content,
-      ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
-      target,
-    });
+    const fragment = readFragmentElementChunk(chunk);
+    if (fragment) fragments.push(fragment);
   }
 
   return { fragments, queries };
@@ -237,19 +231,24 @@ export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter)
       reportRuntimeError(onError, malformedFragmentError(reason));
     },
   })) {
-    const target = readAttribute(chunk.attrs, 'target');
-    if (!target) {
-      continue;
-    }
-
-    fragments.push({
-      html: chunk.content,
-      ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
-      target,
-    });
+    const fragment = readFragmentElementChunk(chunk);
+    if (fragment) fragments.push(fragment);
   }
 
   return fragments;
+}
+
+export function readFragmentElementChunk(
+  chunk: Pick<ElementChunk, 'attrs' | 'content'>,
+): FragmentChunk | undefined {
+  const target = readAttribute(chunk.attrs, 'target');
+  if (!target) return undefined;
+
+  return {
+    html: chunk.content,
+    ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
+    target,
+  };
 }
 
 export function malformedFragmentError(reason: string): Error {
