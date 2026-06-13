@@ -51,6 +51,8 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
 
           if (bold) bold['tabIndex'] = state.activeValue === 'bold' ? 0 : -1;
           if (link) link['tabIndex'] = state.activeValue === 'link' ? 0 : -1;
+          if (state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
+          if (state.activeValue === 'link' && link) Object(link)['focus']?.call(link);
           if (output) output['textContent'] = state.activeValue;
         }}
       >

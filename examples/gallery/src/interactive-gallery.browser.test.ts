@@ -1383,6 +1383,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"activeValue":"link","pressedValue":"bold"}');
       expect(bold.tabIndex).toBe(-1);
       expect(link.tabIndex).toBe(0);
+      expect(document.activeElement).toBe(link);
       expect(activeOutput.textContent).toBe('link');
     });
 

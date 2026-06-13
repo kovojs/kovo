@@ -12,6 +12,8 @@ export const GalleryToolbarDemo$section_keydown = handler((event, ctx) => {
 
   if (bold) bold['tabIndex'] = ctx.state.activeValue === 'bold' ? 0 : -1;
   if (link) link['tabIndex'] = ctx.state.activeValue === 'link' ? 0 : -1;
+  if (ctx.state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
+  if (ctx.state.activeValue === 'link' && link) Object(link)['focus']?.call(link);
   if (output) output['textContent'] = ctx.state.activeValue;
 });
 export const GalleryToolbarDemo$button_click = handler((event, ctx) => {

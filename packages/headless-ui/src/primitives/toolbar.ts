@@ -149,6 +149,8 @@ export function toolbarKeyDown(
   if (intent === undefined) return;
 
   const result = toolbarMoveFocus(state, intent);
+  if (result.index < 0) return;
+
   event.preventDefault();
 
   return result;

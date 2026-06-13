@@ -21,6 +21,7 @@ interface FakeElement {
   checked?: boolean;
   close?: () => void;
   hidden?: boolean;
+  focus?: () => void;
   readonly setAttribute: (name: string, value: string) => void;
   scrollTop?: number;
   tabIndex?: number;
@@ -28,6 +29,7 @@ interface FakeElement {
   value?: string;
   readonly attrs: Record<string, string>;
   closeCalls: number;
+  focusCalls: number;
 }
 
 interface FakeDocument {
@@ -1101,6 +1103,18 @@ describe('compiled interactive gallery demos', () => {
       state: toolbarState,
     });
     expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
+    clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: toolbarState,
+    });
+    expect(toolbarState).toEqual({ activeValue: 'bold', pressedValue: 'bold' });
+    clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: toolbarState,
+    });
+    expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
     clientHandler(toolbar, 'GalleryToolbarDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
@@ -1410,6 +1424,7 @@ describe('compiled interactive gallery demos', () => {
       });
       expect(element(document, 'gallery-toolbar-bold').tabIndex).toBe(-1);
       expect(element(document, 'gallery-toolbar-link').tabIndex).toBe(0);
+      expect(element(document, 'gallery-toolbar-link').focusCalls).toBe(1);
       expect(selector(document, '[data-demo-state="toolbar-active"]').textContent).toBe('link');
       clientHandler(toolbar, 'GalleryToolbarDemo$button_click_2')(new Event('click'), {
         params: {},
@@ -1566,12 +1581,16 @@ function fakeElement(): FakeElement {
   const element: FakeElement = {
     attrs: {},
     closeCalls: 0,
+    focusCalls: 0,
     setAttribute(name, value) {
       this.attrs[name] = value;
     },
   };
   element.close = () => {
     element.closeCalls += 1;
+  };
+  element.focus = () => {
+    element.focusCalls += 1;
   };
 
   return element;

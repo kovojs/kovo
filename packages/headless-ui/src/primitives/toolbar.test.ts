@@ -165,6 +165,18 @@ describe('headless-ui toolbar primitive', () => {
     expect(verticalEvent.defaultPrevented).toBe(false);
   });
 
+  it('does not trap keyboard events when the toolbar has no enabled movement target', () => {
+    const disabledEvent = toolbarKeyboardEvent('ArrowRight');
+    expect(
+      toolbarKeyDown(disabledEvent, { activeValue: 'bold', disabled: true, items: editorItems }),
+    ).toBeUndefined();
+    expect(disabledEvent.defaultPrevented).toBe(false);
+
+    const emptyEvent = toolbarKeyboardEvent('ArrowRight');
+    expect(toolbarKeyDown(emptyEvent, { activeValue: 'bold', items: [] })).toBeUndefined();
+    expect(emptyEvent.defaultPrevented).toBe(false);
+  });
+
   it('guards primitive handlers when author behavior prevented default', () => {
     const event = toolbarKeyboardEvent('ArrowRight');
     event.preventDefault();
