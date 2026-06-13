@@ -33,6 +33,75 @@ export interface CompilerUpdateCoverageFact {
   status: string;
 }
 
+export interface CompilerQueryUpdatePlanLike {
+  componentName: string;
+  paths: readonly string[];
+  query: string;
+  templateStamps?: readonly CompilerTemplateStampLike[];
+  [field: string]: unknown;
+}
+
+export interface CompilerTemplateStampLike {
+  itemBindingPlaceholders?: readonly CompilerTemplateStampPlaceholderLike[];
+  itemBindings?: readonly string[];
+  key: string;
+  list: string;
+  listReadPath?: string;
+  selector: string;
+  template: string;
+  [field: string]: unknown;
+}
+
+export interface CompilerTemplateStampPlaceholderLike {
+  path: string;
+  readPath?: string;
+  value: string;
+  [field: string]: unknown;
+}
+
+export interface CompilerQueryUpdatePlanFact {
+  componentName: string;
+  paths: string[];
+  query: string;
+  templateStamps: CompilerTemplateStampFact[];
+}
+
+export interface CompilerTemplateStampFact {
+  itemBindingPlaceholders: CompilerTemplateStampPlaceholderFact[];
+  itemBindings: string[];
+  key: string;
+  list: string;
+  listReadPath?: string;
+  selector: string;
+  template: string;
+}
+
+export interface CompilerTemplateStampPlaceholderFact {
+  path: string;
+  readPath?: string;
+  value: string;
+}
+
+export type CompilerQueryShape =
+  | string
+  | readonly CompilerQueryShape[]
+  | {
+      kind?: string;
+      shape?: CompilerQueryShape;
+      [field: string]: unknown;
+    };
+
+export interface CompilerQueryShapeFact {
+  query: string;
+  shape: CompilerQueryShape;
+  source: string;
+}
+
+export type CompilerDiagnosticMessageFact = Pick<
+  CompilerDiagnosticFact,
+  'code' | 'help' | 'message'
+>;
+
 export function compilerDiagnosticFacts(
   diagnostics: readonly CompilerDiagnosticLike[],
   codes?: readonly string[],
@@ -49,6 +118,40 @@ export function compilerDiagnosticFacts(
     }));
 }
 
+export function compilerDiagnosticMessageFacts(
+  diagnostics: readonly CompilerDiagnosticLike[],
+  codes?: readonly string[],
+): CompilerDiagnosticMessageFact[] {
+  return compilerDiagnosticFacts(diagnostics, codes).map(({ code, help, message }) => ({
+    code,
+    ...(help === undefined ? {} : { help }),
+    message,
+  }));
+}
+
+export function compilerQueryUpdatePlanFacts(
+  plans: readonly CompilerQueryUpdatePlanLike[],
+): CompilerQueryUpdatePlanFact[] {
+  return plans.map((plan) => ({
+    componentName: plan.componentName,
+    paths: [...plan.paths],
+    query: plan.query,
+    templateStamps: (plan.templateStamps ?? []).map((stamp) => ({
+      itemBindingPlaceholders: (stamp.itemBindingPlaceholders ?? []).map((placeholder) => ({
+        path: placeholder.path,
+        ...(placeholder.readPath === undefined ? {} : { readPath: placeholder.readPath }),
+        value: placeholder.value,
+      })),
+      itemBindings: [...(stamp.itemBindings ?? [])],
+      key: stamp.key,
+      list: stamp.list,
+      ...(stamp.listReadPath === undefined ? {} : { listReadPath: stamp.listReadPath }),
+      selector: stamp.selector,
+      template: stamp.template,
+    })),
+  }));
+}
+
 export function compilerUpdateCoverageFacts(
   coverage: readonly CompilerUpdateCoverageLike[],
 ): CompilerUpdateCoverageFact[] {
@@ -59,4 +162,16 @@ export function compilerUpdateCoverageFacts(
     query: entry.query,
     status: entry.status,
   }));
+}
+
+export function compilerGeneratedQueryShapeFact(options: {
+  query: string;
+  shape: CompilerQueryShape;
+  source?: string;
+}): CompilerQueryShapeFact {
+  return {
+    query: options.query,
+    shape: options.shape,
+    source: options.source ?? `generated/queries/${options.query}.shape.ts`,
+  };
 }

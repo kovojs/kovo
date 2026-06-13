@@ -45,9 +45,15 @@ import {
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
 import {
+  compilerDiagnosticMessageFacts,
   compilerDiagnosticFacts,
+  compilerGeneratedQueryShapeFact,
+  compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   type CompilerDiagnosticFact,
+  type CompilerDiagnosticMessageFact,
+  type CompilerQueryUpdatePlanFact,
+  type CompilerQueryShapeFact,
   type CompilerUpdateCoverageFact,
 } from '@jiso/test/compiler-fixtures';
 import {
@@ -114,6 +120,7 @@ import {
   type FwExplainUpdateConsumerFact,
 } from '@jiso/test/fw-explain-fixtures';
 import {
+  assertGeneratedRegistryConsumerTypes,
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
@@ -122,9 +129,11 @@ import {
   generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
+  generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
   generatedRenderedElementFactsFromSource,
   type GeneratedComponentSourceFacts,
+  type GeneratedRegistryConsumerTypeOptions,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -602,11 +611,28 @@ describe('@jiso/test package subpath exports', () => {
       compilerDiagnosticFacts([{ code: 'FW311', message: 'coverage', severity: 'warn' }]),
     ).toEqual([{ code: 'FW311', message: 'coverage', severity: 'warn' }]);
     expect(
+      compilerDiagnosticMessageFacts([{ code: 'FW302', message: 'binding', severity: 'error' }]),
+    ).toEqual([{ code: 'FW302', message: 'binding' }]);
+    expect(compilerGeneratedQueryShapeFact({ query: 'cart', shape: { count: 'number' } })).toEqual({
+      query: 'cart',
+      shape: { count: 'number' },
+      source: 'generated/queries/cart.shape.ts',
+    });
+    expect(
+      compilerQueryUpdatePlanFacts([
+        { componentName: 'Cart', paths: ['cart.count'], query: 'cart' },
+      ]),
+    ).toEqual([
+      { componentName: 'Cart', paths: ['cart.count'], query: 'cart', templateStamps: [] },
+    ]);
+    expect(
       compilerUpdateCoverageFacts([
         { componentName: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' },
       ]),
     ).toEqual([{ component: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' }]);
     expectTypeOf<CompilerDiagnosticFact>().toHaveProperty('code').toEqualTypeOf<string>();
+    expectTypeOf<CompilerDiagnosticMessageFact>().toHaveProperty('message').toEqualTypeOf<string>();
+    expectTypeOf<CompilerQueryShapeFact>().toHaveProperty('source').toEqualTypeOf<string>();
     expectTypeOf<CompilerUpdateCoverageFact>().toHaveProperty('component').toEqualTypeOf<string>();
     expect(commandOutputLines('one\r\ntwo\n')).toEqual(['one', 'two']);
     expect(commandSequenceWithoutLast('vp run build && vp run fw-check')).toBe('vp run build');
@@ -920,6 +946,8 @@ describe('@jiso/test package subpath exports', () => {
         Cart$click: 'function',
       },
     );
+    expect(generatedRegistryInterfaceMemberTypes).toBeTypeOf('function');
+    expect(assertGeneratedRegistryConsumerTypes).toBeTypeOf('function');
     expect(typeof executeInlineEnhancedFormLoaderFixture).toBe('function');
     expectTypeOf<InlineEnhancedFormLoaderFact>().toMatchTypeOf<{
       listenerEvents: string[];
@@ -977,6 +1005,11 @@ type _PublicSubpathTypes = [
   DiagnosticOutputFact,
   ViteLoweredEventDiagnosticFact,
   ViteDiagnosticMessageFacts,
+  CompilerDiagnosticFact,
+  CompilerDiagnosticMessageFact,
+  CompilerQueryUpdatePlanFact,
+  CompilerQueryShapeFact,
+  CompilerUpdateCoverageFact,
   FwExplainEndpointFact,
   FwExplainMutationAssertionFact,
   FwExplainOutput,
@@ -1038,6 +1071,7 @@ type _PublicSubpathTypes = [
   ParsedSqlOperation,
   TypeScriptInterfaceMemberTypes,
   GeneratedHandlerReferenceFact,
+  GeneratedRegistryConsumerTypeOptions,
   DbObservationOptions,
   DbVerificationConfig,
   DbVerificationDiagnostic,

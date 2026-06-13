@@ -1,6 +1,9 @@
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
 import { htmlElementFacts, type HtmlElementSelector } from './html-fragment.ts';
+import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
 
 export interface GeneratedArtifactFile {
   fileName?: string;
@@ -237,6 +240,11 @@ export interface GeneratedRenderedElementFact {
   tag: string;
 }
 
+export interface GeneratedRegistryConsumerTypeOptions extends AssertTypeScriptProgramOptions {
+  consumerFileName?: string;
+  registryFileName?: string;
+}
+
 const isLowerHex = (value: string): boolean => /^[0-9a-f]+$/.test(value);
 
 export function generatedHandlerReferenceFact(
@@ -347,6 +355,47 @@ export function generatedClientExportTypeFacts(
   names: readonly string[],
 ): Record<string, string> {
   return Object.fromEntries(names.map((name) => [name, typeof exports[name]]));
+}
+
+export async function generatedRegistryInterfaceMemberTypes(
+  files: readonly GeneratedArtifactFile[],
+  interfaceName: string,
+  fileName = 'generated-registry.ts',
+): Promise<Record<string, string>> {
+  const { typeScriptInterfaceMemberTypes } = await import('./typescript-fixtures.ts');
+
+  return typeScriptInterfaceMemberTypes(
+    fileName,
+    generatedArtifactSource(files, 'registry'),
+    interfaceName,
+  );
+}
+
+export async function assertGeneratedRegistryConsumerTypes(
+  files: readonly GeneratedArtifactFile[],
+  consumerSource: string,
+  options: GeneratedRegistryConsumerTypeOptions = {},
+): Promise<void> {
+  const { assertTypeScriptProgramHasNoDiagnostics } = await import('./typescript-fixtures.ts');
+  const workspaceRoot =
+    options.workspaceRoot ?? fileURLToPath(new URL('../../../', import.meta.url));
+  const registryFileName =
+    options.registryFileName ?? join(workspaceRoot, '.jiso-test-generated', 'registry.ts');
+  const consumerFileName =
+    options.consumerFileName ?? join(workspaceRoot, '.jiso-test-generated', 'consumer.ts');
+
+  await assertTypeScriptProgramHasNoDiagnostics(
+    {
+      [registryFileName]: generatedArtifactSource(files, 'registry'),
+      [consumerFileName]: consumerSource,
+    },
+    {
+      ...(options.compilerOptions === undefined
+        ? {}
+        : { compilerOptions: options.compilerOptions }),
+      workspaceRoot,
+    },
+  );
 }
 
 function renderedElementFacts(

@@ -60,6 +60,9 @@ import {
 } from '../packages/test/src/command-fixtures.ts';
 import {
   compilerDiagnosticFacts,
+  compilerDiagnosticMessageFacts,
+  compilerGeneratedQueryShapeFact,
+  compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
 } from '../packages/test/src/compiler-fixtures.ts';
 import { viteLoweredEventDiagnosticFact } from '../packages/test/src/diagnostic-output-fixtures.ts';
@@ -82,8 +85,10 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeInlineEnhancedFormLoaderFixture,
+  assertGeneratedRegistryConsumerTypes,
   generatedClientExportTypeFacts,
   generatedArtifactSource,
+  generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
@@ -140,10 +145,6 @@ import {
   runStarterTemplateViteTaskCommand,
   starterTemplateDevDependencyCoverage,
 } from '../packages/test/src/starter-template-fixtures.ts';
-import {
-  assertTypeScriptProgramHasNoDiagnostics,
-  typeScriptInterfaceMemberTypes,
-} from '../packages/test/src/typescript-fixtures.ts';
 import { loaderSmokeBehaviorFact } from '../packages/test/src/runtime-fixtures.ts';
 import {
   viteGeneratedHandlerMiddlewareFact,
@@ -970,8 +971,6 @@ export const ProductCard = component('product-card', {
 });
 `,
   });
-  const registrySource = generatedArtifactSource(result.files, 'registry');
-
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
   // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
   const renderedElements = generatedRenderedElementFactsFromArtifact(result.files);
@@ -986,14 +985,9 @@ export const ProductCard = component('product-card', {
     1,
   );
   assert.equal(renderedImage?.attrs.viewTransitionName, undefined);
-  assert.deepEqual(
-    await typeScriptInterfaceMemberTypes(
-      'view-transition-registry.ts',
-      registrySource,
-      'ViewTransitions',
-    ),
-    { 'product-p1-image': 'unknown' },
-  );
+  assert.deepEqual(await generatedRegistryInterfaceMemberTypes(result.files, 'ViewTransitions'), {
+    'product-p1-image': 'unknown',
+  });
 });
 
 void test('P1 compiler validates component-scoped IDREFs', async () => {
@@ -1697,7 +1691,6 @@ export const ProductLinks = component('product-links', {
 });
 `,
   });
-  const registrySource = generatedArtifactSource(lowered.files, 'registry');
   assert.deepEqual(lowered.diagnostics, []);
   const renderedLinks = generatedRenderedElementFactsFromArtifact(lowered.files, { tag: 'a' });
   assert.deepEqual(
@@ -1705,20 +1698,9 @@ export const ProductLinks = component('product-links', {
     ['/products/p%201?max=500', '/cart'],
   );
 
-  const virtualRegistryFile = join(
-    fileURLToPath(new URL('../', import.meta.url)),
-    '.fw-check-virtual',
-    'route-registry.ts',
-  );
-  const virtualConsumerFile = join(
-    fileURLToPath(new URL('../', import.meta.url)),
-    '.fw-check-virtual',
-    'route-consumer.ts',
-  );
-
-  await assertTypeScriptProgramHasNoDiagnostics({
-    [virtualRegistryFile]: registrySource,
-    [virtualConsumerFile]: `
+  await assertGeneratedRegistryConsumerTypes(
+    lowered.files,
+    `
 import { href, Link, redirect, route } from '@jiso/core';
 
 href('/cart', {});
@@ -1737,7 +1719,7 @@ href('/products/:id', { params: { id: 1 } });
 // @ts-expect-error generated RouteRegistry rejects undeclared routes.
 href('/checkout', {});
 `,
-  });
+  );
 
   assert.deepEqual(
     compilerDiagnosticFacts(
@@ -4169,15 +4151,14 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
   );
 
   const generatedCartShapeFacts = [
-    {
+    compilerGeneratedQueryShapeFact({
       query: 'cart',
       shape: {
         count: 'number',
         empty: 'boolean',
         items: [{ name: 'string', productId: 'string', qty: 'number' }],
       },
-      source: 'generated/queries/cart.shape.ts',
-    },
+    }),
   ];
   assert.deepEqual(queryShapesFromFacts(generatedCartShapeFacts), {
     cart: {
@@ -4207,7 +4188,7 @@ export const CartBadge = component('cart-badge', {
 `,
   });
   assert.deepEqual(validCartBindings.diagnostics, []);
-  assert.deepEqual(validCartBindings.queryUpdatePlans, [
+  assert.deepEqual(compilerQueryUpdatePlanFacts(validCartBindings.queryUpdatePlans), [
     {
       componentName: 'CartBadge',
       paths: ['cart.count', 'cart.empty', 'cart.items'],
@@ -4217,16 +4198,19 @@ export const CartBadge = component('cart-badge', {
           itemBindingPlaceholders: [
             {
               path: '.name',
+              readPath: 'name',
               value: 'Item',
             },
             {
               path: '.qty',
+              readPath: 'qty',
               value: '0',
             },
           ],
           itemBindings: ['.name', '.qty'],
           key: 'productId',
           list: 'cart.items',
+          listReadPath: 'items',
           selector: '[data-bind-list="cart.items"]',
           template:
             '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
@@ -4238,11 +4222,10 @@ export const CartBadge = component('cart-badge', {
   const staleGeneratedShape = compileComponentModule({
     fileName: 'cart-badge.tsx',
     queryShapeFacts: [
-      {
+      compilerGeneratedQueryShapeFact({
         query: 'cart',
         shape: { itemCount: 'number' },
-        source: 'generated/queries/cart.shape.ts',
-      },
+      }),
     ],
     source: `
 export const CartBadge = component('cart-badge', {
@@ -4250,15 +4233,12 @@ export const CartBadge = component('cart-badge', {
 });
 `,
   });
-  assert.deepEqual(
-    staleGeneratedShape.diagnostics.map(({ code, message }) => ({ code, message })),
-    [
-      {
-        code: 'FW302',
-        message: 'data-bind path is not present in the declared query shape. cart.count',
-      },
-    ],
-  );
+  assert.deepEqual(compilerDiagnosticMessageFacts(staleGeneratedShape.diagnostics), [
+    {
+      code: 'FW302',
+      message: 'data-bind path is not present in the declared query shape. cart.count',
+    },
+  ]);
 
   const invalidListStamp = compileComponentModule({
     fileName: 'cart-badge.tsx',
@@ -4275,18 +4255,15 @@ export const CartBadge = component('cart-badge', {
 });
 `,
   });
-  assert.deepEqual(
-    invalidListStamp.diagnostics.map(({ code, message }) => ({ code, message })),
-    [
-      {
-        code: 'FW302',
-        message: 'data-bind path is not present in the declared query shape. cart.items',
-      },
-    ],
-  );
+  assert.deepEqual(compilerDiagnosticMessageFacts(invalidListStamp.diagnostics), [
+    {
+      code: 'FW302',
+      message: 'data-bind path is not present in the declared query shape. cart.items',
+    },
+  ]);
 
   const nullableFacts = [
-    {
+    compilerGeneratedQueryShapeFact({
       query: 'product',
       shape: {
         name: 'string',
@@ -4300,8 +4277,7 @@ export const CartBadge = component('cart-badge', {
           },
         },
       },
-      source: 'generated/queries/product.shape.ts',
-    },
+    }),
   ];
   assert.deepEqual(queryShapesFromFacts(nullableFacts), {
     product: {
@@ -4337,17 +4313,14 @@ export const ProductCard = component('product-card', {
 });
 `,
   });
-  assert.deepEqual(
-    unsafeNullablePath.diagnostics.map(({ code, help, message }) => ({ code, help, message })),
-    [
-      {
-        code: 'FW227',
-        help: diagnosticDefinitions.FW227.help,
-        message:
-          'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
-      },
-    ],
-  );
+  assert.deepEqual(compilerDiagnosticMessageFacts(unsafeNullablePath.diagnostics), [
+    {
+      code: 'FW227',
+      help: diagnosticDefinitions.FW227.help,
+      message:
+        'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
+    },
+  ]);
 });
 
 void test('S1 production build proves the compiler 1:1 emit contract', async () => {
@@ -4914,27 +4887,15 @@ export const CartRow = component('cart-row', {
 });
 `,
   });
-  const registrySource = generatedArtifactSource(result.files, 'registry');
-  const virtualRegistryFile = join(
-    fileURLToPath(new URL('../', import.meta.url)),
-    '.fw-check-virtual',
-    'generated-registry.ts',
-  );
-  const virtualConsumerFile = join(
-    fileURLToPath(new URL('../', import.meta.url)),
-    '.fw-check-virtual',
-    'fragment-target-consumer.ts',
-  );
-
   assert.deepEqual(result.componentGraphFacts, [
     {
       fragments: ['cart-row'],
       name: 'CartRow',
     },
   ]);
-  await assertTypeScriptProgramHasNoDiagnostics({
-    [virtualRegistryFile]: registrySource,
-    [virtualConsumerFile]: `
+  await assertGeneratedRegistryConsumerTypes(
+    result.files,
+    `
 import { fragmentTarget } from '@jiso/core';
 
 const cartRow = fragmentTarget('cart-row', { rowId: 'row-1' });
@@ -4949,7 +4910,7 @@ fragmentTarget('cart-row', { rowId: 1 });
 // @ts-expect-error generated FragmentTargets reject undeclared props.
 fragmentTarget('cart-row', { rowId: 'row-1', sku: 'sku-1' });
 `,
-  });
+  );
 });
 
 void test('D9 FW235 fails fw-check for app-authored lowered IR component modules', async () => {

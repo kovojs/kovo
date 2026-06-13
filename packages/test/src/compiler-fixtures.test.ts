@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { compilerDiagnosticFacts, compilerUpdateCoverageFacts } from './compiler-fixtures.js';
+import {
+  compilerDiagnosticFacts,
+  compilerDiagnosticMessageFacts,
+  compilerGeneratedQueryShapeFact,
+  compilerQueryUpdatePlanFacts,
+  compilerUpdateCoverageFacts,
+} from './compiler-fixtures.js';
 
 describe('@jiso/test compiler fixture facts', () => {
   it('projects diagnostics without source-offset pins', () => {
@@ -52,6 +58,98 @@ describe('@jiso/test compiler fixture facts', () => {
         position: 'expression',
         query: 'cart.discount',
         status: 'UNHANDLED',
+      },
+    ]);
+  });
+
+  it('projects diagnostic message facts without source locations', () => {
+    expect(
+      compilerDiagnosticMessageFacts([
+        {
+          code: 'FW302',
+          fileName: 'cart.tsx',
+          message: 'data-bind path is not present in the declared query shape. cart.count',
+          severity: 'error',
+          start: { column: 5, line: 9 },
+        },
+        {
+          code: 'FW227',
+          help: 'Use ?.',
+          message: 'Binding path traverses a nullable segment without ?.',
+          severity: 'error',
+        },
+      ]),
+    ).toEqual([
+      {
+        code: 'FW302',
+        message: 'data-bind path is not present in the declared query shape. cart.count',
+      },
+      {
+        code: 'FW227',
+        help: 'Use ?.',
+        message: 'Binding path traverses a nullable segment without ?.',
+      },
+    ]);
+  });
+
+  it('builds generated query shape facts through a reusable fixture', () => {
+    expect(
+      compilerGeneratedQueryShapeFact({
+        query: 'cart',
+        shape: {
+          count: 'number',
+          items: [{ productId: 'string', qty: 'number' }],
+        },
+      }),
+    ).toEqual({
+      query: 'cart',
+      shape: {
+        count: 'number',
+        items: [{ productId: 'string', qty: 'number' }],
+      },
+      source: 'generated/queries/cart.shape.ts',
+    });
+  });
+
+  it('projects query update plans without pinning unrelated compiler fields', () => {
+    expect(
+      compilerQueryUpdatePlanFacts([
+        {
+          componentName: 'CartBadge',
+          paths: ['cart.count', 'cart.items'],
+          query: 'cart',
+          sourceSpan: { start: 1 },
+          templateStamps: [
+            {
+              itemBindingPlaceholders: [
+                { path: '.name', readPath: 'name', sourceSpan: { start: 2 }, value: 'Item' },
+              ],
+              itemBindings: ['.name'],
+              key: 'productId',
+              list: 'cart.items',
+              listReadPath: 'items',
+              selector: '[data-bind-list="cart.items"]',
+              template: '<li>Item</li>',
+            },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        componentName: 'CartBadge',
+        paths: ['cart.count', 'cart.items'],
+        query: 'cart',
+        templateStamps: [
+          {
+            itemBindingPlaceholders: [{ path: '.name', readPath: 'name', value: 'Item' }],
+            itemBindings: ['.name'],
+            key: 'productId',
+            list: 'cart.items',
+            listReadPath: 'items',
+            selector: '[data-bind-list="cart.items"]',
+            template: '<li>Item</li>',
+          },
+        ],
       },
     ]);
   });

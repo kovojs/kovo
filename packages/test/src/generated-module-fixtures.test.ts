@@ -7,12 +7,14 @@ import {
   executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
   executeInlineEnhancedFormLoaderFixture,
+  assertGeneratedRegistryConsumerTypes,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedArtifactFile,
   generatedArtifactSource,
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
+  generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
   generatedRenderedElementFactsFromSource,
   GeneratedFixtureElement,
@@ -232,6 +234,51 @@ export function renderSource() {
       Cart$missing: 'undefined',
       Cart$value: 'number',
     });
+  });
+
+  it('projects generated registry interface types without monolith source plumbing', async () => {
+    await expect(
+      generatedRegistryInterfaceMemberTypes(
+        [
+          {
+            kind: 'registry',
+            source: [
+              'export interface ViewTransitions {',
+              '  "product-image": unknown;',
+              '  cart: { count: number };',
+              '}',
+            ].join('\n'),
+          },
+        ],
+        'ViewTransitions',
+      ),
+    ).resolves.toEqual({
+      cart: '{ count: number; }',
+      'product-image': 'unknown',
+    });
+  });
+
+  it('asserts generated registry consumer programs through package fixtures', async () => {
+    await expect(
+      assertGeneratedRegistryConsumerTypes(
+        [
+          {
+            kind: 'registry',
+            source: [
+              'declare global {',
+              '  function testRegistryValue(value: string): string;',
+              '}',
+              'export {};',
+            ].join('\n'),
+          },
+        ],
+        [
+          "testRegistryValue('cart-row');",
+          '// @ts-expect-error generated registry keeps values typed.',
+          'testRegistryValue(1);',
+        ].join('\n'),
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it('exposes DOM fixture roots that satisfy runtime query/update seams', () => {

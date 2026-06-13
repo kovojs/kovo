@@ -66,6 +66,11 @@ runtime behavior fact instead of rebuilding that harness locally.
 Shared Vite fixtures now own plugin middleware capture, generated transform element/handler
 projections, generated-handler middleware smoke behavior, and red/green build temp-project
 mechanics for the S1 and D10 fw-check cases.
+Shared compiler fixtures now own generated query-shape fact construction, query-update-plan
+projection, and diagnostic message projection for the P5 fw-check data-bind gate. Shared generated
+module fixtures now own generated-registry interface and consumer type assertions for the P2/P3/P1
+fw-check registry gates, so those cases no longer read registry artifact source or recreate virtual
+TypeScript program files in the monolith.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -156,6 +161,12 @@ Latest evidence:
   `pnpm run check:build`;
   `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/vite-fixtures.ts packages/test/src/vite-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Generated registry/query-shape harness fixture slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P2 compiler merges view transition stamps into existing styles|P3 typed routes validate navigation targets|P1 fragment targets emit typed registry facts|P5 data-bind paths are checked against generated query shape facts" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/compiler-fixtures.ts packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR
