@@ -213,10 +213,13 @@ Closed evidence so far:
 - Hydrated query script discovery now uses the shared `queryScriptsFromRoot` runtime helper, and
   the hydration ledger only suppresses successfully applied script nodes so transient malformed
   script JSON can recover on later visible-return scans.
+- Inline-loader `--check` now parses the checked-in generated module and fails when the exported
+  source literal drifts from the executable installer artifact, with tests mutating only one
+  embedded artifact to prove the check.
 
 Open:
 
-- Finish inline-loader build-time minification and checked artifact parity.
+- Decide whether any inline-loader budget/minifier gaps remain after artifact-parity checking.
 - Complete subtractive runtime split of the remaining high-churn root module areas.
 - Expand browser/runtime gates where shared wire parsing can affect hydrated query behavior.
 
@@ -226,6 +229,8 @@ Recent gates:
 - `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/loader.ts packages/runtime/src/query.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts packages/runtime/src/index.browser.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
+- `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts`
+- `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server

@@ -1,11 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runInThisContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  assertInlineJisoLoaderModuleArtifactParity,
   buildInlineJisoLoaderModuleSource,
   buildInlineJisoLoaderInstallerSource,
+  emitInlineJisoLoaderModule,
   inlineJisoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
 import {
@@ -114,10 +118,36 @@ describe('inline loader source', () => {
     // SPEC.md §4.4: build-time emission must keep the shipped bootstrap tied to readable source.
     const moduleSource = buildInlineJisoLoaderModuleSource();
 
+    expect(() => assertInlineJisoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
     expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
     expect(moduleSource).toContain('const inlineJisoLoaderInstaller = (');
     expect(moduleSource).toContain('inlineJisoLoaderInstaller(importModule);');
     expect(moduleSource).not.toContain('eval');
+  });
+
+  it('checks the shipped source literal against the executable installer artifact', () => {
+    // SPEC.md §4.4: the readable build, shipped source string, and callable inline loader are one artifact.
+    const moduleSource = buildInlineJisoLoaderModuleSource();
+    const driftedModuleSource = moduleSource.replace(
+      'const doc=document;',
+      'const doc=globalThis.document;',
+    );
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-inline-loader-'));
+    const targetPath = join(tempDir, 'inline-loader.ts');
+
+    try {
+      expect(() => assertInlineJisoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
+      expect(() => assertInlineJisoLoaderModuleArtifactParity(driftedModuleSource)).toThrow(
+        'embedded installer artifacts drifted',
+      );
+
+      writeFileSync(targetPath, driftedModuleSource, 'utf8');
+      expect(() => emitInlineJisoLoaderModule({ check: true, targetPath })).toThrow(
+        'embedded installer artifacts drifted',
+      );
+    } finally {
+      rmSync(tempDir, { force: true, recursive: true });
+    }
   });
 
   it('wires runtime package build and check scripts through inline loader generation', () => {

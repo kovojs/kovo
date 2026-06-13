@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
+
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 export const inlineJisoLoaderInstallerReadableSource = String.raw`
@@ -266,7 +268,7 @@ export function buildInlineJisoLoaderModuleSource(
 ): string {
   const installerSource = buildInlineJisoLoaderInstallerSource(source);
 
-  return `${[
+  const moduleSource = `${[
     '// @ts-nocheck',
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
@@ -303,6 +305,88 @@ export function buildInlineJisoLoaderModuleSource(
     '',
     'export const jisoLoaderSource = createInlineJisoLoaderSource();',
   ].join('\n')}\n`;
+  assertInlineJisoLoaderModuleArtifactParity(moduleSource, 'Generated inline Jiso loader module');
+
+  return moduleSource;
+}
+
+export function assertInlineJisoLoaderModuleArtifactParity(
+  moduleSource: string,
+  label = 'Inline Jiso loader module',
+): void {
+  const sourceFile = parseInlineJisoLoaderModuleSource(moduleSource, label);
+  let installerLiteralSource: string | undefined;
+  let installerFunctionSource: string | undefined;
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      if (node.name.text === 'inlineJisoLoaderInstallerSource') {
+        installerLiteralSource = readInlineInstallerSourceLiteral(node.initializer);
+      }
+      if (node.name.text === 'inlineJisoLoaderInstaller') {
+        const expression = unwrapInlineInstallerExpression(node.initializer);
+        if (ts.isFunctionExpression(expression)) {
+          installerFunctionSource = expression.getText(sourceFile);
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  if (installerLiteralSource === undefined) {
+    throw new Error(`${label} is missing inlineJisoLoaderInstallerSource.`);
+  }
+  if (installerFunctionSource === undefined) {
+    throw new Error(`${label} is missing inlineJisoLoaderInstaller function artifact.`);
+  }
+  if (installerLiteralSource !== installerFunctionSource) {
+    throw new Error(
+      `${label} embedded installer artifacts drifted: inlineJisoLoaderInstallerSource does not match inlineJisoLoaderInstaller.`,
+    );
+  }
+}
+
+function parseInlineJisoLoaderModuleSource(moduleSource: string, label: string): ts.SourceFile {
+  const sourceFile = ts.createSourceFile(
+    'inline-loader.ts',
+    moduleSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const [diagnostic] =
+    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+      .parseDiagnostics ?? [];
+  if (diagnostic) {
+    const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+    throw new Error(`${label} is invalid TypeScript: ${message}`);
+  }
+
+  return sourceFile;
+}
+
+function readInlineInstallerSourceLiteral(expression: ts.Expression): string | undefined {
+  const unwrapped = unwrapInlineInstallerExpression(expression);
+  if (ts.isNoSubstitutionTemplateLiteral(unwrapped) || ts.isStringLiteral(unwrapped)) {
+    return unwrapped.text;
+  }
+
+  return undefined;
+}
+
+function unwrapInlineInstallerExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isParenthesizedExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 export function emitInlineJisoLoaderModule(
@@ -317,6 +401,9 @@ export function emitInlineJisoLoaderModule(
   const changed = current !== source;
 
   if (options.check) {
+    if (current !== undefined) {
+      assertInlineJisoLoaderModuleArtifactParity(current, targetPath);
+    }
     if (changed) {
       throw new Error(
         `Inline Jiso loader module is stale: ${targetPath}. Run pnpm --filter @jiso/runtime run build:inline-loader.`,
