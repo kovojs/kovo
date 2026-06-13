@@ -1,5 +1,6 @@
 import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handlers.js';
 import type { IslandSignalScope } from './handlers.js';
+import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
 import type { FragmentChunk } from './wire-parser.js';
 
 export interface MorphTarget {
@@ -46,10 +47,10 @@ export class DomMorphTarget implements MorphTarget {
 }
 
 export class DomMorphRoot implements MorphRoot {
-  constructor(private readonly root: ParentNode) {}
+  constructor(private readonly root: FragmentTargetRoot) {}
 
   findFragmentTarget(target: string): MorphTarget | null {
-    const element = this.root.querySelector(`[fw-c="${escapeCssIdentifier(target)}"]`);
+    const element = findFragmentTargetElement(this.root, target);
 
     return element ? new DomMorphTarget(element) : null;
   }
@@ -372,8 +373,4 @@ function morphDomChildren(current: Element, next: Element): void {
   for (const child of Array.from(current.childNodes)) {
     if (!desiredNodes.includes(child)) child.remove();
   }
-}
-
-function escapeCssIdentifier(value: string): string {
-  return globalThis.CSS?.escape(value) ?? value.replace(/["\\]/g, '\\$&');
 }

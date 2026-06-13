@@ -263,6 +263,13 @@ packages/runtime/src/query.ts packages/runtime/src/apply-mutation-response.ts
 packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader.ts
 packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-submit.ts
 packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`.
+- Browser DOM fragment target resolution now shares the live target vocabulary used by
+  `FW-Targets` collection and inline response application: `DomMorphRoot` resolves `fw-c`, `id`,
+  and `fw-fragment-target` through `fragment-targets.ts` (SPEC.md §9.1), including selector-special
+  query-instance-style ids. Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts` and
+  `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`.
 
 Open:
 
@@ -284,6 +291,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-store.ts packages/runtime/src/query.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader.ts packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/fragment-targets.ts packages/runtime/src/morph.ts packages/runtime/src/index.browser.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
 ## Phase 5 - Server

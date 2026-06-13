@@ -471,4 +471,33 @@ describe('runtime browser suite', () => {
       'p2',
     ]);
   });
+
+  it('resolves browser fragment targets through component stamps, ids, and target attributes', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section fw-c="cart-badge">stale badge</section>',
+      '<section id="reviews:p1">stale reviews</section>',
+      '<section fw-fragment-target="recommendations">stale recommendations</section>',
+    ].join('');
+    document.body.append(root);
+
+    const applied = applyMutationResponseToDom({
+      body: [
+        '<fw-fragment target="cart-badge"><section fw-c="cart-badge">fresh badge</section></fw-fragment>',
+        '<fw-fragment target="reviews:p1"><section id="reviews:p1">fresh reviews</section></fw-fragment>',
+        '<fw-fragment target="recommendations"><section fw-fragment-target="recommendations">fresh recommendations</section></fw-fragment>',
+      ].join(''),
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    // SPEC.md §9.1: browser fragment application must resolve the same live
+    // target vocabulary sent in FW-Targets and accepted by the inline loader.
+    expect(applied.appliedFragments).toEqual(['cart-badge', 'reviews:p1', 'recommendations']);
+    expect(root.querySelector('[fw-c="cart-badge"]')?.textContent).toBe('fresh badge');
+    expect(root.querySelector('[id="reviews:p1"]')?.textContent).toBe('fresh reviews');
+    expect(root.querySelector('[fw-fragment-target="recommendations"]')?.textContent).toBe(
+      'fresh recommendations',
+    );
+  });
 });
