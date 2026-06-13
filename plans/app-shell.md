@@ -686,3 +686,16 @@ Round195 root app-shell compatibility boundary evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round201 root app-shell export inventory evidence:
+
+- `packages/server/src/index.ts` now star-forwards root app-shell compatibility exports directly
+  from the split public app-shell owner subpaths, deleting the duplicated manual symbol/type
+  inventory while preserving the SPEC §9.5 public request shell, static-export, node,
+  client-module, and Vite helper surface.
+- `packages/server/src/api/app.test.ts` continues to compare package/local aggregate app-shell
+  values and root aliases, so public split-owner drift remains observable after the subtractive
+  root barrel cleanup.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`

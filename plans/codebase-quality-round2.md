@@ -310,8 +310,8 @@ Commerce Vite dev/export adoption now uses the public `@jiso/server/app-shell/vi
 Commerce app-shell source also imports client-module registry, core request-shell, node adapter,
 and static export helpers from those public app-shell subpaths, leaving root imports for
 non-app-shell data/routing helpers.
-The root `@jiso/server` app-shell compatibility surface now exports directly from the split public
-app-shell owner subpaths instead of routing through the aggregate app-shell barrel; the public API
+The root `@jiso/server` app-shell compatibility surface now star-forwards directly from the split
+public app-shell owner subpaths instead of duplicating a manual symbol inventory; the public API
 test compares local/package app-shell aggregate values and root aliases so split-owner drift is
 observable through module behavior.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
@@ -331,6 +331,9 @@ cannot be mistaken for an output write path.
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`
 - `pnpm exec vp check packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
