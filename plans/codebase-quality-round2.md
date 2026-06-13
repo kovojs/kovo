@@ -331,6 +331,18 @@ packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-js-minifier.test.ts` and
       `pnpm --filter @jiso/runtime run check:inline-loader`.
+      Evidence 2026-06-13: inline enhanced-response application now keeps body parsing and decoded
+      chunk application as separate generated helpers: `applyResponseBody` calls extracted
+      `readMutationResponseElementChunks` once and passes the result to `applyResponseChunks`.
+      `packages/runtime/src/inline-loader-parser-parity.test.ts`,
+      `packages/runtime/src/inline-loader-build.test.ts`, and regenerated
+      `packages/runtime/src/inline-loader.ts` pin the readable/minified parser/apply boundary.
+      Verified by `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts` and
+      `pnpm --filter @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
       Evidence 2026-06-13: `packages/runtime/src/index.test.ts` now owns only public barrel
       loader smoke. `packages/runtime/src/loader-query-hydration.test.ts`,
@@ -498,6 +510,10 @@ packages/runtime/src/query-hydration.browser.test.ts`.
       unified behind `readFragmentElementChunk` for mutation-body and standalone fragment readers.
       Command: `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after inline response body parsing was
+      split from decoded chunk application in the generated loader. Command: `pnpm exec vitest
+--config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 

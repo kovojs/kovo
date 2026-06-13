@@ -69,8 +69,7 @@ function installInlineJisoLoader(importModule) {
       element.innerHTML = fragment.content;
     }
   };
-  const applyResponseBody = (body) => {
-    const chunks = readMutationResponseElementChunks(body);
+  const applyResponseChunks = (chunks) => {
     chunks.queries.forEach((query) => {
       dispatchEvent(
         new CustomEvent('jiso:query', {
@@ -82,6 +81,9 @@ function installInlineJisoLoader(importModule) {
       );
     });
     chunks.fragments.forEach(applyFragment);
+  };
+  const applyResponseBody = (body) => {
+    applyResponseChunks(readMutationResponseElementChunks(body));
   };
   const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {

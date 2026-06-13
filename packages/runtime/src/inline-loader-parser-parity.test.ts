@@ -38,6 +38,10 @@ describe('inline loader parser parity', () => {
     expect(alternateReadable).toContain(alternateReadableParser);
     expect(alternateReadable).not.toContain(inlineWireParserReadableSource);
     expect(alternateReadable).toContain('readMutationResponseElementChunks(body)');
+    expect(alternateReadable).toContain('const applyResponseChunks = (chunks) =>');
+    expect(alternateReadable).toContain(
+      'applyResponseChunks(readMutationResponseElementChunks(body));',
+    );
   });
 
   it('extracts the inline wire parser dependency closure from the modular parser', () => {
