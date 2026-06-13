@@ -14,7 +14,10 @@ import type {
   ElementParamType,
   HandlerLowering,
 } from '../types.js';
-import { elementParamAttributeNameFromExpression } from '../types.js';
+import {
+  elementParamAttributeNameFromExpression,
+  elementParamAttributeNameFromPropertyName,
+} from '../types.js';
 
 export function lowerEventHandlers(
   options: CompileComponentOptions,
@@ -212,6 +215,12 @@ export function capturesUnserializableReferences(references: readonly string[]):
   );
 }
 
+interface ElementParamCandidate {
+  expression: string;
+  terminalName?: string;
+  type?: ElementParamType;
+}
+
 function fw201Diagnostic(
   fileName: string,
   source: string,
@@ -242,7 +251,7 @@ function extractElementParams(
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): ElementParam[] {
   const callArguments = zeroArgArrow?.callArguments;
-  const expressions = callArguments
+  const candidates = callArguments
     ? callArguments
         .map((arg) => arg.trim())
         .flatMap((arg, index) => {
@@ -250,18 +259,30 @@ function extractElementParams(
           if (zeroArgArrow?.callArgumentStaticValues?.[index] !== undefined) return [];
           const members =
             zeroArgArrow?.callArgumentPropertyAccesses?.[index]
-              ?.map((access) => access.path)
-              .filter(serializableMemberExpression) ?? [];
-          return members.length > 0 ? members : [arg];
+              ?.filter((access) => serializableMemberExpression(access.path))
+              .map(elementParamCandidateFromAccess) ?? [];
+          return members.length > 0 ? members : [{ expression: arg }];
         })
     : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
-  return dedupeStrings(expressions).map((arg) => ({
-    attributeName: elementParamAttributeNameFromExpression(arg),
-    expression: arg,
-    type: inferElementParamType(arg, zeroArgArrow, parsedPropertyAccesses),
-    value: `{${arg}}`,
+  return dedupeElementParamCandidates(candidates).map((candidate) => ({
+    attributeName: candidate.terminalName
+      ? elementParamAttributeNameFromPropertyName(candidate.terminalName)
+      : elementParamAttributeNameFromExpression(candidate.expression),
+    expression: candidate.expression,
+    type:
+      candidate.type ??
+      inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
+    value: `{${candidate.expression}}`,
   }));
+}
+
+function elementParamCandidateFromAccess(access: PropertyAccessPathModel): ElementParamCandidate {
+  return {
+    expression: access.path,
+    ...(access.inferredType ? { type: access.inferredType } : {}),
+    terminalName: access.terminalName,
+  };
 }
 
 function inferElementParamType(
@@ -281,10 +302,10 @@ function inferElementParamType(
 function serializableMemberExpressions(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
-): string[] {
-  return collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses).filter(
-    serializableMemberExpression,
-  );
+): ElementParamCandidate[] {
+  return collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses)
+    .filter((access) => serializableMemberExpression(access.path))
+    .map(elementParamCandidateFromAccess);
 }
 
 function serializableMemberExpression(member: string): boolean {
@@ -299,13 +320,20 @@ function serializableMemberExpression(member: string): boolean {
 function collectSerializableMemberExpressions(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
-): string[] {
-  if (zeroArgArrow) return zeroArgArrow.bodyPropertyAccesses.map((access) => access.path);
-  if (parsedPropertyAccesses) return parsedPropertyAccesses.map((access) => access.path);
+): readonly PropertyAccessPathModel[] {
+  if (zeroArgArrow) return zeroArgArrow.bodyPropertyAccesses;
+  if (parsedPropertyAccesses) return parsedPropertyAccesses;
 
   return [];
 }
 
-function dedupeStrings(values: readonly string[]): string[] {
-  return [...new Set(values)];
+function dedupeElementParamCandidates(
+  values: readonly ElementParamCandidate[],
+): ElementParamCandidate[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    if (seen.has(value.expression)) return false;
+    seen.add(value.expression);
+    return true;
+  });
 }

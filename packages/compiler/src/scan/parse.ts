@@ -28,6 +28,7 @@ export interface PropertyAccessPathModel {
   inferredType?: 'boolean' | 'number';
   path: string;
   start: number;
+  terminalName: string;
 }
 
 export interface IdentifierReferenceModel {
@@ -996,6 +997,7 @@ function propertyAccessPathModels(
           ...propertyAccessInferredType(sourceFile, node),
           path,
           start: node.getStart(sourceFile),
+          terminalName: node.name.text,
         });
       }
     }

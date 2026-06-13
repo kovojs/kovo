@@ -243,6 +243,7 @@ export const save = mutation('cart/save', {
         end: source.indexOf('request.db.insert') + 'request.db.insert'.length,
         path: 'request.db.insert',
         start: source.indexOf('request.db.insert'),
+        terminalName: 'insert',
       },
     ]);
     expect(handler?.paramNames).toEqual(['input', 'request']);
@@ -292,12 +293,14 @@ export const CartActions = component('cart-actions', {
           inferredType: 'number',
           path: 'state.count',
           start: source.indexOf('state.count'),
+          terminalName: 'count',
         },
         {
           end: source.indexOf('item.quantity') + 'item.quantity'.length,
           inferredType: 'number',
           path: 'item.quantity',
           start: source.indexOf('item.quantity'),
+          terminalName: 'quantity',
         },
       ],
       bodyReferences: [
@@ -379,17 +382,20 @@ export const CartActions = component('cart-actions', {
         inferredType: 'number',
         path: 'item.quantity',
         start: source.indexOf('item.quantity'),
+        terminalName: 'quantity',
       },
       {
         end: source.indexOf('item.selected') + 'item.selected'.length,
         inferredType: 'boolean',
         path: 'item.selected',
         start: source.indexOf('item.selected'),
+        terminalName: 'selected',
       },
       {
         end: source.indexOf('item.name') + 'item.name'.length,
         path: 'item.name',
         start: source.indexOf('item.name'),
+        terminalName: 'name',
       },
     ]);
   });
@@ -418,6 +424,7 @@ export const CartBadge = component('cart-badge', {
         inferredType: 'number',
         path: 'cart.count',
         start: source.indexOf('cart.count'),
+        terminalName: 'count',
       },
     ]);
     expect(expressions.map((expression) => expression.solePropertyAccessPath ?? null)).toEqual([

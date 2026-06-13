@@ -227,7 +227,9 @@ string splitting.
 Data-derive stamp analysis now uses the shared binding-path parser instead of local `split('.')`
 handling.
 Relative binding detection is centralized in query-shape helpers and reused by query update
-analysis plus data-bind validation.
+analysis plus data-bind validation. Handler param lowering now consumes parser-provided terminal
+property names for captured member expressions when emitting `data-p-*` names, instead of
+rediscovering the final segment from expression text.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -237,6 +239,13 @@ analysis plus data-bind validation.
 
 Latest evidence:
 
+- Handler param terminal-name facts: `pnpm exec vitest --run
+packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts
+packages/compiler/src/compile-component.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact
+  `pnpm exec vp check packages/compiler/src/scan/parse.ts
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts
+packages/compiler/src/types.ts packages/compiler/src/handler-lowering.test.ts
+plans/codebase-quality-round2.md`; `git diff --check`.
 - Render-equivalence executable module emission: `pnpm exec vitest --run
 packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts
 packages/compiler/src/stamps.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec

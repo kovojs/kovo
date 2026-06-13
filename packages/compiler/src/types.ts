@@ -140,7 +140,11 @@ export function elementParamAttributeNameFromExpression(expression: string): str
     .split('.')
     .filter(Boolean);
   const last = segments.at(-1) ?? expression;
-  return `data-p-${last
+  return elementParamAttributeNameFromPropertyName(last);
+}
+
+export function elementParamAttributeNameFromPropertyName(name: string): string {
+  return `data-p-${name
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/[^A-Za-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
