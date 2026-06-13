@@ -60,7 +60,6 @@ describe('headless-ui otp-field primitive', () => {
       'aria-describedby': 'otp-help otp-error',
       'aria-invalid': 'true',
       'aria-labelledby': 'otp-label',
-      'aria-required': 'true',
       'data-complete': '',
       'data-invalid': '',
       'data-required': '',

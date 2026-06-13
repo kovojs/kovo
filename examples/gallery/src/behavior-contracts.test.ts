@@ -447,7 +447,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'role="group"',
     'aria-describedby="gallery-otp-description gallery-otp-error"',
     'aria-invalid="true"',
-    'aria-required="true"',
+    'data-required=""',
     'data-slot="hidden-input"',
     'autoComplete="one-time-code"',
     'name="gallery-otp-code"',

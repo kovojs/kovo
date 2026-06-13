@@ -832,7 +832,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" aria-controls="author-context-content" jiso-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
+      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" role="button" aria-controls="author-context-content" jiso-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
     );
   });
 
@@ -2112,7 +2112,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </div>,
     ).toBe(
-      '<div data-gallery-merge="otp-field"><div data-invalid="" data-required="" role="application" id="gallery-otp-field" aria-labelledby="gallery-otp-label" aria-describedby="author-otp-description" aria-invalid="true" aria-required="true" class="otp-root gap-2"><input data-required="" aria-hidden="false" data-slot="hidden-input" autoComplete="one-time-code" disabled inputMode="numeric" maxLength="6" minLength="6" tabIndex="-1" type="text" value="1234" name="author-otp-code" pattern="[0-9]*" required class="otp-hidden sr-only"><input data-required="" data-filled="" aria-label="Author digit label" data-slot="0" autoComplete="one-time-code" inputMode="numeric" maxLength="2" type="text" value="9" required class="otp-slot text-center"></div></div>',
+      '<div data-gallery-merge="otp-field"><div data-invalid="" data-required="" role="application" id="gallery-otp-field" aria-labelledby="gallery-otp-label" aria-describedby="author-otp-description" aria-invalid="true" class="otp-root gap-2"><input data-required="" aria-hidden="false" data-slot="hidden-input" autoComplete="one-time-code" disabled inputMode="numeric" maxLength="6" minLength="6" tabIndex="-1" type="text" value="1234" name="author-otp-code" pattern="[0-9]*" required class="otp-hidden sr-only"><input data-required="" data-filled="" aria-label="Author digit label" data-slot="0" autoComplete="one-time-code" inputMode="numeric" maxLength="2" type="text" value="9" required class="otp-slot text-center"></div></div>',
     );
   });
 
@@ -3804,8 +3804,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "contextMenuSeparatorAttributes",
         },
         {
-          "diagnostics": 6,
-          "html": "<div data-gallery-merge-builder="contextMenuTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" aria-controls="author-aria-controls" jiso-context-menu="author-jiso-context-menu" id="author-contextMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-contextMenuTriggerAttributes author-contextMenuTriggerAttributes">merged</div>",
+          "diagnostics": 7,
+          "html": "<div data-gallery-merge-builder="contextMenuTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" role="presentation" aria-controls="author-aria-controls" jiso-context-menu="author-jiso-context-menu" id="author-contextMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-contextMenuTriggerAttributes author-contextMenuTriggerAttributes">merged</div>",
           "name": "contextMenuTriggerAttributes",
         },
         {
@@ -4024,8 +4024,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "otpFieldInputAttributes",
         },
         {
-          "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="otpFieldRootAttributes" data-invalid="author-otpFieldRootAttributes" data-required="author-otpFieldRootAttributes" role="presentation" id="author-otpFieldRootAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" aria-required="false" class="primitive-otpFieldRootAttributes author-otpFieldRootAttributes">merged</div>",
+          "diagnostics": 3,
+          "html": "<div data-gallery-merge-builder="otpFieldRootAttributes" data-invalid="author-otpFieldRootAttributes" data-required="author-otpFieldRootAttributes" role="presentation" id="author-otpFieldRootAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" class="primitive-otpFieldRootAttributes author-otpFieldRootAttributes">merged</div>",
           "name": "otpFieldRootAttributes",
         },
         {

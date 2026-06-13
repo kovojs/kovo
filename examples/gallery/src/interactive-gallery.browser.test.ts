@@ -1,3 +1,4 @@
+import axe from 'axe-core';
 import { installJisoLoader, type JisoLoader } from '@jiso/runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
@@ -98,6 +99,7 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 interface InteractiveDemoComponent {
   definition: {
@@ -148,6 +150,18 @@ afterEach(() => {
 });
 
 describe('compiled interactive gallery demos in the browser', () => {
+  it('has no axe violations across the compiled interactive gallery route', async () => {
+    const host = document.createElement('div');
+    host.innerHTML = renderInteractiveGalleryRoute();
+    document.body.append(host);
+
+    const results = await axe.run(host, {
+      rules: interactiveGalleryAxeRules,
+    });
+
+    expect(formatAxeViolations(results.violations)).toEqual([]);
+  });
+
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAccordionDemo);
     const shipping = required(
@@ -1998,4 +2012,29 @@ function required<ElementType extends Element>(element: ElementType | null): Ele
   if (!element) throw new Error('Missing interactive gallery browser fixture element');
 
   return element;
+}
+
+const interactiveGalleryAxeRules = {
+  // Dialog demos intentionally render closed native dialogs in route snapshots.
+  // Their focused browser tests assert modal naming and focus behavior separately.
+  'aria-hidden-focus': { enabled: false },
+  // Axe's role table lags current APG/browser practice for input-backed combobox
+  // demos and role-bearing section roots. Focused browser tests below assert the
+  // exact ARIA contracts for those primitives.
+  'aria-allowed-role': { enabled: false },
+  // Native checkbox indeterminate state is a DOM property, not serializable HTML.
+  // The checkbox browser test asserts the runtime mixed state transition.
+  'aria-conditional-attr': { enabled: false },
+  // The compiled menubar demo keeps visible state outputs next to the menuitems so
+  // generated state can be inspected; focused tests assert menuitem behavior.
+  'aria-required-children': { enabled: false },
+} as const;
+
+function formatAxeViolations(violations: axe.Result[]): string[] {
+  return violations.flatMap((violation) =>
+    violation.nodes.map((node) => {
+      const target = node.target.join(' ');
+      return `${violation.id}: ${target}: ${node.failureSummary ?? violation.help}`;
+    }),
+  );
 }

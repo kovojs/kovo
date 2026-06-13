@@ -150,6 +150,7 @@ export const ContextMenuTrigger = component('context-menu-trigger', {
         data-state={attrs['data-state']}
         id={attrs.id}
         jiso-context-menu={attrs['jiso-context-menu']}
+        role={attrs.role}
         tabIndex={props.disabled === true ? -1 : 0}
       >
         {props.children}

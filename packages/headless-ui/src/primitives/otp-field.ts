@@ -106,7 +106,6 @@ export function otpFieldRootAttributes(
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.disabled === true ? { 'aria-disabled': 'true' } : {}),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
-    ...(options.required === true ? { 'aria-required': 'true' } : {}),
   });
 }
 

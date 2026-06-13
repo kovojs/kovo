@@ -76,6 +76,7 @@ describe('headless-ui context-menu primitive', () => {
       'data-state': 'open',
       'jiso-context-menu': 'editor-menu',
       id: 'editor-surface',
+      role: 'button',
     });
     expect(
       contextMenuTriggerAttributes({
@@ -89,6 +90,7 @@ describe('headless-ui context-menu primitive', () => {
       'aria-haspopup': 'menu',
       'data-disabled': '',
       'data-state': 'closed',
+      role: 'button',
     });
 
     expect(

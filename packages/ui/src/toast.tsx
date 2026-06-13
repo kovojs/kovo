@@ -128,7 +128,7 @@ export const Toast = component('toast', {
     });
 
     return (
-      <section
+      <div
         aria-atomic={attrs['aria-atomic']}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
@@ -142,7 +142,7 @@ export const Toast = component('toast', {
         role={attrs.role}
       >
         {props.children}
-      </section>
+      </div>
     );
   },
 });

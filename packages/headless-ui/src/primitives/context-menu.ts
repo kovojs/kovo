@@ -144,6 +144,7 @@ export function contextMenuTriggerAttributes(
     ...contextMenuDataAttributes(options),
     'aria-expanded': String(options.open === true),
     'aria-haspopup': 'menu',
+    role: 'button',
     ...(options.disabled === true ? { 'aria-disabled': 'true' } : {}),
     ...(enabledContentId === undefined
       ? {}

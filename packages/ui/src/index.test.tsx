@@ -954,7 +954,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(OtpFieldInput.name).toBe('otp-field-input');
     expect(root).toContain('aria-describedby="otp-description otp-error"');
     expect(root).toContain('aria-invalid="true"');
-    expect(root).toContain('aria-required="true"');
+    expect(root).toContain('data-required=""');
     expect(root).toContain('role="group"');
     expect(group).toContain('flex items-center gap-2');
     expect(hidden).toContain('aria-hidden="true"');

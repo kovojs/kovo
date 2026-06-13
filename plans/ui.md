@@ -90,6 +90,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       Toggle-group disabled/empty keyboard no-op behavior is covered by headless tests, while
       refreshed generated toggle-group artifacts and browser tests prove roving tabindex plus DOM
       focus movement.
+- [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
+      churn-heavy baselines.
+      Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
+      gate over all generated demos, with focused rule exceptions documented next to the test for
+      native dialog snapshots, current combobox/section role-table drift, DOM-only checkbox
+      indeterminate state, and the menubar state-output fixture. Context-menu triggers now expose
+      `role="button"`, OTP requiredness stays on native inputs instead of unsupported group
+      `aria-required`, and toast live regions render on neutral elements.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -131,13 +139,19 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       catalog fixture drift whenever new UI subpaths are exported.
 - [ ] Expand G1/G2 until every primitive and styled component has a static route, source/markup
       snapshot, relevant behavior contract, and provenance coverage.
-- [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
-      churn-heavy baselines.
 - [ ] Keep G6 compiled interactive demos app-authored TSX, checked in, generated-artifact fresh,
       and browser-tested when behavior changes.
 
 ## Latest Gates
 
+- [x] Compiled gallery axe and accessibility contract slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/index.test.tsx -t "context-menu|otp-field|toast"`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `pnpm exec vitest --run examples/gallery/src/merge-fixtures.test.tsx`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/context-menu.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/context-menu.tsx packages/ui/src/toast.tsx packages/ui/src/index.test.tsx examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.tsx examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/merge-fixtures.test.tsx plans/ui.md examples/gallery/package.json pnpm-lock.yaml`;
+      `git diff --check`.
 - [x] Toggle-group keyboard/focus closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/toggle-group.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toggle-group`;

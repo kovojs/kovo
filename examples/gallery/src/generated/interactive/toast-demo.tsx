@@ -39,7 +39,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
         fw-c="gallery-toast-demo"
         fw-state='{"open":true}'
       >
-        <article {...toastRootAttributes(toastState)}>
+        <div {...toastRootAttributes(toastState)}>
           <strong {...toastTitleAttributes({ id: 'gallery-toast-title' })}>Saved</strong>
           <p {...toastDescriptionAttributes({ id: 'gallery-toast-description' })}>
             Gallery settings were updated.
@@ -56,7 +56,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           >
             Dismiss
           </button>
-        </article>
+        </div>
         <output data-demo-state="toast-open">{state.open ? 'open' : 'closed'}</output>
       </section>
     );
