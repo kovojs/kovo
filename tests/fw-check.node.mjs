@@ -49,7 +49,7 @@ import {
   submitOptimisticEnhancedMutation,
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
-import { htmlElementFacts } from '../packages/test/src/html-fragment.ts';
+import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
   createApp,
   csrfField,
@@ -456,38 +456,9 @@ const parseCssSourceDirectives = (source) =>
     .filter((line) => line.startsWith('@source '))
     .map((line) => line.slice('@source '.length).replace(/;$/, ''));
 
-const parseHtmlElements = (source) =>
-  htmlElementFacts(source).map((element) => ({
-    attributes: element.attrs,
-    tagName: element.tag,
-  }));
-
-const parseHtmlElementBlocks = (source, tagName) =>
-  htmlElementFacts(source, { tag: tagName }).map((element) => ({
-    attributes: element.attrs,
-    innerHTML: element.innerHtml,
-    tagName: element.tag,
-  }));
-
-const parseDocumentRegions = (source) => {
-  const htmlBlocks = parseHtmlElementBlocks(source, 'html');
-  const headBlocks = parseHtmlElementBlocks(source, 'head');
-  const bodyBlocks = parseHtmlElementBlocks(source, 'body');
-
-  assert.equal(htmlBlocks.length, 1, 'document has one html root');
-  assert.equal(headBlocks.length, 1, 'document has one head region');
-  assert.equal(bodyBlocks.length, 1, 'document has one body region');
-
-  return {
-    body: bodyBlocks[0].innerHTML,
-    head: headBlocks[0].innerHTML,
-    html: htmlBlocks[0].innerHTML,
-  };
-};
-
 const assertHtmlMainMarker = (source, marker, message) => {
   assert.equal(
-    parseHtmlElements(source).find((element) => element.tagName === 'main')?.attributes[
+    htmlElementFacts(source).find((element) => element.tag === 'main')?.attrs[
       'data-fw-check-export'
     ],
     marker,
@@ -2102,42 +2073,44 @@ void test('P3 server renders initial query scripts for document-load hydration',
     body: '<main></main>',
     queries: [query],
   });
-  const documentRegions = parseDocumentRegions(document.html);
-  const documentElements = parseHtmlElements(document.html);
-  const headQueryScripts = parseHtmlElementBlocks(documentRegions.head, 'script').filter(
-    (script) => script.attributes['fw-query'] === 'cart',
-  );
-  const bodyElements = parseHtmlElements(documentRegions.body);
+  const documentRegions = htmlDocumentRegions(document.html);
+  const documentElements = htmlElementFacts(document.html);
+  const headQueryScripts = htmlElementFacts(documentRegions.head.innerHtml, {
+    tag: 'script',
+  }).filter((script) => script.attrs['fw-query'] === 'cart');
+  const bodyElements = htmlElementFacts(documentRegions.body.innerHtml);
   const queryScriptElement = documentElements.find(
-    (element) => element.tagName === 'script' && element.attributes['fw-query'] === 'cart',
+    (element) => element.tag === 'script' && element.attrs['fw-query'] === 'cart',
   );
 
   assert.equal(renderQueryScript(query), queryScript);
   assert.equal(renderDocumentQueryScript(query), queryScript);
   assert.deepEqual(
     headQueryScripts.map((script) => ({
-      attributes: script.attributes,
-      innerHTML: script.innerHTML,
+      attrs: script.attrs,
+      innerHtml: script.innerHtml,
     })),
     [
       {
-        attributes: {
+        attrs: {
           'fw-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
         },
-        innerHTML: '{"html":"\\u003c/script>"}',
+        innerHtml: '{"html":"\\u003c/script>"}',
       },
     ],
   );
-  assert.deepEqual(bodyElements, [{ attributes: {}, tagName: 'main' }]);
-  assert.deepEqual(queryScriptElement?.attributes, {
+  assert.deepEqual(bodyElements, [
+    { attrs: {}, html: '<main></main>', innerHtml: '', tag: 'main' },
+  ]);
+  assert.deepEqual(queryScriptElement?.attrs, {
     'fw-query': 'cart',
     key: 'cart:c1',
     type: 'application/json',
   });
   assert.equal(
-    documentElements.some((element) => element.tagName === 'main'),
+    documentElements.some((element) => element.tag === 'main'),
     true,
   );
 });
@@ -2169,18 +2142,18 @@ export const ProductCard = component('product-card', {
 
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
   // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
-  const renderedElements = parseHtmlElements(executeGeneratedServerRenderSource(serverSource));
-  const renderedImage = renderedElements.find((element) => element.tagName === 'img');
-  assert.deepEqual(renderedImage?.attributes, {
+  const renderedElements = htmlElementFacts(executeGeneratedServerRenderSource(serverSource));
+  const renderedImage = renderedElements.find((element) => element.tag === 'img');
+  assert.deepEqual(renderedImage?.attrs, {
     'fw-c': 'product-card',
     src: '/p1.png',
     style: 'opacity: .8; view-transition-name: product-p1-image',
   });
   assert.equal(
-    renderedElements.filter((element) => Object.hasOwn(element.attributes, 'style')).length,
+    renderedElements.filter((element) => Object.hasOwn(element.attrs, 'style')).length,
     1,
   );
-  assert.equal(renderedImage?.attributes.viewTransitionName, undefined);
+  assert.equal(renderedImage?.attrs.viewTransitionName, undefined);
   assert.deepEqual(
     await typeScriptInterfaceMemberTypes(
       'view-transition-registry.ts',
@@ -2893,11 +2866,11 @@ export const ProductLinks = component('product-links', {
   const serverSource = lowered.files.find((file) => file.kind === 'server')?.source ?? '';
   const registrySource = lowered.files.find((file) => file.kind === 'registry')?.source ?? '';
   assert.deepEqual(lowered.diagnostics, []);
-  const renderedLinks = parseHtmlElements(executeGeneratedServerRenderSource(serverSource)).filter(
-    (element) => element.tagName === 'a',
+  const renderedLinks = htmlElementFacts(executeGeneratedServerRenderSource(serverSource)).filter(
+    (element) => element.tag === 'a',
   );
   assert.deepEqual(
-    renderedLinks.map((element) => element.attributes.href),
+    renderedLinks.map((element) => element.attrs.href),
     ['/products/p%201?max=500', '/cart'],
   );
 
@@ -3704,20 +3677,19 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
     ],
     shell: '<!doctype html><main><fw-defer target="recommendations"></fw-defer></main>',
   });
-  const deferredElements = parseHtmlElements(deferred.body);
+  const deferredElements = htmlElementFacts(deferred.body);
   assert.deepEqual(
-    deferredElements.map((element) => element.tagName),
+    deferredElements.map((element) => element.tag),
     ['main', 'fw-defer', 'fw-fragment', 'link', 'section'],
   );
-  assert.deepEqual(
-    deferredElements.find((element) => element.tagName === 'fw-fragment')?.attributes,
-    { target: 'recommendations' },
-  );
-  assert.deepEqual(deferredElements.find((element) => element.tagName === 'link')?.attributes, {
+  assert.deepEqual(deferredElements.find((element) => element.tag === 'fw-fragment')?.attrs, {
+    target: 'recommendations',
+  });
+  assert.deepEqual(deferredElements.find((element) => element.tag === 'link')?.attrs, {
     href: '/assets/recommendations.css',
     rel: 'stylesheet',
   });
-  assert.deepEqual(deferredElements.find((element) => element.tagName === 'section')?.attributes, {
+  assert.deepEqual(deferredElements.find((element) => element.tag === 'section')?.attrs, {
     class: 'border-slate-200',
   });
 
@@ -4397,30 +4369,24 @@ void test('P10 starter wires graph assertions into CI', async () => {
     '"./**/*.{ts,tsx,html}"',
     'inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200")',
   ]);
-  const htmlElements = parseHtmlElements(indexHtml);
+  const htmlElements = htmlElementFacts(indexHtml);
   assert.deepEqual(
-    htmlElements.map((element) => element.tagName),
+    htmlElements.map((element) => element.tag),
     ['html', 'head', 'meta', 'meta', 'link', 'title', 'body'],
   );
-  assert.deepEqual(htmlElements.find((element) => element.tagName === 'html')?.attributes, {
+  assert.deepEqual(htmlElements.find((element) => element.tag === 'html')?.attrs, {
     lang: 'en',
   });
   assert.deepEqual(
-    htmlElements
-      .filter((element) => element.tagName === 'meta')
-      .map((element) => element.attributes),
+    htmlElements.filter((element) => element.tag === 'meta').map((element) => element.attrs),
     [{ charset: 'UTF-8' }, { content: 'width=device-width, initial-scale=1.0', name: 'viewport' }],
   );
   assert.deepEqual(
-    htmlElements
-      .filter((element) => element.tagName === 'link')
-      .map((element) => element.attributes),
+    htmlElements.filter((element) => element.tag === 'link').map((element) => element.attrs),
     [{ rel: 'stylesheet', href: '/src/styles.css' }],
   );
   assert.deepEqual(
-    htmlElements
-      .filter((element) => element.tagName === 'script')
-      .map((element) => element.attributes),
+    htmlElements.filter((element) => element.tag === 'script').map((element) => element.attrs),
     [],
   );
 
@@ -5387,12 +5353,12 @@ export const ProductCard = component('product-card', {
   assert.ok(transformed);
   assert.equal(transformed.map, null);
 
-  const buttons = parseHtmlElements(executeGeneratedServerRenderSource(transformed.code)).filter(
-    (element) => element.tagName === 'button',
+  const buttons = htmlElementFacts(executeGeneratedServerRenderSource(transformed.code)).filter(
+    (element) => element.tag === 'button',
   );
   assert.equal(buttons.length, 1);
-  assert.equal(buttons[0]?.attributes['data-p-id'], '{product.id}');
-  const handlerRef = buttons[0]?.attributes['on:click'] ?? '';
+  assert.equal(buttons[0]?.attrs['data-p-id'], '{product.id}');
+  const handlerRef = buttons[0]?.attrs['on:click'] ?? '';
   const handlerUrl = new URL(handlerRef, 'http://jiso.test');
   assert.equal(handlerUrl.pathname, '/c/routes/products/product-card.client.js');
   assert.equal(handlerUrl.searchParams.get('v')?.length, 8);
@@ -5496,9 +5462,9 @@ export const DiagnosticCard = component('diagnostic-card', {
   const plugin = jisoVitePlugin();
   const greenTransform = plugin.transform(greenSource, componentId);
   assert.ok(greenTransform);
-  const greenButtons = parseHtmlElements(executeGeneratedServerRenderSource(greenTransform.code))
-    .filter((element) => element.tagName === 'button')
-    .map((element) => element.attributes);
+  const greenButtons = htmlElementFacts(executeGeneratedServerRenderSource(greenTransform.code))
+    .filter((element) => element.tag === 'button')
+    .map((element) => element.attrs);
   assert.deepEqual(greenButtons, [{ 'fw-c': 'diagnostic-card' }]);
 
   assert.throws(
@@ -5515,9 +5481,9 @@ export const DiagnosticCard = component('diagnostic-card', {
   });
   const lintTransform = lintPlugin.transform(lintSource, componentId);
   assert.ok(lintTransform);
-  const lintButtons = parseHtmlElements(executeGeneratedServerRenderSource(lintTransform.code))
-    .filter((element) => element.tagName === 'button')
-    .map((element) => element.attributes);
+  const lintButtons = htmlElementFacts(executeGeneratedServerRenderSource(lintTransform.code))
+    .filter((element) => element.tag === 'button')
+    .map((element) => element.attrs);
   assert.equal(lintButtons.length, 1);
   assert.equal(lintButtons[0]?.['fw-c'], 'diagnostic-card');
   assert.equal(lintButtons[0]?.['data-p-ok'], '{response.ok}');
@@ -6632,10 +6598,9 @@ export const CartBadge = component('cart-badge', {
     store: fixtureStore,
   });
   assert.equal(fixtureApplied.chunks.length, 1);
-  const reviewsTargetBlocks = parseHtmlElementBlocks(
-    fixtureRoot.targets.get('reviews:p1').html,
-    'article',
-  );
+  const reviewsTargetBlocks = htmlElementFacts(fixtureRoot.targets.get('reviews:p1').html, {
+    tag: 'article',
+  });
   assert.deepEqual(
     fixtureApplied.chunks[0].fragments.map((fragment) => fragment.target),
     ['reviews:p1', 'recommendations:p1'],
@@ -6649,14 +6614,19 @@ export const CartBadge = component('cart-badge', {
     items: [{ id: 'rec-1' }],
   });
   assert.deepEqual(
-    parseHtmlElements(fixtureRoot.targets.get('reviews:p1').html)
-      .filter((element) => element.tagName === 'link')
-      .map((element) => element.attributes),
+    htmlElementFacts(fixtureRoot.targets.get('reviews:p1').html)
+      .filter((element) => element.tag === 'link')
+      .map((element) => element.attrs),
     [{ rel: 'stylesheet', href: '/assets/reviews.css' }],
   );
-  assert.deepEqual(reviewsTargetBlocks, [
-    { attributes: { 'fw-key': 'r1' }, innerHTML: '5', tagName: 'article' },
-  ]);
+  assert.deepEqual(
+    reviewsTargetBlocks.map((element) => ({
+      attrs: element.attrs,
+      innerHtml: element.innerHtml,
+      tag: element.tag,
+    })),
+    [{ attrs: { 'fw-key': 'r1' }, innerHtml: '5', tag: 'article' }],
+  );
 });
 
 void test('P1 minifier name preservation evidence remains represented', async () => {
@@ -6744,15 +6714,15 @@ export const CartActions = component('cart-actions', {
   assert.ok(serverFile, 'compiled output includes server render source');
   assert.ok(clientFile, 'compiled output includes client handler source');
 
-  const buttons = parseHtmlElements(executeGeneratedServerRenderSource(serverFile.source)).filter(
-    (element) => element.tagName === 'button',
+  const buttons = htmlElementFacts(executeGeneratedServerRenderSource(serverFile.source)).filter(
+    (element) => element.tag === 'button',
   );
   assert.equal(buttons.length, 2);
-  assert.equal(buttons[0]?.attributes['fw-param-types'], 'quantity:number');
-  assert.equal(buttons[0]?.attributes['data-p-quantity'], '{item.quantity}');
-  assert.equal(buttons[1]?.attributes['fw-param-types'], 'selected:boolean');
-  assert.equal(buttons[1]?.attributes['data-p-selected'], '{item.selected}');
-  assert.equal(buttons[1]?.attributes['data-p-id'], '{item.id}');
+  assert.equal(buttons[0]?.attrs['fw-param-types'], 'quantity:number');
+  assert.equal(buttons[0]?.attrs['data-p-quantity'], '{item.quantity}');
+  assert.equal(buttons[1]?.attrs['fw-param-types'], 'selected:boolean');
+  assert.equal(buttons[1]?.attrs['data-p-selected'], '{item.selected}');
+  assert.equal(buttons[1]?.attrs['data-p-id'], '{item.id}');
 
   const cartActions = executeGeneratedClientModule(clientFile.source, {
     deselect: (id) => `deselect:${id}`,
@@ -6761,7 +6731,7 @@ export const CartActions = component('cart-actions', {
   const addParams = readElementParams({
     attributes: [{ name: 'data-p-quantity', value: '2' }],
     getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[0]?.attributes['fw-param-types'] : null,
+      name === 'fw-param-types' ? buttons[0]?.attrs['fw-param-types'] : null,
   });
   const selectParams = readElementParams({
     attributes: [
@@ -6769,7 +6739,7 @@ export const CartActions = component('cart-actions', {
       { name: 'data-p-id', value: 'p1' },
     ],
     getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[1]?.attributes['fw-param-types'] : null,
+      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
   });
   const deselectParams = readElementParams({
     attributes: [
@@ -6777,7 +6747,7 @@ export const CartActions = component('cart-actions', {
       { name: 'data-p-id', value: 'p2' },
     ],
     getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[1]?.attributes['fw-param-types'] : null,
+      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
   });
   const cartState = { count: 1 };
   assert.equal(
@@ -6824,15 +6794,15 @@ export const CartTotal = component('cart-total', {
   });
   const serverFile = result.files.find((file) => file.kind === 'server');
   assert.ok(serverFile, 'compiled output includes server render source');
-  const renderedElements = parseHtmlElements(executeGeneratedServerRenderSource(serverFile.source));
-  const cartTotal = renderedElements.find((element) => element.tagName === 'cart-total');
-  const boundSpan = renderedElements.find((element) => element.tagName === 'span');
+  const renderedElements = htmlElementFacts(executeGeneratedServerRenderSource(serverFile.source));
+  const cartTotal = renderedElements.find((element) => element.tag === 'cart-total');
+  const boundSpan = renderedElements.find((element) => element.tag === 'span');
 
   assert.equal(result.renderEquivalenceChecks.length, 1);
   assert.equal(result.renderEquivalenceChecks[0]?.artifact, 'components/cart/cart-total.server.js');
   assert.equal(result.renderEquivalenceChecks[0]?.ok, true);
-  assert.deepEqual(cartTotal?.attributes, {});
-  assert.deepEqual(boundSpan?.attributes, { 'data-bind': 'cart.total' });
+  assert.deepEqual(cartTotal?.attrs, {});
+  assert.deepEqual(boundSpan?.attrs, { 'data-bind': 'cart.total' });
   assert.equal(
     result.renderEquivalenceChecks[0]?.actual,
     result.renderEquivalenceChecks[0]?.expected,

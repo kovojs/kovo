@@ -39,6 +39,12 @@ export interface HtmlDocumentFact {
   title: string;
 }
 
+export interface HtmlDocumentRegions {
+  body: HtmlElementFact;
+  head: HtmlElementFact;
+  html: HtmlElementFact;
+}
+
 export interface FwQueryFact {
   attrs: Record<string, string>;
   html: string;
@@ -152,6 +158,30 @@ export function htmlDocumentFacts(html: string): HtmlDocumentFact {
   };
 }
 
+export function htmlDocumentRegions(html: string): HtmlDocumentRegions {
+  const htmlRegions = htmlElementFacts(html, { tag: 'html' });
+  const headRegions = htmlElementFacts(html, { tag: 'head' });
+  const bodyRegions = htmlElementFacts(html, { tag: 'body' });
+
+  if (htmlRegions.length !== 1 || headRegions.length !== 1 || bodyRegions.length !== 1) {
+    throw new Error(
+      `Expected one html/head/body document region; found html=${htmlRegions.length} head=${headRegions.length} body=${bodyRegions.length}`,
+    );
+  }
+
+  return {
+    body: bodyRegions[0]!,
+    head: headRegions[0]!,
+    html: htmlRegions[0]!,
+  };
+}
+
+export function htmlLinkHrefs(html: string, attrs: Record<string, string | true> = {}): string[] {
+  return htmlElementFacts(html, { attrs, tag: 'link' })
+    .map((link) => link.attrs.href ?? '')
+    .filter((href) => href !== '');
+}
+
 export function fwQueryFacts(html: string, name?: string): FwQueryFact[] {
   return htmlElementFacts(html)
     .filter(
@@ -207,6 +237,16 @@ export function htmlFormFacts(html: string): HtmlFormFact[] {
     innerHtml: form.innerHtml,
     method: form.attrs.method ?? 'get',
   }));
+}
+
+export function htmlFormActions(html: string): string[] {
+  return htmlFormFacts(html).map((form) => form.action);
+}
+
+export function htmlFormFields(html: string, name?: string): HtmlFormFieldFact[] {
+  return htmlFormFacts(html)
+    .flatMap((form) => form.fields)
+    .filter((field) => name === undefined || field.name === name);
 }
 
 export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {

@@ -70,6 +70,9 @@ Closed evidence so far:
   `@jiso/test/html-fragment` element facts instead of parsing `vite.config.ts`/`app.ts` source.
 - `tests/fw-check.node.mjs` no longer owns its local regex/index-based HTML element/block parser;
   its compatibility helpers delegate to the shared `@jiso/test/html-fragment` element-fact seam.
+- `tests/fw-check.node.mjs` no longer owns local HTML document-region or element-shape adapters;
+  server document, generated render, Vite, deferred-stream, and template checks consume
+  `@jiso/test/html-fragment` document-region and element facts directly.
 - `examples/commerce/src/source-truth.test.ts` now verifies page hints and enhanced mutation wire
   output with `htmlDocumentFacts`, `fwQueryFacts`, `fwFragmentFacts`, and `htmlKeyFacts` instead
   of local `<fw-query>` regex parsing or raw fragment/key substring membership.
@@ -96,6 +99,9 @@ Recent gates:
 - `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
 - `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P3 server renders initial query scripts|P2 compiler merges view transition stamps|P3 typed routes validate navigation targets|D1 commerce enhanced fragments carry Tailwind stylesheet hints|P10 starter wires graph assertions into CI|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite|D3 deferred stream responses are consumed by the runtime|P1 typed data param coercion|P1 render-equivalence gate" tests/fw-check.node.mjs`
 
 ## Phase 2 - Compiler IR
 
@@ -456,6 +462,10 @@ Closed evidence so far:
   package export tests pin the subpath seam, commerce source-truth/page-hints tests assert title,
   meta, stylesheet, JSON script, body, and static-login text facts through shared helpers, and
   app-shell tests no longer read `scripts/export-static.mjs` source for helper membership.
+- `@jiso/test/html-fragment` exposes `htmlDocumentRegions`, `htmlLinkHrefs`, `htmlFormActions`,
+  and `htmlFormFields`; package export tests pin the subpath seam, `fw-check` uses document-region
+  facts instead of local parsers, and commerce app-shell static/export assertions share link/form
+  extraction instead of local wrapper functions.
 - Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
   fake server module, keeping the local app-shell workflow out of source-text assertions.
 - `@jiso/test` verifier tests share `createVerifiedFakeHarness()` and `deferred()` fixtures, and
@@ -493,6 +503,9 @@ Recent gates:
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
 - `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "dispatches shell login and logout mutations before guarded admin routes|exports the public commerce shell while the dynamic session shell stays non-exportable|wires vp run export to the public commerce shell static output|wires npm run static to the public commerce shell static output"`
+- `node --test --test-name-pattern "P3 server renders initial query scripts|P2 compiler merges view transition stamps|P3 typed routes validate navigation targets|D1 commerce enhanced fragments carry Tailwind stylesheet hints|P10 starter wires graph assertions into CI|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite|D3 deferred stream responses are consumed by the runtime|P1 typed data param coercion|P1 render-equivalence gate" tests/fw-check.node.mjs`
 
 ## Phase 7 - Test Restructuring
 
@@ -513,6 +526,10 @@ Closed evidence so far:
 - Shared `htmlKeyFacts`/`htmlTextContent` coverage in `packages/test/src/html-fragment.test.ts`
   replaces commerce raw HTML probes for list keys, order rows, deferred fragments, auth forms,
   route meta, and mutation error text.
+- Shared `htmlDocumentRegions`/`htmlLinkHrefs`/`htmlFormActions`/`htmlFormFields` coverage in
+  `packages/test/src/html-fragment.test.ts` replaces fw-check document-region parsing and commerce
+  app-shell local wrapper functions for static-export links, preload links, form actions, and CSRF
+  fields.
 - `packages/test/src/test-fixtures.ts` now owns shared verified-harness and promise-control helpers
   used by verifier integration/query tests instead of each test file growing local harness setup.
 

@@ -33,10 +33,14 @@ import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlDocumentFacts,
+  htmlDocumentRegions,
   htmlElementFacts,
+  htmlFormActions,
   htmlFormFacts,
+  htmlFormFields,
   htmlJsonScriptFacts,
   htmlKeyFacts,
+  htmlLinkHrefs,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
@@ -95,6 +99,17 @@ describe('@jiso/test package subpath exports', () => {
       title: 'Cart',
     });
     expect(
+      htmlDocumentRegions(
+        '<html><head><link rel="stylesheet" href="/assets/tailwind.css"></head><body>Ready</body></html>',
+      ).head.tag,
+    ).toBe('head');
+    expect(
+      htmlLinkHrefs(
+        '<link rel="modulepreload" href="/c/app.js"><link rel="stylesheet" href="/assets/tailwind.css">',
+        { rel: 'stylesheet' },
+      ),
+    ).toEqual(['/assets/tailwind.css']);
+    expect(
       htmlJsonScriptFacts('<script type="application/json" data-id="cart">{"count":1}</script>', {
         'data-id': 'cart',
       }),
@@ -113,6 +128,17 @@ describe('@jiso/test package subpath exports', () => {
         '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',
       ),
     ).toMatchObject([{ action: '/_m/cart/add', fields: [{ name: 'productId', value: 'p1' }] }]);
+    expect(
+      htmlFormActions(
+        '<form action="/_m/cart/add"></form><form action="/_m/order/receipt"></form>',
+      ),
+    ).toEqual(['/_m/cart/add', '/_m/order/receipt']);
+    expect(
+      htmlFormFields(
+        '<form><input name="productId" value="p1"><input name="quantity" value="2"></form>',
+        'quantity',
+      ),
+    ).toMatchObject([{ name: 'quantity', value: '2' }]);
     expect(htmlKeyFacts('<li fw-key="order-1"><span>Order</span></li>', 'order-1')).toMatchObject([
       { key: 'order-1', text: 'Order' },
     ]);

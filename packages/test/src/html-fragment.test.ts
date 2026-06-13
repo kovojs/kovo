@@ -5,10 +5,14 @@ import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlDocumentFacts,
+  htmlDocumentRegions,
   htmlElementFacts,
+  htmlFormActions,
   htmlFormFacts,
+  htmlFormFields,
   htmlJsonScriptFacts,
   htmlKeyFacts,
+  htmlLinkHrefs,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
 
@@ -169,6 +173,33 @@ describe('@jiso/test html fragment seam', () => {
     ]);
   });
 
+  it('returns required document regions and link hrefs without local parsers', () => {
+    const html = [
+      '<!doctype html><html lang="en"><head>',
+      '<meta charset="utf-8">',
+      '<link rel="modulepreload" href="/c/app.js">',
+      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '</head><body class="page"><main>Ready</main></body></html>',
+    ].join('');
+
+    expect(htmlDocumentRegions(html)).toMatchObject({
+      body: { attrs: { class: 'page' }, tag: 'body' },
+      head: { tag: 'head' },
+      html: { attrs: { lang: 'en' }, tag: 'html' },
+    });
+    expect(
+      htmlElementFacts(htmlDocumentRegions(html).body.innerHtml).map((item) => item.tag),
+    ).toEqual(['main']);
+    expect(htmlLinkHrefs(html, { rel: 'modulepreload' })).toEqual(['/c/app.js']);
+    expect(htmlLinkHrefs(html, { rel: 'stylesheet' })).toEqual(['/assets/tailwind.css']);
+  });
+
+  it('rejects malformed document region probes with a useful count summary', () => {
+    expect(() => htmlDocumentRegions('<main>Fragment</main>')).toThrow(
+      'Expected one html/head/body document region; found html=0 head=0 body=0',
+    );
+  });
+
   it('returns structured framework query facts for element and script carriers', () => {
     const html = [
       '<fw-query name="cart" key="cart:c1" version="7">{"count":2}</fw-query>',
@@ -290,6 +321,22 @@ describe('@jiso/test html fragment seam', () => {
         method: 'post',
       },
     ]);
+    expect(
+      htmlFormActions(
+        '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',
+      ),
+    ).toEqual(['/_m/cart/add']);
+    expect(
+      htmlFormFields(
+        [
+          '<form method="post" action="/_m/cart/add">',
+          '<input name="productId" value="p1">',
+          '<input name="quantity" value="2">',
+          '</form>',
+        ].join(''),
+        'quantity',
+      ),
+    ).toMatchObject([{ name: 'quantity', value: '2' }]);
   });
 
   it('returns keyed framework element facts with normalized text', () => {

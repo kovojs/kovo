@@ -16,7 +16,10 @@ import {
   fwQueryFacts,
   htmlDocumentFacts,
   htmlElementFacts,
+  htmlFormActions,
   htmlFormFacts,
+  htmlFormFields,
+  htmlLinkHrefs,
 } from '@jiso/test/html-fragment';
 
 import {
@@ -456,7 +459,7 @@ describe('commerce app shell HTTP entry', () => {
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(formFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/admin' }]);
+    expect(htmlFormFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/admin' }]);
 
     const memberLoginForm = new URLSearchParams();
     memberLoginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
@@ -570,20 +573,20 @@ describe('commerce app shell HTTP entry', () => {
 
       const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
       expectCommerceShellDocument(homeHtml, { staticExport: true });
-      expect(modulePreloadHrefs(homeHtml)).toEqual([commerceClientModuleHref]);
+      expect(htmlLinkHrefs(homeHtml, { rel: 'modulepreload' })).toEqual([commerceClientModuleHref]);
 
       const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
       expectCommerceShellDocument(cartHtml, { staticExport: true });
-      expect(stylesheetHrefs(cartHtml)).toContain('/assets/tailwind.css');
-      expect(modulePreloadHrefs(cartHtml)).toEqual([commerceClientModuleHref]);
-      expect(formFields(cartHtml, 'csrf')).toEqual([]);
+      expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/tailwind.css');
+      expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([commerceClientModuleHref]);
+      expect(htmlFormFields(cartHtml, 'csrf')).toEqual([]);
 
       const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
       expect(htmlDocumentFacts(loginHtml).text).toContain(
         'Sign in is available on the dynamic commerce server.',
       );
-      expect(formActions(loginHtml)).not.toContain('/_m/auth/sign-in');
-      expect(formFields(loginHtml, 'csrf')).toHaveLength(0);
+      expect(htmlFormActions(loginHtml)).not.toContain('/_m/auth/sign-in');
+      expect(htmlFormFields(loginHtml, 'csrf')).toHaveLength(0);
 
       await expect(readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8')).resolves.toBe(
         result.clientModules[0]?.body,
@@ -615,19 +618,23 @@ describe('commerce app shell HTTP entry', () => {
 
         const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
         expectCommerceShellDocument(homeHtml, { staticExport: true });
-        expect(modulePreloadHrefs(homeHtml)).toEqual([commerceClientModuleHref]);
+        expect(htmlLinkHrefs(homeHtml, { rel: 'modulepreload' })).toEqual([
+          commerceClientModuleHref,
+        ]);
 
         const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
         expectCommerceShellDocument(cartHtml, { staticExport: true });
-        expect(stylesheetHrefs(cartHtml)).toContain('/assets/tailwind.css');
-        expect(modulePreloadHrefs(cartHtml)).toEqual([commerceClientModuleHref]);
+        expect(htmlLinkHrefs(cartHtml, { rel: 'stylesheet' })).toContain('/assets/tailwind.css');
+        expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([
+          commerceClientModuleHref,
+        ]);
 
         const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
         expect(htmlDocumentFacts(loginHtml).title).toBe('Jiso Commerce Sign In');
         expect(htmlDocumentFacts(loginHtml).text).toContain(
           'Sign in is available on the dynamic commerce server.',
         );
-        expect(formActions(loginHtml)).not.toContain('/_m/auth/sign-in');
+        expect(htmlFormActions(loginHtml)).not.toContain('/_m/auth/sign-in');
 
         const clientModule = await readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8');
         expect(clientModule).toContain('Commerce$markReady');
@@ -644,10 +651,10 @@ describe('commerce app shell HTTP entry', () => {
 function expectCommerceShellDocument(html: string, options: { staticExport?: boolean } = {}): void {
   expect(commerceShellCount(html)).toBe(1);
   if (options.staticExport) {
-    expect(formActions(html)).not.toContain('/_m/cart/add');
-    expect(formActions(html)).not.toContain('/_m/order/receipt');
+    expect(htmlFormActions(html)).not.toContain('/_m/cart/add');
+    expect(htmlFormActions(html)).not.toContain('/_m/order/receipt');
   } else {
-    expect(formActions(html)).toContain('/_m/cart/add');
+    expect(htmlFormActions(html)).toContain('/_m/cart/add');
   }
 }
 
@@ -660,28 +667,6 @@ function commerceShellCount(html: string): number {
 
 function expectCartQueryPayload(html: string, count: number): void {
   expect(fwQueryFacts(html, 'cart').map((query) => query.json)).toEqual([{ count }]);
-}
-
-function formActions(html: string): string[] {
-  return htmlFormFacts(html).map((form) => form.action);
-}
-
-function formFields(html: string, name: string) {
-  return htmlFormFacts(html).flatMap((form) => form.fields.filter((field) => field.name === name));
-}
-
-function modulePreloadHrefs(html: string): string[] {
-  return htmlElementFacts(html, {
-    attrs: { rel: 'modulepreload' },
-    tag: 'link',
-  }).map((link) => link.attrs.href ?? '');
-}
-
-function stylesheetHrefs(html: string): string[] {
-  return htmlElementFacts(html, {
-    attrs: { rel: 'stylesheet' },
-    tag: 'link',
-  }).map((link) => link.attrs.href ?? '');
 }
 
 async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {
