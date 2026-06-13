@@ -3,7 +3,9 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
+import { mutation } from './mutation.js';
 import { route } from './route.js';
+import { s } from './schema.js';
 import {
   createJisoAppShellDevDiagnosticLedger,
   jisoAppShellVitePlugin,
@@ -102,12 +104,18 @@ describe('server app shell Vite diagnostics', () => {
 
   it('serves mutation diagnostics as fragment wire or document responses', async () => {
     const diagnostics = createJisoAppShellDevDiagnosticLedger();
-    const plugin = jisoAppShellVitePlugin(
-      createApp({
-        mutations: [{ key: 'cart/add' }],
-      }),
-      { devDiagnostics: diagnostics },
-    );
+    // SPEC §9.5: the Vite plugin requires a closed createApp() aggregate, so the
+    // mutation must be a full declaration, not a bare { key } shell.
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const plugin = jisoAppShellVitePlugin(createApp({ mutations: [addToCart] }), {
+      devDiagnostics: diagnostics,
+    });
     const middlewares: JisoAppShellViteMiddleware[] = [];
 
     plugin.configureServer({
