@@ -157,6 +157,9 @@ export, Vite+ dev/build/export adoption, and guarded SPEC §9.5 boundaries.
 
 Latest evidence:
 
+- [x] Closed app aggregate guard now validates route, query, mutation, and endpoint declaration
+      entries before request dispatch. Verified with server app/API/static-export/Vite tests, `tsc`,
+      exact `vp check`, and `git diff --check`.
 - [x] `isJisoApp()` and `createRequestHandler()` reject malformed app aggregates and JS raw-handler
       compatibility shells. Verified with server/API/static-export/Vite/commerce/create-jiso tests,
       `tsc`, exact `vp check`, and `git diff --check`.

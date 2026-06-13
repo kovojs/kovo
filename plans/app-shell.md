@@ -164,6 +164,21 @@ Implemented areas:
   before dev/build/export/request dispatch accepts dynamically loaded modules. `createRequestHandler()`
   now applies the same SPEC §9.5 guard for JavaScript callers instead of letting malformed
   compatibility shells reach request dispatch.
+- The shared `isJisoApp()` guard now also validates route, query, mutation, and endpoint declaration
+  entries before dynamic app-shell modules reach request dispatch, Vite build wiring, or static
+  export replay.
+
+Round368 closed aggregate declaration-entry guard evidence:
+
+- `packages/server/src/app-guards.ts` tightens the SPEC §9.5 closed app aggregate around declared
+  route/query/mutation/endpoint entries while preserving normal `createApp()` outputs.
+- `packages/server/src/app.test.ts` proves malformed declaration entries are rejected before
+  `Request -> Response` dispatch, and `packages/server/src/api/app.test.ts` pins the same behavior
+  through the public `@jiso/server/app-shell/core` guard.
+- `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/app.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round363 closed aggregate execution-slot guard evidence:
 

@@ -55,6 +55,31 @@ describe('server createApp request shell', () => {
     ).toThrow('createRequestHandler() requires a Jiso app aggregate.');
   });
 
+  it('rejects malformed declaration entries before request dispatch', () => {
+    const app = createApp({
+      endpoints: [endpoint('/status', { handler: () => new Response('ok') })],
+      mutations: [
+        mutation('cart/add', {
+          handler: () => ({ ok: true }),
+          input: s.object({ productId: s.string() }),
+        }),
+      ],
+      queries: [query('cart', { reads: [domain('cart')] })],
+      routes: [route('/cart', { page: () => '<main>Cart</main>' })],
+    });
+
+    for (const malformedApp of [
+      { ...app, endpoints: [{ path: '/status' }] },
+      { ...app, mutations: [{ key: 'cart/add', handler: () => ({ ok: true }) }] },
+      { ...app, queries: [{ key: 'cart', reads: [{ name: 'cart' }] }] },
+      { ...app, routes: [{ page: () => '<main>Cart</main>' }] },
+    ]) {
+      expect(() =>
+        createRequestHandler(malformedApp as unknown as Parameters<typeof createRequestHandler>[0]),
+      ).toThrow('createRequestHandler() requires a Jiso app aggregate.');
+    }
+  });
+
   it('dispatches a matched route through Request to document Response', async () => {
     const productRoute = route('/products/:id', {
       meta: { title: 'Product' },

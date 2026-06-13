@@ -411,5 +411,18 @@ describe('server app-shell public API barrels', () => {
         clientModules: { put: () => '/c/cart.client.js?v=test' },
       }),
     ).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, endpoints: [{ path: '/status' }] })).toBe(false);
+    expect(
+      packageCoreApi.isJisoApp({
+        ...app,
+        mutations: [{ handler: () => ({ ok: true }), key: 'cart/add' }],
+      }),
+    ).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(
+      false,
+    );
+    expect(
+      packageCoreApi.isJisoApp({ ...app, routes: [{ page: () => '<main>Cart</main>' }] }),
+    ).toBe(false);
   });
 });
