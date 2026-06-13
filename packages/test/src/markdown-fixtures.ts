@@ -1,9 +1,44 @@
+import { cssScopeRules } from './source-fixtures.ts';
+
 export type MarkdownFields = Map<string, string>;
 export type MarkdownTableRow = Record<string, string>;
 
 export interface MarkdownBoldSectionHeading {
   number: string;
   title: string;
+}
+
+export interface NormativeDocsCssManifest {
+  stylesheets: readonly {
+    fragmentTargets?: readonly string[];
+    href: string;
+  }[];
+}
+
+export interface NormativeDocsCompileResult {
+  files: readonly { kind: string; source: string }[];
+  handlerExports: readonly string[];
+}
+
+export interface NormativeDocsGateFact {
+  compilerRuleItemsMatchTitles: boolean;
+  compilerRuleTitles: string[];
+  cssContractHeadings: MarkdownBoldSectionHeading[];
+  cssScopeRules: {
+    limit: string;
+    raw: string;
+    scope: string;
+  }[];
+  cssStylesheet: {
+    fragmentTargets: readonly string[] | undefined;
+    href: string | undefined;
+  };
+  hardRuleTitlesCovered: string[];
+  renderEquivalenceAsserted: boolean;
+  constitutionRuleTitles: string[];
+  constitutionTableNumbers: string[];
+  constitutionTableRuleTitles: string[];
+  handlerExports: readonly string[];
 }
 
 export function normalizeMarkdownCell(value: string): string {
@@ -133,4 +168,77 @@ export function markdownTableRows(source: string): MarkdownTableRow[] {
       .map((cell) => normalizeMarkdownCell(cell));
     return Object.fromEntries(header.map((name, index) => [name, values[index] ?? '']));
   });
+}
+
+function generatedCssScopeRuleFacts(
+  files: readonly { kind: string; source: string }[],
+): NormativeDocsGateFact['cssScopeRules'] {
+  const cssFiles = files.filter((file) => file.kind === 'css');
+  if (cssFiles.length !== 1) {
+    throw new Error(`Expected one generated CSS artifact; found ${cssFiles.length}`);
+  }
+
+  return cssScopeRules(cssFiles[0]!.source);
+}
+
+export function normativeDocsGateFact<T extends NormativeDocsCompileResult>(options: {
+  assertRenderEquivalence: (result: T) => void;
+  collectCssAssetManifest: (result: T, options: { baseHref: string }) => NormativeDocsCssManifest;
+  compileComponentModule: (input: { fileName: string; source: string }) => T;
+  compilerRules: string;
+  constitution: string;
+  spec: string;
+}): NormativeDocsGateFact {
+  const constitutionRows = markdownTableRows(
+    markdownSection(options.spec, '2. The Constitution (Design Tests)'),
+  );
+  const specHardRuleTitles = markdownNumberedListTitles(
+    markdownSection(options.spec, '5.2 Hard rules (normative)'),
+  );
+  const compilerRuleTitles = markdownCanonicalSpecRuleTitles(
+    markdownNumberedListTitles(options.compilerRules),
+  );
+  const compilerRuleItems = markdownNumberedListItems(options.compilerRules);
+  const cssContractHeadings = markdownBoldSectionHeadings(
+    markdownSection(options.spec, '13. Open Design Areas (named, not hand-waved)'),
+  );
+  const behaviorFixture = options.compileComponentModule({
+    fileName: 'components/docs/doc-card.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+function choose() {}
+
+export const DocCard = component('doc-card', {
+  fragmentTarget: true,
+  css: \`
+    .title { color: teal; }
+  \`,
+  render: () => <doc-card><button onClick={choose}>Choose</button><span class="title">Ready</span></doc-card>,
+});
+`,
+  });
+  const cssManifest = options.collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
+  options.assertRenderEquivalence(behaviorFixture);
+
+  return {
+    compilerRuleItemsMatchTitles: compilerRuleItems.length === compilerRuleTitles.length,
+    compilerRuleTitles,
+    constitutionRuleTitles: markdownNumberedListTitles(options.constitution),
+    constitutionTableRuleTitles: constitutionRows.map((row) =>
+      markdownCanonicalSpecRuleTitle(markdownLeadingTitle(row.Test ?? '')),
+    ),
+    cssContractHeadings,
+    cssScopeRules: generatedCssScopeRuleFacts(behaviorFixture.files),
+    cssStylesheet: {
+      fragmentTargets: cssManifest.stylesheets[0]?.fragmentTargets,
+      href: cssManifest.stylesheets[0]?.href,
+    },
+    handlerExports: behaviorFixture.handlerExports,
+    hardRuleTitlesCovered: markdownCanonicalSpecRuleTitles(specHardRuleTitles).filter(
+      (title) => title !== 'Registry atomicity',
+    ),
+    constitutionTableNumbers: constitutionRows.map((row) => row['#'] ?? ''),
+    renderEquivalenceAsserted: true,
+  };
 }

@@ -88,7 +88,6 @@ import {
   executeInlineEnhancedFormLoaderFixture,
   assertGeneratedRegistryConsumerTypes,
   generatedBootstrapDeferredBehaviorFact,
-  generatedCssScopeRulesFromArtifact,
   generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
   generatedRenderEquivalenceBehaviorFact,
@@ -118,12 +117,9 @@ import {
   htmlMainMarkerFact,
 } from '../packages/test/src/html-fragment.ts';
 import {
-  markdownBoldSectionHeadings,
-  markdownCanonicalSpecRuleTitles,
   markdownFields,
-  markdownLeadingTitle,
   markdownNumberedListItems,
-  markdownNumberedListTitles,
+  normativeDocsGateFact,
   markdownSection,
   markdownTableRows,
 } from '../packages/test/src/markdown-fixtures.ts';
@@ -551,53 +547,31 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   const constitution = await readProjectFile('docs/constitution.md');
   const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
   const spec = await readProjectFile('SPEC.md');
-  const constitutionRows = markdownTableRows(
-    markdownSection(spec, '2. The Constitution (Design Tests)'),
-  );
-  const specHardRuleTitles = markdownNumberedListTitles(
-    markdownSection(spec, '5.2 Hard rules (normative)'),
-  );
-  const compilerRuleTitles = markdownCanonicalSpecRuleTitles(
-    markdownNumberedListTitles(compilerRules),
-  );
-  const compilerRuleItems = markdownNumberedListItems(compilerRules);
-  const cssContractHeadings = markdownBoldSectionHeadings(
-    markdownSection(spec, '13. Open Design Areas (named, not hand-waved)'),
-  );
-  const behaviorFixture = compileComponentModule({
-    fileName: 'components/docs/doc-card.tsx',
-    source: `
-import { component } from '@jiso/core';
-
-function choose() {}
-
-export const DocCard = component('doc-card', {
-  fragmentTarget: true,
-  css: \`
-    .title { color: teal; }
-  \`,
-  render: () => <doc-card><button onClick={choose}>Choose</button><span class="title">Ready</span></doc-card>,
-});
-`,
+  const fact = normativeDocsGateFact({
+    assertRenderEquivalence,
+    collectCssAssetManifest,
+    compileComponentModule,
+    compilerRules,
+    constitution,
+    spec,
   });
-  const cssManifest = collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
 
-  assert.deepEqual(markdownNumberedListTitles(constitution), [
+  assert.deepEqual(fact.constitutionRuleTitles, [
     'Legibility is load-bearing',
     'Local code must not require global knowledge',
     'Sugar must lower to authorable IR',
     'The wire is the documentation',
     'Server truth always wins',
   ]);
-  assert.deepEqual(
-    constitutionRows.map((row) => row['#']),
-    ['1', '2', '3', '4', '5'],
-  );
-  assert.deepEqual(
-    constitutionRows.map((row) => markdownLeadingTitle(row.Test)),
-    markdownCanonicalSpecRuleTitles(markdownNumberedListTitles(constitution)),
-  );
-  assert.deepEqual(compilerRuleTitles, [
+  assert.deepEqual(fact.constitutionTableNumbers, ['1', '2', '3', '4', '5']);
+  assert.deepEqual(fact.constitutionTableRuleTitles, [
+    'Legibility is load-bearing',
+    'No global knowledge at local sites',
+    'Sugar must lower to authorable IR',
+    'The wire is the documentation',
+    'Server truth always wins',
+  ]);
+  assert.deepEqual(fact.compilerRuleTitles, [
     'Source-derived names',
     '1:1 file mapping',
     'Fixpoint invariant',
@@ -605,29 +579,24 @@ export const DocCard = component('doc-card', {
     'Teaching errors',
     'TSX-only authoring',
   ]);
-  assert.deepEqual(
-    compilerRuleTitles,
-    markdownCanonicalSpecRuleTitles(specHardRuleTitles).filter(
-      (title) => title !== 'Registry atomicity',
-    ),
-  );
+  assert.deepEqual(fact.compilerRuleTitles, fact.hardRuleTitlesCovered);
   assert.equal(
-    compilerRuleItems.length,
-    compilerRuleTitles.length,
+    fact.compilerRuleItemsMatchTitles,
+    true,
     'compiler hard rules expose one numbered item per parsed title',
   );
-  assert.deepEqual(cssContractHeadings, [
+  assert.deepEqual(fact.cssContractHeadings, [
     { number: '13.1', title: 'CSS' },
     { number: '13.2', title: 'Lists at scale' },
     { number: '13.3', title: 'Streaming details' },
     { number: '13.4', title: 'Persistent cross-navigation elements' },
     { number: '13.5', title: "Adopt-don't-invent list" },
   ]);
-  assert.deepEqual(behaviorFixture.handlerExports, ['DocCard$choose']);
-  assert.doesNotThrow(() => assertRenderEquivalence(behaviorFixture));
-  assert.equal(cssManifest.stylesheets[0]?.href, '/_jiso/components/docs/doc-card.css');
-  assert.deepEqual(cssManifest.stylesheets[0]?.fragmentTargets, ['doc-card']);
-  assert.deepEqual(generatedCssScopeRulesFromArtifact(behaviorFixture.files), [
+  assert.deepEqual(fact.handlerExports, ['DocCard$choose']);
+  assert.equal(fact.renderEquivalenceAsserted, true);
+  assert.equal(fact.cssStylesheet.href, '/_jiso/components/docs/doc-card.css');
+  assert.deepEqual(fact.cssStylesheet.fragmentTargets, ['doc-card']);
+  assert.deepEqual(fact.cssScopeRules, [
     { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
   ]);
 });

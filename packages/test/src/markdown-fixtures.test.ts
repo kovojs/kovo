@@ -8,6 +8,7 @@ import {
   markdownLeadingTitle,
   markdownNumberedListItems,
   markdownNumberedListTitles,
+  normativeDocsGateFact,
   markdownSection,
   markdownTableRows,
   normalizeMarkdownCell,
@@ -124,5 +125,88 @@ describe('@jiso/test markdown fixture seam', () => {
       },
     ]);
     expect(() => markdownTableRows('no table')).toThrow('Markdown section contains a table');
+  });
+
+  it('projects normative docs and generated CSS behavior as a structured gate fact', () => {
+    const calls: string[] = [];
+
+    expect(
+      normativeDocsGateFact({
+        assertRenderEquivalence(result) {
+          calls.push(`render:${result.handlerExports.join(',')}`);
+        },
+        collectCssAssetManifest(_result, options) {
+          return {
+            stylesheets: [
+              {
+                fragmentTargets: ['doc-card'],
+                href: `${options.baseHref}components/docs/doc-card.css`,
+              },
+            ],
+          };
+        },
+        compileComponentModule({ fileName, source }) {
+          calls.push(`compile:${fileName}:${source.includes('doc-card')}`);
+          return {
+            files: [
+              {
+                kind: 'css',
+                source: '@scope (doc-card) to (:scope [fw-c]) {\n.title { color: teal; }',
+              },
+            ],
+            handlerExports: ['DocCard$choose'],
+          };
+        },
+        compilerRules: [
+          '1. **Source-derived names.** Names remain derived.',
+          '2. **One-to-one file mapping.** Files remain mapped.',
+        ].join('\n'),
+        constitution: [
+          '1. **Legibility is load-bearing.**',
+          '2. **Local code must not require global knowledge.**',
+        ].join('\n'),
+        spec: [
+          '## 2. The Constitution (Design Tests)',
+          '| # | Test |',
+          '| --- | --- |',
+          '| 1 | **Legibility is load-bearing.** details |',
+          '| 2 | **Local code must not require global knowledge.** details |',
+          '## 5.2 Hard rules (normative)',
+          '1. **Source-derived names.** Names remain derived.',
+          '2. **One-to-one file mapping.** Files remain mapped.',
+          '3. **Registry atomicity.** Pending.',
+          '## 13. Open Design Areas (named, not hand-waved)',
+          '**13.1 CSS:** details',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      compilerRuleItemsMatchTitles: true,
+      compilerRuleTitles: ['Source-derived names', '1:1 file mapping'],
+      constitutionRuleTitles: [
+        'Legibility is load-bearing',
+        'Local code must not require global knowledge',
+      ],
+      constitutionTableNumbers: ['1', '2'],
+      constitutionTableRuleTitles: [
+        'Legibility is load-bearing',
+        'No global knowledge at local sites',
+      ],
+      cssContractHeadings: [{ number: '13.1', title: 'CSS' }],
+      cssScopeRules: [
+        {
+          limit: ':scope [fw-c]',
+          raw: '@scope (doc-card) to (:scope [fw-c]) {',
+          scope: 'doc-card',
+        },
+      ],
+      cssStylesheet: {
+        fragmentTargets: ['doc-card'],
+        href: '/_jiso/components/docs/doc-card.css',
+      },
+      handlerExports: ['DocCard$choose'],
+      hardRuleTitlesCovered: ['Source-derived names', '1:1 file mapping'],
+      renderEquivalenceAsserted: true,
+    });
+    expect(calls).toEqual(['compile:components/docs/doc-card.tsx:true', 'render:DocCard$choose']);
   });
 });

@@ -260,12 +260,14 @@ import {
   markdownLeadingTitle,
   markdownNumberedListItems,
   markdownNumberedListTitles,
+  normativeDocsGateFact,
   markdownSection,
   markdownTableRows,
   normalizeMarkdownCell,
   type MarkdownBoldSectionHeading,
   type MarkdownFields,
   type MarkdownTableRow,
+  type NormativeDocsGateFact,
 } from '@jiso/test/markdown-fixtures';
 import {
   mcpCompileResponseFacts,
@@ -577,6 +579,11 @@ describe('@jiso/test package subpath exports', () => {
     expect(markdownBoldSectionHeadings('**13.1 CSS:** details')).toEqual([
       { number: '13.1', title: 'CSS' },
     ]);
+    expect(normativeDocsGateFact).toBeTypeOf('function');
+    expectTypeOf<NormativeDocsGateFact>().toMatchTypeOf<{
+      compilerRuleTitles: string[];
+      renderEquivalenceAsserted: boolean;
+    }>();
     expect(
       mcpCompileResponseFacts(
         JSON.stringify({
@@ -1434,6 +1441,7 @@ type _PublicSubpathTypes = [
   MarkdownFields,
   MarkdownTableRow,
   MarkdownBoldSectionHeading,
+  NormativeDocsGateFact,
   McpCompileDiagnosticFact,
   McpCompileResponseFact,
   McpJsonRpcResponseFact,

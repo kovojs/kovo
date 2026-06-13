@@ -147,6 +147,12 @@ Latest evidence:
   targeted `node --test --test-name-pattern "P5 morph evidence preserves keyed identity and applies fragments" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
+- P10 normative-docs fixture slice:
+  `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/markdown-fixtures.ts packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Phase 4 inline query batch apply slice:
   `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;
   `pnpm exec vitest --run packages/runtime/src`;
