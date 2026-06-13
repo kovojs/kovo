@@ -407,6 +407,10 @@ Focused gates since that broad run:
 - UI/gallery: H3 autocomplete, combobox, command, and otp-field reset behavior tests, full
   headless-ui tests, primitive lint, UI package tests, focused gallery tests, exact `vp check`,
   and `git diff --check` passed in Round119.
+- UI/gallery: field/fieldset inactive native disabled booleans are omitted, the field gallery
+  renders a disabled native fieldset with a named control, and focused/full headless UI,
+  primitive lint, UI package tests, focused gallery tests, exact `vp check`, and
+  `git diff --check` passed in Round147.
 - Runtime: decoded apply primitive, full runtime suite, browser runtime, inline-loader check,
   `tsc`, exact `vp check`, and `git diff --check` passed in Round126.
 - Drizzle: carrier member helper handoff degradation, package suite, pinned conformance, exact

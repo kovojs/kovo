@@ -1438,6 +1438,17 @@ export function FieldDemo(): string {
                 children: 'Plan',
                 id: 'gallery-fieldset-legend',
               })}
+              {FieldLabel.definition.render({
+                children: 'Seat preference',
+                controlId: 'gallery-fieldset-seat',
+                id: 'gallery-fieldset-seat-label',
+              })}
+              {FieldControl.definition.render({
+                descriptionId: 'gallery-fieldset-description',
+                id: 'gallery-fieldset-seat',
+                name: 'seat',
+                value: 'window',
+              })}
               {FieldDescription.definition.render({
                 children: 'Fieldset preserves the native grouping element.',
                 id: 'gallery-fieldset-description',
@@ -1445,6 +1456,7 @@ export function FieldDemo(): string {
             </>
           ),
           descriptionId: 'gallery-fieldset-description',
+          disabled: true,
           id: 'gallery-fieldset',
           invalid: true,
         })}

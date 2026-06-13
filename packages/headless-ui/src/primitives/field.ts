@@ -57,7 +57,7 @@ export function fieldControlAttributes(
     ...fieldDataAttributes(options),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
-    disabled: options.disabled === true,
+    ...(options.disabled === true ? { disabled: true } : {}),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.required === true ? { required: true } : {}),
@@ -94,7 +94,7 @@ export function fieldsetRootAttributes(
     ...fieldDataAttributes(options),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
-    disabled: options.disabled === true,
+    ...(options.disabled === true ? { disabled: true } : {}),
     ...(options.id === undefined ? {} : { id: options.id }),
   });
 }

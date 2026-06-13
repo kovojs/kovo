@@ -1088,8 +1088,15 @@ describe('@jiso/ui styled package foundation', () => {
     });
     const error = FieldError.definition.render({ children: 'Email required.', id: 'email-error' });
     const fieldset = Fieldset.definition.render({
-      children: FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }),
+      children:
+        FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }) +
+        FieldControl.definition.render({
+          id: 'seat',
+          name: 'seat',
+          value: 'window',
+        }),
       descriptionId: 'plan-description',
+      disabled: true,
       id: 'plan-fieldset',
       invalid: true,
     });
@@ -1110,15 +1117,21 @@ describe('@jiso/ui styled package foundation', () => {
     expect(control).toContain('id="email" name="email"');
     expect(control).toContain('required type="email"');
     expect(control).toContain('value="ada@example.com"');
+    expect(control).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(textarea).toContain('<textarea aria-describedby="bio-description"');
     expect(textarea).toContain('id="bio" name="bio" placeholder="Short bio" rows="4"');
+    expect(textarea).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(select).toContain('<select aria-describedby="plan-description"');
     expect(select).toContain('id="plan" name="plan" required value="team"');
     expect(select).toContain('<option value="team" selected>Team</option>');
+    expect(select).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(description).toContain('id="email-description"');
     expect(error).toContain('role="alert"');
     expect(fieldset).toContain('aria-describedby="plan-description"');
     expect(fieldset).toContain('aria-invalid="true"');
+    expect(fieldset).toContain('data-disabled=""');
+    expect(fieldset).toContain('disabled id="plan-fieldset"');
+    expect(fieldset).toContain('id="seat" name="seat"');
     expect(fieldset).toContain('id="plan-fieldset"');
     expect(fieldset).toContain('id="plan-legend"');
     expect(fieldLabelClasses.join(' ')).toContain('text-sm font-medium');

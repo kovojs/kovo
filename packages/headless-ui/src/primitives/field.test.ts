@@ -65,7 +65,6 @@ describe('headless-ui field primitive', () => {
       'aria-invalid': 'true',
       'data-invalid': '',
       'data-required': '',
-      disabled: false,
       id: 'email',
       name: 'email',
       required: true,
@@ -82,14 +81,31 @@ describe('headless-ui field primitive', () => {
       }),
     ).toEqual({
       'aria-describedby': 'email-help',
-      disabled: false,
       id: 'email',
       name: 'email',
     });
 
     expect(fieldControlAttributes({ id: 'email' })).toEqual({
-      disabled: false,
       id: 'email',
+    });
+  });
+
+  it('omits native disabled boolean attributes unless the disabled state is active', () => {
+    expect(fieldControlAttributes({ disabled: false, id: 'email' })).toEqual({
+      id: 'email',
+    });
+    expect(fieldControlAttributes({ disabled: true, id: 'email' })).toEqual({
+      'data-disabled': '',
+      disabled: true,
+      id: 'email',
+    });
+    expect(fieldsetRootAttributes({ disabled: false, id: 'shipping' })).toEqual({
+      id: 'shipping',
+    });
+    expect(fieldsetRootAttributes({ disabled: true, id: 'shipping' })).toEqual({
+      'data-disabled': '',
+      disabled: true,
+      id: 'shipping',
     });
   });
 

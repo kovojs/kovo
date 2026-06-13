@@ -382,6 +382,9 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     '<textarea aria-describedby="gallery-field-bio-description"',
     '<select aria-describedby="gallery-field-plan-description"',
     '<option value="team" selected>Team</option>',
+    'disabled id="gallery-fieldset"',
+    'for="gallery-fieldset-seat"',
+    'id="gallery-fieldset-seat" name="seat"',
     'role="alert"',
   ],
   '/components/hover-card': [

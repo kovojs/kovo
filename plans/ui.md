@@ -96,6 +96,14 @@ examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contrac
 examples/gallery/src/merge-fixtures.test.tsx`.
 - [ ] Close any remaining field/fieldset behavior gaps with focused primitive tests rather than
       styled-only evidence.
+      Evidence 2026-06-13: field control and fieldset helpers now omit inactive native
+      `disabled` booleans while preserving active disabled state, and `/components/field`
+      renders a disabled native fieldset containing a named control. Same-session proof:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`,
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx`,
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+      plus the full headless/UI and exact
+      `vp check` commands listed under the latest slice.
 - [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
 
 H3:
@@ -131,13 +139,13 @@ Gallery:
 Latest integrated UI slice:
 
 - `pnpm install --frozen-lockfile`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/scroll-area.test.ts`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`
 - `pnpm exec vitest --run packages/ui/src/index.test.tsx`
-- `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx`
+- `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm exec vp check packages/headless-ui/src/primitives/scroll-area.ts packages/headless-ui/src/primitives/scroll-area.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts packages/ui/src/scroll-area.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`
+- `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Latest broad gate:
