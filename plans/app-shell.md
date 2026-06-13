@@ -41,11 +41,10 @@ Implemented areas:
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
-- `static-replay.ts` rejects exported route documents that still reference same-origin `/_m/` or
-  `/_q/` server endpoints, so SPEC §9.5 L0/L1-only constraints are enforced on the synthetic
-  replayed no-JS artifact before client modules or files are written. It also discovers
-  same-origin full-URL `/c/` module refs from route HTML and `Link` headers, preserving
-  SPEC §4.3's full module URL contract while publishing static-host `/c/` files.
+- `static-export-document.ts` owns synthetic route-document replay, artifact path selection, and
+  SPEC §9.5 L0/L1 endpoint rejection for exported no-JS documents; it also discovers same-origin
+  full-URL `/c/` module refs from route HTML and `Link` headers, preserving SPEC §4.3's full
+  module URL contract while publishing static-host `/c/` files.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting and a
   public export manifest for directory-index documents, copied assets, and `/c/` modules. The
   create-jiso starter and commerce export tasks load the diagnostic helpers from `@jiso/server`
@@ -364,6 +363,20 @@ Round104 app-shell static document inspection evidence:
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
+Round105 app-shell static replay compatibility deletion evidence:
+
+- `packages/server/src/static-export-document.ts` now also owns SPEC §9.5 synthetic
+  route-document replay and L0/L1 validation, so the leftover `static-replay.ts` compatibility
+  module was deleted and `static-export-replay.ts` calls the document boundary directly.
+- `packages/server/src/static-replay.test.ts` now pins route-document replay and document
+  reference discovery against the `static-export-document.ts` owner.
+- `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Open Work

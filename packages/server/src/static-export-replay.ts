@@ -1,7 +1,7 @@
 import { createRequestHandler, type JisoApp } from './app.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
+import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
-import { replayStaticExportRouteArtifact } from './static-replay.js';
 import {
   StaticExportError,
   staticExportDiagnostic,
@@ -50,7 +50,7 @@ export async function replayStaticExportApp({
 
     try {
       artifacts.push(
-        await replayStaticExportRouteArtifact({
+        await replayStaticExportRouteDocumentArtifact({
           handler,
           htmlPathStyle,
           origin,

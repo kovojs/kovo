@@ -4,10 +4,10 @@ import type { RequestHandler } from './app.js';
 import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
+  replayStaticExportRouteDocumentArtifact,
 } from './static-export-document.js';
-import { replayStaticExportRouteArtifact } from './static-replay.js';
 
-describe('server static export replay', () => {
+describe('server static export document boundary', () => {
   it('replays route documents as synthetic GET requests at normalized pathnames', async () => {
     const seen: string[] = [];
     const handler: RequestHandler = async (request) => {
@@ -20,7 +20,7 @@ describe('server static export replay', () => {
     };
 
     await expect(
-      replayStaticExportRouteArtifact({
+      replayStaticExportRouteDocumentArtifact({
         handler,
         htmlPathStyle: 'directory',
         origin: 'https://jiso.local/root?ignored=1',
@@ -46,7 +46,7 @@ describe('server static export replay', () => {
       });
 
     await expect(
-      replayStaticExportRouteArtifact({
+      replayStaticExportRouteDocumentArtifact({
         handler,
         htmlPathStyle: 'directory',
         origin: 'https://jiso.local',

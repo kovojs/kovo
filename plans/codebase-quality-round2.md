@@ -205,6 +205,16 @@ with same-session file/test evidence.
       `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
       `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
       and `git diff --check`.
+      Round105 evidence 2026-06-13: `packages/server/src/static-export-document.ts` now also owns
+      SPEC §9.5 synthetic route-document replay and L0/L1 validation, deleting the leftover
+      `packages/server/src/static-replay.ts` compatibility module while `static-export-replay.ts`
+      calls the document owner directly. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, and
+      `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+      and `git diff --check`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;
