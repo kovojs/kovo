@@ -45,8 +45,8 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
         <div
           {...contextMenuTriggerAttributes({ ...menuState, contentId })}
           id="gallery-context-menu-trigger"
-          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=c1d5eb8a#GalleryContextMenuDemo$div_contextmenu"
-          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=c1d5eb8a#GalleryContextMenuDemo$div_keydown"
+          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$div_contextmenu"
+          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$div_keydown"
           tabIndex="0"
         >
           Right click target
@@ -80,7 +80,8 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemLabel: 'Inspect',
               itemValue: 'inspect',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=c1d5eb8a#GalleryContextMenuDemo$button_click"
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$button_click"
           >
             Inspect
           </button>

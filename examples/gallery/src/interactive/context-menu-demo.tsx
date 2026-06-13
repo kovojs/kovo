@@ -61,6 +61,13 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
             if (output) output['textContent'] = 'open';
           }}
           onKeyDown={() => {
+            if (
+              event &&
+              Object(event)['key'] !== 'ContextMenu' &&
+              !(Object(event)['shiftKey'] === true && Object(event)['key'] === 'F10')
+            )
+              return;
+
             state.open = true;
             const doc = Reflect['get'](globalThis, 'document');
             const content = doc
@@ -101,6 +108,29 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemLabel: 'Inspect',
               itemValue: 'inspect',
             })}
+            onKeyDown={() => {
+              if (
+                event &&
+                Object(event)['key'] !== 'Enter' &&
+                Object(event)['key'] !== ' ' &&
+                Object(event)['key'] !== 'Spacebar'
+              )
+                return;
+
+              if (event) Object(event)['preventDefault']?.call(event);
+              state.open = false;
+              state.highlightedValue = 'inspect';
+              state.value = 'inspect';
+              const doc = Reflect['get'](globalThis, 'document');
+              const content = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-context-menu-content')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="context-value"]')
+                : undefined;
+              if (content) content['hidden'] = true;
+              if (output) output['textContent'] = 'inspect';
+            }}
             onClick={() => {
               state.open = false;
               state.highlightedValue = 'inspect';

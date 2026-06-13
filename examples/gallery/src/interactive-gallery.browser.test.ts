@@ -1409,7 +1409,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dropdownContent.hidden).toBe(false);
     });
 
-    rename.click();
+    rename.focus();
+    await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {
       expect(dropdownRoot.getAttribute('fw-state')).toBe(
@@ -1455,7 +1456,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(content.hidden).toBe(false);
     });
 
-    inspect.click();
+    inspect.focus();
+    await userEvent.keyboard('{Space}');
 
     await vi.waitFor(() => {
       expect(contextRoot.getAttribute('fw-state')).toBe(

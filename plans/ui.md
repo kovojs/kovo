@@ -66,7 +66,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       browser-backed interactive coverage before checking H3 complete.
       Evidence so far: navigation-menu trigger keyboard activation covers Enter, Space, legacy
       Spacebar, native-link pass-through, disabled content, and matching gallery behavior
-      contracts.
+      contracts; dropdown-menu and context-menu item keyboard activation covers Enter, Space,
+      legacy Spacebar, disabled/canceled state, headless barrel exports, static gallery contracts,
+      and compiled/browser interactive gallery keydown selection.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -83,6 +85,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Dropdown/context-menu keyboard selection slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/dropdown-menu.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.tsx examples/gallery/src/interactive/dropdown-menu-demo.tsx examples/gallery/src/interactive/context-menu-demo.tsx examples/gallery/src/generated/interactive/dropdown-menu-demo.tsx examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js examples/gallery/src/generated/interactive/context-menu-demo.tsx examples/gallery/src/generated/interactive/context-menu-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Navigation-menu closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/navigation-menu.test.ts`;
       `pnpm exec vitest --run examples/gallery/src/behavior-contracts.test.ts`;

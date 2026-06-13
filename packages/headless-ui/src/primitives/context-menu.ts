@@ -71,7 +71,7 @@ export type ContextMenuOpenChangeReason =
   | 'programmatic'
   | 'trigger-context-menu';
 
-export type ContextMenuSelectReason = 'item-click' | 'programmatic';
+export type ContextMenuSelectReason = 'item-click' | 'item-keyboard' | 'programmatic';
 
 export type ContextMenuOpenChangeDetail = PrimitiveChangeDetail<
   ContextMenuOpenChangeReason,
@@ -441,6 +441,26 @@ export function contextMenuItemClick(
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
  */
+export function contextMenuItemKeyDown(
+  event: ContextMenuKeyboardEvent,
+  state: ContextMenuItemAttributeOptions,
+  options: ContextMenuChangeOptions = {},
+): ContextMenuSelectResult | undefined {
+  if (event.defaultPrevented) return;
+  if (!contextMenuItemActivationKey(event.key)) return;
+
+  const result = selectContextMenuItem(state, state.itemValue, 'item-keyboard', options);
+  event.preventDefault();
+
+  return result;
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
 export function contextMenuKeyDown(
   event: ContextMenuKeyboardEvent,
   state: ContextMenuState,
@@ -484,4 +504,8 @@ function contextMenuItemDisabled(
     state.itemDisabled === true ||
     state.items?.find((item) => item.value === value)?.disabled === true
   );
+}
+
+function contextMenuItemActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ' || key === 'Spacebar';
 }

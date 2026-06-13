@@ -6,6 +6,7 @@ import {
   dropdownMenuItemAttributes as exportedDropdownMenuItemAttributes,
   dropdownMenuItemClick as exportedDropdownMenuItemClick,
   dropdownMenuItemHighlighted as exportedDropdownMenuItemHighlighted,
+  dropdownMenuItemKeyDown as exportedDropdownMenuItemKeyDown,
   dropdownMenuKeyDown as exportedDropdownMenuKeyDown,
   dropdownMenuMove as exportedDropdownMenuMove,
   dropdownMenuRootAttributes as exportedDropdownMenuRootAttributes,
@@ -23,6 +24,7 @@ import {
   dropdownMenuItemAttributes,
   dropdownMenuItemClick,
   dropdownMenuItemHighlighted,
+  dropdownMenuItemKeyDown,
   dropdownMenuKeyDown,
   dropdownMenuMove,
   dropdownMenuRootAttributes,
@@ -182,6 +184,95 @@ describe('headless-ui dropdown-menu primitive', () => {
     ]);
   });
 
+  it('selects highlighted menu items from keyboard activation keys', () => {
+    const seen: string[] = [];
+    const enterEvent = keydownEvent('Enter');
+    const spaceEvent = keydownEvent(' ');
+    const legacySpaceEvent = keydownEvent('Spacebar');
+
+    expect(
+      dropdownMenuItemKeyDown(
+        enterEvent,
+        { highlightedValue: 'team', itemValue: 'team', items: menuItems, open: true },
+        {
+          onOpenChange(detail) {
+            seen.push(`open:${detail.reason}:${detail.value}`);
+          },
+          onSelect(detail) {
+            seen.push(`select:${detail.reason}:${detail.value}`);
+          },
+        },
+      ),
+    ).toMatchObject({
+      open: { changed: true, open: false },
+      selected: true,
+      value: 'team',
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+
+    expect(
+      dropdownMenuItemKeyDown(spaceEvent, {
+        highlightedValue: 'profile',
+        itemValue: 'profile',
+        items: menuItems,
+        open: true,
+      }),
+    ).toMatchObject({ selected: true, value: 'profile' });
+    expect(spaceEvent.defaultPrevented).toBe(true);
+
+    expect(
+      dropdownMenuItemKeyDown(legacySpaceEvent, {
+        highlightedValue: 'preferences',
+        itemValue: 'preferences',
+        items: menuItems,
+        open: true,
+      }),
+    ).toMatchObject({ selected: true, value: 'preferences' });
+    expect(legacySpaceEvent.defaultPrevented).toBe(true);
+    expect(seen).toEqual(['select:item-keyboard:team', 'open:item-select:false']);
+    expect(
+      dropdownMenuItemKeyDown(keydownEvent('ArrowDown'), {
+        itemValue: 'team',
+        items: menuItems,
+        open: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps keyboard item activation cancelable and disabled-aware', () => {
+    const disabledEvent = keydownEvent('Enter');
+    const disabledResult = dropdownMenuItemKeyDown(disabledEvent, {
+      itemValue: 'billing',
+      items: menuItems,
+      open: true,
+    });
+    expect(disabledResult).toEqual({
+      open: { changed: false, open: true },
+      selected: false,
+      value: 'billing',
+    });
+    expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledEvent = keydownEvent(' ');
+    const canceledResult = dropdownMenuItemKeyDown(
+      canceledEvent,
+      {
+        itemValue: 'team',
+        items: menuItems,
+        open: true,
+      },
+      {
+        onSelect(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledResult?.selected).toBe(false);
+    expect(canceledResult?.open.open).toBe(true);
+    expect(canceledResult?.detail?.defaultPrevented).toBe(true);
+    expect(canceledEvent.defaultPrevented).toBe(true);
+  });
+
   it('keeps previous state when open or select changes are prevented', () => {
     const openResult = toggleDropdownMenu({ open: false }, 'trigger-click', {
       onOpenChange(detail) {
@@ -283,6 +374,8 @@ describe('headless-ui dropdown-menu primitive', () => {
     triggerEvent.preventDefault();
     const itemEvent = new Event('click', { cancelable: true });
     itemEvent.preventDefault();
+    const itemKeyEvent = keydownEvent('Enter');
+    itemKeyEvent.preventDefault();
     const keyEvent = keydownEvent('Escape');
     keyEvent.preventDefault();
 
@@ -304,6 +397,17 @@ describe('headless-ui dropdown-menu primitive', () => {
         {
           onSelect() {
             throw new Error('item should not dispatch after defaultPrevented');
+          },
+        },
+      ),
+    ).toBeUndefined();
+    expect(
+      dropdownMenuItemKeyDown(
+        itemKeyEvent,
+        { itemValue: 'profile', open: true },
+        {
+          onSelect() {
+            throw new Error('item keyboard should not dispatch after defaultPrevented');
           },
         },
       ),
@@ -387,6 +491,7 @@ describe('headless-ui dropdown-menu primitive', () => {
     expect(exportedDropdownMenuItemAttributes).toBe(dropdownMenuItemAttributes);
     expect(exportedDropdownMenuItemClick).toBe(dropdownMenuItemClick);
     expect(exportedDropdownMenuItemHighlighted).toBe(dropdownMenuItemHighlighted);
+    expect(exportedDropdownMenuItemKeyDown).toBe(dropdownMenuItemKeyDown);
     expect(exportedDropdownMenuKeyDown).toBe(dropdownMenuKeyDown);
     expect(exportedDropdownMenuMove).toBe(dropdownMenuMove);
     expect(exportedDropdownMenuRootAttributes).toBe(dropdownMenuRootAttributes);

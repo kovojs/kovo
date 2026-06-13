@@ -44,13 +44,13 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
         <button
           {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
           id="gallery-dropdown-menu-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=7caa5a3b#GalleryDropdownMenuDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click"
         >
           Actions
         </button>
         <div
           {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
-          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=7caa5a3b#GalleryDropdownMenuDemo$div_keydown"
+          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$div_keydown"
         >
           <button
             {...dropdownMenuItemAttributes({
@@ -59,7 +59,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemLabel: 'Duplicate',
               itemValue: 'duplicate',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=7caa5a3b#GalleryDropdownMenuDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click_2"
           >
             Duplicate
           </button>
@@ -81,7 +81,8 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemLabel: 'Rename',
               itemValue: 'rename',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=7caa5a3b#GalleryDropdownMenuDemo$button_click_3"
+            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click_3"
           >
             Rename
           </button>

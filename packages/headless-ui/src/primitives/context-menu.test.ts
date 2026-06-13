@@ -6,6 +6,7 @@ import {
   contextMenuItemAttributes as exportedContextMenuItemAttributes,
   contextMenuItemClick as exportedContextMenuItemClick,
   contextMenuItemHighlighted as exportedContextMenuItemHighlighted,
+  contextMenuItemKeyDown as exportedContextMenuItemKeyDown,
   contextMenuKeyDown as exportedContextMenuKeyDown,
   contextMenuMove as exportedContextMenuMove,
   contextMenuPointFromEvent as exportedContextMenuPointFromEvent,
@@ -25,6 +26,7 @@ import {
   contextMenuItemAttributes,
   contextMenuItemClick,
   contextMenuItemHighlighted,
+  contextMenuItemKeyDown,
   contextMenuKeyDown,
   contextMenuMove,
   contextMenuPointFromEvent,
@@ -246,6 +248,102 @@ describe('headless-ui context-menu primitive', () => {
     expect(callCount).toBe(0);
   });
 
+  it('selects highlighted context menu items from keyboard activation keys', () => {
+    const seen: string[] = [];
+    const enterEvent = keydownEvent('Enter');
+    const spaceEvent = keydownEvent(' ');
+    const legacySpaceEvent = keydownEvent('Spacebar');
+
+    expect(
+      contextMenuItemKeyDown(
+        enterEvent,
+        {
+          highlightedValue: 'paste-plain',
+          itemValue: 'paste-plain',
+          items: menuItems,
+          open: true,
+          point: { x: 3, y: 4 },
+        },
+        {
+          onOpenChange(detail) {
+            seen.push(`open:${detail.reason}:${detail.value}`);
+          },
+          onSelect(detail) {
+            seen.push(`select:${detail.reason}:${detail.value}`);
+          },
+        },
+      ),
+    ).toMatchObject({
+      open: { changed: true, open: false, point: { x: 3, y: 4 } },
+      selected: true,
+      value: 'paste-plain',
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+
+    expect(
+      contextMenuItemKeyDown(spaceEvent, {
+        highlightedValue: 'cut',
+        itemValue: 'cut',
+        items: menuItems,
+        open: true,
+      }),
+    ).toMatchObject({ selected: true, value: 'cut' });
+    expect(spaceEvent.defaultPrevented).toBe(true);
+
+    expect(
+      contextMenuItemKeyDown(legacySpaceEvent, {
+        highlightedValue: 'crop',
+        itemValue: 'crop',
+        items: menuItems,
+        open: true,
+      }),
+    ).toMatchObject({ selected: true, value: 'crop' });
+    expect(legacySpaceEvent.defaultPrevented).toBe(true);
+    expect(seen).toEqual(['select:item-keyboard:paste-plain', 'open:item-select:false']);
+    expect(
+      contextMenuItemKeyDown(keydownEvent('ArrowDown'), {
+        itemValue: 'cut',
+        items: menuItems,
+        open: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps keyboard context item activation cancelable and disabled-aware', () => {
+    const disabledEvent = keydownEvent('Enter');
+    const disabledResult = contextMenuItemKeyDown(disabledEvent, {
+      itemValue: 'copy',
+      items: menuItems,
+      open: true,
+      point: { x: 8, y: 16 },
+    });
+    expect(disabledResult).toEqual({
+      open: { changed: false, open: true, point: { x: 8, y: 16 } },
+      selected: false,
+      value: 'copy',
+    });
+    expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledEvent = keydownEvent(' ');
+    const canceledResult = contextMenuItemKeyDown(
+      canceledEvent,
+      {
+        itemValue: 'cut',
+        items: menuItems,
+        open: true,
+      },
+      {
+        onSelect(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledResult?.selected).toBe(false);
+    expect(canceledResult?.open.open).toBe(true);
+    expect(canceledResult?.detail?.defaultPrevented).toBe(true);
+    expect(canceledEvent.defaultPrevented).toBe(true);
+  });
+
   it('moves through enabled items with shared menu keyboard navigation', () => {
     expect(contextMenuMove({ highlightedValue: 'cut', items: menuItems }, 'ArrowDown')).toEqual({
       highlightedIndex: 1,
@@ -295,6 +393,8 @@ describe('headless-ui context-menu primitive', () => {
     triggerKeyEvent.preventDefault();
     const itemEvent = new Event('click', { cancelable: true });
     itemEvent.preventDefault();
+    const itemKeyEvent = keydownEvent('Enter');
+    itemKeyEvent.preventDefault();
     const keyEvent = keydownEvent('Escape');
     keyEvent.preventDefault();
 
@@ -311,6 +411,9 @@ describe('headless-ui context-menu primitive', () => {
     expect(contextMenuTriggerKeyDown(triggerKeyEvent, { open: false }, options)).toBeUndefined();
     expect(
       contextMenuItemClick(itemEvent, { itemValue: 'cut', open: true }, options),
+    ).toBeUndefined();
+    expect(
+      contextMenuItemKeyDown(itemKeyEvent, { itemValue: 'cut', open: true }, options),
     ).toBeUndefined();
     expect(contextMenuKeyDown(keyEvent, { open: true }, options)).toBeUndefined();
   });
@@ -391,6 +494,7 @@ describe('headless-ui context-menu primitive', () => {
     expect(exportedContextMenuItemAttributes).toBe(contextMenuItemAttributes);
     expect(exportedContextMenuItemClick).toBe(contextMenuItemClick);
     expect(exportedContextMenuItemHighlighted).toBe(contextMenuItemHighlighted);
+    expect(exportedContextMenuItemKeyDown).toBe(contextMenuItemKeyDown);
     expect(exportedContextMenuKeyDown).toBe(contextMenuKeyDown);
     expect(exportedContextMenuMove).toBe(contextMenuMove);
     expect(exportedContextMenuPointFromEvent).toBe(contextMenuPointFromEvent);

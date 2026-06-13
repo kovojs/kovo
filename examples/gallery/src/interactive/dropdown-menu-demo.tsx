@@ -65,6 +65,9 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
         <div
           {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
           onKeyDown={() => {
+            if (event && (Object(event)['defaultPrevented'] || Object(event)['key'] !== 'Escape'))
+              return;
+
             state.open = false;
             const doc = Reflect['get'](globalThis, 'document');
             const trigger = doc
@@ -124,6 +127,33 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemLabel: 'Rename',
               itemValue: 'rename',
             })}
+            onKeyDown={() => {
+              if (
+                event &&
+                Object(event)['key'] !== 'Enter' &&
+                Object(event)['key'] !== ' ' &&
+                Object(event)['key'] !== 'Spacebar'
+              )
+                return;
+
+              if (event) Object(event)['preventDefault']?.call(event);
+              state.open = false;
+              state.highlightedValue = 'rename';
+              state.value = 'rename';
+              const doc = Reflect['get'](globalThis, 'document');
+              const content = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-dropdown-menu-content')
+                : undefined;
+              const item = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-dropdown-menu-rename')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="dropdown-value"]')
+                : undefined;
+              if (content) content['hidden'] = true;
+              if (item) Object(item)['setAttribute']?.call(item, 'data-highlighted', '');
+              if (output) output['textContent'] = 'rename';
+            }}
             onClick={() => {
               state.open = false;
               state.highlightedValue = 'rename';

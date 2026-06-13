@@ -283,6 +283,9 @@ describe('compiled interactive gallery demos', () => {
     expect(contextMenu).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$button_click"/,
     );
+    expect(contextMenu).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$button_keydown"/,
+    );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
     expect(disclosure).toContain('fw-state=\'{"open":false}\'');
@@ -317,6 +320,9 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(dropdownMenu).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$div_keydown"/,
+    );
+    expect(dropdownMenu).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_keydown"/,
     );
 
     expect(field).toContain('data-gallery-interactive="field"');
@@ -720,6 +726,22 @@ describe('compiled interactive gallery demos', () => {
       state: contextMenuState,
     });
     expect(contextMenuState).toEqual({ highlightedValue: 'copy', open: true, value: 'copy' });
+    const contextKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: ' ',
+    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown')(contextKeyboardEvent, {
+      params: {},
+      signal,
+      state: contextMenuState,
+    });
+    expect(contextKeyboardEvent.defaultPrevented).toBe(true);
+    expect(contextMenuState).toEqual({
+      highlightedValue: 'inspect',
+      open: false,
+      value: 'inspect',
+    });
+
+    contextMenuState.open = true;
     clientHandler(contextMenu, 'GalleryContextMenuDemo$button_click')(new Event('click'), {
       params: {},
       signal,
@@ -1179,6 +1201,21 @@ describe('compiled interactive gallery demos', () => {
       );
       expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(false);
       expect(selector(document, '[data-demo-state="dropdown-open"]').textContent).toBe('open');
+      const dropdownKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+        key: 'Enter',
+      });
+      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown')(dropdownKeyboardEvent, {
+        params: {},
+        signal,
+        state: dropdownState,
+      });
+      expect(dropdownKeyboardEvent.defaultPrevented).toBe(true);
+      expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(true);
+      expect(element(document, 'gallery-dropdown-menu-rename').attrs['data-highlighted']).toBe('');
+      expect(selector(document, '[data-demo-state="dropdown-value"]').textContent).toBe('rename');
+
+      dropdownState.open = true;
+      element(document, 'gallery-dropdown-menu-content').hidden = false;
       clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click_3')(new Event('click'), {
         params: {},
         signal,

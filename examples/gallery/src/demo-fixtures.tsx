@@ -1204,9 +1204,11 @@ export function ContextMenuDemo(): string {
         })}
       </div>
       {renderBehaviorContract({
-        changeReasons: 'trigger-context-menu, keyboard-open, item-click, escape-key, programmatic',
+        changeReasons:
+          'trigger-context-menu, keyboard-open, item-click, item-keyboard, escape-key, programmatic',
         dataState: 'open, closed, highlighted, disabled',
-        keyboard: 'Context menu key or Shift+F10 opens; Arrow keys move over menu items',
+        keyboard:
+          'Context menu key or Shift+F10 opens; Arrow keys move; Enter or Space selects items',
       })}
     </section>
   );
@@ -1330,9 +1332,10 @@ export function DropdownMenuDemo(): string {
         })}
       </div>
       {renderBehaviorContract({
-        changeReasons: 'trigger-click, arrow-key, item-click, escape-key, typeahead, programmatic',
+        changeReasons:
+          'trigger-click, arrow-key, item-click, item-keyboard, escape-key, typeahead, programmatic',
         dataState: 'open, closed, highlighted, disabled',
-        keyboard: 'Arrow keys open and move over menu items; Escape closes the menu',
+        keyboard: 'Arrow keys open and move; Enter or Space selects items; Escape closes the menu',
       })}
     </section>
   );

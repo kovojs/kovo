@@ -65,7 +65,7 @@ export type DropdownMenuOpenChangeReason =
   | 'programmatic'
   | 'trigger-click';
 
-export type DropdownMenuSelectReason = 'item-click' | 'programmatic';
+export type DropdownMenuSelectReason = 'item-click' | 'item-keyboard' | 'programmatic';
 
 export type DropdownMenuOpenChangeDetail = PrimitiveChangeDetail<
   DropdownMenuOpenChangeReason,
@@ -369,6 +369,26 @@ export function dropdownMenuItemClick(
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
  */
+export function dropdownMenuItemKeyDown(
+  event: DropdownMenuKeyboardEvent,
+  state: DropdownMenuItemAttributeOptions,
+  options: DropdownMenuChangeOptions = {},
+): DropdownMenuSelectResult | undefined {
+  if (event.defaultPrevented) return;
+  if (!dropdownMenuItemActivationKey(event.key)) return;
+
+  const result = selectDropdownMenuItem(state, state.itemValue, 'item-keyboard', options);
+  event.preventDefault();
+
+  return result;
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
 export function dropdownMenuKeyDown(
   event: DropdownMenuKeyboardEvent,
   state: DropdownMenuState,
@@ -414,4 +434,8 @@ function dropdownMenuItemDisabled(
     state.itemDisabled === true ||
     state.items?.find((item) => item.value === value)?.disabled === true
   );
+}
+
+function dropdownMenuItemActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ' || key === 'Spacebar';
 }
