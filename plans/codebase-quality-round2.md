@@ -1235,6 +1235,13 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Static CSS option model cleanup: `pnpm exec vitest --run
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/css.test.ts
+packages/compiler/src/compile-component.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact
+  `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/css.ts
+packages/compiler/src/scan/parse.test.ts`; `git diff --check`. Evidence: parser component
+  options now carry `staticTemplateValue` facts for no-substitution template literals, and
+  `css.ts` consumes those facts instead of reparsing raw `css`/`styles` option source strings.
 - Fragment target prop constructor model cleanup: `pnpm exec vitest --run
 packages/compiler/src/scan/parse.test.ts packages/compiler/src/fragment-targets.test.ts
 packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`;

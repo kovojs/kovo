@@ -204,6 +204,9 @@ export const CartBadge = component('cart-badge', {
     const source = `
 export const CartBadge = component('cart-badge', {
   props: { label: String, count: Number, open: Boolean, meta: customProp },
+  css: \`
+    cart-badge { color: red; }
+  \`,
   render: () => <cart-badge>Ready</cart-badge>,
 });
 `;
@@ -215,6 +218,9 @@ export const CartBadge = component('cart-badge', {
       { key: 'open', staticConstructorType: 'boolean', value: 'Boolean' },
       { key: 'meta', value: 'customProp' },
     ]);
+    expect(model.components[0]?.options.find((option) => option.key === 'css')).toMatchObject({
+      staticTemplateValue: '\n    cart-badge { color: red; }\n  ',
+    });
   });
 
   it('records first HTML tag names for exported renderSource returns', () => {

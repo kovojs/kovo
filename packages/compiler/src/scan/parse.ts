@@ -6,6 +6,7 @@ export interface ComponentOptionEntry {
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
   staticValue?: StaticLiteralValue;
+  staticTemplateValue?: string;
   value: string;
 }
 
@@ -322,6 +323,14 @@ export function componentOptionStaticValue(
 ): StaticLiteralValue | undefined {
   return firstComponentModel(model)?.options.find((option) => option.key === propertyName)
     ?.staticValue;
+}
+
+export function componentOptionStaticTemplateValue(
+  model: ComponentModuleModel,
+  propertyName: string,
+): string | undefined {
+  return firstComponentModel(model)?.options.find((option) => option.key === propertyName)
+    ?.staticTemplateValue;
 }
 
 export function componentOptionObjectEntries(
@@ -818,6 +827,7 @@ function componentOptions(
           ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
           : {}),
         ...componentOptionStaticValueEntry(property.initializer),
+        ...componentOptionStaticTemplateValueEntry(sourceFile, source, property.initializer),
         value: source.slice(
           property.initializer.getStart(sourceFile),
           property.initializer.getEnd(),
@@ -832,6 +842,19 @@ function componentOptionStaticValueEntry(
 ): { staticValue: StaticLiteralValue } | {} {
   const value = staticLiteralValue(expression);
   return value === undefined ? {} : { staticValue: value };
+}
+
+function componentOptionStaticTemplateValueEntry(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression,
+): { staticTemplateValue: string } | {} {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isNoSubstitutionTemplateLiteral(unwrapped)) return {};
+
+  return {
+    staticTemplateValue: source.slice(unwrapped.getStart(sourceFile) + 1, unwrapped.getEnd() - 1),
+  };
 }
 
 function stringRenderReturns(

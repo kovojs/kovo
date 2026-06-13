@@ -1,5 +1,6 @@
-import { findMatchingToken, findStringEnd } from './scan/text.js';
+import { findMatchingToken } from './scan/text.js';
 import {
+  componentOptionStaticTemplateValue,
   componentRenderHostElement,
   firstComponentModel,
   type ComponentModuleModel,
@@ -209,23 +210,11 @@ function selectorExclusion(nestedHostSelectors: readonly string[]): string {
 }
 
 function extractStaticComponentCss(model: ComponentModuleModel): string | null {
-  const cssOption = firstComponentModel(model)?.options.find(
-    (option) => option.key === 'css' || option.key === 'styles',
+  return (
+    componentOptionStaticTemplateValue(model, 'css') ??
+    componentOptionStaticTemplateValue(model, 'styles') ??
+    null
   );
-  if (cssOption) return extractStaticCssTemplate(cssOption.value);
-
-  return null;
-}
-
-function extractStaticCssTemplate(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('`')) return null;
-
-  const templateEnd = findStringEnd(trimmed, 0, '`');
-  if (templateEnd === -1) return null;
-
-  const css = trimmed.slice(1, templateEnd);
-  return css.includes('${') ? null : css;
 }
 
 function componentHostSelector(componentName: string, model: ComponentModuleModel): string {
