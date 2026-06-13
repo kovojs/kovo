@@ -1,9 +1,6 @@
-import {
-  applyMutationResponseChunksToRuntime,
-  type AppliedMutationResponse,
-} from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
+import { applyQueryChunksToRuntime } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
@@ -42,10 +39,15 @@ export interface RefetchQueriesOptions extends QueryRefetchOptions {
   root?: unknown;
 }
 
+export interface RefetchedQueryResponse {
+  fragments: [];
+  queries: readonly string[];
+}
+
 export async function refetchQueries(
   options: RefetchQueriesOptions,
-): Promise<AppliedMutationResponse[]> {
-  const applied: AppliedMutationResponse[] = [];
+): Promise<RefetchedQueryResponse[]> {
+  const applied: RefetchedQueryResponse[] = [];
 
   for (const query of options.queries) {
     const url = options.urlForQuery?.(query) ?? `/_q/${encodeURIComponent(query)}`;
@@ -64,22 +66,20 @@ export async function refetchQueries(
         continue;
       }
 
-      applied.push(
-        applyMutationResponseChunksToRuntime(
-          {
-            fragments: [],
-            queries: readQueryChunks(await response.text(), options.onError),
-          },
-          {
-            ...definedProps({
-              onError: options.onError,
-              queryRoot: options.root,
-              queryPlans: options.queryPlans,
-            }),
-            store: options.queryStore,
-          },
-        ),
+      // SPEC.md §4.4/§9.4: typed reads are query-only transport. They share
+      // the canonical decoded query apply primitive without entering mutation
+      // fragment apply or preserving a second response-body apply wrapper.
+      const queries = applyQueryChunksToRuntime(
+        options.queryStore,
+        readQueryChunks(await response.text(), options.onError),
+        {
+          ...definedProps({
+            queryPlans: options.queryPlans,
+            root: options.root,
+          }),
+        },
       );
+      applied.push({ fragments: [], queries });
     } catch (error) {
       reportRuntimeError(options.onError, error);
     }

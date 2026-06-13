@@ -5,11 +5,11 @@ import type {
   VisibilityStateLike,
 } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
-import { createQueryScriptHydrationLedger } from './query-apply.js';
-import type { QueryScriptLike } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { refetchQueries } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
+import { createQueryScriptHydrationLedger } from './query-script-hydration.js';
+import type { QueryScriptLike } from './query-script-hydration.js';
 import type { QueryStore } from './query-store.js';
 
 export interface RefetchQueryLedger {
@@ -145,7 +145,7 @@ export function installQueryVisibleReturnRefetch(
         queries,
         queryStore: options.queryStore,
       });
-      ledger.remember(applied.flatMap((chunk) => chunk.queries));
+      ledger.remember(applied.flatMap((result) => result.queries));
     }
   };
   const refetchOnce = () => {

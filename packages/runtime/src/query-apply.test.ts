@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import * as queryApplyModule from './query-apply.js';
 import { applyQueryChunksToRuntime } from './query-apply.js';
 import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
@@ -84,5 +85,13 @@ describe('decoded query runtime apply', () => {
       { key: 'p1', name: 'product', value: { stock: 4 } },
       { stock: 4 },
     );
+  });
+
+  it('keeps script hydration helpers out of the decoded query apply surface', () => {
+    // SPEC.md §4.4/§9.4: query scripts hydrate into decoded chunks, but the
+    // decoded query apply primitive should not retain compatibility parser APIs.
+    expect(Object.hasOwn(queryApplyModule, 'createQueryScriptHydrationLedger')).toBe(false);
+    expect(Object.hasOwn(queryApplyModule, 'hydrateQueryScripts')).toBe(false);
+    expect(Object.hasOwn(queryApplyModule, 'readQueryScriptChunk')).toBe(false);
   });
 });

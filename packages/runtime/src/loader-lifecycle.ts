@@ -13,7 +13,7 @@ import {
   isEnhancedSubmitEvent,
   type EnhancedMutationLoaderOptions,
 } from './mutation-submit.js';
-import type { QueryScriptLike } from './query-apply.js';
+import type { QueryScriptLike } from './query-script-hydration.js';
 
 export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
 

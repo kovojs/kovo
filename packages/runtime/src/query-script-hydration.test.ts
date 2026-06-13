@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  applyQueryChunksToRuntime,
-  createQueryScriptHydrationLedger,
-  hydrateQueryScripts,
-} from './query-apply.js';
+import { applyQueryChunksToRuntime } from './query-apply.js';
+import { createQueryScriptHydrationLedger, hydrateQueryScripts } from './query-script-hydration.js';
 import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
 

@@ -149,6 +149,7 @@ export type {
 export { refetchQueries } from './query-refetch.js';
 export type {
   RefetchQueriesOptions,
+  RefetchedQueryResponse,
   QueryRefetchFetch,
   QueryRefetchOptions,
   QueryRefetchResponse,

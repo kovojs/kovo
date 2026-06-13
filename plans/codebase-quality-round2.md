@@ -512,9 +512,12 @@ Hydrated query script ledgers now decode all unseen successful scripts first and
 `applyQueryChunksToRuntime` once per hydration pass, so visible-return hydration shares the same
 batched binding-index/update-plan path as mutation and typed-read query chunks while malformed
 scripts remain retryable.
+Query script hydration now lives in `packages/runtime/src/query-script-hydration.ts`, leaving
+`packages/runtime/src/query-apply.ts` as the decoded query chunk primitive only.
 DOM mutation response body parsing now lives in `packages/runtime/src/mutation-response-dom.ts`,
 leaving `packages/runtime/src/apply-mutation-response.ts` as the decoded chunk/query/fragment apply
-primitive used by enhanced submit, broadcast, deferred streams, typed-read refetch, and tests.
+primitive used by enhanced submit, broadcast, deferred streams, and mutation-response tests; typed
+read refetch now parses query chunks and calls `applyQueryChunksToRuntime` directly.
 The old broad `packages/runtime/src/mutation-response.test.ts` has been split by ownership:
 parsed wire-body store apply lives in `packages/runtime/src/mutation-response-wire-apply.test.ts`,
 DOM body apply lives in `packages/runtime/src/mutation-response-dom.test.ts`, and decoded chunk
@@ -585,6 +588,21 @@ packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-js-minifier.test.ts`.
+      Evidence 2026-06-13 round257: query script hydration moved from
+      `packages/runtime/src/query-apply.ts` into
+      `packages/runtime/src/query-script-hydration.ts`, and
+      `packages/runtime/src/query-apply.test.ts` now pins that decoded query apply no longer exports
+      hydration parser helpers. `packages/runtime/src/query-refetch.ts` now parses typed-read query
+      chunks and calls `applyQueryChunksToRuntime` directly instead of wrapping query-only responses
+      in the mutation response apply primitive. Verified by focused runtime tests `pnpm exec vitest
+      --run packages/runtime/src/query-apply.test.ts
+      packages/runtime/src/query-script-hydration.test.ts
+      packages/runtime/src/query-visible-return.test.ts packages/runtime/src/query-refetch.test.ts`,
+      full runtime suite `pnpm exec vitest --run packages/runtime/src`, inline-loader check `pnpm
+      --filter @jiso/runtime run check:inline-loader`, browser runtime `pnpm exec vitest --config
+      vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      packages/runtime/src/query-hydration.browser.test.ts`, TypeScript `pnpm exec tsc --noEmit
+      --pretty false`, targeted `pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/query-script-hydration.ts packages/runtime/src/query-script-hydration.test.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/index.ts plans/codebase-quality-round2.md`, and `git diff --check`.
       Supporting checks: `pnpm --filter @jiso/runtime run check:inline-loader`; `pnpm exec vp
 check packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-loader-enhanced-submit.test.ts
