@@ -1,10 +1,11 @@
-import { StaticExportError, staticExportDiagnostic, sortedHeaders } from './static-export-types.js';
+import {
+  StaticExportError,
+  staticExportDiagnostic,
+  sortedHeaders,
+  type StaticExportResponseSnapshot,
+} from './static-export-types.js';
 
-export interface StaticExportReplayedResponseBody {
-  body: string;
-  headers: Record<string, string>;
-  status: number;
-}
+export type StaticExportReplayedResponseBody = StaticExportResponseSnapshot;
 
 export interface StaticExportRouteDocumentResponseOptions {
   response: Response;
@@ -17,19 +18,42 @@ export interface StaticExportClientModuleResponseOptions {
   response: Response;
 }
 
+export type StaticExportReplayedResponseReadOptions =
+  | (StaticExportRouteDocumentResponseOptions & { kind: 'route-document' })
+  | (StaticExportClientModuleResponseOptions & { kind: 'client-module' });
+
 export async function readStaticExportRouteDocumentResponse({
   response,
   routePath,
 }: StaticExportRouteDocumentResponseOptions): Promise<StaticExportReplayedResponseBody> {
+  return await readStaticExportReplayedResponse({
+    kind: 'route-document',
+    response,
+    routePath,
+  });
+}
+
+export async function readStaticExportClientModuleResponse({
+  href,
+  path,
+  response,
+}: StaticExportClientModuleResponseOptions): Promise<StaticExportReplayedResponseBody> {
+  return await readStaticExportReplayedResponse({
+    href,
+    kind: 'client-module',
+    path,
+    response,
+  });
+}
+
+export async function readStaticExportReplayedResponse(
+  options: StaticExportReplayedResponseReadOptions,
+): Promise<StaticExportReplayedResponseBody> {
+  const { response } = options;
   const contentType = response.headers.get('content-type');
 
-  if (response.status !== 200 || !isHtmlDocumentContentType(contentType)) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        routePath,
-        `FW229 static export can only write successful HTML route documents; '${routePath}' returned status ${response.status} with Content-Type '${contentType ?? 'none'}'.`,
-      ),
-    ]);
+  if (response.status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
+    throw new StaticExportError([staticExportReplayResponseDiagnostic(options, contentType)]);
   }
 
   return {
@@ -39,27 +63,30 @@ export async function readStaticExportRouteDocumentResponse({
   };
 }
 
-export async function readStaticExportClientModuleResponse({
-  href,
-  path,
-  response,
-}: StaticExportClientModuleResponseOptions): Promise<StaticExportReplayedResponseBody> {
-  const contentType = response.headers.get('content-type');
-
-  if (response.status !== 200 || !isJavaScriptClientModuleContentType(contentType)) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        path,
-        `FW229 static export cannot copy client module '${href}' because the app handler returned status ${response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
-      ),
-    ]);
+function staticExportReplayResponseDiagnostic(
+  options: StaticExportReplayedResponseReadOptions,
+  contentType: string | null,
+) {
+  if (options.kind === 'route-document') {
+    return staticExportDiagnostic(
+      options.routePath,
+      `FW229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'.`,
+    );
   }
 
-  return {
-    body: await response.text(),
-    headers: sortedHeaders(response.headers),
-    status: response.status,
-  };
+  return staticExportDiagnostic(
+    options.path,
+    `FW229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
+  );
+}
+
+function isExpectedStaticExportContentType(
+  options: StaticExportReplayedResponseReadOptions,
+  contentType: string | null,
+): boolean {
+  return options.kind === 'route-document'
+    ? isHtmlDocumentContentType(contentType)
+    : isJavaScriptClientModuleContentType(contentType);
 }
 
 function isHtmlDocumentContentType(contentType: string | null): boolean {

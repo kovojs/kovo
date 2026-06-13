@@ -129,6 +129,16 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-replay.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
       `pnpm exec vitest --run packages/server/src`, and
       `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: static export route-document and `/c/` client-module replay
+      now read web-standard `Response`s through one policy-discriminated response boundary, and
+      the public export artifact types share the same body/header/status snapshot used by replay
+      validation (SPEC §9.5). Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, and
+      `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-types.ts packages/server/src/static-replay.ts packages/server/src/static-export-client-modules.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+      and `git diff --check`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

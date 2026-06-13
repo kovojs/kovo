@@ -103,6 +103,16 @@ with same-session file/test evidence.
       Same-session evidence: `pnpm exec vitest --run packages/server/src/app.test.ts`,
       `pnpm exec vitest --run packages/server/src`, and
       `pnpm exec tsc --noEmit --pretty false`.
+      Round101 evidence 2026-06-13: static-export replay now has one typed response reader for
+      route documents and `/c/` client modules, and the public route/client-module export
+      artifacts share the replay body/header/status snapshot type instead of parallel response
+      shapes. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, and
+      `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-types.ts packages/server/src/static-replay.ts packages/server/src/static-export-client-modules.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+      and `git diff --check`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;

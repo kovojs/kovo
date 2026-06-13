@@ -311,6 +311,20 @@ Round100 app-shell error diagnostic seam evidence:
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round101 app-shell static replay response evidence:
+
+- `packages/server/src/static-export-response.ts` now owns one SPEC §9.5 replay response reader
+  for route documents and immutable `/c/` modules, preserving the separate FW229 teaching
+  diagnostics while sharing status/content-type/body/header extraction.
+- `packages/server/src/static-export-types.ts` now exposes one body/header/status snapshot shape
+  shared by replay validation and the route/client-module public export artifacts.
+- `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-types.ts packages/server/src/static-replay.ts packages/server/src/static-export-client-modules.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

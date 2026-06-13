@@ -1,18 +1,18 @@
 import type { DiagnosticCode } from '@jiso/core';
 
-export interface StaticExportArtifact {
+export interface StaticExportResponseSnapshot {
   body: string;
   headers: Record<string, string>;
-  path: string;
   status: number;
 }
 
-export interface StaticExportClientModuleArtifact {
-  body: string;
-  headers: Record<string, string>;
+export interface StaticExportArtifact extends StaticExportResponseSnapshot {
+  path: string;
+}
+
+export interface StaticExportClientModuleArtifact extends StaticExportResponseSnapshot {
   href: string;
   path: string;
-  status: number;
 }
 
 export interface StaticExportAssetInput {
