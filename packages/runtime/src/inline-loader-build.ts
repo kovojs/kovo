@@ -262,23 +262,12 @@ export function extractInlineWireParserReadableSource(
     ts.ScriptKind.TS,
   );
   const declarations = new Map<string, ts.FunctionDeclaration>();
-  const unsupportedFunctionLikeValues = new Set<string>();
+  const unsupportedTopLevelBindings =
+    collectUnsupportedInlineWireParserTopLevelBindings(sourceFile);
 
   for (const statement of sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name) {
       declarations.set(statement.name.text, statement);
-      continue;
-    }
-
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
-      if (
-        ts.isArrowFunction(declaration.initializer) ||
-        ts.isFunctionExpression(declaration.initializer)
-      ) {
-        unsupportedFunctionLikeValues.add(declaration.name.text);
-      }
     }
   }
 
@@ -292,7 +281,7 @@ export function extractInlineWireParserReadableSource(
   const included = collectInlineWireParserDependencyClosure(
     sourceFile,
     declarations,
-    unsupportedFunctionLikeValues,
+    unsupportedTopLevelBindings,
     rootFunctionNames,
   );
   const helperSource = [...included]
@@ -372,7 +361,7 @@ function countSubstring(source: string, expected: string): number {
 function collectInlineWireParserDependencyClosure(
   sourceFile: ts.SourceFile,
   declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
-  unsupportedFunctionLikeValues: ReadonlySet<string>,
+  unsupportedTopLevelBindings: ReadonlySet<string>,
   rootFunctionNames: readonly string[],
 ): Set<string> {
   const included = new Set<string>();
@@ -392,7 +381,7 @@ function collectInlineWireParserDependencyClosure(
       sourceFile,
       declaration,
       declarations,
-      unsupportedFunctionLikeValues,
+      unsupportedTopLevelBindings,
     )) {
       include(dependency);
     }
@@ -408,7 +397,7 @@ function collectInlineWireParserFunctionDependencies(
   sourceFile: ts.SourceFile,
   declaration: ts.FunctionDeclaration,
   declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
-  unsupportedFunctionLikeValues: ReadonlySet<string>,
+  unsupportedTopLevelBindings: ReadonlySet<string>,
 ): Set<string> {
   const dependencies = new Set<string>();
   const ownName = declaration.name?.text;
@@ -419,9 +408,9 @@ function collectInlineWireParserFunctionDependencies(
     if (ts.isIdentifier(node)) {
       const name = node.text;
       if (name !== ownName && declarations.has(name)) dependencies.add(name);
-      if (unsupportedFunctionLikeValues.has(name)) {
+      if (unsupportedTopLevelBindings.has(name)) {
         throw new Error(
-          `Inline Jiso loader wire parser helper ${ownName ?? '<anonymous>'} references ${name}, but inline extraction only supports top-level function declarations.`,
+          `Inline Jiso loader wire parser helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
         );
       }
     }
@@ -431,6 +420,58 @@ function collectInlineWireParserFunctionDependencies(
 
   if (declaration.body) visit(declaration.body);
   return dependencies;
+}
+
+function collectUnsupportedInlineWireParserTopLevelBindings(
+  sourceFile: ts.SourceFile,
+): Set<string> {
+  const bindings = new Set<string>();
+
+  const addBindingName = (name: ts.BindingName | ts.Identifier): void => {
+    if (ts.isIdentifier(name)) {
+      bindings.add(name.text);
+      return;
+    }
+
+    for (const element of name.elements) {
+      if (ts.isOmittedExpression(element)) continue;
+      addBindingName(element.name);
+    }
+  };
+
+  const addImportClauseBindings = (clause: ts.ImportClause): void => {
+    if (clause.name) bindings.add(clause.name.text);
+    if (!clause.namedBindings) return;
+    if (ts.isNamespaceImport(clause.namedBindings)) {
+      bindings.add(clause.namedBindings.name.text);
+      return;
+    }
+    for (const specifier of clause.namedBindings.elements) {
+      bindings.add(specifier.name.text);
+    }
+  };
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && statement.importClause) {
+      addImportClauseBindings(statement.importClause);
+      continue;
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        addBindingName(declaration.name);
+      }
+      continue;
+    }
+    if (ts.isClassDeclaration(statement) && statement.name) {
+      bindings.add(statement.name.text);
+      continue;
+    }
+    if (ts.isEnumDeclaration(statement)) {
+      bindings.add(statement.name.text);
+    }
+  }
+
+  return bindings;
 }
 
 export function assertInlineJisoLoaderModuleArtifactParity(

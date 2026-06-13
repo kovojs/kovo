@@ -155,6 +155,19 @@ packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`,
       `pnpm exec vitest --run packages/runtime/src`,
       `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, and `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: inline wire-parser extraction now rejects helper closures
+      that reference imported or top-level runtime bindings outside self-contained function
+      declarations, so SPEC §4.4 readable/minified inline-loader parity cannot ship an unresolved
+      parser dependency; build-only loader checks were split into
+      `packages/runtime/src/inline-loader-build.test.ts`, leaving
+      `packages/runtime/src/inline-loader.test.ts` focused on inline execution behavior.
+      Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, and
+      `pnpm exec tsc --noEmit --pretty false`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
       Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in

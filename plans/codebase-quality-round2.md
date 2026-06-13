@@ -202,6 +202,9 @@ Current state:
 - The internal body-based `applyMutationResponseToRuntime` wrapper was deleted; enhanced mutation
   submit and broadcast now decode mutation bodies with `readMutationResponseBodyChunks` before
   calling `applyMutationResponseChunksToRuntime` directly (SPEC §9.1/§9.2).
+- Inline parser extraction now fails closed when extracted wire-parser helpers reference imports or
+  top-level runtime bindings outside the self-contained function closure, and build-only loader
+  checks live in `inline-loader-build.test.ts` instead of the runtime behavior test.
 
 Open:
 
@@ -214,6 +217,7 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/index-exports.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
