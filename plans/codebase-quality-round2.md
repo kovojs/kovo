@@ -92,6 +92,11 @@ summaries inline.
 Shared graph fixtures now also own the compact generated graph artifact honesty summary used by the
 P4 fw-check commerce gate, keeping exact invalidation and source-derived touch evidence in the
 package fixture instead of the monolith.
+Shared graph fixtures now also own a compact generated graph artifact acceptance evidence
+projection for emit-check cleanliness, `fw-check/v1` OK status, static graph behavior,
+invalidations, source-site provenance, and touches-by-mutation; the P4 fw-check commerce gate and
+commerce source-truth graph acceptance assert that public fixture instead of duplicated local
+summary object shape.
 Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
 component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
 output comparison against SPEC.md section 5.2 provenance.
@@ -253,6 +258,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Generated graph artifact acceptance evidence fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec vp run build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR
@@ -1603,6 +1614,9 @@ presence.
 Shared runtime fixtures now own pagehide optimism cleanup lifecycle and pending-stamp behavior
 facts used by `tests/fw-check.node.mjs`, keeping that verification harness reusable without
 changing commerce generated artifacts.
+Shared graph fixtures now own generated graph artifact acceptance evidence consumed by both
+commerce source-truth tests and the P4 fw-check gate, including emitted graph cleanliness,
+source-derived touch provenance, and static graph behavior.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -1612,6 +1626,12 @@ changing commerce generated artifacts.
 Latest evidence:
 
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- Generated graph artifact acceptance evidence fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec vp run build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs`;
+  `git diff --check`.
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
@@ -1715,6 +1735,10 @@ local generated/authored source reads, and the fixture now compares committed IR
 compiler output while asserting fixpoint/render-equivalence hooks.
 The P6 pagehide optimism cleanup gate now consumes `@jiso/test/runtime-fixtures` lifecycle and
 pending-stamp behavior facts instead of local fake root and delayed fetch mechanics.
+The P4 generated graph artifact acceptance gate now consumes
+`@jiso/test/graph-fixtures` acceptance evidence facts in both `tests/fw-check.node.mjs` and
+commerce source-truth tests, replacing duplicated local emitted-graph summary assertions while
+keeping touch provenance and static graph behavior observable.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -1759,6 +1783,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Generated graph artifact acceptance evidence fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec vp run build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs`;
   `git diff --check`.
 
 ## Current Gates

@@ -118,6 +118,24 @@ export interface GeneratedGraphArtifactAcceptanceFact {
   summary: GeneratedGraphArtifactHonestySummaryFact;
 }
 
+export interface GeneratedGraphArtifactAcceptanceEvidenceFact {
+  authoredGraphMatchesArtifact?: boolean;
+  emitCheck: {
+    clean: boolean;
+  };
+  fwCheck: FwCheckOkAssertionFact;
+  invalidations: Record<string, string[]>;
+  staticBehavior: GraphStaticBehaviorFact;
+  touchGraph: {
+    entryKeys: string[];
+    sourceLineMismatches: string[];
+    sourceSites: TouchGraphProvenanceHonestyFact['sourceSites'];
+    touchCountsByMutation: Record<string, number>;
+    touchesByMutation: Record<string, GeneratedGraphTouchEntrySummaryFact['touches']>;
+    unresolvedMutations: string[];
+  };
+}
+
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
   const page = graph.pages?.find((item) => item.route === route);
   if (!page) throw new Error(`Graph includes page route ${route}`);
@@ -366,6 +384,30 @@ export function generatedGraphArtifactAcceptanceFact(options: {
       graph: options.artifactGraph,
       provenance: options.provenance,
     }),
+  };
+}
+
+export function generatedGraphArtifactAcceptanceEvidenceFact(
+  fact: GeneratedGraphArtifactAcceptanceFact,
+): GeneratedGraphArtifactAcceptanceEvidenceFact {
+  return {
+    ...(fact.authoredGraphMatchesArtifact !== undefined
+      ? { authoredGraphMatchesArtifact: fact.authoredGraphMatchesArtifact }
+      : {}),
+    emitCheck: fact.summary.emitCheck,
+    fwCheck: fact.fwCheck,
+    invalidations: fact.summary.invalidations,
+    staticBehavior: fact.staticBehavior,
+    touchGraph: {
+      entryKeys: fact.summary.touchGraph.honesty.entryKeys,
+      sourceLineMismatches: fact.summary.touchGraph.honesty.sourceLineMismatches,
+      sourceSites: fact.summary.touchGraph.honesty.sourceSites,
+      touchCountsByMutation: fact.summary.touchGraph.honesty.touchCountsByMutation,
+      touchesByMutation: Object.fromEntries(
+        Object.entries(fact.summary.touchGraph.entries).map(([key, entry]) => [key, entry.touches]),
+      ),
+      unresolvedMutations: fact.summary.touchGraph.honesty.unresolvedMutations,
+    },
   };
 }
 

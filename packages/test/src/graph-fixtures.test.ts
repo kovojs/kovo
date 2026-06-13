@@ -4,6 +4,7 @@ import {
   generatedGraphArtifactHonestyFact,
   generatedGraphArtifactHonestySummaryFact,
   generatedGraphArtifactAcceptanceFact,
+  generatedGraphArtifactAcceptanceEvidenceFact,
   graphFixtureFile,
   graphComponentTargetFacts,
   graphDomainFacts,
@@ -246,6 +247,83 @@ describe('@jiso/test graph fixture seam', () => {
           },
           unresolvedMutations: [],
         },
+      },
+    });
+    expect(
+      generatedGraphArtifactAcceptanceEvidenceFact(
+        generatedGraphArtifactAcceptanceFact({
+          artifactGraph: graph,
+          authoredGraph: {
+            mutations: graph.mutations,
+            optimistic: graph.optimistic,
+            pages: graph.pages,
+            queries: graph.queries,
+            touchGraph: graph.touchGraph,
+            components: graph.components,
+          },
+          emitCheck: { stderr: '', stdout: '' },
+          fwCheck: {
+            exitCode: 0,
+            issueCount: 0,
+            status: 'ok',
+            version: 'fw-check/v1',
+          },
+          provenance,
+        }),
+      ),
+    ).toEqual({
+      authoredGraphMatchesArtifact: true,
+      emitCheck: {
+        clean: true,
+      },
+      fwCheck: {
+        exitCode: 0,
+        issueCount: 0,
+        status: 'ok',
+        version: 'fw-check/v1',
+      },
+      invalidations: {
+        'cart/add': ['cart', 'productGrid'],
+      },
+      staticBehavior: {
+        components: [
+          { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+          { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        ],
+        domains: ['attachment', 'cart', 'order', 'product'],
+        invalidations: {
+          'cart/add': ['cart', 'productGrid'],
+        },
+        mutations: ['cart/add', 'order/receipt'],
+        optimistic: [
+          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+          { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+        ],
+        routes: ['/admin', '/cart'],
+        touchGraphKeys: ['cart.addItem', 'order.receipt'],
+      },
+      touchGraph: {
+        entryKeys: ['cart.addItem'],
+        sourceLineMismatches: [],
+        sourceSites: {
+          count: 1,
+          linesArePositive: true,
+          paths: ['src/app.ts'],
+        },
+        touchCountsByMutation: {
+          'cart.addItem': 1,
+        },
+        touchesByMutation: {
+          'cart.addItem': [
+            {
+              domain: 'cart',
+              keys: null,
+              sitePath: 'src/app.ts',
+              via: 'cart_items',
+            },
+          ],
+        },
+        unresolvedMutations: [],
       },
     });
     expect(
