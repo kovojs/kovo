@@ -193,6 +193,10 @@ Shared commerce fixtures now own the commerce mutation-query acceptance projecti
 `fw-explain` optimistic update intent, public harness mutation execution, verifier diagnostics,
 receipt upload execution, and enhanced fragment response facts, so the commerce source-truth test
 asserts one public `@jiso/test` behavior fact instead of rebuilding those mechanics inline.
+Shared commerce fixtures now also own commerce update-intent coverage, paginated harness query
+execution, verifier diagnostics, and deterministic file fixture mechanics, so commerce
+source-truth tests no longer rebuild `fw-explain` consumer maps, local harness query setup, or
+receipt-file doubles inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -233,6 +237,18 @@ Latest evidence:
   `examples/commerce/src/source-truth.test.ts` now asserts that structured fact instead of local
   fw-explain parsing, harness execution, verifier, receipt upload, and fragment response
   mechanics.
+- Phase 1/6/7 commerce harness closure slice:
+  `pnpm exec vitest --run packages/test/src/commerce-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec vitest --run packages/test/src`; `pnpm run check:build`;
+  `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P4 commerce touch graph" tests/fw-check.node.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check --fix packages/test/src/commerce-fixtures.ts packages/test/src/commerce-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/commerce-fixtures.ts` exposes
+  `commerceUpdateIntentFact()`, `commerceHarnessQueryFact()`, and `commerceFixtureFile()` as public
+  fixture seams for SPEC §10.4/§11.2/§16.5 commerce update-intent and query-harness acceptance;
+  `examples/commerce/src/source-truth.test.ts` now asserts those structured facts instead of local
+  fw-explain consumer-map loops, harness query construction, verifier diagnostics, and receipt-file
+  doubles.
 - UI G1 static route source/markup closure slice:
   `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

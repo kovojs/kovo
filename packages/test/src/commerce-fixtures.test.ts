@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { domain, mutation, query, s } from '@jiso/server';
+import type { QueryLoadContext } from '@jiso/server';
 
-import { commerceMutationQueryAcceptanceFact } from './commerce-fixtures.ts';
+import {
+  commerceFixtureFile,
+  commerceHarnessQueryFact,
+  commerceMutationQueryAcceptanceFact,
+  commerceUpdateIntentFact,
+} from './commerce-fixtures.ts';
 
 interface FixtureDb {
   writes: Array<{ row: Record<string, unknown>; table: string }>;
@@ -32,7 +38,21 @@ const cartQuery = query('cart', {
   reads: [cart],
 });
 const productGridQuery = query('productGrid', {
-  load: () => ({ items: [] }),
+  load: (input: unknown, context?: QueryLoadContext<unknown>) => {
+    const pageInput = input as { after?: string; limit?: number };
+    const db = (context?.request as { db?: FixtureDb } | undefined)?.db;
+
+    return {
+      items:
+        pageInput.after === 'fixture-a'
+          ? [
+              { id: 'fixture-b', stock: 4 },
+              { id: 'fixture-c', stock: 5 },
+            ].slice(0, pageInput.limit ?? 2)
+          : (db?.writes.map((write) => ({ id: write.row.productId, stock: 1 })) ?? []),
+      nextCursor: null,
+    };
+  },
   reads: [product],
 });
 
@@ -72,8 +92,36 @@ const uploadReceipt = mutation('order/receipt', {
 
 const fwExplain = (
   _graph: typeof graph,
-  options: { kind: 'mutation'; optimistic?: boolean; target: string },
+  options:
+    | { kind: 'mutation'; optimistic?: boolean; target: string }
+    | { kind: 'page'; target: string }
+    | { kind: 'query'; target: string },
 ) => {
+  if (options.kind === 'page') {
+    return {
+      exitCode: 0,
+      output: ['fw-explain/v1', 'PAGE /cart', 'queries: cart,productGrid'].join('\n'),
+    };
+  }
+  if (options.kind === 'query' && options.target === 'cart') {
+    return {
+      exitCode: 0,
+      output: ['fw-explain/v1', 'QUERY cart', 'consumers: component:CartBadge,page:/cart'].join(
+        '\n',
+      ),
+    };
+  }
+  if (options.kind === 'query') {
+    return {
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'QUERY productGrid',
+        'consumers: component:ProductGrid,page:/cart',
+      ].join('\n'),
+    };
+  }
+
   if (options.target === 'cart/add') {
     return {
       exitCode: 0,
@@ -102,6 +150,65 @@ const fwExplain = (
 };
 
 describe('@jiso/test commerce fixture facts', () => {
+  it('projects cart page update intent without local fw-explain map mechanics', () => {
+    expect(
+      commerceUpdateIntentFact({
+        fwExplain,
+        graph,
+        mutation: 'cart/add',
+        page: '/cart',
+      }),
+    ).toEqual({
+      componentConsumersByQuery: {
+        cart: ['component:CartBadge'],
+        productGrid: ['component:ProductGrid'],
+      },
+      missingComponentConsumers: [],
+      missingPageConsumers: [],
+      page: '/cart',
+      pageQueries: ['cart', 'productGrid'],
+      updateConsumersByQuery: {
+        cart: ['component:CartBadge', 'page:/cart'],
+        productGrid: ['component:ProductGrid', 'page:/cart'],
+      },
+    });
+  });
+
+  it('runs commerce query facts through the public harness verification seam', async () => {
+    await expect(
+      commerceHarnessQueryFact({
+        createDb,
+        input: { after: 'fixture-a', limit: 2 },
+        query: productGridQuery,
+        setupDb(db) {
+          db.write('products', { productId: 'seeded' });
+        },
+        verification: { domainByTable: { products: 'product' } },
+      }),
+    ).resolves.toEqual({
+      diagnostics: [],
+      input: { after: 'fixture-a', limit: 2 },
+      result: {
+        items: [
+          { id: 'fixture-b', stock: 4 },
+          { id: 'fixture-c', stock: 5 },
+        ],
+        nextCursor: null,
+      },
+    });
+  });
+
+  it('creates commerce file fixtures with deterministic metadata and bytes', async () => {
+    const file = commerceFixtureFile('receipt.pdf', 'application/pdf', 2048);
+
+    await expect(file.arrayBuffer()).resolves.toHaveProperty('byteLength', 2048);
+    expect(file).toMatchObject({
+      name: 'receipt.pdf',
+      size: 2048,
+      type: 'application/pdf',
+    });
+  });
+
   it('projects mutation-query acceptance through graph, harness, verifier, and fragment facts', async () => {
     const fact = await commerceMutationQueryAcceptanceFact({
       addToCart,

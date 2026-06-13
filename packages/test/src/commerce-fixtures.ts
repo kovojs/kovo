@@ -9,6 +9,7 @@ import {
 } from './fw-explain-fixtures.js';
 import { graphFragmentTargetForQuery, type JisoGraphFixture } from './graph-fixtures.js';
 import { fwResponseBodyFact } from './html-fragment.js';
+import type { QueryDefinition } from '@jiso/server';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 
 export interface CommerceFixtureFile {
@@ -59,6 +60,130 @@ export interface CommerceMutationQueryAcceptanceFact {
     result: Record<string, unknown>;
     updateConsumers: FwExplainUpdateConsumerFact[];
     updateQueries: string[];
+  };
+}
+
+export interface CommerceUpdateIntentOptions<Graph> {
+  fwExplain: (
+    graph: Graph,
+    options:
+      | { kind: 'mutation'; optimistic?: boolean; target: string }
+      | { kind: 'page'; target: string }
+      | { kind: 'query'; target: string },
+  ) => FwExplainResultLike;
+  graph: Graph;
+  mutation: string;
+  page: string;
+}
+
+export interface CommerceUpdateIntentFact {
+  componentConsumersByQuery: Record<string, string[]>;
+  missingComponentConsumers: string[];
+  missingPageConsumers: string[];
+  page: string;
+  pageQueries: string[];
+  updateConsumersByQuery: Record<string, string[]>;
+}
+
+export interface CommerceHarnessQueryFact {
+  diagnostics: readonly DbVerificationDiagnostic[];
+  input: unknown;
+  result: unknown;
+}
+
+export interface CommerceHarnessQueryOptions<Db> {
+  createDb: () => Db;
+  input?: unknown;
+  query: QueryDefinition;
+  request?: Record<string, unknown>;
+  setupDb?: (db: Db) => void;
+  verification?: {
+    domainByTable: Record<string, string>;
+  };
+}
+
+export function commerceFixtureFile(name: string, type: string, size: number): CommerceFixtureFile {
+  return {
+    async arrayBuffer() {
+      return new ArrayBuffer(size);
+    },
+    name,
+    size,
+    type,
+  };
+}
+
+export function commerceUpdateIntentFact<Graph>(
+  options: CommerceUpdateIntentOptions<Graph>,
+): CommerceUpdateIntentFact {
+  // SPEC.md §10.4/§16.5: mutation update intent must mechanically cover every
+  // query consumer affected on the page instead of relying on duplicated test logic.
+  const mutation = options.fwExplain(options.graph, {
+    kind: 'mutation',
+    target: options.mutation,
+  });
+  const page = options.fwExplain(options.graph, { kind: 'page', target: options.page });
+  const updateConsumers = fwExplainUpdateConsumerMap(mutation.output);
+  const pageQueries = fwExplainListField(page.output, 'queries');
+  const componentConsumersByQuery: Record<string, string[]> = {};
+  const updateConsumersByQuery: Record<string, string[]> = {};
+  const missingComponentConsumers: string[] = [];
+  const missingPageConsumers: string[] = [];
+
+  for (const query of pageQueries) {
+    const queryExplain = options.fwExplain(options.graph, { kind: 'query', target: query });
+    const queryConsumers = fwExplainListField(queryExplain.output, 'consumers');
+    const componentConsumers = queryConsumers.filter((consumer) =>
+      consumer.startsWith('component:'),
+    );
+    const updates = updateConsumers.get(query) ?? [];
+
+    componentConsumersByQuery[query] = componentConsumers;
+    updateConsumersByQuery[query] = updates;
+
+    for (const consumer of componentConsumers) {
+      if (!updates.includes(consumer)) {
+        missingComponentConsumers.push(`${query}:${consumer}`);
+      }
+    }
+    if (
+      queryConsumers.includes(`page:${options.page}`) &&
+      !updates.includes(`page:${options.page}`)
+    ) {
+      missingPageConsumers.push(query);
+    }
+  }
+
+  return {
+    componentConsumersByQuery,
+    missingComponentConsumers,
+    missingPageConsumers,
+    page: options.page,
+    pageQueries,
+    updateConsumersByQuery,
+  };
+}
+
+export async function commerceHarnessQueryFact<Db>(
+  options: CommerceHarnessQueryOptions<Db>,
+): Promise<CommerceHarnessQueryFact> {
+  // SPEC.md §11.2: query source-truth tests exercise loaders through the public
+  // harness DB seam so runtime read verification remains observable.
+  const db = options.createDb();
+  options.setupDb?.(db);
+  const harnessOptions = {
+    db,
+    touchGraph: {},
+    ...(options.request === undefined ? {} : { request: options.request }),
+    ...(options.verification === undefined ? {} : { verification: options.verification }),
+  };
+  const harness = createJisoTestHarness(harnessOptions);
+  const result = await harness.query(options.query, options.input);
+
+  return {
+    diagnostics: harness.verificationDiagnostics(),
+    input: options.input,
+    result,
   };
 }
 
@@ -121,15 +246,7 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Jiso
     },
   });
   const receiptFile =
-    options.receiptFile ??
-    ({
-      async arrayBuffer() {
-        return new ArrayBuffer(2048);
-      },
-      name: 'receipt.pdf',
-      size: 2048,
-      type: 'application/pdf',
-    } satisfies CommerceFixtureFile);
+    options.receiptFile ?? commerceFixtureFile('receipt.pdf', 'application/pdf', 2048);
 
   const addToCartResult = await harness.exec(
     options.addToCart as never,

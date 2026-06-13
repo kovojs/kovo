@@ -3,15 +3,18 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import { compileComponentModule, deriveAppGraph } from '@jiso/compiler';
-import { commerceMutationQueryAcceptanceFact } from '@jiso/test/commerce-fixtures';
+import {
+  commerceFixtureFile,
+  commerceHarnessQueryFact,
+  commerceMutationQueryAcceptanceFact,
+  commerceUpdateIntentFact,
+} from '@jiso/test/commerce-fixtures';
 import {
   fwExplainEndpointAssertionFact,
-  fwExplainListField,
   fwExplainMutationAssertionFact,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
   fwExplainScopeAuditAssertionFact,
-  fwExplainUpdateConsumerMap,
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
@@ -22,7 +25,6 @@ import {
   graphPageFact,
   graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
-import { createJisoTestHarness } from '@jiso/test/harness';
 import { htmlDocumentFacts } from '@jiso/test/html-fragment';
 import { fwCheck, fwExplain } from 'fw';
 
@@ -41,17 +43,6 @@ import {
   uploadReceipt,
 } from './app.js';
 import { createCommerceGraph } from './graph.js';
-
-function commerceFile(name: string, type: string, size: number) {
-  return {
-    async arrayBuffer() {
-      return new ArrayBuffer(size);
-    },
-    name,
-    size,
-    type,
-  };
-}
 
 const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
 
@@ -311,52 +302,61 @@ describe('commerce source-truth graph acceptance', () => {
   });
 
   it('answers cart/add update intent mechanically from fw explain output', () => {
-    const mutation = fwExplain(commerceGraph, { kind: 'mutation', target: 'cart/add' });
-    const page = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
-    const updates = fwExplainUpdateConsumerMap(mutation.output);
-    const pageQueries = fwExplainListField(page.output, 'queries');
-
-    expect(pageQueries).toEqual(['cart', 'productGrid', 'orderHistory']);
-
-    for (const query of pageQueries) {
-      const queryExplain = fwExplain(commerceGraph, { kind: 'query', target: query });
-      const consumers = fwExplainListField(queryExplain.output, 'consumers');
-      const componentConsumers = consumers.filter((consumer) => consumer.startsWith('component:'));
-
-      expect(updates.get(query)).toEqual(expect.arrayContaining(componentConsumers));
-      expect(updates.get(query)).toContain('page:/cart');
-      expect(consumers).toContain('page:/cart');
-      expect(componentConsumers.length).toBeGreaterThan(0);
-    }
+    expect(
+      commerceUpdateIntentFact({
+        fwExplain,
+        graph: commerceGraph,
+        mutation: 'cart/add',
+        page: '/cart',
+      }),
+    ).toEqual({
+      componentConsumersByQuery: {
+        cart: ['component:CartBadge'],
+        orderHistory: ['component:OrderHistory'],
+        productGrid: ['component:ProductGrid'],
+      },
+      missingComponentConsumers: [],
+      missingPageConsumers: [],
+      page: '/cart',
+      pageQueries: ['cart', 'productGrid', 'orderHistory'],
+      updateConsumersByQuery: {
+        cart: ['component:CartBadge', 'page:/cart'],
+        orderHistory: ['component:OrderHistory', 'page:/cart'],
+        productGrid: ['component:ProductGrid', 'page:/cart'],
+      },
+    });
   });
 
   it('loads paginated commerce query input through the public harness source of truth', async () => {
-    const db = createCommerceDb();
-    db.products = new Map([
-      ['custom-a', { id: 'custom-a', stock: 3, unitPrice: 100 }],
-      ['custom-b', { id: 'custom-b', stock: 4, unitPrice: 200 }],
-      ['custom-c', { id: 'custom-c', stock: 5, unitPrice: 300 }],
-    ]);
-    const harness = createJisoTestHarness({
-      db,
-      touchGraph: {},
-      verification: {
-        domainByTable: {
-          products: 'product',
+    await expect(
+      commerceHarnessQueryFact({
+        createDb: createCommerceDb,
+        input: { after: 'custom-a', limit: 2 },
+        query: productGridQuery,
+        setupDb(db) {
+          db.products = new Map([
+            ['custom-a', { id: 'custom-a', stock: 3, unitPrice: 100 }],
+            ['custom-b', { id: 'custom-b', stock: 4, unitPrice: 200 }],
+            ['custom-c', { id: 'custom-c', stock: 5, unitPrice: 300 }],
+          ]);
         },
-      },
-    });
-
-    await expect(harness.query(productGridQuery, { after: 'custom-a', limit: 2 })).resolves.toEqual(
-      {
+        verification: {
+          domainByTable: {
+            products: 'product',
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      diagnostics: [],
+      input: { after: 'custom-a', limit: 2 },
+      result: {
         items: [
           { id: 'custom-b', stock: 4, unitPrice: 200 },
           { id: 'custom-c', stock: 5, unitPrice: 300 },
         ],
         nextCursor: null,
       },
-    );
-    expect(harness.verificationDiagnostics()).toEqual([]);
+    });
   });
 
   it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {
@@ -401,7 +401,7 @@ describe('commerce source-truth graph acceptance', () => {
       createDb: createCommerceDb,
       fwExplain,
       graph: commerceGraph,
-      receiptFile: commerceFile('receipt.pdf', 'application/pdf', 2048),
+      receiptFile: commerceFixtureFile('receipt.pdf', 'application/pdf', 2048),
       submitAddToCart,
       uploadReceipt,
     });

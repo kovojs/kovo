@@ -15,9 +15,16 @@ import {
   type PropertyTestResult,
 } from '@jiso/test/assertions';
 import {
+  commerceFixtureFile,
+  commerceHarnessQueryFact,
   commerceMutationQueryAcceptanceFact,
+  commerceUpdateIntentFact,
+  type CommerceHarnessQueryFact,
+  type CommerceHarnessQueryOptions,
   type CommerceMutationQueryAcceptanceFact,
   type CommerceMutationQueryAcceptanceOptions,
+  type CommerceUpdateIntentFact,
+  type CommerceUpdateIntentOptions,
 } from '@jiso/test/commerce-fixtures';
 import {
   assertOrderedItems,
@@ -485,7 +492,10 @@ describe('@jiso/test package subpath exports', () => {
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
+    expect(commerceFixtureFile).toBeTypeOf('function');
+    expect(commerceHarnessQueryFact).toBeTypeOf('function');
     expect(commerceMutationQueryAcceptanceFact).toBeTypeOf('function');
+    expect(commerceUpdateIntentFact).toBeTypeOf('function');
     expect(enhancedMutationBehaviorFact).toBeTypeOf('function');
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
     expect(morphFragmentBehaviorFact).toBeTypeOf('function');
@@ -568,6 +578,20 @@ describe('@jiso/test package subpath exports', () => {
       uploadReceipt: { invalidates: string[] };
     }>();
     expectTypeOf<CommerceMutationQueryAcceptanceOptions<unknown, { components: [] }>>()
+      .toHaveProperty('fwExplain')
+      .toMatchTypeOf<unknown>();
+    expectTypeOf<CommerceHarnessQueryFact>().toMatchTypeOf<{
+      diagnostics: readonly unknown[];
+      result: unknown;
+    }>();
+    expectTypeOf<CommerceHarnessQueryOptions<unknown>>()
+      .toHaveProperty('createDb')
+      .toMatchTypeOf<() => unknown>();
+    expectTypeOf<CommerceUpdateIntentFact>().toMatchTypeOf<{
+      missingComponentConsumers: string[];
+      pageQueries: string[];
+    }>();
+    expectTypeOf<CommerceUpdateIntentOptions<{ components: [] }>>()
       .toHaveProperty('fwExplain')
       .toMatchTypeOf<unknown>();
   });
