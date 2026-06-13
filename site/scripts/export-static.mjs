@@ -63,26 +63,19 @@ export async function exportSiteStaticApp({
     };
     const { createSiteDistApp } = appShellModule;
     const {
-      assertStaticExportManifestMatchesResult,
-      exportJisoAppShellViteBuildFromManifestFile,
+      exportJisoAppShellViteBuildWithManifestFromManifestFile,
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
       jisoAppShellViteManifestStylesheetHrefFromFile,
-      staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     } = serverApi;
 
     if (typeof createSiteDistApp !== 'function') {
       throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
     }
 
-    if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
+    if (typeof exportJisoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
-      );
-    }
-    if (typeof assertStaticExportManifestMatchesResult !== 'function') {
-      throw new Error(
-        '@jiso/server/app-shell/static-export must export assertStaticExportManifestMatchesResult.',
+        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildWithManifestFromManifestFile.',
       );
     }
     if (typeof formatStaticExportDiagnostics !== 'function') {
@@ -100,31 +93,20 @@ export async function exportSiteStaticApp({
         '@jiso/server/app-shell/vite must export jisoAppShellViteManifestStylesheetHrefFromFile.',
       );
     }
-    if (typeof staticExportManifestForJisoAppShellViteBuildFromManifestFile !== 'function') {
-      throw new Error(
-        '@jiso/server/app-shell/vite must export staticExportManifestForJisoAppShellViteBuildFromManifestFile.',
-      );
-    }
     staticExportTaskHelpers = { formatStaticExportDiagnostics, isStaticExportDiagnosticError };
 
     await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
-    const manifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
-      app,
-      distDir: cssDistDir,
-      manifestFile,
-    });
     // SPEC.md section 9.5 static export owns the final static host bytes:
     // replay route documents, copy versioned /c/ modules, and copy the Vite
     // manifest assets through the public app-shell export bridge.
-    const result = await exportJisoAppShellViteBuildFromManifestFile({
+    const { manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
       app,
       distDir: cssDistDir,
       manifestFile,
       outDir,
     });
-    assertStaticExportManifestMatchesResult(result, manifest);
 
     return { ...result, manifest };
   } finally {

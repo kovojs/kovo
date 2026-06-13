@@ -94,6 +94,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/vite')");
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/static-export')");
     expect(exportScriptSource).toContain('isJisoApp');
+    expect(exportScriptSource).toContain('exportJisoAppShellViteBuildWithManifestFromManifestFile');
     expect(exportScriptSource).not.toContain('function isJisoApp');
     expect(exportScriptSource).not.toContain('commerceStaticExportShell?.app');
     expect(exportScriptSource).not.toContain("ssrLoadModule('@jiso/server')");
@@ -627,6 +628,9 @@ describe('commerce app shell HTTP entry', () => {
         expect(output).toContain('html=3');
         expect(output).toContain('client-modules=1');
         expect(output).toContain('assets=1');
+        expect(output).toContain('manifest-html=3');
+        expect(output).toContain('manifest-client-modules=1');
+        expect(output).toContain('manifest-assets=1');
         expect(output).toContain('diagnostics=0');
 
         const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');

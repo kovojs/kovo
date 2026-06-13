@@ -68,9 +68,23 @@ Implemented areas:
 - `vite-static-export-options.ts` owns the Vite export write-vs-inventory option boundary:
   inventory/manifest dry runs reject `outDir` with FW229 instead of silently discarding a write
   target, while write exports keep the manifest-backed asset copy plan.
+- `exportJisoAppShellViteBuildWithManifest()` and its manifest-file variant are the public
+  app-shell Vite bridge for SPEC §9.5 export-task consumers that need both the written export result
+  and the matching dry-run manifest; starter, commerce, and docs export scripts use this bridge
+  instead of hand-wiring separate manifest and write-export calls.
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
+
+Round271 Vite export result/manifest bridge evidence:
+
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-static-export.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round267 app-shell dynamic export cleanup evidence:
 

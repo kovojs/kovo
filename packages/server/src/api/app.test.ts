@@ -120,6 +120,12 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.exportJisoAppShellViteBuildFromManifestFile,
     );
+    expect(packageViteApi.exportJisoAppShellViteBuildWithManifestFromManifestFile).toBe(
+      viteApi.exportJisoAppShellViteBuildWithManifestFromManifestFile,
+    );
+    expect(packageViteApi.exportJisoAppShellViteBuildWithManifest).toBe(
+      viteApi.exportJisoAppShellViteBuildWithManifest,
+    );
     expect(packageViteApi.staticExportInventoryForJisoAppShellViteBuild).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuild,
     );

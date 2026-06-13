@@ -1385,6 +1385,10 @@ Vite build-output static-export option projection now also lives in
 `packages/server/src/vite-static-export-options.ts`, so plugin-time output writes, direct Vite
 export, and inventory/manifest helpers share the same SPEC §9.5 asset/option owner while
 `vite-build-output.ts` consumes the projected write plan.
+Vite app-shell export tasks that need both write output and manifest evidence now use
+`exportJisoAppShellViteBuildWithManifest()` or its manifest-file variant, so the public Vite
+subpath owns the dry-run manifest/write-export consistency check for starter, commerce, and docs
+adoption instead of each consumer hand-wiring duplicate calls.
 Static export inventory/manifest projection now lives in `packages/server/src/static-export-result.ts`
 and response-header snapshots in `static-export-headers.ts`, leaving `static-export-types.ts` as a
 type/contract module while the app-shell static-export public subpath forwards from the focused
@@ -1426,6 +1430,17 @@ public app exports instead of falling back to stale named-app or shell-object co
 
 Latest evidence:
 
+- Round271 Vite export result/manifest bridge:
+  `packages/server/src/vite-static-export.ts` added the public combined export/manifest helper and
+  the app-shell Vite subpath forwards it; starter, commerce, and docs export scripts consume that
+  helper for SPEC §9.5 manifest-backed static export adoption.
+  `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/vite-static-export.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Round260 app-shell aggregate subpath deletion:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;

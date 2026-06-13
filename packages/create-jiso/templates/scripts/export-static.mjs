@@ -8,14 +8,13 @@ execFileSync('vp', ['build'], { stdio: 'inherit' });
 const manifestFile = join(process.cwd(), 'dist/.vite/manifest.json');
 
 let result;
-let exportJisoAppShellViteBuildFromManifestFile;
+let exportJisoAppShellViteBuildWithManifestFromManifestFile;
 let formatStaticExportDiagnostic;
 let formatStaticExportDiagnostics;
 let isStaticExportDiagnosticError;
 let isJisoApp;
 let jisoAppShellViteManifestStylesheetHrefFromFile;
 let manifest;
-let staticExportManifestForJisoAppShellViteBuildFromManifestFile;
 
 const server = await createServer({
   appType: 'custom',
@@ -31,16 +30,15 @@ try {
   ]);
   ({ isJisoApp } = coreModule);
   ({
-    exportJisoAppShellViteBuildFromManifestFile,
+    exportJisoAppShellViteBuildWithManifestFromManifestFile,
     jisoAppShellViteManifestStylesheetHrefFromFile,
-    staticExportManifestForJisoAppShellViteBuildFromManifestFile,
   } = viteModule);
   ({ formatStaticExportDiagnostic, formatStaticExportDiagnostics, isStaticExportDiagnosticError } =
     staticExportModule);
 
-  if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
+  if (typeof exportJisoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
     throw new Error(
-      '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
+      '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildWithManifestFromManifestFile.',
     );
   }
   if (typeof isJisoApp !== 'function') {
@@ -66,12 +64,6 @@ try {
       '@jiso/server/app-shell/vite must export jisoAppShellViteManifestStylesheetHrefFromFile.',
     );
   }
-  if (typeof staticExportManifestForJisoAppShellViteBuildFromManifestFile !== 'function') {
-    throw new Error(
-      '@jiso/server/app-shell/vite must export staticExportManifestForJisoAppShellViteBuildFromManifestFile.',
-    );
-  }
-
   process.env.JISO_STARTER_STYLESHEET_HREF =
     await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
@@ -83,18 +75,14 @@ try {
   }
 
   // SPEC.md section 9.5 static export replays the app shell and copies the Vite
-  // manifest assets through the public app-shell export bridge.
-  manifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
-    app,
-    distDir: 'dist',
-    manifestFile,
-  });
-  result = await exportJisoAppShellViteBuildFromManifestFile({
+  // manifest assets through the public app-shell export bridge, returning the
+  // dry-run manifest that was checked against the written result.
+  ({ manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
     app,
     distDir: 'dist',
     manifestFile,
     outDir: 'dist',
-  });
+  }));
 } catch (error) {
   if (
     typeof isStaticExportDiagnosticError !== 'function' ||

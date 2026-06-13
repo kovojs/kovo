@@ -174,8 +174,7 @@ describe('site app-shell export adoption', () => {
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
     const loadedModuleIds = [];
-    const manifestResultAssertions = [];
-    const staticExportManifestFiles = [];
+    const combinedExportManifestFiles = [];
     const stylesheetManifestFiles = [];
     const exportScript = await readFile(path.join(siteRoot, 'scripts/export-static.mjs'), 'utf8');
 
@@ -227,21 +226,7 @@ describe('site app-shell export adoption', () => {
             return serverAppShellCore;
           }
           if (id === '@jiso/server/app-shell/static-export') {
-            return {
-              ...serverAppShellStaticExport,
-              assertStaticExportManifestMatchesResult(result, manifest) {
-                manifestResultAssertions.push({
-                  assets: result.assets.length,
-                  manifestAssets: manifest.assets.length,
-                  manifestRouteDocuments: manifest.routeDocuments.length,
-                  routeDocuments: result.artifacts.length,
-                });
-                return serverAppShellStaticExport.assertStaticExportManifestMatchesResult(
-                  result,
-                  manifest,
-                );
-              },
-            };
+            return serverAppShellStaticExport;
           }
           if (id === '@jiso/server/app-shell/vite') {
             return {
@@ -253,9 +238,9 @@ describe('site app-shell export adoption', () => {
                   options,
                 );
               },
-              async staticExportManifestForJisoAppShellViteBuildFromManifestFile(options) {
-                staticExportManifestFiles.push(options.manifestFile);
-                return await serverAppShellVite.staticExportManifestForJisoAppShellViteBuildFromManifestFile(
+              async exportJisoAppShellViteBuildWithManifestFromManifestFile(options) {
+                combinedExportManifestFiles.push(options.manifestFile);
+                return await serverAppShellVite.exportJisoAppShellViteBuildWithManifestFromManifestFile(
                   options,
                 );
               },
@@ -275,9 +260,12 @@ describe('site app-shell export adoption', () => {
 
     expect(exportScript).toContain('formatStaticExportDiagnostics');
     expect(exportScript).toContain('isStaticExportDiagnosticError');
-    expect(exportScript).toContain('assertStaticExportManifestMatchesResult');
+    expect(exportScript).toContain('exportJisoAppShellViteBuildWithManifestFromManifestFile');
     expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
-    expect(exportScript).toContain('staticExportManifestForJisoAppShellViteBuildFromManifestFile');
+    expect(exportScript).not.toContain('assertStaticExportManifestMatchesResult');
+    expect(exportScript).not.toContain(
+      'staticExportManifestForJisoAppShellViteBuildFromManifestFile',
+    );
     expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
     expect(exportScript).not.toContain('function isStaticExportDiagnostic');
     expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
@@ -293,15 +281,7 @@ describe('site app-shell export adoption', () => {
       '@jiso/server/app-shell/vite',
     ]);
     expect(stylesheetManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
-    expect(staticExportManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
-    expect(manifestResultAssertions).toEqual([
-      {
-        assets: 1,
-        manifestAssets: 1,
-        manifestRouteDocuments: 2,
-        routeDocuments: 2,
-      },
-    ]);
+    expect(combinedExportManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
       '/docs/installation/index.html',
       '/index.html',

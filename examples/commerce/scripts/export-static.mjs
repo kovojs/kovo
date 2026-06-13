@@ -32,7 +32,7 @@ export async function exportCommerceStaticApp({
     ]);
     const { isJisoApp } = coreModule;
     const {
-      exportJisoAppShellViteBuildFromManifestFile,
+      exportJisoAppShellViteBuildWithManifestFromManifestFile,
       jisoAppShellViteManifestStylesheetHrefFromFile,
     } = viteModule;
     const {
@@ -41,9 +41,9 @@ export async function exportCommerceStaticApp({
       isStaticExportDiagnosticError,
     } = staticExportModule;
 
-    if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
+    if (typeof exportJisoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
       throw new Error(
-        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
+        '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildWithManifestFromManifestFile.',
       );
     }
     if (typeof isJisoApp !== 'function') {
@@ -85,12 +85,13 @@ export async function exportCommerceStaticApp({
 
     // SPEC.md section 9.5: static export replays the public app shell and copies
     // the Vite manifest bytes through the public app-shell export bridge.
-    return await exportJisoAppShellViteBuildFromManifestFile({
+    const { manifest, result } = await exportJisoAppShellViteBuildWithManifestFromManifestFile({
       app,
       distDir: builtDistDir,
       manifestFile,
       outDir,
     });
+    return { ...result, manifest };
   } finally {
     await viteServer.close();
   }
@@ -113,6 +114,9 @@ if (isMainModule()) {
         `html=${result.artifacts.length}`,
         `client-modules=${result.clientModules.length}`,
         `assets=${result.assets.length}`,
+        `manifest-html=${result.manifest?.routeDocuments.length ?? 0}`,
+        `manifest-client-modules=${result.manifest?.clientModules.length ?? 0}`,
+        `manifest-assets=${result.manifest?.assets.length ?? 0}`,
         `diagnostics=${result.diagnostics.length}`,
         '',
       ].join('\n'),

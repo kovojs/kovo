@@ -24,6 +24,8 @@ export {
 export {
   exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
+  exportJisoAppShellViteBuildWithManifestFromManifestFile,
+  exportJisoAppShellViteBuildWithManifest,
   staticExportManifestForJisoAppShellViteBuildFromManifestFile,
   staticExportManifestForJisoAppShellViteBuild,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
@@ -81,6 +83,7 @@ export type {
   JisoAppShellVitePluginStaticExportOptions,
   JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
   JisoAppShellViteManifestFileBuildStaticExportOptions,
+  JisoAppShellViteStaticExportWithManifestResult,
 } from '../../vite-static-export.js';
 export type { JisoAppShellViteBuildOutputStaticExportOptions } from '../../vite-static-export-options.js';
 export type {

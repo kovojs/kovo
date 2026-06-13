@@ -249,9 +249,11 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).toContain('formatStaticExportDiagnostic');
       expect(exportStaticScript).toContain('formatStaticExportDiagnostics');
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
-      expect(exportStaticScript).toContain('exportJisoAppShellViteBuildFromManifestFile');
       expect(exportStaticScript).toContain(
-        'staticExportManifestForJisoAppShellViteBuildFromManifestFile',
+        'exportJisoAppShellViteBuildWithManifestFromManifestFile',
+      );
+      expect(exportStaticScript).toContain(
+        'dry-run manifest that was checked against the written result',
       );
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isJisoApp');
