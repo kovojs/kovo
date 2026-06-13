@@ -12657,6 +12657,82 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project domain action shorthand aliases through destructured static containers', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'class ProductActions {',
+          '  static add = write(addItem);',
+          '  static get restock() {',
+          '    return write(addItem);',
+          '  }',
+          '}',
+          '',
+          'const { add, restock: refill } = ProductActions;',
+          '',
+          'export const productDomain = domain({',
+          '  add,',
+          '  refill,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.refill': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('marks unresolved computed query loaders and domain actions as FW406', () => {
     const files = [
       pgDatabaseTypes([

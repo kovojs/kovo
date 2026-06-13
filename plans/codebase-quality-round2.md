@@ -184,6 +184,17 @@ Latest evidence:
   dev middleware while retaining app-shell ownership for SPEC §9.5 immutable `/c/*?v=` client
   modules, and `packages/server/src/vite-dev.test.ts` proves both the direct ownership predicate
   and SSR dev middleware fallback behavior.
+- Phase 3 Drizzle destructured static action alias slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "destructured static domain action aliases|domain action shorthand aliases"`;
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/drizzle/src/static.ts` now reuses the ts-morph static binding-element
+  reference path for domain `write(...)` action aliases destructured from static containers,
+  covering `domain({ add })` and renamed aliases without source-name compatibility extraction;
+  `packages/drizzle/src/index.test.ts` and `conformance/drizzle-pin/src/index.test.ts` pin the
+  surface with real Postgres Drizzle fixtures.
 - Phase 5 Vite plugin closed-app runtime guard slice:
   `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;

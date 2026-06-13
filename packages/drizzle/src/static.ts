@@ -3478,20 +3478,10 @@ function callbackFunctionFromBindingElement(
   declaration: BindingElement,
   seen: Set<string>,
 ): Node | undefined {
-  if (isRestBindingElement(declaration)) return undefined;
+  const binding = staticBindingElementReference(declaration);
+  if (!binding) return undefined;
 
-  const initializer = declaration
-    .getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
-    ?.getInitializer();
-  if (!initializer) return undefined;
-
-  const path = bindingElementStaticPath(declaration);
-  if (path.length === 0) return undefined;
-
-  const container = staticLiteralContainerExpression(unwrappedStaticExpressionNode(initializer));
-  const literalReference = container
-    ? callbackReferenceFromStaticLiteralPath(container, path)
-    : undefined;
+  const { initializer, literalReference, path } = binding;
   if (literalReference) {
     if (Node.isArrowFunction(literalReference) || Node.isFunctionExpression(literalReference)) {
       return literalReference;
@@ -3511,6 +3501,26 @@ function callbackFunctionFromBindingElement(
   }
 
   return undefined;
+}
+
+function staticBindingElementReference(
+  declaration: BindingElement,
+): { initializer: Node; literalReference?: Node; path: string[] } | undefined {
+  if (isRestBindingElement(declaration)) return undefined;
+
+  const initializer = declaration
+    .getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
+    ?.getInitializer();
+  if (!initializer) return undefined;
+
+  const path = bindingElementStaticPath(declaration);
+  if (path.length === 0) return undefined;
+
+  const container = staticLiteralContainerExpression(unwrappedStaticExpressionNode(initializer));
+  const literalReference = container
+    ? callbackReferenceFromStaticLiteralPath(container, path)
+    : undefined;
+  return literalReference ? { initializer, literalReference, path } : { initializer, path };
 }
 
 function bindingElementStaticPath(declaration: BindingElement): string[] {
@@ -5933,6 +5943,11 @@ function domainWritePropertyFromDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): DomainWriteProperty | undefined {
+  if (Node.isBindingElement(declaration)) {
+    const property = domainWritePropertyFromBindingElement(memberName, declaration, seen);
+    if (property) return property;
+  }
+
   if (Node.isVariableDeclaration(declaration)) {
     const name = declaration.getNameNode();
     const initializer = declaration.getInitializer();
@@ -5992,6 +6007,44 @@ function domainWritePropertyFromDeclaration(
     return domainWritePropertiesFromSpread(declaration, seen).find(
       (property) => property.memberName === memberName,
     );
+  }
+
+  return undefined;
+}
+
+function domainWritePropertyFromBindingElement(
+  memberName: string,
+  declaration: BindingElement,
+  seen: Set<string>,
+): DomainWriteProperty | undefined {
+  // SPEC §11.1: destructured action aliases are resolved from ts-morph static member facts, so
+  // `domain({ add })` does not fall back to source-name compatibility extraction.
+  const binding = staticBindingElementReference(declaration);
+  if (!binding) return undefined;
+
+  const keyNode = declaration.getNameNode();
+  if (binding.literalReference && writeActionCallbackFunction(binding.literalReference, seen)) {
+    return {
+      initializer: binding.literalReference,
+      keyNode,
+      memberName,
+    };
+  }
+
+  const symbol = symbolForStaticTypePath(
+    unwrappedStaticExpressionNode(binding.initializer),
+    binding.path,
+    declaration,
+  );
+  for (const referencedDeclaration of symbol?.getDeclarations() ?? []) {
+    const property = domainWritePropertyFromDeclaration(memberName, referencedDeclaration, seen);
+    if (property) {
+      return {
+        ...property,
+        keyNode,
+        memberName,
+      };
+    }
   }
 
   return undefined;
@@ -6088,6 +6141,10 @@ function writeActionCallbackFromDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
+  if (Node.isBindingElement(declaration)) {
+    return writeActionCallbackFromBindingElement(declaration, seen);
+  }
+
   if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
     return writeActionCallbackFunction(declaration.getInitializer(), seen);
   }
@@ -6115,6 +6172,31 @@ function writeActionCallbackFromDeclaration(
   }
   if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration) {
     return writeActionCallbackFunction(parent.getNameNode(), seen);
+  }
+
+  return null;
+}
+
+function writeActionCallbackFromBindingElement(
+  declaration: BindingElement,
+  seen: Set<string>,
+): ReturnType<CallExpression['getArguments']>[number] | null {
+  const binding = staticBindingElementReference(declaration);
+  if (!binding) return null;
+
+  if (binding.literalReference) {
+    const callback = writeActionCallbackFunction(binding.literalReference, seen);
+    if (callback) return callback;
+  }
+
+  const symbol = symbolForStaticTypePath(
+    unwrappedStaticExpressionNode(binding.initializer),
+    binding.path,
+    declaration,
+  );
+  for (const referencedDeclaration of symbol?.getDeclarations() ?? []) {
+    const callback = writeActionCallbackFromDeclaration(referencedDeclaration, seen);
+    if (callback) return callback;
   }
 
   return null;
