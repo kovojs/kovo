@@ -373,18 +373,21 @@ export const CartBadge = component('cart-badge', {
         path: '.name',
         readPath: 'name',
         readSegments: [{ name: 'name', optional: false }],
+        templateEnd: 123,
+        templateStart: 119,
         value: 'Item',
       },
       {
         path: '.qty',
         readPath: 'qty',
         readSegments: [{ name: 'qty', optional: false }],
+        templateEnd: 77,
+        templateStart: 38,
         value: `{'<span data-bind=".qty">wrong</span>'}`,
       },
     ]);
-    expect(clientSource).toContain(
-      `html = html.replace("{'<span data-bind=\\".qty\\">wrong</span>'}", String(read(["qty"]) ?? ""));`,
-    );
+    expect(clientSource).toContain('String(read(["qty"]) ?? "")');
+    expect(clientSource).not.toContain('html.replace');
   });
 
   it('classifies query-dependent render positions as isomorphic when declared', () => {

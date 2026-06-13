@@ -14,6 +14,7 @@ import {
   jsxElements,
   jsxExpressions,
   type ComponentModuleModel,
+  type JsxElementChildBody,
   type JsxElementModel,
 } from '../scan/parse.js';
 import type {
@@ -345,8 +346,12 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
       const key = jsxStaticAttributeValue(element, 'fw-key');
       if (!list || !key) return [];
 
-      const template = templateStampContent(elements, element);
-      const itemBindingPlaceholders = templateItemBindingPlaceholders(elements, element);
+      const template = templateStampElement(elements, element);
+      const templateBody = template ? jsxElementChildBody(template) : null;
+      const itemBindingPlaceholders =
+        template && templateBody
+          ? templateItemBindingPlaceholders(elements, template, templateBody)
+          : [];
 
       return [
         {
@@ -357,7 +362,7 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
           listReadPath: queryRelativePath(list),
           listReadSegments: queryRelativeSegments(list),
           selector: `[data-bind-list="${list}"]`,
-          template,
+          template: templateBody?.source ?? '',
         },
       ];
     })
@@ -380,10 +385,11 @@ function bindingPathSegmentsToPath(segments: readonly BindingPathSegmentFact[]):
 
 function templateItemBindingPlaceholders(
   elements: readonly JsxElementModel[],
-  container: JsxElementModel,
+  template: JsxElementModel,
+  templateBody: JsxElementChildBody,
 ): QueryTemplateStampBindingPlaceholder[] {
   return elements
-    .filter((candidate) => isWithinElement(candidate, container))
+    .filter((candidate) => isWithinElement(candidate, template))
     .flatMap((candidate) =>
       candidate.attributes
         .filter(
@@ -395,28 +401,32 @@ function templateItemBindingPlaceholders(
         )
         .map((attribute) => {
           const fact = dataBindAttributeFact(attribute.name, attribute.value ?? '');
+          const childBody = jsxElementChildBody(candidate);
+          const templateStart = childBody ? childBody.offset - templateBody.offset : 0;
+          const templateEnd = templateStart + (childBody?.source.length ?? 0);
           return {
             path: fact.path,
             readPath: fact.relativeReadPath ?? '',
             readSegments: parseBindingPath(fact.relativeReadPath ?? ''),
-            value: jsxElementChildBody(candidate)?.source ?? '',
+            templateEnd,
+            templateStart,
+            value: childBody?.source ?? '',
           };
         }),
     )
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function templateStampContent(
+function templateStampElement(
   elements: readonly JsxElementModel[],
   container: JsxElementModel,
-): string {
-  const template = elements.find(
+): JsxElementModel | undefined {
+  return elements.find(
     (element) =>
       element.tag === 'template' &&
       isWithinElement(element, container) &&
       hasJsxAttribute(element, 'fw-stamp'),
   );
-  return template ? (jsxElementChildBody(template)?.source ?? '') : '';
 }
 
 function jsxAttributes(model: ComponentModuleModel) {

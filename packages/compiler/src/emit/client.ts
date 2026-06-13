@@ -177,20 +177,36 @@ function emitStampPlan(stamp: QueryStampFact): string {
 }
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
-  const placeholders = new Map(
-    stamp.itemBindingPlaceholders?.map((placeholder) => [placeholder.path, placeholder]) ?? [],
-  );
+  const renderSegments = templateStampRenderSegments(stamp);
 
   return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(stamp.listReadPath)}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
       const record = item && typeof item === "object" ? item : {};
       const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
-      let html = ${JSON.stringify(stamp.template)};
-${stamp.itemBindings
-  .map((binding) => {
-    const placeholder = placeholders.get(binding);
-    return `      html = html.replace(${JSON.stringify(placeholder?.value ?? '')}, String(read(${JSON.stringify(placeholder?.readSegments.map((segment) => segment.name) ?? [])}) ?? ""));`;
-  })
-  .join('\n')}
-      return html;
+      return [${renderSegments.join(', ')}].join("");
     } }`;
+}
+
+function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
+  const placeholders = [...(stamp.itemBindingPlaceholders ?? [])].sort(
+    (left, right) => left.templateStart - right.templateStart,
+  );
+  const segments: string[] = [];
+  let cursor = 0;
+
+  for (const placeholder of placeholders) {
+    if (placeholder.templateStart < cursor) continue;
+    if (placeholder.templateStart > cursor) {
+      segments.push(JSON.stringify(stamp.template.slice(cursor, placeholder.templateStart)));
+    }
+    segments.push(
+      `String(read(${JSON.stringify(placeholder.readSegments.map((segment) => segment.name))}) ?? "")`,
+    );
+    cursor = placeholder.templateEnd;
+  }
+
+  if (cursor < stamp.template.length) {
+    segments.push(JSON.stringify(stamp.template.slice(cursor)));
+  }
+
+  return segments.length > 0 ? segments : [JSON.stringify(stamp.template)];
 }

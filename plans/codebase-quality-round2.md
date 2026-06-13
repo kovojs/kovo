@@ -604,6 +604,9 @@ lowerers consume structured tag spans, slash-spacing, child-body, and expression
 The terminal server-render emit patch helper now exposes only patched source; offset maps remain
 limited to model-changing passes and diagnostics instead of an unused emit-only compatibility
 contract.
+Template stamp item placeholders now carry template-relative parser spans, so generated client
+query-plan renderers assemble HTML from model-derived segments instead of emitting runtime
+`html.replace(...)` source-string patching.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -613,6 +616,12 @@ contract.
 
 Latest evidence:
 
+- Template stamp render-segment lowering: `pnpm exec vitest --run
+packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
+packages/compiler/src/query-bindings.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact
+  `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts
+packages/compiler/src/emit/client.ts packages/compiler/src/query-update-plans.test.ts
+packages/compiler/src/query-coverage.test.ts`; `git diff --check`.
 - Combined model-patch reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lowering.test.ts
 packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts

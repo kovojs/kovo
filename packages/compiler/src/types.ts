@@ -229,6 +229,8 @@ export interface QueryTemplateStampBindingPlaceholder {
   path: string;
   readPath: string;
   readSegments: readonly BindingPathSegmentFact[];
+  templateEnd: number;
+  templateStart: number;
   value: string;
 }
 

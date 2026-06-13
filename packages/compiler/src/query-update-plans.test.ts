@@ -42,12 +42,16 @@ export const CartBadge = component('cart-badge', {
                 path: '.name',
                 readPath: 'name',
                 readSegments: [{ name: 'name', optional: false }],
+                templateEnd: 89,
+                templateStart: 85,
                 value: 'Item',
               },
               {
                 path: '.qty',
                 readPath: 'qty',
                 readSegments: [{ name: 'qty', optional: false }],
+                templateEnd: 51,
+                templateStart: 50,
                 value: '0',
               },
             ],
@@ -73,8 +77,10 @@ export const CartBadge = component('cart-badge', {
     expect(clientSource).toContain(
       'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [{ key: "productId", list: "items", selector: "[data-bind-list=\\"cart.items\\"]", render(item) {',
     );
-    expect(clientSource).toContain('html = html.replace("0", String(read(["qty"]) ?? ""));');
-    expect(clientSource).toContain('html = html.replace("Item", String(read(["name"]) ?? ""));');
+    expect(clientSource).toContain('return ["<li fw-key=\\"\\">');
+    expect(clientSource).toContain('String(read(["qty"]) ?? "")');
+    expect(clientSource).toContain('String(read(["name"]) ?? "")');
+    expect(clientSource).not.toContain('html.replace');
     expect(clientSource).toContain(
       'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',
     );
