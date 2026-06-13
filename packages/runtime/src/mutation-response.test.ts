@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseToDom, createQueryStore } from './index.js';
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
-import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
+import {
+  FakeMorphRoot,
+  FakeMorphTarget,
+  FakeQueryBindingElement,
+  FakeQueryPlanElement,
+} from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 describe('mutation response wire chunks', () => {
@@ -46,6 +51,32 @@ describe('mutation response wire chunks', () => {
       fragments: [],
       queries: ['product:p1'],
     });
+  });
+
+  it('keeps keyed query chunks isolated by instance key', () => {
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const p2Plan = vi.fn();
+    const unkeyedPlan = vi.fn();
+
+    store.subscribe('reviews', p1Plan, 'product:p1');
+    store.subscribe('reviews', p2Plan, 'product:p2');
+    store.subscribe('reviews', unkeyedPlan);
+
+    const body = [
+      '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
+      '<fw-query name="reviews" key="product:p2">{"items":[{"id":"r2"}]}</fw-query>',
+    ].join('\n');
+    applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
+      store,
+    });
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+    expect(store.get('reviews', 'product:p2')).toEqual({ items: [{ id: 'r2' }] });
+    expect(p1Plan).toHaveBeenCalledWith({ items: [{ id: 'r1' }] });
+    expect(p2Plan).toHaveBeenCalledWith({ items: [{ id: 'r2' }] });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
   });
 
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
@@ -206,6 +237,76 @@ describe('mutation response wire chunks', () => {
     expect(root.wildcardSelectorCalls).toBe(1);
     expect(cartLabel.getAttribute('aria-label')).toBe('Cart ready');
     expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
+  });
+
+  it('applies query update bindings from mutation chunks without requiring a fragment', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const total = new FakeQueryBindingElement('cart.total', { value: '1499' });
+    const product = new FakeQueryBindingElement('product.name', { textContent: 'Coffee' });
+    root.bindings.push(count, total, product);
+
+    const result = applyMutationResponseToDom({
+      body: '<fw-query name="cart">{"count":2,"total":2998}</fw-query>',
+      root,
+      store,
+    });
+
+    expect(result).toEqual({
+      appliedFragments: [],
+      fragments: [],
+      queries: ['cart'],
+    });
+    expect(count.textContent).toBe('2');
+    expect(total.value).toBe('2998');
+    expect(product.textContent).toBe('Coffee');
+  });
+
+  it('applies mutation query chunks through compiled update plans before morphing', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary, host);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    applyMutationResponseToDom({
+      body: [
+        '<fw-query name="cart">{"count":5}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(
+          `morph:${count.textContent}:${summary.textContent}:${host.getAttribute('data-count')}`,
+        );
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+          stamps: [
+            {
+              attr: 'data-count',
+              selector: '[data-plan="cart-host"]',
+              select: (value) => (value as { count: number }).count,
+            },
+          ],
+        },
+      },
+      root,
+      store,
+    });
+
+    expect(observed).toEqual(['morph:5:5 items:5']);
   });
 
   it('routes runtime store-only apply through the shared mutation response helper', () => {

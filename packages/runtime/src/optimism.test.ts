@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { form } from '@jiso/core';
 
-import { createQueryStore } from './query-store.js';
+import { createQueryStore, installPagehideOptimismCleanup } from './index.js';
 import { applyOptimisticTransforms, OptimisticRebaser, type OptimisticFor } from './optimism.js';
+import { FakeRoot } from './runtime-test-fakes.js';
 
 declare module '@jiso/core' {
   interface InvalidationSets {
@@ -16,6 +17,20 @@ declare module '@jiso/core' {
 }
 
 describe('optimistic query runtime', () => {
+  it('registers pagehide optimism cleanup without unload handlers', () => {
+    const root = new FakeRoot();
+    const discardPendingOptimism = vi.fn();
+
+    installPagehideOptimismCleanup({ discardPendingOptimism, root });
+
+    expect(root.listeners.has('pagehide')).toBe(true);
+    expect(root.listeners.has('unload')).toBe(false);
+
+    void root.listeners.get('pagehide')?.({ target: null, type: 'pagehide' });
+
+    expect(discardPendingOptimism).toHaveBeenCalledTimes(1);
+  });
+
   it('applies hand-written optimistic transforms through query update plans', () => {
     const store = createQueryStore();
     const plan = vi.fn();

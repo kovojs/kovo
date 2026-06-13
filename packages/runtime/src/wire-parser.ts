@@ -69,7 +69,20 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
       nextMarkerStart === -1
         ? body.slice(chunkStart + 1)
         : body.slice(chunkStart + 1, nextMarkerStart);
-    if (/<fw-(?:query|fragment)\b/.test(chunk)) {
+    let containsMutationResponseElement = false;
+    const responseElements = readMutationResponseElementChunks(chunk, {
+      onMalformedFragment() {
+        containsMutationResponseElement = true;
+      },
+      onMalformedQuery() {
+        containsMutationResponseElement = true;
+      },
+    });
+    if (
+      containsMutationResponseElement ||
+      responseElements.queries.length > 0 ||
+      responseElements.fragments.length > 0
+    ) {
       chunks.push(chunk);
     }
     cursor = nextMarkerStart === -1 ? body.length : nextMarkerStart + 1;

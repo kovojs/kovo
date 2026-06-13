@@ -386,6 +386,10 @@ scripts remain retryable.
 DOM mutation response body parsing now lives in `packages/runtime/src/mutation-response-dom.ts`,
 leaving `packages/runtime/src/apply-mutation-response.ts` as the decoded chunk/query/fragment apply
 primitive used by enhanced submit, broadcast, deferred streams, typed-read refetch, and tests.
+Deferred stream part detection now uses the canonical mutation response element scanner instead of
+a regex-only `fw-query`/`fw-fragment` filter, and the remaining broad
+`packages/runtime/src/query-runtime-integration.test.ts` assertions have moved to derive,
+optimism, mutation response, and deferred-stream owner suites.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -597,6 +601,20 @@ packages/runtime/src/query-hydration.browser.test.ts`.
 packages/runtime/src/query-refetch.test.ts`, `pnpm exec vitest --run packages/runtime/src`, and
       browser runtime tests `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: `packages/runtime/src/query-runtime-integration.test.ts` was deleted
+      after pagehide cleanup, derive input metadata, mutation response binding/compiled-plan/keyed
+      apply, and deferred boundary-order cases moved to `packages/runtime/src/optimism.test.ts`,
+      `packages/runtime/src/derive.test.ts`, `packages/runtime/src/mutation-response.test.ts`, and
+      `packages/runtime/src/apply-deferred-stream.test.ts`. `packages/runtime/src/wire-parser.ts`
+      now filters deferred stream parts with `readMutationResponseElementChunks` so deferred
+      stream detection shares the modular/inline mutation element scanner. Verified by
+      `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/derive.test.ts packages/runtime/src/optimism.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`, `pnpm --filter @jiso/runtime run
+check:inline-loader`, and browser runtime tests `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -639,9 +657,17 @@ packages/runtime/src/query-hydration.browser.test.ts`.
       script reader became an explicit runtime seam. Command: `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after deferred stream part detection moved
+      to `readMutationResponseElementChunks` and `query-runtime-integration.test.ts` was split into
+      owner suites. Command: `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/derive.test.ts packages/runtime/src/optimism.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`
 - `pnpm exec vitest --run packages/runtime/src/index.test.ts packages/runtime/src/delegated-runtime-integration.test.ts`
 - `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`

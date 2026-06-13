@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  deferredStreamChunks,
   readAttribute,
   readElementChunks,
   readFragmentChunks,
@@ -218,6 +219,29 @@ describe('wire parser HTML entity handling', () => {
     });
     expect(malformedQuery).toHaveBeenCalledWith('missing closing tag');
     expect(malformedFragment).toHaveBeenCalledWith('missing closing tag');
+  });
+
+  it('filters deferred stream parts through the mutation response element scanner', () => {
+    // SPEC.md §9.1: deferred streams reuse mutation response wire chunks, so
+    // stream part detection must not keep a regex-only parser beside the
+    // canonical fw-query/fw-fragment element scanner.
+    expect(
+      deferredStreamChunks(
+        [
+          '--jiso-boundary',
+          '<p>shell-only chunk</p>',
+          '--jiso-boundary',
+          '<fw-query name="cart">{"count":1}',
+          '--jiso-boundary',
+          '<fw-fragment target="cart"><span>ready</span></fw-fragment>',
+          '--jiso-boundary--',
+        ].join('\n'),
+        'jiso-boundary',
+      ),
+    ).toEqual([
+      '<fw-query name="cart">{"count":1}',
+      '<fw-fragment target="cart"><span>ready</span></fw-fragment>',
+    ]);
   });
 
   it('reports malformed fw-fragment markup instead of silently truncating', () => {

@@ -19,4 +19,12 @@ describe('derive runtime surface', () => {
     expect(Object.getOwnPropertyDescriptor(definition, 'run')?.value).toBe(run);
     expect(definition.run(2)).toBe(3);
   });
+
+  it('declares named derive inputs beside the pure derive function', () => {
+    const isEmpty = derive(['cart'], (cart) => (cart as { count: number }).count === 0);
+
+    expect(isEmpty.inputs).toEqual(['cart']);
+    expect(isEmpty.run({ count: 0 })).toBe(true);
+    expect(isEmpty.run({ count: 2 })).toBe(false);
+  });
 });
