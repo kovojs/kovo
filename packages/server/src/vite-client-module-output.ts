@@ -46,6 +46,18 @@ export async function writeJisoAppShellViteClientModuleOutput(
   }
 }
 
+export async function assertWritableJisoAppShellViteClientModuleOutput(
+  root: string,
+  modules: readonly JisoAppShellBuiltClientModule[],
+): Promise<void> {
+  const writes = jisoAppShellViteClientModuleWrites(root, modules);
+
+  // SPEC §9.5: plugin-time static export must not publish static-host files
+  // until the matching Vite /c/ module output has proved its target boundary.
+  assertNoJisoAppShellViteClientModuleWriteConflicts(writes);
+  await assertWritableJisoAppShellViteClientModuleTargets(root, writes);
+}
+
 export function jisoAppShellViteClientModuleOutputPlan(
   root: string,
   modules: readonly JisoAppShellBuiltClientModule[],

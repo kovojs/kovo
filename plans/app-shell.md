@@ -125,6 +125,21 @@ Implemented areas:
 - Static-export output planning now rejects stale public client-module artifacts whose path/href
   evidence is not a matching versioned `/c/` module URL, keeping SPEC §4.3 immutable client-module
   evidence aligned with SPEC §9.5 static-host output.
+- Vite build output now preflights immutable `/c/` client-module target writability before
+  plugin-time static export replay or writes, so a blocked Vite dist client-module path cannot
+  leave a published static-host export without the matching build output.
+
+Round316 Vite output client-module preflight evidence:
+
+- `packages/server/src/vite-client-module-output.ts` exposes the shared client-module output
+  target preflight, and `packages/server/src/vite-build-output.ts` runs it before static export
+  writes.
+- `packages/server/src/vite-build.test.ts` proves a blocked Vite dist `/c` parent rejects before
+  plugin-time static export writes route documents or client modules.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round313 static export client-module output evidence:
 

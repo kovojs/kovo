@@ -232,6 +232,57 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('preflights Vite client-module output before plugin-time static export writes', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-preflight-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-preflight-export-'));
+
+    try {
+      await writeFile(join(distDir, 'c'), 'blocked parent');
+
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return [
+                  '<main>Cart',
+                  '<button on:click="/c/cart.client.js?v=cart-v1#Cart$add">Add</button>',
+                  '</main>',
+                ].join('');
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cart = true;',
+            version: 'cart-v1',
+          },
+        ],
+      });
+
+      await expect(
+        writeJisoAppShellViteBuildOutput(build, {
+          outDir: distDir,
+          staticExport: { outDir },
+        }),
+      ).rejects.toThrow(
+        `App shell Vite build output cannot write client module because parent '${join(
+          distDir,
+          'c',
+        )}' is not a directory.`,
+      );
+      await expect(readFile(join(outDir, 'cart/index.html'))).rejects.toThrow();
+      await expect(readFile(join(outDir, 'c/cart.client.js'))).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('validates Vite app-shell client module targets before committing staged output', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-target-dist-'));
 

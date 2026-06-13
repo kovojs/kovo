@@ -185,6 +185,15 @@ fixtures inline.
 
 Latest evidence:
 
+- Phase 5 Vite output client-module preflight slice:
+  `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/vite-client-module-output.ts` now exposes
+  the shared client-module target preflight, `packages/server/src/vite-build-output.ts` runs it
+  before plugin-time static export writes, and `packages/server/src/vite-build.test.ts` proves a
+  blocked Vite dist `/c` parent rejects before route documents or `/c/` modules are published to
+  the static export output.
 - Phase 5 static export client-module output boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

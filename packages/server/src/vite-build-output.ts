@@ -9,6 +9,7 @@ import {
   type JisoAppShellViteBuildOutputStaticExportOptions,
 } from './vite-static-export-options.js';
 import {
+  assertWritableJisoAppShellViteClientModuleOutput,
   jisoAppShellViteClientModuleOutputPlan,
   writeJisoAppShellViteClientModuleOutput,
   type JisoAppShellViteClientModuleOutputPlanItem,
@@ -52,6 +53,8 @@ export async function writeJisoAppShellViteBuildOutput(
     clientModules: build.clientModules,
     staticExportAssets,
   };
+
+  await assertWritableJisoAppShellViteClientModuleOutput(root, build.clientModules);
 
   if (staticExportBuild && staticExportPlan) {
     output.staticExport = await exportStaticApp(staticExportBuild.app, staticExportPlan.options);
