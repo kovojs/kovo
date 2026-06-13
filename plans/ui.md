@@ -120,7 +120,7 @@ Latest integrated UI slice:
 
 Latest broad gate:
 
-- `pnpm run check` passed after `37cc7e3` with 768 formatted files, 670 lint/typechecked files,
+- `pnpm run check` passed after `0cac62d` with 782 formatted files, 682 lint/typechecked files,
   and 7 typechecked example/conformance projects.
 
 ## Rules
