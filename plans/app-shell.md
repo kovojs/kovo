@@ -32,12 +32,12 @@ Implemented areas:
 - `app.ts` provides the closed app aggregate and web-standard handler for routes, endpoints,
   queries, mutations, static modules, and error responses.
 - `node.ts` adapts web requests/responses to `node:http` and emits Early Hints from `Link`.
-- `vite.ts` exposes app-shell Vite plugin/build helpers, route-entry mapping, manifest
-  validation, manifest-derived hints/assets, compiled `/c/` module emission, manifest-file
-  export helpers, build static-export asset planning, and plugin `writeBundle` static export
-  wiring over the same Vite build helper. `vite-dev.ts` now defaults SSR dev middleware to the
-  loaded app's SPEC §9.5 `Request -> Response` handler while keeping explicit node-handler
-  exports available for apps that add request context at the adapter edge.
+- `vite.ts` is the public app-shell Vite aggregate over the split Vite owners. `vite-plugin.ts`
+  owns R5 dev middleware and plugin `writeBundle` build/export bridging, while the manifest,
+  build, output, static-export, and dev modules own their extracted surfaces. `vite-dev.ts` now
+  defaults SSR dev middleware to the loaded app's SPEC §9.5 `Request -> Response` handler while
+  keeping explicit node-handler exports available for apps that add request context at the
+  adapter edge.
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
@@ -430,3 +430,19 @@ Quality constraints:
 - Server extraction must be subtractive: split modules should own behavior, not copy root logic.
 - Public API additions require package/root export assertions.
 - Checklist boxes require direct same-session evidence; partial slices add only bounded evidence.
+
+Round108 app-shell Vite plugin/root barrel deletion evidence:
+
+- `packages/server/src/vite-plugin.ts` now owns the R5 Vite app-shell middleware and plugin
+  `writeBundle` bridge for manifest-backed builds plus optional SPEC §9.5 static export,
+  leaving `packages/server/src/vite.ts` as the public Vite aggregate.
+- `packages/server/src/index.ts` now exports the canonical `api/app-shell/index.ts` split
+  directly, and the unused internal `packages/server/src/api/app.ts` compatibility barrel was
+  deleted; `packages/server/src/api/app.test.ts` pins root and subpath exports to the split
+  owners for R5/R6/R7 consumers.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/static-export.test.ts packages/server/src/static-export-replay.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

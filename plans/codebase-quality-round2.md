@@ -1403,6 +1403,15 @@ Closed evidence so far:
 - D7 UI H3 typeahead evidence: `packages/headless-ui/src/lib/typeahead.test.ts` now pins
   repeated-key cycling buffers, and the dropdown-menu, context-menu, menubar, and navigation-menu
   primitive tests prove same-prefix cycling while disabled items stay skipped.
+- App-shell server extraction evidence: `packages/server/src/vite-plugin.ts` now owns the R5
+  Vite middleware/plugin hook while `packages/server/src/vite.ts` stays an aggregate, and the
+  root `@jiso/server` barrel exports `api/app-shell/index.ts` directly after deleting the unused
+  internal `api/app.ts` compatibility barrel. Focused and broad server verification:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts`,
+  `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/static-export.test.ts packages/server/src/static-export-replay.test.ts`,
+  `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
+  `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+  and `git diff --check`.
 
 Open:
 

@@ -228,6 +228,17 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
       `pnpm exec vp check packages/server/src/app-mutation-request.ts packages/server/src/app-mutation-request.test.ts packages/server/src/guards.ts packages/server/src/mutation.ts packages/server/src/api/data.ts packages/server/src/api/app.test.ts packages/server/src/static-export-response.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: the Vite app-shell plugin now lives in
+      `packages/server/src/vite-plugin.ts`, leaving `packages/server/src/vite.ts` as a public
+      aggregate over Vite manifest/build/export/dev/plugin owners; the root `@jiso/server`
+      barrel now exports the canonical app-shell split directly and the internal `api/app.ts`
+      compatibility barrel was deleted. This keeps SPEC §9.5 R5/R6/R7 adoption on the public
+      root and app-shell subpaths while making the server extraction subtractive. Same-session
+      evidence: `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/static-export.test.ts packages/server/src/static-export-replay.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
+      `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the
@@ -984,6 +995,17 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       classification. Focused verification:
       `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
       and `pnpm exec tsc --noEmit --pretty false`.
+      Evidence 2026-06-13: `packages/server/src/vite-plugin.ts` now owns the R5 Vite middleware
+      and plugin `writeBundle` bridge, while `packages/server/src/vite.ts` is a public aggregate
+      over the split Vite app-shell owners. The root package barrel exports
+      `api/app-shell/index.ts` directly and deletes the unused internal `api/app.ts`
+      compatibility layer, so root and `@jiso/server/app-shell` adoption are pinned to the same
+      SPEC §9.5 public modules. Focused verification:
+      `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/static-export.test.ts packages/server/src/static-export-replay.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
+      `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Evidence 2026-06-13: static-export route planning and replayed response validation moved
       subtractively into `packages/server/src/static-export-route-plan.ts` and
       `packages/server/src/static-export-response.ts`, leaving `static-export.ts` to orchestrate

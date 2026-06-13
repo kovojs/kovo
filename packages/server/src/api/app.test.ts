@@ -13,7 +13,6 @@ import * as appShellApi from './app-shell/index.js';
 import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
-import * as appApi from './app.js';
 import * as dataApi from './data.js';
 import * as wireHtmlApi from '../wire-html.js';
 
@@ -40,21 +39,20 @@ import type { JisoAppShellBuild as ViteJisoAppShellBuild } from './app-shell/vit
 
 describe('server app-shell public API barrels', () => {
   it('keeps the package app-shell API on the public barrel while splitting ownership', () => {
-    expect(appApi.createApp).toBe(coreApi.createApp);
     expect(publicApi.createApp).toBe(coreApi.createApp);
     expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
 
-    expect(appApi.createMemoryVersionedClientModuleRegistry).toBe(
+    expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
       clientModulesApi.createMemoryVersionedClientModuleRegistry,
     );
     expect(publicApi.versionedClientModuleHref).toBe(clientModulesApi.versionedClientModuleHref);
 
-    expect(appApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
+    expect(publicApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(publicApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
     expect(dataApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
 
-    expect(appApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
+    expect(publicApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
     expect(publicApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);
     expect(publicApi.shouldHandleJisoAppShellViteRequest).toBe(
       viteApi.shouldHandleJisoAppShellViteRequest,
@@ -82,10 +80,9 @@ describe('server app-shell public API barrels', () => {
       viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
     );
 
-    expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
-    expect(appApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
-    expect(appApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
-    expect(appApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
+    expect(publicApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(publicApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
+    expect(publicApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
     expect(publicApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
     expect(publicApi.formatStaticExportDiagnostic).toBe(
       staticExportApi.formatStaticExportDiagnostic,

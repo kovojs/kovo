@@ -33,8 +33,13 @@ import {
   type JisoAppShellViteMiddleware,
   writeJisoAppShellViteBuildOutput,
 } from './vite.js';
+import { jisoAppShellVitePlugin as splitJisoAppShellVitePlugin } from './vite-plugin.js';
 
 describe('server app shell Vite plugin', () => {
+  it('exports the Vite plugin from the split plugin boundary', () => {
+    expect(jisoAppShellVitePlugin).toBe(splitJisoAppShellVitePlugin);
+  });
+
   it('extracts deterministic stylesheet and modulepreload hints from a Vite manifest', () => {
     expect(
       jisoAppShellViteManifestHints(
