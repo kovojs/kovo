@@ -98,6 +98,7 @@ export interface ToastPartAttributeOptions {
 export interface ToastActionAttributeOptions extends ToastState {
   actionValue?: string;
   dismissOnAction?: boolean;
+  variant?: ToastVariant;
 }
 
 export type ToastChangeValue = Readonly<{
