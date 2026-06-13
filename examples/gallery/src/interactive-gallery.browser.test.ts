@@ -1414,6 +1414,31 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(detailsPanel.hidden).toBe(true);
     expect(auditPanel.hidden).toBe(true);
 
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      const currentOverview = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
+      );
+      const currentDetails = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-details-trigger'),
+      );
+      const currentOverviewPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'),
+      );
+      const currentDetailsPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-details-panel'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"details","value":"overview"}');
+      expect(currentOverview.getAttribute('aria-selected')).toBe('true');
+      expect(currentOverview.tabIndex).toBe(-1);
+      expect(currentOverviewPanel.hidden).toBe(false);
+      expect(currentDetails.getAttribute('aria-selected')).toBe('false');
+      expect(currentDetails.tabIndex).toBe(0);
+      expect(currentDetailsPanel.hidden).toBe(true);
+    });
+
     root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
 
     await vi.waitFor(() => {
@@ -1441,6 +1466,8 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
+        '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
         '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
       ]);
       const currentOverview = required(

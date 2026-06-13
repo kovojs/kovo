@@ -242,14 +242,21 @@ export function tabsKeyDown(
 
   if (tabsActivationKey(event.key)) {
     const activeValue = state.activeValue ?? state.value;
+    if (
+      state.disabled === true ||
+      activeValue === undefined ||
+      tabsValueDisabled(state, activeValue)
+    ) {
+      return;
+    }
+
     const result = setTabsValue(state, activeValue, 'keyboard', options);
-    const rovingState = activeValue === undefined ? state : { ...state, activeValue };
     event.preventDefault();
 
     return {
       ...result,
       activeValue,
-      index: tabsRovingIndex(rovingState),
+      index: tabsRovingIndex({ ...state, activeValue }),
     };
   }
 

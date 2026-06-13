@@ -1124,6 +1124,12 @@ describe('compiled interactive gallery demos', () => {
     expect(switchState).toEqual({ checked: true });
 
     const tabsState = { activeValue: 'overview', value: 'overview' };
+    clientHandler(tabs, 'GalleryTabsDemo$section_keydown')(keyEvent('ArrowRight'), {
+      params: {},
+      signal,
+      state: tabsState,
+    });
+    expect(tabsState).toEqual({ activeValue: 'details', value: 'overview' });
     clientHandler(tabs, 'GalleryTabsDemo$section_keydown')(keyEvent('Enter'), {
       params: {},
       signal,

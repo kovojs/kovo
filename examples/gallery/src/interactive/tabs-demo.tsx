@@ -36,8 +36,11 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
         class="grid gap-2"
         data-gallery-interactive="tabs"
         onKeyDown={() => {
-          state.activeValue = 'details';
-          state.value = 'details';
+          if (state.activeValue === 'overview') {
+            state.activeValue = 'details';
+          } else {
+            state.value = state.activeValue;
+          }
           const doc = Reflect['get'](globalThis, 'document');
           const overview = doc
             ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-trigger')
@@ -45,30 +48,81 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
           const details = doc
             ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-trigger')
             : undefined;
+          const audit = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-audit-trigger')
+            : undefined;
           const overviewPanel = doc
             ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-panel')
             : undefined;
           const detailsPanel = doc
             ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-panel')
             : undefined;
+          const auditPanel = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-audit-panel')
+            : undefined;
 
           if (overview) {
-            overview['tabIndex'] = -1;
-            Object(overview)['setAttribute']?.call(overview, 'aria-selected', 'false');
-            Object(overview)['setAttribute']?.call(overview, 'data-state', 'inactive');
+            overview['tabIndex'] = state.activeValue === 'overview' ? 0 : -1;
+            Object(overview)['setAttribute']?.call(
+              overview,
+              'aria-selected',
+              state.value === 'overview' ? 'true' : 'false',
+            );
+            Object(overview)['setAttribute']?.call(
+              overview,
+              'data-state',
+              state.value === 'overview' ? 'active' : 'inactive',
+            );
           }
           if (details) {
-            details['tabIndex'] = 0;
-            Object(details)['setAttribute']?.call(details, 'aria-selected', 'true');
-            Object(details)['setAttribute']?.call(details, 'data-state', 'active');
+            details['tabIndex'] = state.activeValue === 'details' ? 0 : -1;
+            Object(details)['setAttribute']?.call(
+              details,
+              'aria-selected',
+              state.value === 'details' ? 'true' : 'false',
+            );
+            Object(details)['setAttribute']?.call(
+              details,
+              'data-state',
+              state.value === 'details' ? 'active' : 'inactive',
+            );
+          }
+          if (audit) {
+            audit['tabIndex'] = -1;
+            Object(audit)['setAttribute']?.call(
+              audit,
+              'aria-selected',
+              state.value === 'audit' ? 'true' : 'false',
+            );
+            Object(audit)['setAttribute']?.call(
+              audit,
+              'data-state',
+              state.value === 'audit' ? 'active' : 'inactive',
+            );
           }
           if (overviewPanel) {
-            overviewPanel['hidden'] = true;
-            Object(overviewPanel)['setAttribute']?.call(overviewPanel, 'data-state', 'inactive');
+            overviewPanel['hidden'] = state.value !== 'overview';
+            Object(overviewPanel)['setAttribute']?.call(
+              overviewPanel,
+              'data-state',
+              state.value === 'overview' ? 'active' : 'inactive',
+            );
           }
           if (detailsPanel) {
-            detailsPanel['hidden'] = false;
-            Object(detailsPanel)['setAttribute']?.call(detailsPanel, 'data-state', 'active');
+            detailsPanel['hidden'] = state.value !== 'details';
+            Object(detailsPanel)['setAttribute']?.call(
+              detailsPanel,
+              'data-state',
+              state.value === 'details' ? 'active' : 'inactive',
+            );
+          }
+          if (auditPanel) {
+            auditPanel['hidden'] = state.value !== 'audit';
+            Object(auditPanel)['setAttribute']?.call(
+              auditPanel,
+              'data-state',
+              state.value === 'audit' ? 'active' : 'inactive',
+            );
           }
         }}
       >

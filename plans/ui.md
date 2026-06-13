@@ -97,6 +97,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       re-run for the radio route. Checkbox-group native form ownership and disabled/empty keyboard
       no-trap behavior are covered by headless/styled tests, static gallery contracts, refreshed
       generated artifacts, and browser-backed `FormData` plus roving DOM focus evidence.
+      Tabs activation keys now no-op without trapping default behavior when the tab set is
+      disabled, empty, or focused on a disabled value; refreshed generated artifacts and browser
+      coverage prove manual roving focus remains separate from selected panel activation.
 - [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
       churn-heavy baselines.
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
@@ -249,6 +252,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t tabs)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/tabs.ts packages/headless-ui/src/primitives/tabs.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/tabs-demo.tsx examples/gallery/src/generated/interactive/tabs-demo.tsx examples/gallery/src/generated/interactive/tabs-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
+- [x] Tabs activation no-trap/manual roving slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/tabs.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t tabs`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t tabs)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/tabs.ts packages/headless-ui/src/primitives/tabs.test.ts packages/ui/src/index.test.tsx examples/gallery/src/interactive/tabs-demo.tsx examples/gallery/src/generated/interactive/tabs-demo.tsx examples/gallery/src/generated/interactive/tabs-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
       `git diff --check`.
 - [x] Menubar keyboard selection slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts`;

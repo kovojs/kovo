@@ -294,6 +294,33 @@ describe('headless-ui tabs primitive', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it('does not trap activation keys without an enabled tab target', () => {
+    const disabledEvent = tabsKeyboardEvent('Enter');
+    expect(
+      tabsKeyDown(disabledEvent, {
+        activeValue: 'wire',
+        disabled: true,
+        items: billingItems,
+        value: 'card',
+      }),
+    ).toBeUndefined();
+    expect(disabledEvent.defaultPrevented).toBe(false);
+
+    const emptyEvent = tabsKeyboardEvent(' ');
+    expect(tabsKeyDown(emptyEvent, { items: [] })).toBeUndefined();
+    expect(emptyEvent.defaultPrevented).toBe(false);
+
+    const disabledActiveEvent = tabsKeyboardEvent('Spacebar');
+    expect(
+      tabsKeyDown(disabledActiveEvent, {
+        activeValue: 'audit',
+        items: [{ disabled: true, value: 'audit' }],
+        value: 'card',
+      }),
+    ).toBeUndefined();
+    expect(disabledActiveEvent.defaultPrevented).toBe(false);
+  });
+
   it('does not clear selection when keyboard navigation has no enabled tab target', () => {
     const event = tabsKeyboardEvent('ArrowRight');
     const result = tabsKeyDown(event, {

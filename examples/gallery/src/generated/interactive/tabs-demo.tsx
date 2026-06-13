@@ -36,7 +36,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
         {...tabsRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="tabs"
-        on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=783062b3#GalleryTabsDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$section_keydown"
         fw-c="gallery-tabs-demo"
         fw-state='{"activeValue":"overview","value":"overview"}'
       >
@@ -48,7 +48,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'overview',
               panelId: 'gallery-tabs-overview-panel',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=783062b3#GalleryTabsDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$button_click"
           >
             Overview
           </button>
@@ -59,7 +59,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'details',
               panelId: 'gallery-tabs-details-panel',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=783062b3#GalleryTabsDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$button_click_2"
           >
             Details
           </button>
