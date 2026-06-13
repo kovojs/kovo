@@ -55,6 +55,7 @@ describe('inline loader minified artifact', () => {
       'function applyInlineMutationResponseBody(',
     );
     expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragments(');
     expect(inlineJisoLoaderInstallerSource).toContain('function appendInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain('function replaceInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain(
@@ -64,9 +65,11 @@ describe('inline loader minified artifact', () => {
       'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueries,findFragmentTarget,});',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'const appliedFragments=[];for(const fragment of chunks.fragments)',
+      'function applyResponseFragments(fragments,options){const applied=[];for(const fragment of fragments)',
     );
-    expect(inlineJisoLoaderInstallerSource).toContain('return appliedFragments;');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'return applyResponseFragments(chunks.fragments,{appendFragment:appendInlineFragment',
+    );
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'detail:{queries:queries.map((query)=>({attrs:query.attrs,content:query.content}))}',

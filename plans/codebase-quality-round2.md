@@ -1166,10 +1166,11 @@ default BroadcastChannel replay, so loader-installed mutation transports share t
 query apply hook as initial hydration, inline query events, visible-return hydration, and typed-read
 refetch. Enhanced-mutation-specific `applyQuery` hooks are also pinned ahead of the broader loader
 hook for default BroadcastChannel replay.
-Inline and modular fragment response apply now share `applyResponseFragment` from
-`packages/runtime/src/inline-response-apply.ts`: the extracted inline helper supplies tiny DOM
-append/replace adapters, while `packages/runtime/src/morph.ts` supplies the modular morph and
-island-signal cleanup adapters around the same target/mode decision.
+Inline and modular fragment response apply now share `applyResponseFragment` and
+`applyResponseFragments` from `packages/runtime/src/response-fragment-apply.ts`: the extracted
+inline helper supplies tiny DOM append/replace adapters, while `packages/runtime/src/morph.ts`
+supplies the modular morph and island-signal cleanup adapters around the same target/mode and
+applied-target-list decision.
 Inline enhanced-response apply now parses response bodies in the generated installer and enters the
 extracted helper at `applyInlineMutationResponseChunks`, deleting the inline-only
 `applyInlineMutationResponseBody` parser/apply wrapper while preserving readable/minified artifact
@@ -1979,6 +1980,13 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
   exact `pnpm exec vp check packages/runtime/src/response-fragment-apply.ts packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-response-apply.ts packages/runtime/src/morph.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-response-apply.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Round286 response fragment batch apply closure:
+  `pnpm exec vitest --run packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/mutation-response-apply.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/response-fragment-apply.ts packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-response-apply.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader.ts packages/runtime/src/morph.ts plans/codebase-quality-round2.md`;
+  `git diff --check`; `git diff --cached --check`.
 
 ## Phase 5 - Server And App Shell
 

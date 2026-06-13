@@ -1,7 +1,7 @@
 import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-context.js';
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
-import { applyResponseFragment } from './response-fragment-apply.js';
+import { applyResponseFragments } from './response-fragment-apply.js';
 import type { FragmentChunk } from './wire-parser.js';
 
 export interface MorphTarget {
@@ -85,21 +85,14 @@ export function applyFragments(
   morph: MorphFragment = replaceFragment,
   islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): string[] {
-  const applied: string[] = [];
-
-  for (const fragment of fragments) {
-    const wasApplied = applyResponseFragment<MorphTarget>(fragment, {
-      appendFragment: (target, html) => appendFragment(target, html, morph),
-      findFragmentTarget: (target) => root.findFragmentTarget(target),
-      replaceFragment(target, html) {
-        abortRemovedIslandSignals(target.readHtml?.() ?? '', html, islandSignalScope);
-        morph(target, html);
-      },
-    });
-    if (wasApplied) applied.push(fragment.target);
-  }
-
-  return applied;
+  return applyResponseFragments<MorphTarget>(fragments, {
+    appendFragment: (target, html) => appendFragment(target, html, morph),
+    findFragmentTarget: (target) => root.findFragmentTarget(target),
+    replaceFragment(target, html) {
+      abortRemovedIslandSignals(target.readHtml?.() ?? '', html, islandSignalScope);
+      morph(target, html);
+    },
+  });
 }
 
 /**

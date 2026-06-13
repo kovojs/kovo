@@ -1,5 +1,5 @@
 import type { ElementChunk, InlineMutationResponseBodyChunks } from './wire-response-scanner.js';
-import { applyResponseFragment } from './response-fragment-apply.js';
+import { applyResponseFragments } from './response-fragment-apply.js';
 
 export interface InlineResponseApplyTarget {
   innerHTML: string;
@@ -19,16 +19,11 @@ export function applyInlineMutationResponseChunks(
   // mutation response chunks through this runtime-owned helper closure, not a
   // forked inline-only query/fragment apply path.
   options.dispatchQueries(chunks.queries);
-  const appliedFragments: string[] = [];
-  for (const fragment of chunks.fragments) {
-    const wasApplied = applyResponseFragment(fragment, {
-      appendFragment: appendInlineFragment,
-      findFragmentTarget: (target) => options.findFragmentTarget(target),
-      replaceFragment: replaceInlineFragment,
-    });
-    if (wasApplied) appliedFragments.push(fragment.target);
-  }
-  return appliedFragments;
+  return applyResponseFragments(chunks.fragments, {
+    appendFragment: appendInlineFragment,
+    findFragmentTarget: (target) => options.findFragmentTarget(target),
+    replaceFragment: replaceInlineFragment,
+  });
 }
 
 function appendInlineFragment(element: InlineResponseApplyTarget, html: string): void {

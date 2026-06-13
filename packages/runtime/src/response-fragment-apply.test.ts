@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyResponseFragment } from './response-fragment-apply.js';
+import { applyResponseFragment, applyResponseFragments } from './response-fragment-apply.js';
 
 interface TestFragmentTarget {
   html: string;
@@ -38,5 +38,37 @@ describe('response fragment apply primitive', () => {
 
     expect(targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(targets.get('cart-list')?.html).toBe('<li>existing</li><li>new</li>');
+  });
+
+  it('reports applied targets from one fragment batch helper', () => {
+    // SPEC.md §9.1: modular DOM apply and inline apply share fragment target
+    // filtering and applied-target reporting after response bodies are decoded.
+    const targets = new Map([
+      ['replace-target', { html: '<p>old</p>' }],
+      ['append-target', { html: '<li>old</li>' }],
+    ] satisfies [string, TestFragmentTarget][]);
+
+    const applied = applyResponseFragments<TestFragmentTarget>(
+      [
+        { html: '<p>new</p>', target: 'replace-target' },
+        { html: '<li>new</li>', mode: 'append', target: 'append-target' },
+        { html: '<aside>ignored</aside>', target: 'missing-target' },
+      ],
+      {
+        appendFragment(target, html) {
+          target.html += html;
+        },
+        findFragmentTarget(target) {
+          return targets.get(target) ?? null;
+        },
+        replaceFragment(target, html) {
+          target.html = html;
+        },
+      },
+    );
+
+    expect(applied).toEqual(['replace-target', 'append-target']);
+    expect(targets.get('replace-target')?.html).toBe('<p>new</p>');
+    expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
   });
 });
