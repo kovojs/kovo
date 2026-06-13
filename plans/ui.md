@@ -236,6 +236,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       and `pnpm exec vitest --run packages/ui/src/index.test.tsx`; Chromium asserts route geometry
       `820x5904`, pure-markup geometry `780x450`, route hash `ec47616f`, and pure-markup hash
       `cc33e71c`.
+      Evidence 2026-06-13: the compiled popover demo keeps its SPEC §5.2 app-authored TSX source
+      visible through `data-demo-state="popover-open"`, generates self-contained click/Escape
+      handlers without render-local client scope, and proves browser-visible native popover
+      open/close state plus non-Escape no-op behavior. Verified by
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`,
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`,
+      and `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t popover)`.
       Evidence 2026-06-13: G1 is closed for the current 44-route gallery inventory.
       `examples/gallery/src/demo-fixtures.test.ts` now derives the route/source/markup matrix from
       `expectedRoutes`, proves every route has a synchronized raw markup fixture, and verifies each

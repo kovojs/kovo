@@ -1685,30 +1685,91 @@ describe('compiled interactive gallery demos in the browser', () => {
     const root = mountInteractiveDemo(GalleryPopoverDemo);
     const button = required(root.querySelector<HTMLButtonElement>('button'));
     const content = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
-    installGeneratedGalleryLoader(root);
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+    );
+    installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
     expect(button.getAttribute('popovertarget')).toBe('gallery-popover-content');
     expect(content.matches(':popover-open')).toBe(false);
+    expect(output.textContent).toBe('closed');
 
     button.click();
 
     await vi.waitFor(() => {
+      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
-      expect(content.matches(':popover-open')).toBe(true);
+      expect(currentContent.matches(':popover-open')).toBe(true);
+      expect(currentOutput.textContent).toBe('open');
     });
 
-    button.click();
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
 
     await vi.waitFor(() => {
+      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(currentContent.matches(':popover-open')).toBe(true);
+      expect(currentOutput.textContent).toBe('open');
+    });
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+
+    await vi.waitFor(() => {
+      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
-      expect(content.matches(':popover-open')).toBe(false);
+      expect(currentContent.matches(':popover-open')).toBe(false);
+      expect(currentOutput.textContent).toBe('closed');
     });
 
-    button.click();
+    required(root.querySelector<HTMLButtonElement>('button')).click();
 
     await vi.waitFor(() => {
+      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
-      expect(content.matches(':popover-open')).toBe(true);
+      expect(currentContent.matches(':popover-open')).toBe(true);
+      expect(currentOutput.textContent).toBe('open');
+    });
+
+    required(root.querySelector<HTMLButtonElement>('button')).click();
+
+    await vi.waitFor(() => {
+      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(currentContent.matches(':popover-open')).toBe(false);
+      expect(currentOutput.textContent).toBe('closed');
+    });
+
+    required(root.querySelector<HTMLButtonElement>('button')).click();
+
+    await vi.waitFor(() => {
+      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(currentContent.matches(':popover-open')).toBe(true);
+      expect(currentOutput.textContent).toBe('open');
     });
 
     const escapeContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));

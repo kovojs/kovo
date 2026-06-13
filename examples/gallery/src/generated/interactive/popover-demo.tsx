@@ -23,19 +23,20 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         {...popoverRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="popover"
-        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=af582a38#GalleryPopoverDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=aa404efa#GalleryPopoverDemo$section_keydown"
         fw-c="gallery-popover-demo"
         fw-state='{"open":false}'
       >
         <button
           {...popoverTriggerAttributes({ contentId, open: state.open })}
-          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=af582a38#GalleryPopoverDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=aa404efa#GalleryPopoverDemo$button_click"
         >
           Delivery window
         </button>
         <div {...popoverContentAttributes({ contentId, open: state.open })}>
           Weekday arrivals are available from 9 AM to 5 PM.
         </div>
+        <output data-demo-state="popover-open">{state.open ? 'open' : 'closed'}</output>
       </section>
     );
   },

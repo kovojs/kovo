@@ -3922,6 +3922,14 @@ Focused gates since that broad run:
   now expose native input `id`, `aria-describedby`, and `aria-labelledby` hooks while preserving
   SPEC §3.1 light-DOM/native-form fallback; the static gallery routes prove those hooks stay
   synchronized with raw fixtures and browser `FormData` for externally owned controls.
+- UI/gallery G6 popover compiled-state slice:
+  `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+  `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t popover)`;
+  exact `pnpm exec vp check examples/gallery/src/interactive/popover-demo.tsx examples/gallery/src/generated/interactive/popover-demo.tsx examples/gallery/src/generated/interactive/popover-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: the SPEC §5.2 app-authored popover TSX now emits a visible
+  `data-demo-state="popover-open"` marker, self-contained generated click/Escape handlers, and
+  browser-backed native popover open/close plus non-Escape no-op checks.
 - Runtime body apply closure:
   `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts`;
   `pnpm exec vitest --run packages/runtime/src`;

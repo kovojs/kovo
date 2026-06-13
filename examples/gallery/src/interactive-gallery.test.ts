@@ -449,6 +449,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(popover).toContain('data-gallery-interactive="popover"');
     expect(popover).toContain('fw-state=\'{"open":false}\'');
+    expect(popover).toContain('data-demo-state="popover-open"');
     expect(popover).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$section_keydown"/,
     );
@@ -1122,6 +1123,18 @@ describe('compiled interactive gallery demos', () => {
       state: popoverState,
     });
     expect(popoverState).toEqual({ open: true });
+    clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(keyEvent('ArrowDown'), {
+      params: {},
+      signal,
+      state: popoverState,
+    });
+    expect(popoverState).toEqual({ open: true });
+    clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(keyEvent('Escape'), {
+      params: {},
+      signal,
+      state: popoverState,
+    });
+    expect(popoverState).toEqual({ open: false });
     clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(new Event('keydown'), {
       params: {},
       signal,
