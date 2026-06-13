@@ -16,9 +16,10 @@ import {
   createTouchGraphEntry,
   diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
+  extractQueryFactsFromProject,
+  extractQueryFactsFromSource,
   extractTouchGraphFromProject,
   extractTouchGraphFromSource,
-  extractQueryFactsFromProject,
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
@@ -636,6 +637,44 @@ describe('Drizzle pinned subset conformance', () => {
     });
 
     expect(facts).toEqual([]);
+  });
+
+  it('pins source query-loader destructuring to explicit db receiver slots', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          "export const fakeQuery = query('product/destructured-fake', {",
+          '  load(_input, { fake }) {',
+          '    return fake.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+          '',
+          "export const productQuery = query('product/destructured-db', {",
+          '  load(_input, { db: reader }) {',
+          '    return reader.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product/destructured-db',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:13',
+      },
+    ]);
   });
 
   it('pins local query-loader helper reads under real Drizzle imports', () => {

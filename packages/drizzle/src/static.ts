@@ -2304,17 +2304,35 @@ function appendUntypedQueryReceiverBinding(
   symbolKeys: Set<string>,
 ): void {
   if (Node.isIdentifier(name)) {
-    names.add(name.getText());
-    const symbolKey = resolvedSymbolKey(name.getSymbol());
-    if (symbolKey) symbolKeys.add(symbolKey);
+    appendQueryReceiverIdentifierBinding(name, names, symbolKeys);
     return;
   }
 
   if (!Node.isObjectBindingPattern(name)) return;
 
   for (const element of name.getElements()) {
-    appendUntypedQueryReceiverBinding(element.getNameNode(), names, symbolKeys);
+    const binding = element.getNameNode();
+    const propertyName = element.getPropertyNameNode()?.getText();
+    // SPEC §11.1: without project type identity, source destructuring is proof only for the
+    // canonical Drizzle receiver slots; arbitrary destructured names would fabricate query facts.
+    const isCanonicalReceiverSlot =
+      propertyName === 'db' ||
+      propertyName === 'tx' ||
+      (!propertyName && Node.isIdentifier(binding) && isLikelyDrizzleReceiver(binding.getText()));
+    if (!isCanonicalReceiverSlot || !Node.isIdentifier(binding)) continue;
+    appendQueryReceiverIdentifierBinding(binding, names, symbolKeys);
   }
+}
+
+function appendQueryReceiverIdentifierBinding(
+  name: Node,
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
+  if (!Node.isIdentifier(name)) return;
+  names.add(name.getText());
+  const symbolKey = resolvedSymbolKey(name.getSymbol());
+  if (symbolKey) symbolKeys.add(symbolKey);
 }
 
 interface QueryShapeContext {

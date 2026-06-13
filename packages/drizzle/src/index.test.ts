@@ -2949,6 +2949,57 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('does not fabricate source query facts from arbitrary destructured loader bindings', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product/destructured-fake", {
+            load(_input, { fake }) {
+              return fake.select({ id: products.id }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([]);
+  });
+
+  it('keeps explicit source query-loader db destructuring compatibility', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product/destructured-db", {
+            load(_input, { db: reader }) {
+              return reader.select({ id: products.id }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product/destructured-db',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:6',
+      },
+    ]);
+  });
+
   it('does not scan non-load query callbacks as loader facts', () => {
     const files = [
       {
