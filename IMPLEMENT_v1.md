@@ -749,6 +749,17 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       and
       `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`,
       plus targeted `pnpm exec vp check ...` and `git diff --check`.
+      Additional evidence 2026-06-13: `@jiso/test/fw-check-fixtures`
+      now exposes rawless diagnostic/coverage/result assertion facts and parses quoted
+      `fw-check/v1` key/value fields, so update coverage, unguarded audit, verification
+      diagnostics, FW235, and render-equivalence gates in `tests/fw-check.node.mjs` assert
+      structured public facts instead of serialized output strings while keeping intentional raw
+      wire pins separate (SPEC §5.3/§11.3). Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`,
+      `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`, `pnpm run check:build`,
+      and
+      `node --test --test-name-pattern "P1 compiler emits FW311 update coverage facts|P3 route and query guard removal is mechanically audited by fw check|P9 verification layer evidence remains represented|D9 FW235 fails fw-check for app-authored lowered IR component modules|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`,
+      plus targeted `pnpm exec vp check ...` and `git diff --check`.
 - [x] FW411 write-side-only exemption (SPEC §10.1, §11.2): static exempt-table read-set check in the extraction pass (P4) and the runtime observed-read check in the db verification wrapper (P9), with golden diagnostics. Evidence added: FW411 is in the shared core diagnostic registry/type; `@jiso/drizzle` recognizes `jiso({ exempt: true })`, omits exempt writes from the touch graph, and emits a query-fact FW411 diagnostic when a query reads an exempt table; `@jiso/test` accepts `verification.exemptTables`, allows writes to those tables, and fails observed direct/raw-SQL reads with FW411.
 - [x] P9 v1.5 has full FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostic table evidence plus commerce mutation-suite runtime/static verification-loop acceptance. Evidence added: the commerce matrix acceptance path runs `cart/add` through `@jiso/test` with `touchGraphKey: 'cart.addItem'`, runs `order/receipt` through a no-write verifier with `touchGraphKey: 'order/receipt'`, and asserts both verifier paths report no static/runtime drift before checking the enhanced wire output (SPEC §11.2).
 - [x] D1 Tailwind-first path is implemented in commerce and starter scaffolds with stylesheet delivery tests.

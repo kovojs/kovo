@@ -70,8 +70,9 @@ import {
   fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
 import {
-  fwCheckCoverageFacts,
-  fwCheckDiagnosticFacts,
+  fwCheckAssertionFact,
+  fwCheckCoverageAssertionFacts,
+  fwCheckDiagnosticAssertionFacts,
   fwCheckResultFact,
 } from '../packages/test/src/fw-check-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
@@ -1656,30 +1657,55 @@ export const CartBadge = component('cart-badge', {
       },
     ],
   );
-  assert.equal(
-    fwCheck({
-      updateCoverage: [
+  assert.deepEqual(
+    fwCheckAssertionFact(
+      fwCheck({
+        updateCoverage: [
+          {
+            component: 'CartBadge',
+            detail: 'text binding',
+            position: 'text',
+            query: 'cart.count',
+            status: 'plan',
+          },
+          {
+            component: 'CartBadge',
+            position: 'conditional <dot>',
+            query: 'cart.discount',
+            status: 'UNHANDLED',
+          },
+        ],
+      }),
+    ),
+    {
+      coverage: [
         {
-          component: 'CartBadge',
-          detail: 'text binding',
-          position: 'text',
-          query: 'cart.count',
-          status: 'plan',
-        },
-        {
-          component: 'CartBadge',
-          position: 'conditional <dot>',
-          query: 'cart.discount',
-          status: 'UNHANDLED',
+          properties: {
+            component: 'CartBadge',
+            detail: 'text binding',
+            position: 'text',
+            query: 'cart.count',
+            status: 'plan',
+          },
         },
       ],
-    }).output,
-    [
-      'fw-check/v1',
-      'COVERAGE component=CartBadge query=cart.count position="text" status=plan detail="text binding"',
-      'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.',
-      '',
-    ].join('\n'),
+      diagnostics: [
+        {
+          code: 'FW311',
+          message: diagnosticDefinitions.FW311.message,
+          properties: {
+            component: 'CartBadge',
+            position: 'conditional <dot>',
+            query: 'cart.discount',
+          },
+          severity: 'WARN',
+          target: '',
+        },
+      ],
+      exitCode: 1,
+      status: 'issues',
+      version: 'fw-check/v1',
+    },
   );
 });
 
@@ -2254,33 +2280,54 @@ void test('P3 route and query guard removal is mechanically audited by fw check'
   // SPEC.md section 6.4 and IMPLEMENT_v1.md P3 require route/query guards to surface
   // through the unguarded audit when removed.
   assert.deepEqual(
-    fwCheck({
-      mutations: [
-        { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
-        { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
-      ],
-      optimistic: [
-        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-        { mutation: 'inventory/sync', query: 'adminOrders', status: 'await-fragment' },
-      ],
-      pages: [
-        { guards: ['authed'], queries: ['cart'], route: '/cart' },
-        { guards: [], queries: ['adminOrders'], route: '/admin' },
-      ],
-      queries: [
-        { domains: ['cart'], guards: ['authed'], query: 'cart' },
-        { domains: ['product'], guards: [], query: 'adminOrders' },
-      ],
-    }),
+    fwCheckAssertionFact(
+      fwCheck({
+        mutations: [
+          { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+          { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
+        ],
+        optimistic: [
+          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+          { mutation: 'inventory/sync', query: 'adminOrders', status: 'await-fragment' },
+        ],
+        pages: [
+          { guards: ['authed'], queries: ['cart'], route: '/cart' },
+          { guards: [], queries: ['adminOrders'], route: '/admin' },
+        ],
+        queries: [
+          { domains: ['cart'], guards: ['authed'], query: 'cart' },
+          { domains: ['product'], guards: [], query: 'adminOrders' },
+        ],
+      }),
+    ),
     {
+      coverage: [],
+      diagnostics: [
+        {
+          code: 'UNGUARDED',
+          message: 'mutation is reachable without an auth guard.',
+          properties: {},
+          severity: 'WARN',
+          target: 'inventory/sync',
+        },
+        {
+          code: 'UNGUARDED',
+          message: 'is reachable without an auth guard.',
+          properties: {},
+          severity: 'WARN',
+          target: 'page /admin',
+        },
+        {
+          code: 'UNGUARDED',
+          message: 'is reachable without an auth guard.',
+          properties: {},
+          severity: 'WARN',
+          target: 'query adminOrders',
+        },
+      ],
       exitCode: 0,
-      output: [
-        'fw-check/v1',
-        'WARN UNGUARDED inventory/sync mutation is reachable without an auth guard.',
-        'WARN UNGUARDED page /admin is reachable without an auth guard.',
-        'WARN UNGUARDED query adminOrders is reachable without an auth guard.',
-        '',
-      ].join('\n'),
+      status: 'issues',
+      version: 'fw-check/v1',
     },
   );
 });
@@ -3158,49 +3205,43 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     },
     { family: 'all' },
   );
-  assert.deepEqual(
-    fwCheckDiagnosticFacts(coverageCheck.output).map(({ raw: _raw, ...fact }) => fact),
-    [
-      {
-        code: 'FW310',
-        message: diagnosticDefinitions.FW310.message,
-        properties: {},
-        severity: 'WARN',
-        target: 'cart/add -> cart',
+  assert.deepEqual(fwCheckDiagnosticAssertionFacts(coverageCheck.output), [
+    {
+      code: 'FW310',
+      message: diagnosticDefinitions.FW310.message,
+      properties: {},
+      severity: 'WARN',
+      target: 'cart/add -> cart',
+    },
+    {
+      code: 'FW311',
+      message: diagnosticDefinitions.FW311.message,
+      properties: {
+        component: 'CartBadge',
+        position: 'undefined',
+        query: 'cart.discount',
       },
-      {
-        code: 'FW311',
-        message: diagnosticDefinitions.FW311.message,
-        properties: {
-          component: 'CartBadge',
-          position: 'undefined',
-          query: 'cart.discount',
-        },
-        severity: 'WARN',
-        target: '',
+      severity: 'WARN',
+      target: '',
+    },
+    {
+      code: 'UNGUARDED',
+      message: 'mutation is reachable without an auth guard.',
+      properties: {},
+      severity: 'WARN',
+      target: 'cart/add',
+    },
+  ]);
+  assert.deepEqual(fwCheckCoverageAssertionFacts(coverageCheck.output), [
+    {
+      properties: {
+        component: 'OrderHistory',
+        position: 'undefined',
+        query: 'orderHistory',
+        status: 'fragment',
       },
-      {
-        code: 'UNGUARDED',
-        message: 'mutation is reachable without an auth guard.',
-        properties: {},
-        severity: 'WARN',
-        target: 'cart/add',
-      },
-    ],
-  );
-  assert.deepEqual(
-    fwCheckCoverageFacts(coverageCheck.output).map(({ raw: _raw, ...fact }) => fact),
-    [
-      {
-        properties: {
-          component: 'OrderHistory',
-          position: 'undefined',
-          query: 'orderHistory',
-          status: 'fragment',
-        },
-      },
-    ],
-  );
+    },
+  ]);
   const registryFacts = deriveRegistryFactsFromGraph(commerceGraph);
   assert.deepEqual(registryFacts.components, ['cart-badge', 'order-history', 'product-grid']);
   assert.deepEqual(
@@ -3910,84 +3951,159 @@ void test('P9 verification layer evidence remains represented', async () => {
     'FW402 Write touched an undeclared domain: audit',
   );
 
-  assert.equal(
-    fwCheck({
+  assert.deepEqual(
+    fwCheckAssertionFact(
+      fwCheck({
+        diagnostics: [
+          {
+            code: 'FW410',
+            site: 'cart.queries.ts:5',
+          },
+          {
+            code: 'FW302',
+            message: 'data-bind path is not present in the declared query shape. cart.missing',
+            site: 'cart-badge.tsx',
+            start: { column: 23, line: 3 },
+          },
+        ],
+        verificationDiagnostics: [
+          {
+            branch: 'stock-reserve',
+            code: 'FW405',
+            domain: 'product',
+            site: 'cart.domain.ts:2',
+          },
+          {
+            code: 'FW402',
+            detail: 'observed table audit_log',
+            domain: 'audit',
+          },
+          {
+            code: 'FW403',
+            domain: 'order',
+          },
+          {
+            code: 'FW404',
+            detail: 'observed table unknown_table',
+            domain: 'unknown_table',
+          },
+          {
+            code: 'FW407',
+            detail: 'observed table products',
+            domain: 'product',
+            site: 'cart.queries.ts:7',
+          },
+          {
+            code: 'FW408',
+            detail: 'expected id observed sku',
+            domain: 'product',
+            site: 'product.domain.ts:9',
+          },
+          {
+            code: 'FW410',
+            detail: 'cart Expected number',
+            domain: 'cart',
+            site: 'cart.queries.ts:11',
+          },
+        ],
+      }),
+    ),
+    {
+      coverage: [],
       diagnostics: [
         {
           code: 'FW410',
-          site: 'cart.queries.ts:5',
+          message: 'Query result shape failed declared output schema.',
+          properties: {},
+          severity: 'ERROR',
+          target: 'cart.queries.ts:5',
         },
         {
           code: 'FW302',
           message: 'data-bind path is not present in the declared query shape. cart.missing',
-          site: 'cart-badge.tsx',
-          start: { column: 23, line: 3 },
+          properties: {},
+          severity: 'ERROR',
+          target: 'cart-badge.tsx:3:23',
         },
-      ],
-      verificationDiagnostics: [
         {
-          branch: 'stock-reserve',
           code: 'FW405',
-          domain: 'product',
-          site: 'cart.domain.ts:2',
+          message:
+            'Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
+          properties: {},
+          severity: 'WARN',
+          target: 'cart.domain.ts:2',
         },
         {
           code: 'FW402',
-          detail: 'observed table audit_log',
-          domain: 'audit',
+          message: 'Write touched an undeclared domain. domain=audit observed table audit_log',
+          properties: {},
+          severity: 'ERROR',
+          target: 'domain:audit',
         },
         {
           code: 'FW403',
-          domain: 'order',
+          message: 'Declared domain was never observed written. domain=order',
+          properties: {},
+          severity: 'WARN',
+          target: 'domain:order',
         },
         {
           code: 'FW404',
-          detail: 'observed table unknown_table',
-          domain: 'unknown_table',
+          message: 'Write to unmapped table. domain=unknown_table observed table unknown_table',
+          properties: {},
+          severity: 'ERROR',
+          target: 'domain:unknown_table',
         },
         {
           code: 'FW407',
-          detail: 'observed table products',
-          domain: 'product',
-          site: 'cart.queries.ts:7',
+          message: 'Query read from undeclared domain. domain=product observed table products',
+          properties: {},
+          severity: 'ERROR',
+          target: 'cart.queries.ts:7',
         },
         {
           code: 'FW408',
-          detail: 'expected id observed sku',
-          domain: 'product',
-          site: 'product.domain.ts:9',
+          message:
+            'Declared row key differs from observed row predicate. domain=product expected id observed sku',
+          properties: {},
+          severity: 'ERROR',
+          target: 'product.domain.ts:9',
         },
         {
           code: 'FW410',
-          detail: 'cart Expected number',
-          domain: 'cart',
-          site: 'cart.queries.ts:11',
+          message:
+            'Query result shape failed declared output schema. domain=cart cart Expected number',
+          properties: {},
+          severity: 'ERROR',
+          target: 'cart.queries.ts:11',
         },
       ],
-    }).output,
-    [
-      'fw-check/v1',
-      'ERROR FW410 cart.queries.ts:5 Query result shape failed declared output schema.',
-      'ERROR FW302 cart-badge.tsx:3:23 data-bind path is not present in the declared query shape. cart.missing',
-      'WARN FW405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
-      'ERROR FW402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
-      'WARN FW403 domain:order Declared domain was never observed written. domain=order',
-      'ERROR FW404 domain:unknown_table Write to unmapped table. domain=unknown_table observed table unknown_table',
-      'ERROR FW407 cart.queries.ts:7 Query read from undeclared domain. domain=product observed table products',
-      'ERROR FW408 product.domain.ts:9 Declared row key differs from observed row predicate. domain=product expected id observed sku',
-      'ERROR FW410 cart.queries.ts:11 Query result shape failed declared output schema. domain=cart cart Expected number',
-      '',
-    ].join('\n'),
+      exitCode: 1,
+      status: 'issues',
+      version: 'fw-check/v1',
+    },
   );
-  assert.equal(
-    fwCheck({
-      diagnostics: [{ code: 'FW411', site: 'cart.queries.ts:9' }],
-    }).output,
-    [
-      'fw-check/v1',
-      'ERROR FW411 cart.queries.ts:9 Query read set includes an exempt table.',
-      '',
-    ].join('\n'),
+  assert.deepEqual(
+    fwCheckAssertionFact(
+      fwCheck({
+        diagnostics: [{ code: 'FW411', site: 'cart.queries.ts:9' }],
+      }),
+    ),
+    {
+      coverage: [],
+      diagnostics: [
+        {
+          code: 'FW411',
+          message: 'Query read set includes an exempt table.',
+          properties: {},
+          severity: 'ERROR',
+          target: 'cart.queries.ts:9',
+        },
+      ],
+      exitCode: 1,
+      status: 'issues',
+      version: 'fw-check/v1',
+    },
   );
 
   const noFragmentRoot = {
@@ -5301,20 +5417,33 @@ export const CartBadge = component('cart-badge', {
   assert.ok(diagnostic);
 
   assert.deepEqual(
-    fwCheck({
+    fwCheckAssertionFact(
+      fwCheck({
+        diagnostics: [
+          {
+            code: diagnostic.code,
+            message: diagnostic.message,
+            site: diagnostic.fileName,
+            start: diagnostic.start,
+          },
+        ],
+      }),
+    ),
+    {
+      coverage: [],
       diagnostics: [
         {
-          code: diagnostic.code,
-          message: diagnostic.message,
-          site: diagnostic.fileName,
-          start: diagnostic.start,
+          code: 'FW235',
+          message:
+            'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+          properties: {},
+          severity: 'ERROR',
+          target: 'cart-badge.tsx:4:25',
         },
       ],
-    }),
-    {
       exitCode: 1,
-      output:
-        'fw-check/v1\nERROR FW235 cart-badge.tsx:4:25 App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.\n',
+      status: 'issues',
+      version: 'fw-check/v1',
     },
   );
 });
@@ -6049,32 +6178,51 @@ export const CartTotal = component('cart-total', {
       }),
     /Render equivalence failed for components\/cart\/cart-total\.server\.js/,
   );
-  assert.equal(
-    fwCheck({
-      renderEquivalenceChecks: [
+  assert.deepEqual(
+    fwCheckAssertionFact(
+      fwCheck({
+        renderEquivalenceChecks: [
+          {
+            actual: 'sha256:lowered',
+            artifact: 'components/z.server.js',
+            detail: 'render(src) differed from render(compile(src)).',
+            expected: 'sha256:authored',
+            ok: false,
+          },
+          {
+            artifact: 'components/ok.server.js',
+            ok: true,
+          },
+          {
+            artifact: 'components/a.server.js',
+            ok: false,
+          },
+        ],
+      }),
+    ),
+    {
+      coverage: [],
+      diagnostics: [
         {
-          actual: 'sha256:lowered',
-          artifact: 'components/z.server.js',
-          detail: 'render(src) differed from render(compile(src)).',
-          expected: 'sha256:authored',
-          ok: false,
+          code: 'RENDER_EQUIV',
+          message: 'Authored and lowered render output must match byte-for-byte.',
+          properties: {},
+          severity: 'ERROR',
+          target: 'components/a.server.js',
         },
         {
-          artifact: 'components/ok.server.js',
-          ok: true,
-        },
-        {
-          artifact: 'components/a.server.js',
-          ok: false,
+          code: 'RENDER_EQUIV',
+          message:
+            'render(src) differed from render(compile(src)). expected="sha256:authored" actual="sha256:lowered"',
+          properties: {},
+          severity: 'ERROR',
+          target: 'components/z.server.js',
         },
       ],
-    }).output,
-    [
-      'fw-check/v1',
-      'ERROR RENDER_EQUIV components/a.server.js Authored and lowered render output must match byte-for-byte.',
-      'ERROR RENDER_EQUIV components/z.server.js render(src) differed from render(compile(src)). expected="sha256:authored" actual="sha256:lowered"',
-      '',
-    ].join('\n'),
+      exitCode: 1,
+      status: 'issues',
+      version: 'fw-check/v1',
+    },
   );
 });
 

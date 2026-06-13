@@ -28,6 +28,17 @@ export interface FwCheckResultFact extends FwCheckOutput {
   exitCode: number;
 }
 
+export type FwCheckDiagnosticAssertionFact = Omit<FwCheckDiagnosticFact, 'raw'>;
+export type FwCheckCoverageAssertionFact = Omit<FwCheckCoverageFact, 'raw'>;
+
+export interface FwCheckAssertionFact {
+  coverage: FwCheckCoverageAssertionFact[];
+  diagnostics: FwCheckDiagnosticAssertionFact[];
+  exitCode: number;
+  status: FwCheckOutput['status'];
+  version: FwCheckOutput['version'];
+}
+
 export function parseFwCheckOutput(output: string): FwCheckOutput {
   const lines = output.trimEnd().split('\n');
   const version = lines[0];
@@ -66,12 +77,32 @@ export function fwCheckResultFact(result: FwCheckResultLike): FwCheckResultFact 
   return { ...parseFwCheckOutput(result.output), exitCode: result.exitCode };
 }
 
+export function fwCheckAssertionFact(result: FwCheckResultLike): FwCheckAssertionFact {
+  const fact = fwCheckResultFact(result);
+
+  return {
+    coverage: fact.coverage.map(({ raw: _raw, ...coverage }) => coverage),
+    diagnostics: fact.diagnostics.map(({ raw: _raw, ...diagnostic }) => diagnostic),
+    exitCode: fact.exitCode,
+    status: fact.status,
+    version: fact.version,
+  };
+}
+
 export function fwCheckDiagnosticFacts(output: string): FwCheckDiagnosticFact[] {
   return parseFwCheckOutput(output).diagnostics;
 }
 
+export function fwCheckDiagnosticAssertionFacts(output: string): FwCheckDiagnosticAssertionFact[] {
+  return fwCheckDiagnosticFacts(output).map(({ raw: _raw, ...fact }) => fact);
+}
+
 export function fwCheckCoverageFacts(output: string): FwCheckCoverageFact[] {
   return parseFwCheckOutput(output).coverage;
+}
+
+export function fwCheckCoverageAssertionFacts(output: string): FwCheckCoverageAssertionFact[] {
+  return fwCheckCoverageFacts(output).map(({ raw: _raw, ...fact }) => fact);
 }
 
 function parseFwCheckDiagnostic(line: string): FwCheckDiagnosticFact | undefined {
@@ -81,11 +112,12 @@ function parseFwCheckDiagnostic(line: string): FwCheckDiagnosticFact | undefined
   const severity = match[1] as 'ERROR' | 'WARN';
   const code = match[2] ?? '';
   const detail = match[3] ?? '';
-  const properties = leadingKeyValueFields(detail);
-  const propertyPrefix = Object.entries(properties)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(' ');
-  const rest = propertyPrefix.length > 0 ? detail.slice(propertyPrefix.length).trimStart() : detail;
+  const parsedProperties = leadingKeyValueFields(detail);
+  const properties = parsedProperties.fields;
+  const rest =
+    parsedProperties.consumedLength > 0
+      ? detail.slice(parsedProperties.consumedLength).trimStart()
+      : detail;
   const parsed = parseTargetAndMessage(code, rest);
 
   return {
@@ -113,33 +145,72 @@ function parseTargetAndMessage(code: string, detail: string): { message: string;
     return detail === message ? { message, target: '' } : { message: detail, target: '' };
   }
 
+  if (code === 'UNGUARDED') {
+    if (detail.startsWith('page ') || detail.startsWith('query ')) {
+      const [kind = '', target = '', ...messageParts] = detail.split(/\s+/);
+      return { message: messageParts.join(' '), target: `${kind} ${target}` };
+    }
+  }
+
   const [target, ...messageParts] = detail.split(/\s+/);
   return { message: messageParts.join(' '), target: target ?? '' };
 }
 
-function leadingKeyValueFields(source: string): Record<string, string> {
+function leadingKeyValueFields(source: string): {
+  consumedLength: number;
+  fields: Record<string, string>;
+} {
   const fields: Record<string, string> = {};
+  let consumedLength = 0;
+  let index = 0;
 
-  for (const entry of source.split(/\s+/)) {
-    if (entry.length === 0) continue;
-    const separator = entry.indexOf('=');
+  while (index < source.length) {
+    while (source[index] === ' ') index += 1;
+    const start = index;
+    const separator = source.indexOf('=', start);
     if (separator === -1) break;
-    const key = entry.slice(0, separator);
-    const value = entry.slice(separator + 1);
+
+    const key = source.slice(start, separator);
+    if (key.length === 0 || /\s/.test(key)) break;
+
+    let value = '';
+    let nextIndex = separator + 1;
+    if (source[nextIndex] === '"') {
+      nextIndex += 1;
+      while (nextIndex < source.length) {
+        const character = source[nextIndex];
+        if (character === '"') {
+          nextIndex += 1;
+          break;
+        }
+        if (character === '\\' && nextIndex + 1 < source.length) {
+          value += source[nextIndex + 1];
+          nextIndex += 2;
+          continue;
+        }
+        value += character;
+        nextIndex += 1;
+      }
+    } else {
+      const valueStart = nextIndex;
+      while (nextIndex < source.length && !/\s/.test(source[nextIndex]!)) nextIndex += 1;
+      value = source.slice(valueStart, nextIndex);
+    }
+
     if (key.length === 0 || value.length === 0) break;
     fields[key] = value;
+    consumedLength = nextIndex;
+    index = nextIndex;
   }
 
-  return fields;
+  return { consumedLength, fields };
 }
 
 function parseKeyValueFields(source: string): Record<string, string> {
-  const fields = leadingKeyValueFields(source);
-  const consumed = Object.entries(fields)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(' ');
-  if (consumed !== source.trim()) {
+  const parsed = leadingKeyValueFields(source);
+  const rest = source.slice(parsed.consumedLength).trim();
+  if (rest.length > 0) {
     throw new Error(`fw check coverage fields are key=value entries: ${source}`);
   }
-  return fields;
+  return parsed.fields;
 }

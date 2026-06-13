@@ -55,11 +55,17 @@ import {
   type FwExportSummary,
 } from '@jiso/test/fw-export-fixtures';
 import {
+  fwCheckAssertionFact,
+  fwCheckCoverageAssertionFacts,
   fwCheckCoverageFacts,
+  fwCheckDiagnosticAssertionFacts,
   fwCheckDiagnosticFacts,
   fwCheckResultFact,
   parseFwCheckOutput,
+  type FwCheckAssertionFact,
+  type FwCheckCoverageAssertionFact,
   type FwCheckCoverageFact,
+  type FwCheckDiagnosticAssertionFact,
   type FwCheckDiagnosticFact,
   type FwCheckOutput,
   type FwCheckResultFact,
@@ -534,16 +540,52 @@ describe('@jiso/test package subpath exports', () => {
       exitCode: 0,
       status: 'ok',
     });
+    expect(fwCheckAssertionFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toMatchObject({
+      diagnostics: [],
+      exitCode: 0,
+    });
     expect(
       fwCheckDiagnosticFacts(
         'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
       ),
     ).toMatchObject([{ code: 'FW310', target: 'cart/add -> cart' }]);
     expect(
+      fwCheckDiagnosticAssertionFacts(
+        'fw-check/v1\nWARN FW311 component=Cart query=cart.count position="conditional <dot>" Query-dependent DOM position has no update status.\n',
+      ),
+    ).toEqual([
+      {
+        code: 'FW311',
+        message: 'Query-dependent DOM position has no update status.',
+        properties: {
+          component: 'Cart',
+          position: 'conditional <dot>',
+          query: 'cart.count',
+        },
+        severity: 'WARN',
+        target: '',
+      },
+    ]);
+    expect(
       fwCheckCoverageFacts(
         'fw-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment\n',
       ),
     ).toMatchObject([{ properties: { component: 'Cart', status: 'fragment' } }]);
+    expect(
+      fwCheckCoverageAssertionFacts(
+        'fw-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment detail="text binding"\n',
+      ),
+    ).toEqual([
+      {
+        properties: {
+          component: 'Cart',
+          detail: 'text binding',
+          position: 'replace',
+          query: 'cart',
+          status: 'fragment',
+        },
+      },
+    ]);
     expect(executeGeneratedClientModule).toBeTypeOf('function');
     expect(executeGeneratedServerRenderSource).toBeTypeOf('function');
     expect(executeGeneratedBootstrapModule).toBeTypeOf('function');
@@ -612,7 +654,10 @@ type _PublicSubpathTypes = [
   FwExportHtmlArtifact,
   FwExportOutput,
   FwExportSummary,
+  FwCheckAssertionFact,
+  FwCheckCoverageAssertionFact,
   FwCheckCoverageFact,
+  FwCheckDiagnosticAssertionFact,
   FwCheckDiagnosticFact,
   FwCheckOutput,
   FwCheckResultFact,

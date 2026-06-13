@@ -52,6 +52,10 @@ Current state:
 - Shared `fw-check` fixtures now parse `fw-check/v1` OK, diagnostic, and coverage output into
   structured result facts; commerce/starter graph gates assert result facts instead of raw OK
   strings.
+- Shared `fw-check` fixtures now also expose rawless assertion facts and parse quoted
+  key/value fields, so update coverage, unguarded audit, verification diagnostics, FW235, and
+  render-equivalence harness checks assert structured public facts instead of serialized output
+  strings.
 - Integration fix: `fw-check` now uses the canonical
   `applyDeferredStreamResponseToRuntime` API after runtime compatibility export deletion.
 - Shared `@jiso/test/graph-fixtures` now derive graph page, fragment target, invalidation,
@@ -75,9 +79,11 @@ Latest focused evidence:
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`
+- `node --test --test-name-pattern "P1 compiler emits FW311 update coverage facts|P3 route and query guard removal is mechanically audited by fw check|P9 verification layer evidence remains represented|D9 FW235 fails fw-check for app-authored lowered IR component modules|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
@@ -274,6 +280,8 @@ Current state:
 - `@jiso/test` includes reusable fixture seams for generated modules, fw-explain, TypeScript,
   fw-check output, source/project facts, commands, starter templates, wire, static export, touch
   graphs, and graph invalidation/consumer facts.
+- `@jiso/test/fw-check-fixtures` exposes rawless assertion facts for CLI diagnostics and coverage,
+  with focused parser tests covering quoted coverage/update fields and unguarded page/query rows.
 - Commerce source-truth no longer owns local `fw-explain` parsing helpers for the currently
   covered graph/update/scope facts.
 - Commerce source-truth no longer owns local graph page/fragment/invalidation helpers for the
@@ -291,7 +299,9 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `node --test --test-name-pattern "P1 compiler emits FW311 update coverage facts|P3 route and query guard removal is mechanically audited by fw check|P9 verification layer evidence remains represented|D9 FW235 fails fw-check for app-authored lowered IR component modules|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`
 - `pnpm run check:build`
 
 ## Phase 7 - Test Restructuring
@@ -302,6 +312,9 @@ Current state:
   server static export, compiler shared/model-pipeline, and `@jiso/test` fixtures.
 - `tests/fw-check.node.mjs` is still large but increasingly delegates mechanics to focused
   package fixtures.
+- The remaining `fw-check` monolith checks for update coverage, unguarded audit, verification
+  diagnostics, FW235, and render-equivalence now consume `@jiso/test/fw-check-fixtures` assertion
+  facts instead of owning local `raw` stripping or full-output comparisons.
 
 Open:
 
