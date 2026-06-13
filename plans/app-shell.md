@@ -230,6 +230,17 @@ Round93 app-shell Vite static-export boundary evidence:
 - `pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite-build-assets.ts packages/server/src/vite-static-export.ts packages/server/src/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round94 app-shell Vite build output boundary evidence:
+
+- `packages/server/src/vite-build-output.ts` now owns Vite output directory selection, compiled
+  `/c/` client-module writes, static-export asset publication planning, and output path safety,
+  leaving `vite-build.ts` to construct manifest-backed app-shell builds.
+- `packages/server/src/vite-build.test.ts` pins the extracted output seam, including
+  `output.dir`/`output.file` resolution and rejection of writes outside the Vite output tree.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:

@@ -7,7 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { route } from './route.js';
 import { staticExportManifest } from './static-export.js';
-import { createJisoAppShellViteBuild, writeJisoAppShellViteBuildOutput } from './vite-build.js';
+import { createJisoAppShellViteBuild } from './vite-build.js';
+import {
+  jisoAppShellViteOutputDir,
+  writeJisoAppShellViteBuildOutput,
+} from './vite-build-output.js';
 import {
   exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
@@ -198,6 +202,44 @@ describe('server app shell Vite build seam', () => {
         rm(distDir, { force: true, recursive: true }),
         rm(outDir, { force: true, recursive: true }),
       ]);
+    }
+  });
+
+  it('keeps Vite output path selection and writes inside the build output directory', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-boundary-dist-'));
+
+    try {
+      expect(jisoAppShellViteOutputDir({ dir: join(distDir, 'client') })).toBe(
+        join(distDir, 'client'),
+      );
+      expect(jisoAppShellViteOutputDir({ file: join(distDir, 'server/app-shell.js') })).toBe(
+        join(distDir, 'server'),
+      );
+      expect(() => jisoAppShellViteOutputDir({})).toThrow(
+        'App shell Vite build output requires output.dir or output.file.',
+      );
+
+      await expect(
+        writeJisoAppShellViteBuildOutput(
+          {
+            clientModules: [
+              {
+                file: '../escape.js',
+                href: '/c/escape.js?v=escape',
+                path: '/c/escape.js',
+                source: 'export const escape = true;',
+                version: 'escape',
+              },
+            ],
+          },
+          { outDir: distDir },
+        ),
+      ).rejects.toThrow(
+        'App shell build asset must stay within the Vite output directory: ../escape.js',
+      );
+      await expect(readFile(join(distDir, '../escape.js'))).rejects.toThrow();
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
     }
   });
 

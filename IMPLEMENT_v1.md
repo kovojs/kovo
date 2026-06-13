@@ -76,6 +76,12 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       while preserving the public app-shell Vite barrel. Same-session evidence:
       `pnpm exec vitest --run packages/server/src` and
       `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: Vite build output path resolution and compiled `/c/`
+      module writes now live in `packages/server/src/vite-build-output.ts`, leaving
+      `packages/server/src/vite-build.ts` focused on manifest-backed app-shell build
+      construction while preserving the public Vite app-shell barrel. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src` and
+      `pnpm exec tsc --noEmit --pretty false`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

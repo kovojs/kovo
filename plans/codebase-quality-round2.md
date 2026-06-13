@@ -664,6 +664,12 @@ Closed evidence so far:
   `packages/server/src/static-export-response.test.ts`,
   `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`, and
   `pnpm exec tsc --noEmit --pretty false`.
+- Vite build output path selection and compiled `/c/` module writes now live in
+  `packages/server/src/vite-build-output.ts`, leaving `vite-build.ts` focused on
+  manifest-backed app-shell build construction while the public Vite app-shell barrel remains
+  stable. Evidence: `packages/server/src/vite-build-output.ts`,
+  `packages/server/src/vite-build.test.ts`, `pnpm exec vitest --run packages/server/src`, and
+  `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 
