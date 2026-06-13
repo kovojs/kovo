@@ -1,8 +1,8 @@
 import { definedProps } from './defined-props.js';
 import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
-import { createQueryScriptHydrationLedger } from './query-apply.js';
-import type { QueryScriptLike } from './query-apply.js';
+import { createQueryScriptHydrationLedger, queryScriptsFromRoot } from './query-apply.js';
+import type { QueryScriptRootLike } from './query-apply.js';
 import { refetchQueries } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
@@ -13,11 +13,10 @@ export interface RefetchQueryLedger {
 }
 
 export interface QueryVisibleReturnRefetchRoot
-  extends ListenerTargetLike<unknown>, VisibilityStateLike {}
+  extends ListenerTargetLike<unknown>, QueryScriptRootLike, VisibilityStateLike {}
 
 export interface QueryVisibleReturnRefetchOptions {
   onError?: (error: unknown) => void;
-  queryScripts?: () => Iterable<QueryScriptLike>;
   queryRefetch?: QueryRefetchOptions;
   queryStore?: QueryStore;
   refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
@@ -69,10 +68,10 @@ export function installQueryVisibleReturnRefetch(
     : undefined;
 
   const hydrateNewQueryScripts = () => {
-    if (!hydrationLedger || !options.queryScripts) return;
+    if (!hydrationLedger) return;
 
     ledger.remember(
-      hydrationLedger.hydrate(options.queryScripts(), {
+      hydrationLedger.hydrate(queryScriptsFromRoot(options.root), {
         onError(error) {
           reportRuntimeError(options.onError, error);
         },

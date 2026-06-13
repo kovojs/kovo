@@ -42,6 +42,7 @@ export interface ApplyInlineQueryEventOptions {
 }
 
 export interface InstallInlineQueryEventHydrationOptions extends ApplyInlineQueryEventOptions {
+  onAppliedQueries?: (queries: readonly string[]) => void;
   target: QueryEventHydrationTarget;
 }
 
@@ -68,7 +69,8 @@ export function installInlineQueryEventHydration(
 ): () => void {
   const listener = (event: InlineQueryEvent) => {
     try {
-      applyInlineQueryEventToRuntime(event, options);
+      const applied = applyInlineQueryEventToRuntime(event, options);
+      if (applied.length > 0) options.onAppliedQueries?.(applied);
     } catch (error) {
       reportRuntimeError(options.onError, error);
     }

@@ -17,7 +17,6 @@ import type { QueryEventHydrationTarget } from './query-events.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
-import { queryScriptsFromRoot } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 
 export interface JisoLoaderOptions {
@@ -55,9 +54,6 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     },
     ...definedProps({
       queryRefetch: options.queryRefetch,
-      queryScripts: options.root.querySelectorAll
-        ? () => queryScriptsFromRoot(options.root)
-        : undefined,
       queryStore: options.queryStore,
       refetchOnFocus: options.refetchOnFocus,
       refetchOnFocusOptOut: options.refetchOnFocusOptOut,
@@ -108,6 +104,9 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       installInlineQueryEventHydration({
         onError(error) {
           reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
+        },
+        onAppliedQueries(queries) {
+          queryVisibleReturn.rememberAppliedQueries(queries);
         },
         root: options.root,
         store: options.queryStore,

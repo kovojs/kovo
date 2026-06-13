@@ -294,6 +294,7 @@ describe('runtime browser suite', () => {
   it('hydrates inline query events into the runtime store and DOM bindings', async () => {
     document.body.innerHTML = '<output data-bind="cart.count"></output>';
     const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
     const output = document.querySelector('output');
     if (!output) throw new Error('missing query binding output');
 
@@ -301,6 +302,7 @@ describe('runtime browser suite', () => {
       importModule: vi.fn(),
       queryPlans: { cart: { bindings: true } },
       queryStore: store,
+      refetchOnFocus,
       root: document,
     });
 
@@ -316,6 +318,11 @@ describe('runtime browser suite', () => {
     expect(store.get('cart')).toEqual({ count: 5 });
     expect(output.textContent).toBe('5');
 
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => {
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    });
+
     loader.dispose();
     window.dispatchEvent(
       new CustomEvent('jiso:query', {
@@ -327,7 +334,8 @@ describe('runtime browser suite', () => {
     );
 
     // SPEC.md §9.1/§9.4: inline enhanced responses publish the same query
-    // truth as mutation responses, but loader disposal must remove hydration.
+    // truth and visible-return refetch eligibility as mutation responses, but
+    // loader disposal must remove hydration.
     expect(store.get('cart')).toEqual({ count: 5 });
     expect(output.textContent).toBe('5');
   });

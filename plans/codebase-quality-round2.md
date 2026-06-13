@@ -481,6 +481,17 @@ packages/runtime/src/query-events.ts packages/runtime/src/inline-loader-build.ts
 packages/runtime/src/inline-loader.ts packages/runtime/src/query-store.test.ts
 packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Visible-return hydration no longer accepts a caller-provided `queryScripts` callback: the
+  visible-return installer scans the root through `queryScriptsFromRoot`, and inline
+  `jiso:query` hydration reports applied query keys back into the same visible-return ledger used
+  by mutation responses and typed reads (SPEC.md §4.4/§9.1/§9.4). Same-session evidence:
+  `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+  `pnpm --filter @jiso/runtime run check:inline-loader`, and `pnpm exec vp check
+packages/runtime/src/query-visible-return.ts packages/runtime/src/query-events.ts
+packages/runtime/src/loader.ts packages/runtime/src/query-refetch.test.ts
+packages/runtime/src/query-store.test.ts packages/runtime/src/index.browser.test.ts
+IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 

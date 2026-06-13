@@ -59,7 +59,6 @@ describe('query refetch', () => {
     store.subscribe('cart', plan);
 
     const lifecycle = installQueryVisibleReturnRefetch({
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       root,
     });
@@ -98,7 +97,6 @@ describe('query refetch', () => {
 
     const refetch = installQueryVisibleReturnRefetch({
       queryRefetch: { fetch },
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -151,7 +149,6 @@ describe('query refetch', () => {
 
     installQueryVisibleReturnRefetch({
       queryRefetch: { fetch },
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -202,7 +199,6 @@ describe('query refetch', () => {
     installQueryVisibleReturnRefetch({
       onError,
       queryRefetch: { fetch },
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       root,
     });
@@ -236,7 +232,6 @@ describe('query refetch', () => {
     installQueryVisibleReturnRefetch({
       onError,
       queryRefetch: { fetch },
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       refetchOnFocus: async () => {
         throw callbackError;
@@ -271,7 +266,6 @@ describe('query refetch', () => {
 
     const refetch = installQueryVisibleReturnRefetch({
       queryRefetch: { fetch },
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -312,7 +306,6 @@ describe('query refetch', () => {
 
     const refetch = installQueryVisibleReturnRefetch({
       queryRefetch: { fetch },
-      queryScripts: () => root.querySelectorAll('script[fw-query]'),
       queryStore: store,
       refetchOnFocus,
       root,

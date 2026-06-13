@@ -280,6 +280,7 @@ describe('query store hydration and refetch', () => {
 
   it('installs disposable inline query event hydration listeners', () => {
     const store = createQueryStore();
+    const onAppliedQueries = vi.fn();
     const listeners = new Map<string, (event: { detail?: unknown }) => void>();
     const target: QueryEventHydrationTarget = {
       addEventListener(type: string, listener: (event: { detail?: unknown }) => void) {
@@ -289,7 +290,7 @@ describe('query store hydration and refetch', () => {
         if (listeners.get(type) === listener) listeners.delete(type);
       },
     };
-    const dispose = installInlineQueryEventHydration({ store, target });
+    const dispose = installInlineQueryEventHydration({ onAppliedQueries, store, target });
 
     listeners.get('jiso:query')?.({
       detail: {
@@ -298,6 +299,7 @@ describe('query store hydration and refetch', () => {
       },
     });
     expect(store.get('cart')).toEqual({ count: 1 });
+    expect(onAppliedQueries).toHaveBeenCalledWith(['cart']);
 
     dispose();
     listeners.get('jiso:query')?.({
@@ -308,6 +310,7 @@ describe('query store hydration and refetch', () => {
     });
     expect(listeners.has('jiso:query')).toBe(false);
     expect(store.get('cart')).toEqual({ count: 1 });
+    expect(onAppliedQueries).toHaveBeenCalledTimes(1);
   });
 
   it('hydrates each server query script once while accepting later script nodes', () => {
