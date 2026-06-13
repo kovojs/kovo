@@ -620,6 +620,16 @@ plans/codebase-quality-round2.md`, and `git diff --check`.
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 	conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: shorthand query loaders such as `query(..., { load })`
+      now resolve the loader through ts-morph symbols to function declarations and
+      variable-assigned functions instead of disappearing; typed project loaders produce exact
+      Postgres read/shape facts, source shorthand loaders extract source-mode reads, and untyped
+      project shorthand loaders stay invisible rather than falling back to receiver names.
+      Package and real `drizzle-orm` conformance tests pin the behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src`, `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query

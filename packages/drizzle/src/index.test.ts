@@ -2422,6 +2422,71 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project shorthand query-loader functions through typed receiver symbols', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function load(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'export const productQuery = query("product/shorthand-loader", {',
+            '  load,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/shorthand-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'const load = (_input, db) => {',
+            '  db.update(products);',
+            '  return db.select({ id: products.id }).from(products);',
+            '};',
+            '',
+            'export const productQuery = query("product/untyped-shorthand-loader", {',
+            '  load,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([]);
+  });
+
   it('marks project query-loader direct receiver carrier members as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -7561,6 +7626,37 @@ export interface CommerceInvalidationSets {
         site: 'user.queries.ts:3',
       },
     ]);
+  });
+
+  it('extracts source shorthand query-loader functions from resolved loader symbols', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function load(_input, db) {',
+          '  return db.select({ id: users.id }).from(users);',
+          '}',
+          '',
+          'export const usersQuery = query("users/source-shorthand-loader", {',
+          '  load,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'users/source-shorthand-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'user.queries.ts:7',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
   it('marks source query-loader destructuring assignment receiver aliases as FW406', () => {

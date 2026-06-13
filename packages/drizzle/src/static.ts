@@ -2268,6 +2268,7 @@ function appendQueryReceiverParameterReferences(
 function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
   if (
     Node.isArrowFunction(callback) ||
+    Node.isFunctionDeclaration(callback) ||
     Node.isFunctionExpression(callback) ||
     Node.isMethodDeclaration(callback)
   ) {
@@ -2622,6 +2623,9 @@ function queryCallbackFunction(node: Node): Node | undefined {
   // config/helper properties that happen to accept a db-like parameter.
   if (!queryCallbackPropertyIsLoad(node)) return undefined;
 
+  if (Node.isShorthandPropertyAssignment(node)) {
+    return referencedQueryCallbackFunction(node.getNameNode());
+  }
   if (Node.isMethodDeclaration(node)) return node;
   if (!Node.isPropertyAssignment(node)) return undefined;
 
@@ -2634,8 +2638,54 @@ function queryCallbackFunction(node: Node): Node | undefined {
 }
 
 function queryCallbackPropertyIsLoad(node: Node): boolean {
-  if (!Node.isMethodDeclaration(node) && !Node.isPropertyAssignment(node)) return false;
+  if (
+    !Node.isMethodDeclaration(node) &&
+    !Node.isPropertyAssignment(node) &&
+    !Node.isShorthandPropertyAssignment(node)
+  ) {
+    return false;
+  }
   return propertyNameText(node.getNameNode()) === 'load';
+}
+
+function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+
+  const symbol = symbolForIdentifierReference(identifier);
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    const callback = queryCallbackFunctionFromDeclaration(declaration);
+    if (callback) return callback;
+  }
+
+  return undefined;
+}
+
+function queryCallbackFunctionFromDeclaration(declaration: Node): Node | undefined {
+  if (Node.isFunctionDeclaration(declaration) && declaration.getNameNode()) return declaration;
+  if (Node.isVariableDeclaration(declaration))
+    return queryCallbackFunctionFromVariable(declaration);
+
+  if (!Node.isIdentifier(declaration)) return undefined;
+
+  const parent = declaration.getParent();
+  if (Node.isFunctionDeclaration(parent) && parent.getNameNode() === declaration) return parent;
+  if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
+    return queryCallbackFunctionFromVariable(parent);
+  }
+
+  return undefined;
+}
+
+function queryCallbackFunctionFromVariable(
+  declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
+): Node | undefined {
+  const initializer = declaration.getInitializer();
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
+    ? expression
+    : undefined;
 }
 
 function queryHelperReceiverArgumentName(

@@ -94,11 +94,16 @@ Current state: direct Drizzle/project extraction is backed by ts-morph where pro
 indirect receiver, carrier, destructuring, nested destructuring, detached method, helper handoff, and
 quoted property surfaces now degrade to FW406 instead of fabricating exact facts. Project tuple
 receiver aliases now use ts-morph tuple/array element type facts for exact Postgres receiver proof,
-while source-mode array receiver carriers degrade destructured and assigned aliases to FW406. V1
-proof remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
+while source-mode array receiver carriers degrade destructured and assigned aliases to FW406.
+Shorthand query loaders now resolve through ts-morph symbols instead of disappearing. V1 proof
+remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
+      Evidence: `packages/drizzle/src/static.ts` resolves `query(..., { load })` through
+      referenced function symbols; `packages/drizzle/src/index.test.ts` covers source shorthand,
+      typed project shorthand, and untyped project shorthand; `conformance/drizzle-pin/src/index.test.ts`
+      pins real `drizzle-orm` typed shorthand loaders.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

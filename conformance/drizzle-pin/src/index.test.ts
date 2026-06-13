@@ -1390,6 +1390,45 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins shorthand query-loader functions under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  name: text('name').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function load(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, name: products.name }).from(products);',
+            '}',
+            '',
+            "export const productQuery = query('product/shorthand-loader', {",
+            '  load,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/shorthand-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',
