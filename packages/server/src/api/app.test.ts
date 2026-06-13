@@ -17,6 +17,9 @@ import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
 import * as renderingApi from './rendering.js';
+import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
+import * as staticExportOutputApi from '../static-export-output.js';
+import * as staticExportTypesApi from '../static-export-types.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 import type {
@@ -114,16 +117,16 @@ describe('server app-shell public API barrels', () => {
     );
 
     expect(publicApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
-    expect(publicApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
-    expect(publicApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
-    expect(publicApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
+    expect(publicApi.staticExportInventory).toBe(staticExportTypesApi.staticExportInventory);
+    expect(publicApi.staticExportManifest).toBe(staticExportTypesApi.staticExportManifest);
+    expect(publicApi.staticExportOutputPlan).toBe(staticExportOutputApi.staticExportOutputPlan);
     expect(publicApi.formatStaticExportDiagnostic).toBe(
-      staticExportApi.formatStaticExportDiagnostic,
+      staticExportDiagnosticsApi.formatStaticExportDiagnostic,
     );
     expect(publicApi.isStaticExportDiagnosticError).toBe(
-      staticExportApi.isStaticExportDiagnosticError,
+      staticExportDiagnosticsApi.isStaticExportDiagnosticError,
     );
-    expect(publicApi.StaticExportError).toBe(staticExportApi.StaticExportError);
+    expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
 
     expect(appShellApi.createApp).toBe(coreApi.createApp);
     expect(appShellApi.createMemoryVersionedClientModuleRegistry).toBe(
@@ -131,11 +134,11 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
-    expect(appShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
-    expect(appShellApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
-    expect(appShellApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
+    expect(appShellApi.staticExportInventory).toBe(staticExportTypesApi.staticExportInventory);
+    expect(appShellApi.staticExportManifest).toBe(staticExportTypesApi.staticExportManifest);
+    expect(appShellApi.staticExportOutputPlan).toBe(staticExportOutputApi.staticExportOutputPlan);
     expect(appShellApi.formatStaticExportDiagnostics).toBe(
-      staticExportApi.formatStaticExportDiagnostics,
+      staticExportDiagnosticsApi.formatStaticExportDiagnostics,
     );
     expect(appShellApi.isStaticExportDiagnostic).toBe(staticExportApi.isStaticExportDiagnostic);
     expect(appShellApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
@@ -203,17 +206,19 @@ describe('server app-shell public API barrels', () => {
     expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(packageStaticExportApi.staticExportInventory).toBe(
-      staticExportApi.staticExportInventory,
+      staticExportTypesApi.staticExportInventory,
     );
-    expect(packageStaticExportApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
+    expect(packageStaticExportApi.staticExportManifest).toBe(
+      staticExportTypesApi.staticExportManifest,
+    );
     expect(packageStaticExportApi.staticExportOutputPlan).toBe(
-      staticExportApi.staticExportOutputPlan,
+      staticExportOutputApi.staticExportOutputPlan,
     );
     expect(packageStaticExportApi.formatStaticExportDiagnostic).toBe(
-      staticExportApi.formatStaticExportDiagnostic,
+      staticExportDiagnosticsApi.formatStaticExportDiagnostic,
     );
     expect(packageStaticExportApi.isStaticExportDiagnosticError).toBe(
-      staticExportApi.isStaticExportDiagnosticError,
+      staticExportDiagnosticsApi.isStaticExportDiagnosticError,
     );
     expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
     expect(packageViteApi.writeJisoAppShellVitePluginBuild).toBe(
@@ -250,12 +255,16 @@ describe('server app-shell public API barrels', () => {
       clientModulesApi.renderVersionedClientModuleResponse,
     );
     expect(packageAppShellApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
-    expect(packageAppShellApi.StaticExportError).toBe(staticExportApi.StaticExportError);
-    expect(packageAppShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
-    expect(packageAppShellApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
-    expect(packageAppShellApi.staticExportOutputPlan).toBe(staticExportApi.staticExportOutputPlan);
+    expect(packageAppShellApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
+    expect(packageAppShellApi.staticExportInventory).toBe(
+      staticExportTypesApi.staticExportInventory,
+    );
+    expect(packageAppShellApi.staticExportManifest).toBe(staticExportTypesApi.staticExportManifest);
+    expect(packageAppShellApi.staticExportOutputPlan).toBe(
+      staticExportOutputApi.staticExportOutputPlan,
+    );
     expect(packageAppShellApi.formatStaticExportDiagnostics).toBe(
-      staticExportApi.formatStaticExportDiagnostics,
+      staticExportDiagnosticsApi.formatStaticExportDiagnostics,
     );
     expect(packageAppShellApi.isStaticExportDiagnostic).toBe(
       staticExportApi.isStaticExportDiagnostic,

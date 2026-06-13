@@ -1,31 +1,33 @@
+export { exportStaticApp } from '../../static-export.js';
 export {
-  exportStaticApp,
   formatStaticExportDiagnostic,
   formatStaticExportDiagnostics,
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
-  staticExportInventory,
-  staticExportManifest,
-  staticExportOutputPlan,
   StaticExportError,
-} from '../../static-export.js';
+} from '../../static-export-diagnostics.js';
+export { staticExportInventory, staticExportManifest } from '../../static-export-types.js';
+export { staticExportOutputPlan } from '../../static-export-output.js';
 export type {
   StaticExportArtifact,
   StaticExportAssetArtifact,
   StaticExportAssetInput,
   StaticExportClientModuleArtifact,
-  StaticExportCompileDiagnostic,
-  StaticExportDiagnostic,
-  StaticExportDiagnosticSeverity,
   StaticExportHtmlPathStyle,
   StaticExportInventoryItem,
   StaticExportManifest,
   StaticExportManifestAsset,
   StaticExportManifestClientModule,
   StaticExportManifestRouteDocument,
-  StaticExportOptions,
+} from '../../static-export-types.js';
+export type {
   StaticExportOutputPlanItem,
   StaticExportOutputPlanItemKind,
   StaticExportOutputPlanOptions,
-  StaticExportResult,
-} from '../../static-export.js';
+} from '../../static-export-output.js';
+export type {
+  StaticExportCompileDiagnostic,
+  StaticExportDiagnostic,
+  StaticExportDiagnosticSeverity,
+} from '../../static-export-diagnostics.js';
+export type { StaticExportOptions, StaticExportResult } from '../../static-export.js';

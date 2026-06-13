@@ -374,6 +374,9 @@ The root `@jiso/server` app-shell compatibility surface now star-forwards direct
 public app-shell owner subpaths instead of duplicating a manual symbol inventory; the public API
 test compares local/package app-shell aggregate values and root aliases so split-owner drift is
 observable through module behavior.
+The `@jiso/server/app-shell/static-export` subpath now forwards diagnostics, manifest/inventory,
+and output-plan helpers from their split owners instead of routing those names through the
+aggregate `static-export.ts` facade.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
@@ -432,6 +435,10 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-client-modules.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce

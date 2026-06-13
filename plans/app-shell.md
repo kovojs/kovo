@@ -712,3 +712,17 @@ Round205 static document replay consolidation evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-client-modules.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round208 app-shell static-export owner forwarding evidence:
+
+- `packages/server/src/api/app-shell/static-export.ts` now forwards SPEC §9.5 static export
+  diagnostics, inventory/manifest helpers, and output-plan helpers directly from their split owner
+  modules, leaving `static-export.ts` as the public `exportStaticApp` facade.
+- `packages/server/src/api/app.test.ts` pins the root, package app-shell, and static-export
+  subpath values against those split owner modules so future compatibility-barrel drift is
+  observable.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
