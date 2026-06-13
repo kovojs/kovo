@@ -13,8 +13,12 @@
 - Make commits at meaningful checkpoints instead of accumulating a large uncommitted diff.
 - Default to a parallel fan-out when the open plans expose multiple independent, non-overlapping implementation, audit, or verification slices that can move `IMPLEMENT_v1.md` forward concurrently. Keep one immediate critical-path task in the main worktree, and delegate bounded sidecar slices to up to five sub-agents at a time unless the work is tightly coupled.
 - Prefer large, closure-oriented sub-agent slices that push an open plan item materially toward completion over tiny incremental edits. A delegated slice should usually own a coherent module, primitive family, runtime path, conformance gap, or plan phase and should include the production changes, tests, and evidence needed to integrate that slice.
-- Use `gpt-5.5` with medium reasoning for all sub-agents unless the user explicitly changes the
-  sub-agent model policy.
+- Use `gpt-5.5` with medium reasoning for harder sub-agent tasks: high-conflict implementation,
+  cross-package behavior changes, compiler/runtime/server/Drizzle extraction, broad conformance
+  work, or any slice where architectural judgment and integration risk are significant. Use
+  `gpt-5.4` with medium reasoning for straightforward bounded sub-agent tasks: focused fixture
+  refreshes, narrow test additions, simple docs/plan cleanup, mechanical export assertions, and
+  other low-risk changes with clear ownership and expected output.
 - Each implementation sub-agent should work in its own git worktree and branch, with explicit file/module ownership and instructions not to revert others' work. Sub-agents should hand off the branch, commit range, verification results, and any integration notes to the main agent; the main agent remains responsible for merging worktrees back, resolving conflicts, running final gates, and creating checkpoint commits unless the delegation explicitly says otherwise.
 - To set up a sub-agent worktree, create a unique branch and sibling directory from the current `HEAD`, for example `git worktree add ../jiso-agent-compiler -b agent/compiler-phase-0 HEAD`. Run package install/setup in that worktree if needed, do the delegated edits there, commit only that slice on the agent branch, then report the worktree path, branch name, commit SHA/range, tests run, and remaining risks back to the main agent. The main agent should merge or cherry-pick from that branch, run integration gates in the primary worktree, and remove the sub-agent worktree only after the work is integrated or abandoned.
 - Run the relevant tests or checks before each checkpoint commit.
