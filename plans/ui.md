@@ -27,7 +27,7 @@ conformance. Keep this ledger compact: status, open work, and current gates only
       navigation-menu, slider, toast, command.
 - [x] U1 styled foundation: token sheet, `cn()`, statically analyzable variant helper.
 - [x] U2 `fw add <component>` vendoring pipeline.
-- [ ] U3 styled H1 and pure-markup components.
+- [x] U3 styled H1 and pure-markup components.
 - [x] U4 styled H2 components.
 - [x] U5 styled H3 components.
 - [ ] G1 gallery static fixture surface: one route per component with source/markup snapshot.
@@ -42,10 +42,8 @@ conformance. Keep this ledger compact: status, open work, and current gates only
 Implemented areas:
 
 - Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
-- `@jiso/ui` ships vendorable styled source for pure-markup components plus checkbox,
-  checkbox-group, switch, tabs, toggle, radio-group, toggle-group, toolbar, select, combobox,
-  autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, and command
-  wrappers over the headless primitive attrs.
+- `@jiso/ui` ships vendorable styled source for pure-markup components, H1 primitives, and the
+  H2/H3 wrapper set over headless primitive attrs.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
@@ -63,11 +61,25 @@ Implemented areas:
 - G5 exported primitive attrs inventory is closed: `examples/gallery/src/merge-fixtures.test.tsx`
   renders inline merge goldens for all 134 exported primitive `*Attributes` builders, with author
   stress attrs, merged HTML, and SPEC §4.6 diagnostic checks.
+- U3 styled H1 coverage is closed: `packages/ui/src/accordion.tsx`,
+  `packages/ui/src/alert-dialog.tsx`, `packages/ui/src/avatar.tsx`,
+  `packages/ui/src/collapsible.tsx`, `packages/ui/src/dialog.tsx`,
+  `packages/ui/src/disclosure.tsx`, `packages/ui/src/hover-card.tsx`,
+  `packages/ui/src/meter.tsx`, `packages/ui/src/popover.tsx`,
+  `packages/ui/src/progress.tsx`, `packages/ui/src/separator.tsx`, and
+  `packages/ui/src/tooltip.tsx` export vendorable TSX wrappers. The static gallery now includes
+  `/components/collapsible`, `/components/disclosure`, `/components/hover-card`, and
+  `/components/popover` route/behavior-contract coverage for the remaining H1 static gaps.
 
 Recent gates:
 
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check packages/ui/src/accordion.tsx packages/ui/src/alert-dialog.tsx packages/ui/src/avatar.tsx packages/ui/src/collapsible.tsx packages/ui/src/dialog.tsx packages/ui/src/disclosure.tsx packages/ui/src/hover-card.tsx packages/ui/src/meter.tsx packages/ui/src/popover.tsx packages/ui/src/progress.tsx packages/ui/src/separator.tsx packages/ui/src/tooltip.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts src/merge-fixtures.test.tsx`
 - `pnpm --filter @jiso/example-gallery test`
@@ -141,10 +153,15 @@ H3:
 
 Styled UI:
 
-- Finish styled wrappers for remaining H1/pure-markup gaps, then H3 wrappers.
+- Styled H1 and pure-markup wrappers are closed; keep future wrapper work scoped to new primitive
+  exports or behavior parity fixes.
 - Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered IR,
   no `fw-c=` or `data-bind=` in vendored component source.
 - Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports.
+- Integration note: the optional CLI catalog regression now needs an out-of-scope
+  `packages/cli/src/index.test.ts` expectation update for the newly exported H1 package subpaths;
+  `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+  fails until that CLI test fixture is updated by its owner.
 
 Gallery:
 

@@ -19,19 +19,23 @@ const expectedRoutes = [
   '/components/card',
   '/components/checkbox',
   '/components/checkbox-group',
+  '/components/collapsible',
   '/components/combobox',
   '/components/command',
   '/components/context-menu',
   '/components/dialog',
+  '/components/disclosure',
   '/components/drawer',
   '/components/dropdown-menu',
   '/components/field',
+  '/components/hover-card',
   '/components/kbd',
   '/components/menubar',
   '/components/meter',
   '/components/navigation-menu',
   '/components/number-field',
   '/components/otp-field',
+  '/components/popover',
   '/components/progress',
   '/components/radio-group',
   '/components/scroll-area',
@@ -210,6 +214,30 @@ describe('gallery demo fixtures', () => {
     expect(combobox.html).toContain('data-highlighted="" data-state="unchecked"');
     expect(combobox.html).toContain('aria-disabled="true"');
     expect(combobox.html).toContain('id="gallery-combobox-value">Ada Lovelace</span>');
+  });
+
+  it('renders H1 disclosure and popover fixtures with styled primitive wrappers', () => {
+    const collapsible = findFixture('/components/collapsible');
+    const disclosure = findFixture('/components/disclosure');
+    const hoverCard = findFixture('/components/hover-card');
+    const popover = findFixture('/components/popover');
+
+    expect(collapsible.html).toContain('data-gallery-demo="collapsible"');
+    expect(collapsible.html).toContain('<details');
+    expect(collapsible.html).toContain('aria-controls="gallery-collapsible-content"');
+    expect(collapsible.html).toContain('data-disabled="" data-state="closed"');
+
+    expect(disclosure.html).toContain('data-gallery-demo="disclosure"');
+    expect(disclosure.html).toContain('aria-expanded="true"');
+    expect(disclosure.html).toContain('id="gallery-disclosure-content"');
+
+    expect(hoverCard.html).toContain('data-gallery-demo="hover-card"');
+    expect(hoverCard.html).toContain('jiso-hover-card="gallery-hover-card-content"');
+    expect(hoverCard.html).toContain('popover="manual"');
+
+    expect(popover.html).toContain('data-gallery-demo="popover"');
+    expect(popover.html).toContain('popovertarget="gallery-popover-content"');
+    expect(popover.html).toContain('popover="auto"');
   });
 
   it('renders dialog fixture with native invoker and IDREF wiring', () => {

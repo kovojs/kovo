@@ -942,6 +942,10 @@ Closed evidence so far:
   workflow `vp run` task extraction, and ordered-gate assertions for SPEC §16 acceptance wiring;
   `command-fixtures.test.ts`, package export tests, and targeted `fw-check` node tests pin the
   seam.
+- D7 UI H1 wrapper closure evidence: `packages/ui/src/index.test.tsx` now pins vendorable TSX
+  wrappers for the styled H1 primitive surface, and `examples/gallery/src/demo-fixtures.test.ts`
+  plus `examples/gallery/src/behavior-contracts.test.ts` pin the added static gallery route and
+  behavior-contract coverage for collapsible, disclosure, hover-card, and popover.
 
 Open:
 

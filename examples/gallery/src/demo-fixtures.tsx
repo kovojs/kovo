@@ -44,6 +44,9 @@ import {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   Combobox,
   ComboboxInput,
   ComboboxListbox,
@@ -67,6 +70,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   Field,
   FieldControl,
   FieldDescription,
@@ -74,6 +80,9 @@ import {
   FieldLabel,
   Fieldset,
   FieldsetLegend,
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
   Kbd,
   Menubar,
   MenubarItem,
@@ -94,6 +103,9 @@ import {
   OtpFieldGroup,
   OtpFieldHiddenInput,
   OtpFieldInput,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
@@ -153,19 +165,23 @@ export type GalleryComponent =
   | 'card'
   | 'checkbox'
   | 'checkbox-group'
+  | 'collapsible'
   | 'combobox'
   | 'command'
   | 'context-menu'
   | 'dialog'
+  | 'disclosure'
   | 'drawer'
   | 'dropdown-menu'
   | 'field'
+  | 'hover-card'
   | 'kbd'
   | 'menubar'
   | 'meter'
   | 'navigation-menu'
   | 'number-field'
   | 'otp-field'
+  | 'popover'
   | 'progress'
   | 'radio-group'
   | 'scroll-area'
@@ -267,6 +283,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Checkbox Group',
   },
   {
+    component: 'collapsible',
+    path: '/components/collapsible',
+    render: () => CollapsibleDemo(),
+    title: 'Collapsible',
+  },
+  {
     component: 'combobox',
     path: '/components/combobox',
     render: () => ComboboxDemo(),
@@ -291,6 +313,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Dialog',
   },
   {
+    component: 'disclosure',
+    path: '/components/disclosure',
+    render: () => DisclosureDemo(),
+    title: 'Disclosure',
+  },
+  {
     component: 'drawer',
     path: '/components/drawer',
     render: () => DrawerDemo(),
@@ -307,6 +335,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/field',
     render: () => FieldDemo(),
     title: 'Field',
+  },
+  {
+    component: 'hover-card',
+    path: '/components/hover-card',
+    render: () => HoverCardDemo(),
+    title: 'Hover Card',
   },
   {
     component: 'kbd',
@@ -343,6 +377,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/otp-field',
     render: () => OtpFieldDemo(),
     title: 'OTP Field',
+  },
+  {
+    component: 'popover',
+    path: '/components/popover',
+    render: () => PopoverDemo(),
+    title: 'Popover',
   },
   {
     component: 'progress',
@@ -907,6 +947,52 @@ export function CheckboxGroupDemo(): string {
   );
 }
 
+export function CollapsibleDemo(): string {
+  const state = {
+    contentId: 'gallery-collapsible-content',
+    open: true,
+  };
+
+  return (
+    <section data-gallery-demo="collapsible">
+      <p data-demo-summary="no-js">
+        Collapsible uses native details disclosure while keeping primitive state attrs on each
+        styled part.
+      </p>
+      {Collapsible.definition.render({
+        children:
+          CollapsibleTrigger.definition.render({ ...state, children: 'Release notes' }) +
+          CollapsibleContent.definition.render({
+            ...state,
+            children: 'Includes dependency updates and migration notes.',
+          }),
+        id: 'gallery-collapsible',
+        open: state.open,
+      })}
+      {Collapsible.definition.render({
+        children:
+          CollapsibleTrigger.definition.render({
+            children: 'Archived notes',
+            contentId: 'gallery-collapsible-disabled-content',
+            disabled: true,
+          }) +
+          CollapsibleContent.definition.render({
+            children: 'Archived content remains present for no-JS readers.',
+            contentId: 'gallery-collapsible-disabled-content',
+          }),
+        disabled: true,
+        id: 'gallery-collapsible-disabled',
+        open: false,
+      })}
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Native summary toggles the details element',
+      })}
+    </section>
+  );
+}
+
 export function ComboboxDemo(): string {
   const items = [
     { label: 'Ada Lovelace', value: 'ada' },
@@ -1163,6 +1249,37 @@ export function DialogDemo(): string {
   );
 }
 
+export function DisclosureDemo(): string {
+  const state = {
+    contentId: 'gallery-disclosure-content',
+    open: true,
+  };
+
+  return (
+    <section data-gallery-demo="disclosure">
+      <p data-demo-summary="no-js">
+        Disclosure keeps an explicit button and hidden panel wiring for progressively enhanced
+        state.
+      </p>
+      {Disclosure.definition.render({
+        children:
+          DisclosureTrigger.definition.render({ ...state, children: 'Show audit details' }) +
+          DisclosureContent.definition.render({
+            ...state,
+            children: 'Two reviewers approved the release.',
+          }),
+        id: 'gallery-disclosure',
+        open: state.open,
+      })}
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Space or Enter activates the disclosure button',
+      })}
+    </section>
+  );
+}
+
 export function DropdownMenuDemo(): string {
   const items = [
     { label: 'Duplicate', value: 'duplicate' },
@@ -1283,6 +1400,42 @@ export function FieldDemo(): string {
         changeReasons: 'native form control changes',
         dataState: 'invalid, required, disabled',
         keyboard: 'Native field and fieldset semantics',
+      })}
+    </section>
+  );
+}
+
+export function HoverCardDemo(): string {
+  const state = {
+    contentId: 'gallery-hover-card-content',
+    open: true,
+  };
+
+  return (
+    <section data-gallery-demo="hover-card">
+      <p data-demo-summary="no-js">
+        Hover card uses a package-prefixed behavior attribute on the trigger and keeps popover
+        content in the document.
+      </p>
+      {HoverCard.definition.render({
+        children:
+          HoverCardTrigger.definition.render({
+            ...state,
+            children: 'Ada Lovelace',
+            href: '/team/ada',
+          }) +
+          HoverCardContent.definition.render({
+            ...state,
+            children: '<strong>Compiler owner</strong><p>Maintains release quality gates.</p>',
+          }),
+        id: 'gallery-hover-card',
+        open: state.open,
+      })}
+      {renderBehaviorContract({
+        changeReasons:
+          'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, content-pointer-enter, content-pointer-leave, content-focus, content-blur, escape-key, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Focus opens the hover card; Escape closes it',
       })}
     </section>
   );
@@ -2287,6 +2440,36 @@ export function ToastDemo(): string {
         changeReasons: 'action-click, close-click, escape-key, timeout, programmatic',
         dataState: 'open, closed, disabled, variant',
         keyboard: 'Escape dismisses the active toast',
+      })}
+    </section>
+  );
+}
+
+export function PopoverDemo(): string {
+  const state = {
+    contentId: 'gallery-popover-content',
+    open: true,
+  };
+
+  return (
+    <section data-gallery-demo="popover">
+      <p data-demo-summary="no-js">
+        Popover keeps native popover target wiring on the trigger and an auto popover content node.
+      </p>
+      {Popover.definition.render({
+        children:
+          PopoverTrigger.definition.render({ ...state, children: 'Filters' }) +
+          PopoverContent.definition.render({
+            ...state,
+            children: 'Status, owner, and due-date filters are available.',
+          }),
+        id: 'gallery-popover',
+        open: state.open,
+      })}
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, escape-key, native-beforetoggle, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Native popover trigger toggles content; Escape closes the popover',
       })}
     </section>
   );

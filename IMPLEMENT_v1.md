@@ -578,6 +578,18 @@ plans/codebase-quality-round2.md`.
       `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`,
       `pnpm exec vp check packages/ui/src/autocomplete.tsx packages/ui/src/combobox.tsx packages/ui/src/select.tsx packages/ui/src/slider.tsx packages/ui/src/toast.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: `@jiso/ui` closes the styled H1/pure-markup gap with
+      vendorable TSX wrappers for accordion, alert-dialog, avatar, collapsible, dialog,
+      disclosure, hover-card, meter, popover, progress, separator, and tooltip over the
+      headless primitive attrs. The static gallery adds `/components/collapsible`,
+      `/components/disclosure`, `/components/hover-card`, and `/components/popover` route and
+      behavior-contract coverage, while existing H1 static routes remain stable. Same-session
+      evidence: `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      targeted `pnpm exec vp check` over the touched UI/gallery/plan files, and
+      `git diff --check`.
 - [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); SPEC §9.5 and S8/R1/R2/R3/R4 are implemented, R5 has dev middleware and manifest/build planning helpers, R6 static export writes HTML, `/c/` modules, and configured static assets, R7 starter adoption is partially proven, commerce now has a shell-backed HTTP document/query/module serve entry including `/`, shared-shell `/_m/` mutation dispatch is proven by commerce enhanced/no-JS HTTP tests, and the docs site ships through `vp run export`; the flat-HTML compatibility layer is no longer the default export path, while R7 remains open for any remaining starter/serve adoption gaps.
       Evidence 2026-06-12: the create-jiso starter template and commerce Vite configs now
       late-load the shared `jisoAppShellViteSsrDevPlugin()` through Vite SSR, replacing

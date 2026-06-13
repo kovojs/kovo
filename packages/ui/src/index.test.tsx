@@ -5,12 +5,25 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
+  Accordion,
+  AccordionContent,
+  AccordionHeader,
+  AccordionItem,
+  AccordionTrigger,
   Alert,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogTrigger,
   Autocomplete,
   AutocompleteInput,
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Badge,
   Breadcrumb,
   BreadcrumbItem,
@@ -23,6 +36,9 @@ import {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   Combobox,
   ComboboxInput,
   ComboboxListbox,
@@ -41,11 +57,18 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
   Drawer,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   Field,
   FieldControl,
   FieldDescription,
@@ -53,10 +76,14 @@ import {
   FieldLabel,
   Fieldset,
   FieldsetLegend,
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
   Kbd,
   Menubar,
   MenubarItem,
   MenubarSubmenu,
+  Meter,
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
@@ -73,6 +100,10 @@ import {
   OtpFieldGroup,
   OtpFieldHiddenInput,
   OtpFieldInput,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Progress,
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
@@ -87,6 +118,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
   Sheet,
   Skeleton,
   Slider,
@@ -105,6 +137,9 @@ import {
   TabsList,
   TabsPanel,
   TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   Toggle,
   ToggleGroup,
   ToggleGroupButton,
@@ -118,18 +153,28 @@ import {
   Toolbar,
   ToolbarButton,
   ToolbarItem,
-  breadcrumbClasses,
-  buttonClasses,
+  accordionClasses,
+  accordionContentClasses,
+  accordionTriggerClasses,
+  alertDialogActionClasses,
+  alertDialogClasses,
+  alertDialogContentClasses,
   autocompleteClasses,
   autocompleteInputClasses,
   autocompleteListClasses,
   autocompleteOptionClasses,
   autocompleteValueClasses,
+  avatarClasses,
+  avatarFallbackClasses,
+  breadcrumbClasses,
+  buttonClasses,
   checkboxGroupClasses,
   checkboxGroupControlClasses,
   checkboxGroupItemClasses,
   checkboxGroupLabelClasses,
   checkboxClasses,
+  collapsibleClasses,
+  collapsibleTriggerClasses,
   comboboxClasses,
   comboboxInputClasses,
   comboboxListboxClasses,
@@ -145,6 +190,10 @@ import {
   contextMenuContentClasses,
   contextMenuItemClasses,
   contextMenuTriggerClasses,
+  dialogClasses,
+  dialogContentClasses,
+  disclosureClasses,
+  disclosureTriggerClasses,
   dropdownMenuClasses,
   dropdownMenuContentClasses,
   dropdownMenuItemClasses,
@@ -156,6 +205,8 @@ import {
   fieldLabelClasses,
   fieldsetClasses,
   fieldsetLegendClasses,
+  hoverCardClasses,
+  hoverCardContentClasses,
   menubarClasses,
   menubarItemClasses,
   menubarSubmenuClasses,
@@ -165,6 +216,7 @@ import {
   navigationMenuListClasses,
   navigationMenuTriggerClasses,
   navigationMenuViewportClasses,
+  meterClasses,
   numberFieldButtonClasses,
   numberFieldClasses,
   numberFieldControlClasses,
@@ -173,6 +225,9 @@ import {
   otpFieldGroupClasses,
   otpFieldHiddenInputClasses,
   otpFieldInputClasses,
+  popoverClasses,
+  popoverContentClasses,
+  progressClasses,
   radioGroupClasses,
   radioGroupItemClasses,
   radioGroupLabelClasses,
@@ -182,6 +237,7 @@ import {
   scrollAreaScrollbarClasses,
   scrollAreaThumbClasses,
   scrollAreaViewportClasses,
+  separatorClasses,
   selectClasses,
   selectContentClasses,
   selectItemClasses,
@@ -191,6 +247,8 @@ import {
   tabsListClasses,
   tabsPanelClasses,
   tabsTriggerClasses,
+  tooltipClasses,
+  tooltipContentClasses,
   sheetContentClasses,
   switchClasses,
   tableClasses,
@@ -223,12 +281,23 @@ function readSource(name: string): string {
 describe('@jiso/ui styled package foundation', () => {
   it('exports pure-markup button, badge, and card TSX components', () => {
     expect(Button.name).toBe('button');
+    expect(Accordion.name).toBe('accordion');
+    expect(AlertDialog.name).toBe('alert-dialog');
+    expect(Avatar.name).toBe('avatar');
     expect(Badge.name).toBe('badge');
     expect(Card.name).toBe('card');
     expect(Checkbox.name).toBe('checkbox');
     expect(CheckboxGroup.name).toBe('checkbox-group');
+    expect(Collapsible.name).toBe('collapsible');
+    expect(Dialog.name).toBe('dialog');
+    expect(Disclosure.name).toBe('disclosure');
+    expect(HoverCard.name).toBe('hover-card');
     expect(Kbd.name).toBe('kbd');
     expect(Alert.name).toBe('alert');
+    expect(Meter.name).toBe('meter');
+    expect(Popover.name).toBe('popover');
+    expect(Progress.name).toBe('progress');
+    expect(Separator.name).toBe('separator');
     expect(Skeleton.name).toBe('skeleton');
     expect(Switch.name).toBe('switch');
     expect(RadioGroup.name).toBe('radio-group');
@@ -250,6 +319,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Menubar.name).toBe('menubar');
     expect(NavigationMenu.name).toBe('navigation-menu');
     expect(Command.name).toBe('command');
+    expect(Tooltip.name).toBe('tooltip');
 
     expect(
       Button.definition.render({
@@ -294,8 +364,24 @@ describe('@jiso/ui styled package foundation', () => {
       '<div aria-hidden="true" class="animate-pulse rounded-md bg-neutral-200 h-4 w-32"></div>',
     );
     expect(buttonClasses).toContain('h-9 gap-2 px-3');
+    expect(accordionClasses.join(' ')).toContain('grid w-full gap-2');
+    expect(accordionTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-50');
+    expect(accordionContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
+    expect(alertDialogClasses.join(' ')).toContain('contents');
+    expect(alertDialogContentClasses.join(' ')).toContain('max-w-md');
+    expect(alertDialogActionClasses.join(' ')).toContain('data-[intent=destructive]');
+    expect(avatarClasses.join(' ')).toContain('rounded-full');
+    expect(avatarFallbackClasses.join(' ')).toContain('data-[state=loaded]:hidden');
     expect(checkboxClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(checkboxGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
+    expect(collapsibleClasses.join(' ')).toContain('border-neutral-200');
+    expect(collapsibleTriggerClasses.join(' ')).toContain('cursor-pointer');
+    expect(dialogClasses.join(' ')).toContain('contents');
+    expect(dialogContentClasses.join(' ')).toContain('backdrop:bg-black/30');
+    expect(disclosureClasses.join(' ')).toContain('grid gap-2');
+    expect(disclosureTriggerClasses.join(' ')).toContain('data-[state=open]');
+    expect(hoverCardClasses.join(' ')).toContain('relative inline-block');
+    expect(hoverCardContentClasses.join(' ')).toContain('w-72');
     expect(radioGroupClasses.join(' ')).toContain('data-[orientation=horizontal]:flex');
     expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
@@ -322,6 +408,172 @@ describe('@jiso/ui styled package foundation', () => {
     expect(menubarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(navigationMenuClasses.join(' ')).toContain('data-[orientation=vertical]');
     expect(commandClasses.join(' ')).toContain('grid gap-2');
+    expect(meterClasses.join(' ')).toContain('data-[state=suboptimum]');
+    expect(popoverClasses.join(' ')).toContain('relative inline-block');
+    expect(popoverContentClasses.join(' ')).toContain('w-64');
+    expect(progressClasses.join(' ')).toContain('data-[state=indeterminate]');
+    expect(separatorClasses.join(' ')).toContain('data-[orientation=vertical]');
+    expect(tooltipClasses.join(' ')).toContain('relative inline-block');
+    expect(tooltipContentClasses.join(' ')).toContain('max-w-64');
+  });
+
+  it('wraps H1 primitives as styled vendorable TSX parts', () => {
+    const accordionState = {
+      orientation: 'vertical' as const,
+      type: 'multiple' as const,
+      value: ['shipping'],
+    };
+    const dialogState = {
+      contentId: 'confirm-dialog',
+      descriptionId: 'confirm-description',
+      open: true,
+      titleId: 'confirm-title',
+    };
+
+    expect(
+      AccordionTrigger.definition.render({
+        ...accordionState,
+        children: 'Shipping',
+        contentId: 'shipping-panel',
+        itemValue: 'shipping',
+        triggerId: 'shipping-trigger',
+      }),
+    ).toContain('aria-controls="shipping-panel"');
+    expect(
+      AccordionContent.definition.render({
+        ...accordionState,
+        children: 'Ships from the nearest warehouse.',
+        contentId: 'shipping-panel',
+        itemValue: 'shipping',
+        triggerId: 'shipping-trigger',
+      }),
+    ).toContain('role="region"');
+    expect(
+      AccordionHeader.definition.render({
+        ...accordionState,
+        children: 'Shipping',
+        itemValue: 'shipping',
+        level: 3,
+      }),
+    ).toContain('aria-level="3"');
+    expect(
+      AccordionItem.definition.render({
+        ...accordionState,
+        children: 'item',
+        itemValue: 'shipping',
+      }),
+    ).toContain('data-state="open"');
+
+    expect(
+      AlertDialogTrigger.definition.render({ ...dialogState, children: 'Delete', open: false }),
+    ).toContain('command="show-modal" commandfor="confirm-dialog"');
+    expect(
+      AlertDialogContent.definition.render({
+        ...dialogState,
+        children: '<h2 id="confirm-title">Confirm</h2>',
+      }),
+    ).toContain('role="alertdialog"');
+    expect(
+      AlertDialogCancel.definition.render({ ...dialogState, autoFocus: true, children: 'Cancel' }),
+    ).toContain('autofocus');
+    expect(
+      AlertDialogAction.definition.render({
+        ...dialogState,
+        children: 'Delete',
+        intent: 'destructive',
+      }),
+    ).toContain('data-intent="destructive"');
+
+    expect(
+      Avatar.definition.render({
+        children: AvatarImage.definition.render({
+          alt: 'Ada',
+          src: '/ada.png',
+          status: 'loading',
+        }),
+        label: 'Ada avatar',
+        src: '/ada.png',
+        status: 'loading',
+      }),
+    ).toContain('role="img"');
+    expect(AvatarFallback.definition.render({ children: 'AL', status: 'error' })).toContain(
+      'data-state="error"',
+    );
+
+    expect(
+      CollapsibleTrigger.definition.render({
+        children: 'Release notes',
+        contentId: 'release-notes',
+        open: true,
+      }),
+    ).toContain('aria-expanded="true"');
+    expect(
+      CollapsibleContent.definition.render({
+        children: 'Details',
+        contentId: 'release-notes',
+        open: true,
+      }),
+    ).toContain('id="release-notes"');
+    expect(
+      DisclosureTrigger.definition.render({
+        children: 'Show details',
+        contentId: 'disclosure-content',
+        open: true,
+      }),
+    ).toContain('aria-controls="disclosure-content"');
+    expect(
+      DisclosureContent.definition.render({
+        children: 'Details',
+        contentId: 'disclosure-content',
+        open: false,
+      }),
+    ).toContain('hidden');
+    expect(
+      DialogTrigger.definition.render({ children: 'Open', contentId: 'dialog-content' }),
+    ).toContain('command="show-modal"');
+    expect(
+      DialogContent.definition.render({
+        children: '<h2 id="dialog-title">Title</h2>',
+        contentId: 'dialog-content',
+        open: true,
+        titleId: 'dialog-title',
+      }),
+    ).toContain('aria-labelledby="dialog-title"');
+    expect(DialogClose.definition.render({ contentId: 'dialog-content' })).toContain(
+      'command="request-close"',
+    );
+
+    expect(
+      HoverCardTrigger.definition.render({
+        children: 'Ada',
+        contentId: 'profile-card',
+        href: '/team/ada',
+        open: true,
+      }),
+    ).toContain('jiso-hover-card="profile-card"');
+    expect(HoverCardContent.definition.render({ contentId: 'profile-card', open: true })).toContain(
+      'popover="manual"',
+    );
+    expect(
+      PopoverTrigger.definition.render({ children: 'Filters', contentId: 'filters', open: true }),
+    ).toContain('popovertarget="filters"');
+    expect(PopoverContent.definition.render({ contentId: 'filters', open: true })).toContain(
+      'popover="auto"',
+    );
+    expect(
+      TooltipTrigger.definition.render({ children: 'Help', contentId: 'tip', open: true }),
+    ).toContain('jiso-tooltip="tip"');
+    expect(TooltipContent.definition.render({ contentId: 'tip', open: true })).toContain(
+      'role="tooltip"',
+    );
+
+    expect(Meter.definition.render({ max: 100, value: 84 })).toContain('data-state="optimum"');
+    expect(Progress.definition.render({ max: 100, value: null })).toContain(
+      'data-state="indeterminate"',
+    );
+    expect(Separator.definition.render({ decorative: false, orientation: 'vertical' })).toContain(
+      'aria-orientation="vertical"',
+    );
   });
 
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {

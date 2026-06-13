@@ -65,6 +65,11 @@ const expectedBehaviorContracts = {
     dataState: 'checked, unchecked, disabled',
     keyboard: 'Arrow keys move focus over enabled checkbox items; Space toggles focused item',
   },
+  '/components/collapsible': {
+    changeReasons: 'trigger-click, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Native summary toggles the details element',
+  },
   '/components/combobox': {
     changeReasons: 'input, option-select, arrow-key, escape-key, typeahead, programmatic',
     dataState: 'open, closed, checked, unchecked, highlighted, disabled',
@@ -86,6 +91,11 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed',
     keyboard: 'Escape closes the native dialog',
   },
+  '/components/disclosure': {
+    changeReasons: 'trigger-click, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Space or Enter activates the disclosure button',
+  },
   '/components/drawer': {
     changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
     dataState: 'open, closed, disabled',
@@ -100,6 +110,12 @@ const expectedBehaviorContracts = {
     changeReasons: 'native form control changes',
     dataState: 'invalid, required, disabled',
     keyboard: 'Native field and fieldset semantics',
+  },
+  '/components/hover-card': {
+    changeReasons:
+      'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, content-pointer-enter, content-pointer-leave, content-focus, content-blur, escape-key, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Focus opens the hover card; Escape closes it',
   },
   '/components/kbd': {
     changeReasons: 'not stateful',
@@ -132,6 +148,11 @@ const expectedBehaviorContracts = {
     changeReasons: 'input, delete, paste, programmatic',
     dataState: 'invalid, required, complete, disabled',
     keyboard: 'Arrow keys, Home, and End move between visible slots',
+  },
+  '/components/popover': {
+    changeReasons: 'trigger-click, escape-key, native-beforetoggle, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Native popover trigger toggles content; Escape closes the popover',
   },
   '/components/progress': {
     changeReasons: 'value comes from app state',
@@ -287,6 +308,14 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'data-disabled="" data-state="unchecked" disabled',
     'tabIndex="-1" type="checkbox" value="security"',
   ],
+  '/components/collapsible': [
+    '<details',
+    'open>',
+    '<summary',
+    'aria-expanded="true"',
+    'aria-controls="gallery-collapsible-content"',
+    'data-disabled="" data-state="closed"',
+  ],
   '/components/combobox': [
     'role="combobox"',
     'aria-autocomplete="list"',
@@ -326,6 +355,11 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-describedby="gallery-dialog-description"',
     'open',
   ],
+  '/components/disclosure': [
+    'aria-expanded="true"',
+    'aria-controls="gallery-disclosure-content"',
+    'id="gallery-disclosure-content"',
+  ],
   '/components/drawer': [
     'command="show-modal" commandfor="gallery-drawer"',
     '<dialog aria-describedby="gallery-drawer-description"',
@@ -346,6 +380,13 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-describedby="gallery-field-description gallery-field-error"',
     'aria-invalid="true"',
     'role="alert"',
+  ],
+  '/components/hover-card': [
+    'href="/team/ada"',
+    'jiso-hover-card="gallery-hover-card-content"',
+    'aria-controls="gallery-hover-card-content"',
+    'popover="manual"',
+    'id="gallery-hover-card-content"',
   ],
   '/components/kbd': ['<kbd class="inline-flex h-5 min-w-5', 'uppercase">K</kbd>'],
   '/components/menubar': [
@@ -399,6 +440,13 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'data-filled',
     'data-complete',
     'data-disabled',
+  ],
+  '/components/popover': [
+    'popovertarget="gallery-popover-content"',
+    'popovertargetaction="toggle"',
+    'aria-controls="gallery-popover-content"',
+    'popover="auto"',
+    'id="gallery-popover-content"',
   ],
   '/components/progress': [
     '<progress',
