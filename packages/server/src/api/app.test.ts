@@ -33,8 +33,14 @@ describe('server app-shell public API barrels', () => {
     const localAppShellValues = appShellApi as Record<string, unknown>;
     const packageAppShellValues = packageAppShellApi as Record<string, unknown>;
     const publicValues = publicApi as Record<string, unknown>;
-    const rootStaticExportCompatibility = new Set(['exportStaticApp']);
+    const rootAppShellCompatibility = new Set([
+      'createApp',
+      'createRequestHandler',
+      'exportStaticApp',
+    ]);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
+      createApp: coreApi.createApp,
+      createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
     });
 
@@ -49,7 +55,7 @@ describe('server app-shell public API barrels', () => {
 
     for (const key of Object.keys(localAppShellValues)) {
       expect(packageAppShellValues[key]).toBe(localAppShellValues[key]);
-      if (rootStaticExportCompatibility.has(key)) {
+      if (rootAppShellCompatibility.has(key)) {
         expect(publicValues[key]).toBe(localAppShellValues[key]);
       } else {
         expect(publicValues).not.toHaveProperty(key);
@@ -70,6 +76,8 @@ describe('server app-shell public API barrels', () => {
     expect(renderingApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
+    expect(publicApi.createApp).toBe(coreApi.createApp);
+    expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
 
     expect(appShellApi.createApp).toBe(coreApi.createApp);

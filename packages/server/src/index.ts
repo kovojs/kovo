@@ -1,5 +1,6 @@
+export { createApp, createRequestHandler } from './app.js';
 export { exportStaticApp } from './static-export.js';
-export type { JisoApp } from './api/app-shell/core.js';
+export type { CreateAppOptions, JisoApp, RequestHandler } from './app-types.js';
 export type { StaticExportCompileDiagnostic } from './api/app-shell/static-export.js';
 export * from './api/data.js';
 export * from './api/rendering.js';

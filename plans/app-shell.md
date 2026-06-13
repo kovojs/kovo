@@ -828,6 +828,21 @@ Round240 server root/app-shell boundary evidence:
 - `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round247 server root app aggregate evidence:
+
+- `packages/server/src/index.ts` now exposes the SPEC §9.5 `createApp()` aggregate and
+  `createRequestHandler(app)` `Request -> Response` constructor directly from their app-core owner,
+  while keeping root `exportStaticApp` on the focused static-export facade and public query-script
+  names pointed at the single `wire-html.ts` emitter.
+- `packages/server/src/api/app.test.ts` pins the root runtime value surface to data, rendering,
+  routing, `createApp`, `createRequestHandler`, and `exportStaticApp`; it also keeps app-shell
+  static-export diagnostics resolved through the focused diagnostic seam.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P1 compiler validates component-scoped IDREFs|P1 compiler validates static id uniqueness|P1 compiler validates HTML content-model parser stability|P1 compiler validates declared execution trigger names|P1 compiler validates residual fw-c and fw-deps stamps|P1 compiler emits FW311 update coverage facts|P1 compiler validates binding stamp expression drift|P1 compiler validates primitive composition attribute merges|P1 compiler validates fragment-target child hoisting failures|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
+
 Round242 app-shell app contract boundary evidence:
 
 - `packages/server/src/app-types.ts` now owns the SPEC §9.5 closed app aggregate, app-shell

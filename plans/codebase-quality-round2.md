@@ -127,9 +127,8 @@ Latest evidence:
   exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/compiler-fixtures.ts packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json plans/codebase-quality-round2.md`;
   `git diff --check`.
   Targeted `node --test --test-name-pattern "P1 compiler validates component-scoped IDREFs|P1 compiler validates static id uniqueness|P1 compiler validates HTML content-model parser stability|P1 compiler validates declared execution trigger names|P1 compiler validates residual fw-c and fw-deps stamps|P1 compiler emits FW311 update coverage facts|P1 compiler validates binding stamp expression drift|P1 compiler validates primitive composition attribute merges|P1 compiler validates fragment-target child hoisting failures|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
-  could not load after a clean `pnpm run check:build` because current `dist/server/src/index.mjs`
-  does not export `createApp`, matching `packages/server/src/index.ts`; this is outside this
-  harness slice ownership and leaves the Phase 1 node-harness rerun as an integration gap.
+  originally exposed a server root export gap; Round247 fixed root `createApp`/`createRequestHandler`
+  forwarding and reran the same pattern after `pnpm run check:build`.
 - Generated artifact fixture projection slice:
   `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
@@ -690,9 +689,9 @@ inventory drift cannot hide behind the compatibility barrel.
 The internal `static-export.ts` orchestration facade now exports only `exportStaticApp`;
 compile/static-export diagnostics, manifest/inventory helpers, and output-plan helpers stay on
 their focused owner modules and the public `@jiso/server/app-shell/static-export` replacement seam.
-The root `@jiso/server` CLI compatibility alias for `exportStaticApp` now forwards directly from
-the focused SPEC §9.5 `static-export.ts` orchestrator instead of routing through the wider
-app-shell static-export barrel; public API tests pin the exact root value surface and prove
+The root `@jiso/server` surface now forwards SPEC §9.5 `createApp()` and
+`createRequestHandler(app)` from the app-core owner plus the CLI `exportStaticApp` alias from the
+focused static-export orchestrator. Public API tests pin the exact root value surface and prove
 document/data query-script aliases share the single `wire-html.ts` emitter while static-export
 diagnostic helpers resolve to `static-export-diagnostics.ts`.
 App-shell app contracts now live in `packages/server/src/app-types.ts`, so app dispatch,
@@ -722,6 +721,8 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P1 compiler validates component-scoped IDREFs|P1 compiler validates static id uniqueness|P1 compiler validates HTML content-model parser stability|P1 compiler validates declared execution trigger names|P1 compiler validates residual fw-c and fw-deps stamps|P1 compiler emits FW311 update coverage facts|P1 compiler validates binding stamp expression drift|P1 compiler validates primitive composition attribute merges|P1 compiler validates fragment-target child hoisting failures|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
