@@ -42,6 +42,56 @@ export interface ForbiddenBrowserArchitectureFact {
   site: string;
 }
 
+export interface ProjectSourceFixture {
+  fileName: string;
+  source: string;
+}
+
+export interface ProjectQueryDiagnosticFact {
+  code: string;
+  message: string;
+  severity: string;
+  site: string;
+}
+
+export interface ProjectQueryBehaviorFact {
+  diagnostics?: ProjectQueryDiagnosticFact[];
+  instanceKey?: unknown;
+  query: string;
+  reads: readonly string[];
+  shape: unknown;
+  site: string;
+}
+
+export interface ProjectTouchGraphTouchFact {
+  domain: string;
+  keys?: string | null;
+  predicate?: string;
+  site: string;
+  via: string;
+}
+
+export interface ProjectTouchGraphEntryFact {
+  reads?: readonly unknown[];
+  touches?: readonly ProjectTouchGraphTouchFact[];
+  unresolved?: readonly unknown[];
+}
+
+export interface ProjectTouchGraphBehaviorFact {
+  reads: readonly unknown[];
+  touches: readonly ProjectTouchGraphTouchFact[];
+  unresolved: readonly unknown[];
+}
+
+export interface DrizzleQueryBehaviorSourceFixtures {
+  exemptRead: ProjectSourceFixture[];
+  exemptWriteTouch: ProjectSourceFixture[];
+  importedSchemaProject: ProjectSourceFixture[];
+  nonKeyPredicate: ProjectSourceFixture[];
+  opaqueProjection: ProjectSourceFixture[];
+  selectShape: ProjectSourceFixture[];
+}
+
 export interface CssScopeRuleFact {
   limit: string;
   raw: string;
@@ -75,6 +125,180 @@ export function cssScopeRules(source: string): CssScopeRuleFact[] {
     .filter((rule): rule is CssScopeRuleFact => rule !== undefined);
 }
 
+export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSourceFixtures {
+  return {
+    exemptRead: [
+      {
+        fileName: 'product.queries.ts',
+        source: `
+        export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
+        export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+        export const productQuery = query("product", {
+          async load(_input, db) {
+            return db.select({
+              message: auditLog.message,
+              name: products.name,
+            }).from(products).leftJoin(auditLog, eq(auditLog.productId, products.id));
+          },
+        });
+      `,
+      },
+    ],
+    exemptWriteTouch: [
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export async function writeAudit(db) {
+            await db.insert(auditLog).values({ event: "cart" });
+          }
+
+          export async function addItem(db, cartId) {
+            await db.insert(cartItems).values({ cartId });
+          }
+        `,
+      },
+    ],
+    importedSchemaProject: [
+      {
+        fileName: 'cart.schema.ts',
+        source: `
+          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'order.schema.ts',
+        source: `
+          export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          import { items } from "./cart.schema";
+
+          export const cartQuery = query("cart", {
+            load(input, db) {
+              return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
+            },
+          });
+        `,
+      },
+    ],
+    nonKeyPredicate: [
+      {
+        fileName: 'product.queries.ts',
+        source: `
+        export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+        export const productQuery = query("product", {
+          load(input, db) {
+            return db.select({ sku: products.sku }).from(products).where(eq(products.sku, input.sku));
+          },
+        });
+      `,
+      },
+    ],
+    opaqueProjection: [
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+        export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+        export const cartQuery = query("cart", {
+          async load(input, db) {
+            return db.select({
+              count: sql<number>\`count(*)\`,
+            }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+          },
+        });
+      `,
+      },
+    ],
+    selectShape: [
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+        export const cartItems = pgTable("cart_items", {
+          cartId: text("cart_id").notNull(),
+          productId: text("product_id"),
+          qty: integer("qty").notNull(),
+        }, jiso({ domain: "cart", key: "cartId" }));
+        export const products = pgTable("products", {
+          id: text("id").primaryKey(),
+          name: text("name").notNull(),
+        }, jiso({ domain: "product", key: "id" }));
+
+        export const cartQuery = query("cart", {
+          output: s.object({ count: s.number() }),
+          async load(input, db) {
+            return db.select({
+              count: sql<number>\`count(*)\`,
+              productId: products.id,
+              item: {
+                qty: cartItems.qty,
+              },
+            }).from(cartItems).innerJoin(products, eq(products.id, cartItems.productId)).where(eq(cartItems.cartId, input.cartId));
+          },
+        });
+      `,
+      },
+    ],
+  };
+}
+
+export function projectQueryBehaviorFacts(facts: readonly unknown[]): ProjectQueryBehaviorFact[] {
+  return facts.map((fact) => {
+    const queryFact = fact as {
+      diagnostics?: ProjectQueryDiagnosticFact[];
+      instanceKey?: unknown;
+      query?: unknown;
+      reads?: readonly string[];
+      shape?: unknown;
+      site?: unknown;
+    };
+    if (typeof queryFact.query !== 'string')
+      assertProjectSourceFact(false, 'query fact has a name');
+    if (typeof queryFact.site !== 'string') assertProjectSourceFact(false, 'query fact has a site');
+    if (!Array.isArray(queryFact.reads)) {
+      assertProjectSourceFact(false, `query ${queryFact.query} has read domains`);
+    }
+
+    return {
+      ...(queryFact.diagnostics ? { diagnostics: queryFact.diagnostics } : {}),
+      ...(queryFact.instanceKey !== undefined ? { instanceKey: queryFact.instanceKey } : {}),
+      query: queryFact.query,
+      reads: queryFact.reads,
+      shape: queryFact.shape,
+      site: queryFact.site,
+    };
+  });
+}
+
+export function projectQueryDiagnosticFacts(
+  facts: readonly unknown[],
+): ProjectQueryDiagnosticFact[] {
+  return projectQueryBehaviorFacts(facts).flatMap((fact) => fact.diagnostics ?? []);
+}
+
+export function projectTouchGraphBehaviorFacts(
+  touchGraph: Record<string, ProjectTouchGraphEntryFact>,
+): Record<string, ProjectTouchGraphBehaviorFact> {
+  return Object.fromEntries(
+    Object.entries(touchGraph).map(([name, entry]) => [
+      name,
+      {
+        reads: entry.reads ?? [],
+        touches: entry.touches ?? [],
+        unresolved: entry.unresolved ?? [],
+      },
+    ]),
+  );
+}
+
 export function projectSourceSiteFact(site: string): ProjectSourceSiteFact {
   const separator = site.lastIndexOf(':');
   if (separator === -1) {
@@ -87,6 +311,12 @@ export function projectSourceSiteFact(site: string): ProjectSourceSiteFact {
   }
 
   return { line, path: site.slice(0, separator) };
+}
+
+function assertProjectSourceFact(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(`Project source fixture fact invariant failed: ${message}`);
+  }
 }
 
 export function projectSourceSiteFacts(sites: readonly string[]): ProjectSourceSiteFact[] {

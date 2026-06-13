@@ -8,16 +8,20 @@ import * as ts from 'typescript';
 import {
   cssScopeRules,
   cssSourceDirectives,
+  drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
   projectDirectoryNames,
   projectFilePaths,
   projectFileSources,
   projectJsonFile,
   projectPackageManifestFacts,
+  projectQueryBehaviorFacts,
+  projectQueryDiagnosticFacts,
   projectSourceLineFacts,
   projectSourceSiteFact,
   projectSourceSiteFacts,
   projectSourceSiteSummaryFact,
+  projectTouchGraphBehaviorFacts,
 } from './source-fixtures.js';
 
 describe('@jiso/test source fixture seam', () => {
@@ -160,6 +164,79 @@ describe('@jiso/test source fixture seam', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+
+  it('provides Drizzle query source fixtures without local fw-check source bodies', () => {
+    const fixtures = drizzleQueryBehaviorSourceFixtures();
+
+    expect(Object.keys(fixtures).sort()).toEqual([
+      'exemptRead',
+      'exemptWriteTouch',
+      'importedSchemaProject',
+      'nonKeyPredicate',
+      'opaqueProjection',
+      'selectShape',
+    ]);
+    expect(fixtures.selectShape).toMatchObject([
+      {
+        fileName: 'cart.queries.ts',
+      },
+    ]);
+    expect(fixtures.selectShape[0]?.source).toContain('innerJoin(products');
+    expect(fixtures.importedSchemaProject.map((fixture) => fixture.fileName)).toEqual([
+      'cart.schema.ts',
+      'order.schema.ts',
+      'cart.queries.ts',
+    ]);
+  });
+
+  it('projects query, diagnostic, and touch graph facts for source-derived gates', () => {
+    const queryFacts = [
+      {
+        diagnostics: [
+          {
+            code: 'FW410',
+            message: 'Opaque query projection requires a declared output schema.',
+            severity: 'error',
+            site: 'cart.queries.ts:4',
+          },
+        ],
+        instanceKey: { domain: 'cart', key: 'arg:cartId' },
+        query: 'cart',
+        reads: ['cart'],
+        shape: { count: 'number' },
+        site: 'cart.queries.ts:4',
+      },
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: { sku: 'string' },
+        site: 'product.queries.ts:4',
+      },
+    ];
+
+    expect(projectQueryBehaviorFacts(queryFacts)).toEqual(queryFacts);
+    expect(projectQueryDiagnosticFacts(queryFacts)).toEqual([
+      {
+        code: 'FW410',
+        message: 'Opaque query projection requires a declared output schema.',
+        severity: 'error',
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+    expect(
+      projectTouchGraphBehaviorFacts({
+        addItem: {
+          touches: [{ domain: 'cart', keys: 'arg:cartId', site: 'cart.domain.ts:9', via: 'cart' }],
+        },
+      }),
+    ).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: 'arg:cartId', site: 'cart.domain.ts:9', via: 'cart' }],
+        unresolved: [],
+      },
+    });
   });
 
   it('returns structured forbidden browser architecture facts from TSX source', () => {

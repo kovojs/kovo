@@ -205,21 +205,30 @@ import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
   cssScopeRules,
   cssSourceDirectives,
+  drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
   projectDirectoryNames,
   projectFilePaths,
   projectFileSources,
   projectJsonFile,
   projectPackageManifestFacts,
+  projectQueryBehaviorFacts,
+  projectQueryDiagnosticFacts,
   projectSourceLineFacts,
   projectSourceSiteFact,
+  projectTouchGraphBehaviorFacts,
   type CssScopeRuleFact,
+  type DrizzleQueryBehaviorSourceFixtures,
   type ForbiddenBrowserArchitectureFact,
   type ProjectFileSourceFact,
   type ProjectFileTreeOptions,
   type ProjectPackageManifestFact,
+  type ProjectQueryBehaviorFact,
+  type ProjectQueryDiagnosticFact,
+  type ProjectSourceFixture,
   type ProjectSourceLineFact,
   type ProjectSourceSiteFact,
+  type ProjectTouchGraphBehaviorFact,
 } from '@jiso/test/source-fixtures';
 import {
   executeStarterClientTemplate,
@@ -430,6 +439,28 @@ describe('@jiso/test package subpath exports', () => {
     expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
       { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
     ]);
+    expect(drizzleQueryBehaviorSourceFixtures().selectShape[0]?.fileName).toBe('cart.queries.ts');
+    expect(
+      projectQueryBehaviorFacts([
+        { query: 'cart', reads: ['cart'], shape: { count: 'number' }, site: 'cart.ts:1' },
+      ]),
+    ).toEqual([{ query: 'cart', reads: ['cart'], shape: { count: 'number' }, site: 'cart.ts:1' }]);
+    expect(
+      projectQueryDiagnosticFacts([
+        {
+          diagnostics: [
+            { code: 'FW410', message: 'message', severity: 'error', site: 'cart.ts:1' },
+          ],
+          query: 'cart',
+          reads: ['cart'],
+          shape: { count: 'number' },
+          site: 'cart.ts:1',
+        },
+      ]),
+    ).toEqual([{ code: 'FW410', message: 'message', severity: 'error', site: 'cart.ts:1' }]);
+    expect(projectTouchGraphBehaviorFacts({ addItem: {} })).toEqual({
+      addItem: { reads: [], touches: [], unresolved: [] },
+    });
     expect(forbiddenBrowserArchitectureFacts).toBeTypeOf('function');
     expect(projectDirectoryNames).toBeTypeOf('function');
     expect(projectFilePaths).toBeTypeOf('function');
@@ -441,6 +472,14 @@ describe('@jiso/test package subpath exports', () => {
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expectTypeOf<DrizzleQueryBehaviorSourceFixtures>()
+      .toHaveProperty('selectShape')
+      .toEqualTypeOf<ProjectSourceFixture[]>();
+    expectTypeOf<ProjectQueryBehaviorFact>().toHaveProperty('query').toEqualTypeOf<string>();
+    expectTypeOf<ProjectQueryDiagnosticFact>().toHaveProperty('code').toEqualTypeOf<string>();
+    expectTypeOf<ProjectTouchGraphBehaviorFact>()
+      .toHaveProperty('touches')
+      .toMatchTypeOf<readonly unknown[]>();
     expectTypeOf<ProjectPackageManifestFact>().toHaveProperty('directory').toEqualTypeOf<string>();
     expect(graphFixtureFile).toBeTypeOf('function');
     expectTypeOf<ProjectGraphFixture>().toMatchTypeOf<Record<string, unknown>>();

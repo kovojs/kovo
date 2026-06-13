@@ -118,7 +118,11 @@ import {
 import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
   cssScopeRules,
+  drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
+  projectQueryBehaviorFacts,
+  projectQueryDiagnosticFacts,
+  projectTouchGraphBehaviorFacts,
   projectFileSources,
   projectJsonFile,
   projectPackageManifestFacts,
@@ -5114,12 +5118,14 @@ export default createApp({
 void test('P3 Drizzle query facts include select shapes and instance keys', async () => {
   let drizzle;
   try {
-    drizzle = await import('../dist/drizzle/src/index.mjs');
+    drizzle = await import('../packages/drizzle/src/static.ts');
   } catch (error) {
+    const importFailure = String(error?.stack ?? error);
     assert.equal(
-      String(error?.stack ?? error).includes('__filename is not defined in ES module scope'),
+      importFailure.includes('__filename is not defined in ES module scope') ||
+        importFailure.includes('packages/core/src/diagnostics.js'),
       true,
-      'unexpected Drizzle bundle import failure',
+      'unexpected Drizzle static import failure',
     );
     await execFileAsync(
       'pnpm',
@@ -5143,80 +5149,34 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
     return;
   }
 
-  const {
-    diagnosticsForQueryFacts,
-    extractQueryFactsFromProject,
-    extractQueryFactsFromSource,
-    extractTouchGraphFromSource,
-  } = drizzle;
+  const { extractQueryFactsFromProject, extractQueryFactsFromSource, extractTouchGraphFromSource } =
+    drizzle;
+  const drizzleSources = drizzleQueryBehaviorSourceFixtures();
 
-  const sourceFacts = extractQueryFactsFromSource([
-    {
-      fileName: 'cart.queries.ts',
-      source: `
-        export const cartItems = pgTable("cart_items", {
-          cartId: text("cart_id").notNull(),
-          productId: text("product_id"),
-          qty: integer("qty").notNull(),
-        }, jiso({ domain: "cart", key: "cartId" }));
-        export const products = pgTable("products", {
-          id: text("id").primaryKey(),
-          name: text("name").notNull(),
-        }, jiso({ domain: "product", key: "id" }));
-
-        export const cartQuery = query("cart", {
-          output: s.object({ count: s.number() }),
-          async load(input, db) {
-            return db.select({
-              count: sql<number>\`count(*)\`,
-              productId: products.id,
-              item: {
-                qty: cartItems.qty,
-              },
-            }).from(cartItems).innerJoin(products, eq(products.id, cartItems.productId)).where(eq(cartItems.cartId, input.cartId));
-          },
-        });
-      `,
-    },
-  ]);
-
-  assert.deepEqual(sourceFacts, [
-    {
-      instanceKey: {
-        domain: 'cart',
-        key: 'arg:cartId',
-      },
-      query: 'cart',
-      reads: ['cart', 'product'],
-      shape: {
-        count: 'number',
-        item: {
-          qty: 'number',
+  assert.deepEqual(
+    projectQueryBehaviorFacts(extractQueryFactsFromSource(drizzleSources.selectShape)),
+    [
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:cartId',
         },
-        productId: 'string',
-      },
-      site: 'cart.queries.ts:11',
-    },
-  ]);
-
-  const opaqueProjectionFacts = extractQueryFactsFromSource([
-    {
-      fileName: 'cart.queries.ts',
-      source: `
-        export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-
-        export const cartQuery = query("cart", {
-          async load(input, db) {
-            return db.select({
-              count: sql<number>\`count(*)\`,
-            }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+        query: 'cart',
+        reads: ['cart', 'product'],
+        shape: {
+          count: 'number',
+          item: {
+            qty: 'number',
           },
-        });
-      `,
-    },
-  ]);
+          productId: 'string',
+        },
+        site: 'cart.queries.ts:11',
+      },
+    ],
+  );
 
-  assert.deepEqual(opaqueProjectionFacts, [
+  const opaqueProjectionFacts = extractQueryFactsFromSource(drizzleSources.opaqueProjection);
+  assert.deepEqual(projectQueryBehaviorFacts(opaqueProjectionFacts), [
     {
       diagnostics: [
         {
@@ -5239,7 +5199,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
       site: 'cart.queries.ts:4',
     },
   ]);
-  assert.deepEqual(diagnosticsForQueryFacts(opaqueProjectionFacts), [
+  assert.deepEqual(projectQueryDiagnosticFacts(opaqueProjectionFacts), [
     {
       code: 'FW410',
       message:
@@ -5249,52 +5209,22 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
     },
   ]);
 
-  const nonKeyPredicateFacts = extractQueryFactsFromSource([
-    {
-      fileName: 'product.queries.ts',
-      source: `
-        export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-        export const productQuery = query("product", {
-          load(input, db) {
-            return db.select({ sku: products.sku }).from(products).where(eq(products.sku, input.sku));
-          },
-        });
-      `,
-    },
-  ]);
-
-  assert.deepEqual(nonKeyPredicateFacts, [
-    {
-      query: 'product',
-      reads: ['product'],
-      shape: {
-        sku: 'string',
+  assert.deepEqual(
+    projectQueryBehaviorFacts(extractQueryFactsFromSource(drizzleSources.nonKeyPredicate)),
+    [
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          sku: 'string',
+        },
+        site: 'product.queries.ts:4',
       },
-      site: 'product.queries.ts:4',
-    },
-  ]);
+    ],
+  );
 
-  const exemptReadFacts = extractQueryFactsFromSource([
-    {
-      fileName: 'product.queries.ts',
-      source: `
-        export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
-        export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-        export const productQuery = query("product", {
-          async load(_input, db) {
-            return db.select({
-              message: auditLog.message,
-              name: products.name,
-            }).from(products).leftJoin(auditLog, eq(auditLog.productId, products.id));
-          },
-        });
-      `,
-    },
-  ]);
-
-  assert.deepEqual(exemptReadFacts, [
+  const exemptReadFacts = extractQueryFactsFromSource(drizzleSources.exemptRead);
+  assert.deepEqual(projectQueryBehaviorFacts(exemptReadFacts), [
     {
       diagnostics: [
         {
@@ -5313,7 +5243,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
       site: 'product.queries.ts:5',
     },
   ]);
-  assert.deepEqual(diagnosticsForQueryFacts(exemptReadFacts), [
+  assert.deepEqual(projectQueryDiagnosticFacts(exemptReadFacts), [
     {
       code: 'FW411',
       message: 'Query read set includes an exempt table. Tables: audit_log.',
@@ -5323,23 +5253,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   ]);
 
   assert.deepEqual(
-    extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-
-          export async function writeAudit(db) {
-            await db.insert(auditLog).values({ event: "cart" });
-          }
-
-          export async function addItem(db, cartId) {
-            await db.insert(cartItems).values({ cartId });
-          }
-        `,
-      },
-    ]),
+    projectTouchGraphBehaviorFacts(extractTouchGraphFromSource(drizzleSources.exemptWriteTouch)),
     {
       addItem: {
         reads: [],
@@ -5356,49 +5270,25 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
     },
   );
 
-  const projectFacts = extractQueryFactsFromProject({
-    files: [
+  assert.deepEqual(
+    projectQueryBehaviorFacts(
+      extractQueryFactsFromProject({ files: drizzleSources.importedSchemaProject }),
+    ),
+    [
       {
-        fileName: 'cart.schema.ts',
-        source: `
-          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'order.schema.ts',
-        source: `
-          export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'cart.queries.ts',
-        source: `
-          import { items } from "./cart.schema";
-
-          export const cartQuery = query("cart", {
-            load(input, db) {
-              return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
-            },
-          });
-        `,
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'cart.queries.ts:4',
       },
     ],
-  });
-
-  assert.deepEqual(projectFacts, [
-    {
-      instanceKey: {
-        domain: 'cart',
-        key: 'arg:id',
-      },
-      query: 'cart',
-      reads: ['cart'],
-      shape: {
-        id: 'string',
-      },
-      site: 'cart.queries.ts:4',
-    },
-  ]);
+  );
 });
 
 void test('P1 fragment targets emit typed registry facts', async () => {

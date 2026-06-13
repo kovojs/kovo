@@ -46,7 +46,8 @@ form-field maps, keyed-element projections, and response-body query/fragment/sty
 summaries for commerce app/source-truth tests. Shared markdown fixtures now own SPEC rule-title
 canonicalization for doc gates, so `tests/fw-check.node.mjs` no longer keeps that local normalizer.
 Shared source/command fixtures now own conformance package manifest and Vite+ gate projections for
-the conformance fw-check case.
+the conformance fw-check case. Shared source fixtures also own the Drizzle query/touch source
+fixtures and query/diagnostic/touch behavior projections used by the fw-check Drizzle gate.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -87,6 +88,11 @@ Latest evidence:
 - `pnpm run check:build`
 - `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -537,6 +543,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -553,7 +564,9 @@ local helpers; commerce source-truth matrix projection now lives in
 selected-element counts and named query JSON projections instead of local response-body/shell
 parsing helpers. `fw-check` doc-gate rule-title canonicalization now lives in
 `@jiso/test/markdown-fixtures`. The fw-check conformance gate now consumes shared source and command
-fixtures for package manifest, acceptance script, Vite+ task, and pnpm-filter command facts.
+fixtures for package manifest, acceptance script, Vite+ task, and pnpm-filter command facts. The
+fw-check Drizzle gate now consumes shared source fixtures for query source bodies and structured
+query/diagnostic/touch behavior projections.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -566,6 +579,11 @@ Latest evidence:
 - `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
 - `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Current Gates
 
