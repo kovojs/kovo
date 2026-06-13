@@ -41,8 +41,11 @@ export async function replayStaticExportRouteArtifact({
     ]);
   }
 
+  const body = await response.text();
+  assertStaticExportRouteDocumentL0L1({ body, origin, routePath });
+
   return {
-    body: await response.text(),
+    body,
     headers: sortedHeaders(response.headers),
     path: htmlArtifactPath(pathname, htmlPathStyle),
     status: response.status,
@@ -117,7 +120,12 @@ function collectClientModuleHrefs(
   const hrefs = new Set<string>();
 
   for (const artifact of routeArtifacts) {
-    collectClientModuleHrefsFromHtmlAttributes(artifact.body, hrefs);
+    for (const ref of collectStaticExportHtmlAttributeRefs(artifact.body)) {
+      for (const token of ref.value.split(/\s+/)) {
+        if (token.startsWith('/c/')) hrefs.add(token);
+      }
+    }
+
     const linkHeader = artifact.headers.link;
     if (linkHeader) collectClientModuleHrefsFromLinkHeader(linkHeader, hrefs);
   }
@@ -125,16 +133,92 @@ function collectClientModuleHrefs(
   return [...hrefs].sort();
 }
 
-function collectClientModuleHrefsFromHtmlAttributes(html: string, hrefs: Set<string>): void {
-  const attributePattern = /\s(?:[\w:-]+)=["']([^"']*)["']/g;
+interface StaticExportHtmlAttributeRef {
+  name: string;
+  value: string;
+}
+
+function collectStaticExportHtmlAttributeRefs(html: string): StaticExportHtmlAttributeRef[] {
+  const refs: StaticExportHtmlAttributeRef[] = [];
+  const attributePattern = /\s([\w:-]+)=["']([^"']*)["']/g;
   let attributeMatch: RegExpExecArray | null;
 
   while ((attributeMatch = attributePattern.exec(html)) !== null) {
-    const value = attributeMatch[1] === undefined ? '' : decodeHtmlAttributeText(attributeMatch[1]);
-    for (const ref of value.split(/\s+/)) {
-      if (ref.startsWith('/c/')) hrefs.add(ref);
-    }
+    refs.push({
+      name: attributeMatch[1]?.toLowerCase() ?? '',
+      value: attributeMatch[2] === undefined ? '' : decodeHtmlAttributeText(attributeMatch[2]),
+    });
   }
+
+  return refs;
+}
+
+const STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES = new Set(['action', 'formaction', 'href', 'src']);
+
+interface StaticExportRouteDocumentL0L1Options {
+  body: string;
+  origin: string;
+  routePath: string;
+}
+
+function assertStaticExportRouteDocumentL0L1({
+  body,
+  origin,
+  routePath,
+}: StaticExportRouteDocumentL0L1Options): void {
+  const diagnostics = collectStaticExportServerEndpointRefs(body, origin).map((ref) =>
+    staticExportDiagnostic(
+      routePath,
+      `FW229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
+    ),
+  );
+
+  if (diagnostics.length > 0) throw new StaticExportError(diagnostics);
+}
+
+interface StaticExportServerEndpointRef extends StaticExportHtmlAttributeRef {
+  path: string;
+  phase: 'mutation' | 'query';
+}
+
+// SPEC §9.5: exported documents are no-JS artifacts and cannot rely on server
+// mutation/query endpoints that disappear on a static host.
+function collectStaticExportServerEndpointRefs(
+  html: string,
+  origin: string,
+): StaticExportServerEndpointRef[] {
+  const refs: StaticExportServerEndpointRef[] = [];
+  const exportOrigin = new URL(origin).origin;
+
+  for (const ref of collectStaticExportHtmlAttributeRefs(html)) {
+    if (!STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES.has(ref.name)) continue;
+
+    const url = staticExportUrlFromAttributeValue(ref.value, origin);
+    if (url === undefined || url.origin !== exportOrigin) continue;
+
+    const phase = staticExportServerEndpointPhase(url.pathname);
+    if (phase === undefined) continue;
+
+    refs.push({ ...ref, path: url.pathname, phase });
+  }
+
+  return refs;
+}
+
+function staticExportUrlFromAttributeValue(value: string, origin: string): URL | undefined {
+  if (value.trim() === '') return undefined;
+
+  try {
+    return new URL(value, origin);
+  } catch {
+    return undefined;
+  }
+}
+
+function staticExportServerEndpointPhase(pathname: string): 'mutation' | 'query' | undefined {
+  if (pathname.startsWith('/_m/')) return 'mutation';
+  if (pathname.startsWith('/_q/')) return 'query';
+  return undefined;
 }
 
 function collectClientModuleHrefsFromLinkHeader(header: string, hrefs: Set<string>): void {

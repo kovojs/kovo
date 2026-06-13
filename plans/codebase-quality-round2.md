@@ -263,6 +263,9 @@ Closed evidence so far:
 - SSR Vite dev middleware now defaults to deriving its node adapter from the loaded app's
   SPEC §9.5 `Request -> Response` handler; explicit node-handler exports remain strict for apps
   that add adapter-edge request context.
+- Static export replay now enforces SPEC §9.5 L0/L1-only route documents by rejecting same-origin
+  `/_m/` and `/_q/` server endpoint references before generated HTML, `/c/` modules, or assets are
+  written.
 
 Open:
 
@@ -295,6 +298,11 @@ Recent gates:
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export"`
 - `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
 - `pnpm exec vp check packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-replay.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce

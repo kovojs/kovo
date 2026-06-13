@@ -41,6 +41,9 @@ Implemented areas:
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
+- `static-replay.ts` rejects exported route documents that still reference same-origin `/_m/` or
+  `/_q/` server endpoints, so SPEC §9.5 L0/L1-only constraints are enforced on the synthetic
+  replayed no-JS artifact before client modules or files are written.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards and formatting.
   The create-jiso starter and commerce export tasks load those helpers from `@jiso/server`
   instead of duplicating local FW229 formatting.
@@ -90,12 +93,20 @@ Round84 docs outside-consumer export evidence:
 - `pnpm exec vp check packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round85 app-shell static replay evidence:
+
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-replay.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
 
-- Prove directory-index HTML output, manifest asset copying, duplicate target rejection, and
-  L0/L1-only constraints through focused tests.
+- Prove remaining directory-index HTML output and manifest asset copying acceptance across public
+  export-task consumers.
 - Keep dry-run and write export validation equivalent.
 
 R7:
