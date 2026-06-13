@@ -38,6 +38,14 @@ import {
   type FwExportSummary,
 } from '@jiso/test/fw-export-fixtures';
 import {
+  fwExplainField,
+  fwExplainRecords,
+  fwExplainSummary,
+  fwExplainUpdateTargets,
+  parseFwExplainOutput,
+  type FwExplainOutput,
+} from '@jiso/test/fw-explain-fixtures';
+import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
@@ -101,6 +109,11 @@ import {
   sqlStatementText,
 } from '@jiso/test/sql-observer';
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
+import {
+  assertTypeScriptProgramHasNoDiagnostics,
+  type TypeScriptInterfaceMemberTypes,
+  typeScriptInterfaceMemberTypes,
+} from '@jiso/test/typescript-fixtures';
 import {
   createDbVerifier,
   type DbObservationOptions,
@@ -253,6 +266,24 @@ describe('@jiso/test package subpath exports', () => {
         script: 'test',
       },
     ]);
+    expect(parseFwExplainOutput).toBeTypeOf('function');
+    expect(fwExplainField('fw-explain/v1\nQUERY cart\nreads: cart\n', 'reads')).toBe('cart');
+    expect(
+      fwExplainRecords('fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart plan\n', 'OPTIMISTIC'),
+    ).toEqual(['cart plan']);
+    expect(
+      fwExplainSummary(
+        'fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
+        'OPTIMISTIC-SUMMARY',
+      ),
+    ).toMatchObject({ UNHANDLED: '0', total: '1' });
+    expect(
+      fwExplainUpdateTargets(
+        'fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart; product->page:/products\n',
+      ),
+    ).toEqual(['cart->page:/cart', 'product->page:/products']);
+    expect(assertTypeScriptProgramHasNoDiagnostics).toBeTypeOf('function');
+    expect(typeScriptInterfaceMemberTypes).toBeTypeOf('function');
     expect(
       workflowStepCommands(
         ['steps:', '  - uses: actions/checkout@v4', '  - run: vp check'].join('\n'),
@@ -309,6 +340,7 @@ type _PublicSubpathTypes = [
   PnpmFilterTestCommand,
   VitestTaskCommand,
   WorkflowStepCommand,
+  FwExplainOutput,
   FwExportError,
   FwExportHtmlArtifact,
   FwExportOutput,
@@ -331,6 +363,7 @@ type _PublicSubpathTypes = [
   WireTranscriptExchange,
   WireTranscriptResponse,
   ParsedSqlOperation,
+  TypeScriptInterfaceMemberTypes,
   DbObservationOptions,
   DbVerificationConfig,
   DbVerificationDiagnostic,

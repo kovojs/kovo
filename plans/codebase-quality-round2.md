@@ -121,6 +121,10 @@ Closed evidence so far:
   executors or DOM fixture shims for compiler-output behavior checks; those checks consume
   `@jiso/test/generated-module-fixtures`, keeping SPEC.md §5.2 emitted artifacts as verification
   inputs rather than app-authored source.
+- `tests/fw-check.node.mjs` no longer owns local `fw-explain/v1` prefix/summary/update-target
+  parsers or TypeScript virtual-program helpers; commerce/starter graph-answerability and
+  registry/type gates consume `@jiso/test/fw-explain-fixtures` and
+  `@jiso/test/typescript-fixtures` seams pinned by focused package tests and package exports.
 
 Open:
 
@@ -173,6 +177,11 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|D3 deferred stream responses are consumed by the runtime|P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented|P2 compiler merges view transition stamps|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact|P1 fragment targets emit typed registry facts|S1 production build proves the compiler 1:1 emit contract" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/typescript-fixtures.ts packages/test/src/typescript-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -761,6 +770,11 @@ Closed evidence so far:
 - `@jiso/test/fw-export-fixtures` exposes structured `fw-export/v1` HTML artifact, error, and
   summary facts; package export tests pin the subpath seam, and the D10 `fw-check` export gate
   consumes it instead of a local CLI-output parser.
+- `@jiso/test/fw-explain-fixtures` exposes structured `fw-explain/v1` field, record, summary,
+  and update-target facts for SPEC §5.3 CLI-output gates, while
+  `@jiso/test/typescript-fixtures` exposes virtual TypeScript diagnostic and interface-member
+  facts for SPEC §5.2 registry/type assertions; `fw-check` consumes both seams instead of owning
+  local parsers/helpers.
 
 Open:
 
@@ -773,6 +787,8 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp check packages/test/package.json packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/typescript-fixtures.ts packages/test/src/typescript-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "renders Tailwind-first stylesheet hints and static utility classes|resolves commerce route meta from loaded cart query data"`
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell dev, serve, and export command matrix|dispatches shell login and logout mutations before guarded admin routes|exports the public commerce shell while the dynamic session shell stays non-exportable|wires vp run export to the public commerce shell static output|wires npm run static to the public commerce shell static output"`
@@ -859,6 +875,9 @@ Closed evidence so far:
 - `packages/test/src/fw-export-fixtures.ts` now owns reusable `fw-export/v1` output parsing;
   focused `fw-export-fixtures.test.ts`, package export tests, and the targeted D10 `fw-check` node
   test pin the seam.
+- `packages/test/src/fw-explain-fixtures.ts` and `packages/test/src/typescript-fixtures.ts` now
+  own reusable CLI-output and virtual TypeScript fixture facts; focused package tests, package
+  export tests, and targeted `fw-check` node tests pin the seams.
 
 Open:
 

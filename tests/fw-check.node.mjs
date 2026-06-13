@@ -58,6 +58,12 @@ import {
   vpRunTaskName,
   workflowStepCommands,
 } from '../packages/test/src/command-fixtures.ts';
+import {
+  fwExplainField,
+  fwExplainRecords,
+  fwExplainSummary,
+  fwExplainUpdateTargets,
+} from '../packages/test/src/fw-explain-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
 import {
   executeGeneratedBootstrapModule,
@@ -82,6 +88,10 @@ import {
   forbiddenBrowserArchitectureFacts,
   projectSourceSiteFact,
 } from '../packages/test/src/source-fixtures.ts';
+import {
+  assertTypeScriptProgramHasNoDiagnostics,
+  typeScriptInterfaceMemberTypes,
+} from '../packages/test/src/typescript-fixtures.ts';
 import { parseWireFixture, parseWireResponses } from '../packages/test/src/wire-fixtures.ts';
 import {
   createApp,
@@ -155,35 +165,6 @@ const readWireFixture = async (name) =>
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const execFileAsync = promisify(execFile);
-
-const explainValue = (output, prefix) => {
-  const line = output.split('\n').find((item) => item.startsWith(prefix));
-  assert.ok(line, `explain output includes ${prefix}`);
-  return line.slice(prefix.length);
-};
-
-const explainLines = (output, prefix) =>
-  output
-    .split('\n')
-    .filter((line) => line.startsWith(prefix))
-    .map((line) => line.slice(prefix.length));
-
-const explainSummary = (output, prefix) => {
-  const [summary] = explainLines(output, prefix);
-  assert.ok(summary, `explain output includes ${prefix}`);
-  return Object.fromEntries(
-    summary.split(/\s+/).map((entry) => {
-      const [key, value] = entry.split('=');
-      assert.ok(key && value !== undefined, `summary entry is key=value: ${entry}`);
-      return [key, value];
-    }),
-  );
-};
-
-const explainUpdateTargets = (output) =>
-  explainValue(output, 'updates: ')
-    .split(/\s*;\s*/)
-    .filter(Boolean);
 
 const runCliCommand = async (args) => {
   let stdout = '';
@@ -265,115 +246,6 @@ const generatedModuleRuntime = {
 const generatedBootstrapRuntime = {
   ...generatedModuleRuntime,
   installJisoLoader() {},
-};
-
-const assertTypeScriptProgramHasNoDiagnostics = async (files) => {
-  const ts = await import('typescript');
-  const workspaceRoot = fileURLToPath(new URL('../', import.meta.url));
-  const compilerOptions = {
-    allowImportingTsExtensions: true,
-    baseUrl: workspaceRoot,
-    exactOptionalPropertyTypes: true,
-    ignoreDeprecations: '6.0',
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    noEmit: true,
-    paths: {
-      '@jiso/core': ['dist/core/src/index.d.mts'],
-    },
-    skipLibCheck: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2024,
-    types: ['node'],
-  };
-  const defaultHost = ts.createCompilerHost(compilerOptions, true);
-  const virtualFiles = new Map(Object.entries(files));
-  const host = {
-    ...defaultHost,
-    fileExists(fileName) {
-      return virtualFiles.has(fileName) || defaultHost.fileExists(fileName);
-    },
-    getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile) {
-      const sourceText = virtualFiles.get(fileName);
-      if (sourceText !== undefined) {
-        return ts.createSourceFile(fileName, sourceText, languageVersion, true);
-      }
-      return defaultHost.getSourceFile(
-        fileName,
-        languageVersion,
-        onError,
-        shouldCreateNewSourceFile,
-      );
-    },
-    readFile(fileName) {
-      return virtualFiles.get(fileName) ?? defaultHost.readFile(fileName);
-    },
-  };
-  const program = ts.createProgram([...virtualFiles.keys()], compilerOptions, host);
-  const diagnostics = ts.getPreEmitDiagnostics(program);
-
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => {
-      const position =
-        diagnostic.file && diagnostic.start !== undefined
-          ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
-          : undefined;
-      const site = position
-        ? `${diagnostic.file.fileName}:${position.line + 1}:${position.character + 1}`
-        : diagnostic.file?.fileName;
-      return [diagnostic.code, site, ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')]
-        .filter(Boolean)
-        .join(' ');
-    }),
-    [],
-  );
-};
-
-const typeScriptInterfaceMemberTypes = async (fileName, source, interfaceName) => {
-  const ts = await import('typescript');
-  const compilerOptions = {
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    noEmit: true,
-    skipLibCheck: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2024,
-  };
-  const defaultHost = ts.createCompilerHost(compilerOptions, true);
-  const host = {
-    ...defaultHost,
-    fileExists(candidate) {
-      return candidate === fileName || defaultHost.fileExists(candidate);
-    },
-    getSourceFile(candidate, languageVersion) {
-      if (candidate === fileName) {
-        return ts.createSourceFile(candidate, source, languageVersion, true);
-      }
-      return defaultHost.getSourceFile(candidate, languageVersion);
-    },
-    readFile(candidate) {
-      return candidate === fileName ? source : defaultHost.readFile(candidate);
-    },
-  };
-  const program = ts.createProgram([fileName], compilerOptions, host);
-  const sourceFile = program.getSourceFile(fileName);
-  assert.ok(sourceFile, `TypeScript parsed ${fileName}`);
-  const interfaceNode = sourceFile.statements.find(
-    (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === interfaceName,
-  );
-  assert.ok(interfaceNode, `TypeScript registry exports interface ${interfaceName}`);
-  const checker = program.getTypeChecker();
-
-  return Object.fromEntries(
-    checker
-      .getTypeAtLocation(interfaceNode)
-      .getProperties()
-      .map((symbol) => [
-        symbol.name,
-        checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, interfaceNode)),
-      ])
-      .sort(([left], [right]) => left.localeCompare(right)),
-  );
 };
 
 const loadVitePlusConfig = async (configPath = 'vite.config.ts') => {
@@ -911,8 +783,8 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
       writes: ['cart', 'product', 'order'],
     },
   );
-  assert.equal(explainValue(cartAddExplain, 'manual-invalidates: '), '-');
-  assert.deepEqual(explainUpdateTargets(cartAddExplain), [
+  assert.equal(fwExplainField(cartAddExplain, 'manual-invalidates'), '-');
+  assert.deepEqual(fwExplainUpdateTargets(cartAddExplain), [
     'cart->component:CartBadge,page:/cart',
     'orderHistory->component:OrderHistory,page:/cart',
     'productGrid->component:ProductGrid,page:/cart',
@@ -3523,21 +3395,21 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   }).output;
 
   assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
-  assert.equal(explainValue(cartQueryExplain, 'consumers: '), 'component:CartBadge,page:/cart');
-  assert.equal(explainValue(cartQueryExplain, 'invalidated-by: '), 'cart/add');
-  assert.equal(explainValue(cartQueryExplain, 'domain-writes: '), 'cart.addItem');
-  assert.equal(explainValue(cartAddExplain, 'session: '), 'commerceSession');
-  assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
-  assert.equal(explainValue(cartAddExplain, 'writes: '), 'cart,product,order');
-  assert.equal(explainValue(cartAddExplain, 'invalidates: '), 'cart,product,order');
-  assert.deepEqual(explainUpdateTargets(cartAddExplain), [
+  assert.equal(fwExplainField(cartQueryExplain, 'consumers'), 'component:CartBadge,page:/cart');
+  assert.equal(fwExplainField(cartQueryExplain, 'invalidated-by'), 'cart/add');
+  assert.equal(fwExplainField(cartQueryExplain, 'domain-writes'), 'cart.addItem');
+  assert.equal(fwExplainField(cartAddExplain, 'session'), 'commerceSession');
+  assert.equal(fwExplainField(cartAddExplain, 'input-fields'), 'productId,quantity');
+  assert.equal(fwExplainField(cartAddExplain, 'writes'), 'cart,product,order');
+  assert.equal(fwExplainField(cartAddExplain, 'invalidates'), 'cart,product,order');
+  assert.deepEqual(fwExplainUpdateTargets(cartAddExplain), [
     'cart->component:CartBadge,page:/cart',
     'orderHistory->component:OrderHistory,page:/cart',
     'productGrid->component:ProductGrid,page:/cart',
   ]);
-  assert.equal(explainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY ').UNHANDLED, '0');
-  assert.equal(explainValue(uploadReceiptExplain, 'file-fields: '), 'receipt');
-  assert.equal(explainValue(uploadReceiptExplain, 'invalidates: '), '-');
+  assert.equal(fwExplainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY').UNHANDLED, '0');
+  assert.equal(fwExplainField(uploadReceiptExplain, 'file-fields'), 'receipt');
+  assert.equal(fwExplainField(uploadReceiptExplain, 'invalidates'), '-');
   assert.equal(
     diagnosticDefinitions.FW310.message,
     'Invalidated query lacks optimistic transform.',
@@ -3730,25 +3602,25 @@ void test('P10 starter wires graph assertions into CI', async () => {
     { domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' },
   ]);
   assert.equal(
-    explainValue(cartQueryExplain, 'consumers: '),
+    fwExplainField(cartQueryExplain, 'consumers'),
     'component:CartBadge,component:CartPanel,page:/cart',
   );
-  assert.equal(explainValue(cartQueryExplain, 'invalidated-by: '), 'cart/add');
-  assert.equal(explainValue(cartQueryExplain, 'domain-writes: '), 'cart.addItem');
-  assert.equal(explainValue(cartAddExplain, 'session: '), 'starterSession');
-  assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
-  assert.deepEqual(explainUpdateTargets(cartAddExplain), [
+  assert.equal(fwExplainField(cartQueryExplain, 'invalidated-by'), 'cart/add');
+  assert.equal(fwExplainField(cartQueryExplain, 'domain-writes'), 'cart.addItem');
+  assert.equal(fwExplainField(cartAddExplain, 'session'), 'starterSession');
+  assert.equal(fwExplainField(cartAddExplain, 'input-fields'), 'productId,quantity');
+  assert.deepEqual(fwExplainUpdateTargets(cartAddExplain), [
     'cart->component:CartBadge,component:CartPanel,page:/cart',
   ]);
-  assert.deepEqual(explainLines(cartAddExplain, 'OPTIMISTIC '), ['cart await-fragment']);
-  assert.equal(explainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY ').UNHANDLED, '0');
+  assert.deepEqual(fwExplainRecords(cartAddExplain, 'OPTIMISTIC'), ['cart await-fragment']);
+  assert.equal(fwExplainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY').UNHANDLED, '0');
   assert.equal(
-    explainValue(cartPageExplain, 'meta: '),
+    fwExplainField(cartPageExplain, 'meta'),
     'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
   );
-  assert.equal(explainValue(cartPageExplain, 'i18n: '), 'en-US:cartTitle');
-  assert.equal(explainValue(cartPageExplain, 'queries: '), 'cart');
-  assert.equal(explainValue(cartPageExplain, 'stylesheets: '), '/src/styles.css');
+  assert.equal(fwExplainField(cartPageExplain, 'i18n'), 'en-US:cartTitle');
+  assert.equal(fwExplainField(cartPageExplain, 'queries'), 'cart');
+  assert.equal(fwExplainField(cartPageExplain, 'stylesheets'), '/src/styles.css');
 
   assert.deepEqual(
     {
@@ -5723,9 +5595,9 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   // because runtime verification checks observed effects against these facts.
   assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
   assert.equal(
-    explainValue(
+    fwExplainField(
       fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output,
-      'domain-writes: ',
+      'domain-writes',
     ),
     'cart.addItem',
   );
