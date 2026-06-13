@@ -30,22 +30,30 @@ function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): str
 }
 
 describe('server app-shell public API barrels', () => {
-  it('keeps app-shell helpers on app-shell subpaths while root preserves CLI static export', () => {
+  it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
     const rootAppShellEntrypoints = new Set([
       'createApp',
+      'createMemoryVersionedClientModuleRegistry',
       'createRequestHandler',
       'exportStaticApp',
+      'toNodeHandler',
     ]);
     const rootAppShellEntrypointValues = {
       createApp: coreApi.createApp,
+      createMemoryVersionedClientModuleRegistry:
+        clientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportApi.exportStaticApp,
+      toNodeHandler: nodeApi.toNodeHandler,
     };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: coreApi.createApp,
+      createMemoryVersionedClientModuleRegistry:
+        clientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
+      toNodeHandler: nodeApi.toNodeHandler,
     });
 
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
@@ -83,8 +91,12 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
     expect(publicApi.createApp).toBe(coreApi.createApp);
+    expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
+      clientModulesApi.createMemoryVersionedClientModuleRegistry,
+    );
     expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
+    expect(publicApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
 
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
   });

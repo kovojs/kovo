@@ -1578,9 +1578,12 @@ compile/static-export diagnostics, manifest/inventory helpers, and output-plan h
 their focused owner modules and the public `@jiso/server/app-shell/static-export` replacement seam.
 The root `@jiso/server` surface now forwards SPEC §9.5 `createApp()` and
 `createRequestHandler(app)` from the app-core owner plus the CLI `exportStaticApp` alias from the
-focused static-export orchestrator. Public API tests pin the exact root value surface and prove
-document/data query-script aliases share the single `wire-html.ts` emitter while static-export
-diagnostic helpers resolve to `static-export-diagnostics.ts`.
+focused static-export orchestrator. The built-root acceptance harness boundary also explicitly
+keeps `createMemoryVersionedClientModuleRegistry()` and `toNodeHandler()` from their focused
+client-module/node owners, while the aggregate `@jiso/server/app-shell` compatibility subpath
+stays deleted. Public API tests pin the exact root value surface and prove document/data
+query-script aliases share the single `wire-html.ts` emitter while static-export diagnostic helpers
+resolve to `static-export-diagnostics.ts`.
 App-shell app contracts now live in `packages/server/src/app-types.ts`, so app dispatch,
 document, mutation, static-export replay/request/document/route-plan, node, and Vite modules no
 longer type-import through the `app.ts` constructor facade; `@jiso/server/app-shell/core` re-exports
@@ -1650,6 +1653,14 @@ public app exports instead of falling back to stale named-app or shell-object co
 - [x] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
 
 Latest evidence:
+
+- Round276 built-root P10 boundary:
+  `packages/server/src/index.ts` forwards the focused client-module registry constructor and
+  node/http adapter needed by `tests/p10-perf.node.mjs` from the built root, and
+  `packages/server/src/api/app.test.ts` pins those values while keeping the aggregate app-shell
+  subpath absent. `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; `pnpm run check:build`;
+  `node --test --test-name-pattern "P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`.
 
 - Round274 Vite static-export facade deletion:
   `packages/server/src/vite-static-export.ts` was deleted. `@jiso/server/app-shell/vite` now

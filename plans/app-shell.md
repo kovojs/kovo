@@ -83,6 +83,21 @@ Implemented areas:
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
+- The root `@jiso/server` surface now keeps the SPEC §9.5 built acceptance harness boundary
+  explicit: `createApp()`, `createRequestHandler(app)`, `exportStaticApp()`,
+  `createMemoryVersionedClientModuleRegistry()`, and `toNodeHandler()` are available from the
+  built root while the deleted aggregate `@jiso/server/app-shell` compatibility subpath stays
+  absent.
+
+Round276 built-root P10 boundary evidence:
+
+- `packages/server/src/index.ts` forwards the client-module registry constructor and node/http
+  adapter from their focused owners, and `packages/server/src/api/app.test.ts` pins those values
+  without reopening the aggregate app-shell subpath.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`
 
 Round274 Vite static-export facade deletion evidence:
 
