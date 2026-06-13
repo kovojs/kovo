@@ -283,6 +283,15 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round245: `packages/drizzle/src/static.ts` removed the remaining
+      local object callback-container walker from query-loader and domain-write callback
+      resolution; `symbolForCallbackReference` is now the only member-reference path for these
+      surfaces, using ts-morph member symbols per SPEC §10.2/§11.1. Existing
+      `packages/drizzle/src/index.test.ts` object alias/spread coverage stayed green, and
+      `conformance/drizzle-pin/src/index.test.ts` now pins nested alias/spread query-loader and
+      domain-write containers against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
       Evidence 2026-06-13: `packages/drizzle/src/static.ts` now follows nested static callback
       container members through local object aliases and spreads with override/cycle protection,
       so `load: spread["nested"]["loadProducts"]` and `write(spread["nested"]["addItem"])`
