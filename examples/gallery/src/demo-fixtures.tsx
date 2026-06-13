@@ -755,7 +755,7 @@ export function AutocompleteDemo(): string {
       {renderBehaviorContract({
         changeReasons: 'input, option-select, typeahead, programmatic',
         dataState: 'open, closed, checked, unchecked, highlighted, disabled',
-        keyboard: 'Native input editing plus Arrow and Escape primitive handlers',
+        keyboard: 'Arrow keys open and move over enabled suggestions; Escape closes suggestions',
       })}
     </section>
   );
@@ -1057,7 +1057,7 @@ export function ComboboxDemo(): string {
       {renderBehaviorContract({
         changeReasons: 'input, option-select, arrow-key, escape-key, typeahead, programmatic',
         dataState: 'open, closed, checked, unchecked, highlighted, disabled',
-        keyboard: 'Arrow keys open and move; Escape closes the listbox',
+        keyboard: 'Arrow keys open and move over enabled options; Escape closes the listbox',
       })}
     </section>
   );

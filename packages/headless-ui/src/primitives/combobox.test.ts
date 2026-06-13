@@ -5,6 +5,7 @@ import {
   comboboxInputAttributes as exportedComboboxInputAttributes,
   comboboxKeyDown as exportedComboboxKeyDown,
   comboboxListboxAttributes as exportedComboboxListboxAttributes,
+  comboboxMove as exportedComboboxMove,
   comboboxOptionAttributes as exportedComboboxOptionAttributes,
   comboboxOptionClick as exportedComboboxOptionClick,
   comboboxOptionHighlighted as exportedComboboxOptionHighlighted,
@@ -22,6 +23,7 @@ import {
   comboboxInputAttributes,
   comboboxKeyDown,
   comboboxListboxAttributes,
+  comboboxMove,
   comboboxOptionAttributes,
   comboboxOptionClick,
   comboboxOptionHighlighted,
@@ -269,6 +271,24 @@ describe('headless-ui combobox primitive', () => {
     expect(second.state.buffer).toBe('c');
   });
 
+  it('moves highlighted options with shared keyboard navigation while skipping disabled items', () => {
+    expect(comboboxMove({ items: cityItems, value: 'austin' }, 'ArrowDown')).toEqual({
+      highlightedIndex: 2,
+      highlightedValue: 'chicago',
+    });
+    expect(
+      comboboxMove({ highlightedValue: 'chicago', items: cityItems, value: 'austin' }, 'ArrowDown'),
+    ).toEqual({
+      highlightedIndex: 0,
+      highlightedValue: 'austin',
+    });
+    expect(comboboxMove({ items: cityItems, value: 'austin' }, 'Home')).toEqual({
+      highlightedIndex: 0,
+      highlightedValue: 'austin',
+    });
+    expect(comboboxMove({ disabled: true, items: cityItems }, 'ArrowDown')).toBeUndefined();
+  });
+
   it('guards primitive handlers when author behavior prevented default', () => {
     const inputEvent = comboboxInputEvent('chicago');
     inputEvent.preventDefault();
@@ -361,6 +381,15 @@ describe('headless-ui combobox primitive', () => {
       open: true,
     });
     expect(arrowEvent.defaultPrevented).toBe(true);
+
+    const moveEvent = comboboxKeyEvent('ArrowDown');
+    expect(
+      comboboxKeyDown(moveEvent, { highlightedValue: 'austin', items: cityItems, open: true }),
+    ).toEqual({
+      highlightedIndex: 2,
+      highlightedValue: 'chicago',
+    });
+    expect(moveEvent.defaultPrevented).toBe(true);
   });
 
   it('returns frozen attribute records and exposes option helpers', () => {
@@ -377,6 +406,7 @@ describe('headless-ui combobox primitive', () => {
     expect(exportedComboboxRootAttributes).toBe(comboboxRootAttributes);
     expect(exportedComboboxInputAttributes).toBe(comboboxInputAttributes);
     expect(exportedComboboxListboxAttributes).toBe(comboboxListboxAttributes);
+    expect(exportedComboboxMove).toBe(comboboxMove);
     expect(exportedComboboxOptionAttributes).toBe(comboboxOptionAttributes);
     expect(exportedComboboxValueAttributes).toBe(comboboxValueAttributes);
     expect(exportedComboboxValueText).toBe(comboboxValueText);

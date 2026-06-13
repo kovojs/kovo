@@ -83,12 +83,25 @@ Implemented areas:
 - H3 menu/navigation typeahead now handles repeated printable keys as one-key cycling search, so
   dropdown-menu, context-menu, menubar, and navigation-menu skip disabled items while cycling
   between same-prefix enabled items.
+- H3 filterable choice keyboard movement now covers autocomplete and combobox with exported
+  `autocompleteMove`/`comboboxMove` helpers, open-then-move Arrow key handlers, disabled-option
+  skipping, and gallery behavior contracts that name the enabled suggestion/option movement
+  requirement.
 
 Recent gates:
 
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm exec vitest --run packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/navigation-menu.test.ts`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm --filter @jiso/headless-ui exec vitest --run`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check packages/headless-ui/src/primitives/autocomplete.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/demo-fixtures.tsx examples/gallery/src/behavior-contracts.test.ts plans/ui.md`
+- `git diff --check`
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery test`
 - `pnpm --filter @jiso/example-gallery run test:browser`

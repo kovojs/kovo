@@ -5,6 +5,7 @@ import {
   autocompleteInputAttributes as exportedAutocompleteInputAttributes,
   autocompleteKeyDown as exportedAutocompleteKeyDown,
   autocompleteListAttributes as exportedAutocompleteListAttributes,
+  autocompleteMove as exportedAutocompleteMove,
   autocompleteOptionAttributes as exportedAutocompleteOptionAttributes,
   autocompleteOptionClick as exportedAutocompleteOptionClick,
   autocompleteOptionHighlighted as exportedAutocompleteOptionHighlighted,
@@ -24,6 +25,7 @@ import {
   autocompleteInputAttributes,
   autocompleteKeyDown,
   autocompleteListAttributes,
+  autocompleteMove,
   autocompleteOptionAttributes,
   autocompleteOptionClick,
   autocompleteOptionHighlighted,
@@ -274,6 +276,29 @@ describe('headless-ui autocomplete primitive', () => {
     expect(second.state.buffer).toBe('c');
   });
 
+  it('moves highlighted suggestions with shared keyboard navigation while skipping disabled items', () => {
+    expect(
+      autocompleteMove({ inputValue: 'c', items: cityItems, value: 'austin' }, 'ArrowDown'),
+    ).toEqual({
+      highlightedIndex: 0,
+      highlightedValue: 'chicago',
+    });
+    expect(
+      autocompleteMove(
+        { highlightedValue: 'chicago', inputValue: '', items: cityItems },
+        'ArrowDown',
+      ),
+    ).toEqual({
+      highlightedIndex: 0,
+      highlightedValue: 'austin',
+    });
+    expect(autocompleteMove({ inputValue: '', items: cityItems }, 'End')).toEqual({
+      highlightedIndex: 1,
+      highlightedValue: 'chicago',
+    });
+    expect(autocompleteMove({ disabled: true, items: cityItems }, 'ArrowDown')).toBeUndefined();
+  });
+
   it('guards primitive handlers when author behavior prevented default', () => {
     const inputEvent = autocompleteInputEvent('chicago');
     inputEvent.preventDefault();
@@ -361,6 +386,28 @@ describe('headless-ui autocomplete primitive', () => {
       open: false,
     });
     expect(escapeEvent.defaultPrevented).toBe(true);
+
+    const arrowEvent = autocompleteKeyEvent('ArrowDown');
+    expect(autocompleteKeyDown(arrowEvent, { open: false })).toEqual({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'arrow-key', value: true }),
+      open: true,
+    });
+    expect(arrowEvent.defaultPrevented).toBe(true);
+
+    const moveEvent = autocompleteKeyEvent('ArrowDown');
+    expect(
+      autocompleteKeyDown(moveEvent, {
+        highlightedValue: 'austin',
+        inputValue: '',
+        items: cityItems,
+        open: true,
+      }),
+    ).toEqual({
+      highlightedIndex: 1,
+      highlightedValue: 'chicago',
+    });
+    expect(moveEvent.defaultPrevented).toBe(true);
   });
 
   it('returns frozen attribute records and exposes option helpers', () => {
@@ -377,6 +424,7 @@ describe('headless-ui autocomplete primitive', () => {
     expect(exportedAutocompleteRootAttributes).toBe(autocompleteRootAttributes);
     expect(exportedAutocompleteInputAttributes).toBe(autocompleteInputAttributes);
     expect(exportedAutocompleteListAttributes).toBe(autocompleteListAttributes);
+    expect(exportedAutocompleteMove).toBe(autocompleteMove);
     expect(exportedAutocompleteOptionAttributes).toBe(autocompleteOptionAttributes);
     expect(exportedAutocompleteValueAttributes).toBe(autocompleteValueAttributes);
     expect(exportedAutocompleteValueText).toBe(autocompleteValueText);

@@ -5,6 +5,8 @@ import {
   dispatchCancelableChange,
   findTypeaheadMatch,
   mergeDataAttributes,
+  moveCollectionIndex,
+  navigationIntentFromKey,
   nextTypeaheadState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
@@ -92,6 +94,11 @@ export interface ComboboxOpenChangeResult {
   open: boolean;
 }
 
+export interface ComboboxMoveResult {
+  highlightedIndex: number;
+  highlightedValue: string | undefined;
+}
+
 export interface ComboboxOptionSelectResult {
   open: ComboboxOpenChangeResult;
   value: ComboboxValueChangeResult;
@@ -119,6 +126,7 @@ export type ComboboxInputEvent = Event & {
 };
 export type ComboboxOptionEvent = Event;
 export type ComboboxKeyboardEvent = Event & { readonly key: string };
+export type ComboboxKeyboardResult = ComboboxMoveResult | ComboboxOpenChangeResult;
 
 export function comboboxOptionSelected(options: ComboboxOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
@@ -304,6 +312,35 @@ export function comboboxTypeahead(
   };
 }
 
+export function comboboxMove(
+  state: ComboboxState,
+  key: string,
+  options: { loop?: boolean } = {},
+): ComboboxMoveResult | undefined {
+  if (state.disabled) return undefined;
+
+  const intent = navigationIntentFromKey(key, { orientation: 'vertical' });
+  if (intent === undefined) return undefined;
+
+  const sourceItems = state.items ?? [];
+  const items = sourceItems.map((item) =>
+    item.disabled === undefined ? {} : { disabled: item.disabled },
+  );
+  const currentIndex = items.findIndex(
+    (_item, index) => sourceItems[index]?.value === (state.highlightedValue ?? state.value),
+  );
+  const highlightedIndex = moveCollectionIndex(intent, {
+    currentIndex,
+    items,
+    ...(options.loop === undefined ? {} : { loop: options.loop }),
+  });
+
+  return {
+    highlightedIndex,
+    highlightedValue: highlightedIndex < 0 ? undefined : sourceItems[highlightedIndex]?.value,
+  };
+}
+
 /**
  * @jisoPrimitiveHandler
  *
@@ -356,7 +393,7 @@ export function comboboxKeyDown(
   event: ComboboxKeyboardEvent,
   state: ComboboxState,
   options: ComboboxChangeOptions = {},
-): ComboboxOpenChangeResult | undefined {
+): ComboboxKeyboardResult | undefined {
   if (event.defaultPrevented) return;
 
   if (event.key === 'Escape') {
@@ -366,6 +403,12 @@ export function comboboxKeyDown(
   }
 
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (state.open === true) {
+      const result = comboboxMove(state, event.key, { loop: true });
+      if (result !== undefined) event.preventDefault();
+      return result;
+    }
+
     const result = setComboboxOpen(state, true, 'arrow-key', options);
     if (result.changed) event.preventDefault();
     return result;

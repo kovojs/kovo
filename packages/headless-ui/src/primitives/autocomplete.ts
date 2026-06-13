@@ -5,6 +5,8 @@ import {
   dispatchCancelableChange,
   findTypeaheadMatch,
   mergeDataAttributes,
+  moveCollectionIndex,
+  navigationIntentFromKey,
   nextTypeaheadState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
@@ -110,6 +112,11 @@ export interface AutocompleteOpenChangeResult {
   open: boolean;
 }
 
+export interface AutocompleteMoveResult {
+  highlightedIndex: number;
+  highlightedValue: string | undefined;
+}
+
 export interface AutocompleteOptionSelectResult {
   inputValue: AutocompleteInputChangeResult;
   open: AutocompleteOpenChangeResult;
@@ -138,6 +145,7 @@ export type AutocompleteInputEvent = Event & {
 };
 export type AutocompleteOptionEvent = Event;
 export type AutocompleteKeyboardEvent = Event & { readonly key: string };
+export type AutocompleteKeyboardResult = AutocompleteMoveResult | AutocompleteOpenChangeResult;
 
 export function autocompleteOptionSelected(options: AutocompleteOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
@@ -364,6 +372,32 @@ export function autocompleteTypeahead(
   };
 }
 
+export function autocompleteMove(
+  state: AutocompleteState,
+  key: string,
+  options: { loop?: boolean } = {},
+): AutocompleteMoveResult | undefined {
+  if (state.disabled) return undefined;
+
+  const intent = navigationIntentFromKey(key, { orientation: 'vertical' });
+  if (intent === undefined) return undefined;
+
+  const items = autocompleteSuggestions(state);
+  const currentIndex = items.findIndex(
+    (item) => item.value === (state.highlightedValue ?? state.value),
+  );
+  const highlightedIndex = moveCollectionIndex(intent, {
+    currentIndex,
+    items,
+    ...(options.loop === undefined ? {} : { loop: options.loop }),
+  });
+
+  return {
+    highlightedIndex,
+    highlightedValue: highlightedIndex < 0 ? undefined : items[highlightedIndex]?.value,
+  };
+}
+
 /**
  * @jisoPrimitiveHandler
  *
@@ -421,7 +455,7 @@ export function autocompleteKeyDown(
   event: AutocompleteKeyboardEvent,
   state: AutocompleteState,
   options: AutocompleteChangeOptions = {},
-): AutocompleteOpenChangeResult | undefined {
+): AutocompleteKeyboardResult | undefined {
   if (event.defaultPrevented) return;
 
   if (event.key === 'Escape') {
@@ -431,6 +465,12 @@ export function autocompleteKeyDown(
   }
 
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (state.open === true) {
+      const result = autocompleteMove(state, event.key, { loop: true });
+      if (result !== undefined) event.preventDefault();
+      return result;
+    }
+
     const result = setAutocompleteOpen(state, true, 'arrow-key', options);
     if (result.changed) event.preventDefault();
     return result;
