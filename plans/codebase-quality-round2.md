@@ -84,6 +84,19 @@ with same-session file/test evidence.
       pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-events.test.ts
       pnpm --filter @jiso/runtime run check:inline-loader
       ```
+      Round104 evidence 2026-06-13: the runtime public barrel no longer exposes the legacy
+      `applyMutationResponseToStore` alias, leaving store-only mutation application on the
+      canonical `applyMutationResponse`/`applyMutationResponseToRuntime` paths; deferred-stream
+      runtime coverage moved from the mutation response monolith into
+      `packages/runtime/src/apply-deferred-stream.test.ts`. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
+      git diff --check
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

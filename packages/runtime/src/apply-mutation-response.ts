@@ -52,8 +52,6 @@ export function applyMutationResponse(
   });
 }
 
-export const applyMutationResponseToStore = applyMutationResponse;
-
 export interface ApplyMutationResponseToDomOptions {
   applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
