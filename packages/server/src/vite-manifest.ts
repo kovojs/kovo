@@ -159,7 +159,7 @@ export async function jisoAppShellViteManifestAssetsFromFile(
   );
 }
 
-export function jisoAppShellViteManifestStylesheetHrefs(
+function jisoAppShellViteManifestStylesheetHrefs(
   manifest: JisoAppShellViteManifest,
   options: JisoAppShellViteManifestHintOptions = {},
 ): string[] {
@@ -187,16 +187,6 @@ export function jisoAppShellViteManifestStylesheetHref(
   }
 
   return href;
-}
-
-export async function jisoAppShellViteManifestStylesheetHrefsFromFile(
-  manifestFile: string | URL,
-  options: JisoAppShellViteManifestHintOptions = {},
-): Promise<string[]> {
-  return jisoAppShellViteManifestStylesheetHrefs(
-    await jisoAppShellViteManifestFromFile(manifestFile),
-    options,
-  );
 }
 
 export async function jisoAppShellViteManifestStylesheetHrefFromFile(

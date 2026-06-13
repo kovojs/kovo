@@ -37,8 +37,6 @@ export {
   jisoAppShellViteManifestHints,
   jisoAppShellViteManifestStylesheetHref,
   jisoAppShellViteManifestStylesheetHrefFromFile,
-  jisoAppShellViteManifestStylesheetHrefs,
-  jisoAppShellViteManifestStylesheetHrefsFromFile,
   jisoAppShellViteRouteEntries,
 } from '../../vite-manifest.js';
 export { jisoAppShellVitePlugin } from '../../vite-plugin.js';

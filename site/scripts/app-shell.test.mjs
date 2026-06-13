@@ -216,9 +216,6 @@ describe('site app-shell export adoption', () => {
                   options,
                 );
               },
-              async jisoAppShellViteManifestStylesheetHrefsFromFile() {
-                throw new Error('docs export must use the server-owned singular stylesheet helper');
-              },
               async staticExportManifestForJisoAppShellViteBuildFromManifestFile(options) {
                 staticExportManifestFiles.push(options.manifestFile);
                 return await serverAppShellVite.staticExportManifestForJisoAppShellViteBuildFromManifestFile(

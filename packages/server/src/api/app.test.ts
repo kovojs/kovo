@@ -183,6 +183,8 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
       viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
     );
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefsFromFile');
 
     expect(packageAppShellApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(packageAppShellApi.renderVersionedClientModuleResponse).toBe(
@@ -241,6 +243,10 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageAppShellApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
       viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
+    );
+    expect(packageAppShellApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
+    expect(packageAppShellApi).not.toHaveProperty(
+      'jisoAppShellViteManifestStylesheetHrefsFromFile',
     );
   });
 });

@@ -977,3 +977,18 @@ Round258 static-export raw-text scanner evidence:
 - `pnpm run check:build`
 - `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round259 Vite stylesheet helper contraction evidence:
+
+- The public app-shell Vite subpaths no longer export the plural
+  `jisoAppShellViteManifestStylesheetHrefs*` compatibility helpers. Export tasks are pinned to
+  the singular `jisoAppShellViteManifestStylesheetHref*` helper, which rejects multi-stylesheet
+  manifests before starter/docs/commerce static-export adoption can report ambiguous CSS evidence.
+- `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

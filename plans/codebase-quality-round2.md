@@ -1100,6 +1100,10 @@ SPEC §9.5 export-task evidence.
 Static export document reference discovery now distinguishes real opening-tag attributes from
 comments/declarations and raw-text element bodies, so SPEC §9.5 L0/L1 endpoint rejection and
 `/c/` module copy planning do not treat code/data examples as live exported document refs.
+The public app-shell Vite subpaths now expose only the singular built-stylesheet manifest helper;
+the plural `jisoAppShellViteManifestStylesheetHrefs*` compatibility helpers are private/deleted,
+and server/starter/commerce/docs adoption tests pin the singular helper for SPEC §9.5 export-task
+stylesheet evidence.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1153,6 +1157,15 @@ Latest evidence:
   `pnpm exec tsc --noEmit --pretty false`;
   `pnpm run check:build`;
   exact `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round259 Vite stylesheet helper contraction:
+  `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  exact `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:

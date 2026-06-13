@@ -12,8 +12,6 @@ import {
   jisoAppShellViteManifestHints,
   jisoAppShellViteManifestStylesheetHref,
   jisoAppShellViteManifestStylesheetHrefFromFile,
-  jisoAppShellViteManifestStylesheetHrefs,
-  jisoAppShellViteManifestStylesheetHrefsFromFile,
   jisoAppShellViteRouteEntries,
 } from './vite-manifest.js';
 
@@ -158,9 +156,6 @@ describe('server app shell Vite manifest planning', () => {
         { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
         { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
       ]);
-      await expect(jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile)).resolves.toEqual([
-        '/assets/cart.css',
-      ]);
       await expect(jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile)).resolves.toBe(
         '/assets/cart.css',
       );
@@ -169,9 +164,9 @@ describe('server app shell Vite manifest planning', () => {
     }
   });
 
-  it('extracts deterministic stylesheet hrefs from validated Vite manifests', () => {
-    expect(
-      jisoAppShellViteManifestStylesheetHrefs(
+  it('rejects multi-stylesheet manifests for singular export task stylesheet lookup', () => {
+    expect(() =>
+      jisoAppShellViteManifestStylesheetHref(
         {
           'src/admin.ts': {
             css: ['assets/shared.css', 'assets/admin.css'],
@@ -184,7 +179,21 @@ describe('server app shell Vite manifest planning', () => {
         },
         { base: '/docs/' },
       ),
-    ).toEqual(['/docs/assets/admin.css', '/docs/assets/cart.css', '/docs/assets/shared.css']);
+    ).toThrow('App shell Vite build manifest must contain exactly one stylesheet asset; found 3.');
+  });
+
+  it('resolves exactly one built stylesheet href for export tasks', () => {
+    expect(
+      jisoAppShellViteManifestStylesheetHref(
+        {
+          'src/cart.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        { base: '/docs/' },
+      ),
+    ).toBe('/docs/assets/cart.css');
   });
 
   it('resolves exactly one built stylesheet href for starter export tasks', () => {
