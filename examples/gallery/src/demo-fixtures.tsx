@@ -2515,14 +2515,20 @@ export function ToastDemo(): string {
           actionValue: 'open-deploy',
           children: 'View deploy',
           id: 'gallery-toast',
+          variant: 'success',
         })}
         {ToastAction.definition.render({
           actionValue: 'keep-open',
           children: 'Keep open',
           dismissOnAction: false,
           id: 'gallery-toast',
+          variant: 'success',
         })}
-        {ToastClose.definition.render({ children: 'Dismiss', id: 'gallery-toast' })}
+        {ToastClose.definition.render({
+          children: 'Dismiss',
+          id: 'gallery-toast',
+          variant: 'success',
+        })}
       </>
     ),
     descriptionId: 'gallery-toast-description',

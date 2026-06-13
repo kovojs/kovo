@@ -161,6 +161,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       are synchronized against `renderGalleryRoute()`, and the Chromium browser gate asserts
       deterministic route geometry plus screenshot hashes `08c100b6`, `bc8bc631`, `279cb945`,
       and `3c8e6a99`.
+      Evidence 2026-06-13: the static visual baseline now covers the H3 toast route, including
+      success variant action/close controls and the closed assertive toast state. The raw route
+      fixture is synchronized against `renderGalleryRoute()`, and the Chromium browser gate
+      asserts deterministic `860x543` geometry plus hash `31f9f1c4`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -226,6 +230,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       non-dismissing action marker; static fixtures, refreshed generated artifacts, generated-client
       tests, and a browser-backed compiled gallery test prove the canceled toast action prevents
       default, leaves `fw-state`/DOM visibility open, and a following dismiss closes the toast.
+      Evidence 2026-06-13: toast action/close controls now preserve explicit variant state through
+      headless attributes and styled wrappers; the static gallery route proves success variant
+      action and dismiss controls, and the raw visual fixture plus Chromium baseline gate cover the
+      rendered route.
       Evidence 2026-06-13: `navigationMenuKeyDown()` now prevents native follow-up activation for
       enabled content triggers when keyboard open is unchanged or canceled, styled
       `NavigationMenu`/`NavigationMenuList` render primitive `data-state`, and the compiled
@@ -253,6 +261,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Toast styled variant and static visual-baseline slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/toast.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toast`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "toast fixture|static visual fixture|styled component fixtures"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/toast.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/toast.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/toast.html.txt plans/ui.md`;
+      `git diff --check`.
 - [x] H3 menu/navigation styled static visual-baseline slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;

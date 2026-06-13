@@ -50,6 +50,7 @@ export interface ToastActionProps {
   dismissOnAction?: boolean;
   id: string;
   open?: boolean;
+  variant?: ToastVariant;
 }
 
 export type ToastCloseProps = ToastActionProps;
@@ -188,6 +189,7 @@ export const ToastAction = component('toast-action', {
       ...(props.dismissOnAction === undefined ? {} : { dismissOnAction: props.dismissOnAction }),
       id: props.id,
       ...(props.open === undefined ? {} : { open: props.open }),
+      ...(props.variant === undefined ? {} : { variant: props.variant }),
     });
 
     return (
@@ -214,6 +216,7 @@ export const ToastClose = component('toast-close', {
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       id: props.id,
       ...(props.open === undefined ? {} : { open: props.open }),
+      ...(props.variant === undefined ? {} : { variant: props.variant }),
     });
 
     return (

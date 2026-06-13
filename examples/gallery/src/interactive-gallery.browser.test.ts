@@ -113,6 +113,7 @@ import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
 import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
+import toastStaticRouteHtml from './visual-fixtures/toast.html.txt?raw';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 interface InteractiveDemoComponent {
@@ -135,7 +136,8 @@ type StaticVisualFixturePath =
   | '/components/select'
   | '/components/slider'
   | '/components/table'
-  | '/components/tabs';
+  | '/components/tabs'
+  | '/components/toast';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/checkbox-group': checkboxGroupStaticRouteHtml,
@@ -151,6 +153,7 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/slider': sliderStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
   '/components/tabs': tabsStaticRouteHtml,
+  '/components/toast': toastStaticRouteHtml,
 };
 
 const generatedModules: Record<string, Record<string, unknown>> = {
@@ -314,6 +317,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const dropdownMenuRoute = mountStaticGalleryRoute('/components/dropdown-menu');
     const menubarRoute = mountStaticGalleryRoute('/components/menubar');
     const navigationMenuRoute = mountStaticGalleryRoute('/components/navigation-menu');
+    const toastRoute = mountStaticGalleryRoute('/components/toast');
 
     expect(visualGeometry(tabsRoute)).toEqual({
       height: 539,
@@ -367,6 +371,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 561,
       width: 860,
     });
+    expect(visualGeometry(toastRoute)).toEqual({
+      height: 543,
+      width: 860,
+    });
 
     expect(await visualBaselineHash(tabsRoute)).toBe('9044926b');
     expect(await visualBaselineHash(selectRoute)).toBe('e0f770a7');
@@ -381,6 +389,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(dropdownMenuRoute)).toBe('bc8bc631');
     expect(await visualBaselineHash(menubarRoute)).toBe('279cb945');
     expect(await visualBaselineHash(navigationMenuRoute)).toBe('3c8e6a99');
+    expect(await visualBaselineHash(toastRoute)).toBe('31f9f1c4');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

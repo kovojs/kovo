@@ -105,6 +105,7 @@ describe('gallery demo fixtures', () => {
       ['/components/select', 'select.html.txt'],
       ['/components/slider', 'slider.html.txt'],
       ['/components/table', 'table.html.txt'],
+      ['/components/toast', 'toast.html.txt'],
     ] as const) {
       const route = galleryRoutes.find((candidate) => candidate.path === path);
       if (!route) throw new Error(`Missing gallery route fixture for ${path}`);
@@ -659,10 +660,11 @@ describe('gallery demo fixtures', () => {
     expect(toast.html).toContain('data-part="title" id="gallery-toast-title"');
     expect(toast.html).toContain('data-part="description" id="gallery-toast-description"');
     expect(toast.html).toContain('data-action=""');
+    expect(toast.html).toContain('data-action="" data-state="open" data-variant="success"');
     expect(toast.html).toContain('type="button" value="open-deploy"');
     expect(toast.html).toContain('data-dismiss-on-action="false"');
     expect(toast.html).toContain('type="button" value="keep-open"');
-    expect(toast.html).toContain('data-dismiss=""');
+    expect(toast.html).toContain('data-dismiss="" data-state="open" data-variant="success"');
     expect(toast.html).toContain('data-state="closed" data-variant="error" hidden');
     expect(toast.html).toContain('role="alert"');
   });

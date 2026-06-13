@@ -182,6 +182,18 @@ describe('headless-ui toast primitive', () => {
       type: 'button',
       value: 'keep-open',
     });
+    expect(
+      toastActionAttributes({
+        actionValue: 'retry',
+        id: 'upload-toast',
+        variant: 'error',
+      }),
+    ).toMatchObject({
+      'data-action': '',
+      'data-state': 'open',
+      'data-variant': 'error',
+      value: 'retry',
+    });
     expect(toastCloseAttributes({ disabled: true, id: 'upload-toast' })).toEqual({
       'data-disabled': '',
       'data-dismiss': '',
