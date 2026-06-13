@@ -7,18 +7,19 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { route } from './route.js';
 import { staticExportManifest } from './static-export.js';
+import { createJisoAppShellViteBuild, writeJisoAppShellViteBuildOutput } from './vite-build.js';
 import {
-  createJisoAppShellViteBuild,
   exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
-  jisoAppShellViteBuildStaticExportAssets,
-  jisoAppShellViteManifestFile,
-  jisoAppShellViteStaticExportAssetsFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
   staticExportManifestForJisoAppShellViteBuildFromManifestFile,
-  writeJisoAppShellViteBuildOutput,
-} from './vite-build.js';
+} from './vite-static-export.js';
+import {
+  jisoAppShellViteBuildStaticExportAssets,
+  jisoAppShellViteManifestFile,
+  jisoAppShellViteStaticExportAssetsFromManifestFile,
+} from './vite-build-assets.js';
 
 describe('server app shell Vite build seam', () => {
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {

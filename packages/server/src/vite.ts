@@ -11,12 +11,12 @@ import {
 import type { JisoAppShellViteOutputBundle } from './vite-manifest.js';
 import {
   createJisoAppShellViteBuildFromBundle,
-  exportJisoAppShellViteBuild as exportJisoAppShellViteBuildForPlugin,
   jisoAppShellViteOutputDir,
   writeJisoAppShellViteBuildOutput,
   type JisoAppShellViteOutputOptions,
   type JisoAppShellVitePluginBuildOptions,
 } from './vite-build.js';
+import { exportJisoAppShellViteBuild as exportJisoAppShellViteBuildForPlugin } from './vite-static-export.js';
 
 export {
   jisoAppShellViteManifestAssets,
@@ -47,18 +47,22 @@ export {
   createJisoAppShellViteBuild,
   createJisoAppShellViteBuildFromBundle,
   createJisoAppShellViteBuildFromManifestFile,
-  exportJisoAppShellViteBuild,
-  exportJisoAppShellViteBuildFromManifestFile,
+  writeJisoAppShellViteBuildOutput,
+} from './vite-build.js';
+export {
   jisoAppShellViteManifestFile,
   jisoAppShellViteBuildStaticExportAssets,
   jisoAppShellViteStaticExportAssetsFromManifestFile,
   jisoAppShellViteStaticExportAssets,
+} from './vite-build-assets.js';
+export {
+  exportJisoAppShellViteBuild,
+  exportJisoAppShellViteBuildFromManifestFile,
   staticExportManifestForJisoAppShellViteBuildFromManifestFile,
   staticExportManifestForJisoAppShellViteBuild,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
-  writeJisoAppShellViteBuildOutput,
-} from './vite-build.js';
+} from './vite-static-export.js';
 export type {
   JisoAppShellBuild,
   JisoAppShellBuildOptions,
@@ -67,20 +71,24 @@ export type {
   JisoAppShellRouteBuildHints,
   JisoAppShellViteBuildOptions,
   JisoAppShellViteBundleBuildOptions,
-  JisoAppShellViteBuildStaticExportAssetOptions,
   JisoAppShellViteBuildOutput,
   JisoAppShellViteBuildOutputOptions,
-  JisoAppShellViteBuildStaticExportInventoryOptions,
-  JisoAppShellViteBuildStaticExportOptions,
   JisoAppShellViteManifestFileBuildOptions,
-  JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-  JisoAppShellViteManifestFileBuildStaticExportOptions,
-  JisoAppShellViteManifestFileStaticExportAssetOptions,
   JisoAppShellViteOutputOptions,
   JisoAppShellVitePluginBuildOptions,
-  JisoAppShellVitePluginStaticExportOptions,
-  JisoAppShellViteStaticExportAssetOptions,
 } from './vite-build.js';
+export type {
+  JisoAppShellViteBuildStaticExportAssetOptions,
+  JisoAppShellViteManifestFileStaticExportAssetOptions,
+  JisoAppShellViteStaticExportAssetOptions,
+} from './vite-build-assets.js';
+export type {
+  JisoAppShellViteBuildStaticExportInventoryOptions,
+  JisoAppShellViteBuildStaticExportOptions,
+  JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+  JisoAppShellViteManifestFileBuildStaticExportOptions,
+  JisoAppShellVitePluginStaticExportOptions,
+} from './vite-static-export.js';
 export {
   createJisoAppShellDevDiagnosticLedger,
   jisoAppShellViteSsrDevPlugin,

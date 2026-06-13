@@ -69,6 +69,13 @@ packages/runtime/src/index.browser.test.ts`.
       `packages/server/src/static-replay.ts` to orchestrate route document replay and L0/L1
       validation. Same-session evidence: `pnpm exec vitest --run packages/server/src
 packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: Vite static-export asset planning now lives in
+      `packages/server/src/vite-build-assets.ts`, and Vite build export/inventory/manifest
+      wrappers now live in `packages/server/src/vite-static-export.ts`, leaving
+      `packages/server/src/vite-build.ts` focused on build construction and `/c/` module output
+      while preserving the public app-shell Vite barrel. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src` and
+      `pnpm exec tsc --noEmit --pretty false`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

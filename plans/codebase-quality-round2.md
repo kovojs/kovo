@@ -35,6 +35,12 @@ with same-session file/test evidence.
       `packages/server/src/static-export.ts`. Same-session evidence:
       `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
       and `pnpm exec tsc --noEmit --pretty false`.
+      Round93 evidence 2026-06-13: `packages/server/src/vite-build-assets.ts` owns Vite
+      static-export asset planning/path validation and `packages/server/src/vite-static-export.ts`
+      owns Vite build export/inventory/manifest wrappers, subtracting SPEC §9.5 static export
+      task wiring from `packages/server/src/vite-build.ts`. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src` and
+      `pnpm exec tsc --noEmit --pretty false`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;

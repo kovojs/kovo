@@ -218,6 +218,18 @@ Round92 app-shell static export output boundary evidence:
 - `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round93 app-shell Vite static-export boundary evidence:
+
+- `packages/server/src/vite-build-assets.ts` now owns Vite manifest asset-to-static-export
+  planning, manifest file lookup, output path containment, and asset content-type inference.
+- `packages/server/src/vite-static-export.ts` now owns SPEC §9.5 Vite build static export,
+  dry-run inventory, public manifest, and manifest-file wrappers, leaving `vite-build.ts` focused
+  on app/build construction and `/c/` module output.
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite-build-assets.ts packages/server/src/vite-static-export.ts packages/server/src/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

@@ -1,20 +1,16 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { VersionedClientModuleInput } from './client-modules.js';
 import type { JisoApp } from './app.js';
 import type { PageHintOptions } from './hints.js';
+import type { StaticExportAssetInput, StaticExportResult } from './static-export.js';
+import type { JisoAppShellVitePluginStaticExportOptions } from './vite-static-export.js';
 import {
-  exportStaticApp,
-  staticExportInventory,
-  staticExportManifest,
-  type StaticExportAssetInput,
-  type StaticExportInventoryItem,
-  type StaticExportManifest,
-  type StaticExportOptions,
-  type StaticExportResult,
-} from './static-export.js';
+  jisoAppShellViteStaticExportAssets,
+  resolvedFileSystemPath,
+  viteDistSourcePath,
+} from './vite-build-assets.js';
 import {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestFromBundle,
@@ -104,19 +100,6 @@ export interface JisoAppShellBuild {
   routeHints: readonly JisoAppShellRouteBuildHints[];
 }
 
-export interface JisoAppShellViteStaticExportAssetOptions {
-  distDir: string | URL;
-}
-
-export interface JisoAppShellViteBuildStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
-  assets?: readonly StaticExportAssetInput[];
-}
-
-export interface JisoAppShellViteManifestFileStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
-  base?: string;
-  manifestFile?: string | URL;
-}
-
 export interface JisoAppShellViteBuildOutputOptions {
   outDir: string | URL;
 }
@@ -125,47 +108,6 @@ export interface JisoAppShellViteBuildOutput {
   clientModules: readonly JisoAppShellBuiltClientModule[];
   staticExport?: StaticExportResult;
   staticExportAssets: readonly StaticExportAssetInput[];
-}
-
-export interface JisoAppShellVitePluginStaticExportOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
-  'distDir'
-> {
-  distDir?: never;
-}
-
-export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
-  StaticExportOptions,
-  'assets'
-> {
-  assets?: readonly StaticExportAssetInput[];
-  distDir: string | URL;
-}
-
-export interface JisoAppShellViteBuildStaticExportInventoryOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
-  'outDir'
-> {
-  outDir?: never;
-}
-
-export interface JisoAppShellViteManifestFileBuildStaticExportOptions extends Omit<
-  JisoAppShellViteBuildStaticExportOptions,
-  'distDir'
-> {
-  app: JisoApp;
-  base?: string;
-  clientModules?: readonly JisoAppShellCompiledClientModule[];
-  distDir: string | URL;
-  manifestFile?: string | URL;
-  routeEntryMap?: JisoAppShellRouteEntryMap;
-}
-
-export interface JisoAppShellViteManifestFileBuildStaticExportInventoryOptions extends Omit<
-  JisoAppShellViteManifestFileBuildStaticExportOptions,
-  'outDir'
-> {
-  outDir?: never;
 }
 
 export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
@@ -231,162 +173,6 @@ export async function createJisoAppShellViteBuildFromManifestFile(
     manifest: await jisoAppShellViteManifestFromFile(options.manifestFile),
     ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
   });
-}
-
-export function jisoAppShellViteStaticExportAssets(
-  assets: readonly JisoAppShellBuildAsset[],
-  options: JisoAppShellViteStaticExportAssetOptions,
-): StaticExportAssetInput[] {
-  return assets.map((asset) => {
-    const contentType = viteAssetContentType(asset.file);
-
-    return {
-      ...(contentType === undefined ? {} : { contentType }),
-      path: asset.path,
-      source: viteDistSourcePath(options.distDir, asset.file),
-    };
-  });
-}
-
-export async function jisoAppShellViteStaticExportAssetsFromManifestFile(
-  options: JisoAppShellViteManifestFileStaticExportAssetOptions,
-): Promise<StaticExportAssetInput[]> {
-  return jisoAppShellViteStaticExportAssets(
-    jisoAppShellViteManifestAssets(
-      await jisoAppShellViteManifestFromFile(
-        options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
-      ),
-      viteManifestOptions(options.base),
-    ),
-    { distDir: options.distDir },
-  );
-}
-
-export function jisoAppShellViteBuildStaticExportAssets(
-  build: Pick<JisoAppShellBuild, 'assets'>,
-  options: JisoAppShellViteBuildStaticExportAssetOptions,
-): StaticExportAssetInput[] {
-  return [
-    ...jisoAppShellViteStaticExportAssets(build.assets, { distDir: options.distDir }),
-    ...(options.assets ?? []),
-  ];
-}
-
-export async function exportJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportOptions,
-): Promise<StaticExportResult> {
-  const build = await createJisoAppShellViteBuildFromManifestFile({
-    app: options.app,
-    ...(options.base === undefined ? {} : { base: options.base }),
-    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifestFile: options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
-    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
-  });
-
-  return exportJisoAppShellViteBuild(build, {
-    ...(options.assets === undefined ? {} : { assets: options.assets }),
-    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
-    distDir: options.distDir,
-    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
-    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
-    ...(options.origin === undefined ? {} : { origin: options.origin }),
-    ...(options.outDir === undefined ? {} : { outDir: options.outDir }),
-  });
-}
-
-export async function staticExportInventoryForJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-): Promise<StaticExportInventoryItem[]> {
-  const build = await createJisoAppShellViteBuildFromManifestFile({
-    app: options.app,
-    ...(options.base === undefined ? {} : { base: options.base }),
-    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifestFile: options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
-    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
-  });
-
-  return staticExportInventoryForJisoAppShellViteBuild(build, {
-    ...(options.assets === undefined ? {} : { assets: options.assets }),
-    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
-    distDir: options.distDir,
-    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
-    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
-    ...(options.origin === undefined ? {} : { origin: options.origin }),
-  });
-}
-
-export async function staticExportManifestForJisoAppShellViteBuildFromManifestFile(
-  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
-): Promise<StaticExportManifest> {
-  const build = await createJisoAppShellViteBuildFromManifestFile({
-    app: options.app,
-    ...(options.base === undefined ? {} : { base: options.base }),
-    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifestFile: options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
-    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
-  });
-
-  return staticExportManifestForJisoAppShellViteBuild(build, {
-    ...(options.assets === undefined ? {} : { assets: options.assets }),
-    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
-    distDir: options.distDir,
-    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
-    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
-    ...(options.origin === undefined ? {} : { origin: options.origin }),
-  });
-}
-
-export async function exportJisoAppShellViteBuild(
-  build: JisoAppShellBuild,
-  options: JisoAppShellViteBuildStaticExportOptions,
-): Promise<StaticExportResult> {
-  const { assets, distDir, ...exportOptions } = options;
-
-  return exportStaticApp(build.app, {
-    ...exportOptions,
-    // SPEC §9.5: static export replays the built app shell, then copies the
-    // immutable asset files referenced by the Vite manifest.
-    assets: jisoAppShellViteBuildStaticExportAssets(build, {
-      ...(assets === undefined ? {} : { assets }),
-      distDir,
-    }),
-  });
-}
-
-export async function staticExportInventoryForJisoAppShellViteBuild(
-  build: JisoAppShellBuild,
-  options: JisoAppShellViteBuildStaticExportInventoryOptions,
-): Promise<StaticExportInventoryItem[]> {
-  const { assets, distDir, outDir: _outDir, ...exportOptions } = options;
-  const result = await exportStaticApp(build.app, {
-    ...exportOptions,
-    // SPEC §9.5: dry-run task wiring inspects the exact built app shell,
-    // manifest assets, and /c/ modules without selecting an output directory.
-    assets: jisoAppShellViteBuildStaticExportAssets(build, {
-      ...(assets === undefined ? {} : { assets }),
-      distDir,
-    }),
-  });
-
-  return staticExportInventory(result);
-}
-
-export async function staticExportManifestForJisoAppShellViteBuild(
-  build: JisoAppShellBuild,
-  options: JisoAppShellViteBuildStaticExportInventoryOptions,
-): Promise<StaticExportManifest> {
-  const { assets, distDir, outDir: _outDir, ...exportOptions } = options;
-  const result = await exportStaticApp(build.app, {
-    ...exportOptions,
-    // SPEC §9.5: dry-run task wiring exposes the same manifest-backed
-    // documents, /c/ modules, and copied static assets as write export.
-    assets: jisoAppShellViteBuildStaticExportAssets(build, {
-      ...(assets === undefined ? {} : { assets }),
-      distDir,
-    }),
-  });
-
-  return staticExportManifest(result);
 }
 
 export async function writeJisoAppShellViteBuildOutput(
@@ -457,40 +243,6 @@ function registerCompiledClientModules(
 
 function viteManifestOptions(base: string | undefined): JisoAppShellViteManifestHintOptions {
   return base === undefined ? {} : { base };
-}
-
-function viteDistSourcePath(distDir: string | URL, file: string): string {
-  const root = resolvedFileSystemPath(distDir);
-  const targetPath = path.resolve(root, normalizedDistFile(file));
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
-
-  throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
-}
-
-export function jisoAppShellViteManifestFile(distDir: string | URL): string {
-  return path.join(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
-}
-
-function resolvedFileSystemPath(value: string | URL): string {
-  return path.resolve(value instanceof URL ? fileURLToPath(value) : value);
-}
-
-function viteAssetContentType(file: string): string | undefined {
-  const extension = path.extname(file).toLowerCase();
-
-  switch (extension) {
-    case '.css':
-      return 'text/css; charset=utf-8';
-    case '.js':
-    case '.mjs':
-      return 'text/javascript; charset=utf-8';
-    case '.json':
-      return 'application/json; charset=utf-8';
-    case '.svg':
-      return 'image/svg+xml';
-    default:
-      return undefined;
-  }
 }
 
 function mergePageHints(base: PageHintOptions, extra: PageHintOptions): PageHintOptions {
