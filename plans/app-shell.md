@@ -483,3 +483,16 @@ Round120 app-shell static document/client replay evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round124 app-shell Vite client-module output evidence:
+
+- `packages/server/src/vite-client-module-output.ts` now owns validated, staged compiled `/c/`
+  module writes for SPEC §9.5 Vite app-shell builds; `vite-build-output.ts` keeps only static
+  export/output orchestration.
+- `packages/server/src/index.ts` exports app-shell owner subpaths directly instead of routing the
+  root package through the app-shell aggregate barrel.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts packages/server/src/index.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

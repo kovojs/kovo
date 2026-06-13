@@ -12,6 +12,7 @@ import {
   jisoAppShellViteOutputDir,
   writeJisoAppShellViteBuildOutput,
 } from './vite-build-output.js';
+import { writeJisoAppShellViteClientModuleOutput } from './vite-client-module-output.js';
 import {
   exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
@@ -192,27 +193,22 @@ describe('server app shell Vite build seam', () => {
       await mkdir(join(distDir, 'c', 'blocked.client.js'), { recursive: true });
 
       await expect(
-        writeJisoAppShellViteBuildOutput(
+        writeJisoAppShellViteClientModuleOutput(distDir, [
           {
-            clientModules: [
-              {
-                file: 'c/ok.client.js',
-                href: '/c/ok.client.js?v=ok',
-                path: '/c/ok.client.js',
-                source: 'export const ok = true;',
-                version: 'ok',
-              },
-              {
-                file: 'c/blocked.client.js',
-                href: '/c/blocked.client.js?v=blocked',
-                path: '/c/blocked.client.js',
-                source: 'export const blocked = true;',
-                version: 'blocked',
-              },
-            ],
+            file: 'c/ok.client.js',
+            href: '/c/ok.client.js?v=ok',
+            path: '/c/ok.client.js',
+            source: 'export const ok = true;',
+            version: 'ok',
           },
-          { outDir: distDir },
-        ),
+          {
+            file: 'c/blocked.client.js',
+            href: '/c/blocked.client.js?v=blocked',
+            path: '/c/blocked.client.js',
+            source: 'export const blocked = true;',
+            version: 'blocked',
+          },
+        ]),
       ).rejects.toThrow(/target '.*blocked\.client\.js' is a directory/);
       await expect(readFile(join(distDir, 'c/ok.client.js'))).rejects.toThrow();
     } finally {
@@ -326,20 +322,15 @@ describe('server app shell Vite build seam', () => {
       );
 
       await expect(
-        writeJisoAppShellViteBuildOutput(
+        writeJisoAppShellViteClientModuleOutput(distDir, [
           {
-            clientModules: [
-              {
-                file: '../escape.js',
-                href: '/c/escape.js?v=escape',
-                path: '/c/escape.js',
-                source: 'export const escape = true;',
-                version: 'escape',
-              },
-            ],
+            file: '../escape.js',
+            href: '/c/escape.js?v=escape',
+            path: '/c/escape.js',
+            source: 'export const escape = true;',
+            version: 'escape',
           },
-          { outDir: distDir },
-        ),
+        ]),
       ).rejects.toThrow(
         'App shell build asset must stay within the Vite output directory: ../escape.js',
       );

@@ -303,6 +303,15 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
       `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: Vite compiled `/c/` output writes now live in
+      `packages/server/src/vite-client-module-output.ts`, leaving
+      `packages/server/src/vite-build-output.ts` to orchestrate static export plus output
+      reporting; the root package barrel now exports app-shell owner subpaths directly instead
+      of routing through the app-shell aggregate. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
+      `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts packages/server/src/index.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

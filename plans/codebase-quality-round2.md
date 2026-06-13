@@ -281,6 +281,9 @@ Focused gates since that broad run:
   `tsc`, exact `vp check`, and `git diff --check` passed through `b980a06`.
 - Server/app-shell: matched dispatch extraction, full server suite, `tsc`, exact `vp check`, and
   `git diff --check` passed through `2319a5f`.
+- Server/app-shell: Vite client-module output owner split, root app-shell subpath export split,
+  focused Vite/static tests, full server suite, `tsc`, exact `vp check`, and `git diff --check`
+  passed in Round124.
 - UI/gallery: toolbar primitive/UI tests, headless primitive lint, gallery generated-artifact
   check, gallery unit/browser suites, exact `vp check`, and `git diff --check` passed through
   `2a1917d`.
