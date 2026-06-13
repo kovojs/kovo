@@ -1,11 +1,22 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
 import { projectJsonFile } from './source-fixtures.ts';
 import {
   touchGraphProvenanceHonestyFact,
+  touchGraphProvenanceFact,
+  type TouchGraphFixture,
   type TouchGraphProvenanceEntryFact,
   type TouchGraphProvenanceHonestyFact,
   type TouchGraphProvenanceFact,
 } from './touch-graph-fixtures.ts';
-import type { FwCheckOkAssertionFact } from './fw-check-fixtures.ts';
+import {
+  fwCheckOkAssertionFact,
+  type FwCheckOkAssertionFact,
+  type FwCheckResultLike,
+} from './fw-check-fixtures.ts';
+
+const execFileAsync = promisify(execFile);
 
 export interface JisoGraphComponentFact {
   fragments?: readonly string[];
@@ -42,7 +53,7 @@ export interface JisoGraphFixture {
   optimistic?: readonly JisoGraphOptimisticFact[];
   pages?: readonly JisoGraphPageFact[];
   queries?: readonly JisoGraphQueryFact[];
-  touchGraph?: Record<string, unknown>;
+  touchGraph?: TouchGraphFixture;
 }
 
 export type ProjectGraphFixture = JisoGraphFixture & Record<string, unknown>;
@@ -150,6 +161,25 @@ export interface GeneratedGraphArtifactAcceptanceChecklistFact {
     touchCountsByMutation: Record<string, number>;
     unresolvedMutations: string[];
   };
+}
+
+export interface GeneratedGraphArtifactAcceptanceProjectFact<T extends ProjectGraphFixture> {
+  artifactGraph: T;
+  checklist: GeneratedGraphArtifactAcceptanceChecklistFact;
+  emitCheck: GeneratedGraphEmitCheckResult;
+}
+
+export interface GeneratedGraphArtifactAcceptanceProjectOptions<T extends ProjectGraphFixture> {
+  artifactPath: string;
+  authoredGraph?: JisoGraphFixture;
+  emitCheck: {
+    args?: readonly string[];
+    command: string;
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+  };
+  fwCheck: (graph: T) => FwCheckOkAssertionFact | FwCheckResultLike;
+  rootPath: string;
 }
 
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
@@ -458,6 +488,48 @@ export async function graphFixtureFile<T extends ProjectGraphFixture = ProjectGr
   path: string,
 ): Promise<T> {
   return projectJsonFile<T>(rootPath, path);
+}
+
+export async function generatedGraphArtifactAcceptanceProjectFact<
+  T extends ProjectGraphFixture = ProjectGraphFixture,
+>(
+  options: GeneratedGraphArtifactAcceptanceProjectOptions<T>,
+): Promise<GeneratedGraphArtifactAcceptanceProjectFact<T>> {
+  const artifactGraph = await graphFixtureFile<T>(options.rootPath, options.artifactPath);
+  const emitCheck = await execFileAsync(
+    options.emitCheck.command,
+    [...(options.emitCheck.args ?? [])],
+    {
+      ...(options.emitCheck.cwd !== undefined ? { cwd: options.emitCheck.cwd } : {}),
+      ...(options.emitCheck.env !== undefined ? { env: options.emitCheck.env } : {}),
+    },
+  );
+  const fwCheckResult = options.fwCheck(artifactGraph);
+  const fwCheck =
+    'issueCount' in fwCheckResult ? fwCheckResult : fwCheckOkAssertionFact(fwCheckResult);
+  const provenance = await touchGraphProvenanceFact(
+    options.rootPath,
+    artifactGraph.touchGraph ?? {},
+  );
+  const fact = generatedGraphArtifactAcceptanceFact({
+    artifactGraph,
+    ...(options.authoredGraph !== undefined ? { authoredGraph: options.authoredGraph } : {}),
+    emitCheck: {
+      stderr: String(emitCheck.stderr),
+      stdout: String(emitCheck.stdout),
+    },
+    fwCheck,
+    provenance,
+  });
+
+  return {
+    artifactGraph,
+    checklist: generatedGraphArtifactAcceptanceChecklistFact(fact),
+    emitCheck: {
+      stderr: String(emitCheck.stderr),
+      stdout: String(emitCheck.stdout),
+    },
+  };
 }
 
 function stableGraphJson(value: unknown): string {

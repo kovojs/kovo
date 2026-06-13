@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   generatedGraphArtifactAcceptanceChecklistFact,
+  generatedGraphArtifactAcceptanceProjectFact,
   generatedGraphArtifactHonestyFact,
   generatedGraphArtifactHonestySummaryFact,
   generatedGraphArtifactAcceptanceFact,
@@ -487,6 +488,37 @@ describe('@jiso/test graph fixture seam', () => {
     ).resolves.toMatchObject({
       pages: expect.arrayContaining([expect.objectContaining({ route: '/cart' })]),
       queries: expect.arrayContaining([expect.objectContaining({ query: 'cart' })]),
+    });
+  });
+
+  it('runs project graph artifact acceptance checks through one public fixture', async () => {
+    await expect(
+      generatedGraphArtifactAcceptanceProjectFact({
+        artifactPath: 'examples/commerce/src/generated/graph.json',
+        emitCheck: {
+          args: ['-e', ''],
+          command: process.execPath,
+          cwd: process.cwd(),
+        },
+        fwCheck: () => ({
+          exitCode: 0,
+          output: 'fw-check/v1\nOK\n',
+        }),
+        rootPath: process.cwd(),
+      }),
+    ).resolves.toMatchObject({
+      checklist: {
+        emitCheckClean: true,
+        fwCheckOk: true,
+        invalidationKeys: ['cart/add'],
+        touchGraph: {
+          unresolvedMutations: [],
+        },
+      },
+      emitCheck: {
+        stderr: '',
+        stdout: '',
+      },
     });
   });
 

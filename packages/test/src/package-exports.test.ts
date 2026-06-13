@@ -186,6 +186,7 @@ import {
 import {
   generatedGraphArtifactAcceptanceChecklistFact,
   generatedGraphArtifactAcceptanceEvidenceFact,
+  generatedGraphArtifactAcceptanceProjectFact,
   generatedGraphArtifactHonestyFact,
   graphFixtureFile,
   graphComponentTargetFacts,
@@ -696,6 +697,7 @@ describe('@jiso/test package subpath exports', () => {
       .toMatchTypeOf<readonly unknown[]>();
     expectTypeOf<ProjectPackageManifestFact>().toHaveProperty('directory').toEqualTypeOf<string>();
     expect(graphFixtureFile).toBeTypeOf('function');
+    expect(generatedGraphArtifactAcceptanceProjectFact).toBeTypeOf('function');
     expectTypeOf<GeneratedGraphArtifactHonestyFact>().toMatchTypeOf<{
       emitCheck: { clean: boolean };
     }>();

@@ -102,6 +102,10 @@ keeps the P4 fw-check commerce gate and commerce source-truth graph acceptance o
 facts for clean emit, `fw-check/v1` OK status, invalidation keys, static behavior, source-site
 coverage, touch counts, and unresolved mutations instead of repeating the generated-artifact
 evidence object in those tests.
+Shared graph fixtures now also own project-level generated graph artifact acceptance mechanics for
+loading checked-in graph artifacts, running emit freshness commands, collecting touch provenance,
+and projecting the acceptance checklist, so the P4 fw-check commerce gate and commerce
+source-truth graph acceptance no longer assemble those mechanics locally.
 Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
 component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
 output comparison against SPEC.md section 5.2 provenance.
@@ -147,6 +151,16 @@ markdown tables inline.
 
 Latest evidence:
 
+- Project graph artifact acceptance fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`.
+  Evidence: `packages/test/src/graph-fixtures.ts` exposes
+  `generatedGraphArtifactAcceptanceProjectFact()`; `tests/fw-check.node.mjs` and
+  `examples/commerce/src/source-truth.test.ts` use that public fixture for graph artifact loading,
+  emit-check freshness, touch provenance, `fw-check/v1` OK status, and acceptance checklist
+  projection instead of locally composing the generated-artifact evidence.
 - Phase 5 manifest-file Vite replay cleanup slice:
   `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

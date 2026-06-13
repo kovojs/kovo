@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
@@ -18,9 +18,7 @@ import {
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
-  generatedGraphArtifactAcceptanceFact,
-  generatedGraphArtifactAcceptanceChecklistFact,
-  graphFixtureFile,
+  generatedGraphArtifactAcceptanceProjectFact,
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
   graphMutationUpdateConsumers,
@@ -29,7 +27,6 @@ import {
   graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
 import { fwResponseBodyFact, htmlDocumentFacts } from '@jiso/test/html-fragment';
-import { touchGraphProvenanceFact } from '@jiso/test/touch-graph-fixtures';
 import { fwCheck, fwExplain } from 'fw';
 
 import {
@@ -63,24 +60,27 @@ const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
 
 describe('commerce source-truth graph acceptance', () => {
   it('ships graph facts for fw check and explain acceptance', async () => {
-    const emitGraphCheckStdout = execFileSync(
-      'node',
-      ['examples/commerce/scripts/emit-graph.mjs', '--check'],
+    const graphAcceptance = await generatedGraphArtifactAcceptanceProjectFact<typeof commerceGraph>(
       {
-        stdio: 'pipe',
+        artifactPath: 'examples/commerce/src/generated/graph.json',
+        authoredGraph: commerceGraph,
+        emitCheck: {
+          args: ['scripts/emit-graph.mjs', '--check'],
+          command: 'node',
+          cwd: join(projectRootPath, 'examples/commerce'),
+          env: { ...process.env, CI: '1' },
+        },
+        fwCheck,
+        rootPath: projectRootPath,
       },
-    ).toString();
-    const graphArtifact = await graphFixtureFile<typeof commerceGraph>(
-      projectRootPath,
-      'examples/commerce/src/generated/graph.json',
     );
     const starterCart = loadCartQuery(createCommerceDb());
     const cartMeta = commerceCartPageMeta(starterCart);
     const pageHints = htmlDocumentFacts(renderCommercePageHints(starterCart).html);
 
-    expect(graphArtifact).toEqual(commerceGraph);
+    expect(graphAcceptance.artifactGraph).toEqual(commerceGraph);
     expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
-    expect(graphPageFact(graphArtifact, '/cart').meta).toEqual(cartMeta);
+    expect(graphPageFact(graphAcceptance.artifactGraph, '/cart').meta).toEqual(cartMeta);
     expect(graphPageFact(commerceGraph, '/cart').meta).toEqual(cartMeta);
     expect(pageHints.title).toBe(cartMeta.title);
     expect(pageHints.metas).toEqual(
@@ -95,18 +95,7 @@ describe('commerce source-truth graph acceptance', () => {
     );
     expect(addToCart.registry?.touches).toBeUndefined();
     expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
-    const provenance = await touchGraphProvenanceFact(projectRootPath, commerceTouchGraph);
-    const graphArtifactFact = generatedGraphArtifactAcceptanceFact({
-      artifactGraph: graphArtifact,
-      authoredGraph: commerceGraph,
-      emitCheck: {
-        stderr: '',
-        stdout: emitGraphCheckStdout,
-      },
-      fwCheck: fwCheckOkAssertionFact(fwCheck(graphArtifact)),
-      provenance,
-    });
-    expect(generatedGraphArtifactAcceptanceChecklistFact(graphArtifactFact)).toEqual({
+    expect(graphAcceptance.checklist).toEqual({
       authoredGraphMatchesArtifact: true,
       emitCheckClean: true,
       fwCheckOk: true,

@@ -101,8 +101,7 @@ import {
 import {
   graphComponentTargetFacts,
   graphFixtureFile,
-  generatedGraphArtifactAcceptanceFact,
-  generatedGraphArtifactAcceptanceChecklistFact,
+  generatedGraphArtifactAcceptanceProjectFact,
   graphMutationFact,
   graphOptimisticFacts,
   graphMutationUpdateConsumers,
@@ -134,7 +133,6 @@ import {
   projectJsonFile,
   projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
-import { touchGraphProvenanceFact } from '../packages/test/src/touch-graph-fixtures.ts';
 import {
   loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
@@ -4436,32 +4434,19 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
-  const commerceGraph = await graphFixtureFile(
-    projectRootPath,
-    'examples/commerce/src/generated/graph.json',
-  );
-  const emitGraphCheck = await execFileAsync('node', ['scripts/emit-graph.mjs', '--check'], {
-    cwd: new URL('../examples/commerce/', import.meta.url),
-    env: { ...process.env, CI: '1' },
-  });
-  assert.deepEqual(
-    {
-      stderr: emitGraphCheck.stderr,
-      stdout: emitGraphCheck.stdout,
-    },
-    { stderr: '', stdout: '' },
-  );
-  const provenance = await touchGraphProvenanceFact(projectRootPath, commerceGraph.touchGraph);
-  const graphArtifactFact = generatedGraphArtifactAcceptanceFact({
-    artifactGraph: commerceGraph,
+  const commerceAcceptance = await generatedGraphArtifactAcceptanceProjectFact({
+    artifactPath: 'examples/commerce/src/generated/graph.json',
     emitCheck: {
-      stderr: emitGraphCheck.stderr,
-      stdout: emitGraphCheck.stdout,
+      args: ['scripts/emit-graph.mjs', '--check'],
+      command: 'node',
+      cwd: join(projectRootPath, 'examples/commerce'),
+      env: { ...process.env, CI: '1' },
     },
-    fwCheck: fwCheckOkAssertionFact(fwCheck(commerceGraph)),
-    provenance,
+    fwCheck,
+    rootPath: projectRootPath,
   });
-  assert.deepEqual(generatedGraphArtifactAcceptanceChecklistFact(graphArtifactFact), {
+  assert.deepEqual(commerceAcceptance.emitCheck, { stderr: '', stdout: '' });
+  assert.deepEqual(commerceAcceptance.checklist, {
     emitCheckClean: true,
     fwCheckOk: true,
     invalidationKeys: ['cart/add'],
@@ -4498,8 +4483,9 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     },
   });
   assert.deepEqual(
-    fwExplainQueryAssertionFact(fwExplain(commerceGraph, { kind: 'query', target: 'cart' }))
-      .domainWrites,
+    fwExplainQueryAssertionFact(
+      fwExplain(commerceAcceptance.artifactGraph, { kind: 'query', target: 'cart' }),
+    ).domainWrites,
     ['cart.addItem'],
   );
 });
