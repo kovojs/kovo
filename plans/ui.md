@@ -1,12 +1,15 @@
-# UI libraries - `@jiso/headless-ui`, vendored `@jiso/ui`, and gallery
+# UI Libraries - `@jiso/headless-ui`, Vendored `@jiso/ui`, And Gallery
 
 Status: active. Last compacted on 2026-06-12.
 
 Scope: `packages/headless-ui`, `packages/ui`, `examples/gallery`, and the framework seams needed
 for package prefixes, behavior attributes, primitive authoring lint, vendoring, and gallery
-conformance. Keep this ledger compact: status, open work, and current gates only.
+conformance.
 
-## Progress Checklist
+Keep this ledger compact. Track current state, open work, latest proving commands, and integration
+risks. Do not append long historical command lists.
+
+## Checklist
 
 - [x] F1 SPEC text: package prefix registration, `jiso-*` reservation, alias escape, behavior
       namespace implications, FW234.
@@ -37,241 +40,102 @@ conformance. Keep this ledger compact: status, open work, and current gates only
 - [x] G5 merge fixtures for primitive attrs plus author elements.
 - [ ] G6 compiled interactive gallery authored as app TSX and exercised in browser.
 
-## Current Evidence Rollup
-
-Implemented areas:
+## Current State
 
 - Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
-- `@jiso/ui` ships vendorable styled source for pure-markup components, H1 primitives, and the
-  H2/H3 wrapper set over headless primitive attrs.
+- `@jiso/ui` ships vendorable styled TSX wrappers for pure-markup components, H1 primitives, and
+  current H2/H3 wrapper surfaces.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
-- Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
-  fixtures, compiled interactive demos, and generated-client DOM ref/export contracts.
-- The compiled interactive gallery now includes progress and meter value-display demos with
-  generated handlers covering native value, `data-state`, `aria-valuetext`, and output updates.
-- The compiled interactive gallery now has static docs deployment wiring:
-  `examples/gallery/src/app-shell.ts` serves `/interactive`, registers the checked-in generated
-  client modules under their versioned `/c/` refs, and `examples/gallery/vite.config.ts` exposes a
-  `vp run export` task that writes the route plus all generated client modules to `dist/` while
-  tracking generated `.js` client modules as task inputs.
-- The compiled interactive gallery now includes a scroll-area demo with browser-backed generated
-  handler coverage for `scrollTop`, viewport labelling/focusability, scrollbar/thumb data attrs,
-  static docs wiring, and generated-client DOM sync.
-- Representative G2 `fw explain component` coverage now lives in
-  `examples/gallery/src/fw-explain-contracts.test.ts`, proving package-prefix provenance,
-  handler records, platform substitutions, and merge diagnostics for H1 dialog, H2 tabs, and H3
-  dropdown-menu primitive families through the public CLI output (SPEC §6.1.1).
-- G5 exported primitive attrs inventory is closed: `examples/gallery/src/merge-fixtures.test.tsx`
-  renders inline merge goldens for all 134 exported primitive `*Attributes` builders, with author
-  stress attrs, merged HTML, and SPEC §4.6 diagnostic checks.
-- U3 styled H1 coverage is closed: `packages/ui/src/accordion.tsx`,
-  `packages/ui/src/alert-dialog.tsx`, `packages/ui/src/avatar.tsx`,
-  `packages/ui/src/collapsible.tsx`, `packages/ui/src/dialog.tsx`,
-  `packages/ui/src/disclosure.tsx`, `packages/ui/src/hover-card.tsx`,
-  `packages/ui/src/meter.tsx`, `packages/ui/src/popover.tsx`,
-  `packages/ui/src/progress.tsx`, `packages/ui/src/separator.tsx`, and
-  `packages/ui/src/tooltip.tsx` export vendorable TSX wrappers. The static gallery now includes
-  `/components/collapsible`, `/components/disclosure`, `/components/hover-card`, and
-  `/components/popover` route/behavior-contract coverage for the remaining H1 static gaps.
-- Field/fieldset integration now includes styled input, textarea, and select controls over the
-  shared native field IDREF contract, with `/components/field` static gallery coverage proving
-  label, description, error, option, and fieldset wiring.
-- Field/fieldset now has compiled interactive gallery coverage proving native input validity
-  IDREF updates, native select state, generated client module export/version wiring, and fieldset
-  disabled state through app-authored TSX lowered into checked-in artifacts.
-- H3 menu/navigation typeahead now handles repeated printable keys as one-key cycling search, so
-  dropdown-menu, context-menu, menubar, and navigation-menu skip disabled items while cycling
-  between same-prefix enabled items.
-- H3 filterable choice keyboard movement now covers autocomplete and combobox with exported
-  `autocompleteMove`/`comboboxMove` helpers, open-then-move Arrow key handlers, disabled-option
-  skipping, and gallery behavior contracts that name the enabled suggestion/option movement
-  requirement.
-- H3 command now supports stable item ids in the item inventory, so filtered command palettes keep
-  `aria-activedescendant` aligned with the rendered option id instead of deriving from filtered
-  indexes; the compiled interactive command gallery carries those ids through generated TSX and
-  browser-backed state coverage.
-- Native value-backed primitive handlers for select, number-field, and slider now restore the
-  submitted control value when SPEC §4.6 cancelable/blocked changes keep primitive state unchanged,
-  preventing native DOM state from drifting past the rejected value.
-- H2 compiled interactive coverage now proves disabled-item roving behavior for radio-group, tabs,
-  and toggle-group, keeps toggle-group generated DOM state on the exported `pressed/off` primitive
-  vocabulary, and carries toolbar `data-pressed` through headless attrs, the styled wrapper,
-  merge fixtures, generated handlers, and browser assertions.
-- The compiled toast demo now keeps generated client DOM visibility and `data-state` synchronized
-  when action, close, or Escape handlers dismiss the toast.
-
-Recent gates:
-
-- `pnpm --filter @jiso/headless-ui exec vitest --run`
-- `pnpm exec vitest --run packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/navigation-menu.test.ts`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/headless-ui exec vitest --run`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check packages/headless-ui/src/primitives/autocomplete.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/demo-fixtures.tsx examples/gallery/src/behavior-contracts.test.ts plans/ui.md`
-- `git diff --check`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check packages/headless-ui/src/lib/typeahead.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/navigation-menu.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
-- `git diff --check`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check packages/ui/src/accordion.tsx packages/ui/src/alert-dialog.tsx packages/ui/src/avatar.tsx packages/ui/src/collapsible.tsx packages/ui/src/dialog.tsx packages/ui/src/disclosure.tsx packages/ui/src/hover-card.tsx packages/ui/src/meter.tsx packages/ui/src/popover.tsx packages/ui/src/progress.tsx packages/ui/src/separator.tsx packages/ui/src/tooltip.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
-- `git diff --check`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts src/merge-fixtures.test.tsx`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized"`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts src/merge-fixtures.test.tsx`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-- `pnpm exec vp check packages/ui/src/toggle-group.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
-- `pnpm exec vp check packages/ui/src/radio-group.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check packages/ui/src/command.tsx packages/ui/src/context-menu.tsx packages/ui/src/dropdown-menu.tsx packages/ui/src/menubar.tsx packages/ui/src/navigation-menu.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md IMPLEMENT_v1.md`
-- `git diff --check`
-- `pnpm exec vp check packages/ui/src/autocomplete.tsx packages/ui/src/combobox.tsx packages/ui/src/select.tsx packages/ui/src/slider.tsx packages/ui/src/toast.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-- `pnpm exec vp check packages/ui/src/field.tsx packages/ui/src/number-field.tsx packages/ui/src/otp-field.tsx packages/ui/src/scroll-area.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
-- `git diff --check`
-- `git diff --check`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`
-- `git diff --check`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`
-- `pnpm exec vp check examples/gallery/scripts/export-static.mjs examples/gallery/src/app-shell.ts examples/gallery/src/index.ts examples/gallery/src/interactive-gallery.test.ts examples/gallery/vite.config.ts plans/ui.md IMPLEMENT_v1.md`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/scroll-area-demo.tsx examples/gallery/src/generated/interactive/scroll-area-demo.tsx examples/gallery/src/generated/interactive/scroll-area-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/vite.config.ts plans/ui.md IMPLEMENT_v1.md`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm exec vitest --run packages/cli/src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-- `pnpm exec vp check packages/ui/src/field.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`
-- `pnpm --filter @jiso/headless-ui exec vitest --run`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
-- `git diff --check`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`
-- `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "updates command dialog"`
-- `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`
-- `git diff --check`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts packages/headless-ui/src/primitives/number-field.test.ts packages/headless-ui/src/primitives/slider.test.ts`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts src/demo-fixtures.test.ts`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/index.test.tsx`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery test`
-- `pnpm --filter @jiso/example-gallery run test:browser`
+- Gallery tests cover static fixtures, behavior contracts, merge fixtures, compiled interactive
+  demos, generated-client DOM ref/export contracts, and static docs export wiring.
+- G5 exported primitive attrs inventory is closed for all exported primitive `*Attributes`
+  builders, with author stress attrs, rendered merge goldens, and SPEC §4.6 diagnostic checks.
+- U3/U4/U5 styled wrappers are broadly present for current H1/H2/H3 exports; future wrapper work
+  should be tied to new primitive exports or behavior parity fixes.
+- Field/fieldset includes styled input, textarea, select, and fieldset grouping over the shared
+  native field IDREF contract, plus compiled interactive gallery coverage for validity and native
+  group state.
+- H3 menu/navigation typeahead supports repeated printable-key cycling and skips disabled items
+  for dropdown-menu, context-menu, menubar, and navigation-menu.
+- H3 autocomplete/combobox movement covers open-then-move Arrow key handlers and disabled-option
+  skipping.
+- H3 command preserves stable option ids across filtering so `aria-activedescendant` remains
+  aligned with rendered option ids.
+- Native value-backed primitive handlers for select, number-field, slider, toolbar, tabs,
+  radio-group, toggle-group, and toast have focused interactive or unit coverage for recent state
+  synchronization fixes.
 
 ## Open Work
 
 H2:
 
-- Confirm which H2 primitives still need implementation versus only styled/gallery/conformance
-  closure, then update the checklist only from code evidence.
-- Toggle-group now has a styled vendorable wrapper, gallery route, behavior-contract snippets,
-  catalog sync, merge coverage via existing roving-groups fixture, and compiled interactive
-  disabled-item plus `pressed/off` DOM-state coverage; broader H2 remains open for other H2
-  families.
-- Checkbox-group, number-field, otp-field, scroll-area, and field/fieldset now have styled
-  vendorable wrappers, static gallery routes, behavior-contract snippets, and catalog sync;
-  broader H2 remains open until all primitive and conformance evidence is rechecked together.
-- Toolbar now has a styled vendorable wrapper, static gallery route, behavior-contract snippets,
-  catalog sync, and `data-pressed` parity across headless attrs, styled output, G5 merge, and
-  compiled interactive browser coverage; broader H2 remains open for other H2 families.
-- Field/fieldset now covers styled native input, textarea, and select controls plus fieldset
-  grouping, plus compiled interactive gallery coverage for validity and native group state; keep
-  future work tied to `form()` integration rather than a standalone styled-only surface.
+- [ ] Re-audit the full H2 primitive list against package exports, tests, styled wrappers, gallery
+      routes, behavior contracts, merge fixtures, and compiled interactive coverage before
+      checking H2 complete.
+- [ ] Close any remaining checkbox-group, number-field, otp-field, scroll-area, and field/fieldset
+      behavior gaps with focused primitive tests rather than styled-only evidence.
+- [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
 
 H3:
 
-- Confirm wave-3 primitive implementation completeness against package exports and tests.
-- Select, combobox, autocomplete, slider, and toast now have styled vendorable wrappers, static
-  gallery routes, behavior-contract snippets, and catalog sync.
-- Dropdown-menu, context-menu, menubar, navigation-menu, and command now have styled vendorable
-  wrappers, static gallery routes, behavior-contract snippets, catalog sync, and browser-backed
-  gallery regression coverage through the existing compiled interactive H3 demos; broader H3
-  remains open for full primitive/conformance closure.
-- Repeated-key typeahead cycling is now covered for dropdown-menu, context-menu, menubar, and
-  navigation-menu. Close any remaining state/focus/menu edge cases with focused tests before
-  checking H3.
-- Command now preserves stable option ids across filtering for `aria-activedescendant` and the
-  compiled gallery command demo proves that path; broader H3 remains open until every wave-3
-  primitive is rechecked together.
+- [ ] Re-audit the full H3 primitive list against package exports, tests, styled wrappers, gallery
+      routes, behavior contracts, and browser-backed interactive coverage before checking H3
+      complete.
+- [ ] Close remaining state/focus/menu edge cases for select, combobox, autocomplete,
+      dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, and command with
+      primitive tests plus gallery evidence where user-visible.
+- [ ] Confirm input-like H3 primitives restore rejected native values for disabled/canceled
+      cancelable changes across the full family.
 
 Styled UI:
 
-- Styled H1 and pure-markup wrappers are closed; keep future wrapper work scoped to new primitive
-  exports or behavior parity fixes.
-- Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered IR,
-  no `fw-c=` or `data-bind=` in vendored component source.
-- Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports.
-- Integration note: the optional CLI catalog regression now needs an out-of-scope
-  `packages/cli/src/index.test.ts` expectation update for the newly exported H1 package subpaths;
-  `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
-  fails until that CLI test fixture is updated by its owner.
+- [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
+      IR, no `fw-c=`, and no `data-bind=` in vendored component source.
+- [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports.
+- [ ] Resolve any remaining CLI catalog fixture drift when new UI subpaths are exported.
 
 Gallery:
 
-- Expand route coverage until every primitive/styled component has a gallery fixture.
-- Extend G2 beyond the current representative `fw explain` primitive coverage when more component
-  families need provenance or merge-diagnostic examples.
-- Add G3/G4 once the gallery surface is stable enough to avoid churn-heavy baselines.
-- G5 is closed for the exported primitive attrs inventory and rendered merge goldens; keep future
-  merge work scoped to new primitive exports or compiler/runtime diagnostic parity.
-- Progress and meter now have compiled interactive gallery coverage; continue extending remaining
-  non-commanding display/native families only where browser-observable state can move.
-- Scroll-area now has compiled interactive gallery and Chromium coverage for browser-observable
-  viewport scroll movement plus generated-client DOM sync.
-- G6 docs deployment wiring now exports the compiled `/interactive` route and generated client
-  module set; continue full browser-backed stateful-family coverage. Generated client DOM
-  ref/export inventory is covered for every checked-in compiled interactive demo.
-- H2 roving-family compiled gallery coverage now includes disabled-item inertness for tabs,
-  radio-group, and toggle-group, plus browser-backed tab ARIA/panel sync, toolbar
-  `data-pressed` parity, toggle `data-state="pressed"` sync, and toast close-state DOM sync
-  through app-authored TSX lowered into checked-in artifacts.
+- [ ] Expand G1 route coverage until every primitive/styled component has a gallery fixture.
+- [ ] Expand G2 beyond representative `fw explain` coverage when more primitive families need
+      provenance, keyboard, ARIA, native-state, or merge-diagnostic examples.
+- [ ] Add G3 axe checks once the gallery surface is stable enough to avoid churn-heavy baselines.
+- [ ] Add G4 visual regression baselines for `@jiso/ui` once route/state coverage is stable.
+- [ ] Keep G6 compiled interactive demos app-authored TSX, checked in, generated-artifact fresh,
+      and browser-tested when behavior changes.
+
+## Latest Gates
+
+Latest integrated UI slice:
+
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/index.test.tsx`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts src/demo-fixtures.test.ts`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check packages/headless-ui/src/primitives/toolbar.ts packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/toolbar.tsx examples/gallery/src/interactive/radio-group-demo.tsx examples/gallery/src/interactive/tabs-demo.tsx examples/gallery/src/interactive/toggle-group-demo.tsx examples/gallery/src/interactive/toolbar-demo.tsx examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
+Latest broad gate:
+
+- `pnpm run check` passed after `37cc7e3` with 768 formatted files, 670 lint/typechecked files,
+  and 7 typechecked example/conformance projects.
+
+## Integration Queue
+
+- [ ] UI worker `round119` produced `9960956` for H3 input reset primitive gaps; integrate with
+      focused headless/UI/gallery gates before updating this ledger.
 
 ## Rules
 
-- Evidence updates belong near the relevant checklist item only when they change current status.
-- Do not paste repeated command transcripts; list the latest proving commands.
-- Do not check broad H/G/U items from a narrow primitive slice.
+- Prefer native platform behavior first; JS should add state coordination only when native
+  semantics are insufficient.
+- Primitive handlers must respect `event.defaultPrevented` and leave DOM/native state coherent
+  after canceled changes.
+- Behavior attributes belong to package prefixes such as `jiso-*`; framework `fw-*` stays
+  reserved.
+- `@jiso/ui` components are vendored TSX source, not runtime imports from the package.
+- Gallery evidence should prove authored TSX, rendered markup, generated clients, and browser
+  behavior where each surface is relevant.

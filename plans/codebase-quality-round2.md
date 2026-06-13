@@ -54,11 +54,11 @@ Current state:
 
 Open:
 
-- Search for remaining custom parsers, raw source membership checks, and generated-artifact
+- [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
   projections in `tests/fw-check.node.mjs`.
-- Replace each with public behavior or structured `@jiso/test` fixture assertions.
-- Keep intentional byte-for-byte wire pins.
-- Keep create-jiso scaffold checks executable against real generated files, Vite+ tasks, graph
+- [ ] Replace each with public behavior or structured `@jiso/test` fixture assertions.
+- [ ] Keep intentional byte-for-byte wire pins.
+- [ ] Keep create-jiso scaffold checks executable against real generated files, Vite+ tasks, graph
   assertions, and typechecking.
 
 Latest focused evidence:
@@ -93,10 +93,10 @@ Current state:
 
 Open:
 
-- Remove remaining compatibility fallback reparses where parser facts are sufficient.
-- Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
+- [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
+- [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
   parser/scanner internals and diagnostics, retire source-string lowerers/validators.
-- Keep Phase 2 open until source-returning lowering is gone from the compile path or each
+- [ ] Keep Phase 2 open until source-returning lowering is gone from the compile path or each
   remaining case is explicitly justified.
 
 Latest focused evidence:
@@ -126,9 +126,9 @@ Current state:
 
 Open:
 
-- Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
-- Cover or degrade any remaining invisible source/project query-loader and mutation surfaces.
-- Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
+- [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
+- [ ] Cover or degrade any remaining invisible source/project query-loader and mutation surfaces.
+- [ ] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
 
 Latest focused evidence:
 
@@ -157,11 +157,11 @@ Current state:
 
 Open:
 
-- Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
+- [ ] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
   deletion.
-- Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
-- Continue splitting large runtime tests along apply/query/loader/minifier seams.
-- Re-run browser runtime tests after each apply/loader surface change.
+- [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
+- [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+- [ ] Re-run browser runtime tests after each apply/loader surface change.
 
 Latest focused evidence:
 
@@ -192,12 +192,12 @@ Current state:
 
 Open:
 
-- Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
+- [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
   replay, document, and app boundaries are small and obvious.
-- Finish R5/R6/R7 closure: Vite build/static export/adoption should be proven through server,
+- [ ] Finish R5/R6/R7 closure: Vite build/static export/adoption should be proven through server,
   commerce, and starter surfaces.
-- Keep one wire-html emitter and one compile/static-export diagnostic seam.
-- Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
+- [ ] Keep one wire-html emitter and one compile/static-export diagnostic seam.
+- [ ] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
 
 Latest focused evidence:
 
@@ -222,9 +222,9 @@ Current state:
 
 Open:
 
-- Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
-- Make opaque adapter objects either observable or explicitly documented as unobserved.
-- Keep commerce generated artifacts honest: checked in, freshness-gated, and tied to source
+- [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
+- [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
+- [ ] Keep commerce generated artifacts honest: checked in, freshness-gated, and tied to source
   provenance rather than synthetic projections.
 
 Latest focused evidence:
@@ -244,9 +244,9 @@ Current state:
 
 Open:
 
-- When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
-- Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
-- Keep `plans/*` evidence terse: command list plus current status, not repeated history.
+- [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
+- [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
+- [ ] Keep `plans/*` evidence terse: command list plus current status, not repeated history.
 
 ## Current Gates
 
@@ -278,4 +278,4 @@ Stale but useful broad references:
 
 ## Integration Queue
 
-- Keep five active worker lanes by refilling integrated lanes from the latest main `HEAD`.
+- [ ] Keep five active worker lanes by refilling integrated lanes from the latest main `HEAD`.
