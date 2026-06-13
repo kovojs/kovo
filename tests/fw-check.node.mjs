@@ -146,8 +146,8 @@ import {
   typeScriptInterfaceMemberTypes,
 } from '../packages/test/src/typescript-fixtures.ts';
 import { parseWireFixture, parseWireResponses } from '../packages/test/src/wire-fixtures.ts';
+import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
-  createApp,
   csrfField,
   csrfToken,
   domain,
@@ -4943,8 +4943,11 @@ export default {
   const cliRedModule = join(cliFixtureRoot, 'red-app.mjs');
   const cliGreenModule = join(cliFixtureRoot, 'green-app.mjs');
   const cliAppModuleSource = (diagnostics) => `
-import { createApp, route as serverRoute } from ${JSON.stringify(
+import { route as serverRoute } from ${JSON.stringify(
     pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
+  )};
+import { createApp } from ${JSON.stringify(
+    pathToFileURL(join(projectRoot, 'dist/server/src/api/app-shell/core.mjs')).href,
   )};
 
 export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};

@@ -143,7 +143,7 @@ export default defineConfig({
     ],
   },
   pack: {
-    entry: ['packages/*/src/index.ts'],
+    entry: ['packages/*/src/index.ts', 'packages/server/src/api/app-shell/*.ts'],
     dts: true,
     deps: {
       neverBundle: ['typescript'],
