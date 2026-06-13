@@ -1,5 +1,11 @@
 import { dedupeBy } from '../shared.js';
-import { knownQueryNames, queryNameFromPath, queryPathUsesKnownQuery } from './query-shapes.js';
+import {
+  knownQueryNames,
+  parseBindingPath,
+  queryNameFromPath,
+  queryPathUsesKnownQuery,
+  relativeBindingPath,
+} from './query-shapes.js';
 import {
   callExpressions,
   componentOptionSource,
@@ -50,7 +56,7 @@ export function collectQueryUpdatePlans(
   }
 
   for (const stamp of collectDataBindListStamps(model)) {
-    const [query] = stamp.list.split('.');
+    const query = queryNameFromPath(stamp.list);
     if (!query) continue;
 
     const paths = pathsByQuery.get(query) ?? new Set<string>();
@@ -322,7 +328,7 @@ function dataBindAttributeFact(name: string, path: string): DataBindAttribute {
     name,
     path,
     query: path.startsWith('.') ? null : queryNameFromPath(path),
-    relativeReadPath: path.startsWith('.') ? path.slice(1) : null,
+    relativeReadPath: path.startsWith('.') ? relativeBindingPath(path) : null,
   };
 }
 
@@ -354,7 +360,10 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
 }
 
 function queryRelativePath(path: string): string {
-  return path.split('.').slice(1).join('.');
+  return parseBindingPath(path)
+    .slice(1)
+    .map((segment) => (segment.optional ? `${segment.name}?` : segment.name))
+    .join('.');
 }
 
 function templateItemBindingPlaceholders(
