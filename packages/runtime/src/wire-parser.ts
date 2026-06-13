@@ -260,7 +260,7 @@ export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter)
   );
 }
 
-export function readFragmentElementChunk(
+function readFragmentElementChunk(
   chunk: Pick<ElementChunk, 'attrs' | 'content'>,
 ): FragmentChunk | undefined {
   const target = readAttribute(chunk.attrs, 'target');
@@ -286,7 +286,7 @@ function readFragmentChunksFromElements(
   return fragments;
 }
 
-export function malformedFragmentError(reason: string): Error {
+function malformedFragmentError(reason: string): Error {
   return new Error(`Malformed fw-fragment chunk: ${reason}`);
 }
 

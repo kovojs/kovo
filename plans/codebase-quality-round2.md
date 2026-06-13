@@ -432,6 +432,9 @@ Deferred stream part detection now uses the canonical mutation response element 
 a regex-only `fw-query`/`fw-fragment` filter, and the remaining broad
 `packages/runtime/src/query-runtime-integration.test.ts` assertions have moved to derive,
 optimism, mutation response, and deferred-stream owner suites.
+Fragment element decoding/error helpers are now private inside `wire-parser.ts`; the checked
+decoded body readers remain the shared parser surface used by modular apply and the extracted
+inline-loader parser closure.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -673,6 +676,17 @@ packages/runtime/src/inline-js-minifier.test.ts`, `pnpm exec vitest --run packag
       `pnpm --filter @jiso/runtime run check:inline-loader`, and browser runtime tests `pnpm exec
 vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round253: `packages/runtime/src/wire-parser.ts` no longer exports
+      `readFragmentElementChunk` or `malformedFragmentError`; `packages/runtime/src/wire-parser.test.ts`
+      pins that private parser boundary while the inline-loader extractor still consumes the helper
+      closure from source. Verified by `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-js-minifier.test.ts`, `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec tsc --noEmit --pretty
+false`, and browser runtime tests `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -685,6 +699,10 @@ packages/runtime/src/query-hydration.browser.test.ts`.
       `packages/runtime/src/query-hydration.browser.test.ts`.
       Evidence 2026-06-13 round252: browser runtime checks passed after the shared fragment
       decoder/inline-loader extraction change. Command: `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round253: browser runtime checks passed after the fragment element
+      parser helper exports were narrowed. Command: `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
       Evidence 2026-06-13: browser runtime checks passed after readable loader parser-generation
@@ -726,6 +744,20 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- Round253 private fragment parser surface:
+  `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-js-minifier.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/runtime/src/wire-parser.ts
+packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-response-apply.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm --filter @jiso/runtime run check:inline-loader`

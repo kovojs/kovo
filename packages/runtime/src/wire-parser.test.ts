@@ -15,6 +15,17 @@ import {
 } from './wire-parser.js';
 
 describe('wire parser HTML entity handling', () => {
+  it('keeps fragment element internals behind the decoded reader surface', async () => {
+    const wireParserModule = await import('./wire-parser.js');
+
+    // SPEC.md §4.4/§9.1: inline and modular response paths share decoded body
+    // readers; individual fragment element decoding is not a compatibility API.
+    expect(Object.hasOwn(wireParserModule, 'readFragmentElementChunk')).toBe(false);
+    expect(Object.hasOwn(wireParserModule, 'malformedFragmentError')).toBe(false);
+    expect(wireParserModule.readFragmentChunks).toBe(readFragmentChunks);
+    expect(wireParserModule.readMutationResponseBodyChunks).toBe(readMutationResponseBodyChunks);
+  });
+
   it('decodes the server-runtime HTML entity contract for wire text', () => {
     // SPEC section 2 Constitution #4: mutation/query wire traffic must stay readable HTML.
     expect(unescapeHtml('&lt;fw-query name=&quot;cart&quot; key=&apos;cart:1&#39;&gt;&amp;')).toBe(
