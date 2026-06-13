@@ -1,13 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
-  route,
-  toNodeHandler,
-} from '@jiso/server';
+import { route } from '@jiso/server';
+import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
+import { createApp, createRequestHandler } from '@jiso/server/app-shell/core';
+import { toNodeHandler } from '@jiso/server/app-shell/node';
 
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
