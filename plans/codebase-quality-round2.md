@@ -777,6 +777,10 @@ default BroadcastChannel replay, so loader-installed mutation transports share t
 query apply hook as initial hydration, inline query events, visible-return hydration, and typed-read
 refetch. Enhanced-mutation-specific `applyQuery` hooks are also pinned ahead of the broader loader
 hook for default BroadcastChannel replay.
+Inline and modular fragment response apply now share `applyResponseFragment` from
+`packages/runtime/src/inline-response-apply.ts`: the extracted inline helper supplies tiny DOM
+append/replace adapters, while `packages/runtime/src/morph.ts` supplies the modular morph and
+island-signal cleanup adapters around the same target/mode decision.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -804,6 +808,29 @@ packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-js-minifier.test.ts` and
       `pnpm --filter @jiso/runtime run check:inline-loader`.
+      Evidence 2026-06-13 round272: `packages/runtime/src/inline-response-apply.ts` now owns
+      `applyResponseFragment` as the shared decoded fragment target/mode branch for both extracted
+      inline response apply and modular DOM morph apply in `packages/runtime/src/morph.ts`.
+      `packages/runtime/src/inline-loader.ts` was regenerated from that helper closure, and
+      `packages/runtime/src/inline-loader-parser-parity.test.ts` plus
+      `packages/runtime/src/inline-loader-artifact-minifier.test.ts` pin the readable/minified
+      helper embed around `applyResponseFragment`, `appendInlineFragment`, and
+      `replaceInlineFragment`. Verified by focused runtime tests `pnpm exec vitest --run
+      packages/runtime/src/inline-loader-parser-parity.test.ts
+      packages/runtime/src/inline-loader-response-apply.test.ts
+      packages/runtime/src/inline-loader-artifact-minifier.test.ts
+      packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-minifier.test.ts
+      packages/runtime/src/mutation-response-dom.test.ts
+      packages/runtime/src/mutation-response-apply.test.ts
+      packages/runtime/src/mutation-response-wire-apply.test.ts packages/runtime/src/morph.test.ts`;
+      browser runtime `pnpm exec vitest --config vitest.browser.config.ts --run
+      packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
+      inline generation `pnpm --filter @jiso/runtime run check:inline-loader`; exact `pnpm exec vp
+      check packages/runtime/src/inline-response-apply.ts packages/runtime/src/morph.ts
+      packages/runtime/src/inline-loader.ts
+      packages/runtime/src/inline-loader-parser-parity.test.ts
+      packages/runtime/src/inline-loader-artifact-minifier.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check`.
       Evidence 2026-06-13 round270: inline enhanced-response application now extracts both sides of
       the inline parser/apply boundary from runtime-owned source. `packages/runtime/src/wire-parser.ts`
       still owns `readInlineMutationResponseBodyChunks`, while

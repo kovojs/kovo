@@ -1,6 +1,7 @@
 import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-context.js';
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
+import { applyResponseFragment } from './inline-response-apply.js';
 import type { FragmentChunk } from './wire-parser.js';
 
 export interface MorphTarget {
@@ -87,16 +88,15 @@ export function applyFragments(
   const applied: string[] = [];
 
   for (const fragment of fragments) {
-    const target = root.findFragmentTarget(fragment.target);
-    if (!target) continue;
-
-    if (fragment.mode === 'append') {
-      appendFragment(target, fragment.html, morph);
-    } else {
-      abortRemovedIslandSignals(target.readHtml?.() ?? '', fragment.html, islandSignalScope);
-      morph(target, fragment.html);
-    }
-    applied.push(fragment.target);
+    const wasApplied = applyResponseFragment<MorphTarget>(fragment, {
+      appendFragment: (target, html) => appendFragment(target, html, morph),
+      findFragmentTarget: (target) => root.findFragmentTarget(target),
+      replaceFragment(target, html) {
+        abortRemovedIslandSignals(target.readHtml?.() ?? '', html, islandSignalScope);
+        morph(target, html);
+      },
+    });
+    if (wasApplied) applied.push(fragment.target);
   }
 
   return applied;

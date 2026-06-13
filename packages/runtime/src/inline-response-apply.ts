@@ -15,6 +15,12 @@ export interface InlineMutationResponseApplyOptions {
   readBody(body: string): InlineMutationResponseBodyChunks;
 }
 
+export interface ResponseFragmentApplyOptions<Target> {
+  appendFragment(target: Target, html: string): void;
+  findFragmentTarget(target: string): Target | null | undefined;
+  replaceFragment(target: Target, html: string): void;
+}
+
 export function applyInlineMutationResponseBody(
   body: string,
   options: InlineMutationResponseApplyOptions,
@@ -31,20 +37,33 @@ function applyInlineMutationResponseChunks(
 ): void {
   chunks.queries.forEach((query) => options.dispatchQuery(query));
   chunks.fragments.forEach((fragment) =>
-    applyInlineFragment(fragment, (target) => options.findFragmentTarget(target)),
+    applyResponseFragment(fragment, {
+      appendFragment: appendInlineFragment,
+      findFragmentTarget: (target) => options.findFragmentTarget(target),
+      replaceFragment: replaceInlineFragment,
+    }),
   );
 }
 
-function applyInlineFragment(
+export function applyResponseFragment<Target>(
   fragment: FragmentChunk,
-  findFragmentTarget: InlineMutationResponseApplyOptions['findFragmentTarget'],
-): void {
-  const element = findFragmentTarget(fragment.target);
-  if (!element) return;
+  options: ResponseFragmentApplyOptions<Target>,
+): boolean {
+  const element = options.findFragmentTarget(fragment.target);
+  if (!element) return false;
 
   if (fragment.mode === 'append') {
-    element.insertAdjacentHTML('beforeend', fragment.html);
+    options.appendFragment(element, fragment.html);
   } else {
-    element.innerHTML = fragment.html;
+    options.replaceFragment(element, fragment.html);
   }
+  return true;
+}
+
+function appendInlineFragment(element: InlineResponseApplyTarget, html: string): void {
+  element.insertAdjacentHTML('beforeend', html);
+}
+
+function replaceInlineFragment(element: InlineResponseApplyTarget, html: string): void {
+  element.innerHTML = html;
 }

@@ -37,7 +37,9 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function applyInlineMutationResponseChunks(',
     );
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function appendInlineFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function replaceInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'const dispatchQuery=(query)=>{dispatchEvent(new CustomEvent',
     );

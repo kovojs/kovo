@@ -73,7 +73,9 @@ describe('inline loader parser parity', () => {
     expect(inlineResponseApplyReadableSource).toContain(
       'function applyInlineMutationResponseChunks(',
     );
-    expect(inlineResponseApplyReadableSource).toContain('function applyInlineFragment(');
+    expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragment(');
+    expect(inlineResponseApplyReadableSource).toContain('function appendInlineFragment(');
+    expect(inlineResponseApplyReadableSource).toContain('function replaceInlineFragment(');
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableParser);
     expect(alternateReadable).toContain(alternateReadableApply);
