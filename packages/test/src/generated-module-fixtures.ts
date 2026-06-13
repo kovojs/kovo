@@ -29,6 +29,23 @@ export interface GeneratedComponentSourceFileFact extends GeneratedComponentSour
   name: string;
 }
 
+export interface GeneratedComponentCompileResult {
+  diagnostics: readonly unknown[];
+  renderEquivalenceChecks?: readonly { expected?: string }[];
+}
+
+export interface GeneratedComponentCommittedIrFact extends GeneratedComponentSourceFileFact {
+  diagnostics: readonly unknown[];
+  fixpointAsserted: boolean;
+  generatedMatchesCompilerOutput: boolean;
+  loweredRenderSourcePresent: boolean;
+  provenance: {
+    fileName: string;
+    spec: 'SPEC.md section 5.2';
+  };
+  renderEquivalenceAsserted: boolean;
+}
+
 const loweredStampAttributePattern = /\b((?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+))=/g;
 
 export function generatedComponentSourceFacts(options: {
@@ -66,6 +83,62 @@ export function generatedComponentSourceFileFacts(options: {
       authoredPath,
       generatedPath,
       name,
+    };
+  });
+}
+
+export function generatedComponentCommittedIrFacts<
+  T extends GeneratedComponentCompileResult,
+>(options: {
+  assertFixpoint: (result: T) => void;
+  assertRenderEquivalence: (result: T) => void;
+  authoredDir?: string;
+  compileComponentModule: (input: { fileName: string; source: string }) => T;
+  components: readonly string[];
+  generatedDir?: string;
+  projectFilePrefix: string;
+  sourceRootUrl: URL;
+}): GeneratedComponentCommittedIrFact[] {
+  const authoredDir = options.authoredDir ?? 'components';
+  const generatedDir = options.generatedDir ?? 'generated';
+
+  return generatedComponentSourceFileFacts({
+    authoredDir,
+    components: options.components,
+    generatedDir,
+    sourceRootUrl: options.sourceRootUrl,
+  }).map((sourceFact) => {
+    const authoredSource = readFileSync(
+      new URL(`./${sourceFact.authoredPath}`, options.sourceRootUrl),
+      'utf8',
+    );
+    const generatedSource = readFileSync(
+      new URL(`./${sourceFact.generatedPath}`, options.sourceRootUrl),
+      'utf8',
+    );
+    const fileName = `${options.projectFilePrefix}/${sourceFact.authoredPath}`;
+    const result = options.compileComponentModule({ fileName, source: authoredSource });
+
+    options.assertFixpoint(result);
+    options.assertRenderEquivalence(result);
+
+    const lowered = result.renderEquivalenceChecks?.[0]?.expected ?? '';
+    const expectedGeneratedSource = [
+      `// @jiso-ir — lowered from ${fileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
+      lowered,
+    ].join('\n');
+
+    return {
+      ...sourceFact,
+      diagnostics: result.diagnostics,
+      fixpointAsserted: true,
+      generatedMatchesCompilerOutput: generatedSource === expectedGeneratedSource,
+      loweredRenderSourcePresent: lowered.length > 0,
+      provenance: {
+        fileName,
+        spec: 'SPEC.md section 5.2',
+      },
+      renderEquivalenceAsserted: true,
     };
   });
 }

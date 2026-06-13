@@ -82,6 +82,9 @@ fake document/runtime mechanics inline.
 Shared generated-module fixtures now own generated CSS artifact scope-rule projection for the P10
 normative-docs fw-check gate, so the monolith no longer extracts generated CSS source and parses
 scope rules locally.
+Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
+component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
+output comparison against SPEC.md section 5.2 provenance.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -199,6 +202,14 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Committed commerce IR freshness fixture slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR
@@ -1317,7 +1328,9 @@ counts and named query JSON projections used by commerce app-shell tests. Shared
 fixtures now own endpoint and scope-audit assertion facts, so commerce source-truth tests no
 longer parse those subjects and summaries locally. Shared generated-module fixtures now own
 commerce authored/generated component source-pair loading and projection for the committed-IR
-freshness gate, so commerce app tests no longer reimplement generated artifact file-pair reads.
+freshness gate, including exact compiler-output comparison and SPEC.md section 5.2 provenance, so
+commerce app tests no longer reimplement generated artifact file-pair reads or settle for marker
+presence.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -1381,6 +1394,14 @@ Latest evidence:
   `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
   `pnpm run check:build`;
   `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`.
+- Committed commerce IR freshness fixture slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 7 - Test Restructuring
 
@@ -1407,7 +1428,8 @@ inside `tests/fw-check.node.mjs`. The P1 generated-module minifier, typed-param,
 render-equivalence assertions now consume shared `@jiso/test/generated-module-fixtures` behavior
 facts instead of local fake-client invocation and render-projection mechanics. Commerce committed-IR
 freshness tests now consume `@jiso/test/generated-module-fixtures` file-pair facts instead of
-local generated/authored source reads.
+local generated/authored source reads, and the fixture now compares committed IR to caller-provided
+compiler output while asserting fixpoint/render-equivalence hooks.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -1433,6 +1455,14 @@ Latest evidence:
 - `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`
+- Committed commerce IR freshness fixture slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Current Gates
 

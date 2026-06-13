@@ -127,6 +127,7 @@ import {
   executeInlineEnhancedFormLoaderFixture,
   generatedBootstrapDeferredBehaviorFact,
   generatedClientExportTypeFacts,
+  generatedComponentCommittedIrFacts,
   generatedComponentSourceFileFacts,
   generatedComponentSourceFacts,
   generatedCssScopeRulesFromArtifact,
@@ -142,6 +143,7 @@ import {
   generatedRenderedElementFactsFromArtifact,
   generatedRenderedElementFactsFromSource,
   type GeneratedComponentSourceFacts,
+  type GeneratedComponentCommittedIrFact,
   type GeneratedComponentSourceFileFact,
   type GeneratedMinifierNamePreservationBehaviorFact,
   type GeneratedRenderEquivalenceBehaviorFact,
@@ -949,6 +951,25 @@ describe('@jiso/test package subpath exports', () => {
       generatedPath: 'generated/cart-badge.tsx',
       name: 'cart-badge',
     } satisfies Partial<GeneratedComponentSourceFileFact>);
+    expect(generatedComponentCommittedIrFacts).toBeTypeOf('function');
+    expect({
+      authoredLoweredStampAttributes: [],
+      authoredPath: 'components/cart-badge.tsx',
+      diagnostics: [],
+      fixpointAsserted: true,
+      generatedHasLoweredIrMarker: true,
+      generatedMatchesCompilerOutput: true,
+      generatedPath: 'generated/cart-badge.tsx',
+      loweredRenderSourcePresent: true,
+      name: 'cart-badge',
+      provenance: {
+        fileName: 'examples/commerce/src/components/cart-badge.tsx',
+        spec: 'SPEC.md section 5.2',
+      },
+      renderEquivalenceAsserted: true,
+    }).toMatchObject({
+      generatedMatchesCompilerOutput: true,
+    } satisfies Partial<GeneratedComponentCommittedIrFact>);
     expect(generatedHandlerReferenceFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toMatchObject({
       handlerName: 'Cart$click',
       modulePath: '/c/cart.client.js',

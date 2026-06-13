@@ -1,3 +1,8 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,6 +15,7 @@ import {
   generatedBootstrapDeferredBehaviorFact,
   assertGeneratedRegistryConsumerTypes,
   generatedClientExportTypeFacts,
+  generatedComponentCommittedIrFacts,
   generatedComponentSourceFacts,
   generatedComponentSourceFileFacts,
   generatedCssScopeRulesFromArtifact,
@@ -111,6 +117,74 @@ describe('@jiso/test generated module fixtures', () => {
         name: 'cart-badge',
       },
     ]);
+  });
+
+  it('compares committed generated IR to compiler output through a fixture seam', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-committed-ir-'));
+    try {
+      await mkdir(join(root, 'components'), { recursive: true });
+      await mkdir(join(root, 'generated'), { recursive: true });
+      await writeFile(
+        join(root, 'components/cart-badge.tsx'),
+        '<cart-badge>{cart.count}</cart-badge>',
+      );
+      await writeFile(
+        join(root, 'generated/cart-badge.tsx'),
+        [
+          '// @jiso-ir — lowered from examples/commerce/src/components/cart-badge.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.',
+          '<cart-badge fw-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>',
+        ].join('\n'),
+      );
+
+      const fixtureCalls: string[] = [];
+      expect(
+        generatedComponentCommittedIrFacts({
+          assertFixpoint(result) {
+            fixtureCalls.push(`fixpoint:${result.renderEquivalenceChecks?.length ?? 0}`);
+          },
+          assertRenderEquivalence(result) {
+            fixtureCalls.push(`render:${result.renderEquivalenceChecks?.length ?? 0}`);
+          },
+          compileComponentModule({ fileName, source }) {
+            return {
+              diagnostics: [],
+              renderEquivalenceChecks: [
+                {
+                  expected:
+                    fileName.endsWith('components/cart-badge.tsx') &&
+                    source.includes('{cart.count}')
+                      ? '<cart-badge fw-deps="cart"><span data-bind="cart.count">{cart.count}</span></cart-badge>'
+                      : '',
+                },
+              ],
+            };
+          },
+          components: ['cart-badge'],
+          projectFilePrefix: 'examples/commerce/src',
+          sourceRootUrl: pathToFileURL(`${root}/`),
+        }),
+      ).toEqual([
+        {
+          authoredLoweredStampAttributes: [],
+          authoredPath: 'components/cart-badge.tsx',
+          diagnostics: [],
+          fixpointAsserted: true,
+          generatedHasLoweredIrMarker: true,
+          generatedMatchesCompilerOutput: true,
+          generatedPath: 'generated/cart-badge.tsx',
+          loweredRenderSourcePresent: true,
+          name: 'cart-badge',
+          provenance: {
+            fileName: 'examples/commerce/src/components/cart-badge.tsx',
+            spec: 'SPEC.md section 5.2',
+          },
+          renderEquivalenceAsserted: true,
+        },
+      ]);
+      expect(fixtureCalls).toEqual(['fixpoint:1', 'render:1']);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('executes generated client modules through explicit runtime bindings', () => {

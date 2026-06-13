@@ -4,8 +4,9 @@ import { createHmac } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';
 
 import { storageBodyToBytes } from '@jiso/core';
+import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@jiso/compiler';
 import { propertyTest } from '@jiso/test/assertions';
-import { generatedComponentSourceFileFacts } from '@jiso/test/generated-module-fixtures';
+import { generatedComponentCommittedIrFacts } from '@jiso/test/generated-module-fixtures';
 import { cookiePair, headerValues, setCookieValues } from '@jiso/test/headers';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
@@ -1241,41 +1242,66 @@ describe('commerce example', () => {
   });
 
   it('compiles TSX-authored components to committed IR through the fixpoint gate', () => {
-    // SPEC.md section 5.2.3 / Constitution #3: emit-components.mjs asserts the
-    // fixpoint (compiling emitted IR is a no-op) and render equivalence for
-    // every authored component, and --check fails if committed IR is stale.
-    execFileSync('node', ['examples/commerce/scripts/emit-components.mjs', '--check'], {
-      stdio: 'pipe',
-    });
-
-    // SPEC.md section 4.8: stamps are compiler-derived, never hand-written
-    // in authored sugar (FW222 drift / FW223 duplicates).
+    // SPEC.md sections 4.8 and 5.2: authored sugar carries no lowered stamps,
+    // while committed generated IR must match the compiler output for the
+    // source component and pass the compiler fixpoint/render-equivalence gates.
     expect(
-      generatedComponentSourceFileFacts({
+      generatedComponentCommittedIrFacts({
+        assertFixpoint,
+        assertRenderEquivalence,
+        compileComponentModule,
         components: ['cart-badge', 'order-history', 'product-grid'],
+        projectFilePrefix: 'examples/commerce/src',
         sourceRootUrl: new URL('./', import.meta.url),
       }),
     ).toEqual([
       {
         authoredLoweredStampAttributes: [],
         authoredPath: 'components/cart-badge.tsx',
+        diagnostics: [],
+        fixpointAsserted: true,
         generatedHasLoweredIrMarker: true,
+        generatedMatchesCompilerOutput: true,
         generatedPath: 'generated/cart-badge.tsx',
+        loweredRenderSourcePresent: true,
         name: 'cart-badge',
+        provenance: {
+          fileName: 'examples/commerce/src/components/cart-badge.tsx',
+          spec: 'SPEC.md section 5.2',
+        },
+        renderEquivalenceAsserted: true,
       },
       {
         authoredLoweredStampAttributes: [],
         authoredPath: 'components/order-history.tsx',
+        diagnostics: [],
+        fixpointAsserted: true,
         generatedHasLoweredIrMarker: true,
+        generatedMatchesCompilerOutput: true,
         generatedPath: 'generated/order-history.tsx',
+        loweredRenderSourcePresent: true,
         name: 'order-history',
+        provenance: {
+          fileName: 'examples/commerce/src/components/order-history.tsx',
+          spec: 'SPEC.md section 5.2',
+        },
+        renderEquivalenceAsserted: true,
       },
       {
         authoredLoweredStampAttributes: [],
         authoredPath: 'components/product-grid.tsx',
+        diagnostics: [],
+        fixpointAsserted: true,
         generatedHasLoweredIrMarker: true,
+        generatedMatchesCompilerOutput: true,
         generatedPath: 'generated/product-grid.tsx',
+        loweredRenderSourcePresent: true,
         name: 'product-grid',
+        provenance: {
+          fileName: 'examples/commerce/src/components/product-grid.tsx',
+          spec: 'SPEC.md section 5.2',
+        },
+        renderEquivalenceAsserted: true,
       },
     ]);
   });
