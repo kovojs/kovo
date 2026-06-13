@@ -196,6 +196,7 @@ import {
   dialogContentClasses,
   disclosureClasses,
   disclosureTriggerClasses,
+  drawerContentClasses,
   dropdownMenuClasses,
   dropdownMenuContentClasses,
   dropdownMenuItemClasses,
@@ -1949,6 +1950,8 @@ describe('@jiso/ui styled package foundation', () => {
 
     expect(sheetContentClasses).toContain('inset-y-0 right-0 w-full max-w-sm border-l');
     expect(sheetContentClasses).toContain('inset-x-0 bottom-0 max-h-[85vh] border-t');
+    expect(drawerContentClasses).toContain('inset-x-0 bottom-0 max-h-[85vh] border-t');
+    expect(drawerContentClasses).toContain('inset-y-0 right-0 w-full max-w-sm border-l');
     expect(topSheet).toContain('top-0 max-h-[85vh] border-b');
     expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
     expect(drawer).toContain('<dialog aria-describedby="account-drawer-description"');
@@ -1970,6 +1973,7 @@ describe('@jiso/ui styled package foundation', () => {
       'combobox.tsx',
       'command.tsx',
       'context-menu.tsx',
+      'drawer.tsx',
       'dropdown-menu.tsx',
       'field.tsx',
       'kbd.tsx',

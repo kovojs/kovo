@@ -183,6 +183,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       route fixtures are synchronized against `renderGalleryRoute()`, and the Chromium browser gate
       asserts deterministic route geometry plus screenshot hashes `4af1bf12`, `fa14c61f`,
       `ff922618`, `d3536b91`, `70bf25ac`, and `827c88ad`.
+      Evidence 2026-06-13: the `@jiso/ui` root barrel now exports `Drawer` from authored
+      `packages/ui/src/drawer.tsx` plus `drawerContentClassNames`/`drawerContentClasses`, matching
+      the `./drawer` package subpath. The static visual baseline now covers the drawer/sheet dialog
+      route family; raw route fixtures are synchronized against `renderGalleryRoute()`, and the
+      Chromium browser gate asserts deterministic `860x503` geometry plus hashes `d6203776` and
+      `538e1a6e`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and

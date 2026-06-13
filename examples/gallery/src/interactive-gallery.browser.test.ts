@@ -109,6 +109,7 @@ import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.
 import comboboxStaticRouteHtml from './visual-fixtures/combobox.html.txt?raw';
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
+import drawerStaticRouteHtml from './visual-fixtures/drawer.html.txt?raw';
 import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
 import hoverCardStaticRouteHtml from './visual-fixtures/hover-card.html.txt?raw';
 import kbdStaticRouteHtml from './visual-fixtures/kbd.html.txt?raw';
@@ -119,6 +120,7 @@ import otpFieldStaticRouteHtml from './visual-fixtures/otp-field.html.txt?raw';
 import popoverStaticRouteHtml from './visual-fixtures/popover.html.txt?raw';
 import radioGroupStaticRouteHtml from './visual-fixtures/radio-group.html.txt?raw';
 import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
+import sheetStaticRouteHtml from './visual-fixtures/sheet.html.txt?raw';
 import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
 import skeletonStaticRouteHtml from './visual-fixtures/skeleton.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
@@ -144,6 +146,7 @@ type StaticVisualFixturePath =
   | '/components/combobox'
   | '/components/command'
   | '/components/context-menu'
+  | '/components/drawer'
   | '/components/dropdown-menu'
   | '/components/hover-card'
   | '/components/kbd'
@@ -154,6 +157,7 @@ type StaticVisualFixturePath =
   | '/components/popover'
   | '/components/radio-group'
   | '/components/select'
+  | '/components/sheet'
   | '/components/slider'
   | '/components/skeleton'
   | '/components/table'
@@ -171,6 +175,7 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/combobox': comboboxStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
   '/components/context-menu': contextMenuStaticRouteHtml,
+  '/components/drawer': drawerStaticRouteHtml,
   '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
   '/components/hover-card': hoverCardStaticRouteHtml,
   '/components/kbd': kbdStaticRouteHtml,
@@ -181,6 +186,7 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/popover': popoverStaticRouteHtml,
   '/components/radio-group': radioGroupStaticRouteHtml,
   '/components/select': selectStaticRouteHtml,
+  '/components/sheet': sheetStaticRouteHtml,
   '/components/slider': sliderStaticRouteHtml,
   '/components/skeleton': skeletonStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
@@ -502,6 +508,20 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(cardRoute)).toBe('d3536b91');
     expect(await visualBaselineHash(kbdRoute)).toBe('70bf25ac');
     expect(await visualBaselineHash(skeletonRoute)).toBe('827c88ad');
+
+    const drawerRoute = mountStaticGalleryRoute('/components/drawer');
+    const sheetRoute = mountStaticGalleryRoute('/components/sheet');
+
+    expect(visualGeometry(drawerRoute)).toEqual({
+      height: 503,
+      width: 860,
+    });
+    expect(visualGeometry(sheetRoute)).toEqual({
+      height: 503,
+      width: 860,
+    });
+    expect(await visualBaselineHash(drawerRoute)).toBe('d6203776');
+    expect(await visualBaselineHash(sheetRoute)).toBe('538e1a6e');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

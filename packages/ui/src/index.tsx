@@ -221,8 +221,10 @@ export type {
   RadioGroupRadioProps,
   RadioGroupStateProps,
 } from './radio-group.js';
-export { Drawer, Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
-export type { DrawerProps, DrawerSide, SheetProps, SheetSide } from './sheet.js';
+export { Drawer, drawerContentClassNames, drawerContentClasses } from './drawer.js';
+export type { DrawerProps, DrawerSide } from './drawer.js';
+export { Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
+export type { SheetProps, SheetSide } from './sheet.js';
 export {
   Field,
   FieldControl,
