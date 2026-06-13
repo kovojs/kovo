@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import * as server from '@jiso/server';
-import * as serverAppShell from '@jiso/server/app-shell';
+import * as serverAppShellClientModules from '@jiso/server/app-shell/client-modules';
+import * as serverAppShellCore from '@jiso/server/app-shell/core';
+import * as serverAppShellStaticExport from '@jiso/server/app-shell/static-export';
+import * as serverAppShellVite from '@jiso/server/app-shell/vite';
 import { describe, expect, it } from 'vitest';
 
 import { createSiteDistApp, siteDocumentRouteEntries } from './app-shell.mjs';
@@ -61,7 +64,7 @@ describe('site app-shell export adoption', () => {
       'export function copy() { document.body.dataset.copied = ""; }\n',
     );
 
-    const serverApi = { ...server, ...serverAppShell };
+    const serverApi = { ...server, ...serverAppShellClientModules, ...serverAppShellCore };
     expect(siteDocumentRouteEntries(distDir).map((entry) => entry.routePath)).toEqual([
       '/docs/installation',
       '/',
@@ -179,12 +182,23 @@ describe('site app-shell export adoption', () => {
           if (id === '@jiso/server') {
             return server;
           }
-          if (id === '@jiso/server/app-shell') {
+          if (id === '@jiso/server/app-shell/client-modules') {
+            return serverAppShellClientModules;
+          }
+          if (id === '@jiso/server/app-shell/core') {
+            return serverAppShellCore;
+          }
+          if (id === '@jiso/server/app-shell/static-export') {
             return {
-              ...serverAppShell,
+              ...serverAppShellStaticExport,
+            };
+          }
+          if (id === '@jiso/server/app-shell/vite') {
+            return {
+              ...serverAppShellVite,
               async jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile, options) {
                 stylesheetManifestFiles.push(manifestFile);
-                return await serverAppShell.jisoAppShellViteManifestStylesheetHrefFromFile(
+                return await serverAppShellVite.jisoAppShellViteManifestStylesheetHrefFromFile(
                   manifestFile,
                   options,
                 );
@@ -194,11 +208,14 @@ describe('site app-shell export adoption', () => {
               },
               async staticExportManifestForJisoAppShellViteBuildFromManifestFile(options) {
                 staticExportManifestFiles.push(options.manifestFile);
-                return await serverAppShell.staticExportManifestForJisoAppShellViteBuildFromManifestFile(
+                return await serverAppShellVite.staticExportManifestForJisoAppShellViteBuildFromManifestFile(
                   options,
                 );
               },
             };
+          }
+          if (id === '@jiso/server/app-shell') {
+            throw new Error('docs export must load focused app-shell subpaths');
           }
           if (id === '/scripts/app-shell.mjs') return { createSiteDistApp };
           throw new Error(`unexpected SSR module ${id}`);
@@ -219,7 +236,10 @@ describe('site app-shell export adoption', () => {
     expect(loadedModuleIds).toEqual([
       '/scripts/app-shell.mjs',
       '@jiso/server',
-      '@jiso/server/app-shell',
+      '@jiso/server/app-shell/client-modules',
+      '@jiso/server/app-shell/core',
+      '@jiso/server/app-shell/static-export',
+      '@jiso/server/app-shell/vite',
     ]);
     expect(stylesheetManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
     expect(staticExportManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
@@ -348,7 +368,11 @@ describe('site app-shell export adoption', () => {
       ".jiso-site-routes.json declares '/missing'",
     );
     await expect(
-      createSiteDistApp({ distDir, publicDir, server: { ...server, ...serverAppShell } }),
+      createSiteDistApp({
+        distDir,
+        publicDir,
+        server: { ...server, ...serverAppShellClientModules, ...serverAppShellCore },
+      }),
     ).rejects.toThrow(".jiso-site-routes.json declares '/missing'");
   });
 });

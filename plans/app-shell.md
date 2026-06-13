@@ -928,3 +928,21 @@ Round254 docs-site route-manifest export adoption evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs site/scripts/build.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round256 docs-site split-subpath export adoption evidence:
+
+- Docs-site app-shell export no longer loads the aggregate `@jiso/server/app-shell` compatibility
+  module for SPEC §9.5 replay. `site/scripts/export-static.mjs` composes the docs export server API
+  from root server helpers plus focused `@jiso/server/app-shell/client-modules`, `core`,
+  `static-export`, and `vite` subpaths; `site/scripts/app-shell.mjs` default built-output loading
+  also requires the focused client-modules/core subpaths instead of falling back to the aggregate
+  when built subpaths should exist.
+- `site/scripts/app-shell.test.mjs` now rejects accidental aggregate loading and proves the docs
+  export task uses the focused Vite/static-export helpers for manifest validation and static replay.
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm run check:build`
+- `pnpm --filter @jiso/site run build`
+- `node site/scripts/export-static.mjs --skip-build --skip-gallery`
+- `pnpm exec vp check site/scripts/export-static.mjs site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

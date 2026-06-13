@@ -996,6 +996,9 @@ Docs-site app-shell adoption now has a build-authored `.jiso-site-routes.json` r
 `site/scripts/build.mjs` records the exact HTML routes it writes, and `site/scripts/app-shell.mjs`
 uses that manifest for SPEC §9.5 export replay before falling back to recursive fixture discovery,
 so stale `index.html` files in `dist` cannot silently become exported docs routes.
+Docs-site export now also composes public app-shell helpers from the focused client-modules, core,
+static-export, and Vite subpaths instead of the aggregate app-shell compatibility module; its
+adoption test rejects accidental aggregate loading while proving manifest-backed static replay.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1025,6 +1028,14 @@ Latest evidence:
   `node site/scripts/export-static.mjs --skip-build --skip-gallery`;
   `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs site/scripts/build.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round256 docs-site split-subpath export adoption:
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm run check:build`;
+  `pnpm --filter @jiso/site run build`;
+  `node site/scripts/export-static.mjs --skip-build --skip-gallery`;
+  exact `pnpm exec vp check site/scripts/export-static.mjs site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:

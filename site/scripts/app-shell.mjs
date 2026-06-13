@@ -12,6 +12,11 @@ const defaultServerAppShellModulePath = path.join(
   repoRoot,
   'dist/server/src/api/app-shell/index.mjs',
 );
+const defaultServerAppShellClientModulesPath = path.join(
+  repoRoot,
+  'dist/server/src/api/app-shell/client-modules.mjs',
+);
+const defaultServerAppShellCorePath = path.join(repoRoot, 'dist/server/src/api/app-shell/core.mjs');
 const routeManifestFile = '.jiso-site-routes.json';
 
 const textEncoder = new TextEncoder();
@@ -33,13 +38,27 @@ export async function createSiteDistApp({
 }
 
 async function loadDefaultServerApi() {
-  const [serverApi, appShellApi] = await Promise.all([
+  const [serverApi, clientModulesApi, coreApi] = await Promise.all([
     import(pathToFileURL(defaultServerModulePath).href),
-    existsSync(defaultServerAppShellModulePath)
-      ? import(pathToFileURL(defaultServerAppShellModulePath).href)
-      : import('@jiso/server/app-shell'),
+    loadAppShellSubpath(
+      defaultServerAppShellClientModulesPath,
+      '@jiso/server/app-shell/client-modules',
+    ),
+    loadAppShellSubpath(defaultServerAppShellCorePath, '@jiso/server/app-shell/core'),
   ]);
-  return { ...serverApi, ...appShellApi };
+  return { ...serverApi, ...clientModulesApi, ...coreApi };
+}
+
+async function loadAppShellSubpath(builtModulePath, packageSubpath) {
+  if (existsSync(builtModulePath)) {
+    return await import(pathToFileURL(builtModulePath).href);
+  }
+
+  if (existsSync(defaultServerAppShellModulePath)) {
+    throw new Error(`site app shell: missing built server subpath ${builtModulePath}`);
+  }
+
+  return await import(packageSubpath);
 }
 
 export function siteDocumentRoutes(distDir = defaultDistDir, moduleHrefs = new Map(), server) {
