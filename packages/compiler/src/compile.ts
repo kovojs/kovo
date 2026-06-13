@@ -30,12 +30,6 @@ import type { CompileComponentOptions, CompileResult } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
-  const packageComponentPrefixes = mergePackageComponentPrefixFacts(
-    packageComponentPrefixesForModule(options),
-    options.packageComponentPrefixes,
-  );
-  const compileOptions = { ...options, packageComponentPrefixes };
-
   if (isCompilerIrArtifact(options.source)) {
     const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
     return {
@@ -52,6 +46,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   }
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  const packageComponentPrefixes = mergePackageComponentPrefixFacts(
+    packageComponentPrefixesForModule(options, originalModel),
+    options.packageComponentPrefixes,
+  );
+  const compileOptions = { ...options, packageComponentPrefixes };
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);

@@ -104,6 +104,8 @@ Closed evidence so far:
   parser-owned string-render facts.
 - Server-render replacements now flow through the shared pipeline patch seam instead of directly
   applying source replacements in `compile.ts`.
+- Package-prefix discovery now consumes module specifier facts from the primary
+  `ComponentModuleModel`; `package-prefixes.ts` no longer reparses TSX source.
 
 Open:
 
@@ -118,7 +120,9 @@ Open:
 Recent gates:
 
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
-- `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/package-prefixes.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
+- `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/package-prefixes.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts plans/codebase-quality-round2.md`
+- `pnpm run check`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

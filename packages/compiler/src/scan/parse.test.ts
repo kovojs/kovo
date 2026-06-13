@@ -17,6 +17,22 @@ import {
 } from './parse.js';
 
 describe('compiler scan parser helpers', () => {
+  it('records static module specifiers for package prefix discovery', () => {
+    const source = `
+import { component } from '@jiso/core';
+import { Dialog } from '@acme/primitives/dialog';
+export { theme } from '@acme/theme';
+const loader = () => import('@acme/lazy/panel');
+`;
+
+    expect(parseComponentModule('imports.tsx', source).moduleSpecifiers).toEqual([
+      { specifier: '@jiso/core' },
+      { specifier: '@acme/primitives/dialog' },
+      { specifier: '@acme/theme' },
+      { specifier: '@acme/lazy/panel' },
+    ]);
+  });
+
   it('records trimmed JSX child bodies with original source offsets', () => {
     const source = `
 export const ChildSlot = component('child-slot', {

@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 import { packageComponentPrefixFactFromPackageManifest } from '@jiso/core';
-import ts from 'typescript';
 
+import type { ComponentModuleModel } from './scan/parse.js';
 import type { PackageComponentPrefixFact } from './types.js';
 
 export interface PackageComponentPrefixDiscoveryOptions {
@@ -14,9 +14,10 @@ export interface PackageComponentPrefixDiscoveryOptions {
 
 export function packageComponentPrefixesForModule(
   options: PackageComponentPrefixDiscoveryOptions,
+  model: ComponentModuleModel,
 ): PackageComponentPrefixFact[] {
   // SPEC §6.1.1 makes package.json jiso.prefix the source of package wire names.
-  return staticImportPackageNames(options.fileName, options.source).flatMap((packageName) => {
+  return staticImportPackageNames(model).flatMap((packageName) => {
     const manifest = readPackageManifest(packageName, options);
     const fact = packageComponentPrefixFactFromPackageManifest(manifest);
     return fact ? [fact] : [];
@@ -75,43 +76,13 @@ function moduleContainingDirectory(fileName: string, root: string | undefined): 
   return dirname(absoluteFileName);
 }
 
-function staticImportPackageNames(fileName: string, source: string): string[] {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+function staticImportPackageNames(model: ComponentModuleModel): string[] {
   const packageNames = new Set<string>();
-
-  const visit = (node: ts.Node): void => {
-    const specifier = moduleSpecifierText(node);
-    const packageName = specifier ? packageNameFromSpecifier(specifier) : null;
+  for (const { specifier } of model.moduleSpecifiers) {
+    const packageName = packageNameFromSpecifier(specifier);
     if (packageName) packageNames.add(packageName);
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
+  }
   return [...packageNames].sort((left, right) => left.localeCompare(right));
-}
-
-function moduleSpecifierText(node: ts.Node): string | null {
-  if (
-    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-    node.moduleSpecifier &&
-    ts.isStringLiteralLike(node.moduleSpecifier)
-  ) {
-    return node.moduleSpecifier.text;
-  }
-
-  if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-    const [argument] = node.arguments;
-    if (argument && ts.isStringLiteralLike(argument)) return argument.text;
-  }
-
-  return null;
 }
 
 function packageNameFromSpecifier(specifier: string): string | null {

@@ -168,12 +168,17 @@ export interface StringRenderModel {
   start: number;
 }
 
+export interface ModuleSpecifierModel {
+  specifier: string;
+}
+
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
   components: readonly ComponentModel[];
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
+  moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];
   renderSourceReturns: readonly StringRenderModel[];
 }
@@ -191,10 +196,14 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
+  const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
 
   const visit = (node: ts.Node): void => {
+    const specifier = moduleSpecifierModel(node);
+    if (specifier) moduleSpecifiers.push(specifier);
+
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
       const model = componentModelFromInitializer(
         sourceFile,
@@ -237,9 +246,27 @@ export function parseComponentModule(fileName: string, source: string): Componen
     jsxComments: attachedJsxComments,
     jsxExpressions,
     jsxElements,
+    moduleSpecifiers,
     mutationHandlers,
     renderSourceReturns,
   };
+}
+
+function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
+  if (
+    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+    node.moduleSpecifier &&
+    ts.isStringLiteralLike(node.moduleSpecifier)
+  ) {
+    return { specifier: node.moduleSpecifier.text };
+  }
+
+  if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    const [argument] = node.arguments;
+    if (argument && ts.isStringLiteralLike(argument)) return { specifier: argument.text };
+  }
+
+  return null;
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
