@@ -93,6 +93,10 @@ describe('gallery demo fixtures', () => {
   it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
     for (const [path, fileName] of [
       ['/components/autocomplete', 'autocomplete.html.txt'],
+      ['/components/badge', 'badge.html.txt'],
+      ['/components/breadcrumb', 'breadcrumb.html.txt'],
+      ['/components/button', 'button.html.txt'],
+      ['/components/card', 'card.html.txt'],
       ['/components/checkbox-group', 'checkbox-group.html.txt'],
       ['/components/combobox', 'combobox.html.txt'],
       ['/components/command', 'command.html.txt'],
@@ -104,10 +108,12 @@ describe('gallery demo fixtures', () => {
       ['/components/number-field', 'number-field.html.txt'],
       ['/components/otp-field', 'otp-field.html.txt'],
       ['/components/popover', 'popover.html.txt'],
+      ['/components/kbd', 'kbd.html.txt'],
       ['/components/radio-group', 'radio-group.html.txt'],
       ['/components/tabs', 'tabs.html.txt'],
       ['/components/select', 'select.html.txt'],
       ['/components/slider', 'slider.html.txt'],
+      ['/components/skeleton', 'skeleton.html.txt'],
       ['/components/table', 'table.html.txt'],
       ['/components/toast', 'toast.html.txt'],
       ['/components/tooltip', 'tooltip.html.txt'],
@@ -719,6 +725,10 @@ describe('gallery demo fixtures', () => {
     expect(alert.html).toContain('border-red-200 bg-red-50');
 
     expect(button.html).toContain('data-ui-demo="button"');
+    expect(button.html).toContain('id="gallery-button-form" data-gallery-form="button"');
+    expect(button.html).toContain('form="gallery-button-form"');
+    expect(button.html).toContain('name="gallery-action"');
+    expect(button.html).toContain('type="submit" value="save"');
     expect(button.html).toContain('rounded-md border text-sm font-medium');
     expect(button.html).toContain('type="button"');
     expect(button.html).toContain('disabled type="button"');

@@ -177,6 +177,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       input route family. Their raw route fixtures are synchronized against `renderGalleryRoute()`,
       and the Chromium browser gate asserts deterministic route geometry plus screenshot hashes
       `b23aee53` and `38d910c8`.
+      Evidence 2026-06-13: the static visual baseline now covers the simple styled route family:
+      badge, breadcrumb, button, card, kbd, and skeleton. The button route also proves external
+      native `form` ownership in authored TSX per SPEC §3.1 light-DOM/native-form fallback. Raw
+      route fixtures are synchronized against `renderGalleryRoute()`, and the Chromium browser gate
+      asserts deterministic route geometry plus screenshot hashes `4af1bf12`, `fa14c61f`,
+      `ff922618`, `d3536b91`, `70bf25ac`, and `827c88ad`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -278,6 +284,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Simple styled static visual-baseline and button form-owner slice:
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      exact `pnpm exec vp check packages/ui/src/button.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/badge.html.txt examples/gallery/src/visual-fixtures/breadcrumb.html.txt examples/gallery/src/visual-fixtures/button.html.txt examples/gallery/src/visual-fixtures/card.html.txt examples/gallery/src/visual-fixtures/kbd.html.txt examples/gallery/src/visual-fixtures/skeleton.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Toast disabled non-dismissing action closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/toast.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toast`;

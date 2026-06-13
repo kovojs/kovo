@@ -330,13 +330,25 @@ describe('@jiso/ui styled package foundation', () => {
         children: 'Save',
         class: ['tracking-wide', { uppercase: true }],
         disabled: true,
+        form: 'settings-form',
+        name: 'settings-action',
         size: 'sm',
         type: 'submit',
+        value: 'save',
         variant: 'secondary',
       }),
     ).toContain(
       '<button class="inline-flex items-center justify-center rounded-md border text-sm font-medium transition-colors',
     );
+    expect(
+      Button.definition.render({
+        children: 'Save',
+        form: 'settings-form',
+        name: 'settings-action',
+        type: 'submit',
+        value: 'save',
+      }),
+    ).toContain('form="settings-form" name="settings-action" type="submit" value="save"');
     expect(Button.definition.render({ children: 'Save', disabled: true })).toContain(
       ' disabled type="button"',
     );

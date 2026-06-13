@@ -195,6 +195,14 @@ Latest evidence:
   covering `domain({ add })` and renamed aliases without source-name compatibility extraction;
   `packages/drizzle/src/index.test.ts` and `conformance/drizzle-pin/src/index.test.ts` pin the
   surface with real Postgres Drizzle fixtures.
+- UI/gallery simple styled visual-baseline and button form-owner slice:
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+  exact `pnpm exec vp check packages/ui/src/button.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/badge.html.txt examples/gallery/src/visual-fixtures/breadcrumb.html.txt examples/gallery/src/visual-fixtures/button.html.txt examples/gallery/src/visual-fixtures/card.html.txt examples/gallery/src/visual-fixtures/kbd.html.txt examples/gallery/src/visual-fixtures/skeleton.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/ui/src/button.tsx` preserves external native `form`
+  ownership on styled buttons per SPEC §3.1 light-DOM/native-form fallback, while static gallery
+  fixtures and Chromium visual hashes now cover badge, breadcrumb, button, card, kbd, and skeleton
+  routes.
 - Phase 5 Vite plugin closed-app runtime guard slice:
   `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;

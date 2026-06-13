@@ -821,8 +821,15 @@ export function ButtonDemo(): string {
       <p data-demo-summary="no-js">
         Button keeps the native button element and submit/reset behavior available without JS.
       </p>
+      <form id="gallery-button-form" data-gallery-form="button" />
       <div data-ui-demo="button">
-        {Button.definition.render({ children: 'Save changes' })}
+        {Button.definition.render({
+          children: 'Save changes',
+          form: 'gallery-button-form',
+          name: 'gallery-action',
+          type: 'submit',
+          value: 'save',
+        })}
         {Button.definition.render({ children: 'Preview', variant: 'secondary' })}
         {Button.definition.render({ children: 'Archived', disabled: true, variant: 'ghost' })}
       </div>

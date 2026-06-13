@@ -9,6 +9,7 @@ export interface ButtonProps {
   children?: string;
   class?: ClassValue;
   disabled?: boolean;
+  form?: string;
   name?: string;
   size?: ButtonSize;
   type?: 'button' | 'submit' | 'reset';
@@ -46,6 +47,7 @@ export const Button = component('button', {
       <button
         class={cn(buttonClassNames({ size: props.size, variant: props.variant }), props.class)}
         disabled={props.disabled}
+        form={props.form}
         name={props.name}
         type={props.type ?? 'button'}
         value={props.value}

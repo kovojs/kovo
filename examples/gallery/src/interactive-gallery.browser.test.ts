@@ -101,12 +101,17 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
 import autocompleteStaticRouteHtml from './visual-fixtures/autocomplete.html.txt?raw';
+import badgeStaticRouteHtml from './visual-fixtures/badge.html.txt?raw';
+import breadcrumbStaticRouteHtml from './visual-fixtures/breadcrumb.html.txt?raw';
+import buttonStaticRouteHtml from './visual-fixtures/button.html.txt?raw';
+import cardStaticRouteHtml from './visual-fixtures/card.html.txt?raw';
 import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.txt?raw';
 import comboboxStaticRouteHtml from './visual-fixtures/combobox.html.txt?raw';
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
 import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
 import hoverCardStaticRouteHtml from './visual-fixtures/hover-card.html.txt?raw';
+import kbdStaticRouteHtml from './visual-fixtures/kbd.html.txt?raw';
 import menubarStaticRouteHtml from './visual-fixtures/menubar.html.txt?raw';
 import navigationMenuStaticRouteHtml from './visual-fixtures/navigation-menu.html.txt?raw';
 import numberFieldStaticRouteHtml from './visual-fixtures/number-field.html.txt?raw';
@@ -115,6 +120,7 @@ import popoverStaticRouteHtml from './visual-fixtures/popover.html.txt?raw';
 import radioGroupStaticRouteHtml from './visual-fixtures/radio-group.html.txt?raw';
 import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
 import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
+import skeletonStaticRouteHtml from './visual-fixtures/skeleton.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
 import toastStaticRouteHtml from './visual-fixtures/toast.html.txt?raw';
@@ -130,12 +136,17 @@ interface InteractiveDemoComponent {
 
 type StaticVisualFixturePath =
   | '/components/autocomplete'
+  | '/components/badge'
+  | '/components/breadcrumb'
+  | '/components/button'
+  | '/components/card'
   | '/components/checkbox-group'
   | '/components/combobox'
   | '/components/command'
   | '/components/context-menu'
   | '/components/dropdown-menu'
   | '/components/hover-card'
+  | '/components/kbd'
   | '/components/menubar'
   | '/components/navigation-menu'
   | '/components/number-field'
@@ -144,6 +155,7 @@ type StaticVisualFixturePath =
   | '/components/radio-group'
   | '/components/select'
   | '/components/slider'
+  | '/components/skeleton'
   | '/components/table'
   | '/components/tabs'
   | '/components/toast'
@@ -151,12 +163,17 @@ type StaticVisualFixturePath =
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/autocomplete': autocompleteStaticRouteHtml,
+  '/components/badge': badgeStaticRouteHtml,
+  '/components/breadcrumb': breadcrumbStaticRouteHtml,
+  '/components/button': buttonStaticRouteHtml,
+  '/components/card': cardStaticRouteHtml,
   '/components/checkbox-group': checkboxGroupStaticRouteHtml,
   '/components/combobox': comboboxStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
   '/components/context-menu': contextMenuStaticRouteHtml,
   '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
   '/components/hover-card': hoverCardStaticRouteHtml,
+  '/components/kbd': kbdStaticRouteHtml,
   '/components/menubar': menubarStaticRouteHtml,
   '/components/navigation-menu': navigationMenuStaticRouteHtml,
   '/components/number-field': numberFieldStaticRouteHtml,
@@ -165,6 +182,7 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/radio-group': radioGroupStaticRouteHtml,
   '/components/select': selectStaticRouteHtml,
   '/components/slider': sliderStaticRouteHtml,
+  '/components/skeleton': skeletonStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
   '/components/tabs': tabsStaticRouteHtml,
   '/components/toast': toastStaticRouteHtml,
@@ -446,6 +464,44 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     expect(await visualBaselineHash(autocompleteRoute)).toBe('b23aee53');
     expect(await visualBaselineHash(comboboxRoute)).toBe('38d910c8');
+
+    const badgeRoute = mountStaticGalleryRoute('/components/badge');
+    const breadcrumbRoute = mountStaticGalleryRoute('/components/breadcrumb');
+    const buttonRoute = mountStaticGalleryRoute('/components/button');
+    const cardRoute = mountStaticGalleryRoute('/components/card');
+    const kbdRoute = mountStaticGalleryRoute('/components/kbd');
+    const skeletonRoute = mountStaticGalleryRoute('/components/skeleton');
+
+    expect(visualGeometry(badgeRoute)).toEqual({
+      height: 491,
+      width: 860,
+    });
+    expect(visualGeometry(breadcrumbRoute)).toEqual({
+      height: 577,
+      width: 860,
+    });
+    expect(visualGeometry(buttonRoute)).toEqual({
+      height: 513,
+      width: 860,
+    });
+    expect(visualGeometry(cardRoute)).toEqual({
+      height: 553,
+      width: 860,
+    });
+    expect(visualGeometry(kbdRoute)).toEqual({
+      height: 491,
+      width: 860,
+    });
+    expect(visualGeometry(skeletonRoute)).toEqual({
+      height: 470,
+      width: 860,
+    });
+    expect(await visualBaselineHash(badgeRoute)).toBe('4af1bf12');
+    expect(await visualBaselineHash(breadcrumbRoute)).toBe('fa14c61f');
+    expect(await visualBaselineHash(buttonRoute)).toBe('ff922618');
+    expect(await visualBaselineHash(cardRoute)).toBe('d3536b91');
+    expect(await visualBaselineHash(kbdRoute)).toBe('70bf25ac');
+    expect(await visualBaselineHash(skeletonRoute)).toBe('827c88ad');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
