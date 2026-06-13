@@ -209,7 +209,7 @@ const expectedBehaviorContracts = {
   '/components/tabs': {
     changeReasons: 'trigger-click, keyboard, programmatic',
     dataState: 'active, inactive, disabled',
-    keyboard: 'Arrow keys move focus; activation mode controls selection',
+    keyboard: 'Arrow keys move focus; Enter or Space activates the focused tab in manual mode',
   },
   '/components/toast': {
     changeReasons: 'action-click, close-click, escape-key, timeout, programmatic',

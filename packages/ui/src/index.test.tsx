@@ -1798,6 +1798,14 @@ describe('@jiso/ui styled package foundation', () => {
         itemValue: 'audit',
       }),
     ).toContain('data-disabled="" data-state="inactive" disabled role="tab" tabIndex="-1"');
+    const activeUnselectedTab = TabsTrigger.definition.render({
+      ...state,
+      activeValue: 'activity',
+      children: 'Activity',
+      itemValue: 'activity',
+    });
+    expect(activeUnselectedTab).toContain('aria-selected="false"');
+    expect(activeUnselectedTab).toContain('data-state="inactive" role="tab" tabIndex="0"');
     expect(
       TabsPanel.definition.render({
         ...state,

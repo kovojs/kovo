@@ -240,6 +240,19 @@ export function tabsKeyDown(
 ): TabsKeyboardResult | undefined {
   if (event.defaultPrevented) return;
 
+  if (tabsActivationKey(event.key)) {
+    const activeValue = state.activeValue ?? state.value;
+    const result = setTabsValue(state, activeValue, 'keyboard', options);
+    const rovingState = activeValue === undefined ? state : { ...state, activeValue };
+    event.preventDefault();
+
+    return {
+      ...result,
+      activeValue,
+      index: tabsRovingIndex(rovingState),
+    };
+  }
+
   const intent = navigationIntentFromKey(event.key, {
     ...(state.dir === undefined ? {} : { dir: state.dir }),
     ...(state.orientation === undefined ? {} : { orientation: state.orientation }),
@@ -324,4 +337,8 @@ function tabsDataOrientation(
 
 function tabsActivationMode(state: TabsState): TabsActivationMode {
   return state.activationMode === 'manual' ? 'manual' : 'automatic';
+}
+
+function tabsActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ' || key === 'Spacebar';
 }

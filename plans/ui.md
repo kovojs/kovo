@@ -57,7 +57,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       delegated gallery input handling through refreshed generated artifacts and a browser test.
       Combobox and autocomplete now select highlighted options from Enter keydown, restore previous
       value/input state when option-select follow-up changes are canceled, and prove generated
-      keydown handlers through browser-backed gallery tests.
+      keydown handlers through browser-backed gallery tests. Tabs manual activation now selects
+      the focused tab from Enter/Space through the cancelable keyboard path and proves generated
+      keydown selection in the compiled gallery.
 
 ## Open Work
 
@@ -67,7 +69,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       disabled/native constraint/autofill attributes and gallery validity hints; field controls
       and fieldsets now preserve native `form` owner attributes through headless helpers, styled
       wrappers, static gallery contracts, generated interactive artifacts, and browser-backed
-      `FormData`/`checkValidity()` evidence.
+      `FormData`/`checkValidity()` evidence. Tabs manual Enter/Space activation is covered by
+      headless tests, styled `activeValue` forwarding, static gallery tests, refreshed generated
+      artifacts, and a browser-backed generated keydown selection test.
 - [ ] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -111,6 +115,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Tabs manual keyboard activation slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/tabs.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t tabs`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t tabs)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/tabs.ts packages/headless-ui/src/primitives/tabs.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/tabs-demo.tsx examples/gallery/src/generated/interactive/tabs-demo.tsx examples/gallery/src/generated/interactive/tabs-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Menubar keyboard selection slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts`;
       `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;

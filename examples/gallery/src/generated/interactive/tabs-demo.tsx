@@ -9,6 +9,7 @@ import {
 } from '@jiso/headless-ui/primitives';
 
 export interface GalleryTabsDemoState {
+  activeValue: string;
   value: string;
 }
 
@@ -21,9 +22,11 @@ const tabsItems = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryTabsDemo = component('gallery-tabs-demo', {
-  state: () => ({ value: 'overview' }),
+  state: () => ({ activeValue: 'overview', value: 'overview' }),
   render: (_queries: Record<string, never>, state: GalleryTabsDemoState) => {
     const rootState = {
+      activationMode: 'manual' as const,
+      activeValue: state.activeValue,
       items: tabsItems,
       value: state.value,
     };
@@ -33,13 +36,11 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
         {...tabsRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="tabs"
+        on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=783062b3#GalleryTabsDemo$section_keydown"
         fw-c="gallery-tabs-demo"
-        fw-state='{"value":"overview"}'
+        fw-state='{"activeValue":"overview","value":"overview"}'
       >
-        <div
-          {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}
-          on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=740d7629#GalleryTabsDemo$div_keydown"
-        >
+        <div {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}>
           <button
             {...tabsTriggerAttributes({
               ...rootState,
@@ -47,7 +48,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'overview',
               panelId: 'gallery-tabs-overview-panel',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=740d7629#GalleryTabsDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=783062b3#GalleryTabsDemo$button_click"
           >
             Overview
           </button>
@@ -58,7 +59,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'details',
               panelId: 'gallery-tabs-details-panel',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=740d7629#GalleryTabsDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=783062b3#GalleryTabsDemo$button_click_2"
           >
             Details
           </button>

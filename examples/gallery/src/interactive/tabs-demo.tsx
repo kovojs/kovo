@@ -8,6 +8,7 @@ import {
 } from '@jiso/headless-ui/primitives';
 
 export interface GalleryTabsDemoState {
+  activeValue: string;
   value: string;
 }
 
@@ -20,9 +21,11 @@ const tabsItems = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryTabsDemo = component('gallery-tabs-demo', {
-  state: () => ({ value: 'overview' }),
+  state: () => ({ activeValue: 'overview', value: 'overview' }),
   render: (_queries: Record<string, never>, state: GalleryTabsDemoState) => {
     const rootState = {
+      activationMode: 'manual' as const,
+      activeValue: state.activeValue,
       items: tabsItems,
       value: state.value,
     };
@@ -32,13 +35,44 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
         {...tabsRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="tabs"
+        onKeyDown={() => {
+          state.activeValue = 'details';
+          state.value = 'details';
+          const doc = Reflect['get'](globalThis, 'document');
+          const overview = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-trigger')
+            : undefined;
+          const details = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-trigger')
+            : undefined;
+          const overviewPanel = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-panel')
+            : undefined;
+          const detailsPanel = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-panel')
+            : undefined;
+
+          if (overview) {
+            overview['tabIndex'] = -1;
+            Object(overview)['setAttribute']?.call(overview, 'aria-selected', 'false');
+            Object(overview)['setAttribute']?.call(overview, 'data-state', 'inactive');
+          }
+          if (details) {
+            details['tabIndex'] = 0;
+            Object(details)['setAttribute']?.call(details, 'aria-selected', 'true');
+            Object(details)['setAttribute']?.call(details, 'data-state', 'active');
+          }
+          if (overviewPanel) {
+            overviewPanel['hidden'] = true;
+            Object(overviewPanel)['setAttribute']?.call(overviewPanel, 'data-state', 'inactive');
+          }
+          if (detailsPanel) {
+            detailsPanel['hidden'] = false;
+            Object(detailsPanel)['setAttribute']?.call(detailsPanel, 'data-state', 'active');
+          }
+        }}
       >
-        <div
-          {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}
-          onKeyDown={() => {
-            state.value = state.value === 'overview' ? 'details' : 'overview';
-          }}
-        >
+        <div {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}>
           <button
             {...tabsTriggerAttributes({
               ...rootState,
@@ -47,6 +81,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               panelId: 'gallery-tabs-overview-panel',
             })}
             onClick={() => {
+              state.activeValue = 'overview';
               state.value = 'overview';
               const doc = Reflect['get'](globalThis, 'document');
               const overview = doc
@@ -92,6 +127,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               panelId: 'gallery-tabs-details-panel',
             })}
             onClick={() => {
+              state.activeValue = 'details';
               state.value = 'details';
               const doc = Reflect['get'](globalThis, 'document');
               const overview = doc

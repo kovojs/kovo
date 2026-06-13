@@ -481,9 +481,9 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(tabs).toContain('data-gallery-interactive="tabs"');
-    expect(tabs).toContain('fw-state=\'{"value":"overview"}\'');
+    expect(tabs).toContain('fw-state=\'{"activeValue":"overview","value":"overview"}\'');
     expect(tabs).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTabsDemo\$div_keydown"/,
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTabsDemo\$section_keydown"/,
     );
     expect(tabs).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTabsDemo\$button_click_2"/,
@@ -1080,19 +1080,19 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(switchState).toEqual({ checked: true });
 
-    const tabsState = { value: 'overview' };
-    clientHandler(tabs, 'GalleryTabsDemo$div_keydown')(new Event('keydown'), {
+    const tabsState = { activeValue: 'overview', value: 'overview' };
+    clientHandler(tabs, 'GalleryTabsDemo$section_keydown')(keyEvent('Enter'), {
       params: {},
       signal,
       state: tabsState,
     });
-    expect(tabsState).toEqual({ value: 'details' });
+    expect(tabsState).toEqual({ activeValue: 'details', value: 'details' });
     clientHandler(tabs, 'GalleryTabsDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: tabsState,
     });
-    expect(tabsState).toEqual({ value: 'overview' });
+    expect(tabsState).toEqual({ activeValue: 'overview', value: 'overview' });
 
     const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
     clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {

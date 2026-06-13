@@ -215,6 +215,85 @@ describe('headless-ui tabs primitive', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it('activates the focused tab from Enter or Space in manual activation mode', () => {
+    const reasons: string[] = [];
+    const enterEvent = tabsKeyboardEvent('Enter');
+    const enterResult = tabsKeyDown(
+      enterEvent,
+      {
+        activationMode: 'manual',
+        activeValue: 'wire',
+        items: billingItems,
+        value: 'card',
+      },
+      {
+        onValueChange(detail) {
+          reasons.push(`${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(enterResult).toMatchObject({
+      activeValue: 'wire',
+      changed: true,
+      index: 2,
+      value: 'wire',
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+
+    const spacebarEvent = tabsKeyboardEvent('Spacebar');
+    const spacebarResult = tabsKeyDown(
+      spacebarEvent,
+      {
+        activationMode: 'manual',
+        activeValue: 'card',
+        items: billingItems,
+        value: 'wire',
+      },
+      {
+        onValueChange(detail) {
+          reasons.push(`${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(spacebarResult).toMatchObject({
+      activeValue: 'card',
+      changed: true,
+      index: 0,
+      value: 'card',
+    });
+    expect(spacebarEvent.defaultPrevented).toBe(true);
+    expect(reasons).toEqual(['keyboard:wire', 'keyboard:card']);
+  });
+
+  it('restores the selected value when manual keyboard activation is canceled', () => {
+    const event = tabsKeyboardEvent(' ');
+    const result = tabsKeyDown(
+      event,
+      {
+        activationMode: 'manual',
+        activeValue: 'wire',
+        items: billingItems,
+        value: 'card',
+      },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      activeValue: 'wire',
+      changed: false,
+      index: 2,
+      value: 'card',
+    });
+    expect(result?.detail?.defaultPrevented).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('does not clear selection when keyboard navigation has no enabled tab target', () => {
     const event = tabsKeyboardEvent('ArrowRight');
     const result = tabsKeyDown(event, {

@@ -165,7 +165,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
     expect(root.getAttribute('fw-state')).toBe('{"value":"shipping"}');
     expect(shipping.getAttribute('aria-expanded')).toBe('true');
@@ -216,7 +216,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="alert-dialog-open"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
     expect(root.getAttribute('fw-state')).toBe('{"open":false}');
     expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
@@ -1260,7 +1260,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('updates tabs stamped state from generated click handlers', async () => {
+  it('updates tabs stamped state from generated click and manual keyboard handlers', async () => {
     const root = mountInteractiveDemo(GalleryTabsDemo);
     const overview = required(
       root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
@@ -1272,9 +1272,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const overviewPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'));
     const detailsPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-details-panel'));
     const auditPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-audit-panel'));
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe('{"value":"overview"}');
+    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"overview","value":"overview"}');
     expect(overview.getAttribute('aria-selected')).toBe('true');
     expect(overview.tabIndex).toBe(0);
     expect(details.getAttribute('aria-selected')).toBe('false');
@@ -1286,6 +1286,29 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(overviewPanel.hidden).toBe(false);
     expect(detailsPanel.hidden).toBe(true);
     expect(auditPanel.hidden).toBe(true);
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+
+    await vi.waitFor(() => {
+      const currentOverview = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
+      );
+      const currentDetails = required(
+        root.querySelector<HTMLButtonElement>('#gallery-tabs-details-trigger'),
+      );
+      const currentOverviewPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'),
+      );
+      const currentDetailsPanel = required(
+        root.querySelector<HTMLElement>('#gallery-tabs-details-panel'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"details","value":"details"}');
+      expect(currentOverview.getAttribute('aria-selected')).toBe('false');
+      expect(currentOverviewPanel.hidden).toBe(true);
+      expect(currentDetails.getAttribute('aria-selected')).toBe('true');
+      expect(currentDetailsPanel.hidden).toBe(false);
+    });
 
     details.click();
 
@@ -1312,7 +1335,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLElement>('#gallery-tabs-audit-panel'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe('{"value":"details"}');
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"details","value":"details"}');
       expect(currentOverview.getAttribute('aria-selected')).toBe('false');
       expect(currentOverviewPanel.hidden).toBe(true);
       expect(currentDetails.getAttribute('aria-selected')).toBe('true');
