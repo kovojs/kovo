@@ -2711,7 +2711,7 @@ interface ExtractedWriteCall {
 }
 
 interface ExtractedReadSource {
-  operation: 'insert-select' | 'update-from';
+  operation: 'insert-select' | 'update-from' | 'update-predicate';
   tableExpression: string;
 }
 
@@ -9115,18 +9115,14 @@ function extractReadSourcesFromWriteChain(
     ...(Node.isCallExpression(chain) ? [chain] : []),
     ...chain.getDescendantsOfKind(SyntaxKind.CallExpression),
   ];
-  const sourceOperation =
-    operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select')
-      ? 'insert-select'
-      : operation === 'update' && calls.some((call) => propertyAccessCallName(call) === 'from')
-        ? 'update-from'
-        : null;
-  if (!sourceOperation) return [];
-
+  const hasInsertSelect =
+    operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select');
   const sources: ExtractedReadSource[] = [];
 
   for (const call of calls) {
     if (!isReadSourceCall(call)) continue;
+    const sourceOperation = writeReadSourceOperation(call, chain, operation);
+    if (!sourceOperation) continue;
 
     const tableArgument = call.getArguments()[0];
     const tableExpression = tableArgument ? tableExpressionText(tableArgument) : '';
@@ -9137,10 +9133,46 @@ function extractReadSourcesFromWriteChain(
     });
   }
 
-  // SPEC §10-§11: an opaque insert-select/update-from source is visible as FW406, not guessed.
-  return sources.length > 0
+  // SPEC §10-§11: an opaque write read source is visible as FW406, not guessed.
+  return sources.length > 0 || !hasInsertSelect
     ? sources
-    : [{ operation: sourceOperation, tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
+    : [{ operation: 'insert-select', tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
+}
+
+function writeReadSourceOperation(
+  call: CallExpression,
+  chain: Node,
+  operation: string,
+): ExtractedReadSource['operation'] | undefined {
+  if (operation === 'insert') {
+    return callExpressionsInNode(chain).some(
+      (candidate) => propertyAccessCallName(candidate) === 'select',
+    )
+      ? 'insert-select'
+      : undefined;
+  }
+
+  if (operation !== 'update') return undefined;
+  return callExpressionContinuesToChain(call, chain) ? 'update-from' : 'update-predicate';
+}
+
+function callExpressionContinuesToChain(call: CallExpression, chain: Node): boolean {
+  let current: Node = call;
+
+  while (current !== chain) {
+    const parent = current.getParent();
+    if (parent && Node.isPropertyAccessExpression(parent) && parent.getExpression() === current) {
+      current = parent;
+      continue;
+    }
+    if (parent && Node.isCallExpression(parent) && parent.getExpression() === current) {
+      current = parent;
+      continue;
+    }
+    return false;
+  }
+
+  return true;
 }
 
 function isReadSourceCall(call: CallExpression): boolean {

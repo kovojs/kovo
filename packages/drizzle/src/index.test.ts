@@ -7451,6 +7451,61 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('keeps project CTE builder query surfaces visible as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes([
+          '$with(name: string): unknown;',
+          'with(value: unknown): { select(value?: unknown): { from(table: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/cte-builder", {',
+            '  load(_input: unknown, db: PgDatabase) {',
+            '    const active = db.$with("active_products");',
+            '    return db.with(active).select({ id: products.id }).from(products);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
+            severity: 'warn',
+            site: 'product.queries.ts:7',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.with().',
+            severity: 'warn',
+            site: 'product.queries.ts:7',
+          },
+        ],
+        query: 'product/cte-builder',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('marks project computed receiver methods only for typed Drizzle symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -10622,6 +10677,103 @@ export interface CommerceInvalidationSets {
           },
         ],
         unresolved: [],
+      },
+    });
+  });
+
+  it('extracts project write predicate subquery read sources', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import { inArray } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", { productId: text("product_id").notNull() }, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export async function reserveCartProducts(db: PgDatabase) {',
+            '  await db.update(products).set({ reserved: true }).where(inArray(products.id, db.select({ productId: cartItems.productId }).from(cartItems)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      reserveCartProducts: {
+        reads: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:8',
+            source: 'update-predicate',
+            via: 'cart_items',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks unresolved project write predicate subquery read sources as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import { inArray } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function reserveCartProducts(db: PgDatabase) {',
+            '  await db.update(products).set({ reserved: true }).where(inArray(products.id, db.select().from(tableFor("cart_items"))));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      reserveCartProducts: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:7',
+            via: 'products',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Update predicate read source could not be resolved to a Drizzle table.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
       },
     });
   });

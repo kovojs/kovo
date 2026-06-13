@@ -106,6 +106,10 @@ FW406 instead of fabricated facts.
 
 Latest evidence:
 
+- [x] Drizzle update predicate subquery reads now have distinct `update-predicate` provenance, exact
+      read-source coverage, and FW406 degradation for opaque predicate subquery sources. Verified
+      with focused predicate/CTE tests, full Drizzle package plus pinned conformance tests, `tsc`,
+      exact `vp check`, and `git diff --check`.
 - [x] Static class member callbacks now run the same project local-helper and unresolved-surface pass
       as other callback forms. Package and pinned Drizzle conformance tests cover exact helper facts
       and FW406 degradation for unresolved helpers/receiver execution.

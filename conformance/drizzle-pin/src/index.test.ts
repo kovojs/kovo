@@ -9609,6 +9609,54 @@ describe('Drizzle pinned subset conformance', () => {
     );
   });
 
+  it('pins project update predicate subquery read sources under real Drizzle imports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import { inArray } from 'drizzle-orm';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', { id: text('id').primaryKey() }, jiso({ domain: 'product', key: 'id' }));",
+            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function reserveCartProducts(db: PgDatabase<any, any, any>) {',
+            '  await db.update(products).set({ reserved: true }).where(inArray(products.id, db.select({ productId: cartItems.productId }).from(cartItems)));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      reserveCartProducts: {
+        reads: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:9',
+            source: 'update-predicate',
+            via: 'cart_items',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins project conditional table FW406 when an opaque branch remains', () => {
     const graph = extractTouchGraphFromProject({
       files: [
