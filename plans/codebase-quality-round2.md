@@ -1174,6 +1174,13 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Fragment target static-fact cleanup: `pnpm exec vitest --run
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/fragment-targets.test.ts
+packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/scan/parse.ts`; `git diff --check`. Evidence:
+  `componentFragmentTargetNames()` now consumes parser-owned component option static values instead
+  of comparing raw option source text.
 - Component option static-fact cleanup: `pnpm exec vitest --run
 packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-coverage.test.ts
 packages/compiler/src/fragment-targets.test.ts packages/compiler/src/compile-component.test.ts

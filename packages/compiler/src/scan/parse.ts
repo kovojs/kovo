@@ -385,7 +385,7 @@ export function componentExplicitNames(model: ComponentModuleModel): string[] {
 
 export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
   return model.components.flatMap((component) => {
-    if (component.options.find((option) => option.key === 'fragmentTarget')?.value !== 'true') {
+    if (component.options.find((option) => option.key === 'fragmentTarget')?.staticValue !== true) {
       return [];
     }
 
