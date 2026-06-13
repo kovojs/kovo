@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  applyInlineQueryEventToRuntime,
+  installInlineQueryEventHydration,
+  type QueryEventHydrationTarget,
+} from './query-events.js';
 import { installJisoLoader, type DelegatedEvent } from './index.js';
 import {
+  applyQueryChunksToRuntime,
   applyQueryChunksToStore,
   applyQueryChunkToStore,
   createQueryScriptHydrationLedger,
@@ -183,6 +189,84 @@ describe('query store hydration and refetch', () => {
     expect(appliedStore.get('product')).toBeUndefined();
     expect(hydratedPlan).toHaveBeenCalledWith({ stock: 4 });
     expect(appliedPlan).toHaveBeenCalledWith({ stock: 4 });
+  });
+
+  it('applies inline query events through the same store and plan path as mutation chunks', () => {
+    const store = createQueryStore();
+    const binding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
+    };
+    const root = {
+      querySelectorAll(selector: string) {
+        if (selector === '[data-bind]') return [binding];
+        if (selector === '*') return [];
+        return [];
+      },
+    };
+
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            body: '{"count":3}',
+            key: 'cart:c1',
+            name: 'cart',
+          },
+        },
+        {
+          queryPlans: { cart: { bindings: true } },
+          root,
+          store,
+        },
+      ),
+    ).toEqual(['cart:c1']);
+    expect(store.get('cart', 'cart:c1')).toEqual({ count: 3 });
+    expect(binding.textContent).toBe('3');
+
+    // SPEC.md §9.1/§9.4: the inline query event seam must reuse the same
+    // runtime query apply behavior as decoded mutation response chunks.
+    binding.textContent = '';
+    expect(
+      applyQueryChunksToRuntime(store, [{ key: 'cart:c1', name: 'cart', value: { count: 4 } }], {
+        queryPlans: { cart: { bindings: true } },
+        root,
+      }),
+    ).toEqual(['cart:c1']);
+    expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
+    expect(binding.textContent).toBe('4');
+  });
+
+  it('installs disposable inline query event hydration listeners', () => {
+    const store = createQueryStore();
+    const listeners = new Map<string, (event: { detail?: unknown }) => void>();
+    const target: QueryEventHydrationTarget = {
+      addEventListener(type: string, listener: (event: { detail?: unknown }) => void) {
+        listeners.set(type, listener);
+      },
+      removeEventListener(type: string, listener: (event: { detail?: unknown }) => void) {
+        if (listeners.get(type) === listener) listeners.delete(type);
+      },
+    };
+    const dispose = installInlineQueryEventHydration({ store, target });
+
+    listeners.get('jiso:query')?.({
+      detail: {
+        body: '{"count":1}',
+        name: 'cart',
+      },
+    });
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    dispose();
+    listeners.get('jiso:query')?.({
+      detail: {
+        body: '{"count":2}',
+        name: 'cart',
+      },
+    });
+    expect(listeners.has('jiso:query')).toBe(false);
+    expect(store.get('cart')).toEqual({ count: 1 });
   });
 
   it('hydrates each server query script once while accepting later script nodes', () => {

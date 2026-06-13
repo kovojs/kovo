@@ -291,6 +291,47 @@ describe('runtime browser suite', () => {
     loader.dispose();
   });
 
+  it('hydrates inline query events into the runtime store and DOM bindings', async () => {
+    document.body.innerHTML = '<output data-bind="cart.count"></output>';
+    const store = createQueryStore();
+    const output = document.querySelector('output');
+    if (!output) throw new Error('missing query binding output');
+
+    const loader = installJisoLoader({
+      importModule: vi.fn(),
+      queryPlans: { cart: { bindings: true } },
+      queryStore: store,
+      root: document,
+    });
+
+    window.dispatchEvent(
+      new CustomEvent('jiso:query', {
+        detail: {
+          body: '{"count":5}',
+          name: 'cart',
+        },
+      }),
+    );
+
+    expect(store.get('cart')).toEqual({ count: 5 });
+    expect(output.textContent).toBe('5');
+
+    loader.dispose();
+    window.dispatchEvent(
+      new CustomEvent('jiso:query', {
+        detail: {
+          body: '{"count":6}',
+          name: 'cart',
+        },
+      }),
+    );
+
+    // SPEC.md §9.1/§9.4: inline enhanced responses publish the same query
+    // truth as mutation responses, but loader disposal must remove hydration.
+    expect(store.get('cart')).toEqual({ count: 5 });
+    expect(output.textContent).toBe('5');
+  });
+
   it('preserves L0 light-DOM IDREF and form behavior without handler imports', async () => {
     const root = document.createElement('main');
     root.innerHTML = [

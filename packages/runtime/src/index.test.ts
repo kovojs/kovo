@@ -851,7 +851,13 @@ describe('runtime loader', () => {
 
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
-    expect([...root.listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
+    expect([...root.listeners.keys()]).toEqual([
+      'click',
+      'submit',
+      'input',
+      'change',
+      'jiso:query',
+    ]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
   });
 

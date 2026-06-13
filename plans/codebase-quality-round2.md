@@ -420,6 +420,17 @@ packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
 packages/runtime/src/loader.ts packages/runtime/src/loader-lifecycle.ts
 packages/runtime/src/loader-lifecycle.test.ts IMPLEMENT_v1.md
 plans/codebase-quality-round2.md`.
+- Inline query-event hydration now has a runtime-owned seam in `query-events.ts`: inline
+  `jiso:query` events parse into canonical query chunks and delegate to the shared
+  `query-apply.ts` runtime apply helper, while mutation responses also use that helper for store
+  writes and compiled query update plans (SPEC.md §9.1/§9.4). Browser coverage proves global
+  inline query events hydrate the store, update DOM bindings, and stop after loader disposal.
+  Same-session evidence: `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest
+--config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm
+exec vp check packages/runtime/src/query-events.ts packages/runtime/src/query-apply.ts
+packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader.ts
+packages/runtime/src/query.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts
+packages/runtime/src/index.browser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
@@ -467,6 +478,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/loader.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader-lifecycle.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/query-events.ts packages/runtime/src/query-apply.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader.ts packages/runtime/src/query.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts packages/runtime/src/index.browser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server

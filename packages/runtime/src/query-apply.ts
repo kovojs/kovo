@@ -1,5 +1,17 @@
+import { definedProps } from './defined-props.js';
 import type { OptionalQuerySelectorAllRootLike } from './dom-like.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
+import {
+  applyCompiledQueryUpdatePlan,
+  createQueryBindingIndex,
+  supportsQueryBindings,
+} from './query-bindings.js';
+import type {
+  CompiledQueryUpdatePlan,
+  CompiledQueryUpdatePlans,
+  QueryBindingIndex,
+  QueryBindingRoot,
+} from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { queryWireKey } from './query-store.js';
 import { readQueryScriptChunks } from './wire-parser.js';
@@ -21,6 +33,11 @@ export interface QueryScriptHydrationLedger {
 export interface ApplyQueryChunksToStoreOptions {
   afterApplyQuery?: (query: QueryChunk, value: unknown) => void;
   applyQuery?: QueryApplyInterposition;
+}
+
+export interface ApplyQueryChunksToRuntimeOptions extends ApplyQueryChunksToStoreOptions {
+  queryPlans?: CompiledQueryUpdatePlans;
+  root?: unknown;
 }
 
 export function applyQueryChunkToStore(
@@ -49,6 +66,28 @@ export function applyQueryChunksToStore(
   }
 
   return applied;
+}
+
+export function applyQueryChunksToRuntime(
+  store: QueryStore,
+  queries: readonly QueryChunk[],
+  options: ApplyQueryChunksToRuntimeOptions = {},
+): readonly string[] {
+  const readBindingIndex = createLazyBindingIndexReader();
+
+  return applyQueryChunksToStore(store, queries, {
+    afterApplyQuery(query, value) {
+      applyCompiledQueryUpdatePlanIfSupported(
+        options.root,
+        query.name,
+        value,
+        options.queryPlans?.[query.name],
+        readBindingIndex,
+      );
+      options.afterApplyQuery?.(query, value);
+    },
+    ...definedProps({ applyQuery: options.applyQuery }),
+  });
 }
 
 export function hydrateQueryScripts(
@@ -92,4 +131,27 @@ export function createQueryScriptHydrationLedger(store: QueryStore): QueryScript
       return hydrated;
     },
   };
+}
+
+function createLazyBindingIndexReader(): (root: QueryBindingRoot) => QueryBindingIndex {
+  let bindingIndex: QueryBindingIndex | undefined;
+
+  return (root) => {
+    bindingIndex ??= createQueryBindingIndex(root);
+    return bindingIndex;
+  };
+}
+
+function applyCompiledQueryUpdatePlanIfSupported(
+  root: unknown,
+  queryName: string,
+  value: unknown,
+  plan: CompiledQueryUpdatePlan = {},
+  readBindingIndex?: (root: QueryBindingRoot) => QueryBindingIndex,
+): void {
+  if (!root || !supportsQueryBindings(root)) return;
+
+  const options =
+    plan.bindings === false || !readBindingIndex ? {} : { bindingIndex: readBindingIndex(root) };
+  applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
 }

@@ -12,6 +12,9 @@ import type {
 } from './loader-lifecycle.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
+import { installInlineQueryEventHydration } from './query-events.js';
+import type { QueryEventHydrationTarget } from './query-events.js';
+import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import { queryScriptsFromRoot } from './query-apply.js';
@@ -24,6 +27,8 @@ export interface JisoLoaderOptions {
   focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
+  queryEventTarget?: QueryEventHydrationTarget;
+  queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
   requestIdle?: (callback: () => void) => void;
   visibleObserver?: VisibleObserverFactory;
@@ -98,6 +103,25 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     );
   }
 
+  if (options.queryStore) {
+    disposers.push(
+      installInlineQueryEventHydration({
+        onError(error) {
+          reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
+        },
+        root: options.root,
+        store: options.queryStore,
+        target:
+          options.queryEventTarget ??
+          globalQueryEventTarget() ??
+          (options.root as unknown as QueryEventHydrationTarget),
+        ...definedProps({
+          queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
+        }),
+      }),
+    );
+  }
+
   disposers.push(installExecutionTriggers(options, islandSignalScope));
   if (enhancedMutationSetup?.dispose) {
     disposers.push(enhancedMutationSetup.dispose);
@@ -112,4 +136,8 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     },
     events,
   };
+}
+
+function globalQueryEventTarget(): QueryEventHydrationTarget | undefined {
+  return typeof globalThis.addEventListener === 'function' ? globalThis : undefined;
 }

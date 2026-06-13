@@ -16,16 +16,29 @@ export type {
   TemplateStampItem,
 } from './query-bindings.js';
 export {
+  applyQueryChunksToRuntime,
   createQueryScriptHydrationLedger,
   hydrateQueryScripts,
   queryScriptsFromRoot,
 } from './query-apply.js';
 export { createQueryStore } from './query-store.js';
 export type {
+  ApplyQueryChunksToRuntimeOptions,
   QueryScriptHydrationLedger,
   QueryScriptLike,
   QueryScriptRootLike,
 } from './query-apply.js';
+export {
+  applyInlineQueryEventToRuntime,
+  installInlineQueryEventHydration,
+} from './query-events.js';
+export type {
+  ApplyInlineQueryEventOptions,
+  InlineQueryEvent,
+  InlineQueryEventDetail,
+  InstallInlineQueryEventHydrationOptions,
+  QueryEventHydrationTarget,
+} from './query-events.js';
 export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
 export { refetchQueries } from './query-refetch.js';
 export type {

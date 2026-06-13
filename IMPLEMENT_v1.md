@@ -53,6 +53,13 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
 packages/runtime/src/loader-lifecycle.ts
 packages/runtime/src/loader-lifecycle.test.ts IMPLEMENT_v1.md
 plans/codebase-quality-round2.md`.
+      Evidence 2026-06-13: inline `jiso:query` events now hydrate through
+      `packages/runtime/src/query-events.ts`, which delegates to the shared
+      `packages/runtime/src/query-apply.ts` runtime apply helper used by mutation
+      responses for store writes and compiled query update plans (SPEC §9.1/§9.4).
+      Same-session evidence: `pnpm exec vitest --run packages/runtime/src` and
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
