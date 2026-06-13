@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  fwExplainComponentAssertionFact,
+  fwExplainComponentDeriveFacts,
+  fwExplainComponentHandlerFacts,
+  fwExplainComponentMergeFacts,
+  fwExplainComponentTriggerFacts,
   fwExplainEndpointAssertionFact,
   fwExplainEndpointFacts,
   fwExplainField,
@@ -14,6 +19,8 @@ import {
   fwExplainScopeAuditAssertionFact,
   fwExplainScopeAuditFacts,
   fwExplainSummary,
+  fwExplainUnguardedAssertionFact,
+  fwExplainUnguardedFacts,
   fwExplainUpdateConsumerMap,
   fwExplainUpdateConsumers,
   fwExplainUpdateTargets,
@@ -249,6 +256,112 @@ describe('@jiso/test fw explain fixture seam', () => {
   });
 
   it('exposes rawless assertion facts for endpoint and scope audit explanations', () => {
+    const componentOutput = [
+      'fw-explain/v1',
+      'COMPONENT CartBadge',
+      'queries: cart',
+      'fragments: cart-badge',
+      'HANDLER click export=CartBadge$button_click ref=/components/cart-badge.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
+      'DERIVE CartBadge$isEmpty inputs=cart ref=/components/cart-badge.js#CartBadge$isEmpty target=data-bind:hidden',
+      'TRIGGER visible export=CartBadge$mountChart ref=/components/cart-badge.js#CartBadge$mountChart deps=cart justification=charts are below the fold',
+      'MERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-',
+      'MERGE button attr=data-bind:hidden rule=single-binding-writer decision=diagnostic diagnostics=FW233',
+      '',
+    ].join('\n');
+
+    expect(fwExplainComponentHandlerFacts(componentOutput)).toEqual([
+      {
+        captures: ['ctx', 'element-params'],
+        event: 'click',
+        exportName: 'CartBadge$button_click',
+        params: ['itemId'],
+        ref: '/components/cart-badge.js#CartBadge$button_click',
+        substitution: '-',
+      },
+    ]);
+    expect(fwExplainComponentDeriveFacts(componentOutput)).toEqual([
+      {
+        inputs: ['cart'],
+        name: 'CartBadge$isEmpty',
+        ref: '/components/cart-badge.js#CartBadge$isEmpty',
+        target: 'data-bind:hidden',
+      },
+    ]);
+    expect(fwExplainComponentTriggerFacts(componentOutput)).toEqual([
+      {
+        deps: ['cart'],
+        exportName: 'CartBadge$mountChart',
+        justification: 'charts are below the fold',
+        ref: '/components/cart-badge.js#CartBadge$mountChart',
+        trigger: 'visible',
+      },
+    ]);
+    expect(fwExplainComponentMergeFacts(componentOutput)).toEqual([
+      {
+        attr: 'aria-expanded',
+        decision: 'primitive',
+        diagnostics: [],
+        element: 'button',
+        rule: 'primitive-owned',
+      },
+      {
+        attr: 'data-bind:hidden',
+        decision: 'diagnostic',
+        diagnostics: ['FW233'],
+        element: 'button',
+        rule: 'single-binding-writer',
+      },
+    ]);
+    expect(fwExplainComponentAssertionFact({ exitCode: 0, output: componentOutput })).toEqual({
+      derives: [
+        {
+          inputs: ['cart'],
+          name: 'CartBadge$isEmpty',
+          ref: '/components/cart-badge.js#CartBadge$isEmpty',
+          target: 'data-bind:hidden',
+        },
+      ],
+      exitCode: 0,
+      fragments: ['cart-badge'],
+      handlers: [
+        {
+          captures: ['ctx', 'element-params'],
+          event: 'click',
+          exportName: 'CartBadge$button_click',
+          params: ['itemId'],
+          ref: '/components/cart-badge.js#CartBadge$button_click',
+          substitution: '-',
+        },
+      ],
+      merges: [
+        {
+          attr: 'aria-expanded',
+          decision: 'primitive',
+          diagnostics: [],
+          element: 'button',
+          rule: 'primitive-owned',
+        },
+        {
+          attr: 'data-bind:hidden',
+          decision: 'diagnostic',
+          diagnostics: ['FW233'],
+          element: 'button',
+          rule: 'single-binding-writer',
+        },
+      ],
+      queries: ['cart'],
+      subject: 'COMPONENT CartBadge',
+      triggers: [
+        {
+          deps: ['cart'],
+          exportName: 'CartBadge$mountChart',
+          justification: 'charts are below the fold',
+          ref: '/components/cart-badge.js#CartBadge$mountChart',
+          trigger: 'visible',
+        },
+      ],
+      version: 'fw-explain/v1',
+    });
     expect(
       fwExplainEndpointAssertionFact({
         exitCode: 0,
@@ -301,6 +414,65 @@ describe('@jiso/test fw explain fixture seam', () => {
         },
       ],
       subject: 'UNSCOPED',
+      summary: { total: '1' },
+      version: 'fw-explain/v1',
+    });
+    expect(
+      fwExplainUnguardedFacts(
+        [
+          'fw-explain/v1',
+          'UNGUARDED',
+          'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=checked',
+          'MUTATION cart/add guards=- writes=cart invalidates=- manual-invalidates=-',
+          'PAGE /cart guards=- queries=cart',
+          'QUERY cart guards=- reads=cart',
+          'SUMMARY total=4',
+          '',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        fields: { auth: '-', csrf: 'checked', method: 'GET', mount: 'exact', path: '/health' },
+        target: 'health',
+        targetKind: 'ENDPOINT',
+      },
+      {
+        fields: { guards: [], invalidates: [], 'manual-invalidates': [], writes: ['cart'] },
+        target: 'cart/add',
+        targetKind: 'MUTATION',
+      },
+      {
+        fields: { guards: [], queries: ['cart'] },
+        target: '/cart',
+        targetKind: 'PAGE',
+      },
+      {
+        fields: { guards: [], reads: ['cart'] },
+        target: 'cart',
+        targetKind: 'QUERY',
+      },
+    ]);
+    expect(
+      fwExplainUnguardedAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'UNGUARDED',
+          'QUERY cart guards=- reads=cart',
+          'SUMMARY total=1',
+          '',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      exitCode: 0,
+      records: [
+        {
+          fields: { guards: [], reads: ['cart'] },
+          target: 'cart',
+          targetKind: 'QUERY',
+        },
+      ],
+      subject: 'UNGUARDED',
       summary: { total: '1' },
       version: 'fw-explain/v1',
     });
@@ -425,6 +597,30 @@ describe('@jiso/test fw explain fixture seam', () => {
     expect(() =>
       fwExplainScopeAuditFacts('fw-explain/v1\nUNSCOPED\nUNSCOPED cart\n', 'UNSCOPED'),
     ).toThrow('fw explain UNSCOPED record is');
+    expect(() =>
+      fwExplainComponentHandlerFacts('fw-explain/v1\nCOMPONENT CartBadge\nHANDLER click\n'),
+    ).toThrow('fw explain HANDLER record is');
+    expect(() =>
+      fwExplainComponentDeriveFacts('fw-explain/v1\nCOMPONENT CartBadge\nDERIVE value\n'),
+    ).toThrow('fw explain DERIVE record is');
+    expect(() =>
+      fwExplainComponentTriggerFacts('fw-explain/v1\nCOMPONENT CartBadge\nTRIGGER visible\n'),
+    ).toThrow('fw explain TRIGGER record is');
+    expect(() =>
+      fwExplainComponentMergeFacts('fw-explain/v1\nCOMPONENT CartBadge\nMERGE button\n'),
+    ).toThrow('fw explain MERGE record is');
+    expect(() => fwExplainUnguardedFacts('fw-explain/v1\nUNGUARDED\nQUERY\n')).toThrow(
+      'fw explain UNGUARDED record includes a target',
+    );
+    expect(() => fwExplainUnguardedFacts('fw-explain/v1\nUNGUARDED\nQUERY cart guards\n')).toThrow(
+      'fw explain record field is key=value',
+    );
+    expect(() =>
+      fwExplainUnguardedAssertionFact({
+        exitCode: 0,
+        output: 'fw-explain/v1\nENDPOINTS\nSUMMARY total=0\n',
+      }),
+    ).toThrow('fw explain unguarded subject is UNGUARDED: ENDPOINTS');
     expect(() =>
       fwExplainScopeAuditAssertionFact({
         exitCode: 0,

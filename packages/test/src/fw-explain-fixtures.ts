@@ -25,11 +25,49 @@ export interface FwExplainEndpointFact {
   writes: string[];
 }
 
+export interface FwExplainComponentHandlerFact {
+  captures: string[];
+  event: string;
+  exportName: string;
+  params: string[];
+  ref: string;
+  substitution: string;
+}
+
+export interface FwExplainComponentDeriveFact {
+  inputs: string[];
+  name: string;
+  ref: string;
+  target: string;
+}
+
+export interface FwExplainComponentTriggerFact {
+  deps: string[];
+  exportName: string;
+  justification: string;
+  ref: string;
+  trigger: string;
+}
+
+export interface FwExplainComponentMergeFact {
+  attr: string;
+  decision: string;
+  diagnostics: string[];
+  element: string;
+  rule: string;
+}
+
 export interface FwExplainScopeAuditFact {
   domain: string;
   reason: string;
   scope: string;
   site: string;
+  target: string;
+  targetKind: string;
+}
+
+export interface FwExplainUnguardedFact {
+  fields: Record<string, string | string[]>;
   target: string;
   targetKind: string;
 }
@@ -42,10 +80,30 @@ export interface FwExplainEndpointAssertionFact {
   version: FwExplainOutput['version'];
 }
 
+export interface FwExplainComponentAssertionFact {
+  derives: FwExplainComponentDeriveFact[];
+  exitCode: number;
+  fragments: string[];
+  handlers: FwExplainComponentHandlerFact[];
+  merges: FwExplainComponentMergeFact[];
+  queries: string[];
+  subject: string;
+  triggers: FwExplainComponentTriggerFact[];
+  version: FwExplainOutput['version'];
+}
+
 export interface FwExplainScopeAuditAssertionFact {
   exitCode: number;
   records: FwExplainScopeAuditFact[];
   subject: 'UNGUARDED' | 'UNSCOPED';
+  summary: FwExplainSummary;
+  version: FwExplainOutput['version'];
+}
+
+export interface FwExplainUnguardedAssertionFact {
+  exitCode: number;
+  records: FwExplainUnguardedFact[];
+  subject: 'UNGUARDED';
   summary: FwExplainSummary;
   version: FwExplainOutput['version'];
 }
@@ -240,6 +298,24 @@ export function fwExplainPageAssertionFact(
   };
 }
 
+export function fwExplainComponentAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainComponentAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+
+  return {
+    derives: fwExplainComponentDeriveFacts(result.output),
+    exitCode: result.exitCode,
+    fragments: listField(parsed, 'fragments'),
+    handlers: fwExplainComponentHandlerFacts(result.output),
+    merges: fwExplainComponentMergeFacts(result.output),
+    queries: listField(parsed, 'queries'),
+    subject: parsed.subject,
+    triggers: fwExplainComponentTriggerFacts(result.output),
+    version: parsed.version,
+  };
+}
+
 export function fwExplainEndpointAssertionFact(
   result: FwExplainResultLike,
 ): FwExplainEndpointAssertionFact {
@@ -265,6 +341,23 @@ export function fwExplainScopeAuditAssertionFact(
   return {
     exitCode: result.exitCode,
     records: fwExplainScopeAuditFacts(result.output, parsed.subject),
+    subject: parsed.subject,
+    summary: fwExplainSummary(result.output, 'SUMMARY'),
+    version: parsed.version,
+  };
+}
+
+export function fwExplainUnguardedAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainUnguardedAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+  if (parsed.subject !== 'UNGUARDED') {
+    throw new Error(`fw explain unguarded subject is UNGUARDED: ${parsed.subject}`);
+  }
+
+  return {
+    exitCode: result.exitCode,
+    records: fwExplainUnguardedFacts(result.output),
     subject: parsed.subject,
     summary: fwExplainSummary(result.output, 'SUMMARY'),
     version: parsed.version,
@@ -376,6 +469,93 @@ export function fwExplainMutationQueryMatrixFact(
   };
 }
 
+export function fwExplainComponentHandlerFacts(output: string): FwExplainComponentHandlerFact[] {
+  return fwExplainRecords(output, 'HANDLER').map((record) => {
+    const match =
+      /^(?<event>\S+) export=(?<exportName>\S+) ref=(?<ref>\S+) captures=(?<captures>\S+) params=(?<params>\S+) substitution=(?<substitution>\S+)$/.exec(
+        record,
+      );
+    if (!match?.groups) {
+      throw new Error(
+        `fw explain HANDLER record is '<event> export=... ref=... captures=... params=... substitution=...': ${record}`,
+      );
+    }
+
+    return {
+      captures: parseList(requiredMatchGroup(match.groups, 'captures')),
+      event: requiredMatchGroup(match.groups, 'event'),
+      exportName: requiredMatchGroup(match.groups, 'exportName'),
+      params: parseList(requiredMatchGroup(match.groups, 'params')),
+      ref: requiredMatchGroup(match.groups, 'ref'),
+      substitution: requiredMatchGroup(match.groups, 'substitution'),
+    };
+  });
+}
+
+export function fwExplainComponentDeriveFacts(output: string): FwExplainComponentDeriveFact[] {
+  return fwExplainRecords(output, 'DERIVE').map((record) => {
+    const match = /^(?<name>\S+) inputs=(?<inputs>\S+) ref=(?<ref>\S+) target=(?<target>\S+)$/.exec(
+      record,
+    );
+    if (!match?.groups) {
+      throw new Error(
+        `fw explain DERIVE record is '<name> inputs=... ref=... target=...': ${record}`,
+      );
+    }
+
+    return {
+      inputs: parseList(requiredMatchGroup(match.groups, 'inputs')),
+      name: requiredMatchGroup(match.groups, 'name'),
+      ref: requiredMatchGroup(match.groups, 'ref'),
+      target: requiredMatchGroup(match.groups, 'target'),
+    };
+  });
+}
+
+export function fwExplainComponentTriggerFacts(output: string): FwExplainComponentTriggerFact[] {
+  return fwExplainRecords(output, 'TRIGGER').map((record) => {
+    const match =
+      /^(?<trigger>\S+) export=(?<exportName>\S+) ref=(?<ref>\S+) deps=(?<deps>\S+) justification=(?<justification>.*)$/.exec(
+        record,
+      );
+    if (!match?.groups) {
+      throw new Error(
+        `fw explain TRIGGER record is '<trigger> export=... ref=... deps=... justification=...': ${record}`,
+      );
+    }
+
+    return {
+      deps: parseList(requiredMatchGroup(match.groups, 'deps')),
+      exportName: requiredMatchGroup(match.groups, 'exportName'),
+      justification: requiredMatchGroup(match.groups, 'justification'),
+      ref: requiredMatchGroup(match.groups, 'ref'),
+      trigger: requiredMatchGroup(match.groups, 'trigger'),
+    };
+  });
+}
+
+export function fwExplainComponentMergeFacts(output: string): FwExplainComponentMergeFact[] {
+  return fwExplainRecords(output, 'MERGE').map((record) => {
+    const match =
+      /^(?<element>\S+) attr=(?<attr>\S+) rule=(?<rule>\S+) decision=(?<decision>\S+) diagnostics=(?<diagnostics>\S+)$/.exec(
+        record,
+      );
+    if (!match?.groups) {
+      throw new Error(
+        `fw explain MERGE record is '<element> attr=... rule=... decision=... diagnostics=...': ${record}`,
+      );
+    }
+
+    return {
+      attr: requiredMatchGroup(match.groups, 'attr'),
+      decision: requiredMatchGroup(match.groups, 'decision'),
+      diagnostics: parseList(requiredMatchGroup(match.groups, 'diagnostics')),
+      element: requiredMatchGroup(match.groups, 'element'),
+      rule: requiredMatchGroup(match.groups, 'rule'),
+    };
+  });
+}
+
 export function fwExplainEndpointFacts(output: string): FwExplainEndpointFact[] {
   return fwExplainRecords(output, 'ENDPOINT').map((record) => {
     const match =
@@ -424,6 +604,42 @@ export function fwExplainScopeAuditFacts(
       targetKind: requiredMatchGroup(match.groups, 'targetKind'),
     };
   });
+}
+
+export function fwExplainUnguardedFacts(output: string): FwExplainUnguardedFact[] {
+  return parseFwExplainOutput(output)
+    .records.filter((record) => record.key !== 'SUMMARY')
+    .map((record) => {
+      const tokens = record.value.split(/\s+/).filter(Boolean);
+      const target = tokens.shift();
+      if (!target) {
+        throw new Error(`fw explain UNGUARDED record includes a target: ${record.raw}`);
+      }
+
+      return {
+        fields: parseRecordFields(tokens, record.raw),
+        target,
+        targetKind: record.key,
+      };
+    });
+}
+
+function parseRecordFields(tokens: string[], raw: string): Record<string, string | string[]> {
+  return Object.fromEntries(
+    tokens.map((token) => {
+      const [key, value] = token.split('=');
+      if (!key || value === undefined) {
+        throw new Error(`fw explain record field is key=value: ${raw}`);
+      }
+      return [key, shouldParseRecordList(key) ? parseList(value) : value];
+    }),
+  );
+}
+
+function shouldParseRecordList(key: string): boolean {
+  return ['guards', 'invalidates', 'manual-invalidates', 'queries', 'reads', 'writes'].includes(
+    key,
+  );
 }
 
 function requiredMatchGroup(groups: Record<string, string | undefined>, key: string): string {

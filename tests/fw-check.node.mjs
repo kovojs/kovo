@@ -65,10 +65,14 @@ import {
 } from '../packages/test/src/compiler-fixtures.ts';
 import { viteLoweredEventDiagnosticFact } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
+  fwExplainComponentAssertionFact,
+  fwExplainEndpointAssertionFact,
   fwExplainListField,
   fwExplainMutationAssertionFact,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
+  fwExplainScopeAuditAssertionFact,
+  fwExplainUnguardedAssertionFact,
   fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
 import {
@@ -3621,55 +3625,135 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
     ],
   };
 
-  assert.equal(
-    fwExplain(graph, { kind: 'component', target: 'CartBadge' }).output,
-    [
-      'fw-explain/v1',
-      'COMPONENT CartBadge',
-      'queries: cart',
-      'fragments: -',
-      'HANDLER click export=CartBadge$button_click ref=/components/cart-badge.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
-      'DERIVE CartBadge$isEmpty inputs=cart ref=/components/cart-badge.js#CartBadge$isEmpty target=data-bind:hidden',
-      'TRIGGER visible export=CartBadge$mountChart ref=/components/cart-badge.js#CartBadge$mountChart deps=cart justification=charts are below the fold',
-      'MERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-',
-      'MERGE button attr=data-bind:hidden rule=single-binding-writer decision=diagnostic diagnostics=FW233',
-      '',
-    ].join('\n'),
+  assert.deepEqual(
+    fwExplainComponentAssertionFact(fwExplain(graph, { kind: 'component', target: 'CartBadge' })),
+    {
+      derives: [
+        {
+          inputs: ['cart'],
+          name: 'CartBadge$isEmpty',
+          ref: '/components/cart-badge.js#CartBadge$isEmpty',
+          target: 'data-bind:hidden',
+        },
+      ],
+      exitCode: 0,
+      fragments: [],
+      handlers: [
+        {
+          captures: ['ctx', 'element-params'],
+          event: 'click',
+          exportName: 'CartBadge$button_click',
+          params: ['itemId'],
+          ref: '/components/cart-badge.js#CartBadge$button_click',
+          substitution: '-',
+        },
+      ],
+      merges: [
+        {
+          attr: 'aria-expanded',
+          decision: 'primitive',
+          diagnostics: [],
+          element: 'button',
+          rule: 'primitive-owned',
+        },
+        {
+          attr: 'data-bind:hidden',
+          decision: 'diagnostic',
+          diagnostics: ['FW233'],
+          element: 'button',
+          rule: 'single-binding-writer',
+        },
+      ],
+      queries: ['cart'],
+      subject: 'COMPONENT CartBadge',
+      triggers: [
+        {
+          deps: ['cart'],
+          exportName: 'CartBadge$mountChart',
+          justification: 'charts are below the fold',
+          ref: '/components/cart-badge.js#CartBadge$mountChart',
+          trigger: 'visible',
+        },
+      ],
+      version: 'fw-explain/v1',
+    },
   );
-  assert.equal(
-    fwExplain(graph, { endpoints: true }).output,
-    [
-      'fw-explain/v1',
-      'ENDPOINTS',
-      'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=checked writes=-',
-      'ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:stripe-signature writes=payment',
-      'SUMMARY total=2',
-      '',
-    ].join('\n'),
-  );
-  assert.equal(
-    fwExplain(graph, { unguarded: true }).output,
-    [
-      'fw-explain/v1',
-      'UNGUARDED',
-      'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=checked',
-      'MUTATION cart/add guards=- writes=cart invalidates=- manual-invalidates=-',
-      'PAGE /cart guards=- queries=cart',
-      'QUERY cart guards=- reads=cart',
-      'SUMMARY total=4',
-      '',
-    ].join('\n'),
-  );
-  assert.equal(
-    fwExplain(graph, { unscoped: true }).output,
-    [
-      'fw-explain/v1',
-      'UNSCOPED',
-      'UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21 where eq(carts.id, args.cartId)',
-      'SUMMARY total=1',
-      '',
-    ].join('\n'),
-  );
+  assert.deepEqual(fwExplainEndpointAssertionFact(fwExplain(graph, { endpoints: true })), {
+    endpoints: [
+      {
+        auth: '-',
+        csrf: 'checked',
+        endpoint: 'health',
+        method: 'GET',
+        mount: 'exact',
+        path: '/health',
+        writes: [],
+      },
+      {
+        auth: 'verifier:stripe-signature',
+        csrf: 'exempt:stripe-signature',
+        endpoint: 'stripe/webhook',
+        method: 'POST',
+        mount: 'exact',
+        path: '/webhooks/stripe',
+        writes: ['payment'],
+      },
+    ],
+    exitCode: 0,
+    subject: 'ENDPOINTS',
+    summary: { total: '2' },
+    version: 'fw-explain/v1',
+  });
+  assert.deepEqual(fwExplainUnguardedAssertionFact(fwExplain(graph, { unguarded: true })), {
+    exitCode: 0,
+    records: [
+      {
+        fields: {
+          auth: '-',
+          csrf: 'checked',
+          method: 'GET',
+          mount: 'exact',
+          path: '/health',
+        },
+        target: 'health',
+        targetKind: 'ENDPOINT',
+      },
+      {
+        fields: { guards: [], invalidates: [], 'manual-invalidates': [], writes: ['cart'] },
+        target: 'cart/add',
+        targetKind: 'MUTATION',
+      },
+      {
+        fields: { guards: [], queries: ['cart'] },
+        target: '/cart',
+        targetKind: 'PAGE',
+      },
+      {
+        fields: { guards: [], reads: ['cart'] },
+        target: 'cart',
+        targetKind: 'QUERY',
+      },
+    ],
+    subject: 'UNGUARDED',
+    summary: { total: '4' },
+    version: 'fw-explain/v1',
+  });
+  assert.deepEqual(fwExplainScopeAuditAssertionFact(fwExplain(graph, { unscoped: true })), {
+    exitCode: 0,
+    records: [
+      {
+        domain: 'cart',
+        reason: 'where eq(carts.id, args.cartId)',
+        scope: 'args',
+        site: 'cart.queries.ts:21',
+        target: 'cartById',
+        targetKind: 'QUERY',
+      },
+    ],
+    subject: 'UNSCOPED',
+    summary: { total: '1' },
+    version: 'fw-explain/v1',
+  });
 });
 
 void test('P5 data-bind paths are checked against generated query shape facts', async () => {

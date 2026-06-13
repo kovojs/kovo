@@ -103,6 +103,11 @@ import {
   type FwCheckResultFact,
 } from '@jiso/test/fw-check-fixtures';
 import {
+  fwExplainComponentAssertionFact,
+  fwExplainComponentDeriveFacts,
+  fwExplainComponentHandlerFacts,
+  fwExplainComponentMergeFacts,
+  fwExplainComponentTriggerFacts,
   fwExplainEndpointFacts,
   fwExplainField,
   fwExplainListField,
@@ -114,10 +119,17 @@ import {
   fwExplainRecords,
   fwExplainScopeAuditFacts,
   fwExplainSummary,
+  fwExplainUnguardedAssertionFact,
+  fwExplainUnguardedFacts,
   fwExplainUpdateConsumerMap,
   fwExplainUpdateConsumers,
   fwExplainUpdateTargets,
   parseFwExplainOutput,
+  type FwExplainComponentAssertionFact,
+  type FwExplainComponentDeriveFact,
+  type FwExplainComponentHandlerFact,
+  type FwExplainComponentMergeFact,
+  type FwExplainComponentTriggerFact,
   type FwExplainEndpointFact,
   type FwExplainMutationAssertionFact,
   type FwExplainOutput,
@@ -125,6 +137,8 @@ import {
   type FwExplainQueryAssertionFact,
   type FwExplainResultLike,
   type FwExplainScopeAuditFact,
+  type FwExplainUnguardedAssertionFact,
+  type FwExplainUnguardedFact,
   type FwExplainUpdateConsumerFact,
 } from '@jiso/test/fw-explain-fixtures';
 import {
@@ -843,6 +857,81 @@ describe('@jiso/test package subpath exports', () => {
       }).matrix,
     ).toEqual({ 'cart/add': { cart: 'hand-written' } });
     expect(
+      fwExplainComponentAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'COMPONENT CartBadge',
+          'queries: cart',
+          'fragments: -',
+          'HANDLER click export=CartBadge$button_click ref=/cart.js#CartBadge$button_click captures=ctx params=- substitution=-',
+          'DERIVE CartBadge$isEmpty inputs=cart ref=/cart.js#CartBadge$isEmpty target=data-bind:hidden',
+          'TRIGGER visible export=CartBadge$mount ref=/cart.js#CartBadge$mount deps=cart justification=below the fold',
+          'MERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-',
+          '',
+        ].join('\n'),
+      }),
+    ).toMatchObject({
+      derives: [{ inputs: ['cart'], name: 'CartBadge$isEmpty', target: 'data-bind:hidden' }],
+      fragments: [],
+      handlers: [{ captures: ['ctx'], event: 'click', params: [] }],
+      merges: [{ attr: 'aria-expanded', diagnostics: [] }],
+      queries: ['cart'],
+      triggers: [{ deps: ['cart'], trigger: 'visible' }],
+    });
+    expect(
+      fwExplainComponentHandlerFacts(
+        'fw-explain/v1\nCOMPONENT CartBadge\nHANDLER click export=CartBadge$button_click ref=/cart.js#CartBadge$button_click captures=ctx params=- substitution=-\n',
+      ),
+    ).toEqual([
+      {
+        captures: ['ctx'],
+        event: 'click',
+        exportName: 'CartBadge$button_click',
+        params: [],
+        ref: '/cart.js#CartBadge$button_click',
+        substitution: '-',
+      },
+    ]);
+    expect(
+      fwExplainComponentDeriveFacts(
+        'fw-explain/v1\nCOMPONENT CartBadge\nDERIVE CartBadge$isEmpty inputs=cart ref=/cart.js#CartBadge$isEmpty target=data-bind:hidden\n',
+      ),
+    ).toEqual([
+      {
+        inputs: ['cart'],
+        name: 'CartBadge$isEmpty',
+        ref: '/cart.js#CartBadge$isEmpty',
+        target: 'data-bind:hidden',
+      },
+    ]);
+    expect(
+      fwExplainComponentTriggerFacts(
+        'fw-explain/v1\nCOMPONENT CartBadge\nTRIGGER visible export=CartBadge$mount ref=/cart.js#CartBadge$mount deps=cart justification=below the fold\n',
+      ),
+    ).toEqual([
+      {
+        deps: ['cart'],
+        exportName: 'CartBadge$mount',
+        justification: 'below the fold',
+        ref: '/cart.js#CartBadge$mount',
+        trigger: 'visible',
+      },
+    ]);
+    expect(
+      fwExplainComponentMergeFacts(
+        'fw-explain/v1\nCOMPONENT CartBadge\nMERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-\n',
+      ),
+    ).toEqual([
+      {
+        attr: 'aria-expanded',
+        decision: 'primitive',
+        diagnostics: [],
+        element: 'button',
+        rule: 'primitive-owned',
+      },
+    ]);
+    expect(
       fwExplainEndpointFacts(
         [
           'fw-explain/v1',
@@ -877,6 +966,35 @@ describe('@jiso/test package subpath exports', () => {
         targetKind: 'QUERY',
       },
     ]);
+    expect(
+      fwExplainUnguardedFacts(
+        'fw-explain/v1\nUNGUARDED\nQUERY cart guards=- reads=cart\nSUMMARY total=1\n',
+      ),
+    ).toEqual([
+      {
+        fields: { guards: [], reads: ['cart'] },
+        target: 'cart',
+        targetKind: 'QUERY',
+      },
+    ]);
+    expect(
+      fwExplainUnguardedAssertionFact({
+        exitCode: 0,
+        output: 'fw-explain/v1\nUNGUARDED\nQUERY cart guards=- reads=cart\nSUMMARY total=1\n',
+      }),
+    ).toEqual({
+      exitCode: 0,
+      records: [
+        {
+          fields: { guards: [], reads: ['cart'] },
+          target: 'cart',
+          targetKind: 'QUERY',
+        },
+      ],
+      subject: 'UNGUARDED',
+      summary: { total: '1' },
+      version: 'fw-explain/v1',
+    });
     const graph = {
       components: [{ fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] }],
       mutations: [{ invalidates: ['cart'], key: 'cart/add' }],
@@ -1256,6 +1374,11 @@ type _PublicSubpathTypes = [
   CompilerQueryUpdatePlanFact,
   CompilerQueryShapeFact,
   CompilerUpdateCoverageFact,
+  FwExplainComponentAssertionFact,
+  FwExplainComponentDeriveFact,
+  FwExplainComponentHandlerFact,
+  FwExplainComponentMergeFact,
+  FwExplainComponentTriggerFact,
   FwExplainEndpointFact,
   FwExplainMutationAssertionFact,
   FwExplainOutput,
@@ -1263,6 +1386,8 @@ type _PublicSubpathTypes = [
   FwExplainQueryAssertionFact,
   FwExplainResultLike,
   FwExplainScopeAuditFact,
+  FwExplainUnguardedAssertionFact,
+  FwExplainUnguardedFact,
   FwExplainUpdateConsumerFact,
   FwExportCliArtifactFact,
   FwExportCliResultFact,
