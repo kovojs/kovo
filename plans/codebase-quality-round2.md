@@ -106,6 +106,8 @@ Current state:
   matcher.
 - Static `href()` route-param lowering now scans route params explicitly instead of regex
   substitution, including multi-param path segments.
+- Static `<Link>` tag lowering now constructs the native opening tag from the parsed JSX tag fact
+  instead of regex-replacing source text.
 
 Open:
 
@@ -123,6 +125,8 @@ Latest focused evidence:
 - `pnpm exec vp check packages/compiler/src/validate/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/execution-triggers.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/validate/event-triggers.ts packages/compiler/src/execution-triggers.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vp check packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`

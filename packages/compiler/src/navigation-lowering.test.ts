@@ -22,6 +22,34 @@ export const ProductLinks = component('product-links', {
     ]);
   });
 
+  it('lowers parsed multiline Link opening tags without source-regex matching', () => {
+    const source = `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <Link
+      className="product-link"
+      to="/products/:id"
+      params={{ id: 'p 1' }}
+    >
+      Product
+    </Link>
+  ),
+});
+`;
+    const lowering = navigationLinkLowering(parseComponentModule('product-links.tsx', source));
+
+    expect(lowering.replacements).toEqual([
+      {
+        end: source.indexOf('</Link>') + '</Link>'.length,
+        replacement: `<a
+      className="product-link" href="/products/p%201">
+      Product
+    </a>`,
+        start: source.indexOf('<Link'),
+      },
+    ]);
+  });
+
   it('exposes static href lowering as explicit source patches', () => {
     const source = `
 export const ProductLinks = component('product-links', {

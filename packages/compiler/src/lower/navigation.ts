@@ -54,9 +54,13 @@ function lowerLinkOpeningTag(link: JsxElementModel, href: string): string {
         }),
         replacement: '',
       })),
-  ).replace(/^<Link\b/, '<a');
+  );
 
-  return insertOpeningTagAttribute(opening, link, 'href', href);
+  return insertOpeningTagAttribute(lowerParsedLinkTagName(opening), link, 'href', href);
+}
+
+function lowerParsedLinkTagName(openingSource: string): string {
+  return `<a${openingSource.slice('<Link'.length)}`;
 }
 
 export function navigationHrefLowering(model: ComponentModuleModel): NavigationLowering {
