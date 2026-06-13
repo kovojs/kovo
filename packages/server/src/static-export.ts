@@ -1,6 +1,5 @@
-import { diagnosticDefinitions } from '@jiso/core';
-
 import type { JisoApp } from './app.js';
+import { assertStaticExportCompileDiagnostics } from './static-export-diagnostics.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -9,7 +8,6 @@ import {
 } from './static-export-output.js';
 import { replayStaticExportApp } from './static-export-replay.js';
 import {
-  StaticExportError,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,
@@ -68,10 +66,7 @@ export async function exportStaticApp(
   app: JisoApp,
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
-  const blockingDiagnostics = blockingStaticExportDiagnostics(options.diagnostics ?? []);
-  if (blockingDiagnostics.length > 0) {
-    throw new StaticExportError(blockingDiagnostics);
-  }
+  assertStaticExportCompileDiagnostics(options.diagnostics ?? []);
 
   const replay = await replayStaticExportApp({
     app,
@@ -97,26 +92,4 @@ export async function exportStaticApp(
     clientModules: replay.clientModules,
     diagnostics: replay.diagnostics,
   };
-}
-
-function blockingStaticExportDiagnostics(
-  diagnostics: readonly StaticExportCompileDiagnostic[],
-): StaticExportDiagnostic[] {
-  return diagnostics
-    .filter((diagnostic) => diagnosticDefinitions[diagnostic.code].severity === 'error')
-    .map((diagnostic) => ({
-      code: diagnostic.code,
-      message: staticExportCompileDiagnosticMessage(diagnostic),
-      routePath: diagnostic.fileName,
-    }));
-}
-
-function staticExportCompileDiagnosticMessage(diagnostic: StaticExportCompileDiagnostic): string {
-  const site = diagnostic.start
-    ? `${diagnostic.fileName}:${diagnostic.start.line}:${diagnostic.start.column}`
-    : diagnostic.fileName;
-  const help = diagnostic.help?.trim();
-  const message = `Static export refused error diagnostic ${diagnostic.code} at ${site}. ${diagnostic.message}`;
-
-  return help ? `${message}\n${help}` : message;
 }

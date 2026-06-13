@@ -1180,6 +1180,15 @@ Closed evidence so far:
   `packages/server/src/static-export-output.test.ts`,
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`,
   and `pnpm exec tsc --noEmit --pretty false`.
+- Static export compile-diagnostic blocking now lives in
+  `packages/server/src/static-export-diagnostics.ts`, keeping `static-export.ts` focused on
+  SPEC §9.5 replay/output orchestration while the diagnostic boundary enforces SPEC §11.3 before
+  route replay or output writes. Evidence: `packages/server/src/static-export-diagnostics.ts`,
+  `packages/server/src/static-export-diagnostics.test.ts`,
+  `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`,
+  `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`,
+  `pnpm exec vitest --run packages/server/src`, and
+  `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 

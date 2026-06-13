@@ -446,3 +446,17 @@ Round108 app-shell Vite plugin/root barrel deletion evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite-plugin.ts packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round109 app-shell static export diagnostic boundary evidence:
+
+- `packages/server/src/static-export-diagnostics.ts` now owns SPEC §11.3 compile-diagnostic
+  blocking for SPEC §9.5 static export; `static-export.ts` stays focused on replay, output
+  planning, and optional writes.
+- `packages/server/src/static-export-diagnostics.test.ts` proves error diagnostics stop before
+  route replay/output writes while lint diagnostics continue through synthetic document replay.
+- `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
