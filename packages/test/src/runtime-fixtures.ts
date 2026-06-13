@@ -38,6 +38,24 @@ export interface OptimismCleanupRuntime {
   }>;
 }
 
+export interface EnhancedMutationRuntime {
+  OptimisticRebaser: new (store: unknown) => {
+    pendingCount: (query: string, key?: string) => number;
+  };
+  createQueryStore: () => {
+    get(name: string, key?: string): unknown;
+    set(name: string, value: unknown, key?: string): void;
+  };
+  submitEnhancedMutation: (options: unknown) => Promise<{
+    changes: Array<{ domain: string; keys?: string[] }>;
+    queries: string[];
+  }>;
+  submitOptimisticEnhancedMutation: (options: unknown) => Promise<{
+    changes: Array<{ domain: string; keys?: string[] }>;
+    queries: string[];
+  }>;
+}
+
 export interface LoaderSmokeBehaviorFact {
   appliedTemplateStamps: string[];
   calls: Array<[string, boolean]>;
@@ -100,6 +118,34 @@ export interface OptimismCleanupBehaviorFact {
     afterSubmit: unknown;
     afterPagehide: unknown;
     afterResponse: unknown;
+  };
+}
+
+export interface EnhancedMutationBehaviorFact {
+  broadcast: {
+    events: Array<{
+      body: string;
+      changes: Array<{ domain: string; keys?: string[] }>;
+    }>;
+    fetchHeaders: unknown;
+    resultChanges: Array<{ domain: string; keys?: string[] }>;
+    resultQueries: string[];
+    storeValue: unknown;
+  };
+  malformedHeader: {
+    errorCount: number;
+    errorMessagePrefixMatches: boolean;
+    resultChanges: Array<{ domain: string; keys?: string[] }>;
+    resultQueries: string[];
+  };
+  optimistic: {
+    fetchIdemHeader: unknown;
+    pendingAfterResponse: string | null;
+    pendingDuringFetch: string | null;
+    resultChanges: Array<{ domain: string; keys?: string[] }>;
+    resultQueries: string[];
+    storeAfterResponse: unknown;
+    storeDuringFetch: unknown;
   };
 }
 
@@ -384,6 +430,146 @@ export async function optimismCleanupBehaviorFact(
       afterSubmit: storeAfterSubmit,
       afterPagehide: storeAfterPagehide,
       afterResponse: storeAfterResponse,
+    },
+  };
+}
+
+export async function enhancedMutationBehaviorFact(
+  runtime: EnhancedMutationRuntime,
+): Promise<EnhancedMutationBehaviorFact> {
+  // SPEC.md §4.8/§9.3: enhanced mutations publish valid change records,
+  // update keyed query state, and clear pending optimistic stamps after settle.
+  const noFragmentRoot = {
+    findFragmentTarget() {
+      return null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+  const broadcastEvents: EnhancedMutationBehaviorFact['broadcast']['events'] = [];
+  const enhancedStore = runtime.createQueryStore();
+  let enhancedFetchHeaders: unknown;
+  const enhancedResult = await runtime.submitEnhancedMutation({
+    broadcast: {
+      close() {},
+      publish(body: string, changes: Array<{ domain: string; keys?: string[] }>) {
+        broadcastEvents.push({ body, changes });
+      },
+    },
+    fetch: async (_url: string, options: { headers?: unknown }) => {
+      enhancedFetchHeaders = options.headers;
+      return {
+        headers: {
+          get(name: string) {
+            return name === 'FW-Changes'
+              ? '[{"domain":"cart","keys":["c1"],"input":"ignored"},{"domain":"bad","keys":[7]},{"keys":["missing-domain"]}]'
+              : null;
+          },
+        },
+        async text() {
+          return '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>';
+        },
+      };
+    },
+    form: { action: '/_m/cart/add', method: 'post' },
+    formData: new FormData(),
+    idem: 'idem_change_record',
+    root: noFragmentRoot,
+    store: enhancedStore,
+  });
+
+  const malformedHeaderErrors: Error[] = [];
+  const malformedResult = await runtime.submitEnhancedMutation({
+    fetch: async () => ({
+      headers: {
+        get(name: string) {
+          return name === 'FW-Changes' ? '{bad json' : null;
+        },
+      },
+      async text() {
+        return '<fw-query name="cart">{"count":3}</fw-query>';
+      },
+    }),
+    form: { action: '/_m/cart/add', method: 'post' },
+    formData: new FormData(),
+    onError(error: Error) {
+      malformedHeaderErrors.push(error);
+    },
+    root: noFragmentRoot,
+    store: runtime.createQueryStore(),
+  });
+
+  const optimisticStore = runtime.createQueryStore();
+  optimisticStore.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+  const rebaser = new runtime.OptimisticRebaser(optimisticStore);
+  const pendingElement = new GeneratedFixtureElement({ 'fw-deps': 'reviews' });
+  let optimisticFetchIdemHeader: unknown;
+  let optimisticStoreDuringFetch: unknown;
+  let optimisticPendingDuringFetch: string | null = null;
+  const optimisticResult = await runtime.submitOptimisticEnhancedMutation({
+    fetch: async (_url: string, options: { headers?: Record<string, unknown> }) => {
+      optimisticFetchIdemHeader = options.headers?.['FW-Idem'];
+      optimisticStoreDuringFetch = optimisticStore.get('reviews', 'product:p1');
+      optimisticPendingDuringFetch = pendingElement.getAttribute('fw-pending');
+      return {
+        headers: {
+          get(name: string) {
+            return name === 'FW-Changes' ? '[{"domain":"product","keys":["p1"]}]' : null;
+          },
+        },
+        async text() {
+          return '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>';
+        },
+      };
+    },
+    form: { action: '/_m/reviews/add', method: 'post' },
+    formData: new FormData(),
+    change: { domain: 'product', keys: ['p1'], input: { reviewId: 'draft' } },
+    idem: 'idem_optimistic_change',
+    input: { reviewId: 'unused' },
+    optimistic: {
+      keys: { reviews: (change: { keys?: string[] }) => `product:${change.keys?.[0]}` },
+      transforms: {
+        reviews(current: { items: unknown[] }, input: { reviewId: string }) {
+          return { items: [...current.items, { id: input.reviewId }] };
+        },
+      },
+    },
+    pendingRoot: {
+      querySelectorAll(selector: string) {
+        return selector === '[fw-deps]' ? [pendingElement] : [];
+      },
+    },
+    rebaser,
+    root: noFragmentRoot,
+    store: optimisticStore,
+  });
+
+  return {
+    broadcast: {
+      events: broadcastEvents,
+      fetchHeaders: enhancedFetchHeaders,
+      resultChanges: enhancedResult.changes,
+      resultQueries: enhancedResult.queries,
+      storeValue: enhancedStore.get('cart', 'cart:c1'),
+    },
+    malformedHeader: {
+      errorCount: malformedHeaderErrors.length,
+      errorMessagePrefixMatches:
+        malformedHeaderErrors[0]?.message.startsWith('Malformed JSON in FW-Changes header:') ??
+        false,
+      resultChanges: malformedResult.changes,
+      resultQueries: malformedResult.queries,
+    },
+    optimistic: {
+      fetchIdemHeader: optimisticFetchIdemHeader,
+      pendingAfterResponse: pendingElement.getAttribute('fw-pending'),
+      pendingDuringFetch: optimisticPendingDuringFetch,
+      resultChanges: optimisticResult.changes,
+      resultQueries: optimisticResult.queries,
+      storeAfterResponse: optimisticStore.get('reviews', 'product:p1'),
+      storeDuringFetch: optimisticStoreDuringFetch,
     },
   };
 }

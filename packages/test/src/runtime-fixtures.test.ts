@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
   optimismCleanupBehaviorFact,
+  type EnhancedMutationRuntime,
   type LoaderSmokeRuntime,
   type OptimismCleanupRuntime,
 } from './runtime-fixtures.ts';
@@ -240,6 +242,151 @@ describe('@jiso/test runtime fixture facts', () => {
         afterSubmit: { count: 3 },
         afterPagehide: { count: 1 },
         afterResponse: { count: 2 },
+      },
+    });
+  });
+
+  it('projects enhanced mutation behavior without keeping fake DOM mechanics in fw-check', async () => {
+    const createQueryStore = () => {
+      const values = new Map<string, unknown>();
+      const keyFor = (name: string, key?: string) => (key === undefined ? name : `${name}:${key}`);
+      return {
+        get(name: string, key?: string) {
+          return values.get(keyFor(name, key));
+        },
+        set(name: string, value: unknown, key?: string) {
+          values.set(keyFor(name, key), value);
+        },
+      };
+    };
+    const runtime: EnhancedMutationRuntime = {
+      OptimisticRebaser: class {
+        constructor(private readonly store: ReturnType<typeof createQueryStore>) {}
+        pendingCount() {
+          return 0;
+        }
+        applyOptimistic(query: string, key: string, value: unknown) {
+          this.store.set(query, value, key);
+        }
+        settle(query: string, key: string, value: unknown) {
+          this.store.set(query, value, key);
+        }
+      } as unknown as EnhancedMutationRuntime['OptimisticRebaser'],
+      createQueryStore,
+      async submitEnhancedMutation(options) {
+        const fixtureOptions = options as {
+          broadcast?: {
+            publish(body: string, changes: Array<{ domain: string; keys?: string[] }>): void;
+          };
+          fetch(
+            url: string,
+            options: { headers: Record<string, string> },
+          ): Promise<{
+            headers: { get(name: string): string | null };
+            text(): Promise<string>;
+          }>;
+          idem?: string;
+          onError?(error: Error): void;
+          store: ReturnType<typeof createQueryStore>;
+        };
+        const response = await fixtureOptions.fetch('/_m/cart/add', {
+          headers: {
+            Accept: 'text/vnd.jiso.fragment+html',
+            'FW-Fragment': 'true',
+            'FW-Idem': fixtureOptions.idem ?? '',
+            'FW-Targets': '',
+          },
+        });
+        const body = await response.text();
+        const changesHeader = response.headers.get('FW-Changes');
+        let changes: Array<{ domain: string; keys?: string[] }> = [];
+        if (changesHeader === '{bad json') {
+          fixtureOptions.onError?.(new Error('Malformed JSON in FW-Changes header: {bad json'));
+        } else if (changesHeader) {
+          changes = [{ domain: 'cart', keys: ['c1'] }];
+        }
+        if (body.includes('"count":2')) {
+          fixtureOptions.store.set('cart', { count: 2 }, 'cart:c1');
+          fixtureOptions.broadcast?.publish(body, changes);
+          return { changes, queries: ['cart:c1'] };
+        }
+        return { changes: [], queries: ['cart'] };
+      },
+      async submitOptimisticEnhancedMutation(options) {
+        const fixtureOptions = options as {
+          fetch(
+            url: string,
+            options: { headers: Record<string, string> },
+          ): Promise<{
+            headers: { get(name: string): string | null };
+            text(): Promise<string>;
+          }>;
+          pendingRoot: {
+            querySelectorAll(selector: string): Array<{
+              removeAttribute(name: string): void;
+              setAttribute(name: string, value: string): void;
+            }>;
+          };
+          rebaser: {
+            applyOptimistic(query: string, key: string, value: unknown): void;
+            settle(query: string, key: string, value: unknown): void;
+          };
+        };
+        fixtureOptions.rebaser.applyOptimistic('reviews', 'product:p1', {
+          items: [{ id: 'r1' }, { id: 'draft' }],
+        });
+        for (const element of fixtureOptions.pendingRoot.querySelectorAll('[fw-deps]')) {
+          element.setAttribute('fw-pending', '');
+        }
+        const response = await fixtureOptions.fetch('/_m/reviews/add', {
+          headers: { 'FW-Idem': 'idem_optimistic_change' },
+        });
+        await response.text();
+        fixtureOptions.rebaser.settle('reviews', 'product:p1', {
+          items: [{ id: 'r1' }, { id: 'server' }],
+        });
+        for (const element of fixtureOptions.pendingRoot.querySelectorAll('[fw-deps]')) {
+          element.removeAttribute('fw-pending');
+        }
+        return {
+          changes: [{ domain: 'product', keys: ['p1'] }],
+          queries: ['reviews:product:p1'],
+        };
+      },
+    };
+
+    await expect(enhancedMutationBehaviorFact(runtime)).resolves.toEqual({
+      broadcast: {
+        events: [
+          {
+            body: '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>',
+            changes: [{ domain: 'cart', keys: ['c1'] }],
+          },
+        ],
+        fetchHeaders: {
+          Accept: 'text/vnd.jiso.fragment+html',
+          'FW-Fragment': 'true',
+          'FW-Idem': 'idem_change_record',
+          'FW-Targets': '',
+        },
+        resultChanges: [{ domain: 'cart', keys: ['c1'] }],
+        resultQueries: ['cart:c1'],
+        storeValue: { count: 2 },
+      },
+      malformedHeader: {
+        errorCount: 1,
+        errorMessagePrefixMatches: true,
+        resultChanges: [],
+        resultQueries: ['cart'],
+      },
+      optimistic: {
+        fetchIdemHeader: 'idem_optimistic_change',
+        pendingAfterResponse: null,
+        pendingDuringFetch: '',
+        resultChanges: [{ domain: 'product', keys: ['p1'] }],
+        resultQueries: ['reviews:product:p1'],
+        storeAfterResponse: { items: [{ id: 'r1' }, { id: 'server' }] },
+        storeDuringFetch: { items: [{ id: 'r1' }, { id: 'draft' }] },
       },
     });
   });

@@ -149,6 +149,7 @@ import {
   starterTemplateDevDependencyCoverage,
 } from '../packages/test/src/starter-template-fixtures.ts';
 import {
+  enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
   optimismCleanupBehaviorFact,
 } from '../packages/test/src/runtime-fixtures.ts';
@@ -3480,147 +3481,48 @@ void test('P9 verification layer evidence remains represented', async () => {
     },
   );
 
-  const noFragmentRoot = {
-    findFragmentTarget() {
-      return null;
-    },
-    querySelectorAll() {
-      return [];
-    },
-  };
-  const broadcastEvents = [];
-  const enhancedStore = createQueryStore();
-  const enhancedResult = await submitEnhancedMutation({
-    broadcast: {
-      close() {},
-      publish(body, changes) {
-        broadcastEvents.push({ body, changes });
-      },
-    },
-    fetch: async (_url, options) => {
-      assert.deepEqual(options.headers, {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem_change_record',
-        'FW-Targets': '',
-      });
-      return {
-        headers: {
-          get(name) {
-            return name === 'FW-Changes'
-              ? '[{"domain":"cart","keys":["c1"],"input":"ignored"},{"domain":"bad","keys":[7]},{"keys":["missing-domain"]}]'
-              : null;
-          },
-        },
-        async text() {
-          return '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>';
-        },
-      };
-    },
-    form: { action: '/_m/cart/add', method: 'post' },
-    formData: new FormData(),
-    idem: 'idem_change_record',
-    root: noFragmentRoot,
-    store: enhancedStore,
-  });
-  assert.deepEqual(enhancedResult.changes, [{ domain: 'cart', keys: ['c1'] }]);
-  assert.deepEqual(enhancedResult.queries, ['cart:c1']);
-  assert.deepEqual(enhancedStore.get('cart', 'cart:c1'), { count: 2 });
-  assert.deepEqual(broadcastEvents, [
-    {
-      body: '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>',
-      changes: [{ domain: 'cart', keys: ['c1'] }],
-    },
-  ]);
-
-  const malformedHeaderErrors = [];
-  const malformedResult = await submitEnhancedMutation({
-    fetch: async () => ({
-      headers: {
-        get(name) {
-          return name === 'FW-Changes' ? '{bad json' : null;
-        },
-      },
-      async text() {
-        return '<fw-query name="cart">{"count":3}</fw-query>';
-      },
+  assert.deepEqual(
+    await enhancedMutationBehaviorFact({
+      OptimisticRebaser,
+      createQueryStore,
+      submitEnhancedMutation,
+      submitOptimisticEnhancedMutation,
     }),
-    form: { action: '/_m/cart/add', method: 'post' },
-    formData: new FormData(),
-    onError(error) {
-      malformedHeaderErrors.push(error);
-    },
-    root: noFragmentRoot,
-    store: createQueryStore(),
-  });
-  assert.deepEqual(malformedResult.changes, []);
-  assert.equal(malformedHeaderErrors.length, 1);
-  assert.equal(
-    malformedHeaderErrors[0].message.startsWith('Malformed JSON in FW-Changes header:'),
-    true,
-  );
-
-  const optimisticStore = createQueryStore();
-  optimisticStore.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
-  const rebaser = new OptimisticRebaser(optimisticStore);
-  const pendingElement = {
-    attributes: { 'fw-deps': 'reviews' },
-    getAttribute(name) {
-      return this.attributes[name] ?? null;
-    },
-    removeAttribute(name) {
-      delete this.attributes[name];
-    },
-    setAttribute(name, value) {
-      this.attributes[name] = value;
-    },
-  };
-  const optimisticResult = await submitOptimisticEnhancedMutation({
-    fetch: async (_url, options) => {
-      assert.equal(options.headers['FW-Idem'], 'idem_optimistic_change');
-      assert.deepEqual(optimisticStore.get('reviews', 'product:p1'), {
-        items: [{ id: 'r1' }, { id: 'draft' }],
-      });
-      assert.equal(pendingElement.getAttribute('fw-pending'), '');
-      return {
-        headers: {
-          get(name) {
-            return name === 'FW-Changes' ? '[{"domain":"product","keys":["p1"]}]' : null;
+    {
+      broadcast: {
+        events: [
+          {
+            body: '<fw-query name="cart" key="cart:c1">{"count":2}</fw-query>',
+            changes: [{ domain: 'cart', keys: ['c1'] }],
           },
+        ],
+        fetchHeaders: {
+          Accept: 'text/vnd.jiso.fragment+html',
+          'FW-Fragment': 'true',
+          'FW-Idem': 'idem_change_record',
+          'FW-Targets': '',
         },
-        async text() {
-          return '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>';
-        },
-      };
-    },
-    form: { action: '/_m/reviews/add', method: 'post' },
-    formData: new FormData(),
-    change: { domain: 'product', keys: ['p1'], input: { reviewId: 'draft' } },
-    idem: 'idem_optimistic_change',
-    input: { reviewId: 'unused' },
-    optimistic: {
-      keys: { reviews: (change) => `product:${change.keys?.[0]}` },
-      transforms: {
-        reviews(current, input) {
-          return { items: [...current.items, { id: input.reviewId }] };
-        },
+        resultChanges: [{ domain: 'cart', keys: ['c1'] }],
+        resultQueries: ['cart:c1'],
+        storeValue: { count: 2 },
+      },
+      malformedHeader: {
+        errorCount: 1,
+        errorMessagePrefixMatches: true,
+        resultChanges: [],
+        resultQueries: ['cart'],
+      },
+      optimistic: {
+        fetchIdemHeader: 'idem_optimistic_change',
+        pendingAfterResponse: null,
+        pendingDuringFetch: '',
+        resultChanges: [{ domain: 'product', keys: ['p1'] }],
+        resultQueries: ['reviews:product:p1'],
+        storeAfterResponse: { items: [{ id: 'r1' }, { id: 'server' }] },
+        storeDuringFetch: { items: [{ id: 'r1' }, { id: 'draft' }] },
       },
     },
-    pendingRoot: {
-      querySelectorAll(selector) {
-        return selector === '[fw-deps]' ? [pendingElement] : [];
-      },
-    },
-    rebaser,
-    root: noFragmentRoot,
-    store: optimisticStore,
-  });
-  assert.deepEqual(optimisticResult.changes, [{ domain: 'product', keys: ['p1'] }]);
-  assert.deepEqual(optimisticResult.queries, ['reviews:product:p1']);
-  assert.deepEqual(optimisticStore.get('reviews', 'product:p1'), {
-    items: [{ id: 'r1' }, { id: 'server' }],
-  });
-  assert.equal(pendingElement.getAttribute('fw-pending'), null);
+  );
 });
 
 void test('P8 component explain includes handler, derive, trigger, and merge facts', async () => {

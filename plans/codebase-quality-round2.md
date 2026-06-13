@@ -112,6 +112,9 @@ fw-check gate.
 Shared verification fixtures now own the P9 CSRF, harness, DB verifier, structured SQL, and
 Pglite verification behavior fact, so `tests/fw-check.node.mjs` no longer defines that reusable
 fake DB and assertion harness locally.
+Shared runtime fixtures now own enhanced mutation broadcast, malformed change-header, keyed query
+state, and optimistic pending-stamp behavior projections for the P9 verification-layer fw-check gate, so the monolith
+no longer defines that fake DOM/mutation root harness inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -123,6 +126,12 @@ fake DB and assertion harness locally.
 
 Latest evidence:
 
+- Enhanced mutation runtime fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Verification-layer fixture slice:
   `pnpm exec vitest --run packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
@@ -1972,6 +1981,9 @@ keeping touch provenance and static graph behavior observable.
 The P9 verification-layer gate now consumes `@jiso/test/verification-fixtures` behavior facts
 instead of defining fake DB, verifier, assertion, SQL, and Pglite mechanics inside
 `tests/fw-check.node.mjs`.
+The P9 enhanced mutation verification gate now consumes `@jiso/test/runtime-fixtures` behavior facts instead of
+defining fake DOM roots, broadcast capture, malformed header capture, and optimistic pending
+element mechanics inside `tests/fw-check.node.mjs`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -1979,6 +1991,12 @@ instead of defining fake DB, verifier, assertion, SQL, and Pglite mechanics insi
 
 Latest evidence:
 
+- Enhanced mutation runtime fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Verification-layer fixture slice:
   `pnpm exec vitest --run packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

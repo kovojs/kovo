@@ -254,8 +254,11 @@ import {
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
+  enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
   optimismCleanupBehaviorFact,
+  type EnhancedMutationBehaviorFact,
+  type EnhancedMutationRuntime,
   type LoaderSmokeBehaviorFact,
   type LoaderSmokeRuntime,
   type OptimismCleanupBehaviorFact,
@@ -381,6 +384,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
+    expect(enhancedMutationBehaviorFact).toBeTypeOf('function');
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
     expect(optimismCleanupBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
@@ -401,6 +405,12 @@ describe('@jiso/test package subpath exports', () => {
     }>();
     expectTypeOf<OptimismCleanupRuntime>().toMatchTypeOf<{
       createQueryStore: () => unknown;
+    }>();
+    expectTypeOf<EnhancedMutationBehaviorFact>().toMatchTypeOf<{
+      optimistic: { pendingAfterResponse: string | null; resultQueries: string[] };
+    }>();
+    expectTypeOf<EnhancedMutationRuntime>().toMatchTypeOf<{
+      submitEnhancedMutation: (options: unknown) => Promise<unknown>;
     }>();
     expectTypeOf<VerificationLayerBehaviorFact>().toMatchTypeOf<{
       failures: Record<string, string>;
