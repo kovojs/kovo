@@ -118,6 +118,7 @@ describe('runtime root exports', () => {
     expect(Object.hasOwn(runtime, 'applyEnhancedMutationResponseBodyToDom')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyFragmentQueryBody')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
+    expect(Object.hasOwn(runtime, 'applyMutationResponseBodyToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseChunksToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);

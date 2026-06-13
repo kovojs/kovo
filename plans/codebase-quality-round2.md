@@ -646,6 +646,15 @@ packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-js-minifier.test.ts`.
+      Evidence 2026-06-13 round260: inline execution trigger coverage moved from
+      `packages/runtime/src/inline-loader.test.ts` into
+      `packages/runtime/src/inline-loader-triggers.test.ts`, leaving the original suite focused on
+      source installation and delegated handler parity. Mutation response compatibility export
+      assertions moved from metadata behavior coverage into
+      `packages/runtime/src/index-exports.test.ts`. Verified by `pnpm exec vitest --run
+packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-loader-triggers.test.ts packages/runtime/src/index-exports.test.ts
+packages/runtime/src/mutation-response-metadata.test.ts`.
       Evidence 2026-06-13 round257: query script hydration moved from
       `packages/runtime/src/query-apply.ts` into
       `packages/runtime/src/query-script-hydration.ts`, and

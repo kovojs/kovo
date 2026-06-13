@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyMutationResponseToDom } from './index.js';
-import * as runtime from './index.js';
-import { applyMutationResponseToDom as applyMutationResponseToDomFromMutationDomModule } from './mutation-response-dom.js';
 import {
   createMutationIdem,
   isMutationBroadcastMessage,
@@ -11,13 +8,6 @@ import {
 } from './mutation-response.js';
 
 describe('mutation response metadata', () => {
-  it('exports only the DOM mutation response helper through the runtime barrel', () => {
-    expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
-    expect(Object.hasOwn(runtime, 'applyMutationResponseBodyToRuntime')).toBe(false);
-    expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromMutationDomModule);
-    expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);
-  });
-
   it('reports malformed FW-Changes headers through the mutation response error hook', () => {
     const onError = vi.fn();
 
