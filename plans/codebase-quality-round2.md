@@ -174,6 +174,14 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       handoffs while fake context containers remain ignored. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` now resolves object-member callback
+      aliases and shorthand members such as `load: loaders.aliased`, `load: loaders.loadProducts`,
+      `write(callbacks.aliased)`, and `write(callbacks.addItem)` through ts-morph callback
+      symbols with cycle protection; `packages/drizzle/src/index.test.ts` covers source query
+      loaders and source domain writes, and `conformance/drizzle-pin/src/index.test.ts` pins the
+      same surfaces against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

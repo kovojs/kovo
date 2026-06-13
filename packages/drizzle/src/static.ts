@@ -2632,11 +2632,23 @@ function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
   return localObjectMemberCallbackFunction(identifier);
 }
 
-function callbackFunctionFromDeclaration(declaration: Node): Node | undefined {
+function callbackFunctionFromDeclaration(
+  declaration: Node,
+  seen: Set<string> = new Set(),
+): Node | undefined {
+  const key = `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
   if (Node.isFunctionDeclaration(declaration) && declaration.getNameNode()) return declaration;
   if (Node.isMethodDeclaration(declaration)) return declaration;
-  if (Node.isVariableDeclaration(declaration)) return callbackFunctionFromVariable(declaration);
-  if (Node.isPropertyAssignment(declaration)) return callbackFunctionFromProperty(declaration);
+  if (Node.isVariableDeclaration(declaration))
+    return callbackFunctionFromVariable(declaration, seen);
+  if (Node.isPropertyAssignment(declaration))
+    return callbackFunctionFromProperty(declaration, seen);
+  if (Node.isShorthandPropertyAssignment(declaration)) {
+    return callbackFunctionFromReference(declaration.getNameNode(), seen);
+  }
 
   if (!Node.isIdentifier(declaration)) return undefined;
 
@@ -2644,10 +2656,13 @@ function callbackFunctionFromDeclaration(declaration: Node): Node | undefined {
   if (Node.isFunctionDeclaration(parent) && parent.getNameNode() === declaration) return parent;
   if (Node.isMethodDeclaration(parent) && parent.getNameNode() === declaration) return parent;
   if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
-    return callbackFunctionFromVariable(parent);
+    return callbackFunctionFromVariable(parent, seen);
   }
   if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
-    return callbackFunctionFromProperty(parent);
+    return callbackFunctionFromProperty(parent, seen);
+  }
+  if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+    return callbackFunctionFromReference(parent.getNameNode(), seen);
   }
 
   return undefined;
@@ -2655,26 +2670,35 @@ function callbackFunctionFromDeclaration(declaration: Node): Node | undefined {
 
 function callbackFunctionFromVariable(
   declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
+  seen: Set<string>,
 ): Node | undefined {
   const initializer = declaration.getInitializer();
   if (!initializer) return undefined;
 
   const expression = unwrappedStaticExpressionNode(initializer);
-  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
-    ? expression
-    : undefined;
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  return callbackFunctionFromReference(expression, seen);
 }
 
-function callbackFunctionFromProperty(declaration: Node): Node | undefined {
+function callbackFunctionFromProperty(declaration: Node, seen: Set<string>): Node | undefined {
   if (!Node.isPropertyAssignment(declaration)) return undefined;
 
   const initializer = declaration.getInitializer();
   if (!initializer) return undefined;
 
   const expression = unwrappedStaticExpressionNode(initializer);
-  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
-    ? expression
-    : undefined;
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  return callbackFunctionFromReference(expression, seen);
+}
+
+function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Node | undefined {
+  const symbol = symbolForCallbackReference(identifier);
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    const callback = callbackFunctionFromDeclaration(declaration, seen);
+    if (callback) return callback;
+  }
+
+  return undefined;
 }
 
 function symbolForCallbackReference(node: Node): MorphSymbol | undefined {

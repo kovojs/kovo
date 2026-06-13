@@ -5357,6 +5357,70 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source member write callback aliases from domain authoring surfaces', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'const callbacks = {',
+          '  aliased: addItem,',
+          '  addItem,',
+          '};',
+          '',
+          'export const cart = domain({',
+          '  addAliased: write(callbacks.aliased),',
+          '  addShorthand: write(callbacks.addItem),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addShorthand': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts configured write callbacks and folds local helper summaries', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -8050,6 +8114,54 @@ export interface CommerceInvalidationSets {
           id: 'string',
         },
         site: 'user.queries.ts:7',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('extracts source member query-loader aliases from resolved loader symbols', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function loadUsers(_input, db) {',
+          '  return db.select({ id: users.id }).from(users);',
+          '}',
+          '',
+          'const loaders = {',
+          '  aliased: loadUsers,',
+          '  loadUsers,',
+          '};',
+          '',
+          'export const aliasedQuery = query("users/source-member-aliased-loader", {',
+          '  load: loaders.aliased,',
+          '});',
+          '',
+          'export const shorthandQuery = query("users/source-member-shorthand-loader", {',
+          '  load: loaders.loadUsers,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'users/source-member-aliased-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'user.queries.ts:12',
+      },
+      {
+        query: 'users/source-member-shorthand-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'user.queries.ts:16',
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
