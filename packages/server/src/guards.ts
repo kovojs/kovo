@@ -277,10 +277,10 @@ function requestWithSession<Request, SessionValue>(
   }
 
   return new Proxy(request as object, {
-    get(target, property, receiver) {
+    get(target, property) {
       if (property === 'session') return sessionValue;
 
-      const value = Reflect.get(target, property, receiver) as unknown;
+      const value = Reflect.get(target, property, target) as unknown;
       return typeof value === 'function' ? value.bind(target) : value;
     },
     getOwnPropertyDescriptor(target, property) {

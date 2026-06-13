@@ -9,10 +9,10 @@ export {
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderNoJsMutationResponse,
-  renderQueryScript,
   runMutation,
   write,
 } from '../mutation.js';
+export { renderQueryScript } from '../wire-html.js';
 export type {
   ChangeRecord,
   InvalidateOptions,

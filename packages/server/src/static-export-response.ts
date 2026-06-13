@@ -5,8 +5,6 @@ import {
   type StaticExportResponseSnapshot,
 } from './static-export-types.js';
 
-export type StaticExportReplayedResponseBody = StaticExportResponseSnapshot;
-
 interface StaticExportRouteDocumentResponseOptions {
   response: Response;
   routePath: string;
@@ -24,7 +22,7 @@ export type StaticExportReplayedResponseReadOptions =
 
 export async function readStaticExportReplayedResponse(
   options: StaticExportReplayedResponseReadOptions,
-): Promise<StaticExportReplayedResponseBody> {
+): Promise<StaticExportResponseSnapshot> {
   const { response } = options;
   const contentType = response.headers.get('content-type');
 

@@ -55,5 +55,6 @@ describe('server app mutation request boundary', () => {
     expect(response.headers.get('location')).toBe('/cart');
     expect(sessionReads).toBe(1);
     expect(seen).toEqual(['response:u1:/_m/cart/add?from=button:true', 'handler:u1:p1']);
+    expect('session' in request).toBe(false);
   });
 });

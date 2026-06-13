@@ -1,4 +1,4 @@
-import type { SessionProvider } from './guards.js';
+import { resolveLifecycleRequest } from './guards.js';
 import { renderMutationEndpointResponse, type MutationDefinition } from './mutation.js';
 import { serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
@@ -24,7 +24,10 @@ export async function handleAppMutationRequest(
     );
   }
 
-  const mutationRequest = await requestWithResolvedSession(app.sessionProvider, request);
+  const mutationRequest = await resolveLifecycleRequest(
+    request,
+    app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider },
+  );
   const rawInput = await readMutationRequestBody(mutationRequest);
   const currentUrl = appRequestUrl(url);
   const mutationResponseOptions = await app.mutationResponse?.({
@@ -75,21 +78,6 @@ async function readMutationRequestBody(request: Request): Promise<unknown> {
   const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
   if (contentType.includes('application/json')) return request.json();
   return request.formData();
-}
-
-async function requestWithResolvedSession(
-  sessionProvider: SessionProvider<Request, unknown> | undefined,
-  request: Request,
-): Promise<Request> {
-  if (!sessionProvider) return request;
-
-  const session = await sessionProvider(request);
-  Object.defineProperty(request, 'session', {
-    configurable: true,
-    enumerable: true,
-    value: session ?? null,
-  });
-  return request;
 }
 
 function defaultMutationRedirectTo(request: Request, currentUrl: string): string {

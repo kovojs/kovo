@@ -14,6 +14,8 @@ import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
 import * as appApi from './app.js';
+import * as dataApi from './data.js';
+import * as wireHtmlApi from '../wire-html.js';
 
 import type {
   JisoApp as PublicJisoApp,
@@ -49,6 +51,8 @@ describe('server app-shell public API barrels', () => {
 
     expect(appApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(publicApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
+    expect(dataApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
+    expect(publicApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
 
     expect(appApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
     expect(publicApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);

@@ -18,12 +18,7 @@ import {
   type RequestLifecycleOptions,
 } from './guards.js';
 import { renderStylesheetLinks } from './hints.js';
-import {
-  renderFragmentWireHtml,
-  renderQueryScript as renderQueryScriptHtml,
-  renderQueryWireHtml,
-  type QueryScriptRenderOptions,
-} from './wire-html.js';
+import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 import {
   readQueryInstanceKey,
   readQueryVersion,
@@ -699,28 +694,12 @@ function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
 ): string {
   const key = readQueryInstanceKey(queryDefinition, input);
 
-  return renderQueryWireChunk({
+  return renderQueryWireHtml({
     key,
     name: queryDefinition.key,
     value,
     version: readQueryVersion(queryDefinition, input, value),
   });
-}
-
-function renderQueryWireChunk(options: {
-  key: string | undefined;
-  name: string;
-  value: unknown;
-  version: number | string | undefined;
-}): string {
-  return renderQueryWireHtml(options);
-}
-
-export function renderQueryScript(options: QueryScriptRenderOptions): string {
-  // Legacy fw-check source audit: delegated query scripts still render
-  // `fw-query="${escapeAttribute(options.name)}"` and
-  // `escapeScriptJson(JSON.stringify(options.value))` in wire-html.ts.
-  return renderQueryScriptHtml(options);
 }
 
 async function renderFragmentChunks(
