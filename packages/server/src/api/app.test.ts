@@ -22,6 +22,10 @@ import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportTypesApi from '../static-export-types.js';
 import * as wireHtmlApi from '../wire-html.js';
 
+function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
+  return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
+}
+
 describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on app-shell subpaths while root preserves CLI static export', () => {
     const localAppShellValues = appShellApi as Record<string, unknown>;
@@ -31,6 +35,9 @@ describe('server app-shell public API barrels', () => {
 
     expect(Object.keys(packageAppShellValues).sort()).toEqual(
       Object.keys(localAppShellValues).sort(),
+    );
+    expect(Object.keys(localAppShellValues).sort()).toEqual(
+      aggregateValueKeys(clientModulesApi, coreApi, nodeApi, staticExportApi, viteApi),
     );
 
     for (const key of Object.keys(localAppShellValues)) {

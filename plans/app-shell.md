@@ -784,3 +784,18 @@ Round228 app-shell static-export option boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-options.ts packages/server/src/static-export-options.test.ts packages/server/src/static-export-types.ts packages/server/src/static-export-replay.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app-shell/index.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round232 app-shell aggregate boundary evidence:
+
+- `packages/server/src/api/app-shell/index.ts` now composes the public app-shell aggregate from
+  the split client-module, core, node, static-export, and Vite subpaths instead of duplicating a
+  manual runtime/type inventory, preserving the SPEC §9.5 public request/static-export boundary
+  through the owner subpaths.
+- `packages/server/src/api/app.test.ts` now proves the aggregate runtime value keys exactly match
+  the union of those public subpaths, while root `@jiso/server` remains narrowed to the CLI
+  `exportStaticApp` compatibility alias plus non-app-shell data/rendering/routing APIs.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

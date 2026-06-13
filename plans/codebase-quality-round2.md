@@ -563,6 +563,9 @@ Static export option normalization now lives in `static-export-options.ts`: repl
 owner for html path-style FW229 diagnostics, `static-export-types.ts` remains data/option shapes,
 and `StaticExportNonExportablePolicy` is the single public policy type exported through app-shell
 static-export subpaths.
+The `@jiso/server/app-shell` aggregate now composes from the split public app-shell subpaths, and
+the public API test proves its runtime values equal the union of those subpaths so manual aggregate
+inventory drift cannot hide behind the compatibility barrel.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite app-shell build output also reuses one planned SPEC §9.5 static-export asset list
@@ -582,6 +585,11 @@ targets, so R6 dry-run preview/export introspection cannot be mistaken for an ou
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/static-export-options.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
