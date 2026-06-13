@@ -6,11 +6,10 @@ import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { readQueryElementChunk } from './wire-parser.js';
-import type { QueryChunk } from './wire-parser.js';
+import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
 
 export interface InlineQueryEventDetail {
-  attrs?: unknown;
-  content?: unknown;
+  queries?: unknown;
 }
 
 export interface InlineQueryEvent {
@@ -20,8 +19,7 @@ export interface InlineQueryEvent {
 export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQueryEvent> {}
 
 interface InlineQueryWireEventDetail {
-  attrs: string;
-  content: string;
+  queries: QueryElementChunkLike[];
 }
 
 export interface ApplyInlineQueryEventOptions {
@@ -41,12 +39,12 @@ export function applyInlineQueryEventToRuntime(
   event: InlineQueryEvent,
   options: ApplyInlineQueryEventOptions,
 ): readonly string[] {
-  const chunk = queryChunkFromInlineEvent(event, options.onError);
-  if (!chunk) return [];
+  const chunks = queryChunksFromInlineEvent(event, options.onError);
+  if (chunks.length === 0) return [];
 
   // SPEC.md §9.1/§9.4: inline enhanced responses, mutation responses, typed
   // reads, and hydrated scripts all converge on the same query apply path.
-  return applyQueryChunksToRuntime(options.store, [chunk], {
+  return applyQueryChunksToRuntime(options.store, chunks, {
     ...definedProps({
       applyQuery: options.applyQuery,
       queryPlans: options.queryPlans,
@@ -74,21 +72,31 @@ export function installInlineQueryEventHydration(
   };
 }
 
-function queryChunkFromInlineEvent(
+function queryChunksFromInlineEvent(
   event: InlineQueryEvent,
   onError?: RuntimeErrorReporter,
-): QueryChunk | undefined {
+): QueryChunk[] {
   const detail = event.detail;
-  if (isInlineQueryWireEventDetail(detail)) {
-    return readQueryElementChunk(detail, onError);
-  }
+  if (!isInlineQueryWireEventDetail(detail)) return [];
 
-  return undefined;
+  const chunks: QueryChunk[] = [];
+  for (const query of detail.queries) {
+    const chunk = readQueryElementChunk(query, onError);
+    if (chunk) chunks.push(chunk);
+  }
+  return chunks;
 }
 
 function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryWireEventDetail {
   if (typeof value !== 'object' || value === null) return false;
 
   const detail = value as InlineQueryEventDetail;
-  return typeof detail.attrs === 'string' && typeof detail.content === 'string';
+  return Array.isArray(detail.queries) && detail.queries.every(isQueryElementChunkLike);
+}
+
+function isQueryElementChunkLike(value: unknown): value is QueryElementChunkLike {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const chunk = value as Partial<QueryElementChunkLike>;
+  return typeof chunk.attrs === 'string' && typeof chunk.content === 'string';
 }

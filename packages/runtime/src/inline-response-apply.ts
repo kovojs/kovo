@@ -10,7 +10,7 @@ export interface InlineResponseApplyTarget {
 }
 
 export interface InlineMutationResponseApplyOptions {
-  dispatchQuery(query: Pick<ElementChunk, 'attrs' | 'content'>): void;
+  dispatchQueries(queries: readonly Pick<ElementChunk, 'attrs' | 'content'>[]): void;
   findFragmentTarget(target: string): InlineResponseApplyTarget | null | undefined;
   readBody(body: string): InlineMutationResponseBodyChunks;
 }
@@ -35,7 +35,7 @@ function applyInlineMutationResponseChunks(
   chunks: InlineMutationResponseBodyChunks,
   options: InlineMutationResponseApplyOptions,
 ): void {
-  chunks.queries.forEach((query) => options.dispatchQuery(query));
+  options.dispatchQueries(chunks.queries);
   chunks.fragments.forEach((fragment) =>
     applyResponseFragment(fragment, {
       appendFragment: appendInlineFragment,

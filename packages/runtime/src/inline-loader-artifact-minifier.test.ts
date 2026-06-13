@@ -56,14 +56,14 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).toContain('function appendInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain('function replaceInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'const dispatchQuery=(query)=>{dispatchEvent(new CustomEvent',
+      'const dispatchQueries=(queries)=>{dispatchEvent(new CustomEvent',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseBody(body,{dispatchQuery,findFragmentTarget,readBody:readInlineMutationResponseBodyChunks,});',
+      'applyInlineMutationResponseBody(body,{dispatchQueries,findFragmentTarget,readBody:readInlineMutationResponseBodyChunks,});',
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'detail:{attrs:query.attrs,content:query.content}',
+      'detail:{queries:queries.map((query)=>({attrs:query.attrs,content:query.content}))}',
     );
   });
 });

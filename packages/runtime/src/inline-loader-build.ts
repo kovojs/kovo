@@ -82,19 +82,21 @@ function installInlineJisoLoader(importModule) {
     doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
-  const dispatchQuery = (query) => {
+  const dispatchQueries = (queries) => {
     dispatchEvent(
       new CustomEvent('jiso:query', {
         detail: {
-          attrs: query.attrs,
-          content: query.content
+          queries: queries.map((query) => ({
+            attrs: query.attrs,
+            content: query.content
+          }))
         },
       }),
     );
   };
   const applyResponseBody = (body) => {
     applyInlineMutationResponseBody(body, {
-      dispatchQuery,
+      dispatchQueries,
       findFragmentTarget,
       readBody: readInlineMutationResponseBodyChunks,
     });

@@ -23,7 +23,7 @@ describe('inline loader response apply source', () => {
       '  return applyInlineMutationResponseChunks(options.readBody(body), options);',
       '}',
       'function applyInlineMutationResponseChunks(chunks, options) {',
-      '  chunks.queries.forEach(options.dispatchQuery);',
+      '  options.dispatchQueries(chunks.queries);',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
       '}',
       'function applyInlineFragment(fragment, findFragmentTarget) {',
@@ -63,7 +63,7 @@ describe('inline loader response apply source', () => {
       '  return applyInlineMutationResponseChunks(options.readBody(body), options);',
       '}',
       'function applyInlineMutationResponseChunks(chunks, options) {',
-      '  chunks.queries.forEach(options.dispatchQuery);',
+      '  options.dispatchQueries(chunks.queries);',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
       '}',
       'function applyInlineFragment(fragment, findFragmentTarget) {',
@@ -121,7 +121,7 @@ describe('inline loader response apply source', () => {
 
   it('keeps freshly minified response apply source compact before parity execution', () => {
     // SPEC.md §4.4/§9.1: minification cannot fork the inline mutation response
-    // scanner or the raw `jiso:query` event handoff used by runtime query apply.
+    // scanner or the batched `jiso:query` event handoff used by runtime query apply.
     const minifiedSource = buildInlineJisoLoaderInstallerSource();
 
     expect(minifiedSource).toBe(minifiedSource.trim());
@@ -157,8 +157,8 @@ describe('inline loader response apply source', () => {
     ]);
 
     applyInlineMutationResponseBody('ignored body', {
-      dispatchQuery(query) {
-        dispatched.push(query);
+      dispatchQueries(queries) {
+        dispatched.push([...queries]);
       },
       findFragmentTarget(target) {
         return targets.get(target) ?? null;
@@ -175,7 +175,7 @@ describe('inline loader response apply source', () => {
     });
 
     expect(dispatched).toEqual([
-      { attrs: ' name="cart"', content: 'ignored body', end: 0, start: 0 },
+      [{ attrs: ' name="cart"', content: 'ignored body', end: 0, start: 0 }],
     ]);
     expect(targets.get('replace-target')?.innerHTML).toBe('<p>replace</p>');
     expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');

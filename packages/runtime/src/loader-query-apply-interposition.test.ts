@@ -67,8 +67,7 @@ describe('loader query apply interposition', () => {
       | undefined;
     queryEventListener?.({
       detail: {
-        attrs: ' name="cart"',
-        content: '{"count":2}',
+        queries: [{ attrs: ' name="cart"', content: '{"count":2}' }],
       },
     });
     root.visibilityState = 'visible';

@@ -27,8 +27,7 @@ describe('inline query events', () => {
       applyInlineQueryEventToRuntime(
         {
           detail: {
-            attrs: ' name="cart" key="cart:c1"',
-            content: '{"count":3}',
+            queries: [{ attrs: ' name="cart" key="cart:c1"', content: '{"count":3}' }],
           },
         },
         {
@@ -63,8 +62,12 @@ describe('inline query events', () => {
       applyInlineQueryEventToRuntime(
         {
           detail: {
-            attrs: ' name="product" key="product&gt;p1"',
-            content: '{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}',
+            queries: [
+              {
+                attrs: ' name="product" key="product&gt;p1"',
+                content: '{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}',
+              },
+            ],
           },
         },
         { onError, store },
@@ -78,8 +81,7 @@ describe('inline query events', () => {
       applyInlineQueryEventToRuntime(
         {
           detail: {
-            attrs: ' name="empty"',
-            content: '',
+            queries: [{ attrs: ' name="empty"', content: '' }],
           },
         },
         { onError, store },
@@ -106,8 +108,7 @@ describe('inline query events', () => {
       applyInlineQueryEventToRuntime(
         {
           detail: {
-            attrs: ' name="product:p1"',
-            content: '{"stock":7}',
+            queries: [{ attrs: ' name="product:p1"', content: '{"stock":7}' }],
           },
         },
         { store },
@@ -121,7 +122,36 @@ describe('inline query events', () => {
     expect(plan).toHaveBeenCalledWith({ stock: 7 });
   });
 
-  it('ignores removed body/name inline query compatibility events', () => {
+  it('applies batched inline query events in one runtime query pass', () => {
+    const store = createQueryStore();
+    const seen: string[] = [];
+
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            queries: [
+              { attrs: ' name="cart" key="cart:c1"', content: '{"count":3}' },
+              { attrs: ' name="product:p1"', content: '{"stock":7}' },
+            ],
+          },
+        },
+        {
+          applyQuery(query) {
+            seen.push(`${query.name}:${query.key ?? ''}`);
+          },
+          store,
+        },
+      ),
+    ).toEqual(['cart:c1', 'product:p1']);
+
+    // SPEC.md §4.4/§9.1: the inline loader publishes one parsed fw-query
+    // batch per enhanced response, so modular hydration shares the batched
+    // query apply path used by mutation responses instead of per-query drift.
+    expect(seen).toEqual(['cart:cart:c1', 'product:p1']);
+  });
+
+  it('ignores removed inline query compatibility events', () => {
     const store = createQueryStore();
 
     expect(
@@ -136,10 +166,21 @@ describe('inline query events', () => {
         { store },
       ),
     ).toEqual([]);
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            attrs: ' name="cart" key="cart:c1"',
+            content: '{"count":3}',
+          },
+        },
+        { store },
+      ),
+    ).toEqual([]);
 
-    // SPEC.md §9.1/§9.4: the v1 inline query event contract is the fw-query
-    // wire chunk shape emitted by inline-loader-build.ts, not an alternate
-    // runtime-only compatibility payload.
+    // SPEC.md §9.1/§9.4: the inline query event contract is the batched
+    // fw-query wire shape emitted by inline-loader-build.ts, not alternate
+    // single-query or runtime-only compatibility payloads.
     expect(store.get('cart', 'cart:c1')).toBeUndefined();
   });
 
@@ -159,8 +200,7 @@ describe('inline query events', () => {
 
     listeners.get('jiso:query')?.({
       detail: {
-        attrs: ' name="cart"',
-        content: '{"count":1}',
+        queries: [{ attrs: ' name="cart"', content: '{"count":1}' }],
       },
     });
     expect(store.get('cart')).toEqual({ count: 1 });
@@ -169,8 +209,7 @@ describe('inline query events', () => {
     dispose();
     listeners.get('jiso:query')?.({
       detail: {
-        attrs: ' name="cart"',
-        content: '{"count":2}',
+        queries: [{ attrs: ' name="cart"', content: '{"count":2}' }],
       },
     });
     expect(listeners.has('jiso:query')).toBe(false);

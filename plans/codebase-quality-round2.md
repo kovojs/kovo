@@ -135,6 +135,11 @@ Latest evidence:
   targeted `node --test --test-name-pattern "P8 component explain includes handler, derive, trigger, and merge facts" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Phase 4 inline query batch apply slice:
+  `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm run check:inline-loader`;
+  `git diff --check`.
 - P10 acceptance command-fixture slice:
   `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
