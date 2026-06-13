@@ -167,7 +167,6 @@ export interface StateReturnObjectModel {
   end: number;
   entries: readonly ObjectLiteralEntry[];
   staticValue?: Record<string, StaticLiteralValue>;
-  source: string;
   start: number;
 }
 
@@ -370,10 +369,6 @@ export function componentRenderHostElement(model: ComponentModuleModel): JsxElem
       (element) => element.start === host.start && element.openingEnd === host.end,
     ) ?? null
   );
-}
-
-export function componentStateReturnObject(model: ComponentModuleModel): string | null {
-  return componentStateReturnObjectModel(model)?.source ?? null;
 }
 
 export function componentStateReturnObjectModel(
@@ -1721,7 +1716,6 @@ function arrowReturnObjectSource(
     end,
     entries: objectLiteralEntries(sourceFile, source, body),
     ...stateReturnStaticValue(body),
-    source: source.slice(start, end),
     start,
   };
 }

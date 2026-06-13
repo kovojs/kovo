@@ -80,6 +80,10 @@ remaining source-returning lowerers are retired or justified.
 
 Latest evidence:
 
+- [x] Dead state-return raw source storage and the source-returning
+      `componentStateReturnObject()` compatibility helper were removed; validation/emit use spans,
+      keys, and static model values. Verified with parser/state/compile/id-content tests, `tsc`,
+      exact `vp check`, and `git diff --check`.
 - [x] Component option entries no longer store unused raw initializer source after parser facts
       replaced known production consumers. Verified with parser/CSS/fragment/query/compile tests,
       `tsc`, exact `vp check`, and `git diff --check`.
