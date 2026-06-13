@@ -28,7 +28,12 @@ export interface WriteSummaryInput {
 
 export interface ReadSummaryInput {
   branch?: string;
-  operation: 'insert-select' | 'update-from' | 'update-predicate' | (string & {});
+  operation:
+    | 'delete-predicate'
+    | 'insert-select'
+    | 'update-from'
+    | 'update-predicate'
+    | (string & {});
   predicate?: 'eq' | 'non-eq';
   readKey?: string;
   site: string;
@@ -109,6 +114,9 @@ function unresolvedMessage(site: UnresolvedSummaryInput): string {
   }
   if (site.operation === 'update-predicate') {
     return `${diagnosticDefinitions.FW406.message} Update predicate read source could not be resolved to a Drizzle table.`;
+  }
+  if (site.operation === 'delete-predicate') {
+    return `${diagnosticDefinitions.FW406.message} Delete predicate read source could not be resolved to a Drizzle table.`;
   }
   return diagnosticDefinitions.FW406.message;
 }

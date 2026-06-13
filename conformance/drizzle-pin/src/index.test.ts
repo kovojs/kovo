@@ -9746,6 +9746,104 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins project delete predicate subquery read sources under real Drizzle imports', () => {
+    // SPEC §11.1: real drizzle-orm Postgres `PgDeleteBase` exposes only where/returning (no
+    // `.from()`/`.using()`), so a `delete().where(inArray(col, db.select().from(R)))` reads R as a
+    // `delete-predicate` source instead of silently dropping the subquery read.
+    expect(inArray).toBeTypeOf('function');
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import { inArray } from 'drizzle-orm';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', { id: text('id').primaryKey() }, jiso({ domain: 'product', key: 'id' }));",
+            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function pruneOrphanedItems(db: PgDatabase<any, any, any>) {',
+            '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select({ id: products.id }).from(products)));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      pruneOrphanedItems: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:9',
+            source: 'delete-predicate',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:9',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins opaque project delete predicate subquery reads as FW406 under real Drizzle imports', () => {
+    // SPEC §11.1: an opaque delete-predicate read source stays visible as FW406, not guessed.
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import { inArray } from 'drizzle-orm';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function pruneOrphanedItems(db: PgDatabase<any, any, any>) {',
+            '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select().from(tableFor("products"))));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      pruneOrphanedItems: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:8',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Delete predicate read source could not be resolved to a Drizzle table.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins project conditional table FW406 when an opaque branch remains', () => {
     const graph = extractTouchGraphFromProject({
       files: [

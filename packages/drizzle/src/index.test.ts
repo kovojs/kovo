@@ -5649,6 +5649,50 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source delete predicate subquery read source tables', () => {
+    // SPEC §11.1: a `delete().where(subquery.from(R))` reads R as a `delete-predicate` source.
+    // drizzle Postgres delete has no `.from()`/`.using()` chain, so the read is not silently dropped.
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export async function pruneOrphanedItems(db) {',
+          '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select({ id: products.id }).from(products)));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      pruneOrphanedItems: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:5',
+            source: 'delete-predicate',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts read source tables from write call AST without reparsing statement text', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -10808,6 +10852,106 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Update predicate read source could not be resolved to a Drizzle table.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
+  it('extracts project delete predicate subquery read sources', () => {
+    // SPEC §11.1: a `delete().where(subquery.from(R))` reads R; drizzle Postgres delete has no
+    // `.from()`/`.using()` chain, so this is a `delete-predicate` source, not a silently dropped read.
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+          'delete(table: unknown): { where(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import { inArray } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", { productId: text("product_id").notNull() }, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export async function pruneOrphanedItems(db: PgDatabase) {',
+            '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select({ id: products.id }).from(products)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      pruneOrphanedItems: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:8',
+            source: 'delete-predicate',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:8',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks unresolved project delete predicate subquery read sources as FW406', () => {
+    // SPEC §11.1: an opaque delete-predicate read source is visible as FW406, not guessed.
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+          'delete(table: unknown): { where(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import { inArray } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", { productId: text("product_id").notNull() }, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export async function pruneOrphanedItems(db: PgDatabase) {',
+            '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select().from(tableFor("products"))));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      pruneOrphanedItems: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Delete predicate read source could not be resolved to a Drizzle table.',
             site: 'cart.domain.ts:7',
           },
         ],

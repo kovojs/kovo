@@ -2712,7 +2712,7 @@ interface ExtractedWriteCall {
 }
 
 interface ExtractedReadSource {
-  operation: 'insert-select' | 'update-from' | 'update-predicate';
+  operation: 'delete-predicate' | 'insert-select' | 'update-from' | 'update-predicate';
   tableExpression: string;
 }
 
@@ -9164,6 +9164,14 @@ function writeReadSourceOperation(
     )
       ? 'insert-select'
       : undefined;
+  }
+
+  // SPEC §11.1: drizzle Postgres `delete()` has no `.from()`/`.using()` chain method (PgDeleteBase
+  // exposes only where/returning), so a `from(R)` descended from a delete chain is necessarily
+  // inside a `.where()` predicate subquery and contributes R to the READ set as a `delete-predicate`
+  // source instead of being silently dropped.
+  if (operation === 'delete') {
+    return callExpressionContinuesToChain(call, chain) ? undefined : 'delete-predicate';
   }
 
   if (operation !== 'update') return undefined;
