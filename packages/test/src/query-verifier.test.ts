@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, query, s, type QueryLoadContext } from '@jiso/server';
+import { domain, mutation, query, s, type QueryLoadContext } from '@jiso/server';
 
-import { createJisoTestHarness } from './harness.js';
 import { createDbVerifier } from './verifier.js';
-import { createFakeDb, expectedDiagnostic, type FakeDb } from './test-fixtures.js';
+import {
+  createFakeDb,
+  createVerifiedFakeHarness,
+  deferred,
+  expectedDiagnostic,
+  type FakeDb,
+} from './test-fixtures.js';
 
 describe('@jiso/test query verifier', () => {
   it('fails read-side verification for undeclared query domains', () => {
@@ -166,7 +171,7 @@ describe('@jiso/test query verifier', () => {
   it('executes query loaders and verifies reads against declared domains', async () => {
     const cart = domain('cart');
     const db = createFakeDb();
-    const harness = createJisoTestHarness({
+    const harness = createVerifiedFakeHarness({
       db,
       request: {
         session: { cartId: 'c1' },
@@ -196,7 +201,7 @@ describe('@jiso/test query verifier', () => {
   it('passes the verifier-wrapped db as the query loader context db', async () => {
     const cart = domain('cart');
     const db = createFakeDb();
-    const harness = createJisoTestHarness({
+    const harness = createVerifiedFakeHarness({
       db,
       touchGraph: {},
       verification: {
@@ -225,7 +230,7 @@ describe('@jiso/test query verifier', () => {
     const db = createFakeDb();
     db.write('products', 'p1');
     db.write('products', 'p2');
-    const harness = createJisoTestHarness({
+    const harness = createVerifiedFakeHarness({
       db,
       touchGraph: {},
       verification: {
@@ -251,8 +256,7 @@ describe('@jiso/test query verifier', () => {
 
   it('validates query loader results against declared output schemas', async () => {
     const cart = domain('cart');
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -274,8 +278,7 @@ describe('@jiso/test query verifier', () => {
 
   it('fails query output verification when observed result shape violates the schema', async () => {
     const cart = domain('cart');
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -299,8 +302,7 @@ describe('@jiso/test query verifier', () => {
 
   it('reports FW410 for nested query output shape mismatches', async () => {
     const product = domain('product');
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -324,8 +326,7 @@ describe('@jiso/test query verifier', () => {
 
   it('fails query-loader verification for reads outside declared domains', async () => {
     const cart = domain('cart');
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -347,8 +348,7 @@ describe('@jiso/test query verifier', () => {
 
   it('fails query-loader verification for raw SQL reads of exempt tables', async () => {
     const cart = domain('cart');
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -373,8 +373,7 @@ describe('@jiso/test query verifier', () => {
   it('scopes automatic query read verification to the current loader', async () => {
     const cart = domain('cart');
     const product = domain('product');
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -399,6 +398,63 @@ describe('@jiso/test query verifier', () => {
     await harness.query(productQuery);
 
     await expect(harness.query(cartQuery)).resolves.toEqual([]);
+  });
+
+  it('isolates query read verification from overlapping mutation observations', async () => {
+    const product = domain('product');
+    const releaseMutation = deferred();
+    const mutationStarted = deferred();
+    const mutationObserved = deferred();
+    const db = createFakeDb();
+    db.write('products', 'p1');
+    const harness = createVerifiedFakeHarness({
+      db,
+      touchGraph: {
+        'cart.add': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          audit_log: 'audit',
+          cart_items: 'cart',
+          products: 'product',
+        },
+      },
+    });
+    const cartMutation = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: FakeDb }) {
+        mutationStarted.resolve(undefined);
+        await releaseMutation.promise;
+        request.db.read('audit_log');
+        request.db.write('cart_items', input.productId);
+        mutationObserved.resolve(undefined);
+        return input.productId;
+      },
+    });
+    const productQuery = query('product', {
+      async load() {
+        await mutationStarted.promise;
+        releaseMutation.resolve(undefined);
+        await mutationObserved.promise;
+        return harness.db.read('products');
+      },
+      reads: [product],
+    });
+
+    const mutationRun = harness.exec(
+      cartMutation,
+      { productId: 'p1' },
+      { touchGraphKey: 'cart.add' },
+    );
+
+    await expect(harness.query(productQuery)).resolves.toEqual(['p1']);
+    await expect(mutationRun).resolves.toMatchObject({ ok: true, value: 'p1' });
+    expect(harness.verificationDiagnostics()).toEqual([]);
+    expect(harness.db.read('cart_items')).toEqual(['p1']);
   });
 
   it('fails read-side verification for unmapped query tables', () => {

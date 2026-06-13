@@ -2,28 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@jiso/server';
 
-import { createJisoTestHarness } from './harness.js';
 import {
-  createFakeDb,
+  createVerifiedFakeHarness,
+  deferred,
   expectedDiagnostic,
   expectedDiagnosticMessage,
   type FakeDb,
 } from './test-fixtures.js';
-
-function deferred<T = void>(): {
-  promise: Promise<T>;
-  reject(reason?: unknown): void;
-  resolve(value: T | PromiseLike<T>): void;
-} {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((innerResolve, innerReject) => {
-    resolve = innerResolve;
-    reject = innerReject;
-  });
-
-  return { promise, reject, resolve };
-}
 
 describe('@jiso/test harness verifier integration', () => {
   it('verifies observed writes against the static touch graph after exec', async () => {
@@ -35,8 +20,7 @@ describe('@jiso/test harness verifier integration', () => {
         return request.db.read('cart_items');
       },
     });
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {
         'cart.addItem': {
           touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
@@ -65,8 +49,7 @@ describe('@jiso/test harness verifier integration', () => {
         return request.db.read('cart_items');
       },
     });
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {
         'cart.addItem': {
           touches: [
@@ -125,8 +108,7 @@ describe('@jiso/test harness verifier integration', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {
         'cart.addItem': {
           touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
@@ -156,8 +138,7 @@ describe('@jiso/test harness verifier integration', () => {
         return input.productId;
       },
     });
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {
         'cart.addItem': {
           touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
@@ -210,8 +191,7 @@ describe('@jiso/test harness verifier integration', () => {
         return input.event;
       },
     });
-    const harness = createJisoTestHarness({
-      db: createFakeDb(),
+    const harness = createVerifiedFakeHarness({
       touchGraph: {
         'audit.add': {
           touches: [{ domain: 'audit', keys: null, site: 'audit.domain.ts:1', via: 'audit_log' }],

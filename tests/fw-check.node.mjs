@@ -1756,6 +1756,9 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
   const fetchCalls = [];
   const form = {
     action: '/_m/cart/add',
+    getAttribute(name) {
+      return name === 'enhance' ? '' : null;
+    },
     method: 'post',
   };
   const depElements = [
@@ -1776,10 +1779,6 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
       },
     },
   ];
-  const parseAttributes = (source) =>
-    Object.fromEntries(
-      [...source.matchAll(/\s+([a-zA-Z:-]+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
-    );
   const context = {
     CustomEvent: class CustomEvent {
       constructor(type, init) {
@@ -1789,31 +1788,23 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     },
     DOMParser: class DOMParser {
       parseFromString(body) {
-        const queryMatch = /<fw-query\b([^>]*)>([\s\S]*?)<\/fw-query>/.exec(body);
-        const queryAttributes = parseAttributes(queryMatch?.[1] ?? '');
-        const fragmentElements = [
-          ...body.matchAll(/<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/g),
-        ].map((match) => {
-          const attributes = parseAttributes(match[1] ?? '');
-          return {
-            getAttribute(name) {
-              return attributes[name] ?? null;
-            },
-            innerHTML: match[2],
-          };
-        });
+        const queryElements = htmlElementFacts(body, { tag: 'fw-query' });
+        const fragmentElements = htmlElementFacts(body, { tag: 'fw-fragment' }).map((element) => ({
+          getAttribute(name) {
+            return element.attrs[name] ?? null;
+          },
+          innerHTML: element.innerHtml,
+        }));
 
         return {
           querySelectorAll(selector) {
-            if (selector === 'fw-query' && queryMatch) {
-              return [
-                {
-                  getAttribute(name) {
-                    return queryAttributes[name] ?? null;
-                  },
-                  textContent: queryMatch[2],
+            if (selector === 'fw-query') {
+              return queryElements.map((element) => ({
+                getAttribute(name) {
+                  return element.attrs[name] ?? null;
                 },
-              ];
+                textContent: element.innerHtml,
+              }));
             }
             if (selector === 'fw-fragment') return fragmentElements;
             return [];

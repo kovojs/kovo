@@ -70,6 +70,9 @@ Closed evidence so far:
   `@jiso/test/html-fragment` element facts instead of parsing `vite.config.ts`/`app.ts` source.
 - `tests/fw-check.node.mjs` no longer owns its local regex/index-based HTML element/block parser;
   its compatibility helpers delegate to the shared `@jiso/test/html-fragment` element-fact seam.
+- The inline loader enhanced-form evidence now uses an internally consistent enhanced-form fixture
+  (`closest()` selector match plus `getAttribute('enhance')`), so the assertion proves submit
+  behavior against the loader's public form-detection contract instead of a stale test double.
 
 Open:
 
@@ -386,6 +389,9 @@ Closed evidence so far:
   selected text, and route meta through shared facts instead of raw HTML membership.
 - Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
   fake server module, keeping the local app-shell workflow out of source-text assertions.
+- `@jiso/test` verifier tests share `createVerifiedFakeHarness()` and `deferred()` fixtures, and
+  query verification now proves AsyncLocalStorage capture isolation while an overlapping mutation
+  observes unrelated reads/writes.
 
 Open:
 
@@ -407,7 +413,10 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src/harness-verifier.test.ts packages/test/src/query-verifier.test.ts`
 - `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "S2 loader budget and inline enhanced form behavior" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
 - `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`
@@ -432,6 +441,8 @@ Closed evidence so far:
 - Shared `htmlKeyFacts`/`htmlTextContent` coverage in `packages/test/src/html-fragment.test.ts`
   replaces commerce raw HTML probes for list keys, order rows, deferred fragments, auth forms,
   route meta, and mutation error text.
+- `packages/test/src/test-fixtures.ts` now owns shared verified-harness and promise-control helpers
+  used by verifier integration/query tests instead of each test file growing local harness setup.
 
 Open:
 
