@@ -376,6 +376,15 @@ packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
 packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts
 packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Visible-return query lifecycle is split from typed-read HTTP refetch: `query-visible-return.ts`
+  now owns the hydration/refetch ledger, initial and later `fw-query` script hydration, disposal,
+  and the `visibilitychange` listener; `query-refetch.ts` is narrowed to typed-read fetch and
+  decoded response application (SPEC.md §4.4/§9.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts
+packages/runtime/src/loader.ts packages/runtime/src/query-refetch.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`.
 
 Open:
 
@@ -415,6 +424,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/loader-lifecycle.test.ts`
+- `pnpm exec vp check packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts packages/runtime/src/loader.ts packages/runtime/src/query-refetch.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts packages/runtime/src/loader.ts packages/runtime/src/query-refetch.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server

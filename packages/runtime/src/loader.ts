@@ -17,7 +17,7 @@ import type {
 import { dispatchEnhancedFormSubmit, isEnhancedSubmitEvent } from './mutation-submit.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
-import { installQueryVisibleReturnRefetch } from './query-refetch.js';
+import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import { queryScriptsFromRoot } from './query-apply.js';
 import type { QueryStore } from './query-store.js';

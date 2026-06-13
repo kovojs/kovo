@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './query-store.js';
+import { refetchQueries } from './query-refetch.js';
 import {
   createRefetchQueryLedger,
   installQueryVisibleReturnRefetch,
-  refetchQueries,
-} from './query-refetch.js';
+} from './query-visible-return.js';
 
 class FakeVisibleReturnRoot {
   listeners = new Map<string, (event: unknown) => void | Promise<void>>();
@@ -45,6 +45,37 @@ describe('query refetch ledger', () => {
 });
 
 describe('query refetch', () => {
+  it('hydrates initial scripts without installing a visible-return listener when refetch is disabled', () => {
+    const root = new FakeVisibleReturnRoot();
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+    store.subscribe('cart', plan);
+
+    const lifecycle = installQueryVisibleReturnRefetch({
+      queryScripts: () => root.querySelectorAll('script[fw-query]'),
+      queryStore: store,
+      root,
+    });
+
+    // SPEC.md §4.4/§9.4: query script hydration is loader lifecycle work even
+    // when visible-return typed reads are not configured.
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(plan).toHaveBeenCalledWith({ count: 1 });
+    expect(root.listeners.has('visibilitychange')).toBe(false);
+
+    lifecycle.rememberAppliedQueries(['reviews']);
+    lifecycle.dispose();
+    lifecycle.rememberAppliedQueries(['inventory']);
+    expect(root.listeners.has('visibilitychange')).toBe(false);
+  });
+
   it('hydrates new query scripts before visible-return refetch and dedupes in-flight work', async () => {
     const root = new FakeVisibleReturnRoot();
     const store = createQueryStore();

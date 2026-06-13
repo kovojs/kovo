@@ -150,6 +150,16 @@ packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
 packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts
 packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md
 plans/codebase-quality-round2.md`.
+      Evidence 2026-06-13: visible-return query hydration/refetch lifecycle now lives in
+      `packages/runtime/src/query-visible-return.ts`, leaving
+      `packages/runtime/src/query-refetch.ts` focused on typed-read HTTP response application
+      while loader install still hydrates query scripts without requiring visible-return refetch
+      configuration (SPEC §4.4/§9.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts
+packages/runtime/src/loader.ts packages/runtime/src/query-refetch.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
 - [x] FW227 nullable binding paths (SPEC §4.8, §6.2): optional-segment (`?.`) path grammar lowered by the compiler (P1), shared empty-rendering semantics in server renderer and loader/stamps (P2/P5), null-aware path typing against inferred query shapes with the leftJoin-nullability proof under `vp check` (P5), and a golden teaching error.
       Evidence 2026-06-11: `packages/compiler/src/query-bindings.test.ts` covers optional
