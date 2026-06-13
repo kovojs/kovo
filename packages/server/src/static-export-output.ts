@@ -106,7 +106,7 @@ export function staticExportAssetArtifacts(
   return assets.map((asset) => ({
     headers: sortedHeaders(staticExportAssetHeaders(asset)),
     path: asset.path,
-    source: staticExportSourcePath(asset.source),
+    source: staticExportSourcePath(asset),
     status: 200,
   }));
 }
@@ -287,6 +287,17 @@ function staticExportAssetHeaders(asset: StaticExportAssetInput): Headers {
   return headers;
 }
 
-function staticExportSourcePath(source: string | URL): string {
-  return source instanceof URL ? fileURLToPath(source) : source;
+function staticExportSourcePath(asset: StaticExportAssetInput): string {
+  if (asset.source instanceof URL) {
+    if (asset.source.protocol === 'file:') return fileURLToPath(asset.source);
+
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        asset.path,
+        `FW229 static export cannot copy static asset '${asset.path}' from '${asset.source.href}'. Static asset sources must be filesystem paths or file: URLs.`,
+      ),
+    ]);
+  }
+
+  return asset.source;
 }

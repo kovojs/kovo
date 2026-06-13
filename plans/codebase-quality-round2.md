@@ -175,6 +175,15 @@ checks, so the monolith asserts public diagnostic facts without rebuilding those
 
 Latest evidence:
 
+- Phase 5 static export asset source boundary slice:
+  `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/static-export-output.ts` now rejects non-`file:` URL static asset
+  sources with FW229, and `packages/server/src/static-export.ts` normalizes public static export
+  assets before SPEC §9.5 synthetic route replay so invalid asset source URLs fail before route
+  rendering, output planning, or writes.
 - Phase 5 static export replay origin boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-request.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

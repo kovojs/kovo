@@ -196,6 +196,21 @@ Round294 static export replay origin boundary evidence:
 - `pnpm exec vp check packages/server/src/static-export-replay-context.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round295 static export asset source boundary evidence:
+
+- `packages/server/src/static-export-output.ts` now rejects non-`file:` URL static asset sources
+  with FW229 while preserving filesystem paths and `file:` URLs, keeping SPEC §9.5 static asset
+  copying on a local filesystem boundary instead of leaking Node URL errors.
+- `packages/server/src/static-export.ts` normalizes public `assets` before synthetic route replay,
+  so invalid asset source URLs fail before route rendering or output planning/writes.
+- `packages/server/src/static-export-output.test.ts` proves the artifact helper emits the FW229
+  teaching diagnostic for `https:` asset sources, and `packages/server/src/static-export.test.ts`
+  proves `exportStaticApp()` rejects the same input before route replay.
+- `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

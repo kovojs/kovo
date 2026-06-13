@@ -168,6 +168,17 @@ describe('server static export output boundary', () => {
     }
   });
 
+  it('rejects non-file URL static asset sources at the public artifact boundary', () => {
+    expect(() =>
+      staticExportAssetArtifacts([
+        {
+          path: '/assets/app.css',
+          source: new URL('https://cdn.example.test/app.css'),
+        },
+      ]),
+    ).toThrow(/Static asset sources must be filesystem paths or file: URLs/);
+  });
+
   it('validates final output targets before committing staged files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-commit-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-source-'));

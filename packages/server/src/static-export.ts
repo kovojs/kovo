@@ -20,12 +20,12 @@ export async function exportStaticApp(
   assertStaticExportCompileDiagnostics(options.diagnostics ?? []);
   assertNoStaticExportHtmlPathStyleOption(options);
 
+  const assets = staticExportAssetArtifacts(options.assets ?? []);
   const replay = await replayStaticExportApp({
     app,
     ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
     ...(options.origin === undefined ? {} : { origin: options.origin }),
   });
-  const assets = staticExportAssetArtifacts(options.assets ?? []);
   const outputPlan = createStaticExportOutputPlan({
     artifacts: replay.artifacts,
     assets,

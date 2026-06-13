@@ -197,6 +197,41 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects non-file static asset source URLs before synthetic route replay', async () => {
+    let rendered = false;
+    const app = createApp({
+      routes: [
+        route('/', {
+          page: () => {
+            rendered = true;
+            return '<main>Home</main>';
+          },
+        }),
+      ],
+    });
+
+    await expect(
+      exportStaticApp(app, {
+        assets: [
+          {
+            path: '/assets/app.css',
+            source: new URL('https://cdn.example.test/app.css'),
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining('Static asset sources must be filesystem paths'),
+          routePath: '/assets/app.css',
+        },
+      ],
+    });
+    expect(rendered).toBe(false);
+  });
+
   it('rejects duplicate concrete route targets before static replay', async () => {
     let replayed = false;
     const app = createApp({
