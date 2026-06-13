@@ -284,9 +284,9 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the app-shell/harness/runtime mini-wave through `272d3f2`
-  (`a2d9378`, `19a156c`, `272d3f2`): 771 formatted files, 673 lint/typechecked files, and
-  7 typechecked example/conformance projects.
+- `pnpm run check` passed after the Round119-134 integration wave through `e597da6`: inline
+  loader check, 776 formatted files, 678 lint/typechecked files, and 7 typechecked
+  example/conformance projects.
 
 Focused gates since that broad run:
 
@@ -301,9 +301,19 @@ Focused gates since that broad run:
 - Server/app-shell: Vite client-module output owner split, root app-shell subpath export split,
   focused Vite/static tests, full server suite, `tsc`, exact `vp check`, and `git diff --check`
   passed in Round124.
+- Server/app-shell: deleted internal `document.ts` and `vite.ts` aggregate aliases, full server
+  suite, `tsc`, exact `vp check`, and `git diff --check` passed in Round128.
 - UI/gallery: H3 autocomplete, combobox, command, and otp-field reset behavior tests, full
   headless-ui tests, primitive lint, UI package tests, focused gallery tests, exact `vp check`,
   and `git diff --check` passed in Round119.
+- Runtime: decoded apply primitive, full runtime suite, browser runtime, inline-loader check,
+  `tsc`, exact `vp check`, and `git diff --check` passed in Round126.
+- Drizzle: carrier member helper handoff degradation, package suite, pinned conformance, exact
+  `vp check`, and `git diff --check` passed in Round127.
+- Harness: structured `fw-check` fixtures, commerce source-truth, `check:build`, targeted
+  `fw-check`, exact `vp check`, and `git diff --check` passed in Round125.
+- UI: number-field off-grid step alignment, focused/full headless-ui tests, primitive lint, exact
+  `vp check`, and `git diff --check` passed in Round129.
 
 Stale but useful broad references:
 
