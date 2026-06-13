@@ -1,7 +1,8 @@
 # Jiso v1 Remaining Work
 
 `SPEC.md` is the behavior source of truth. This file is the top-level v1 closeout checklist; keep
-implementation evidence in `plans/codebase-quality-round2.md`, `plans/ui.md`, and `plans/app-shell.md`.
+implementation evidence in `plans/codebase-quality-round2.md`, `plans/ui.md`, `plans/app-shell.md`,
+and `plans/better-docs.md`.
 
 ## Fixed Scope
 
@@ -29,6 +30,9 @@ implementation evidence in `plans/codebase-quality-round2.md`, `plans/ui.md`, an
 - [ ] UI: finish remaining primitive exports, behavior contracts, wrappers, gallery routes, compiled
       demos, state/focus/form/validity behavior, canceled-change restoration, axe checks, and visual
       baselines.
+- [ ] Docs: rewrite the docs site for approachability and dual human/agent consumption — "Why Jiso?"
+      positioning, voice cleanup, real API references from source JSDoc, and an agent layer. See
+      `plans/better-docs.md`.
 
 ## Final Acceptance
 
