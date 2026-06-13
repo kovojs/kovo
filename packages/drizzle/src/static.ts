@@ -3783,7 +3783,7 @@ function queryShapeFromObjectLiteralNode(
     const key = projectionPropertyName(property.name);
     if (!key) continue;
 
-    const valueNode = unwrappedExpression(property.initializer);
+    const valueNode = unwrappedTsExpression(property.initializer);
     const path = prefix ? `${prefix}.${key}` : key;
     if (ts.isObjectLiteralExpression(valueNode)) {
       const nested = queryShapeFromObjectLiteralNode(valueNode, {
@@ -3923,7 +3923,7 @@ function scalarProjectionTable(expression: ts.Expression): string | undefined {
 }
 
 function isOpaqueProjection(expression: ts.Expression): boolean {
-  const node = unwrappedExpression(expression);
+  const node = unwrappedTsExpression(expression);
   if (ts.isTaggedTemplateExpression(node)) return staticTsExpressionPath(node.tag) === 'sql';
   if (!ts.isCallExpression(node)) return false;
 
@@ -3932,7 +3932,7 @@ function isOpaqueProjection(expression: ts.Expression): boolean {
 }
 
 function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
-  const node = unwrappedExpression(expression);
+  const node = unwrappedTsExpression(expression);
   const typeArguments = ts.isTaggedTemplateExpression(node)
     ? node.typeArguments
     : ts.isCallExpression(node)
@@ -3952,14 +3952,8 @@ function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
   return null;
 }
 
-function unwrappedExpression(expression: ts.Expression): ts.Expression {
-  return ts.isParenthesizedExpression(expression)
-    ? unwrappedExpression(expression.expression)
-    : expression;
-}
-
 function staticTsExpressionPath(expression: ts.Expression): string | undefined {
-  const node = unwrappedExpression(expression);
+  const node = unwrappedTsExpression(expression);
   if (ts.isIdentifier(node)) return node.text;
   if (ts.isPropertyAccessExpression(node)) {
     const base = staticTsExpressionPath(node.expression);
@@ -3976,7 +3970,7 @@ function staticTsExpressionPath(expression: ts.Expression): string | undefined {
 function staticTsElementAccessName(expression: ts.Expression | undefined): string | undefined {
   if (!expression) return undefined;
 
-  const node = unwrappedExpression(expression);
+  const node = unwrappedTsExpression(expression);
   if (
     ts.isStringLiteral(node) ||
     ts.isNumericLiteral(node) ||
@@ -5289,6 +5283,8 @@ function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
   if (ts.isParenthesizedExpression(expression)) return unwrappedTsExpression(expression.expression);
   if (ts.isAsExpression(expression)) return unwrappedTsExpression(expression.expression);
   if (ts.isSatisfiesExpression(expression)) return unwrappedTsExpression(expression.expression);
+  if (ts.isTypeAssertionExpression(expression)) return unwrappedTsExpression(expression.expression);
+  if (ts.isNonNullExpression(expression)) return unwrappedTsExpression(expression.expression);
   return expression;
 }
 

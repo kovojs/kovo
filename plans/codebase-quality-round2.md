@@ -678,7 +678,10 @@ computed callback/action keys resolve only on executable Drizzle surfaces; unres
 loader/action keys remain visible as FW406. Project Postgres receiver proof now uses ts-morph
 type/symbol names plus exact unresolved type-reference parsing instead of broad printed type-text
 membership, so similarly named fake types such as `PgDatabaseLike` stay invisible while real
-`PgDatabase` carriers and destructured helper parameters remain exact.
+`PgDatabase` carriers and destructured helper parameters remain exact. Query projection extraction
+now uses the same parsed wrapper unwrapping as the rest of static extraction, so wrapped column and
+typed `sql<T>` expressions are resolved from source/project facts instead of degrading behind
+duplicate parenthesis-only projection logic.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
@@ -1005,6 +1008,15 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
       exact `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
       and `git diff --check`.
+      Evidence 2026-06-13 round285: `packages/drizzle/src/static.ts` deleted the projection-only
+      `unwrappedExpression()` path and routes query-shape, static path, opaque projection, and
+      typed `sql<T>` extraction through shared parsed `unwrappedTsExpression()` semantics for
+      parentheses, `as`, `satisfies`, angle-bracket assertions, and non-null wrappers.
+      `packages/drizzle/src/index.test.ts` covers wrapped source and project query projection
+      expressions, and `conformance/drizzle-pin/src/index.test.ts` pins the same behavior under
+      real `drizzle-orm` Postgres imports. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
+      and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -1012,6 +1024,11 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 
 Latest evidence:
 
+- round285 wrapped query projection extraction slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
+  `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - round284 worker B project receiver type proof slice:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
   exact `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;

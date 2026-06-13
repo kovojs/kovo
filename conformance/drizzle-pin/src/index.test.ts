@@ -149,6 +149,49 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins wrapped project query projection expressions under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              stock: integer('stock').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/wrapped-projection', {
+              load(_input, db: PgDatabase<any, any, any>) {
+                return db.select({
+                  id: (products.id as unknown) as typeof products.id,
+                  stock: products['stock']!,
+                  count: (sql<number>\`count(*)\` satisfies unknown),
+                }).from(products);
+              },
+              output: {},
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/wrapped-projection',
+        reads: ['product'],
+        shape: {
+          count: 'number',
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:10',
+      },
+    ]);
+  });
+
   it('pins nullable project query shapes for real Drizzle left joins', () => {
     const facts = extractQueryFactsFromProject({
       files: [

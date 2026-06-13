@@ -176,6 +176,56 @@ describe('@jiso/drizzle touch graph helpers', () => {
     expect(extractQueryFactsFromProject({ files })).toEqual([]);
   });
 
+  it('resolves wrapped query projection expressions in source and project modes', () => {
+    const sourceFile = {
+      fileName: 'product.queries.ts',
+      source: [
+        'export const products = pgTable("products", {',
+        '  id: text("id").primaryKey(),',
+        '  stock: integer("stock").notNull(),',
+        '}, jiso({ domain: "product", key: "id" }));',
+        '',
+        'export const productQuery = query("product/wrapped-projection", {',
+        '  load(_input, db) {',
+        '    return db.select({',
+        '      id: (products.id as unknown) as typeof products.id,',
+        '      stock: products["stock"]!,',
+        '      count: (sql<number>`count(*)` satisfies unknown),',
+        '    }).from(products);',
+        '  },',
+        '  output: {},',
+        '});',
+        '',
+      ].join('\n'),
+    };
+
+    const expected = [
+      {
+        query: 'product/wrapped-projection',
+        reads: ['product'],
+        shape: {
+          count: 'number',
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:6',
+      },
+    ];
+
+    expect(extractQueryFactsFromSource([sourceFile])).toEqual(expected);
+    expect(
+      extractQueryFactsFromProject({
+        files: [
+          pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<void> };']),
+          {
+            ...sourceFile,
+            source: sourceFile.source.replace('load(_input, db)', 'load(_input, db: PgDatabase)'),
+          },
+        ],
+      }),
+    ).toEqual(expected);
+  });
+
   it('degrades deferred SQLite table factories instead of extracting exact v1 source writes', () => {
     const graph = extractTouchGraphFromSource([
       {
