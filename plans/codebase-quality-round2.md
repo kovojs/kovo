@@ -250,8 +250,8 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the compiler validator mini-wave through `fa71b3f`
-  (`1bc23f8`, `fa71b3f`): 768 formatted files, 670 lint/typechecked files, and
+- `pnpm run check` passed after the app-shell/harness/runtime mini-wave through `272d3f2`
+  (`a2d9378`, `19a156c`, `272d3f2`): 771 formatted files, 673 lint/typechecked files, and
   7 typechecked example/conformance projects.
 
 Focused gates since that broad run:
