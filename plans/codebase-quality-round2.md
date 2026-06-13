@@ -1166,8 +1166,23 @@ membership, so similarly named fake types such as `PgDatabaseLike` stay invisibl
 now uses the same parsed wrapper unwrapping as the rest of static extraction, so wrapped column and
 typed `sql<T>` expressions are resolved from source/project facts instead of degrading behind
 duplicate parenthesis-only projection logic.
+Project Postgres namespace table factories such as `pg.pgTable()` and namespace column builders
+such as `pg.text()` now resolve only when ts-morph proves a `drizzle-orm/pg-core` namespace import;
+source mode keeps that surface opaque and degrades writes to FW406.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
+      Evidence 2026-06-13 round327: `packages/drizzle/src/static.ts` separates project table
+      initializer proof from source-mode `pgTable` compatibility and resolves
+      `drizzle-orm/pg-core` namespace table/column factories through ts-morph import facts.
+      `packages/drizzle/src/index.test.ts` proves source-mode namespace factories still degrade to
+      FW406 while project mode extracts exact Postgres writes, query reads, shapes, and instance
+      keys; `conformance/drizzle-pin/src/index.test.ts` pins the same behavior against real
+      `drizzle-orm` namespace imports. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
+      `pnpm --filter @jiso/conformance-drizzle-pin test`;
+      `pnpm exec tsc --noEmit --pretty false`; exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
       Evidence: `packages/drizzle/src/static.ts` resolves `query(..., { load })` through
       referenced function symbols; `packages/drizzle/src/index.test.ts` covers source shorthand,

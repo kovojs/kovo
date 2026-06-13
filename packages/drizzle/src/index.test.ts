@@ -1073,6 +1073,75 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('resolves project-mode Postgres namespace table factories from real import symbols', () => {
+    const source = [
+      'import * as pg from "drizzle-orm/pg-core";',
+      'import type { PgDatabase } from "drizzle-orm/pg-core";',
+      '',
+      'export const products = pg.pgTable("products", {',
+      '  id: pg.text("id").primaryKey(),',
+      '  stock: pg.integer("stock").notNull(),',
+      '}, jiso({ domain: "product", key: "id" }));',
+      '',
+      'export async function restock(db: PgDatabase<any, any, any>, productId: string) {',
+      '  await db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+      '}',
+      '',
+      'export const productQuery = query("product/namespace-factory", {',
+      '  load(input, db: PgDatabase<any, any, any>) {',
+      '    return db.select({ id: products.id, stock: products.stock }).from(products).where(eq(products.id, input.id));',
+      '  },',
+      '});',
+    ].join('\n');
+
+    expect(extractTouchGraphFromSource([{ fileName: 'product.domain.ts', source }])).toEqual({
+      restock: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:10',
+          },
+        ],
+      },
+    });
+    expect(
+      extractTouchGraphFromProject({ files: [{ fileName: 'product.domain.ts', source }] }),
+    ).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:10',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(
+      extractQueryFactsFromProject({ files: [{ fileName: 'product.domain.ts', source }] }),
+    ).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product/namespace-factory',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:13',
+      },
+    ]);
+  });
+
   it('ignores source-mode table declarations inside comments and strings', () => {
     const graph = extractTouchGraphFromSource([
       {

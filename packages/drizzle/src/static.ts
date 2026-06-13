@@ -2012,7 +2012,7 @@ function projectTableNamesBySymbol(
   for (const sourceFile of sourceFiles) {
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const initializer = declaration.getInitializer();
-      if (!initializer || !isAnnotatedTableInitializerNode(initializer)) continue;
+      if (!initializer || !isProjectAnnotatedTableInitializerNode(initializer)) continue;
 
       const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
       if (!symbolKey) continue;
@@ -2166,14 +2166,14 @@ function projectColumnShapesByTable(
   for (const sourceFile of sourceFiles) {
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const initializer = declaration.getInitializer();
-      if (!initializer || !isAnnotatedTableInitializerNode(initializer)) continue;
+      if (!initializer || !isProjectAnnotatedTableInitializerNode(initializer)) continue;
 
       const tableName = tableNamesBySymbol.get(
         resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
       );
       if (!tableName) continue;
 
-      const columns = tableColumnShapes(initializer);
+      const columns = tableColumnShapes(initializer, 'project');
       if (Object.keys(columns).length > 0) shapes.set(tableName, columns);
     }
   }
@@ -2181,7 +2181,10 @@ function projectColumnShapesByTable(
   return shapes;
 }
 
-function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
+function tableColumnShapes(
+  initializer: Node,
+  mode: 'project' | 'source' = 'source',
+): Record<string, QueryShape> {
   const call = Node.isCallExpression(initializer) ? initializer : undefined;
   const columns = call?.getArguments()[1];
   if (!columns || !Node.isObjectLiteralExpression(columns)) return {};
@@ -2193,11 +2196,23 @@ function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
     const name = propertyNameText(property.getNameNode());
     if (!name) continue;
 
-    const shape = columnBuilderShape(property.getInitializer());
+    const shape =
+      mode === 'project'
+        ? projectColumnBuilderShape(property.getInitializer())
+        : columnBuilderShape(property.getInitializer());
     if (shape) shapes[name] = shape;
   }
 
   return shapes;
+}
+
+function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
+  const builder = projectColumnBuilderName(initializer);
+  if (!builder) return undefined;
+
+  const baseShape = columnBuilderBaseShape(builder);
+  if (!baseShape) return undefined;
+  return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
 function propertyNameText(name: Node, resolveStaticComputed = false): string | undefined {
@@ -2314,6 +2329,24 @@ function columnBuilderName(initializer: Node | undefined): string | undefined {
   return columnBuilderNameFromExpression(
     unwrappedTsExpression(initializer.compilerNode as ts.Expression),
   );
+}
+
+function projectColumnBuilderName(initializer: Node | undefined): string | undefined {
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isCallExpression(expression)) return undefined;
+
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (Node.isIdentifier(callee)) return callee.getText();
+  if (!Node.isPropertyAccessExpression(callee)) return undefined;
+
+  const base = unwrappedStaticExpressionNode(callee.getExpression());
+  if (Node.isCallExpression(base)) return projectColumnBuilderName(base);
+
+  // SPEC §10-§11: project-mode namespace column factories require ts-morph import proof instead
+  // of accepting arbitrary `schema.text()` source names.
+  return isDrizzlePgCoreNamespaceMember(callee) ? callee.getName() : undefined;
 }
 
 function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
@@ -2441,6 +2474,50 @@ function isAnnotatedTableInitializerNode(initializer: Node): boolean {
   if (!isDrizzleTableFactoryName(expression.getText())) return false;
 
   return initializer.getArguments().some(isJisoAnnotationCall);
+}
+
+function isProjectAnnotatedTableInitializerNode(initializer: Node): boolean {
+  if (!Node.isCallExpression(initializer)) return false;
+  const expression = unwrappedStaticExpressionNode(initializer.getExpression());
+  const isTableFactory = Node.isIdentifier(expression)
+    ? isDrizzleTableFactoryName(expression.getText())
+    : Node.isPropertyAccessExpression(expression) &&
+      isDrizzleTableFactoryNamespaceMember(expression);
+  if (!isTableFactory) return false;
+
+  return initializer.getArguments().some(isJisoAnnotationCall);
+}
+
+function isDrizzleTableFactoryNamespaceMember(access: Node): boolean {
+  if (!Node.isPropertyAccessExpression(access)) return false;
+  if (!isDrizzleTableFactoryName(access.getName())) return false;
+  return isDrizzlePgCoreNamespaceMember(access);
+}
+
+function isDrizzlePgCoreNamespaceMember(access: Node): boolean {
+  if (!Node.isPropertyAccessExpression(access)) return false;
+
+  const expression = unwrappedStaticExpressionNode(access.getExpression());
+  if (!Node.isIdentifier(expression)) return false;
+
+  const namespaceImport = access
+    .getSourceFile()
+    .getImportDeclarations()
+    .some(
+      (declaration) =>
+        declaration.getNamespaceImport()?.getText() === expression.getText() &&
+        declaration.getModuleSpecifierValue() === 'drizzle-orm/pg-core',
+    );
+  if (namespaceImport) return true;
+
+  const symbol = expression.getSymbol()?.getAliasedSymbol() ?? expression.getSymbol();
+  return (
+    symbol?.getDeclarations().some((declaration) => {
+      if (declaration.getKind() !== SyntaxKind.NamespaceImport) return false;
+      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+      return importDeclaration?.getModuleSpecifierValue() === 'drizzle-orm/pg-core';
+    }) ?? false
+  );
 }
 
 function isJisoAnnotationCall(node: Node): boolean {
@@ -5232,7 +5309,7 @@ function projectTablesBySyntheticName(
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
-      if (!initializer || !isAnnotatedTableInitializerNode(initializer)) continue;
+      if (!initializer || !isProjectAnnotatedTableInitializerNode(initializer)) continue;
 
       const syntheticName = extraction.tableNamesBySymbol.get(
         resolvedSymbolKey(name.getSymbol()) ?? '',
@@ -5248,7 +5325,8 @@ function projectTablesBySyntheticName(
           name: tableNameArgument(initializer) ?? syntheticName,
         },
         columns:
-          extraction.columnShapesByTable.get(syntheticName) ?? tableColumnShapes(initializer),
+          extraction.columnShapesByTable.get(syntheticName) ??
+          tableColumnShapes(initializer, 'project'),
         exported: variableDeclarationIsExported(declaration),
       });
     }

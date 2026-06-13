@@ -11,6 +11,7 @@ import {
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
+import * as pg from 'drizzle-orm/pg-core';
 
 import {
   createTouchGraphEntry,
@@ -145,6 +146,81 @@ describe('Drizzle pinned subset conformance', () => {
           stock: 'number',
         },
         site: 'conformance/drizzle-pin/src/product.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('pins project extraction for real Postgres namespace table factories', () => {
+    const products = pg.pgTable('products', {
+      id: pg.text('id').primaryKey(),
+      metadata: pg.jsonb('metadata'),
+      stock: pg.integer('stock').notNull(),
+    });
+
+    expect(products.id).toBeDefined();
+    expect(products.metadata).toBeDefined();
+    expect(products.stock).toBeDefined();
+
+    const source = [
+      "import * as pg from 'drizzle-orm/pg-core';",
+      "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+      '',
+      "export const products = pg.pgTable('products', {",
+      "  id: pg.text('id').primaryKey(),",
+      "  metadata: pg.jsonb('metadata'),",
+      "  stock: pg.integer('stock').notNull(),",
+      "}, jiso({ domain: 'product', key: 'id' }));",
+      '',
+      'export async function restock(db: PgDatabase<any, any, any>, productId: string) {',
+      '  await db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+      '}',
+      '',
+      "export const productQuery = query('product/namespace-factory', {",
+      '  load(input, db: PgDatabase<any, any, any>) {',
+      '    return db.select({ id: products.id, metadata: products.metadata, stock: products.stock }).from(products).where(eq(products.id, input.id));',
+      '  },',
+      '});',
+    ].join('\n');
+
+    expect(
+      extractTouchGraphFromProject({
+        files: [{ fileName: 'conformance/drizzle-pin/src/product.namespace.ts', source }],
+      }),
+    ).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.namespace.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(
+      extractQueryFactsFromProject({
+        files: [{ fileName: 'conformance/drizzle-pin/src/product.namespace.ts', source }],
+      }),
+    ).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product/namespace-factory',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          metadata: {
+            kind: 'nullable',
+            shape: 'object',
+          },
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.namespace.ts:14',
       },
     ]);
   });
