@@ -72,6 +72,10 @@ export interface FwResponseBodyFact {
   stylesheetHrefsByTarget: Record<string, string[]>;
 }
 
+export function htmlElementCount(html: string, selector: HtmlElementSelector = {}): number {
+  return htmlElementFacts(html, selector).length;
+}
+
 export interface HtmlFormFieldFact {
   attrs: Record<string, string>;
   html: string;
@@ -243,6 +247,10 @@ export function fwResponseBodyFact(html: string): FwResponseBodyFact {
       fragments.map((fragment) => [fragment.target, fragment.stylesheetHrefs]),
     ),
   };
+}
+
+export function fwQueryJsonValues(html: string, name: string): unknown[] {
+  return fwResponseBodyFact(html).queryJsonByName[name] ?? [];
 }
 
 export function htmlFormFacts(html: string): HtmlFormFact[] {

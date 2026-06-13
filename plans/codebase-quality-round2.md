@@ -345,7 +345,8 @@ static-invalidation mismatch facts.
 Shared graph fixtures now own checked-in graph artifact loading so commerce source-truth and
 `fw-check` graph gates no longer parse commerce generated graph JSON locally. Shared graph fixtures
 also own static behavior summaries for component targets, domains, routes, invalidations,
-optimistic rows, and touch-graph keys.
+optimistic rows, and touch-graph keys. Shared HTML fragment fixtures now own selected-element
+counts and named query JSON projections used by commerce app-shell tests.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -381,6 +382,12 @@ Latest evidence:
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|D2 commerce validates keyed append and optimistic reorder|P10 commerce graph assertions answer behavior mechanically|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "serves shell routes|serves the app-shell surface|serves the commerce cart document|routes enhanced and no-JS commerce mutations|exports the public commerce shell|wires .* public commerce shell static output"`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "D1 commerce enhanced fragments carry Tailwind stylesheet hints|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app-shell.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -393,7 +400,9 @@ keyed-element projections and shared `@jiso/test/headers` response/cookie projec
 local helpers; commerce source-truth matrix projection now lives in
 `@jiso/test/fw-explain-fixtures`; checked-in graph artifact loading now lives in
 `@jiso/test/graph-fixtures`, along with graph static behavior projections consumed by
-`tests/fw-check.node.mjs`.
+`tests/fw-check.node.mjs`. Commerce app-shell tests now consume shared `@jiso/test/html-fragment`
+selected-element counts and named query JSON projections instead of local response-body/shell
+parsing helpers.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.

@@ -15,8 +15,9 @@ import { exportStaticApp } from '@jiso/server/app-shell/static-export';
 import { cookiePair, firstSetCookiePair } from '@jiso/test/headers';
 import {
   fwFragmentFacts,
-  fwResponseBodyFact,
+  fwQueryJsonValues,
   htmlDocumentFacts,
+  htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
@@ -39,6 +40,11 @@ import {
 import { commerceSharedAppShellDevPlugin, commerceViteConfig } from '../vite.config.ts';
 
 let server: Server | undefined;
+
+const commerceShellSelector = {
+  attrs: { 'data-commerce-shell': 'cart' },
+  tag: 'div',
+} as const;
 
 afterEach(async () => {
   if (!server) return;
@@ -194,7 +200,7 @@ describe('commerce app shell HTTP entry', () => {
       const query = await fetch(`${origin}/_q/cart`);
       const queryBody = await query.text();
       expect(query.status, formatDevServerFailure(queryBody, devServerError)).toBe(200);
-      expectCartQueryPayload(queryBody, 0);
+      expect(fwQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
 
       const loginForm = new URLSearchParams();
       loginForm.set(
@@ -287,7 +293,7 @@ describe('commerce app shell HTTP entry', () => {
       const missing = await fetch(`${origin}/not-a-commerce-shell-route`);
       const missingBody = await missing.text();
       expect(missing.status, formatDevServerFailure(missingBody, devServerError)).toBe(404);
-      expect(commerceShellCount(missingBody)).toBe(0);
+      expect(htmlElementCount(missingBody, commerceShellSelector)).toBe(0);
     } finally {
       await vite.close();
     }
@@ -319,7 +325,7 @@ describe('commerce app shell HTTP entry', () => {
         expect(moduleBody).toContain('export function Commerce$markReady');
 
         const queryBody = await fetchTextWhenReady(`${origin}/_q/cart`, output);
-        expectCartQueryPayload(queryBody, 0);
+        expect(fwQueryJsonValues(queryBody, 'cart')).toEqual([{ count: 0 }]);
 
         const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
         expect(stylesheetBody).toContain('tailwindcss v');
@@ -327,7 +333,7 @@ describe('commerce app shell HTTP entry', () => {
         const missing = await fetch(`${origin}/not-a-commerce-shell-route`);
         const missingBody = await missing.text();
         expect(missing.status, `${missingBody}\n${output()}`).toBe(404);
-        expect(commerceShellCount(missingBody)).toBe(0);
+        expect(htmlElementCount(missingBody, commerceShellSelector)).toBe(0);
       } finally {
         await stopProcess(serveProcess);
       }
@@ -379,7 +385,7 @@ describe('commerce app shell HTTP entry', () => {
 
     const query = await fetch(`${origin}/_q/cart`);
     expect(query.status).toBe(200);
-    expectCartQueryPayload(await query.text(), 2);
+    expect(fwQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 2 }]);
 
     const clientModule = await fetch(`${origin}${commerceClientModuleHref}`);
     expect(clientModule.status).toBe(200);
@@ -421,8 +427,8 @@ describe('commerce app shell HTTP entry', () => {
     expect(enhanced.headers.get('fw-changes')).toBe(
       '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
     );
-    expectCartQueryPayload(enhancedBody, 2);
-    expect(fwResponseBodyFact(enhancedBody).fragmentTargets).toEqual([
+    expect(fwQueryJsonValues(enhancedBody, 'cart')).toEqual([{ count: 2 }]);
+    expect(fwFragmentFacts(enhancedBody).map((fragment) => fragment.target)).toEqual([
       'cart-badge',
       'product-grid',
       'order-history',
@@ -450,7 +456,7 @@ describe('commerce app shell HTTP entry', () => {
       headers: { cookie: sessionCookie },
     });
     expect(query.status).toBe(200);
-    expectCartQueryPayload(await query.text(), 3);
+    expect(fwQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 3 }]);
   });
 
   it('dispatches shell login and logout mutations before guarded admin routes', async () => {
@@ -674,24 +680,13 @@ describe('commerce app shell HTTP entry', () => {
 });
 
 function expectCommerceShellDocument(html: string, options: { staticExport?: boolean } = {}): void {
-  expect(commerceShellCount(html)).toBe(1);
+  expect(htmlElementCount(html, commerceShellSelector)).toBe(1);
   if (options.staticExport) {
     expect(htmlFormActions(html)).not.toContain('/_m/cart/add');
     expect(htmlFormActions(html)).not.toContain('/_m/order/receipt');
   } else {
     expect(htmlFormActions(html)).toContain('/_m/cart/add');
   }
-}
-
-function commerceShellCount(html: string): number {
-  return htmlElementFacts(html, {
-    attrs: { 'data-commerce-shell': 'cart' },
-    tag: 'div',
-  }).length;
-}
-
-function expectCartQueryPayload(html: string, count: number): void {
-  expect(fwResponseBodyFact(html).queryJsonByName.cart).toEqual([{ count }]);
 }
 
 async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {

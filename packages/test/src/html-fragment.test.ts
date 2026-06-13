@@ -4,9 +4,11 @@ import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
+  fwQueryJsonValues,
   fwResponseBodyFact,
   htmlDocumentFacts,
   htmlDocumentRegions,
+  htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
@@ -123,6 +125,19 @@ describe('@jiso/test html fragment seam', () => {
         tag: 'a',
       },
     ]);
+  });
+
+  it('counts selected elements without commerce-local query selectors', () => {
+    expect(
+      htmlElementCount(
+        [
+          '<div data-commerce-shell="cart">Cart</div>',
+          '<div data-commerce-shell="cart">Duplicate</div>',
+          '<div data-commerce-shell="admin">Admin</div>',
+        ].join(''),
+        { attrs: { 'data-commerce-shell': 'cart' }, tag: 'div' },
+      ),
+    ).toBe(2);
   });
 
   it('represents void elements as complete facts', () => {
@@ -313,6 +328,8 @@ describe('@jiso/test html fragment seam', () => {
         'product-grid': ['/assets/tailwind.css'],
       },
     });
+    expect(fwQueryJsonValues(html, 'cart')).toEqual([{ count: 2 }]);
+    expect(fwQueryJsonValues(html, 'missing')).toEqual([]);
   });
 
   it('returns structured form facts with named controls', () => {

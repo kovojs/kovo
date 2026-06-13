@@ -159,9 +159,11 @@ import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
+  fwQueryJsonValues,
   fwResponseBodyFact,
   htmlDocumentFacts,
   htmlDocumentRegions,
+  htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
@@ -298,6 +300,12 @@ describe('@jiso/test package subpath exports', () => {
       htmlElementFacts('<a href="/cart">Cart</a>', { attrs: { href: '/cart' }, tag: 'a' }),
     ).toMatchObject([{ innerHtml: 'Cart', tag: 'a' }]);
     expect(
+      htmlElementCount('<div data-shell="cart"></div><div></div>', {
+        attrs: { 'data-shell': 'cart' },
+        tag: 'div',
+      }),
+    ).toBe(1);
+    expect(
       htmlDocumentFacts(
         '<html><head><title>Cart</title><script type="application/json">{"count":1}</script></head><body class="page">Ready</body></html>',
       ),
@@ -342,6 +350,9 @@ describe('@jiso/test package subpath exports', () => {
       queryJsonByName: { cart: [{ count: 1 }] },
       queryNames: ['cart'],
     });
+    expect(fwQueryJsonValues('<fw-query name="cart">{"count":1}</fw-query>', 'cart')).toEqual([
+      { count: 1 },
+    ]);
     expect(
       htmlFormFacts(
         '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',
