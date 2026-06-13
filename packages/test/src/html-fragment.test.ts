@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { fragmentHtml, htmlElementFacts } from '@jiso/test/html-fragment';
+import {
+  fragmentHtml,
+  fwFragmentFacts,
+  fwQueryFacts,
+  htmlElementFacts,
+} from '@jiso/test/html-fragment';
 
 describe('@jiso/test html fragment seam', () => {
   it('extracts explicit fragments without constructing a harness page assertion', () => {
@@ -122,6 +127,68 @@ describe('@jiso/test html fragment seam', () => {
         html: '<link rel="stylesheet" href="/assets/tailwind.css">',
         innerHtml: '',
         tag: 'link',
+      },
+    ]);
+  });
+
+  it('returns structured framework query facts for element and script carriers', () => {
+    const html = [
+      '<fw-query name="cart" key="cart:c1" version="7">{"count":2}</fw-query>',
+      '<script type="application/json" fw-query="productGrid">{"items":[{"id":"p1"}]}</script>',
+    ].join('');
+
+    expect(fwQueryFacts(html)).toEqual([
+      {
+        attrs: {
+          key: 'cart:c1',
+          name: 'cart',
+          version: '7',
+        },
+        html: '<fw-query name="cart" key="cart:c1" version="7">{"count":2}</fw-query>',
+        json: { count: 2 },
+        name: 'cart',
+        rawJson: '{"count":2}',
+        tag: 'fw-query',
+      },
+      {
+        attrs: {
+          'fw-query': 'productGrid',
+          type: 'application/json',
+        },
+        html: '<script type="application/json" fw-query="productGrid">{"items":[{"id":"p1"}]}</script>',
+        json: { items: [{ id: 'p1' }] },
+        name: 'productGrid',
+        rawJson: '{"items":[{"id":"p1"}]}',
+        tag: 'script',
+      },
+    ]);
+    expect(fwQueryFacts(html, 'cart').map((fact) => fact.json)).toEqual([{ count: 2 }]);
+  });
+
+  it('returns structured framework fragment facts with nested stylesheet hints', () => {
+    const html = [
+      '<fw-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></fw-fragment>',
+      '<fw-fragment target="product-grid" error-boundary="product-grid">',
+      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<section><article fw-key="p1">Mug</article></section>',
+      '</fw-fragment>',
+    ].join('');
+
+    expect(fwFragmentFacts(html).map((fact) => fact.target)).toEqual([
+      'cart-badge',
+      'product-grid',
+    ]);
+    expect(fwFragmentFacts(html, 'product-grid')).toEqual([
+      {
+        attrs: {
+          'error-boundary': 'product-grid',
+          target: 'product-grid',
+        },
+        html: '<fw-fragment target="product-grid" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section><article fw-key="p1">Mug</article></section></fw-fragment>',
+        innerHtml:
+          '<link rel="stylesheet" href="/assets/tailwind.css"><section><article fw-key="p1">Mug</article></section>',
+        stylesheetHrefs: ['/assets/tailwind.css'],
+        target: 'product-grid',
       },
     ]);
   });

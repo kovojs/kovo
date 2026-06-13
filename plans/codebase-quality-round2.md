@@ -293,6 +293,9 @@ Closed evidence so far:
   committed generated touch-graph artifacts from SPEC.md §11.1.
 - `@jiso/test/html-fragment` exposes structured `htmlElementFacts` so commerce tests can assert
   rendered page/link/script/body facts through a shared harness seam.
+- `@jiso/test/html-fragment` also exposes structured `fwQueryFacts` and `fwFragmentFacts`; package
+  export tests pin the subpath seam, and commerce HTTP/mutation tests now assert query payloads,
+  fragment targets, and fragment stylesheet hints through those facts.
 - Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
   fake server module, keeping the local app-shell workflow out of source-text assertions.
 
@@ -307,7 +310,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
+- `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `node examples/commerce/scripts/emit-graph.mjs --check`
 - `node examples/commerce/scripts/emit-components.mjs --check`
 - `pnpm exec vp run build`
@@ -324,6 +329,9 @@ Closed evidence so far:
 - Shared `htmlElementFacts` coverage in `packages/test/src/html-fragment.test.ts` replaces local
   commerce HTML/source probes for i18n script, stylesheet link, body class, and app-shell config
   behavior.
+- Shared `fwQueryFacts`/`fwFragmentFacts` coverage in `packages/test/src/html-fragment.test.ts`
+  replaces repeated commerce response substring probes for query names, fragment targets, and
+  fragment stylesheet hints.
 
 Open:
 

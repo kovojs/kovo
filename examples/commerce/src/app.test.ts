@@ -6,7 +6,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { storageBodyToBytes } from '@jiso/core';
 import { propertyTest } from '@jiso/test/assertions';
 import { createJisoTestHarness } from '@jiso/test/harness';
-import { htmlElementFacts } from '@jiso/test/html-fragment';
+import { fwFragmentFacts, fwQueryFacts, htmlElementFacts } from '@jiso/test/html-fragment';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
 import { csrfToken, runMutation } from '@jiso/server';
@@ -495,9 +495,10 @@ describe('commerce example', () => {
     expect(response.body).toContain(
       '<main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
     );
-    expect(response.body).toContain('<fw-query name="productGrid">');
-    expect(response.body).toContain('<fw-fragment target="product-grid">');
-    expect(response.body).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
+    expect(fwQueryFacts(response.body).map((query) => query.name)).toContain('productGrid');
+    expect(fwFragmentFacts(response.body, 'product-grid')[0]?.stylesheetHrefs).toContain(
+      '/assets/tailwind.css',
+    );
     expect(response.body).toContain('class="rounded border border-slate-200 bg-white p-4"');
   });
 
@@ -976,13 +977,22 @@ describe('commerce example', () => {
       },
     );
 
-    expect(response.body).toContain('<fw-query name="cart">');
-    expect(response.body).toContain('<fw-query name="productGrid">');
-    expect(response.body).toContain('<fw-query name="orderHistory">');
-    expect(response.body).toContain('<fw-fragment target="cart-badge">');
-    expect(response.body).toContain('<fw-fragment target="product-grid">');
-    expect(response.body).toContain('<fw-fragment target="order-history">');
-    expect(response.body.match(/\/assets\/tailwind\.css/g) ?? []).toHaveLength(3);
+    expect(fwQueryFacts(response.body).map((query) => query.name)).toEqual([
+      'cart',
+      'productGrid',
+      'orderHistory',
+    ]);
+    const fragments = fwFragmentFacts(response.body);
+    expect(fragments.map((fragment) => fragment.target)).toEqual([
+      'cart-badge',
+      'product-grid',
+      'order-history',
+    ]);
+    expect(fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([
+      '/assets/tailwind.css',
+      '/assets/tailwind.css',
+      '/assets/tailwind.css',
+    ]);
     expect(response.body).toContain('fw-key="order-2"');
     expect(transactions).toBe(2);
   });
@@ -1011,13 +1021,18 @@ describe('commerce example', () => {
       },
       status: 200,
     });
-    expect(response.body).toContain(
-      '<fw-fragment target="product-grid" error-boundary="product-grid">',
-    );
-    expect(response.body).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
+    expect(fwFragmentFacts(response.body, 'product-grid')).toMatchObject([
+      {
+        attrs: { 'error-boundary': 'product-grid', target: 'product-grid' },
+        stylesheetHrefs: ['/assets/tailwind.css'],
+      },
+    ]);
     expect(response.body).toContain('Product grid failed: catalog unavailable');
-    expect(response.body).toContain('<fw-fragment target="cart-badge">');
-    expect(response.body).toContain('<fw-fragment target="order-history">');
+    expect(fwFragmentFacts(response.body).map((fragment) => fragment.target)).toEqual([
+      'cart-badge',
+      'product-grid',
+      'order-history',
+    ]);
   });
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
@@ -1056,9 +1071,17 @@ describe('commerce example', () => {
       },
       status: 422,
     });
-    expect(response.body).toContain('<fw-fragment target="product-form:p2">');
-    expect(response.body).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
-    expect(response.body).toContain('<form method="post" action="/_m/cart/add" enhance');
+    const [formFragment] = fwFragmentFacts(response.body, 'product-form:p2');
+    expect(formFragment).toMatchObject({
+      stylesheetHrefs: ['/assets/tailwind.css'],
+      target: 'product-form:p2',
+    });
+    expect(
+      htmlElementFacts(formFragment?.innerHtml ?? '', {
+        attrs: { action: '/_m/cart/add', method: 'post' },
+        tag: 'form',
+      }),
+    ).toHaveLength(1);
     expect(response.body).toContain('fw-fragment-target="product-form:p2"');
     expect(response.body).toContain('name="productId" value="p2"');
     expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');

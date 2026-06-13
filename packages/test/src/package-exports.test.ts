@@ -28,7 +28,12 @@ import {
   type HarnessMutationOptions,
   type HarnessOperationVerifier,
 } from '@jiso/test/harness-operations';
-import { fragmentHtml, htmlElementFacts } from '@jiso/test/html-fragment';
+import {
+  fragmentHtml,
+  fwFragmentFacts,
+  fwQueryFacts,
+  htmlElementFacts,
+} from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
@@ -74,6 +79,15 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       htmlElementFacts('<a href="/cart">Cart</a>', { attrs: { href: '/cart' }, tag: 'a' }),
     ).toMatchObject([{ innerHtml: 'Cart', tag: 'a' }]);
+    expect(fwQueryFacts('<fw-query name="cart">{"count":1}</fw-query>', 'cart')).toMatchObject([
+      { json: { count: 1 }, name: 'cart' },
+    ]);
+    expect(
+      fwFragmentFacts(
+        '<fw-fragment target="cart"><link rel="stylesheet" href="/assets/tailwind.css"></fw-fragment>',
+        'cart',
+      ),
+    ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'], target: 'cart' }]);
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');

@@ -23,6 +23,23 @@ export interface HtmlElementSelector {
   tag?: string;
 }
 
+export interface FwQueryFact {
+  attrs: Record<string, string>;
+  html: string;
+  json: unknown;
+  name: string;
+  rawJson: string;
+  tag: string;
+}
+
+export interface FwFragmentFact {
+  attrs: Record<string, string>;
+  html: string;
+  innerHtml: string;
+  stylesheetHrefs: string[];
+  target: string;
+}
+
 export function htmlElementFacts(
   html: string,
   selector: HtmlElementSelector = {},
@@ -64,6 +81,42 @@ export function htmlElementFacts(
   }
 
   return facts;
+}
+
+export function fwQueryFacts(html: string, name?: string): FwQueryFact[] {
+  return htmlElementFacts(html)
+    .filter(
+      (element) =>
+        element.tag === 'fw-query' ||
+        (element.tag === 'script' && element.attrs['fw-query'] !== undefined),
+    )
+    .map((element) => {
+      const queryName = element.attrs.name ?? element.attrs['fw-query'] ?? '';
+      return {
+        attrs: element.attrs,
+        html: element.html,
+        json: JSON.parse(element.innerHtml),
+        name: queryName,
+        rawJson: element.innerHtml,
+        tag: element.tag,
+      };
+    })
+    .filter((fact) => name === undefined || fact.name === name);
+}
+
+export function fwFragmentFacts(html: string, target?: string): FwFragmentFact[] {
+  return htmlElementFacts(html, { tag: 'fw-fragment' })
+    .map((element) => ({
+      attrs: element.attrs,
+      html: element.html,
+      innerHtml: element.innerHtml,
+      stylesheetHrefs: htmlElementFacts(element.innerHtml, {
+        attrs: { rel: 'stylesheet' },
+        tag: 'link',
+      }).map((link) => link.attrs.href ?? ''),
+      target: element.attrs.target ?? '',
+    }))
+    .filter((fact) => target === undefined || fact.target === target);
 }
 
 function explicitFragmentHtml(html: string, target: string): string | undefined {
