@@ -14,6 +14,11 @@ export interface QueryChunk {
   value: unknown;
 }
 
+export interface QueryElementChunkLike {
+  attrs: string;
+  content: string;
+}
+
 export interface MutationResponseBodyChunks {
   fragments: FragmentChunk[];
   queries: QueryChunk[];
@@ -69,26 +74,32 @@ export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): Q
       reportRuntimeError(onError, malformedQueryError(reason));
     },
   })) {
-    const name = readAttribute(chunk.attrs, 'name');
-    if (!name) {
-      continue;
-    }
-
-    const key = readAttribute(chunk.attrs, 'key') ?? undefined;
-    const parsed = parseJsonValue(unescapeHtml(chunk.content));
-    if (!parsed.ok) {
-      reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
-      continue;
-    }
-
-    queries.push({
-      ...(key === undefined ? {} : { key }),
-      name,
-      value: parsed.value,
-    });
+    const query = readQueryElementChunk(chunk, onError);
+    if (query) queries.push(query);
   }
 
   return queries;
+}
+
+export function readQueryElementChunk(
+  chunk: QueryElementChunkLike,
+  onError?: RuntimeErrorReporter,
+): QueryChunk | undefined {
+  const name = readAttribute(chunk.attrs, 'name');
+  if (!name) return undefined;
+
+  const key = readAttribute(chunk.attrs, 'key') ?? undefined;
+  const parsed = parseJsonValue(unescapeHtml(chunk.content));
+  if (!parsed.ok) {
+    reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
+    return undefined;
+  }
+
+  return {
+    ...(key === undefined ? {} : { key }),
+    name,
+    value: parsed.value,
+  };
 }
 
 export function readQueryScriptChunks(

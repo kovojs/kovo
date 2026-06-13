@@ -450,6 +450,19 @@ exec vp check packages/runtime/src/query-events.ts packages/runtime/src/query-ap
 packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader.ts
 packages/runtime/src/query.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts
 packages/runtime/src/index.browser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Inline query events now carry pre-split `fw-query` wire chunks (`attrs`/`content`) from the
+  generated bootstrap into `query-events.ts`, and `wire-parser.ts` owns the reusable
+  `readQueryElementChunk` decoder used by both full response bodies and inline hydration. This
+  removes the inline-only `JSON.parse` preflight and the empty-query `null` fallback while keeping
+  old `body`/`name`/`key` event details normalized through the same parser for deploy skew
+  (SPEC.md §6.6/§9.1/§9.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, `pnpm --filter @jiso/runtime run
+check:inline-loader`, and `pnpm exec vp check packages/runtime/src/wire-parser.ts
+packages/runtime/src/query-events.ts packages/runtime/src/inline-loader-build.ts
+packages/runtime/src/inline-loader.ts packages/runtime/src/query-store.test.ts
+packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
@@ -475,6 +488,9 @@ Recent gates:
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/fragment-targets.ts packages/runtime/src/morph.ts packages/runtime/src/index.browser.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec vitest --run packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts`

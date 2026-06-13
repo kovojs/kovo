@@ -1,15 +1,17 @@
 import { definedProps } from './defined-props.js';
 import type { ListenerTargetLike } from './dom-like.js';
-import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
+import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
-import { parseJsonValue } from './json.js';
 import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
+import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 
 export interface InlineQueryEventDetail {
+  attrs?: unknown;
   body?: unknown;
+  content?: unknown;
   key?: unknown;
   name?: unknown;
 }
@@ -20,7 +22,12 @@ export interface InlineQueryEvent {
 
 export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQueryEvent> {}
 
-interface ParsedInlineQueryEventDetail {
+interface InlineQueryWireEventDetail {
+  attrs: string;
+  content: string;
+}
+
+interface LegacyInlineQueryEventDetail {
   body: string;
   key?: string;
   name: string;
@@ -79,22 +86,28 @@ function queryChunkFromInlineEvent(
   onError?: RuntimeErrorReporter,
 ): QueryChunk | undefined {
   const detail = event.detail;
-  if (!isParsedInlineQueryEventDetail(detail)) return undefined;
-
-  const parsed = parseJsonValue(detail.body);
-  if (!parsed.ok) {
-    reportMalformedJson(onError, `fw-query ${detail.name}`, parsed.error);
-    return undefined;
+  if (isInlineQueryWireEventDetail(detail)) {
+    return readQueryElementChunk(detail, onError);
   }
 
-  return {
-    ...(detail.key === undefined ? {} : { key: detail.key }),
-    name: detail.name,
-    value: parsed.value,
-  };
+  if (isLegacyInlineQueryEventDetail(detail)) {
+    // SPEC.md §6.6/§9.4: old documents can keep dispatching the previous
+    // body/name/key detail across deploys, but the runtime still normalizes it
+    // through the shared fw-query element parser.
+    return readQueryElementChunk(legacyInlineQueryDetailToWireChunk(detail), onError);
+  }
+
+  return undefined;
 }
 
-function isParsedInlineQueryEventDetail(value: unknown): value is ParsedInlineQueryEventDetail {
+function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryWireEventDetail {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const detail = value as InlineQueryEventDetail;
+  return typeof detail.attrs === 'string' && typeof detail.content === 'string';
+}
+
+function isLegacyInlineQueryEventDetail(value: unknown): value is LegacyInlineQueryEventDetail {
   if (typeof value !== 'object' || value === null) return false;
 
   const detail = value as InlineQueryEventDetail;
@@ -103,4 +116,26 @@ function isParsedInlineQueryEventDetail(value: unknown): value is ParsedInlineQu
     typeof detail.body === 'string' &&
     (detail.key === undefined || typeof detail.key === 'string')
   );
+}
+
+function legacyInlineQueryDetailToWireChunk(detail: LegacyInlineQueryEventDetail): {
+  attrs: string;
+  content: string;
+} {
+  const attrs = [`name="${escapeHtml(detail.name)}"`];
+  if (detail.key !== undefined) attrs.push(`key="${escapeHtml(detail.key)}"`);
+
+  return {
+    attrs: ` ${attrs.join(' ')}`,
+    content: escapeHtml(detail.body),
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }

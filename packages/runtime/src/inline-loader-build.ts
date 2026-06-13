@@ -67,19 +67,12 @@ function installInlineJisoLoader(importModule) {
   const applyResponseBody = (body) => {
     readElementChunks(body, 'fw-query').forEach((query) => {
       const name = readAttribute(query.attrs, 'name');
-      const queryBody = unescapeHtml(query.content || 'null');
       if (!name) return;
-      try {
-        JSON.parse(queryBody);
-      } catch {
-        return;
-      }
       dispatchEvent(
         new CustomEvent('jiso:query', {
           detail: {
-            body: queryBody,
-            key: readAttribute(query.attrs, 'key') ?? undefined,
-            name,
+            attrs: query.attrs,
+            content: query.content
           },
         }),
       );

@@ -26,6 +26,7 @@ import {
   submitEnhancedMutation,
   type EnhancedMutationFetchOptions,
 } from './index.js';
+import { applyInlineQueryEventToRuntime } from './query-events.js';
 
 type InlineSourceInstall = (
   importModule: (url: string) => Promise<Record<string, unknown>>,
@@ -218,8 +219,9 @@ describe('inline loader source', () => {
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      "key:readAttribute(query.attrs,'key')??undefined",
+      'detail:{attrs:query.attrs,content:query.content}',
     );
+    expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
     expect(inlineJisoLoaderInstallerSource).toContain(
       "element.getAttribute('fw-fragment-target')??element.id",
     );
@@ -368,6 +370,7 @@ describe('inline loader source', () => {
         '<fw-query name="productGrid">{"products":[{"id":"p1"}]}</fw-query>',
         '<fw-query name="product" key="product&gt;p1">{&quot;stock&quot;:7}</fw-query>',
         '<fw-query name="malformed">{</fw-query>',
+        '<fw-query name="empty"></fw-query>',
         '<fw-query>{"ignored":true}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge></fw-fragment>',
         '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
@@ -418,7 +421,7 @@ describe('inline loader source', () => {
         importModule: globalRecord.__jisoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => void>();
-      const dispatched: Array<{ detail?: { body?: string; key?: string; name?: string } }> = [];
+      const dispatched: Array<{ detail?: unknown }> = [];
       interface InlineParityTarget {
         html?: string;
         innerHTML?: string;
@@ -440,13 +443,12 @@ describe('inline loader source', () => {
 
       try {
         globalRecord.CustomEvent = class CustomEvent {
-          constructor(
-            readonly type: string,
-            readonly init?: { detail?: unknown },
-          ) {}
+          readonly detail: unknown;
+          readonly type: string;
 
-          get detail(): unknown {
-            return this.init?.detail;
+          constructor(type: string, init?: { detail?: unknown }) {
+            this.detail = init?.detail;
+            this.type = type;
           }
         };
         globalRecord.DOMParser = class DOMParser {
@@ -461,7 +463,7 @@ describe('inline loader source', () => {
           listeners.set(type, listener);
         };
         globalRecord.dispatchEvent = (event: { detail?: unknown }) => {
-          dispatched.push(event as { detail?: { body?: string; key?: string; name?: string } });
+          dispatched.push(event);
           return true;
         };
         globalRecord.document = {
@@ -506,17 +508,17 @@ describe('inline loader source', () => {
         await Promise.resolve();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(
-          dispatched.map((event) => ({
-            key: event.detail?.key,
-            name: event.detail?.name,
-            value: JSON.parse(event.detail?.body ?? 'null'),
-          })),
-        ).toEqual([
-          { key: 'cart:c1', name: 'cart', value: store.get('cart', 'cart:c1') },
-          { key: undefined, name: 'productGrid', value: store.get('productGrid') },
-          { key: 'product>p1', name: 'product', value: store.get('product', 'product>p1') },
-        ]);
+        const inlineStore = createQueryStore();
+        const inlineQueries = dispatched.flatMap((event) =>
+          applyInlineQueryEventToRuntime(event, { store: inlineStore }),
+        );
+
+        expect(inlineQueries).toEqual(modularResult.queries);
+        expect(inlineStore.get('cart', 'cart:c1')).toEqual(store.get('cart', 'cart:c1'));
+        expect(inlineStore.get('productGrid')).toEqual(store.get('productGrid'));
+        expect(inlineStore.get('product', 'product>p1')).toEqual(
+          store.get('product', 'product>p1'),
+        );
         expect(inlineTargets.get('cart-badge')?.innerHTML).toBe(
           modularTargets.get('cart-badge')?.html,
         );

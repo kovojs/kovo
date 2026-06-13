@@ -237,6 +237,47 @@ describe('query store hydration and refetch', () => {
     expect(binding.textContent).toBe('4');
   });
 
+  it('parses wire-shaped inline query events with the shared fw-query chunk parser', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            attrs: ' name="product" key="product&gt;p1"',
+            content: '{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}',
+          },
+        },
+        { onError, store },
+      ),
+    ).toEqual(['product:product>p1']);
+    expect(store.get('product', 'product>p1')).toEqual({
+      label: "Alice's & Bob's",
+    });
+
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            attrs: ' name="empty"',
+            content: '',
+          },
+        },
+        { onError, store },
+      ),
+    ).toEqual([]);
+
+    // SPEC.md §9.1/§9.4: inline enhanced responses carry fw-query wire chunks
+    // into the modular parser, so malformed or empty query bodies do not gain
+    // a separate inline-only null fallback.
+    expect(store.get('empty')).toBeUndefined();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in fw-query empty',
+    );
+  });
+
   it('installs disposable inline query event hydration listeners', () => {
     const store = createQueryStore();
     const listeners = new Map<string, (event: { detail?: unknown }) => void>();

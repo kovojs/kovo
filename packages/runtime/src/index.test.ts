@@ -454,13 +454,12 @@ describe('runtime loader', () => {
 
     try {
       globalRecord.CustomEvent = class CustomEvent {
-        constructor(
-          readonly type: string,
-          readonly init?: { detail?: unknown },
-        ) {}
+        readonly detail: unknown;
+        readonly type: string;
 
-        get detail(): unknown {
-          return this.init?.detail;
+        constructor(type: string, init?: { detail?: unknown }) {
+          this.detail = init?.detail;
+          this.type = type;
         }
       };
       globalRecord.DOMParser = class DOMParser {
@@ -561,7 +560,10 @@ describe('runtime loader', () => {
       });
       expect(dispatched).toEqual([
         expect.objectContaining({
-          detail: { body: '{"count":1}', key: 'cart:c1', name: 'cart' },
+          detail: {
+            attrs: ' name="cart" key="cart:c1"',
+            content: '{"count":1}',
+          },
           type: 'jiso:query',
         }),
       ]);

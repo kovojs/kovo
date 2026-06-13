@@ -6,6 +6,7 @@ import {
   readFragmentChunks,
   readMutationResponseBodyChunks,
   readQueryChunks,
+  readQueryElementChunk,
   readQueryScriptChunks,
   unescapeHtml,
 } from './wire-parser.js';
@@ -27,6 +28,17 @@ describe('wire parser HTML entity handling', () => {
     expect(
       readQueryChunks('<fw-query name="cart" key="cart>a">{&quot;count&quot;:1}</fw-query>'),
     ).toEqual([{ key: 'cart>a', name: 'cart', value: { count: 1 } }]);
+  });
+
+  it('reads a pre-split fw-query element chunk through the same decoded shape', () => {
+    // SPEC.md §9.1/§9.4: inline hydration and mutation bodies share the same
+    // fw-query chunk parser after the inline bootstrap has split wire markup.
+    expect(
+      readQueryElementChunk({
+        attrs: ' name="product" key="product&gt;p1"',
+        content: '{&quot;stock&quot;:7}',
+      }),
+    ).toEqual({ key: 'product>p1', name: 'product', value: { stock: 7 } });
   });
 
   it('shares quoted tag-close scanning for mutation wire element chunks', () => {
