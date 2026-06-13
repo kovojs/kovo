@@ -21,6 +21,7 @@
     "./mcp-fixtures": "./src/mcp-fixtures.ts",
     "./page": "./src/page.ts",
     "./pglite": "./src/pglite.ts",
+    "./runtime-fixtures": "./src/runtime-fixtures.ts",
     "./source-fixtures": "./src/source-fixtures.ts",
     "./starter-template-fixtures": "./src/starter-template-fixtures.ts",
     "./sql-observer": "./src/sql-observer.ts",

@@ -60,6 +60,9 @@ artifact harness cases, reducing repeated local render/HTML parsing/export-shape
 Shared generated-module fixtures also own the inline enhanced-form loader VM fixture and project
 listener/fetch/query/fragment effects into structured facts, so the S2 fw-check gate no longer
 keeps a local DOMParser/FormData/fetch VM harness.
+Shared runtime fixtures now own the loader smoke fake-root, visibility observer, refetch, and
+template-stamp mechanics used by the P2 fw-check gate, so the monolith asserts a structured public
+runtime behavior fact instead of rebuilding that harness locally.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -139,6 +142,12 @@ Latest evidence:
   `node --test --test-name-pattern "S2 loader budget and inline enhanced form behavior are acceptance evidence" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check --fix tests/fw-check.node.mjs packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
   exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Runtime loader smoke fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P2 loader smoke evidence is asserted through runtime behavior" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR

@@ -223,6 +223,11 @@ import {
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
+  loaderSmokeBehaviorFact,
+  type LoaderSmokeBehaviorFact,
+  type LoaderSmokeRuntime,
+} from '@jiso/test/runtime-fixtures';
+import {
   cssScopeRules,
   cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
@@ -315,6 +320,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(createPgliteTestDb).toBe(rootCreatePgliteTestDb);
     expect(jisoTest).toBe(rootJisoTest);
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
+    expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
     ]);
@@ -322,6 +328,12 @@ describe('@jiso/test package subpath exports', () => {
     expect(cookiePair('sid=1; Path=/')).toBe('sid=1');
     expect(firstSetCookiePair({ 'Set-Cookie': 'sid=1; Path=/' })).toBe('sid=1');
     expectTypeOf<HeaderRecord>().toEqualTypeOf<Record<string, string | string[] | undefined>>();
+    expectTypeOf<LoaderSmokeBehaviorFact>().toMatchTypeOf<{
+      calls: Array<[string, boolean]>;
+    }>();
+    expectTypeOf<LoaderSmokeRuntime>().toMatchTypeOf<{
+      createQueryStore: () => unknown;
+    }>();
   });
 
   it('keeps subpath-only helpers available through their owning modules', () => {

@@ -147,6 +147,7 @@ import {
   assertTypeScriptProgramHasNoDiagnostics,
   typeScriptInterfaceMemberTypes,
 } from '../packages/test/src/typescript-fixtures.ts';
+import { loaderSmokeBehaviorFact } from '../packages/test/src/runtime-fixtures.ts';
 import { parseWireFixture, parseWireResponses } from '../packages/test/src/wire-fixtures.ts';
 import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
@@ -858,166 +859,44 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
 });
 
 void test('P2 loader smoke evidence is asserted through runtime behavior', async () => {
-  const listeners = new Map();
-  const rootElements = new Map();
-  const root = {
-    addEventListener(type, listener, options) {
-      listeners.set(type, { listener, options });
-    },
-    removeEventListener(type, listener) {
-      if (listeners.get(type)?.listener === listener) listeners.delete(type);
-    },
-    querySelectorAll(selector) {
-      return rootElements.get(selector) ?? [];
-    },
-    visibilityState: 'visible',
-  };
-  const eventElement = (attributes) => new GeneratedFixtureElement(attributes);
-  const calls = [];
-  const waitForCalls = async (count) => {
-    for (let attempts = 0; attempts < 10 && calls.length < count; attempts += 1) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    }
-    assert.equal(calls.length, count);
-  };
-  const handlers = {
-    idle(_event, context) {
-      calls.push(['idle', context.signal instanceof AbortSignal]);
-    },
-    load(_event, context) {
-      calls.push(['load', context.signal instanceof AbortSignal]);
-    },
-    visible(_event, context) {
-      calls.push(['visible', context.signal instanceof AbortSignal]);
-    },
-  };
-  const loadElement = eventElement({ 'on:load': '/loader.js#load' });
-  const idleElement = eventElement({ 'on:idle': '/loader.js#idle' });
-  const visibleElement = eventElement({ 'on:visible': '/loader.js#visible' });
-  const idleCallbacks = [];
-  let visibleCallback;
-  const observer = {
-    observed: [],
-    unobserved: [],
-    observe(element) {
-      this.observed.push(element);
-    },
-    unobserve(element) {
-      this.unobserved.push(element);
-    },
-  };
-  rootElements.set('[on\\:load]', [loadElement]);
-  rootElements.set('[on\\:idle]', [idleElement]);
-  rootElements.set('[on\\:visible]', [visibleElement]);
-  let importCount = 0;
-
-  const loader = installJisoLoader({
-    importModule: async () => {
-      importCount += 1;
-      return handlers;
-    },
-    requestIdle(callback) {
-      idleCallbacks.push(callback);
-    },
-    root,
-    visibleObserver(callback) {
-      visibleCallback = callback;
-      return observer;
-    },
-  });
-
-  assert.deepEqual(loader.events, ['click', 'submit', 'input', 'change']);
-  assert.deepEqual([...listeners.keys()], ['click', 'submit', 'input', 'change']);
-  assert.equal(listeners.get('click')?.options.capture, true);
-  assert.equal(importCount, 0);
-  await waitForCalls(1);
-  assert.deepEqual(calls, [['load', true]]);
-
-  idleCallbacks[0]();
-  await waitForCalls(2);
-  assert.deepEqual(calls, [
-    ['load', true],
-    ['idle', true],
-  ]);
-
-  assert.deepEqual(observer.observed, [visibleElement]);
-  visibleCallback([{ isIntersecting: true, target: visibleElement }]);
-  await waitForCalls(3);
-  visibleCallback([{ isIntersecting: true, target: visibleElement }]);
-  assert.deepEqual(calls, [
-    ['load', true],
-    ['idle', true],
-    ['visible', true],
-  ]);
-  assert.deepEqual(observer.unobserved, [visibleElement]);
-
-  const store = createQueryStore();
-  const refetched = await refetchQueries({
-    fetch: async (url, options) => {
-      assert.equal(url, '/_q/cart');
-      assert.deepEqual(options, {
-        headers: {
-          Accept: 'text/html',
-          'FW-Fragment': 'true',
-        },
-        method: 'GET',
-      });
-      return {
-        ok: true,
-        status: 200,
-        async text() {
-          return '<fw-query name="cart">{"count":2}</fw-query>';
-        },
-      };
-    },
-    queries: ['cart'],
-    queryStore: store,
-  });
-  assert.deepEqual(refetched, [{ fragments: [], queries: ['cart'] }]);
-  assert.deepEqual(store.get('cart'), { count: 2 });
-
-  let reconciledItems;
-  const templateHost = {
-    getAttribute() {
-      return null;
-    },
-    reconcileTemplateStamp(items) {
-      reconciledItems = items;
-    },
-  };
-  const applied = applyCompiledQueryUpdatePlan(
+  assert.deepEqual(
+    await loaderSmokeBehaviorFact({
+      applyCompiledQueryUpdatePlan,
+      createQueryStore,
+      installJisoLoader,
+      refetchQueries,
+    }),
     {
-      querySelectorAll(selector) {
-        return selector === '[data-list]' ? [templateHost] : [];
+      appliedTemplateStamps: ['[data-list]'],
+      calls: [
+        ['load', true],
+        ['idle', true],
+        ['visible', true],
+      ],
+      disposedListenerEvents: [],
+      initialImportCount: 0,
+      listenerEvents: ['click', 'submit', 'input', 'change'],
+      listenerOptions: {
+        change: { capture: true },
+        click: { capture: true },
+        input: { capture: true },
+        submit: { capture: true },
       },
-    },
-    'cart',
-    { items: [{ id: 'p1', qty: 2 }] },
-    {
-      templateStamps: [
+      observer: { observedCount: 1, unobservedCount: 2 },
+      reconciledItems: [
         {
-          key: 'id',
-          list: 'items',
-          render: (item) => `<li>${item.id}:${item.qty}</li>`,
-          selector: '[data-list]',
+          html: '<li>p1:2</li>',
+          index: 0,
+          key: 'p1',
+          value: { id: 'p1', qty: 2 },
         },
       ],
+      refetched: [{ fragments: [], queries: ['cart'] }],
+      storeValues: {
+        cart: { count: 2 },
+      },
     },
   );
-  assert.deepEqual(applied.templateStamps, ['[data-list]']);
-  assert.deepEqual(reconciledItems, [
-    {
-      html: '<li>p1:2</li>',
-      index: 0,
-      key: 'p1',
-      value: { id: 'p1', qty: 2 },
-    },
-  ]);
-
-  loader.dispose();
-  assert.deepEqual([...listeners.keys()], []);
 });
 
 void test('P3 server renders initial query scripts for document-load hydration', async () => {
