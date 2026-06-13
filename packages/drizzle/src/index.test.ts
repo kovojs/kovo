@@ -5430,6 +5430,71 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project array-destructured detached receiver methods only for typed Drizzle symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'execute(query: unknown): Promise<void>;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export async function sync(db: PgDatabase, fake: FakeDb, method: string) {',
+            '  const [execute, write, computed] = [db.execute, db.update, db[method]];',
+            '  const [fakeExecute] = [fake.execute];',
+            '  let assignedExecute;',
+            '  [assignedExecute] = [db.execute];',
+            '  await execute("select 1");',
+            '  await write(users).set({});',
+            '  await computed("select 1");',
+            '  await assignedExecute("select 1");',
+            '  await fakeExecute("select 1");',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:15',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:16',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:18',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks project direct receiver carrier members as FW406 without fake sibling facts', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -6880,6 +6945,58 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:20',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks source array-destructured detached receiver method aliases as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake, method) {',
+          '  const [execute, write, computed] = [db.execute, db.update, db[method]];',
+          '  const [fakeExecute] = [fake.execute];',
+          '  let assignedExecute;',
+          '  [assignedExecute] = [db.execute];',
+          '  await execute("select 1");',
+          '  await write(users).set({});',
+          '  await computed("select 1");',
+          '  await assignedExecute("select 1");',
+          '  await fakeExecute("select 1");',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:8',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
           },
         ],
       },

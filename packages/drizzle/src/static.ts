@@ -5020,6 +5020,17 @@ function receiverMethodAliasesForBody(
         appendReceiverMethodAliasesFromObjectPattern(binding, names, symbols);
         continue;
       }
+      if (Node.isArrayBindingPattern(binding)) {
+        appendReceiverMethodAliasesFromArrayPattern(
+          binding,
+          initializer,
+          names,
+          symbols,
+          isReceiverIdentifier,
+          { names, symbols },
+        );
+        continue;
+      }
 
       if (!Node.isIdentifier(binding)) continue;
       const method = receiverMethodAliasExpressionName(initializer, isReceiverIdentifier, {
@@ -5038,6 +5049,17 @@ function receiverMethodAliasesForBody(
       const right = unwrappedStaticExpressionNode(expression.getRight());
       if (Node.isObjectLiteralExpression(left) && isReceiverIdentifier(right)) {
         appendReceiverMethodAliasesFromObjectAssignment(left, names, symbols);
+        continue;
+      }
+      if (Node.isArrayLiteralExpression(left)) {
+        appendReceiverMethodAliasesFromArrayAssignment(
+          left,
+          right,
+          names,
+          symbols,
+          isReceiverIdentifier,
+          { names, symbols },
+        );
         continue;
       }
 
@@ -5073,6 +5095,34 @@ function appendReceiverMethodAliasesFromObjectPattern(
   }
 }
 
+function appendReceiverMethodAliasesFromArrayPattern(
+  binding: Node,
+  initializer: Node,
+  names: Map<string, string>,
+  symbols: Map<string, string>,
+  isReceiverIdentifier: (node: Node) => boolean,
+  aliases: ReceiverMethodAliases,
+): void {
+  if (!Node.isArrayBindingPattern(binding)) return;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isArrayLiteralExpression(expression)) return;
+
+  const values = expression.getElements();
+  binding.getElements().forEach((element, index) => {
+    if (!Node.isBindingElement(element)) return;
+
+    const alias = element.getNameNode();
+    if (!Node.isIdentifier(alias)) return;
+
+    const value = values[index];
+    if (!value) return;
+
+    const method = receiverMethodAliasExpressionName(value, isReceiverIdentifier, aliases);
+    if (method) appendReceiverMethodAlias(names, symbols, alias, method);
+  });
+}
+
 function appendReceiverMethodAliasesFromObjectAssignment(
   assignment: Node,
   names: Map<string, string>,
@@ -5098,6 +5148,32 @@ function appendReceiverMethodAliasesFromObjectAssignment(
     if (!method) continue;
     appendReceiverMethodAlias(names, symbols, alias, method);
   }
+}
+
+function appendReceiverMethodAliasesFromArrayAssignment(
+  assignment: Node,
+  initializer: Node,
+  names: Map<string, string>,
+  symbols: Map<string, string>,
+  isReceiverIdentifier: (node: Node) => boolean,
+  aliases: ReceiverMethodAliases,
+): void {
+  if (!Node.isArrayLiteralExpression(assignment)) return;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isArrayLiteralExpression(expression)) return;
+
+  const values = expression.getElements();
+  assignment.getElements().forEach((element, index) => {
+    const alias = unwrappedStaticExpressionNode(element);
+    if (!Node.isIdentifier(alias)) return;
+
+    const value = values[index];
+    if (!value) return;
+
+    const method = receiverMethodAliasExpressionName(value, isReceiverIdentifier, aliases);
+    if (method) appendReceiverMethodAlias(names, symbols, alias, method);
+  });
 }
 
 function receiverMethodAliasExpressionName(

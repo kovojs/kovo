@@ -60,6 +60,14 @@ with same-session file/test evidence.
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Round105 Drizzle evidence 2026-06-13: source/project array-destructured detached receiver
+      methods such as `const [execute] = [db.execute]` and `[execute] = [db.execute]` now degrade
+      touch and query-loader surfaces to FW406, while fake tuple elements remain invisible.
+      Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
       Round100 evidence 2026-06-13: `packages/runtime/src/query-events.ts` deleted the legacy
