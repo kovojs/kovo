@@ -116,6 +116,28 @@ describe('query binding helpers', () => {
     expect(label.getAttribute('aria-label')).toBe('Cart ready');
   });
 
+  it('applies optional binding path segments and removes empty attribute bindings', () => {
+    const root = new FakeQueryRoot();
+    const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });
+    const label = new FakeQueryPlanElement({
+      'aria-label': 'Ada',
+      'data-bind:aria-label': 'deal.contact?.name',
+    });
+    root.bindings.push(name);
+    root.elements.push(label);
+
+    expect(applyQueryBindings(root, 'deal', { contact: null })).toEqual([
+      'deal.contact?.name',
+      'deal.contact?.name',
+    ]);
+    expect(name.textContent).toBe('');
+    expect(label.getAttribute('aria-label')).toBeNull();
+
+    applyQueryBindings(root, 'deal', { contact: { name: 'Grace' } });
+    expect(name.textContent).toBe('Grace');
+    expect(label.getAttribute('aria-label')).toBe('Grace');
+  });
+
   it('reuses indexed attribute binding candidates across compiled query plans', () => {
     const root = new FakeQueryRoot();
     const cartLabel = new FakeQueryPlanElement({
@@ -161,17 +183,21 @@ describe('query binding helpers', () => {
     expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
   });
 
-  it('runs compiled plans after bindings and reconciles template stamps', () => {
+  it('runs compiled query update plans in bindings, derives, stamps, then template-stamps order', () => {
     const root = new FakeQueryRoot();
-    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
     const summary = new FakeQueryPlanElement(
       { 'data-derive': 'cart.summary' },
-      { textContent: '0 items' },
+      { textContent: '1 item' },
     );
-    const list = new FakeTemplateStampHost({ 'data-bind-list': 'cart.items' });
+    const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
+    const list = new FakeTemplateStampHost({
+      'data-bind-list': 'cart.items',
+      'fw-key': 'productId',
+    });
     const observed: string[] = [];
     root.bindings.push(count);
-    root.elements.push(summary, list);
+    root.elements.push(summary, host, list);
 
     const applied = applyCompiledQueryUpdatePlan(
       root,
@@ -179,26 +205,37 @@ describe('query binding helpers', () => {
       {
         count: 2,
         items: [
-          { id: 'mug', name: 'Mug' },
-          { id: 'beans', name: 'Beans' },
+          { name: 'Mug', productId: 'p1', qty: 2 },
+          { name: 'Beans', productId: 'p2', qty: 1 },
         ],
       },
       {
         derives: [
           {
             name: 'summary',
+            select(value) {
+              observed.push(`derive sees binding:${count.textContent}`);
+              return `${(value as { count: number }).count} items`;
+            },
+          },
+        ],
+        stamps: [
+          {
+            attr: 'data-cart-summary',
+            selector: '[data-plan="cart-host"]',
             select() {
-              observed.push(`derive:${count.textContent}`);
-              return `${count.textContent} items`;
+              observed.push(`stamp sees derive:${summary.textContent}`);
+              return summary.textContent;
             },
           },
         ],
         templateStamps: [
           {
-            key: 'id',
+            key: 'productId',
             list: 'items',
             render(item) {
-              return `<li>${(item as { name: string }).name}</li>`;
+              const product = item as { name: string; qty: number };
+              return `<li><span data-bind=".qty">${product.qty}</span> x <span data-bind=".name">${product.name}</span></li>`;
             },
             selector: '[data-bind-list="cart.items"]',
           },
@@ -209,13 +246,49 @@ describe('query binding helpers', () => {
     expect(applied).toEqual({
       bindings: ['cart.count'],
       derives: ['summary'],
-      stamps: [],
+      stamps: ['data-cart-summary'],
       templateStamps: ['[data-bind-list="cart.items"]'],
     });
-    expect(observed).toEqual(['derive:2']);
+    expect(observed).toEqual(['derive sees binding:2', 'stamp sees derive:2 items']);
     expect(summary.textContent).toBe('2 items');
-    expect(list.items.map((item) => item.key)).toEqual(['mug', 'beans']);
-    expect(list.textContent).toBe('<li>Mug</li><li>Beans</li>');
+    expect(host.getAttribute('data-cart-summary')).toBe('2 items');
+    expect(list.items.map((item) => item.key)).toEqual(['p1', 'p2']);
+    expect(list.items.map((item) => item.index)).toEqual([0, 1]);
+    expect(list.textContent).toBe(
+      '<li><span data-bind=".qty">2</span> x <span data-bind=".name">Mug</span></li><li><span data-bind=".qty">1</span> x <span data-bind=".name">Beans</span></li>',
+    );
+  });
+
+  it('removes compiled attribute stamps when the selected value is empty', () => {
+    const root = new FakeQueryRoot();
+    const host = new FakeQueryPlanElement({ 'aria-label': 'Ada', 'data-plan': 'deal-host' });
+    root.elements.push(host);
+
+    const applied = applyCompiledQueryUpdatePlan(
+      root,
+      'deal',
+      { contact: null },
+      {
+        bindings: false,
+        stamps: [
+          {
+            attr: 'aria-label',
+            selector: '[data-plan="deal-host"]',
+            select(value) {
+              return (value as { contact: { name: string } | null }).contact?.name;
+            },
+          },
+        ],
+      },
+    );
+
+    expect(applied).toEqual({
+      bindings: [],
+      derives: [],
+      stamps: ['aria-label'],
+      templateStamps: [],
+    });
+    expect(host.getAttribute('aria-label')).toBeNull();
   });
 
   it('detects query binding roots by selector support', () => {

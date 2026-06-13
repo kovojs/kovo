@@ -259,6 +259,12 @@ packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-js-minifier.test.ts`.
+      Evidence 2026-06-13: query binding/update-plan helper coverage moved from
+      `packages/runtime/src/query-runtime-integration.test.ts` into
+      `packages/runtime/src/query-bindings.test.ts`, leaving the integration file focused on
+      response apply, deferred stream, broadcast, and enhanced mutation flows. Verified by
+      `pnpm exec vitest --run packages/runtime/src/query-bindings.test.ts
+packages/runtime/src/query-runtime-integration.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted

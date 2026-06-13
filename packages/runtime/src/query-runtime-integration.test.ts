@@ -3,9 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import {
   applyDeferredStreamResponseToRuntime,
-  applyCompiledQueryUpdatePlan,
   applyMutationResponseToDom,
-  applyQueryBindings,
   createQueryStore,
   derive,
   installMutationBroadcast,
@@ -22,7 +20,6 @@ import {
   FakeQueryBindingElement,
   FakeQueryPlanElement,
   FakeRoot,
-  FakeTemplateStampHost,
 } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
@@ -89,177 +86,12 @@ describe('query runtime integration', () => {
     expect(observed).toEqual(['binding:4']);
   });
 
-  it('exposes a DOM-light data-bind update plan helper', () => {
-    const root = new FakeMorphRoot();
-    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
-    const items = new FakeQueryBindingElement('cart.items', { textContent: '' });
-    root.bindings.push(count, items);
-
-    expect(applyQueryBindings(root, 'cart', { count: 3, items: [{ id: 'p1' }] })).toEqual([
-      'cart.count',
-      'cart.items',
-    ]);
-    expect(count.textContent).toBe('3');
-    expect(items.textContent).toBe('[{"id":"p1"}]');
-  });
-
-  it('applies optional binding path segments and removes empty attribute bindings', () => {
-    const root = new FakeMorphRoot();
-    const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });
-    const label = new FakeQueryPlanElement({
-      'aria-label': 'Ada',
-      'data-bind:aria-label': 'deal.contact?.name',
-    });
-    root.bindings.push(name);
-    root.planElements.push(label);
-
-    expect(applyQueryBindings(root, 'deal', { contact: null })).toEqual([
-      'deal.contact?.name',
-      'deal.contact?.name',
-    ]);
-    expect(name.textContent).toBe('');
-    expect(label.getAttribute('aria-label')).toBeNull();
-
-    applyQueryBindings(root, 'deal', { contact: { name: 'Grace' } });
-    expect(name.textContent).toBe('Grace');
-    expect(label.getAttribute('aria-label')).toBe('Grace');
-  });
-
-  it('runs compiled query update plans in bindings -> named derives -> stamps order', () => {
-    const root = new FakeMorphRoot();
-    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
-    const summary = new FakeQueryPlanElement(
-      { 'data-derive': 'cart.summary' },
-      { textContent: '1 item' },
-    );
-    const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
-    const observed: string[] = [];
-    root.bindings.push(count);
-    root.planElements.push(summary, host);
-
-    const applied = applyCompiledQueryUpdatePlan(
-      root,
-      'cart',
-      { count: 2 },
-      {
-        derives: [
-          {
-            name: 'summary',
-            select(value) {
-              observed.push(`derive sees binding:${count.textContent}`);
-              return `${(value as { count: number }).count} items`;
-            },
-          },
-        ],
-        stamps: [
-          {
-            attr: 'data-cart-summary',
-            selector: '[data-plan="cart-host"]',
-            select() {
-              observed.push(`stamp sees derive:${summary.textContent}`);
-              return summary.textContent;
-            },
-          },
-        ],
-      },
-    );
-
-    expect(applied).toEqual({
-      bindings: ['cart.count'],
-      derives: ['summary'],
-      stamps: ['data-cart-summary'],
-      templateStamps: [],
-    });
-    expect(observed).toEqual(['derive sees binding:2', 'stamp sees derive:2 items']);
-    expect(count.textContent).toBe('2');
-    expect(summary.textContent).toBe('2 items');
-    expect(host.getAttribute('data-cart-summary')).toBe('2 items');
-  });
-
-  it('removes compiled attribute stamps when the selected value is empty', () => {
-    const root = new FakeMorphRoot();
-    const host = new FakeQueryPlanElement({ 'aria-label': 'Ada', 'data-plan': 'deal-host' });
-    root.planElements.push(host);
-
-    const applied = applyCompiledQueryUpdatePlan(
-      root,
-      'deal',
-      { contact: null },
-      {
-        bindings: false,
-        stamps: [
-          {
-            attr: 'aria-label',
-            selector: '[data-plan="deal-host"]',
-            select(value) {
-              return (value as { contact: { name: string } | null }).contact?.name;
-            },
-          },
-        ],
-      },
-    );
-
-    expect(applied).toEqual({
-      bindings: [],
-      derives: [],
-      stamps: ['aria-label'],
-      templateStamps: [],
-    });
-    expect(host.getAttribute('aria-label')).toBeNull();
-  });
-
   it('declares named derive inputs beside the pure derive function', () => {
     const isEmpty = derive(['cart'], (cart) => (cart as { count: number }).count === 0);
 
     expect(isEmpty.inputs).toEqual(['cart']);
     expect(isEmpty.run({ count: 0 })).toBe(true);
     expect(isEmpty.run({ count: 2 })).toBe(false);
-  });
-
-  it('reconciles compiled template stamps with keyed item descriptors', () => {
-    const root = new FakeMorphRoot();
-    const list = new FakeTemplateStampHost({
-      'data-bind-list': 'cart.items',
-      'fw-key': 'productId',
-    });
-    root.planElements.push(list);
-
-    const applied = applyCompiledQueryUpdatePlan(
-      root,
-      'cart',
-      {
-        items: [
-          { name: 'Mug', productId: 'p1', qty: 2 },
-          { name: 'Beans', productId: 'p2', qty: 1 },
-        ],
-      },
-      {
-        bindings: false,
-        templateStamps: [
-          {
-            key: 'productId',
-            list: 'items',
-            render(item) {
-              const product = item as { name: string; qty: number };
-              return `<li><span data-bind=".qty">${product.qty}</span> x <span data-bind=".name">${product.name}</span></li>`;
-            },
-            selector: '[data-bind-list="cart.items"]',
-          },
-        ],
-      },
-    );
-
-    expect(applied).toEqual({
-      bindings: [],
-      derives: [],
-      stamps: [],
-      templateStamps: ['[data-bind-list="cart.items"]'],
-    });
-    expect(list.items.map((item) => item.key)).toEqual(['p1', 'p2']);
-    expect(list.items.map((item) => item.index)).toEqual([0, 1]);
-    expect(list.textContent).toBe(
-      '<li><span data-bind=".qty">2</span> x <span data-bind=".name">Mug</span></li><li><span data-bind=".qty">1</span> x <span data-bind=".name">Beans</span></li>',
-    );
   });
 
   it('applies mutation query chunks through compiled update plans before morphing', () => {
