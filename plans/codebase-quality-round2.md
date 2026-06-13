@@ -683,6 +683,8 @@ query-plan renderers assemble HTML from model-derived segments instead of emitti
 `html.replace(...)` source-string patching.
 Template stamp facts no longer carry the duplicate `itemBindings` compatibility list; validation,
 shared test fixtures, and fw-check projections consume the structured placeholder paths directly.
+Client handler arrow-body lowering no longer returns a one-field compatibility wrapper; the emitter
+now applies parser-derived handler source replacements directly.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -705,6 +707,10 @@ packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.te
   targeted `node --test --test-name-pattern "P5 data-bind paths are checked against generated query
 shape facts|P1 fragment targets emit typed registry facts" tests/fw-check.node.mjs`;
   `pnpm exec tsc --noEmit --pretty false`.
+- Client handler lowering wrapper deletion: `pnpm exec vitest --run
+packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`;
+  exact `pnpm exec vp check packages/compiler/src/emit/client.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Combined model-patch reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lowering.test.ts
 packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts

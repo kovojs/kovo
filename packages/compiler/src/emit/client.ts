@@ -11,10 +11,6 @@ import type {
   QueryUpdatePlanFact,
 } from '../types.js';
 
-interface HandlerExpressionLowering {
-  replacements: SourceReplacement[];
-}
-
 export function emitClientModule(
   handlers: HandlerLowering[],
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
@@ -63,13 +59,13 @@ function emitHandlerBody(handler: HandlerLowering): string {
 }
 
 function lowerHandlerArrowBody(body: HandlerArrowBody, params: readonly ElementParam[]): string {
-  return applySourceReplacements(body.source, handlerArrowBodyLowering(body, params).replacements);
+  return applySourceReplacements(body.source, handlerArrowBodyReplacements(body, params));
 }
 
-function handlerArrowBodyLowering(
+function handlerArrowBodyReplacements(
   body: HandlerArrowBody,
   params: readonly ElementParam[],
-): HandlerExpressionLowering {
+): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
   const paramReplacements = params
     .map((param) => ({
@@ -128,7 +124,7 @@ function handlerArrowBodyLowering(
     });
   }
 
-  return { replacements: dedupeHandlerReplacements(replacements) };
+  return dedupeHandlerReplacements(replacements);
 }
 
 function dedupeHandlerReplacements(
