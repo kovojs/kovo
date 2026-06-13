@@ -2458,6 +2458,54 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks query-loader helpers receiving db through containers as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+
+            interface FakeDb {
+              select(value?: unknown): { from(table: unknown): Promise<unknown[]> };
+            }
+
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            declare function loadProducts(context: unknown): Promise<unknown[]>;
+
+            export const productQuery = query("product/helper-context", {
+              async load(_input, db: PgDatabase, fake: FakeDb) {
+                await loadProducts({ fake });
+                return loadProducts({ db });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver db to helper loadProducts().',
+            severity: 'warn',
+            site: 'product.queries.ts:14',
+          },
+        ],
+        query: 'product/helper-context',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:14',
+      },
+    ]);
+  });
+
   it('folds local query-loader helper reads into query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -4680,6 +4728,47 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project helpers receiving typed Drizzle receivers through containers as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'declare const auditServices: {',
+            '  write(context: unknown): Promise<void>;',
+            '};',
+            '',
+            'export async function addItem(db: PgDatabase, fake: FakeDb) {',
+            '  await auditServices.write({ fake });',
+            '  await auditServices.write({ db });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:13',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks project unknown direct receiver methods only for typed Drizzle symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -5417,6 +5506,33 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks external helpers receiving a Drizzle receiver through containers as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export async function addItem(db, productId) {
+            await writeAudit({ db, productId });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:3',
           },
         ],
       },

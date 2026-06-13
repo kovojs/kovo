@@ -267,6 +267,12 @@ Closed evidence so far:
   `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
   `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Opaque helper calls that receive proven Drizzle receivers through container arguments such as
+  `{ db }` now degrade to FW406 in source/project touch extraction and project query-loader
+  extraction instead of disappearing, while fake/lookalike container arguments remain invisible.
+  Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

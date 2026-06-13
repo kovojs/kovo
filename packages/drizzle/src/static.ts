@@ -817,7 +817,7 @@ function extractProjectExternalDbArgumentCalls(
     ) {
       continue;
     }
-    if (!call.getArguments().some((arg) => isProjectDrizzleReceiverIdentifier(arg, receivers))) {
+    if (!call.getArguments().some((arg) => projectReceiverReferenceInArgument(arg, receivers))) {
       continue;
     }
 
@@ -983,7 +983,7 @@ function isProjectDrizzleReceiverIdentifier(
 ): boolean {
   if (!node || !Node.isIdentifier(node)) return false;
 
-  const symbolKey = resolvedSymbolKey(node.getSymbol());
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   if (symbolKey) return receivers.symbolKeys.has(symbolKey);
 
   return receivers.names.has(node.getText());
@@ -1993,7 +1993,7 @@ function isQueryReceiverIdentifier(
 ): boolean {
   if (!node || !Node.isIdentifier(node)) return false;
 
-  const symbolKey = resolvedSymbolKey(node.getSymbol());
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   if (receiverReferences.symbolKeys.size > 0 && symbolKey) {
     return receiverReferences.symbolKeys.has(symbolKey);
   }
@@ -2150,9 +2150,8 @@ function queryHelperArgumentReceiverName(
   argument: Node,
   receiverReferences: QueryReceiverReferences,
 ): string | undefined {
-  return isQueryReceiverIdentifier(argument, receiverReferences) && Node.isIdentifier(argument)
-    ? argument.getText()
-    : undefined;
+  const receiver = queryReceiverReferenceInArgument(argument, receiverReferences);
+  return receiver ? receiver.getText() : undefined;
 }
 
 function appendUntypedQueryReceiverBinding(
@@ -3941,7 +3940,7 @@ function extractExternalDbArgumentCallsFromBody(
       : undefined;
     if (key && localFunctionKeys.has(key)) continue;
 
-    if (!call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))) {
+    if (!call.getArguments().some((arg) => sourceReceiverReferenceInArgument(arg, receiverNames))) {
       continue;
     }
 
@@ -4042,6 +4041,121 @@ function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {
   );
 }
 
+function projectReceiverReferenceInArgument(
+  argument: Node,
+  receivers: ProjectDrizzleReceivers,
+): Node | undefined {
+  return receiverReferenceInArgument(argument, (node) =>
+    isProjectDrizzleReceiverIdentifier(node, receivers),
+  );
+}
+
+function queryReceiverReferenceInArgument(
+  argument: Node,
+  receiverReferences: QueryReceiverReferences,
+): Node | undefined {
+  return receiverReferenceInArgument(argument, (node) =>
+    isQueryReceiverIdentifier(node, receiverReferences),
+  );
+}
+
+function sourceReceiverReferenceInArgument(
+  argument: Node,
+  receiverNames: ReadonlySet<string>,
+): Node | undefined {
+  return receiverReferenceInArgument(argument, (node) =>
+    isSourceDrizzleReceiverIdentifier(node, receiverNames),
+  );
+}
+
+function receiverReferenceInArgument(
+  argument: Node,
+  isReceiverIdentifier: (node: Node) => boolean,
+): Node | undefined {
+  // SPEC §10-§11: opaque helper handoffs may hide Drizzle work, so receiver values passed inside
+  // containers degrade to FW406 while classified receiver call chains remain separately analyzed.
+  if (isFunctionLikeNode(argument)) return undefined;
+  if (isReceiverArgumentReference(argument, argument, isReceiverIdentifier)) return argument;
+
+  for (const node of argument.getDescendants()) {
+    if (isFunctionLikeNode(node)) continue;
+    if (Node.isShorthandPropertyAssignment(node)) {
+      const name = node.getNameNode();
+      if (
+        isReceiverIdentifier(name) &&
+        !isIdentifierDeclarationPosition(name) &&
+        !isInsideNestedFunction(name, argument)
+      ) {
+        return name;
+      }
+    }
+    if (isReceiverArgumentReference(node, argument, isReceiverIdentifier)) return node;
+  }
+
+  return undefined;
+}
+
+function isReceiverArgumentReference(
+  node: Node,
+  argument: Node,
+  isReceiverIdentifier: (node: Node) => boolean,
+): boolean {
+  if (!Node.isIdentifier(node)) return false;
+  if (!isReceiverIdentifier(node)) return false;
+  if (isIdentifierDeclarationPosition(node)) return false;
+  if (isPropertyNamePosition(node)) return false;
+  if (isAccessExpressionReceiver(node)) return false;
+  if (isInsideNestedFunction(node, argument)) return false;
+  return true;
+}
+
+function isIdentifierDeclarationPosition(node: Node): boolean {
+  const parent = node.getParent();
+  if (!parent) return false;
+
+  if (Node.isParameterDeclaration(parent) && parent.getNameNode() === node) return true;
+  if (Node.isVariableDeclaration(parent) && parent.getNameNode() === node) return true;
+  if (Node.isBindingElement(parent) && parent.getNameNode() === node) return true;
+  if (Node.isFunctionDeclaration(parent) && parent.getNameNode() === node) return true;
+
+  return false;
+}
+
+function isPropertyNamePosition(node: Node): boolean {
+  const parent = node.getParent();
+  if (!parent) return false;
+
+  if (Node.isPropertyAccessExpression(parent)) return true;
+  if (
+    (Node.isPropertyAssignment(parent) || Node.isMethodDeclaration(parent)) &&
+    parent.getNameNode() === node
+  ) {
+    return true;
+  }
+  if (Node.isBindingElement(parent) && parent.getPropertyNameNode() === node) return true;
+
+  return false;
+}
+
+function isAccessExpressionReceiver(node: Node): boolean {
+  const parent = node.getParent();
+  return (
+    (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) &&
+    parent.getExpression() === node
+  );
+}
+
+function isInsideNestedFunction(node: Node, boundary: Node): boolean {
+  if (node === boundary) return false;
+
+  for (const ancestor of node.getAncestors()) {
+    if (ancestor === boundary) return false;
+    if (isFunctionLikeNode(ancestor)) return true;
+  }
+
+  return false;
+}
+
 function extractUnclassifiedDrizzleReceiverCallsFromBody(
   body: Node,
   receiverNames: ReadonlySet<string>,
@@ -4104,7 +4218,7 @@ function isSourceDrizzleReceiverIdentifier(
 ): boolean {
   if (!node || !Node.isIdentifier(node)) return false;
 
-  const symbol = node.getSymbol();
+  const symbol = symbolForIdentifierReference(node);
   const declarations = symbol?.getDeclarations() ?? [];
   if (declarations.length === 0) return receiverNames.has(node.getText());
 
@@ -4145,6 +4259,17 @@ function isSourceDrizzleReceiverIdentifier(
   }
 
   return false;
+}
+
+function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
+  if (Node.isIdentifier(node)) {
+    const parent = node.getParent();
+    if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === node) {
+      return parent.getValueSymbol() ?? node.getSymbol();
+    }
+  }
+
+  return node.getSymbol();
 }
 
 function isSourceReceiverBindingDeclaration(declaration: Node): boolean {

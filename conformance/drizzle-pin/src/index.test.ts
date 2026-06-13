@@ -375,6 +375,88 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins containerized Drizzle receiver helper handoffs as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              select(value?: unknown): { from(table: unknown): Promise<unknown[]> };
+            }
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            declare function runReport(context: unknown): Promise<unknown[]>;
+
+            export const productQuery = query('product/container-helper', {
+              async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
+                await runReport({ fake });
+                return runReport({ db });
+              },
+            });
+          `,
+        },
+      ],
+    });
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'declare function audit(context: unknown): Promise<void>;',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  await audit({ fake });',
+            '  await audit({ db });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver db to helper runReport().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:14',
+          },
+        ],
+        query: 'product/container-helper',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:14',
+      },
+    ]);
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:11',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins query-loader receiver symbols without shadowed lookalike facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
