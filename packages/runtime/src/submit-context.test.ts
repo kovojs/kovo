@@ -6,7 +6,6 @@ import {
   createSubmitContext,
   type EnhancedMutationFetchOptions,
 } from './index.js';
-import { createSubmitContext as createSubmitContextFromMutationBarrel } from './mutation.js';
 import { createSubmitContext as createSubmitContextFromSubmitContextModule } from './submit-context.js';
 
 declare module '@jiso/core' {
@@ -134,9 +133,8 @@ class FakeQueryBindingElement {
 }
 
 describe('submit context', () => {
-  it('exports the split submit context implementation through the public runtime barrels', () => {
+  it('exports the split submit context implementation through the public runtime barrel', () => {
     expect(createSubmitContext).toBe(createSubmitContextFromSubmitContextModule);
-    expect(createSubmitContextFromMutationBarrel).toBe(createSubmitContextFromSubmitContextModule);
   });
 
   it('submits typed forms through a ctx.submit-style helper', async () => {

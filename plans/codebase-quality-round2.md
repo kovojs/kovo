@@ -610,10 +610,20 @@ packages/runtime/src/loader.ts packages/runtime/src/loader-lifecycle.ts packages
 packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-apply.ts
 packages/runtime/src/apply-mutation-response.ts packages/runtime/src/index.test.ts
 packages/runtime/src/loader-lifecycle.test.ts`.
+- Runtime root private facades have been deleted: `index.ts` now exports the canonical inline
+  loader, loader/handler, morph, mutation, and query split modules directly after removing
+  `inline.ts`, `loader-api.ts`, `morphing.ts`, `mutation.ts`, and `query.ts`. `index-exports.test.ts`
+  pins the root package surface to those canonical modules so future compatibility barrels cannot
+  drift back in (SPEC.md §4.4/§4.7/§4.8/§9.1/§9.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, `pnpm --filter @jiso/runtime run
+check:inline-loader`, and `pnpm exec vp check packages/runtime/src/index.ts
+packages/runtime/src/index-exports.test.ts packages/runtime/src/submit-context.test.ts
+IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
-- Complete subtractive runtime split of the remaining high-churn root module areas.
+- Continue shrinking broad runtime tests where split modules now have focused coverage.
 - Expand browser/runtime gates where shared wire parsing can affect hydrated query behavior.
 
 Recent gates:
