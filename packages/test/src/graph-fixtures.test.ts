@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   generatedGraphArtifactHonestyFact,
   generatedGraphArtifactHonestySummaryFact,
+  generatedGraphArtifactAcceptanceFact,
   graphFixtureFile,
   graphComponentTargetFacts,
   graphDomainFacts,
@@ -247,6 +248,103 @@ describe('@jiso/test graph fixture seam', () => {
         },
       },
     });
+    expect(
+      generatedGraphArtifactAcceptanceFact({
+        artifactGraph: graph,
+        authoredGraph: {
+          mutations: graph.mutations,
+          optimistic: graph.optimistic,
+          pages: graph.pages,
+          queries: graph.queries,
+          touchGraph: graph.touchGraph,
+          components: graph.components,
+        },
+        emitCheck: { stderr: '', stdout: '' },
+        fwCheck: {
+          exitCode: 0,
+          issueCount: 0,
+          status: 'ok',
+          version: 'fw-check/v1',
+        },
+        provenance,
+      }),
+    ).toEqual({
+      authoredGraphMatchesArtifact: true,
+      fwCheck: {
+        exitCode: 0,
+        issueCount: 0,
+        status: 'ok',
+        version: 'fw-check/v1',
+      },
+      staticBehavior: {
+        components: [
+          { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+          { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        ],
+        domains: ['attachment', 'cart', 'order', 'product'],
+        invalidations: {
+          'cart/add': ['cart', 'productGrid'],
+        },
+        mutations: ['cart/add', 'order/receipt'],
+        optimistic: [
+          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+          { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+        ],
+        routes: ['/admin', '/cart'],
+        touchGraphKeys: ['cart.addItem', 'order.receipt'],
+      },
+      summary: {
+        emitCheck: {
+          clean: true,
+        },
+        invalidations: {
+          'cart/add': ['cart', 'productGrid'],
+        },
+        touchGraph: {
+          entries: {
+            'cart.addItem': {
+              reads: 0,
+              touches: [
+                {
+                  domain: 'cart',
+                  keys: null,
+                  sitePath: 'src/app.ts',
+                  via: 'cart_items',
+                },
+              ],
+              unresolved: 0,
+            },
+          },
+          honesty: {
+            entryKeys: ['cart.addItem'],
+            sourceLineMismatches: [],
+            sourceSites: {
+              count: 1,
+              linesArePositive: true,
+              paths: ['src/app.ts'],
+            },
+            touchCountsByMutation: {
+              'cart.addItem': 1,
+            },
+            unresolvedMutations: [],
+          },
+        },
+      },
+    });
+    expect(
+      generatedGraphArtifactAcceptanceFact({
+        artifactGraph: graph,
+        authoredGraph: { ...graph, pages: [] },
+        emitCheck: { stderr: '', stdout: '' },
+        fwCheck: {
+          exitCode: 0,
+          issueCount: 0,
+          status: 'ok',
+          version: 'fw-check/v1',
+        },
+        provenance,
+      }).authoredGraphMatchesArtifact,
+    ).toBe(false);
   });
 
   it('loads checked-in graph artifacts through the graph fixture seam', async () => {

@@ -18,19 +18,16 @@ import {
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
+  generatedGraphArtifactAcceptanceFact,
   graphFixtureFile,
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
   graphPageFact,
-  graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
 import { fwResponseBodyFact, htmlDocumentFacts } from '@jiso/test/html-fragment';
-import {
-  touchGraphProvenanceFact,
-  touchGraphProvenanceHonestyFact,
-} from '@jiso/test/touch-graph-fixtures';
+import { touchGraphProvenanceFact } from '@jiso/test/touch-graph-fixtures';
 import { fwCheck, fwExplain } from 'fw';
 
 import {
@@ -64,9 +61,13 @@ const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
 
 describe('commerce source-truth graph acceptance', () => {
   it('ships graph facts for fw check and explain acceptance', async () => {
-    execFileSync('node', ['examples/commerce/scripts/emit-graph.mjs', '--check'], {
-      stdio: 'pipe',
-    });
+    const emitGraphCheckStdout = execFileSync(
+      'node',
+      ['examples/commerce/scripts/emit-graph.mjs', '--check'],
+      {
+        stdio: 'pipe',
+      },
+    ).toString();
     const graphArtifact = await graphFixtureFile<typeof commerceGraph>(
       projectRootPath,
       'examples/commerce/src/generated/graph.json',
@@ -77,25 +78,6 @@ describe('commerce source-truth graph acceptance', () => {
 
     expect(graphArtifact).toEqual(commerceGraph);
     expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
-    expect(graphStaticBehaviorFact(graphArtifact)).toEqual({
-      components: [
-        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
-        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
-        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
-      ],
-      domains: ['attachment', 'auth', 'cart', 'order', 'product'],
-      invalidations: {
-        'cart/add': ['cart', 'orderHistory', 'productGrid'],
-      },
-      mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
-      optimistic: [
-        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
-      ],
-      routes: ['/admin', '/cart'],
-      touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
-    });
     expect(graphPageFact(graphArtifact, '/cart').meta).toEqual(cartMeta);
     expect(graphPageFact(commerceGraph, '/cart').meta).toEqual(cartMeta);
     expect(pageHints.title).toBe(cartMeta.title);
@@ -109,53 +91,126 @@ describe('commerce source-truth graph acceptance', () => {
         }),
       ]),
     );
-    expect(fwCheckOkAssertionFact(fwCheck(graphArtifact))).toEqual({
-      exitCode: 0,
-      issueCount: 0,
-      status: 'ok',
-      version: 'fw-check/v1',
-    });
     expect(addToCart.registry?.touches).toBeUndefined();
     expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
     const provenance = await touchGraphProvenanceFact(projectRootPath, commerceTouchGraph);
-    expect(touchGraphProvenanceHonestyFact(provenance)).toEqual({
-      entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
-      sourceLineMismatches: [],
-      sourceSites: {
-        count: 5,
-        linesArePositive: true,
-        paths: ['examples/commerce/src/app.ts'],
+    expect(
+      generatedGraphArtifactAcceptanceFact({
+        artifactGraph: graphArtifact,
+        authoredGraph: commerceGraph,
+        emitCheck: {
+          stderr: '',
+          stdout: emitGraphCheckStdout,
+        },
+        fwCheck: fwCheckOkAssertionFact(fwCheck(graphArtifact)),
+        provenance,
+      }),
+    ).toEqual({
+      authoredGraphMatchesArtifact: true,
+      fwCheck: {
+        exitCode: 0,
+        issueCount: 0,
+        status: 'ok',
+        version: 'fw-check/v1',
       },
-      touchCountsByMutation: {
-        'cart.addItem': 3,
-        'order.receipt': 1,
-        'payment.webhook': 1,
+      staticBehavior: {
+        components: [
+          { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+          { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+          { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+        ],
+        domains: ['attachment', 'auth', 'cart', 'order', 'product'],
+        invalidations: {
+          'cart/add': ['cart', 'orderHistory', 'productGrid'],
+        },
+        mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
+        optimistic: [
+          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+          { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+          { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+        ],
+        routes: ['/admin', '/cart'],
+        touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
       },
-      unresolvedMutations: [],
+      summary: {
+        emitCheck: {
+          clean: true,
+        },
+        invalidations: {
+          'cart/add': ['cart', 'orderHistory', 'productGrid'],
+        },
+        touchGraph: {
+          entries: {
+            'cart.addItem': {
+              reads: 0,
+              touches: [
+                {
+                  domain: 'cart',
+                  keys: null,
+                  sitePath: 'examples/commerce/src/app.ts',
+                  via: 'cart_items',
+                },
+                {
+                  domain: 'order',
+                  keys: null,
+                  sitePath: 'examples/commerce/src/app.ts',
+                  via: 'orders',
+                },
+                {
+                  domain: 'product',
+                  keys: 'arg:productId',
+                  predicate: 'eq',
+                  sitePath: 'examples/commerce/src/app.ts',
+                  via: 'products',
+                },
+              ],
+              unresolved: 0,
+            },
+            'payment.webhook': {
+              reads: 0,
+              touches: [
+                {
+                  domain: 'order',
+                  keys: 'arg:data.object.id',
+                  predicate: 'eq',
+                  sitePath: 'examples/commerce/src/app.ts',
+                  via: 'orders',
+                },
+              ],
+              unresolved: 0,
+            },
+            'order.receipt': {
+              reads: 0,
+              touches: [
+                {
+                  domain: 'attachment',
+                  keys: 'arg:orderId',
+                  predicate: 'eq',
+                  sitePath: 'examples/commerce/src/app.ts',
+                  via: 'attachments',
+                },
+              ],
+              unresolved: 0,
+            },
+          },
+          honesty: {
+            entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+            sourceLineMismatches: [],
+            sourceSites: {
+              count: 5,
+              linesArePositive: true,
+              paths: ['examples/commerce/src/app.ts'],
+            },
+            touchCountsByMutation: {
+              'cart.addItem': 3,
+              'order.receipt': 1,
+              'payment.webhook': 1,
+            },
+            unresolvedMutations: [],
+          },
+        },
+      },
     });
-    expect(provenance.entries['cart.addItem']?.touches).toEqual([
-      {
-        domain: 'cart',
-        keys: null,
-        predicate: undefined,
-        sitePath: 'examples/commerce/src/app.ts',
-        via: 'cart_items',
-      },
-      {
-        domain: 'order',
-        keys: null,
-        predicate: undefined,
-        sitePath: 'examples/commerce/src/app.ts',
-        via: 'orders',
-      },
-      {
-        domain: 'product',
-        keys: 'arg:productId',
-        predicate: 'eq',
-        sitePath: 'examples/commerce/src/app.ts',
-        via: 'products',
-      },
-    ]);
     expect(fwCheckOkAssertionFact(fwCheck(commerceGraph))).toEqual({
       exitCode: 0,
       issueCount: 0,

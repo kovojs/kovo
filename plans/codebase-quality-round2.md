@@ -248,6 +248,12 @@ Latest evidence:
   `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts`;
   exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Generated graph artifact acceptance fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 2 - Compiler IR
 
@@ -1627,6 +1633,12 @@ Latest evidence:
   `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P6 navigation bfcache optimism cleanup acceptance is represented" tests/fw-check.node.mjs`.
+- Generated graph artifact acceptance fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 7 - Test Restructuring
 
@@ -1695,6 +1707,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P6 navigation bfcache optimism cleanup acceptance is represented" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Generated graph artifact acceptance fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/graph-fixtures.ts packages/test/src/graph-fixtures.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Current Gates

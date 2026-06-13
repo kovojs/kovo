@@ -5,6 +5,7 @@ import {
   type TouchGraphProvenanceHonestyFact,
   type TouchGraphProvenanceFact,
 } from './touch-graph-fixtures.ts';
+import type { FwCheckOkAssertionFact } from './fw-check-fixtures.ts';
 
 export interface JisoGraphComponentFact {
   fragments?: readonly string[];
@@ -108,6 +109,13 @@ export interface GeneratedGraphArtifactHonestySummaryFact {
     entries: Record<string, GeneratedGraphTouchEntrySummaryFact>;
     honesty: TouchGraphProvenanceHonestyFact;
   };
+}
+
+export interface GeneratedGraphArtifactAcceptanceFact {
+  authoredGraphMatchesArtifact?: boolean;
+  fwCheck: FwCheckOkAssertionFact;
+  staticBehavior: GraphStaticBehaviorFact;
+  summary: GeneratedGraphArtifactHonestySummaryFact;
 }
 
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
@@ -337,9 +345,48 @@ export function generatedGraphArtifactHonestySummaryFact(options: {
   };
 }
 
+export function generatedGraphArtifactAcceptanceFact(options: {
+  artifactGraph: JisoGraphFixture;
+  authoredGraph?: JisoGraphFixture;
+  emitCheck: GeneratedGraphEmitCheckResult;
+  fwCheck: FwCheckOkAssertionFact;
+  provenance: TouchGraphProvenanceFact;
+}): GeneratedGraphArtifactAcceptanceFact {
+  return {
+    ...(options.authoredGraph
+      ? {
+          authoredGraphMatchesArtifact:
+            stableGraphJson(options.artifactGraph) === stableGraphJson(options.authoredGraph),
+        }
+      : {}),
+    fwCheck: options.fwCheck,
+    staticBehavior: graphStaticBehaviorFact(options.artifactGraph),
+    summary: generatedGraphArtifactHonestySummaryFact({
+      emitCheck: options.emitCheck,
+      graph: options.artifactGraph,
+      provenance: options.provenance,
+    }),
+  };
+}
+
 export async function graphFixtureFile<T extends ProjectGraphFixture = ProjectGraphFixture>(
   rootPath: string,
   path: string,
 ): Promise<T> {
   return projectJsonFile<T>(rootPath, path);
+}
+
+function stableGraphJson(value: unknown): string {
+  return JSON.stringify(sortGraphValue(value));
+}
+
+function sortGraphValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortGraphValue);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, sortGraphValue(entry)]),
+  );
 }
