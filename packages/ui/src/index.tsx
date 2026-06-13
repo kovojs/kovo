@@ -74,8 +74,105 @@ export type {
 } from './radio-group.js';
 export { Drawer, Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
 export type { DrawerProps, DrawerSide, SheetProps, SheetSide } from './sheet.js';
+export {
+  Field,
+  FieldControl,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  Fieldset,
+  FieldsetLegend,
+  fieldClassNames,
+  fieldClasses,
+  fieldControlClassNames,
+  fieldControlClasses,
+  fieldDescriptionClassNames,
+  fieldDescriptionClasses,
+  fieldErrorClassNames,
+  fieldErrorClasses,
+  fieldLabelClassNames,
+  fieldLabelClasses,
+  fieldsetClassNames,
+  fieldsetClasses,
+  fieldsetLegendClassNames,
+  fieldsetLegendClasses,
+} from './field.js';
+export type {
+  FieldControlProps,
+  FieldLabelProps,
+  FieldMessageProps,
+  FieldProps,
+  FieldStateProps,
+  FieldsetLegendProps,
+  FieldsetProps,
+} from './field.js';
+export {
+  NumberField,
+  NumberFieldControl,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
+  numberFieldButtonClassNames,
+  numberFieldButtonClasses,
+  numberFieldClassNames,
+  numberFieldClasses,
+  numberFieldControlClassNames,
+  numberFieldControlClasses,
+  numberFieldInputClassNames,
+  numberFieldInputClasses,
+} from './number-field.js';
+export type {
+  NumberFieldButtonProps,
+  NumberFieldInputProps,
+  NumberFieldProps,
+  NumberFieldStateProps,
+} from './number-field.js';
+export {
+  OtpField,
+  OtpFieldGroup,
+  OtpFieldHiddenInput,
+  OtpFieldInput,
+  otpFieldClassNames,
+  otpFieldClasses,
+  otpFieldGroupClassNames,
+  otpFieldGroupClasses,
+  otpFieldHiddenInputClassNames,
+  otpFieldHiddenInputClasses,
+  otpFieldInputClassNames,
+  otpFieldInputClasses,
+} from './otp-field.js';
+export type {
+  OtpFieldHiddenInputProps,
+  OtpFieldInputProps,
+  OtpFieldProps,
+  OtpFieldStateProps,
+} from './otp-field.js';
 export { Skeleton, skeletonClassNames, skeletonClasses } from './skeleton.js';
 export type { SkeletonProps } from './skeleton.js';
+export {
+  ScrollArea,
+  ScrollAreaCorner,
+  ScrollAreaScrollbar,
+  ScrollAreaThumb,
+  ScrollAreaViewport,
+  scrollAreaClassNames,
+  scrollAreaClasses,
+  scrollAreaCornerClassNames,
+  scrollAreaCornerClasses,
+  scrollAreaScrollbarClassNames,
+  scrollAreaScrollbarClasses,
+  scrollAreaThumbClassNames,
+  scrollAreaThumbClasses,
+  scrollAreaViewportClassNames,
+  scrollAreaViewportClasses,
+} from './scroll-area.js';
+export type {
+  ScrollAreaCornerProps,
+  ScrollAreaProps,
+  ScrollAreaScrollbarProps,
+  ScrollAreaStateProps,
+  ScrollAreaViewportProps,
+} from './scroll-area.js';
 export {
   Switch,
   switchClassNames,

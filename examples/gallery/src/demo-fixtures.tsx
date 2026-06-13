@@ -17,27 +17,8 @@ import {
   dialogContentAttributes,
   dialogRootAttributes,
   dialogTriggerAttributes,
-  fieldControlAttributes,
-  fieldDescriptionAttributes,
-  fieldErrorAttributes,
-  fieldLabelAttributes,
-  fieldRootAttributes,
-  fieldsetLegendAttributes,
-  fieldsetRootAttributes,
   meterRootAttributes,
-  numberFieldDecrementAttributes,
-  numberFieldIncrementAttributes,
-  numberFieldInputAttributes,
-  numberFieldRootAttributes,
-  otpFieldHiddenInputAttributes,
-  otpFieldInputAttributes,
-  otpFieldRootAttributes,
   progressRootAttributes,
-  scrollAreaCornerAttributes,
-  scrollAreaRootAttributes,
-  scrollAreaScrollbarAttributes,
-  scrollAreaThumbAttributes,
-  scrollAreaViewportAttributes,
   selectContentAttributes,
   selectItemAttributes,
   selectRootAttributes,
@@ -65,11 +46,32 @@ import {
   CheckboxGroupItem,
   CheckboxGroupLabel,
   Drawer,
+  Field,
+  FieldControl,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  Fieldset,
+  FieldsetLegend,
   Kbd,
+  NumberField,
+  NumberFieldControl,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
+  OtpField,
+  OtpFieldGroup,
+  OtpFieldHiddenInput,
+  OtpFieldInput,
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
   RadioGroupRadio,
+  ScrollArea,
+  ScrollAreaCorner,
+  ScrollAreaScrollbar,
+  ScrollAreaThumb,
+  ScrollAreaViewport,
   Sheet,
   Skeleton,
   Switch,
@@ -768,48 +770,61 @@ export function FieldDemo(): string {
     invalid: true,
     required: true,
   };
-  const fieldsetState = {
-    descriptionId: 'gallery-fieldset-description',
-    id: 'gallery-fieldset',
-    invalid: true,
-  };
 
   return (
     <section data-gallery-demo="field">
       <p data-demo-summary="no-js">
         Field helpers wire labels, descriptions, errors, and native controls without hidden inputs.
       </p>
-      <div {...fieldRootAttributes({ ...fieldState, id: 'gallery-field' })}>
-        <label
-          {...fieldLabelAttributes({
-            ...fieldState,
-            controlId: 'gallery-field-email',
-            id: 'gallery-field-label',
-          })}
-        >
-          Email
-        </label>
-        <input
-          {...fieldControlAttributes({
-            ...fieldState,
-            descriptionId: 'gallery-field-description',
-            errorId: 'gallery-field-error',
-            id: 'gallery-field-email',
-            name: 'email',
-          })}
-          type="email"
-        />
-        <p {...fieldDescriptionAttributes({ id: 'gallery-field-description' })}>
-          Used for release notifications.
-        </p>
-        <p {...fieldErrorAttributes({ id: 'gallery-field-error' })}>Email is required.</p>
+      <div data-ui-demo="field">
+        {Field.definition.render({
+          ...fieldState,
+          children: (
+            <>
+              {FieldLabel.definition.render({
+                ...fieldState,
+                children: 'Email',
+                controlId: 'gallery-field-email',
+                id: 'gallery-field-label',
+              })}
+              {FieldControl.definition.render({
+                ...fieldState,
+                descriptionId: 'gallery-field-description',
+                errorId: 'gallery-field-error',
+                id: 'gallery-field-email',
+                name: 'email',
+                type: 'email',
+              })}
+              {FieldDescription.definition.render({
+                children: 'Used for release notifications.',
+                id: 'gallery-field-description',
+              })}
+              {FieldError.definition.render({
+                children: 'Email is required.',
+                id: 'gallery-field-error',
+              })}
+            </>
+          ),
+          id: 'gallery-field',
+        })}
+        {Fieldset.definition.render({
+          children: (
+            <>
+              {FieldsetLegend.definition.render({
+                children: 'Plan',
+                id: 'gallery-fieldset-legend',
+              })}
+              {FieldDescription.definition.render({
+                children: 'Fieldset preserves the native grouping element.',
+                id: 'gallery-fieldset-description',
+              })}
+            </>
+          ),
+          descriptionId: 'gallery-fieldset-description',
+          id: 'gallery-fieldset',
+          invalid: true,
+        })}
       </div>
-      <fieldset {...fieldsetRootAttributes(fieldsetState)}>
-        <legend {...fieldsetLegendAttributes({ id: 'gallery-fieldset-legend' })}>Plan</legend>
-        <p {...fieldDescriptionAttributes({ id: 'gallery-fieldset-description' })}>
-          Fieldset preserves the native grouping element.
-        </p>
-      </fieldset>
       {renderBehaviorContract({
         changeReasons: 'native form control changes',
         dataState: 'invalid, required, disabled',
@@ -878,10 +893,7 @@ export function NumberFieldDemo(): string {
   };
 
   return (
-    <section
-      {...numberFieldRootAttributes({ ...quantity, id: 'gallery-number-field' })}
-      data-gallery-demo="number-field"
-    >
+    <section data-gallery-demo="number-field">
       <p data-demo-summary="no-js">
         Number field preserves a native number input while step buttons expose primitive-owned
         actions.
@@ -889,48 +901,50 @@ export function NumberFieldDemo(): string {
       <label id="gallery-number-field-label" for="gallery-number-field-input">
         Quantity
       </label>
-      <div>
-        <button
-          {...numberFieldDecrementAttributes({
-            ...quantity,
-            id: 'gallery-number-field-decrement',
-            inputId: 'gallery-number-field-input',
-            label: 'Decrease quantity',
-          })}
-        >
-          -
-        </button>
-        <input
-          {...numberFieldInputAttributes({
-            ...quantity,
-            descriptionId: 'gallery-number-field-description',
-            errorId: 'gallery-number-field-error',
-            id: 'gallery-number-field-input',
-            labelledBy: 'gallery-number-field-label',
-          })}
-        />
-        <button
-          {...numberFieldIncrementAttributes({
-            ...quantity,
-            id: 'gallery-number-field-increment',
-            inputId: 'gallery-number-field-input',
-            label: 'Increase quantity',
-          })}
-        >
-          +
-        </button>
-      </div>
-      <p id="gallery-number-field-description">Choose an even quantity.</p>
-      <p id="gallery-number-field-error">Quantity must be available in stock.</p>
-      <button
-        {...numberFieldDecrementAttributes({
-          min: 0,
-          value: 0,
+      <div data-ui-demo="number-field">
+        {NumberField.definition.render({
+          ...quantity,
+          children: (
+            <>
+              {NumberFieldControl.definition.render({
+                ...quantity,
+                children: (
+                  <>
+                    {NumberFieldDecrement.definition.render({
+                      ...quantity,
+                      id: 'gallery-number-field-decrement',
+                      inputId: 'gallery-number-field-input',
+                      label: 'Decrease quantity',
+                    })}
+                    {NumberFieldInput.definition.render({
+                      ...quantity,
+                      descriptionId: 'gallery-number-field-description',
+                      errorId: 'gallery-number-field-error',
+                      id: 'gallery-number-field-input',
+                      labelledBy: 'gallery-number-field-label',
+                    })}
+                    {NumberFieldIncrement.definition.render({
+                      ...quantity,
+                      id: 'gallery-number-field-increment',
+                      inputId: 'gallery-number-field-input',
+                      label: 'Increase quantity',
+                    })}
+                  </>
+                ),
+              })}
+              <p id="gallery-number-field-description">Choose an even quantity.</p>
+              <p id="gallery-number-field-error">Quantity must be available in stock.</p>
+            </>
+          ),
+          id: 'gallery-number-field',
         })}
-        data-fixture-state="disabled-boundary"
-      >
-        At minimum
-      </button>
+        <span data-fixture-state="disabled-boundary">
+          {NumberFieldDecrement.definition.render({
+            min: 0,
+            value: 0,
+          })}
+        </span>
+      </div>
       {renderBehaviorContract({
         changeReasons: 'input, increment, decrement, programmatic',
         dataState: 'invalid, required, disabled',
@@ -959,10 +973,7 @@ export function OtpFieldDemo(): string {
   };
 
   return (
-    <section
-      {...otpFieldRootAttributes({ ...state, id: 'gallery-otp-field' })}
-      data-gallery-demo="otp-field"
-    >
+    <section data-gallery-demo="otp-field">
       <p data-demo-summary="no-js">
         OTP field submits one aggregate native input while visible slots keep per-character editing
         semantics.
@@ -970,32 +981,38 @@ export function OtpFieldDemo(): string {
       <label id="gallery-otp-label" for="gallery-otp-code">
         One-time code
       </label>
-      <input {...otpFieldHiddenInputAttributes({ ...state, id: 'gallery-otp-code' })} />
-      <div aria-label="One-time code slots">
-        {Array.from({ length: state.length }, (_, slotIndex) => (
-          <input
-            {...otpFieldInputAttributes({
-              ...state,
-              id: `gallery-otp-slot-${slotIndex + 1}`,
-              label: `One-time code digit ${slotIndex + 1}`,
-              slotIndex,
-            })}
-          />
-        ))}
-      </div>
-      <p id="gallery-otp-description">Enter the six digit verification code.</p>
-      <p id="gallery-otp-error">The code is incomplete.</p>
-      <div
-        {...otpFieldRootAttributes(completeDisabledState)}
-        data-fixture-state="disabled-complete"
-      >
-        <input
-          {...otpFieldHiddenInputAttributes({
+      <div data-ui-demo="otp-field">
+        {OtpField.definition.render({
+          ...state,
+          children: (
+            <>
+              {OtpFieldHiddenInput.definition.render({ ...state, id: 'gallery-otp-code' })}
+              {OtpFieldGroup.definition.render({
+                children: Array.from({ length: state.length }, (_, slotIndex) =>
+                  OtpFieldInput.definition.render({
+                    ...state,
+                    id: `gallery-otp-slot-${slotIndex + 1}`,
+                    label: `One-time code digit ${slotIndex + 1}`,
+                    slotIndex,
+                  }),
+                ).join(''),
+              })}
+              <p id="gallery-otp-description">Enter the six digit verification code.</p>
+              <p id="gallery-otp-error">The code is incomplete.</p>
+            </>
+          ),
+          id: 'gallery-otp-field',
+        })}
+        <span data-fixture-state="disabled-complete">
+          {OtpField.definition.render({
             ...completeDisabledState,
-            id: 'gallery-otp-disabled-code',
-            name: 'gallery-disabled-otp-code',
+            children: OtpFieldHiddenInput.definition.render({
+              ...completeDisabledState,
+              id: 'gallery-otp-disabled-code',
+              name: 'gallery-disabled-otp-code',
+            }),
           })}
-        />
+        </span>
       </div>
       {renderBehaviorContract({
         changeReasons: 'input, delete, paste, programmatic',
@@ -1192,73 +1209,77 @@ export function ScrollAreaDemo(): string {
   };
 
   return (
-    <section
-      {...scrollAreaRootAttributes({ ...state, id: 'gallery-scroll-area' })}
-      data-gallery-demo="scroll-area"
-    >
+    <section data-gallery-demo="scroll-area">
       <p data-demo-summary="no-js">
         Scroll area leaves movement on a native focusable viewport while exposing decorative
         scrollbar parts for styling.
       </p>
       <h2 id="gallery-scroll-area-title">Activity feed</h2>
-      <div
-        {...scrollAreaViewportAttributes({
+      <div data-ui-demo="scroll-area">
+        {ScrollArea.definition.render({
           ...state,
-          descriptionId: 'gallery-scroll-area-description',
-          id: 'gallery-scroll-area-viewport',
-          labelledBy: 'gallery-scroll-area-title',
+          children: (
+            <>
+              {ScrollAreaViewport.definition.render({
+                ...state,
+                children: (
+                  <ol>
+                    <li>Design tokens published.</li>
+                    <li>Headless primitive verified.</li>
+                    <li>Gallery route added.</li>
+                  </ol>
+                ),
+                descriptionId: 'gallery-scroll-area-description',
+                id: 'gallery-scroll-area-viewport',
+                labelledBy: 'gallery-scroll-area-title',
+              })}
+              <p id="gallery-scroll-area-description">
+                The viewport remains tabbable without a client behavior island.
+              </p>
+              {ScrollAreaScrollbar.definition.render({
+                ...state,
+                children: ScrollAreaThumb.definition.render({
+                  ...state,
+                  id: 'gallery-scroll-area-thumb-y',
+                  orientation: 'vertical',
+                  visible: true,
+                }),
+                id: 'gallery-scroll-area-scrollbar-y',
+                orientation: 'vertical',
+                visible: true,
+              })}
+              {ScrollAreaScrollbar.definition.render({
+                ...state,
+                children: ScrollAreaThumb.definition.render({
+                  ...state,
+                  forceMount: true,
+                  id: 'gallery-scroll-area-thumb-x',
+                  orientation: 'horizontal',
+                  visible: false,
+                }),
+                forceMount: true,
+                id: 'gallery-scroll-area-scrollbar-x',
+                orientation: 'horizontal',
+                visible: false,
+              })}
+              {ScrollAreaCorner.definition.render({
+                ...state,
+                id: 'gallery-scroll-area-corner',
+              })}
+            </>
+          ),
+          id: 'gallery-scroll-area',
         })}
-      >
-        <ol>
-          <li>Design tokens published.</li>
-          <li>Headless primitive verified.</li>
-          <li>Gallery route added.</li>
-        </ol>
-      </div>
-      <p id="gallery-scroll-area-description">
-        The viewport remains tabbable without a client behavior island.
-      </p>
-      <div
-        {...scrollAreaScrollbarAttributes({
-          ...state,
-          id: 'gallery-scroll-area-scrollbar-y',
-          orientation: 'vertical',
-          visible: true,
-        })}
-      >
-        <div
-          {...scrollAreaThumbAttributes({
-            ...state,
-            id: 'gallery-scroll-area-thumb-y',
-            orientation: 'vertical',
-            visible: true,
+        <span data-fixture-state="disabled">
+          {ScrollArea.definition.render({
+            ...disabledState,
+            children: ScrollAreaViewport.definition.render({
+              ...disabledState,
+              children: 'Archived feed',
+              label: 'Archived feed',
+            }),
           })}
-        />
-      </div>
-      <div
-        {...scrollAreaScrollbarAttributes({
-          ...state,
-          forceMount: true,
-          id: 'gallery-scroll-area-scrollbar-x',
-          orientation: 'horizontal',
-          visible: false,
-        })}
-      >
-        <div
-          {...scrollAreaThumbAttributes({
-            ...state,
-            forceMount: true,
-            id: 'gallery-scroll-area-thumb-x',
-            orientation: 'horizontal',
-            visible: false,
-          })}
-        />
-      </div>
-      <div {...scrollAreaCornerAttributes({ ...state, id: 'gallery-scroll-area-corner' })} />
-      <div {...scrollAreaRootAttributes(disabledState)} data-fixture-state="disabled">
-        <div {...scrollAreaViewportAttributes({ ...disabledState, label: 'Archived feed' })}>
-          Archived feed
-        </div>
+        </span>
       </div>
       {renderBehaviorContract({
         changeReasons: 'native scroll position changes',

@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, badge, breadcrumb, button, card, checkbox, checkbox-group, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle, toggle-group, toolbar',
+      'alert, badge, breadcrumb, button, card, checkbox, checkbox-group, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, sheet, skeleton, switch, table, tabs, toggle, toggle-group, toolbar',
     );
 
     const manifest = JSON.parse(
@@ -288,7 +288,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, checkbox-group, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle, toggle-group, toolbar.\n',
+        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, checkbox-group, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, sheet, skeleton, switch, table, tabs, toggle, toggle-group, toolbar.\n',
       );
     } finally {
       stdout.mockRestore();

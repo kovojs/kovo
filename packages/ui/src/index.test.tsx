@@ -19,11 +19,32 @@ import {
   CheckboxGroupItem,
   CheckboxGroupLabel,
   Drawer,
+  Field,
+  FieldControl,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  Fieldset,
+  FieldsetLegend,
   Kbd,
+  NumberField,
+  NumberFieldControl,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
+  OtpField,
+  OtpFieldGroup,
+  OtpFieldHiddenInput,
+  OtpFieldInput,
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
   RadioGroupRadio,
+  ScrollArea,
+  ScrollAreaCorner,
+  ScrollAreaScrollbar,
+  ScrollAreaThumb,
+  ScrollAreaViewport,
   Sheet,
   Skeleton,
   Switch,
@@ -51,10 +72,30 @@ import {
   checkboxGroupItemClasses,
   checkboxGroupLabelClasses,
   checkboxClasses,
+  fieldClasses,
+  fieldControlClasses,
+  fieldDescriptionClasses,
+  fieldErrorClasses,
+  fieldLabelClasses,
+  fieldsetClasses,
+  fieldsetLegendClasses,
+  numberFieldButtonClasses,
+  numberFieldClasses,
+  numberFieldControlClasses,
+  numberFieldInputClasses,
+  otpFieldClasses,
+  otpFieldGroupClasses,
+  otpFieldHiddenInputClasses,
+  otpFieldInputClasses,
   radioGroupClasses,
   radioGroupItemClasses,
   radioGroupLabelClasses,
   radioGroupRadioClasses,
+  scrollAreaClasses,
+  scrollAreaCornerClasses,
+  scrollAreaScrollbarClasses,
+  scrollAreaThumbClasses,
+  scrollAreaViewportClasses,
   tabsClasses,
   tabsListClasses,
   tabsPanelClasses,
@@ -93,6 +134,10 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Toggle.name).toBe('toggle');
     expect(ToggleGroup.name).toBe('toggle-group');
     expect(Toolbar.name).toBe('toolbar');
+    expect(NumberField.name).toBe('number-field');
+    expect(OtpField.name).toBe('otp-field');
+    expect(ScrollArea.name).toBe('scroll-area');
+    expect(Field.name).toBe('field');
 
     expect(
       Button.definition.render({
@@ -145,6 +190,10 @@ describe('@jiso/ui styled package foundation', () => {
     expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
     expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
+    expect(numberFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
+    expect(otpFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
+    expect(scrollAreaClasses.join(' ')).toContain('relative overflow-hidden');
+    expect(fieldClasses.join(' ')).toContain('data-[required]');
   });
 
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {
@@ -408,6 +457,256 @@ describe('@jiso/ui styled package foundation', () => {
     expect(toolbarButtonClasses.join(' ')).toContain('data-[pressed=true]:bg-neutral-950');
   });
 
+  it('wraps the headless number-field primitive as a styled native number input', () => {
+    const state = {
+      invalid: true,
+      max: 10,
+      min: 0,
+      name: 'quantity',
+      required: true,
+      step: 2,
+      value: 2,
+    };
+
+    const root = NumberField.definition.render({
+      ...state,
+      children: 'quantity controls',
+      id: 'quantity-field',
+    });
+    const control = NumberFieldControl.definition.render({
+      ...state,
+      children: 'stepper',
+      id: 'quantity-control',
+    });
+    const decrement = NumberFieldDecrement.definition.render({
+      ...state,
+      id: 'quantity-decrement',
+      inputId: 'quantity-input',
+      label: 'Decrease quantity',
+    });
+    const input = NumberFieldInput.definition.render({
+      ...state,
+      descriptionId: 'quantity-description',
+      errorId: 'quantity-error',
+      id: 'quantity-input',
+      labelledBy: 'quantity-label',
+    });
+    const increment = NumberFieldIncrement.definition.render({
+      ...state,
+      id: 'quantity-increment',
+      inputId: 'quantity-input',
+      label: 'Increase quantity',
+    });
+    const disabledAtMax = NumberFieldIncrement.definition.render({
+      max: 10,
+      value: 10,
+    });
+
+    expect(NumberFieldControl.name).toBe('number-field-control');
+    expect(NumberFieldDecrement.name).toBe('number-field-decrement');
+    expect(NumberFieldInput.name).toBe('number-field-input');
+    expect(NumberFieldIncrement.name).toBe('number-field-increment');
+    expect(root).toContain('data-invalid="" data-required="" id="quantity-field"');
+    expect(control).toContain('data-invalid="" data-required="" id="quantity-control"');
+    expect(decrement).toContain('aria-controls="quantity-input"');
+    expect(decrement).toContain('aria-label="Decrease quantity"');
+    expect(decrement).toContain('data-action="decrement"');
+    expect(input).toContain('aria-describedby="quantity-description quantity-error"');
+    expect(input).toContain('aria-invalid="true"');
+    expect(input).toContain('id="quantity-input" max="10" min="0" name="quantity" required');
+    expect(input).toContain('step="2" type="number" value="2"');
+    expect(increment).toContain('data-action="increment"');
+    expect(disabledAtMax).toContain('data-disabled=""');
+    expect(disabledAtMax).toContain('disabled type="button"');
+    expect(numberFieldControlClasses.join(' ')).toContain('inline-flex h-9');
+    expect(numberFieldInputClasses.join(' ')).toContain('text-center');
+    expect(numberFieldButtonClasses.join(' ')).toContain('data-[action=increment]:border-l');
+  });
+
+  it('wraps the headless otp-field primitive as styled aggregate and slot inputs', () => {
+    const state = {
+      descriptionId: 'otp-description',
+      errorId: 'otp-error',
+      invalid: true,
+      labelledBy: 'otp-label',
+      length: 6,
+      name: 'otp-code',
+      pattern: '[0-9]*',
+      required: true,
+      value: '1234',
+    };
+
+    const root = OtpField.definition.render({
+      ...state,
+      children: 'otp controls',
+      id: 'otp-field',
+    });
+    const group = OtpFieldGroup.definition.render({ children: 'slots' });
+    const hidden = OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' });
+    const firstSlot = OtpFieldInput.definition.render({
+      ...state,
+      id: 'otp-slot-1',
+      label: 'One-time code digit 1',
+      slotIndex: 0,
+    });
+    const emptySlot = OtpFieldInput.definition.render({
+      ...state,
+      id: 'otp-slot-6',
+      slotIndex: 5,
+    });
+    const completeDisabled = OtpField.definition.render({
+      disabled: true,
+      length: 4,
+      value: '9876',
+    });
+
+    expect(OtpFieldGroup.name).toBe('otp-field-group');
+    expect(OtpFieldHiddenInput.name).toBe('otp-field-hidden-input');
+    expect(OtpFieldInput.name).toBe('otp-field-input');
+    expect(root).toContain('aria-describedby="otp-description otp-error"');
+    expect(root).toContain('aria-invalid="true"');
+    expect(root).toContain('aria-required="true"');
+    expect(root).toContain('role="group"');
+    expect(group).toContain('flex items-center gap-2');
+    expect(hidden).toContain('aria-hidden="true"');
+    expect(hidden).toContain('data-slot="hidden-input"');
+    expect(hidden).toContain('autoComplete="one-time-code"');
+    expect(hidden).toContain('name="otp-code"');
+    expect(hidden).toContain('readOnly required tabIndex="-1" type="text" value="1234"');
+    expect(firstSlot).toContain('aria-label="One-time code digit 1"');
+    expect(firstSlot).toContain('data-filled=""');
+    expect(firstSlot).toContain('data-slot="0"');
+    expect(firstSlot).toContain('maxLength="1"');
+    expect(emptySlot).toContain('data-slot="5"');
+    expect(completeDisabled).toContain('data-complete="" data-disabled=""');
+    expect(otpFieldGroupClasses.join(' ')).toContain('flex items-center gap-2');
+    expect(otpFieldHiddenInputClasses.join(' ')).toContain('sr-only');
+    expect(otpFieldInputClasses.join(' ')).toContain('data-[filled]:border-neutral-500');
+  });
+
+  it('wraps the headless scroll-area primitive as styled native scrolling parts', () => {
+    const state = {
+      dir: 'ltr' as const,
+      scrollbars: 'both' as const,
+    };
+
+    const root = ScrollArea.definition.render({
+      ...state,
+      children: 'viewport and scrollbars',
+      id: 'activity',
+    });
+    const viewport = ScrollAreaViewport.definition.render({
+      ...state,
+      children: 'feed',
+      descriptionId: 'activity-description',
+      id: 'activity-viewport',
+      labelledBy: 'activity-title',
+    });
+    const verticalScrollbar = ScrollAreaScrollbar.definition.render({
+      ...state,
+      children: 'thumb',
+      id: 'activity-scrollbar-y',
+      orientation: 'vertical',
+      visible: true,
+    });
+    const hiddenThumb = ScrollAreaThumb.definition.render({
+      ...state,
+      forceMount: true,
+      id: 'activity-thumb-x',
+      orientation: 'horizontal',
+      visible: false,
+    });
+    const corner = ScrollAreaCorner.definition.render({ ...state, id: 'activity-corner' });
+    const disabledViewport = ScrollAreaViewport.definition.render({
+      disabled: true,
+      label: 'Archived feed',
+      scrollbars: 'vertical',
+    });
+
+    expect(ScrollAreaViewport.name).toBe('scroll-area-viewport');
+    expect(ScrollAreaScrollbar.name).toBe('scroll-area-scrollbar');
+    expect(ScrollAreaThumb.name).toBe('scroll-area-thumb');
+    expect(ScrollAreaCorner.name).toBe('scroll-area-corner');
+    expect(root).toContain('data-scrollbars="both" dir="ltr" id="activity"');
+    expect(viewport).toContain('aria-describedby="activity-description"');
+    expect(viewport).toContain('aria-labelledby="activity-title"');
+    expect(viewport).toContain('role="region" tabIndex="0"');
+    expect(verticalScrollbar).toContain('aria-hidden="true"');
+    expect(verticalScrollbar).toContain('data-orientation="vertical"');
+    expect(verticalScrollbar).toContain('data-state="visible"');
+    expect(hiddenThumb).toContain('data-orientation="horizontal"');
+    expect(hiddenThumb).toContain('data-state="hidden"');
+    expect(corner).toContain('id="activity-corner"');
+    expect(disabledViewport).toContain('aria-disabled="true"');
+    expect(disabledViewport).toContain('tabIndex="-1"');
+    expect(scrollAreaViewportClasses.join(' ')).toContain('overflow-auto');
+    expect(scrollAreaScrollbarClasses.join(' ')).toContain('data-[orientation=vertical]:w-2.5');
+    expect(scrollAreaThumbClasses.join(' ')).toContain('rounded-full bg-neutral-400');
+    expect(scrollAreaCornerClasses.join(' ')).toContain('absolute bottom-0 right-0');
+  });
+
+  it('wraps field and fieldset primitives as styled native form wiring', () => {
+    const state = {
+      invalid: true,
+      required: true,
+    };
+
+    const root = Field.definition.render({
+      ...state,
+      children: 'email field',
+      id: 'email-field',
+    });
+    const label = FieldLabel.definition.render({
+      ...state,
+      children: 'Email',
+      controlId: 'email',
+      id: 'email-label',
+    });
+    const control = FieldControl.definition.render({
+      ...state,
+      descriptionId: 'email-description',
+      errorId: 'email-error',
+      id: 'email',
+      name: 'email',
+      type: 'email',
+    });
+    const description = FieldDescription.definition.render({
+      children: 'Used for notifications.',
+      id: 'email-description',
+    });
+    const error = FieldError.definition.render({ children: 'Email required.', id: 'email-error' });
+    const fieldset = Fieldset.definition.render({
+      children: FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }),
+      descriptionId: 'plan-description',
+      id: 'plan-fieldset',
+      invalid: true,
+    });
+
+    expect(FieldLabel.name).toBe('field-label');
+    expect(FieldControl.name).toBe('field-control');
+    expect(FieldDescription.name).toBe('field-description');
+    expect(FieldError.name).toBe('field-error');
+    expect(Fieldset.name).toBe('fieldset');
+    expect(FieldsetLegend.name).toBe('fieldset-legend');
+    expect(root).toContain('data-invalid="" data-required="" id="email-field"');
+    expect(label).toContain('for="email" id="email-label"');
+    expect(control).toContain('aria-describedby="email-description email-error"');
+    expect(control).toContain('aria-invalid="true"');
+    expect(control).toContain('id="email" name="email" required type="email"');
+    expect(description).toContain('id="email-description"');
+    expect(error).toContain('role="alert"');
+    expect(fieldset).toContain('aria-describedby="plan-description"');
+    expect(fieldset).toContain('aria-invalid="true"');
+    expect(fieldset).toContain('id="plan-fieldset"');
+    expect(fieldset).toContain('id="plan-legend"');
+    expect(fieldLabelClasses.join(' ')).toContain('text-sm font-medium');
+    expect(fieldControlClasses.join(' ')).toContain('aria-[invalid=true]:border-red-500');
+    expect(fieldDescriptionClasses.join(' ')).toContain('text-neutral-500');
+    expect(fieldErrorClasses.join(' ')).toContain('text-red-600');
+    expect(fieldsetClasses.join(' ')).toContain('rounded-md border border-neutral-200');
+    expect(fieldsetLegendClasses.join(' ')).toContain('px-1 text-sm font-medium');
+  });
+
   it('exports table primitives as styled semantic markup', () => {
     expect(Table.name).toBe('table');
     expect(TableHead.name).toBe('table-head');
@@ -571,9 +870,13 @@ describe('@jiso/ui styled package foundation', () => {
       'card.tsx',
       'checkbox.tsx',
       'checkbox-group.tsx',
+      'field.tsx',
       'kbd.tsx',
+      'number-field.tsx',
+      'otp-field.tsx',
       'sheet.tsx',
       'skeleton.tsx',
+      'scroll-area.tsx',
       'switch.tsx',
       'table.tsx',
       'tabs.tsx',

@@ -28,7 +28,7 @@ conformance. Keep this ledger compact: status, open work, and current gates only
 - [x] U1 styled foundation: token sheet, `cn()`, statically analyzable variant helper.
 - [x] U2 `fw add <component>` vendoring pipeline.
 - [ ] U3 styled H1 and pure-markup components.
-- [ ] U4 styled H2 components.
+- [x] U4 styled H2 components.
 - [ ] U5 styled H3 components.
 - [ ] G1 gallery static fixture surface: one route per component with source/markup snapshot.
 - [ ] G2 behavior-contract gates: keyboard/ARIA/native state checks and `fw explain` coverage.
@@ -66,6 +66,10 @@ Recent gates:
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
 - `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm exec vp check packages/ui/src/field.tsx packages/ui/src/number-field.tsx packages/ui/src/otp-field.tsx packages/ui/src/scroll-area.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
 - `git diff --check`
 - `git diff --check`
 - `pnpm --filter @jiso/ui exec vitest --run`
@@ -81,9 +85,9 @@ H2:
 - Toggle-group now has a styled vendorable wrapper, gallery route, behavior-contract snippets,
   catalog sync, and merge coverage via existing roving-groups fixture; broader H2 remains open for
   other H2 families.
-- Checkbox-group now has a styled vendorable wrapper, static gallery route, behavior-contract
-  snippets, and catalog sync; broader H2 remains open for number-field, otp-field, scroll-area, and
-  field/fieldset styled closure.
+- Checkbox-group, number-field, otp-field, scroll-area, and field/fieldset now have styled
+  vendorable wrappers, static gallery routes, behavior-contract snippets, and catalog sync;
+  broader H2 remains open until all primitive and conformance evidence is rechecked together.
 - Toolbar now has a styled vendorable wrapper, static gallery route, behavior-contract snippets,
   and catalog sync; broader H2 remains open for other H2 families.
 - Keep field/fieldset tied to `form()` integration rather than a standalone styled-only surface.
@@ -95,7 +99,7 @@ H3:
 
 Styled UI:
 
-- Finish styled wrappers for remaining H1/pure-markup gaps, then H2/H3 wrappers.
+- Finish styled wrappers for remaining H1/pure-markup gaps, then H3 wrappers.
 - Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered IR,
   no `fw-c=` or `data-bind=` in vendored component source.
 - Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports.
