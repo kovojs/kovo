@@ -446,6 +446,19 @@ plans/codebase-quality-round2.md`.
       `pnpm --filter @jiso/example-gallery run test:browser`,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/progress-demo.tsx examples/gallery/src/interactive/meter-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/progress-demo.tsx examples/gallery/src/generated/interactive/progress-demo.client.js examples/gallery/src/generated/interactive/meter-demo.tsx examples/gallery/src/generated/interactive/meter-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: `examples/gallery/src/app-shell.ts` exposes a
+      Jiso docs shell for `/interactive`, registers every checked-in generated interactive
+      client module under its compiled versioned `/c/` ref, and
+      `examples/gallery/vite.config.ts` wires `vp run export` through
+      `examples/gallery/scripts/export-static.mjs` so static docs output includes the
+      route document plus generated client modules. `examples/gallery/src/interactive-gallery.test.ts`
+      runs the export and inspects `dist/interactive/index.html` plus the emitted
+      `/c/examples/gallery/src/generated/interactive/` module files. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/scripts/export-static.mjs examples/gallery/src/app-shell.ts examples/gallery/src/index.ts examples/gallery/src/interactive-gallery.test.ts examples/gallery/vite.config.ts plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `@jiso/ui` adds a vendorable styled
       checkbox-group wrapper over the headless native checkbox-group attrs, and the
       static gallery adds `/components/checkbox-group` behavior-contract coverage plus

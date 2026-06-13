@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
+import { galleryInteractiveClientModuleHrefs } from './app-shell.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 const galleryRoot = resolve(import.meta.dirname, '..');
@@ -70,6 +71,44 @@ describe('compiled interactive gallery demos', () => {
       expect(html).toContain(`/c/examples/gallery/src/generated/interactive/${demo}.client.js`);
     }
   });
+
+  it('exports the compiled interactive docs route and client modules for static deployment', () => {
+    const distDir = resolve(galleryRoot, 'dist');
+    rmSync(distDir, { force: true, recursive: true });
+
+    try {
+      const output = execFileSync('pnpm', ['exec', 'vp', 'run', 'export'], {
+        cwd: galleryRoot,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+
+      expect(output).toContain('gallery-interactive-export/v1');
+      expect(output).toContain('html=1');
+      expect(output).toContain(`client-modules=${interactiveGalleryDemos.length}`);
+      expect(output).toContain('diagnostics=0');
+
+      const html = readFileSync(join(distDir, 'interactive/index.html'), 'utf8');
+      expect(html).toContain('<title>Jiso Interactive Gallery</title>');
+      expect(html).toContain('data-gallery-route="/interactive"');
+      expect(html).toContain('data-gallery-interactive="progress"');
+      expect(html).toContain('data-gallery-interactive="meter"');
+
+      for (const href of galleryInteractiveClientModuleHrefs) {
+        expect(html).toContain(`<link rel="modulepreload" href="${href}">`);
+        const modulePath = href.replace(/^\//, '').replace(/\?v=[0-9a-f]{8}$/, '');
+        expect(existsSync(join(distDir, modulePath)), `${modulePath} was exported`).toBe(true);
+      }
+
+      const progressClient = readFileSync(
+        join(distDir, 'c/examples/gallery/src/generated/interactive/progress-demo.client.js'),
+        'utf8',
+      );
+      expect(progressClient).toContain('GalleryProgressDemo$button_click');
+    } finally {
+      rmSync(distDir, { force: true, recursive: true });
+    }
+  }, 60_000);
 
   it('keeps rendered generated-client DOM refs in lockstep with client exports', () => {
     for (const demo of generatedInteractiveDemoNames()) {

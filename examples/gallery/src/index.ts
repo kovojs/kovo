@@ -27,6 +27,13 @@ export {
   type GalleryRoute,
 } from './demo-fixtures.js';
 export {
+  galleryInteractiveAppShell,
+  galleryInteractiveClientModuleHrefs,
+  galleryInteractiveNodeHandler,
+  galleryInteractiveRoute,
+  createGalleryInteractiveAppShell,
+} from './app-shell.js';
+export {
   interactiveGalleryDemos,
   renderInteractiveGalleryRoute,
   type InteractiveGalleryDemo,
