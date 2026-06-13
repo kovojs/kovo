@@ -2820,6 +2820,77 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins direct real Drizzle query carrier members as explicit FW406 surfaces', () => {
+    expect(sql`select * from users`).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            '',
+            "export const users = pgTable('users', {",
+            "  id: text('id').primaryKey(),",
+            "}, jiso({ domain: 'user', key: 'id' }));",
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const usersQuery = query('users/carrier-direct', {",
+            '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '    const carrier = { db, fake };',
+            '    await carrier.db.execute(sql`select * from users`);',
+            '    await carrier.db.update(users).set({ id: "u1" });',
+            '    await carrier.db.query.users.findMany();',
+            '    await carrier.fake.execute(sql`select * from users`);',
+            '    await carrier.fake.update(users).set({ id: "fake" });',
+            '    await carrier.fake.query.users.findMany();',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:14',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:14',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:14',
+          },
+        ],
+        query: 'users/carrier-direct',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:14',
+      },
+    ]);
+  });
+
   it('pins non-load query callbacks as non-loader surfaces', () => {
     expect(sql`select * from audit_log`).toBeDefined();
 
@@ -3402,6 +3473,64 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/users.domain.ts:34',
+          },
+        ],
+      },
+    });
+  });
+
+  it('pins direct real Drizzle carrier member calls as explicit FW406 surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            '',
+            "export const users = pgTable('users', {",
+            "  id: text('id').primaryKey(),",
+            "}, jiso({ domain: 'user', key: 'id' }));",
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  const carrier = { db, fake };',
+            "  await carrier.db.execute('select 1');",
+            '  await carrier.db.update(users).set({});',
+            '  await carrier.db.query.users.findMany();',
+            "  await carrier.fake.execute('select 1');",
+            '  await carrier.fake.update(users).set({});',
+            '  await carrier.fake.query.users.findMany();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      configureUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:16',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:17',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:18',
           },
         ],
       },

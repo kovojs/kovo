@@ -45,6 +45,12 @@ with same-session file/test evidence.
       surfaces to FW406, while sibling fake carrier members remain invisible. Same-session
       evidence: `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Round103 Drizzle evidence 2026-06-13: project-mode direct receiver carrier-member calls
+      such as `carrier.db.execute()`, `carrier.db.update(...)`, and
+      `carrier.db.query.users.findMany()` now degrade to FW406 instead of deriving exact
+      touch/query facts through the carrier boundary, while sibling fake carrier members remain
+      invisible. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
       Round100 evidence 2026-06-13: `packages/runtime/src/query-events.ts` deleted the legacy

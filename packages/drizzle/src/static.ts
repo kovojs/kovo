@@ -761,9 +761,7 @@ function extractProjectDrizzleWriteCalls(
     const operation = staticAccessName(expression);
     const receiver = staticAccessExpression(expression);
     if (!operation || !receiver) continue;
-    if (!isDrizzleReceiver(receiver) && !isProjectDrizzleReceiverIdentifier(receiver, receivers)) {
-      continue;
-    }
+    if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
 
     const tableArgument = call.getArguments()[0];
     if (!tableArgument) continue;
@@ -876,6 +874,7 @@ function extractProjectUnresolvedCalls(
         isProjectDrizzleReceiverIdentifier(node, receivers),
       ),
     ),
+    ...extractProjectCarrierMemberReceiverCallsFromBody(body, receivers),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
   ];
 }
@@ -940,6 +939,28 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
   }
 
   return calls;
+}
+
+function extractProjectCarrierMemberReceiverCallsFromBody(
+  body: Node,
+  receivers: ProjectDrizzleReceivers,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const references = sourceReceiverAliasReferencesForBody(body, (node) =>
+    isProjectDrizzleReceiverIdentifier(node, receivers),
+  );
+  const calls: ExternalDbArgumentCall[] = [];
+
+  for (const call of touchBodyCallExpressions(body)) {
+    const surface = sourceReceiverCallSurface(
+      call,
+      (node) => isSourceReceiverCarrierMemberExpression(node, references),
+      bodyOffset,
+    );
+    if (surface) calls.push(surface);
+  }
+
+  return dedupeExternalDbArgumentCalls(calls);
 }
 
 function projectUnclassifiedCallSurface(
@@ -1893,6 +1914,9 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
+      ...((options.receiverMode ?? 'source') === 'project'
+        ? projectCarrierMemberQueryReceiverDiagnostics(bodyArgument, receiverReferences)
+        : []),
       ...receiverMethodAliasQueryDiagnostics(
         bodyArgument,
         receiverReferences,
@@ -2170,6 +2194,25 @@ function unclassifiedQueryReceiverDiagnostics(
       },
     ];
   });
+}
+
+function projectCarrierMemberQueryReceiverDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): TouchGraphDiagnostic[] {
+  // SPEC §11.1: project carrier members are typed proof that some Drizzle work is reachable, but
+  // not enough static proof to derive precise table facts through the carrier boundary.
+  return queryCallbackBodies(body).flatMap((callbackBody) =>
+    extractProjectCarrierMemberReceiverCallsFromBody(callbackBody, {
+      names: receiverReferences.names,
+      symbolKeys: receiverReferences.symbolKeys,
+    }).map((call) => ({
+      code: 'FW406' as const,
+      message: `${diagnosticDefinitions.FW406.message} Query uses Drizzle receiver carrier surface ${call.name}().`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    })),
+  );
 }
 
 function externalQueryHelperDiagnostics(

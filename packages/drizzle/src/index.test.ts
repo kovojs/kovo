@@ -2324,6 +2324,72 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks project query-loader direct receiver carrier members as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const productQuery = query("product/carrier-direct", {',
+            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '    const carrier = { db, fake };',
+            '    await carrier.db.execute("select 1");',
+            '    await carrier.db.update(products).set({ id: "p1" });',
+            '    await carrier.db.query.products.findMany();',
+            '    await carrier.fake.execute("select 1");',
+            '    await carrier.fake.update(products).set({ id: "fake" });',
+            '    await carrier.fake.query.products.findMany();',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+            severity: 'warn',
+            site: 'product.queries.ts:11',
+          },
+        ],
+        query: 'product/carrier-direct',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('marks project query-loader detached receiver method aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -5358,6 +5424,66 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:31',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks project direct receiver carrier members as FW406 without fake sibling facts', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'execute(query: unknown): Promise<void>;',
+          'query: any;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            '  const carrier = { db, fake };',
+            '  await carrier.db.execute("select 1");',
+            '  await carrier.db.update(users).set({});',
+            '  await carrier.db.query.users.findMany();',
+            '  await carrier.fake.execute("select 1");',
+            '  await carrier.fake.update(users).set({});',
+            '  await carrier.fake.query.users.findMany();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:13',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:14',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:15',
           },
         ],
       },
