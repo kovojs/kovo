@@ -318,6 +318,13 @@ conformance/drizzle-pin/src/index.test.ts`, exact
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Evidence 2026-06-13: detached Drizzle receiver method aliases now resolve only by
+      ts-morph symbol keys; `packages/drizzle/src/static.ts` deleted the receiver-method alias
+      source-name map/fallback, while `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin same-name shadowed query-loader aliases
+      against package and real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

@@ -3059,6 +3059,66 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('uses project query-loader detached receiver method symbols without name fallback', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '}',
+            '',
+            'export const productQuery = query("product/detached-symbols", {',
+            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '    const { execute } = db;',
+            '    await execute("select 1");',
+            '    {',
+            '      const execute = fake.execute;',
+            '      await execute("select 1");',
+            '    }',
+            '    let assignedExecute;',
+            '    assignedExecute = db.execute;',
+            '    await assignedExecute("select 1");',
+            '    {',
+            '      let assignedExecute;',
+            '      assignedExecute = fake.execute;',
+            '      await assignedExecute("select 1");',
+            '    }',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:5',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:5',
+          },
+        ],
+        query: 'product/detached-symbols',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:5',
+      },
+    ]);
+  });
+
   it('marks project query-loader bound receiver method aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [

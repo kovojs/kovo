@@ -6006,7 +6006,7 @@ function extractReceiverMethodAliasCallsFromBody(
   bodyOffset = bodySourceStart(body),
 ): ExternalDbArgumentCall[] {
   const aliases = receiverMethodAliasesForBody(body, isReceiverIdentifier);
-  if (aliases.symbols.size === 0 && aliases.names.size === 0) return [];
+  if (aliases.symbols.size === 0) return [];
 
   const calls: ExternalDbArgumentCall[] = [];
   for (const call of touchBodyCallExpressions(body)) {
@@ -6047,12 +6047,10 @@ function receiverMethodAliasName(
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(identifier));
   // SPEC §11.1: detached receiver aliases are symbol facts when parser identity is available;
   // same-name shadow bindings must not fall back to source-name compatibility.
-  if (symbolKey) return aliases.symbols.get(symbolKey);
-  return aliases.names.get(identifier.getText());
+  return symbolKey ? aliases.symbols.get(symbolKey) : undefined;
 }
 
 interface ReceiverMethodAliases {
-  names: ReadonlyMap<string, string>;
   symbols: ReadonlyMap<string, string>;
 }
 
@@ -6060,12 +6058,11 @@ function receiverMethodAliasesForBody(
   body: Node,
   isReceiverIdentifier: (node: Node) => boolean,
 ): ReceiverMethodAliases {
-  const names = new Map<string, string>();
   const symbols = new Map<string, string>();
 
   let changed = true;
   while (changed) {
-    const before = receiverMethodAliasSize({ names, symbols });
+    const before = symbols.size;
 
     for (const declaration of touchBodyVariableDeclarations(body)) {
       const initializer = declaration.getInitializer();
@@ -6073,28 +6070,26 @@ function receiverMethodAliasesForBody(
 
       const binding = declaration.getNameNode();
       if (Node.isObjectBindingPattern(binding) && isReceiverIdentifier(initializer)) {
-        appendReceiverMethodAliasesFromObjectPattern(binding, names, symbols);
+        appendReceiverMethodAliasesFromObjectPattern(binding, symbols);
         continue;
       }
       if (Node.isArrayBindingPattern(binding)) {
         appendReceiverMethodAliasesFromArrayPattern(
           binding,
           initializer,
-          names,
           symbols,
           isReceiverIdentifier,
-          { names, symbols },
+          { symbols },
         );
         continue;
       }
 
       if (!Node.isIdentifier(binding)) continue;
       const method = receiverMethodAliasExpressionName(initializer, isReceiverIdentifier, {
-        names,
         symbols,
       });
       if (!method) continue;
-      appendReceiverMethodAlias(names, symbols, binding, method);
+      appendReceiverMethodAlias(symbols, binding, method);
     }
 
     for (const expression of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
@@ -6104,39 +6099,32 @@ function receiverMethodAliasesForBody(
       const left = unwrappedStaticExpressionNode(expression.getLeft());
       const right = unwrappedStaticExpressionNode(expression.getRight());
       if (Node.isObjectLiteralExpression(left) && isReceiverIdentifier(right)) {
-        appendReceiverMethodAliasesFromObjectAssignment(left, names, symbols);
+        appendReceiverMethodAliasesFromObjectAssignment(left, symbols);
         continue;
       }
       if (Node.isArrayLiteralExpression(left)) {
-        appendReceiverMethodAliasesFromArrayAssignment(
-          left,
-          right,
-          names,
+        appendReceiverMethodAliasesFromArrayAssignment(left, right, symbols, isReceiverIdentifier, {
           symbols,
-          isReceiverIdentifier,
-          { names, symbols },
-        );
+        });
         continue;
       }
 
       if (!Node.isIdentifier(left)) continue;
       const method = receiverMethodAliasExpressionName(right, isReceiverIdentifier, {
-        names,
         symbols,
       });
       if (!method) continue;
-      appendReceiverMethodAlias(names, symbols, left, method);
+      appendReceiverMethodAlias(symbols, left, method);
     }
 
-    changed = receiverMethodAliasSize({ names, symbols }) !== before;
+    changed = symbols.size !== before;
   }
 
-  return { names, symbols };
+  return { symbols };
 }
 
 function appendReceiverMethodAliasesFromObjectPattern(
   binding: Node,
-  names: Map<string, string>,
   symbols: Map<string, string>,
 ): void {
   if (!Node.isObjectBindingPattern(binding)) return;
@@ -6147,14 +6135,13 @@ function appendReceiverMethodAliasesFromObjectPattern(
 
     const method = propertyNameText(element.getPropertyNameNode() ?? alias);
     if (!method) continue;
-    appendReceiverMethodAlias(names, symbols, alias, method);
+    appendReceiverMethodAlias(symbols, alias, method);
   }
 }
 
 function appendReceiverMethodAliasesFromArrayPattern(
   binding: Node,
   initializer: Node,
-  names: Map<string, string>,
   symbols: Map<string, string>,
   isReceiverIdentifier: (node: Node) => boolean,
   aliases: ReceiverMethodAliases,
@@ -6175,13 +6162,12 @@ function appendReceiverMethodAliasesFromArrayPattern(
     if (!value) return;
 
     const method = receiverMethodAliasExpressionName(value, isReceiverIdentifier, aliases);
-    if (method) appendReceiverMethodAlias(names, symbols, alias, method);
+    if (method) appendReceiverMethodAlias(symbols, alias, method);
   });
 }
 
 function appendReceiverMethodAliasesFromObjectAssignment(
   assignment: Node,
-  names: Map<string, string>,
   symbols: Map<string, string>,
 ): void {
   if (!Node.isObjectLiteralExpression(assignment)) return;
@@ -6189,7 +6175,7 @@ function appendReceiverMethodAliasesFromObjectAssignment(
   for (const property of assignment.getProperties()) {
     if (Node.isShorthandPropertyAssignment(property)) {
       const alias = property.getNameNode();
-      appendReceiverMethodAlias(names, symbols, alias, alias.getText());
+      appendReceiverMethodAlias(symbols, alias, alias.getText());
       continue;
     }
 
@@ -6202,14 +6188,13 @@ function appendReceiverMethodAliasesFromObjectAssignment(
 
     const method = propertyNameText(property.getNameNode());
     if (!method) continue;
-    appendReceiverMethodAlias(names, symbols, alias, method);
+    appendReceiverMethodAlias(symbols, alias, method);
   }
 }
 
 function appendReceiverMethodAliasesFromArrayAssignment(
   assignment: Node,
   initializer: Node,
-  names: Map<string, string>,
   symbols: Map<string, string>,
   isReceiverIdentifier: (node: Node) => boolean,
   aliases: ReceiverMethodAliases,
@@ -6228,7 +6213,7 @@ function appendReceiverMethodAliasesFromArrayAssignment(
     if (!value) return;
 
     const method = receiverMethodAliasExpressionName(value, isReceiverIdentifier, aliases);
-    if (method) appendReceiverMethodAlias(names, symbols, alias, method);
+    if (method) appendReceiverMethodAlias(symbols, alias, method);
   });
 }
 
@@ -6272,19 +6257,13 @@ function boundReceiverMethodAccessName(
 }
 
 function appendReceiverMethodAlias(
-  names: Map<string, string>,
   symbols: Map<string, string>,
   alias: Node,
   method: string,
 ): void {
   if (!Node.isIdentifier(alias)) return;
-  names.set(alias.getText(), method);
   const symbolKey = resolvedSymbolKey(alias.getSymbol());
   if (symbolKey) symbols.set(symbolKey, method);
-}
-
-function receiverMethodAliasSize(aliases: ReceiverMethodAliases): number {
-  return aliases.names.size + aliases.symbols.size;
 }
 
 function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {

@@ -1217,6 +1217,69 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
   });
 
+  it('pins detached query-loader receiver method symbols without name fallback', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '}',
+            '',
+            "export const productQuery = query('product/detached-symbols', {",
+            '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '    const { execute } = db;',
+            "    await execute('select 1');",
+            '    {',
+            '      const execute = fake.execute;',
+            "      await execute('select 1');",
+            '    }',
+            '    let assignedExecute;',
+            '    assignedExecute = db.execute;',
+            "    await assignedExecute('select 1');",
+            '    {',
+            '      let assignedExecute;',
+            '      assignedExecute = fake.execute;',
+            "      await assignedExecute('select 1');",
+            '    }',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+        ],
+        query: 'product/detached-symbols',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
+  });
+
   it('pins source nested carrier destructuring as FW406 under real Drizzle imports', () => {
     const graph = extractTouchGraphFromSource([
       {
