@@ -26,6 +26,18 @@ with same-session file/test evidence.
       `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
+      Round100 evidence 2026-06-13: `packages/runtime/src/query-events.ts` deleted the legacy
+      `{ name, key, body }` inline `jiso:query` compatibility payload, so inline enhanced
+      responses hydrate only through the `{ attrs, content }` fw-query wire chunk emitted by the
+      inline loader; focused tests now live in `packages/runtime/src/query-events.test.ts`
+      instead of the query-store monolith. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      ```
+
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.
       Round91 evidence 2026-06-13: `packages/server/src/static-export-request.ts` owns

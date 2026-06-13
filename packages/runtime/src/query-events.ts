@@ -10,10 +10,7 @@ import type { QueryChunk } from './wire-parser.js';
 
 export interface InlineQueryEventDetail {
   attrs?: unknown;
-  body?: unknown;
   content?: unknown;
-  key?: unknown;
-  name?: unknown;
 }
 
 export interface InlineQueryEvent {
@@ -25,12 +22,6 @@ export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQuer
 interface InlineQueryWireEventDetail {
   attrs: string;
   content: string;
-}
-
-interface LegacyInlineQueryEventDetail {
-  body: string;
-  key?: string;
-  name: string;
 }
 
 export interface ApplyInlineQueryEventOptions {
@@ -92,13 +83,6 @@ function queryChunkFromInlineEvent(
     return readQueryElementChunk(detail, onError);
   }
 
-  if (isLegacyInlineQueryEventDetail(detail)) {
-    // SPEC.md §6.6/§9.4: old documents can keep dispatching the previous
-    // body/name/key detail across deploys, but the runtime still normalizes it
-    // through the shared fw-query element parser.
-    return readQueryElementChunk(legacyInlineQueryDetailToWireChunk(detail), onError);
-  }
-
   return undefined;
 }
 
@@ -107,37 +91,4 @@ function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryWireE
 
   const detail = value as InlineQueryEventDetail;
   return typeof detail.attrs === 'string' && typeof detail.content === 'string';
-}
-
-function isLegacyInlineQueryEventDetail(value: unknown): value is LegacyInlineQueryEventDetail {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const detail = value as InlineQueryEventDetail;
-  return (
-    typeof detail.name === 'string' &&
-    typeof detail.body === 'string' &&
-    (detail.key === undefined || typeof detail.key === 'string')
-  );
-}
-
-function legacyInlineQueryDetailToWireChunk(detail: LegacyInlineQueryEventDetail): {
-  attrs: string;
-  content: string;
-} {
-  const attrs = [`name="${escapeHtml(detail.name)}"`];
-  if (detail.key !== undefined) attrs.push(`key="${escapeHtml(detail.key)}"`);
-
-  return {
-    attrs: ` ${attrs.join(' ')}`,
-    content: escapeHtml(detail.body),
-  };
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 }

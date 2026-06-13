@@ -309,8 +309,8 @@ describe('runtime browser suite', () => {
     window.dispatchEvent(
       new CustomEvent('jiso:query', {
         detail: {
-          body: '{"count":5}',
-          name: 'cart',
+          attrs: ' name="cart"',
+          content: '{"count":5}',
         },
       }),
     );
@@ -327,8 +327,8 @@ describe('runtime browser suite', () => {
     window.dispatchEvent(
       new CustomEvent('jiso:query', {
         detail: {
-          body: '{"count":6}',
-          name: 'cart',
+          attrs: ' name="cart"',
+          content: '{"count":6}',
         },
       }),
     );
