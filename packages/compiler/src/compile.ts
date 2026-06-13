@@ -22,6 +22,7 @@ import {
   applyComponentPipelinePatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
+  lowerComponentPipelineSequence,
 } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
@@ -59,29 +60,21 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
   const viewTransitions = viewTransitionLowering(originalState.model);
-  const viewTransitionState = lowerComponentPipelinePatches(
+  let platformLowering = platformBehaviorLowering(originalState.model);
+  const navigationPatch = lowerComponentPipelineSequence(
     originalState,
-    viewTransitions.replacements,
+    [
+      () => viewTransitions,
+      (state) => {
+        platformLowering = platformBehaviorLowering(state.model);
+        return platformLowering;
+      },
+      (state) => navigationLinkLowering(state.model),
+      (state) => navigationHrefLowering(state.model),
+    ],
     parseComponentModuleModel,
-  ).state;
-  const platformLowering = platformBehaviorLowering(viewTransitionState.model);
-  const platformState = lowerComponentPipelinePatches(
-    viewTransitionState,
-    platformLowering.replacements,
-    parseComponentModuleModel,
-  ).state;
-  const linkLowering = navigationLinkLowering(platformState.model);
-  const linksLoweredState = lowerComponentPipelinePatches(
-    platformState,
-    linkLowering.replacements,
-    parseComponentModuleModel,
-  ).state;
-  const hrefLowering = navigationHrefLowering(linksLoweredState.model);
-  const navigationState = lowerComponentPipelinePatches(
-    linksLoweredState,
-    hrefLowering.replacements,
-    parseComponentModuleModel,
-  ).state;
+  );
+  const navigationState = navigationPatch.state;
   const deriveLowering = lowerInlineAttributeDerives(
     navigationState.model,
     componentName,

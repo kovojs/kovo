@@ -156,6 +156,9 @@ Closed evidence so far:
 - List-stamp query-shape traversal now lives in `analyze/query-shapes.ts`; binding validators
   consume shared analyzer helpers instead of carrying duplicate path-validation types and
   array-item lookup logic.
+- The parse-requiring view/platform/navigation lowering chain now runs through
+  `lowerComponentPipelineSequence`, so `compile.ts` no longer hand-chains each source patch/reparse
+  step and `model-pipeline.test.ts` proves ordered passes see the latest parsed model.
 
 Open:
 
@@ -181,6 +184,9 @@ Recent gates:
 - `git diff --check`
 - `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/analyze/query-shapes.ts packages/compiler/src/validate/bindings.ts`
+- `git diff --check`
+- `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
+- `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction
