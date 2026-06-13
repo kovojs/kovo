@@ -258,17 +258,21 @@ import {
   markdownCanonicalSpecRuleTitles,
   markdownFields,
   markdownLeadingTitle,
+  legibilityStudyGateFact,
   markdownNumberedListItems,
   markdownNumberedListTitles,
   normativeDocsGateFact,
+  prelaunchChecklistGateFact,
   markdownSection,
   markdownTableRows,
   normalizeMarkdownCell,
   v1AcceptanceLedgerGateFact,
+  type LegibilityStudyGateFact,
   type MarkdownBoldSectionHeading,
   type MarkdownFields,
   type MarkdownTableRow,
   type NormativeDocsGateFact,
+  type PrelaunchChecklistGateFact,
   type V1AcceptanceLedgerGateFact,
 } from '@jiso/test/markdown-fixtures';
 import {
@@ -583,6 +587,8 @@ describe('@jiso/test package subpath exports', () => {
     ]);
     expect(normativeDocsGateFact).toBeTypeOf('function');
     expect(v1AcceptanceLedgerGateFact).toBeTypeOf('function');
+    expect(legibilityStudyGateFact).toBeTypeOf('function');
+    expect(prelaunchChecklistGateFact).toBeTypeOf('function');
     expectTypeOf<NormativeDocsGateFact>().toMatchTypeOf<{
       compilerRuleTitles: string[];
       renderEquivalenceAsserted: boolean;
@@ -591,6 +597,15 @@ describe('@jiso/test package subpath exports', () => {
       gateCriteria: string[];
       gateCriteriaMatchSpec: boolean;
       runFacts: Array<{ command: string; commit: string; result: string }>;
+    }>();
+    expectTypeOf<LegibilityStudyGateFact>().toMatchTypeOf<{
+      resultFacts: Array<{ commit: string; date: string; participant: string; result: string }>;
+      taskNames: string[];
+    }>();
+    expectTypeOf<PrelaunchChecklistGateFact>().toMatchTypeOf<{
+      auditStatuses: Record<string, string>;
+      evidenceStatuses: string[];
+      requiredChecks: string[];
     }>();
     expect(
       mcpCompileResponseFacts(

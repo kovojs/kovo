@@ -64,6 +64,45 @@ export interface V1AcceptanceLedgerGateFact {
   specGateCriteria: string[];
 }
 
+export interface LegibilityStudyGateFact {
+  issueStatuses: string[];
+  localSessionEvidenceComplete: boolean;
+  localSessionSteps: string[];
+  passingCriterion: string | undefined;
+  readinessStatuses: string[];
+  requiredParticipants: string | undefined;
+  resultFacts: {
+    commit: string;
+    date: string;
+    participant: string;
+    result: string;
+  }[];
+  status: string | undefined;
+  taskNames: string[];
+}
+
+export interface PrelaunchChecklistGateFact {
+  auditReadyCount: number;
+  auditStatuses: Record<string, string>;
+  evidenceByCheck: Record<string, MarkdownTableRow | undefined>;
+  evidenceReviewFacts: Record<
+    string,
+    {
+      date: string | undefined;
+      reviewer: string | undefined;
+      status: string | undefined;
+    }
+  >;
+  evidenceStatuses: string[];
+  linguisticMarkets: string | undefined;
+  requiredChecks: string[];
+  requiredStatuses: Record<string, string | undefined>;
+  runnableStatuses: string[];
+  scope: string | undefined;
+  trademarkSources: string | undefined;
+  domain: string | undefined;
+}
+
 export function normalizeMarkdownCell(value: string): string {
   return value
     .replace(/`([^`]+)`/g, '$1')
@@ -345,5 +384,88 @@ export function v1AcceptanceLedgerGateFact(options: {
       result: markdownRequiredTableCell(row, 'Result'),
     })),
     specGateCriteria,
+  };
+}
+
+export function legibilityStudyGateFact(study: string): LegibilityStudyGateFact {
+  const fields = markdownFields(study);
+  const tasks = markdownTableRows(markdownSection(study, 'Tasks'));
+  const results = markdownTableRows(markdownSection(study, 'Results Ledger'));
+  const readinessRows = markdownTableRows(markdownSection(study, 'Dated Study Readiness Ledger'));
+  const localSessionChecks = markdownTableRows(markdownSection(study, 'Local Session Checklist'));
+  const issues = markdownTableRows(markdownSection(study, 'Issues Ledger'));
+
+  return {
+    issueStatuses: issues.map((row) => markdownRequiredTableCell(row, 'Status')),
+    localSessionEvidenceComplete: localSessionChecks.every(
+      (row) =>
+        markdownRequiredTableCell(row, 'Local check').length > 0 &&
+        Boolean(row['Evidence to retain outside repo if private']),
+    ),
+    localSessionSteps: localSessionChecks.map((row) => markdownRequiredTableCell(row, 'Step')),
+    passingCriterion: fields.get('Passing criterion'),
+    readinessStatuses: readinessRows.map((row) => markdownRequiredTableCell(row, 'Status')),
+    requiredParticipants: fields.get('Required participants'),
+    resultFacts: results.map((row) => ({
+      commit: markdownRequiredTableCell(row, 'Commit'),
+      date: markdownRequiredTableCell(row, 'Date'),
+      participant: markdownRequiredTableCell(row, 'Participant'),
+      result: markdownRequiredTableCell(row, 'Result'),
+    })),
+    status: fields.get('Status'),
+    taskNames: tasks.map((row) => markdownRequiredTableCell(row, 'Task')),
+  };
+}
+
+export function prelaunchChecklistGateFact(checklist: string): PrelaunchChecklistGateFact {
+  const requiredRows = markdownTableRows(markdownSection(checklist, 'Required Checks'));
+  const auditRows = markdownTableRows(markdownSection(checklist, 'Dated Audit Ledger'));
+  const runnableRows = markdownTableRows(markdownSection(checklist, 'Runnable Local Checklist'));
+  const evidenceByCheck = {
+    Domain: markdownTableRows(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
+    'Linguistic screen': markdownTableRows(
+      markdownSection(checklist, 'Linguistic Evidence Ledger'),
+    )[0],
+    'npm scope': markdownTableRows(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
+    'Trademark screen': markdownTableRows(
+      markdownSection(checklist, 'Trademark Evidence Ledger'),
+    )[0],
+  };
+
+  return {
+    auditReadyCount: auditRows.filter(
+      (row) =>
+        markdownRequiredTableCell(row, 'Status') === 'packet ready; external evidence pending',
+    ).length,
+    auditStatuses: Object.fromEntries(
+      auditRows.map((row) => [
+        markdownRequiredTableCell(row, 'Reviewer'),
+        markdownRequiredTableCell(row, 'Status'),
+      ]),
+    ),
+    domain: evidenceByCheck.Domain?.Domain,
+    evidenceByCheck,
+    evidenceReviewFacts: Object.fromEntries(
+      Object.entries(evidenceByCheck).map(([check, row]) => [
+        check,
+        {
+          date: row?.Date,
+          reviewer: row?.Reviewer,
+          status: row?.Status,
+        },
+      ]),
+    ),
+    evidenceStatuses: Object.values(evidenceByCheck).map((row) => row?.Status ?? ''),
+    linguisticMarkets: evidenceByCheck['Linguistic screen']?.['Markets or languages'],
+    requiredChecks: requiredRows.map((row) => markdownRequiredTableCell(row, 'Check')),
+    requiredStatuses: Object.fromEntries(
+      requiredRows.map((row) => [
+        markdownRequiredTableCell(row, 'Check'),
+        markdownRequiredTableCell(row, 'Status'),
+      ]),
+    ),
+    runnableStatuses: runnableRows.map((row) => markdownRequiredTableCell(row, 'Status')),
+    scope: evidenceByCheck['npm scope']?.Scope,
+    trademarkSources: evidenceByCheck['Trademark screen']?.Sources,
   };
 }

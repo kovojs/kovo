@@ -127,6 +127,10 @@ and query-store fixture inline.
 Shared markdown fixtures now own the v1 acceptance ledger projection for SPEC §16 criterion
 coverage, evidence artifacts, audit statuses, acceptance runs, and clean-checkout status facts, so
 the P10 fw-check gate no longer stitches those markdown tables locally.
+Shared markdown fixtures now also own the legibility-study and prelaunch-checklist readiness
+projections, including pending external evidence, dated ledger review facts, local checklist
+coverage, and packet-readiness counts, so the P10 fw-check gate no longer assembles those
+markdown tables inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -172,6 +176,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P10 v1 acceptance ledger tracks every freeze criterion" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/markdown-fixtures.ts packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs`;
+  `git diff --check`.
+- P10 legibility/prelaunch markdown fixture slice:
+  `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 legibility study packet is ready but not claimed complete|pre-launch checklist is tracked explicitly" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/markdown-fixtures.ts packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 - Phase 4 inline query batch apply slice:
   `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;

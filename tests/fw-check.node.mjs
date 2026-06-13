@@ -117,10 +117,9 @@ import {
   htmlMainMarkerFact,
 } from '../packages/test/src/html-fragment.ts';
 import {
-  markdownFields,
+  legibilityStudyGateFact,
   normativeDocsGateFact,
-  markdownSection,
-  markdownTableRows,
+  prelaunchChecklistGateFact,
   v1AcceptanceLedgerGateFact,
 } from '../packages/test/src/markdown-fixtures.ts';
 import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
@@ -603,51 +602,34 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
 
 void test('P10 legibility study packet is ready but not claimed complete', async () => {
   const study = await readProjectFile('docs/legibility-study.md');
-  const fields = markdownFields(study);
-  const tasks = markdownTableRows(markdownSection(study, 'Tasks'));
-  const results = markdownTableRows(markdownSection(study, 'Results Ledger'));
-  const readinessRows = markdownTableRows(markdownSection(study, 'Dated Study Readiness Ledger'));
-  const localSessionChecks = markdownTableRows(markdownSection(study, 'Local Session Checklist'));
-  const issues = markdownTableRows(markdownSection(study, 'Issues Ledger'));
+  const fact = legibilityStudyGateFact(study);
 
-  assert.equal(fields.get('Status'), 'protocol ready; recruitment, sessions, and results pending');
+  assert.equal(fact.status, 'protocol ready; recruitment, sessions, and results pending');
+  assert.equal(fact.requiredParticipants, 'five outside developers who have not worked on Jiso');
   assert.equal(
-    fields.get('Required participants'),
-    'five outside developers who have not worked on Jiso',
-  );
-  assert.equal(
-    fields.get('Passing criterion'),
+    fact.passingCriterion,
     'each participant answers every task from browser devtools artifacts alone in under 60 seconds',
   );
+  assert.deepEqual(fact.taskNames, [
+    'Button behavior',
+    'Island data',
+    'Mutation effects',
+    'Optimism',
+    'Failure path',
+  ]);
   assert.deepEqual(
-    tasks.map((row) => row.Task),
-    ['Button behavior', 'Island data', 'Mutation effects', 'Optimism', 'Failure path'],
-  );
-  assert.deepEqual(
-    results.map((row) => row.Participant),
+    fact.resultFacts.map((row) => row.participant),
     ['pending-1', 'pending-2', 'pending-3', 'pending-4', 'pending-5'],
   );
-  for (const row of results) {
-    assert.equal(row.Date, 'TBD', `${row.Participant} is not dated as a completed study`);
-    assert.equal(row.Commit, 'TBD', `${row.Participant} has no freeze-run commit`);
-    assert.equal(row.Result, 'pending', `${row.Participant} remains pending`);
+  for (const row of fact.resultFacts) {
+    assert.equal(row.date, 'TBD', `${row.participant} is not dated as a completed study`);
+    assert.equal(row.commit, 'TBD', `${row.participant} has no freeze-run commit`);
+    assert.equal(row.result, 'pending', `${row.participant} remains pending`);
   }
-  assert.equal(issues.length, 1);
-  assert.equal(issues[0].Status, 'pending');
-  assert.deepEqual(
-    readinessRows.map((row) => row.Status),
-    ['pending', 'pending'],
-  );
-  assert.deepEqual(
-    localSessionChecks.map((row) => row.Step),
-    ['1', '2', '3', '4', '5'],
-  );
-  assert.equal(
-    localSessionChecks.every(
-      (row) => row['Local check'].length > 0 && row['Evidence to retain outside repo if private'],
-    ),
-    true,
-  );
+  assert.deepEqual(fact.issueStatuses, ['pending']);
+  assert.deepEqual(fact.readinessStatuses, ['pending', 'pending']);
+  assert.deepEqual(fact.localSessionSteps, ['1', '2', '3', '4', '5']);
+  assert.equal(fact.localSessionEvidenceComplete, true);
 });
 
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
@@ -719,74 +701,45 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
 
 void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
-  const requiredChecks = markdownTableRows(markdownSection(checklist, 'Required Checks'));
-  const auditRows = markdownTableRows(markdownSection(checklist, 'Dated Audit Ledger'));
-  const runnableChecks = markdownTableRows(markdownSection(checklist, 'Runnable Local Checklist'));
-  const evidenceLedgers = {
-    Domain: markdownTableRows(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
-    'Linguistic screen': markdownTableRows(
-      markdownSection(checklist, 'Linguistic Evidence Ledger'),
-    )[0],
-    'npm scope': markdownTableRows(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
-    'Trademark screen': markdownTableRows(
-      markdownSection(checklist, 'Trademark Evidence Ledger'),
-    )[0],
-  };
-  const auditStatuses = Object.fromEntries(auditRows.map((row) => [row.Reviewer, row.Status]));
+  const fact = prelaunchChecklistGateFact(checklist);
 
+  assert.deepEqual(fact.requiredChecks, [
+    'Trademark screen',
+    'Domain',
+    'npm scope',
+    'Linguistic screen',
+  ]);
   assert.deepEqual(
-    requiredChecks.map((row) => row.Check),
-    ['Trademark screen', 'Domain', 'npm scope', 'Linguistic screen'],
+    Object.keys(fact.evidenceByCheck).toSorted((left, right) => left.localeCompare(right)),
+    fact.requiredChecks.toSorted((left, right) => left.localeCompare(right)),
   );
-  assert.deepEqual(
-    Object.keys(evidenceLedgers).toSorted((left, right) => left.localeCompare(right)),
-    requiredChecks.map((row) => row.Check).toSorted((left, right) => left.localeCompare(right)),
-  );
-  for (const row of requiredChecks) {
-    assert.equal(row.Status, 'pending', `${row.Check} remains pending`);
-    assert.ok(evidenceLedgers[row.Check], `${row.Check} has a dedicated evidence ledger row`);
+  for (const check of fact.requiredChecks) {
+    assert.equal(fact.requiredStatuses[check], 'pending', `${check} remains pending`);
+    assert.ok(fact.evidenceByCheck[check], `${check} has a dedicated evidence ledger row`);
   }
-  assert.equal(evidenceLedgers.Domain.Domain, 'jiso.dev');
-  assert.equal(evidenceLedgers['npm scope'].Scope, '@jiso');
-  assert.deepEqual(
-    Object.fromEntries(
-      Object.entries(evidenceLedgers).map(([check, row]) => [
-        check,
-        {
-          date: row.Date,
-          reviewer: row.Reviewer,
-          status: row.Status,
-        },
-      ]),
-    ),
-    {
-      Domain: { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
-      'Linguistic screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
-      'Trademark screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
-      'npm scope': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
-    },
-  );
+  assert.equal(fact.domain, 'jiso.dev');
+  assert.equal(fact.scope, '@jiso');
+  assert.deepEqual(fact.evidenceReviewFacts, {
+    Domain: { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+    'Linguistic screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+    'Trademark screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+    'npm scope': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+  });
   assert.deepEqual(
     {
-      linguisticMarkets: evidenceLedgers['Linguistic screen']['Markets or languages'],
-      trademarkSources: evidenceLedgers['Trademark screen'].Sources,
+      linguisticMarkets: fact.linguisticMarkets,
+      trademarkSources: fact.trademarkSources,
     },
     {
       linguisticMarkets: 'TBD',
       trademarkSources: 'TBD',
     },
   );
-  assert.equal(auditStatuses.Codex, 'packet ready; external evidence pending');
-  assert.deepEqual(
-    runnableChecks.map((row) => row.Status),
-    ['pending', 'pending', 'pending', 'pending'],
-  );
-  assert.deepEqual(
-    Object.values(evidenceLedgers).map((row) => row.Status),
-    ['pending', 'pending', 'pending', 'pending'],
-  );
+  assert.equal(fact.auditStatuses.Codex, 'packet ready; external evidence pending');
+  assert.deepEqual(fact.runnableStatuses, ['pending', 'pending', 'pending', 'pending']);
+  assert.deepEqual(fact.evidenceStatuses, ['pending', 'pending', 'pending', 'pending']);
   assert.equal(
-    auditRows.filter((row) => row.Status === 'packet ready; external evidence pending').length,
+    fact.auditReadyCount,
     1,
     'packet readiness is recorded separately from external completion',
   );
