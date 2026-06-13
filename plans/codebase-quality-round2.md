@@ -23,7 +23,7 @@ queue. Do not restore long historical transcripts; preserve durable evidence as 
       opportunistically under Phase 7.)
 - [x] Phase 5 server/app-shell: subtractive server extraction, one request/document/static-export
       path, stable public export boundaries, static export and Vite adoption closed.
-- [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams prove behavior through
+- [x] Phase 6 verification harness and commerce honesty: `@jiso/test` seams prove behavior through
       public fixtures; commerce source/dependency/generated-artifact story is honest.
 - [ ] Phase 7 test restructuring: monolith tests split along module seams, shared fixtures used
       deliberately, diagnostics asserted through `diagnosticDefinitions`.
@@ -144,7 +144,7 @@ Latest evidence:
 - [x] `delete().where(subquery)` predicate reads now surface as `delete-predicate` (were silently
       dropped) and degrade opaque sources to FW406, mirroring `update-predicate`; +3 package tests,
       +2 conformance tests against real `drizzle-orm`. Verified: `vitest packages/drizzle
-  conformance/drizzle-pin` 479 pass, `pnpm run test:conformance` EXIT=0.
+conformance/drizzle-pin` 479 pass, `pnpm run test:conformance` EXIT=0.
 - [x] Query loader getter options now degrade in source mode and extract returned static callbacks in
       project mode instead of dropping executable accessor loader surfaces. Verified with focused
       Drizzle source/project tests, pinned Drizzle conformance, full Drizzle package tests, `tsc`,
@@ -253,9 +253,18 @@ Current state: commerce source-truth and harness tests now consume shared fixtur
 stylesheet hints, adoption, mutation/query behavior, verifier diagnostics, receipt upload,
 update intent, query harnesses, file fixtures, CLI capture, and page hints.
 
-- [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
-- [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
-- [ ] Keep commerce generated artifacts checked in, freshness-gated, and tied to source-truth tests.
+- [x] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
+      `source-truth.test.ts` has zero local parsing mechanics (fully fixture-based); the only
+      residual source reads in `app-shell.test.ts` are scoped adoption pins (commerce imports the
+      focused `@jiso/server/app-shell/*` subpaths), comparable to the intentional wire pins.
+- [x] Make opaque adapter objects either observable or explicitly documented as unobserved. The
+      DB adapter is made observable through the `@jiso/test` `sql-observer` proxy, and
+      `verifier-diagnostics.ts` surfaces `unobservedBranches`/`unobservedDomains` as diagnostics so
+      no touch-graph branch is silently opaque.
+- [x] Keep commerce generated artifacts checked in, freshness-gated, and tied to source-truth tests.
+      `emit-components.mjs --check` (lowered IR) and `emit-graph.mjs --check` (graph.json +
+      touch-graph.ts) both EXIT=0; `source-truth.test.ts` runs the emit-check via
+      `generatedGraphArtifactAcceptanceProjectFact`. Commerce + `@jiso/test` suites: 321 pass.
 
 Latest evidence:
 
