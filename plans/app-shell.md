@@ -128,6 +128,21 @@ Implemented areas:
 - Vite build output now preflights immutable `/c/` client-module target writability before
   plugin-time static export replay or writes, so a blocked Vite dist client-module path cannot
   leave a published static-host export without the matching build output.
+- The Vite dev app-shell public boundary now exposes only the canonical
+  `shouldHandleJisoAppShellViteRequest()` ownership predicate; the stale
+  `shouldHandleJisoAppShellViteSsrRequest()` wrapper is removed from production and the focused
+  public app-shell Vite subpath.
+
+Round320 Vite dev request predicate alias removal evidence:
+
+- `packages/server/src/vite-dev.ts` removes the SSR-named compatibility wrapper, and
+  `packages/server/src/api/app-shell/vite.ts` no longer exports it.
+- `packages/server/src/api/app.test.ts` proves `@jiso/server/app-shell/vite` exposes the canonical
+  request predicate while keeping `shouldHandleJisoAppShellViteSsrRequest` absent.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round316 Vite output client-module preflight evidence:
 

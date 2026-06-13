@@ -185,6 +185,15 @@ fixtures inline.
 
 Latest evidence:
 
+- Phase 5 Vite dev request predicate alias removal slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/vite-dev.ts` removes the stale
+  `shouldHandleJisoAppShellViteSsrRequest()` wrapper, `packages/server/src/api/app-shell/vite.ts`
+  no longer exports it, and `packages/server/src/api/app.test.ts` proves
+  `@jiso/server/app-shell/vite` exposes only the canonical
+  `shouldHandleJisoAppShellViteRequest()` predicate.
 - Phase 5 Vite output client-module preflight slice:
   `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

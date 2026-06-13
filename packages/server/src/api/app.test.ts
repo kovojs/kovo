@@ -171,7 +171,6 @@ describe('server app-shell public API barrels', () => {
       'jisoAppShellViteStaticExportAssetsFromManifestFile',
       'renderJisoAppShellViteDevDiagnosticResponse',
       'shouldHandleJisoAppShellViteRequest',
-      'shouldHandleJisoAppShellViteSsrRequest',
       'staticExportInventoryForJisoAppShellViteBuild',
       'staticExportInventoryForJisoAppShellViteBuildFromManifestFile',
       'staticExportManifestForJisoAppShellViteBuild',
@@ -274,6 +273,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefsFromFile');
+    expect(packageViteApi).not.toHaveProperty('shouldHandleJisoAppShellViteSsrRequest');
 
     const appShellPackageExports = Object.fromEntries(
       Object.entries(serverPackage.exports as Record<string, string>).filter(([subpath]) =>

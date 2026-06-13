@@ -3,7 +3,6 @@ export {
   jisoAppShellViteSsrDevPlugin,
   renderJisoAppShellViteDevDiagnosticResponse,
   shouldHandleJisoAppShellViteRequest,
-  shouldHandleJisoAppShellViteSsrRequest,
 } from '../../vite-dev.js';
 export {
   createJisoAppShellViteBuild,
