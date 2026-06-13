@@ -757,6 +757,11 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       `git diff --check`.
+      Evidence 2026-06-13 round276: project-mode object-contained tuple assignment aliases such
+      as `({ wrappers: { receivers: [db] } } = context)` now recurse through ts-morph property and
+      tuple element types, extracting exact query-loader reads and mutation touches only when the
+      element type is a pinned Postgres Drizzle receiver. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin the package and real `drizzle-orm` surfaces.
       Evidence 2026-06-13 round274: project-mode opaque helper handoffs now treat factory-returned
       typed carrier expressions as ts-morph receiver-container facts, so `writeAudit(makeContext())`
       and `runReport(makeContext())` degrade to FW406 when the returned type contains a pinned
@@ -775,6 +780,9 @@ Latest evidence:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
   exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
+- round276 object-contained tuple assignment receiver slice:
+  `pnpm exec vitest --run packages/drizzle/src`;
+  `pnpm --filter @jiso/conformance-drizzle-pin test`.
 - round273 tuple callback container slice:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
   `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;

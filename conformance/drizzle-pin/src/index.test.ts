@@ -3717,6 +3717,75 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins object-contained tuple assignment receiver aliases with real imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface DrizzleContext { wrappers: { receivers: [PgDatabase<any, any, any>, FakeDb] } }',
+          'interface FakeContext { wrappers: { receivers: [FakeDb, FakeDb] } }',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'export async function restock(context: DrizzleContext, fake: FakeContext, productId: string) {',
+          '  let writer;',
+          '  ({ wrappers: { receivers: [writer] } } = context);',
+          '  let fakeWriter;',
+          '  ({ wrappers: { receivers: [fakeWriter] } } = fake);',
+          '  await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '  await fakeWriter.update(products).set({ stock: 0 });',
+          '}',
+          '',
+          "export const productQuery = query('product/object-contained-tuple-assignment', {",
+          '  load(_input, context: DrizzleContext, fake: FakeContext) {',
+          '    let reader;',
+          '    ({ wrappers: { receivers: [reader] } } = context);',
+          '    let fakeReader;',
+          '    ({ wrappers: { receivers: [fakeReader] } } = fake);',
+          '    fakeReader.select({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:20',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/object-contained-tuple-assignment',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:24',
+      },
+    ]);
+  });
+
   it('pins namespace-imported project write targets with real Drizzle tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [

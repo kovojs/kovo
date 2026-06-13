@@ -1046,6 +1046,16 @@ function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
         propertyType,
         receivers,
       );
+      continue;
+    }
+
+    if (Node.isArrayLiteralExpression(target)) {
+      appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
+        target,
+        location,
+        propertyType,
+        receivers,
+      );
     }
   }
 }
