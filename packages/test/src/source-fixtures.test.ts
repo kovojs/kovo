@@ -1,9 +1,17 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import * as ts from 'typescript';
 
 import {
   cssSourceDirectives,
   forbiddenBrowserArchitectureFacts,
+  projectDirectoryNames,
+  projectFilePaths,
+  projectFileSources,
+  projectJsonFile,
   projectSourceSiteFact,
 } from './source-fixtures.js';
 
@@ -31,6 +39,45 @@ describe('@jiso/test source fixture seam', () => {
     expect(() => projectSourceSiteFact('examples/commerce/src/app.ts:0')).toThrow(
       'Project source site line is positive: examples/commerce/src/app.ts:0',
     );
+  });
+
+  it('loads structured project file and package-directory facts for fw-check gates', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-project-source-'));
+    try {
+      await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
+      await mkdir(join(root, 'packages/runtime/docs'), { recursive: true });
+      await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
+      await writeFile(join(root, 'packages/runtime/package.json'), '{"name":"@jiso/runtime"}');
+      await writeFile(join(root, 'packages/runtime/src/index.ts'), 'export const runtime = true;');
+      await writeFile(join(root, 'packages/runtime/docs/readme.md'), '# Runtime');
+      await writeFile(join(root, 'packages/compiler/src/index.test.ts'), 'export {};');
+
+      expect(await projectDirectoryNames({ rootPath: root, directory: 'packages' })).toEqual([
+        'packages/compiler',
+        'packages/runtime',
+      ]);
+      expect(
+        await projectFilePaths({
+          rootPath: root,
+          directory: 'packages',
+          include: (path) => path.endsWith('.ts') && path.includes('/src/'),
+        }),
+      ).toEqual(['packages/compiler/src/index.test.ts', 'packages/runtime/src/index.ts']);
+      expect(
+        await projectFileSources({
+          rootPath: root,
+          directory: 'packages',
+          include: (path) => path.endsWith('.ts') && !path.endsWith('.test.ts'),
+        }),
+      ).toEqual([
+        { path: 'packages/runtime/src/index.ts', source: 'export const runtime = true;' },
+      ]);
+      expect(await projectJsonFile(root, 'packages/runtime/package.json')).toEqual({
+        name: '@jiso/runtime',
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('returns structured forbidden browser architecture facts from TSX source', () => {

@@ -132,6 +132,10 @@ Closed evidence so far:
 - `tests/fw-check.node.mjs` no longer owns the TypeScript AST scanner for forbidden browser
   architecture facts; the SPEC.md §2 constitution gate consumes structured
   `@jiso/test/source-fixtures` facts pinned by `packages/test/src/source-fixtures.test.ts`.
+- `tests/fw-check.node.mjs` no longer owns project recursive file walking, source loading, package
+  directory discovery, or JSON manifest reads for the SPEC.md §2 architecture scan and §16
+  conformance gate; both consume reusable `@jiso/test/source-fixtures` project facts pinned by
+  package and export tests.
 - `tests/fw-check.node.mjs` no longer owns its local HTTP wire fixture/request-response parser;
   Phase 0 wire gates consume structured `@jiso/test/wire-fixtures` facts while preserving
   byte-for-byte response body pins.
@@ -224,6 +228,11 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR

@@ -104,8 +104,14 @@ import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
   cssSourceDirectives,
   forbiddenBrowserArchitectureFacts,
+  projectDirectoryNames,
+  projectFilePaths,
+  projectFileSources,
+  projectJsonFile,
   projectSourceSiteFact,
   type ForbiddenBrowserArchitectureFact,
+  type ProjectFileSourceFact,
+  type ProjectFileTreeOptions,
   type ProjectSourceSiteFact,
 } from '@jiso/test/source-fixtures';
 import {
@@ -242,6 +248,10 @@ describe('@jiso/test package subpath exports', () => {
     expect(normalizeMarkdownCell('`one` **two**')).toBe('one two');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
     expect(forbiddenBrowserArchitectureFacts).toBeTypeOf('function');
+    expect(projectDirectoryNames).toBeTypeOf('function');
+    expect(projectFilePaths).toBeTypeOf('function');
+    expect(projectFileSources).toBeTypeOf('function');
+    expect(projectJsonFile).toBeTypeOf('function');
     expect(projectSourceSiteFact('examples/commerce/src/app.ts:7')).toEqual({
       line: 7,
       path: 'examples/commerce/src/app.ts',
@@ -375,6 +385,8 @@ type _PublicSubpathTypes = [
   FwExportOutput,
   FwExportSummary,
   ForbiddenBrowserArchitectureFact,
+  ProjectFileSourceFact,
+  ProjectFileTreeOptions,
   JisoTestContext<{ cart: string[] }>,
   JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>,
   JisoTestHarnessOptions<{ cart: string[] }>,

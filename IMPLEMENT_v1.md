@@ -369,6 +369,13 @@ plans/codebase-quality-round2.md`.
       evidence: `pnpm exec vitest --run packages/test/src`, `pnpm exec vp run build`, and
       `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
       plus targeted `pnpm exec vp check ...` and `git diff --check`.
+      Additional evidence 2026-06-13: `@jiso/test/source-fixtures`
+      now owns reusable project file-tree, source, JSON manifest, and package-directory facts
+      for the SPEC §2 browser-architecture and SPEC §16 conformance gates, replacing local
+      `fw-check` directory recursion and manifest reads. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src`, `pnpm exec vp run build`, and
+      `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code|Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
+      plus targeted `pnpm exec vp check ...` and `git diff --check`.
 - [x] FW411 write-side-only exemption (SPEC §10.1, §11.2): static exempt-table read-set check in the extraction pass (P4) and the runtime observed-read check in the db verification wrapper (P9), with golden diagnostics. Evidence added: FW411 is in the shared core diagnostic registry/type; `@jiso/drizzle` recognizes `jiso({ exempt: true })`, omits exempt writes from the touch graph, and emits a query-fact FW411 diagnostic when a query reads an exempt table; `@jiso/test` accepts `verification.exemptTables`, allows writes to those tables, and fails observed direct/raw-SQL reads with FW411.
 - [x] P9 v1.5 has full FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostic table evidence plus commerce mutation-suite runtime/static verification-loop acceptance. Evidence added: the commerce matrix acceptance path runs `cart/add` through `@jiso/test` with `touchGraphKey: 'cart.addItem'`, runs `order/receipt` through a no-write verifier with `touchGraphKey: 'order/receipt'`, and asserts both verifier paths report no static/runtime drift before checking the enhanced wire output (SPEC §11.2).
 - [x] D1 Tailwind-first path is implemented in commerce and starter scaffolds with stylesheet delivery tests.

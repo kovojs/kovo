@@ -85,6 +85,9 @@ import {
 } from '../packages/test/src/markdown-fixtures.ts';
 import {
   forbiddenBrowserArchitectureFacts,
+  projectDirectoryNames,
+  projectFileSources,
+  projectJsonFile,
   projectSourceSiteFact,
 } from '../packages/test/src/source-fixtures.ts';
 import {
@@ -195,23 +198,6 @@ const runCliCommand = async (args) => {
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
   }
-};
-
-const listProjectFiles = async (dir, predicate) => {
-  const entries = await readdir(new URL(`../${dir}`, import.meta.url), { withFileTypes: true });
-  const files = [];
-
-  for (const entry of entries) {
-    const path = `${dir}/${entry.name}`;
-
-    if (entry.isDirectory()) {
-      files.push(...(await listProjectFiles(path, predicate)));
-    } else if (predicate(path)) {
-      files.push(path);
-    }
-  }
-
-  return files;
 };
 
 const isLowerHex = (value) =>
@@ -445,14 +431,14 @@ void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () =
 
 void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {
   const ts = await import('typescript');
-  const sourcePaths = await listProjectFiles(
-    'packages',
-    (path) => path.endsWith('.ts') && path.includes('/src/') && !path.endsWith('.test.ts'),
-  );
+  const sources = await projectFileSources({
+    rootPath: projectRootPath,
+    directory: 'packages',
+    include: (path) => path.endsWith('.ts') && path.includes('/src/') && !path.endsWith('.test.ts'),
+  });
   const violations = [];
 
-  for (const path of sourcePaths) {
-    const source = await readProjectFile(path);
+  for (const { path, source } of sources) {
     violations.push(...forbiddenBrowserArchitectureFacts(ts, path, source));
   }
 
@@ -5318,15 +5304,14 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
 });
 
 void test('Conformance suites are an explicit gate', async () => {
-  const conformanceEntries = (
-    await readdir(new URL('../conformance/', import.meta.url), { withFileTypes: true })
-  )
-    .filter((entry) => entry.isDirectory())
-    .sort((left, right) => left.name.localeCompare(right.name));
+  const conformanceDirectories = await projectDirectoryNames({
+    rootPath: projectRootPath,
+    directory: 'conformance',
+  });
   const conformancePackages = await Promise.all(
-    conformanceEntries.map(async (entry) => ({
-      directory: entry.name,
-      manifest: JSON.parse(await readProjectFile(`conformance/${entry.name}/package.json`)),
+    conformanceDirectories.map(async (directory) => ({
+      directory: directory.slice('conformance/'.length),
+      manifest: await projectJsonFile(projectRootPath, `${directory}/package.json`),
     })),
   );
   const conformanceManifestsByName = new Map(

@@ -1,6 +1,20 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 export interface ProjectSourceSiteFact {
   line: number;
   path: string;
+}
+
+export interface ProjectFileTreeOptions {
+  directory: string;
+  include?: (path: string) => boolean;
+  rootPath: string;
+}
+
+export interface ProjectFileSourceFact {
+  path: string;
+  source: string;
 }
 
 export interface ForbiddenBrowserArchitectureFact {
@@ -33,6 +47,38 @@ export function projectSourceSiteFact(site: string): ProjectSourceSiteFact {
   }
 
   return { line, path: site.slice(0, separator) };
+}
+
+export async function projectDirectoryNames(options: ProjectFileTreeOptions): Promise<string[]> {
+  const entries = await readdir(join(options.rootPath, options.directory), {
+    withFileTypes: true,
+  });
+  const names = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `${options.directory}/${entry.name}`)
+    .filter((path) => options.include?.(path) ?? true);
+
+  return names.sort((left, right) => left.localeCompare(right));
+}
+
+export async function projectFilePaths(options: ProjectFileTreeOptions): Promise<string[]> {
+  const paths = await projectFileTreeEntries(options);
+  return paths.sort((left, right) => left.localeCompare(right));
+}
+
+export async function projectFileSources(
+  options: ProjectFileTreeOptions,
+): Promise<ProjectFileSourceFact[]> {
+  return Promise.all(
+    (await projectFilePaths(options)).map(async (path) => ({
+      path,
+      source: await readFile(join(options.rootPath, path), 'utf8'),
+    })),
+  );
+}
+
+export async function projectJsonFile<T = unknown>(rootPath: string, path: string): Promise<T> {
+  return JSON.parse(await readFile(join(rootPath, path), 'utf8')) as T;
 }
 
 export function forbiddenBrowserArchitectureFacts(
@@ -119,4 +165,23 @@ export function forbiddenBrowserArchitectureFacts(
 
   visit(sourceFile);
   return facts;
+}
+
+async function projectFileTreeEntries(options: ProjectFileTreeOptions): Promise<string[]> {
+  const entries = await readdir(join(options.rootPath, options.directory), {
+    withFileTypes: true,
+  });
+  const paths: string[] = [];
+
+  for (const entry of entries) {
+    const path = `${options.directory}/${entry.name}`;
+
+    if (entry.isDirectory()) {
+      paths.push(...(await projectFileTreeEntries({ ...options, directory: path })));
+    } else if (options.include?.(path) ?? true) {
+      paths.push(path);
+    }
+  }
+
+  return paths;
 }
