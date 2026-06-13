@@ -158,9 +158,12 @@ describe('inline loader build source', () => {
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function readMutationResponseElementChunks(',
     );
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'function readInlineMutationResponseBodyChunks(',
+    );
     expect(inlineJisoLoaderInstallerSource).toContain('const applyResponseChunks=(chunks)=>');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'const applyResponseBody=(body)=>{applyResponseChunks(readMutationResponseElementChunks(body));}',
+      'const applyResponseBody=(body)=>{applyResponseChunks(readInlineMutationResponseBodyChunks(body));}',
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");

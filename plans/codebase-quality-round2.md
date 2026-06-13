@@ -429,18 +429,19 @@ packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-js-minifier.test.ts` and
       `pnpm --filter @jiso/runtime run check:inline-loader`.
-      Evidence 2026-06-13: inline enhanced-response application now keeps body parsing and decoded
-      chunk application as separate generated helpers: `applyResponseBody` calls extracted
-      `readMutationResponseElementChunks` once and passes the result to `applyResponseChunks`.
+      Evidence 2026-06-13 round251: inline enhanced-response application now keeps body parsing and
+      decoded chunk application as separate generated helpers: `applyResponseBody` calls extracted
+      `readInlineMutationResponseBodyChunks` once and passes canonical raw query chunks plus decoded
+      fragment chunks to `applyResponseChunks`.
       `packages/runtime/src/inline-loader-parser-parity.test.ts`,
-      `packages/runtime/src/inline-loader-build.test.ts`, and regenerated
+      `packages/runtime/src/inline-loader-build.test.ts`,
+      `packages/runtime/src/wire-parser.test.ts`, and regenerated
       `packages/runtime/src/inline-loader.ts` pin the readable/minified parser/apply boundary.
-      Verified by `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts
+      Verified by `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
-packages/runtime/src/inline-loader-response-apply.test.ts
-packages/runtime/src/inline-loader-enhanced-submit.test.ts
-packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts` and
-      `pnpm --filter @jiso/runtime run check:inline-loader`.
+packages/runtime/src/inline-loader-response-apply.test.ts` and `pnpm --filter @jiso/runtime run
+check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
       Evidence 2026-06-13: `packages/runtime/src/index.test.ts` now owns only public barrel
       loader smoke. `packages/runtime/src/loader-query-hydration.test.ts`,
@@ -544,19 +545,19 @@ plans/codebase-quality-round2.md`.
       scan for multi-script hydration plus malformed-script retry. Verified by `pnpm exec vitest
 --run packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.test.ts` and
       `pnpm exec vitest --run packages/runtime/src`.
-      Evidence 2026-06-13: `packages/runtime/src/wire-parser.ts` now owns
-      `readMutationResponseElementChunks` as the shared response element scanner used by
-      `readMutationResponseBodyChunks`, while `packages/runtime/src/inline-loader-build.ts`
-      extracts that helper as the generated inline-loader parser root instead of spelling out a
-      separate query/fragment response scan. `packages/runtime/src/wire-parser.test.ts`,
+      Evidence 2026-06-13 round251: `packages/runtime/src/wire-parser.ts` now owns
+      `readInlineMutationResponseBodyChunks`, which wraps the shared response element scanner for
+      the inline loader and returns canonical raw query chunks plus decoded fragment chunks before
+      apply. `packages/runtime/src/inline-loader-build.ts` extracts that body-decoder helper as the
+      generated inline-loader parser root instead of letting inline apply separately map fragment
+      element chunks. `packages/runtime/src/wire-parser.test.ts`,
       `packages/runtime/src/inline-loader-parser-parity.test.ts`,
       `packages/runtime/src/inline-loader-build.test.ts`, and the regenerated
       `packages/runtime/src/inline-loader.ts` pin readable/minified helper parity and response
       behavior. Verified by `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-build.test.ts
-packages/runtime/src/inline-loader-response-apply.test.ts
-packages/runtime/src/inline-js-minifier.test.ts`, `pnpm --filter @jiso/runtime run
+packages/runtime/src/inline-loader-response-apply.test.ts`, `pnpm --filter @jiso/runtime run
 check:inline-loader`, and browser runtime tests `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`. Broader/runtime gates:
@@ -565,8 +566,7 @@ packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts
 packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-response-apply.test.ts
-packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader.ts
-plans/codebase-quality-round2.md`; `git diff --check`.
+packages/runtime/src/inline-loader.ts plans/codebase-quality-round2.md`; `git diff --check`.
       Evidence 2026-06-13: DOM mutation response body parsing moved into
       `packages/runtime/src/mutation-response-dom.ts`; `packages/runtime/src/apply-mutation-response.ts`
       now owns only decoded `MutationResponseBodyChunks` apply, and the broad
@@ -687,6 +687,11 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-response-apply.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`
+- exact `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/derive.test.ts packages/runtime/src/optimism.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm --filter @jiso/runtime run check:inline-loader`

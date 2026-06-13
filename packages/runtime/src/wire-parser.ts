@@ -24,6 +24,11 @@ export interface MutationResponseBodyChunks {
   queries: QueryChunk[];
 }
 
+export interface InlineMutationResponseBodyChunks {
+  fragments: FragmentChunk[];
+  queries: ElementChunk[];
+}
+
 export interface MutationResponseElementChunks {
   fragments: ElementChunk[];
   queries: ElementChunk[];
@@ -210,6 +215,26 @@ export function readMutationResponseBodyChunks(
   }
 
   return { fragments, queries };
+}
+
+export function readInlineMutationResponseBodyChunks(
+  body: string,
+): InlineMutationResponseBodyChunks {
+  // SPEC.md §4.4/§9.1: the inline bootstrap may defer fw-query JSON decoding
+  // to the modular runtime, but fragment decoding still follows this canonical
+  // response body projection instead of an inline-only apply parser.
+  const chunks = readMutationResponseElementChunks(body);
+  const fragments: FragmentChunk[] = [];
+
+  for (const chunk of chunks.fragments) {
+    const fragment = readFragmentElementChunk(chunk);
+    if (fragment) fragments.push(fragment);
+  }
+
+  return {
+    fragments,
+    queries: chunks.queries,
+  };
 }
 
 export function readMutationResponseElementChunks(

@@ -16,6 +16,10 @@ describe('inline loader parser parity', () => {
     // chunks as the modular runtime, so readable source is generated from the
     // extracted parser helper closure instead of carrying a hand-copied parser.
     const alternateReadableParser = [
+      'function readInlineMutationResponseBodyChunks(body) {',
+      '  const chunks = readMutationResponseElementChunks(body);',
+      '  return { fragments: chunks.fragments.map(readFragmentElementChunk), queries: chunks.queries };',
+      '}',
       'function readAttribute(attrs, name) {',
       '  return attrs + ":" + name;',
       '}',
@@ -36,18 +40,19 @@ describe('inline loader parser parity', () => {
     expect(defaultReadable).toBe(inlineJisoLoaderInstallerReadableSource);
     expect(defaultReadable).toContain(inlineWireParserReadableSource);
     expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
+    expect(inlineWireParserReadableSource).toContain(
+      'function readInlineMutationResponseBodyChunks(',
+    );
     expect(inlineWireParserReadableSource).toContain('function readMutationResponseElementChunks(');
     expect(inlineWireParserReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableParser);
     expect(alternateReadable).not.toContain(inlineWireParserReadableSource);
-    expect(alternateReadable).toContain('readMutationResponseElementChunks(body)');
+    expect(alternateReadable).toContain('readInlineMutationResponseBodyChunks(body)');
     expect(alternateReadable).toContain('const applyResponseChunks = (chunks) =>');
     expect(alternateReadable).toContain(
-      'applyResponseChunks(readMutationResponseElementChunks(body));',
+      'applyResponseChunks(readInlineMutationResponseBodyChunks(body));',
     );
-    expect(alternateReadable).toContain(
-      'chunks.fragments.map(readFragmentElementChunk).filter(Boolean).forEach(applyFragment);',
-    );
+    expect(alternateReadable).toContain('chunks.fragments.forEach(applyFragment);');
   });
 
   it('extracts the inline wire parser dependency closure from the modular parser', () => {
@@ -75,6 +80,10 @@ describe('inline loader parser parity', () => {
       'export function readMutationResponseElementChunks(body) {',
       '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
       '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  const chunks = readMutationResponseElementChunks(body);',
+      '  return { fragments: chunks.fragments.map(readFragmentElementChunk), queries: chunks.queries };',
+      '}',
       'function unescapeHtml(value) {',
       '  return value.replaceAll("&amp;", "&");',
       '}',
@@ -89,6 +98,7 @@ describe('inline loader parser parity', () => {
       /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\).*function readMutationResponseElementChunks\(body\)/s,
     );
     expect(extracted).toContain('function readFragmentElementChunk(fragment)');
+    expect(extracted).toContain('function readInlineMutationResponseBodyChunks(body)');
     expect(extracted).not.toContain('unusedHelper');
     expect(extracted).not.toContain('export function');
   });
@@ -108,6 +118,10 @@ describe('inline loader parser parity', () => {
       '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
+      '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  const chunks = readMutationResponseElementChunks(body);',
+      '  return { fragments: chunks.fragments.map(readFragmentElementChunk), queries: chunks.queries };',
       '}',
     ].join('\n');
     const canonicalReadable = extractInlineWireParserReadableSource(canonicalParser);
@@ -151,6 +165,9 @@ describe('inline loader parser parity', () => {
       'export function readMutationResponseElementChunks(body) {',
       '  return readElementChunks(body);',
       '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  return readMutationResponseElementChunks(body);',
+      '}',
     ].join('\n');
     const importedHelperSource = [
       'import { parseJsonValue } from "./json.js";',
@@ -166,6 +183,9 @@ describe('inline loader parser parity', () => {
       'export function readMutationResponseElementChunks(body) {',
       '  return readElementChunks(body);',
       '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  return readMutationResponseElementChunks(body);',
+      '}',
     ].join('\n');
     const topLevelValueSource = [
       'const attributePattern = /target/;',
@@ -180,6 +200,9 @@ describe('inline loader parser parity', () => {
       '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return readElementChunks(body);',
+      '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  return readMutationResponseElementChunks(body);',
       '}',
     ].join('\n');
 

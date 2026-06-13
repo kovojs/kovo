@@ -5,6 +5,7 @@ import {
   readAttribute,
   readElementChunks,
   readFragmentChunks,
+  readInlineMutationResponseBodyChunks,
   readMutationResponseBodyChunks,
   readMutationResponseElementChunks,
   readQueryChunks,
@@ -219,6 +220,40 @@ describe('wire parser HTML entity handling', () => {
     });
     expect(malformedQuery).toHaveBeenCalledWith('missing closing tag');
     expect(malformedFragment).toHaveBeenCalledWith('missing closing tag');
+  });
+
+  it('projects inline response bodies through the canonical parser before apply', () => {
+    // SPEC.md §4.4/§9.1: inline enhanced responses dispatch raw query chunks
+    // for modular JSON decoding while fragment apply consumes canonical chunks.
+    expect(
+      readInlineMutationResponseBodyChunks(
+        [
+          '<fw-query name="cart" key="cart&gt;1">{&quot;count&quot;:1}</fw-query>',
+          '<fw-query>{"ignored":true}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+          '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
+        ].join(''),
+      ),
+    ).toEqual({
+      fragments: [
+        { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
+        { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
+      ],
+      queries: [
+        {
+          attrs: ' name="cart" key="cart&gt;1"',
+          content: '{&quot;count&quot;:1}',
+          end: expect.any(Number),
+          start: expect.any(Number),
+        },
+        {
+          attrs: '',
+          content: '{"ignored":true}',
+          end: expect.any(Number),
+          start: expect.any(Number),
+        },
+      ],
+    });
   });
 
   it('filters deferred stream parts through the mutation response element scanner', () => {
