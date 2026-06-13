@@ -128,6 +128,22 @@ check:inline-loader`, `pnpm exec tsc --noEmit --pretty false`, `pnpm exec vp che
 packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts
 packages/runtime/src/query-apply.test.ts packages/runtime/src/query-store.test.ts
 IMPLEMENT_v1.md plans/codebase-quality-round2.md`, and `git diff --check`.
+      Additional evidence 2026-06-13: `packages/runtime/src/apply-mutation-response.ts` now owns
+      decoded chunk application through `applyMutationResponseChunksToRuntime`; mutation bodies,
+      deferred stream parts, and typed-read responses parse through their transport-specific wire
+      readers before converging on that apply primitive, with typed reads limited to `<fw-query>`
+      chunks per SPEC §9.4. Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/mutation-response.test.ts packages/runtime/src/apply-deferred-stream.test.ts
+packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-apply.test.ts
+packages/runtime/src/index-exports.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec tsc --noEmit --pretty
+      false`, `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/query-refetch.ts
+packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts
+packages/runtime/src/index-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`, and
+      `git diff --check`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
       Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in

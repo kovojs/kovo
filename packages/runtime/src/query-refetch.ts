@@ -1,11 +1,12 @@
 import {
-  applyMutationResponseToRuntime,
+  applyMutationResponseChunksToRuntime,
   type AppliedMutationResponse,
 } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
+import { readQueryChunks } from './wire-parser.js';
 
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
@@ -64,15 +65,20 @@ export async function refetchQueries(
       }
 
       applied.push(
-        applyMutationResponseToRuntime({
-          body: await response.text(),
-          ...definedProps({
-            onError: options.onError,
-            queryRoot: options.root,
-            queryPlans: options.queryPlans,
-          }),
-          store: options.queryStore,
-        }),
+        applyMutationResponseChunksToRuntime(
+          {
+            fragments: [],
+            queries: readQueryChunks(await response.text(), options.onError),
+          },
+          {
+            ...definedProps({
+              onError: options.onError,
+              queryRoot: options.root,
+              queryPlans: options.queryPlans,
+            }),
+            store: options.queryStore,
+          },
+        ),
       );
     } catch (error) {
       reportRuntimeError(options.onError, error);

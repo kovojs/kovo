@@ -395,10 +395,7 @@ describe('query refetch', () => {
         root,
       }),
     ).resolves.toEqual([
-      {
-        fragments: [{ html: '<cart-badge>2</cart-badge>', target: 'cart-badge' }],
-        queries: ['cart'],
-      },
+      { fragments: [], queries: ['cart'] },
       { fragments: [], queries: ['reviews'] },
     ]);
 
@@ -469,7 +466,7 @@ describe('query refetch', () => {
     expect(store.get('inventory')).toBeUndefined();
   });
 
-  it('reports malformed typed read chunks through the shared apply path', async () => {
+  it('reports malformed typed read query chunks through the shared decoded apply path', async () => {
     const store = createQueryStore();
     const onError = vi.fn();
     const fetch = vi.fn(async (url: string) => ({
@@ -487,8 +484,9 @@ describe('query refetch', () => {
       queryStore: store,
     });
 
-    // SPEC.md §4.4: typed-read visible-return refetch applies server query chunks through
-    // the same mutation-response vocabulary as other runtime apply paths.
+    // SPEC.md §4.4/§9.4: typed-read visible-return refetch applies server query
+    // chunks through the same decoded runtime apply primitive as mutation bodies
+    // without accepting a second fragment parser surface.
     expect(applied).toEqual([
       { fragments: [], queries: ['inventory'] },
       { fragments: [], queries: ['reviews'] },

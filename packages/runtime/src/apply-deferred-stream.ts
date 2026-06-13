@@ -1,11 +1,11 @@
 import { definedProps } from './defined-props.js';
 import type { MorphRoot } from './morph.js';
-import { deferredStreamChunks } from './wire-parser.js';
+import { deferredStreamChunks, readMutationResponseBodyChunks } from './wire-parser.js';
 import {
-  applyMutationResponseToRuntime,
+  applyMutationResponseChunksToRuntime,
   type AppliedMutationResponse,
   type AppliedMutationResponseToDom,
-  type ApplyMutationResponseToRuntimeOptions,
+  type ApplyMutationResponseChunksToRuntimeOptions,
 } from './apply-mutation-response.js';
 
 export type AppliedDeferredStreamResponseToDom = AppliedMutationResponseToDom & {
@@ -17,8 +17,8 @@ export type AppliedDeferredStreamResponseToRuntime =
   | AppliedDeferredStreamResponseToDom;
 
 interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
-  ApplyMutationResponseToRuntimeOptions,
-  'body'
+  ApplyMutationResponseChunksToRuntimeOptions,
+  'root'
 > {
   body: string;
   boundary?: string;
@@ -43,8 +43,7 @@ export function applyDeferredStreamResponseToRuntime(
 ): AppliedDeferredStreamResponseToRuntime {
   const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
     (body) =>
-      applyMutationResponseToRuntime({
-        body,
+      applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body, options.onError), {
         ...definedProps({
           applyQuery: options.applyQuery,
           beforeApplyQueries: options.beforeApplyQueries,
@@ -53,8 +52,8 @@ export function applyDeferredStreamResponseToRuntime(
           onError: options.onError,
           queryRoot: options.queryRoot,
           queryPlans: options.queryPlans,
+          root: options.root,
         }),
-        ...definedProps({ root: options.root }),
         store: options.store,
       }),
   );

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { applyMutationResponseToDom, createQueryStore } from './index.js';
 import * as runtime from './index.js';
 import {
+  applyMutationResponseChunksToRuntime,
   applyMutationResponseToDom as applyMutationResponseToDomFromMutationModule,
   applyMutationResponseToRuntime,
 } from './apply-mutation-response.js';
@@ -196,6 +197,44 @@ describe('mutation response wire chunks', () => {
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
     expect(domApplied.queries).toEqual(storeOnlyApplied.queries);
     expect(domApplied.fragments).toEqual(storeOnlyApplied.fragments);
+  });
+
+  it('applies pre-decoded mutation response chunks through the canonical runtime path', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    const beforeApplyQueries = vi.fn();
+    root.bindings.push(count);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    const applied = applyMutationResponseChunksToRuntime(
+      {
+        fragments: [{ html: '<cart-badge>11</cart-badge>', target: 'cart-badge' }],
+        queries: [{ name: 'cart', value: { count: 1 } }],
+      },
+      {
+        applyQuery(query) {
+          store.set(query.name, { count: (query.value as { count: number }).count + 10 });
+          return { value: store.get(query.name) };
+        },
+        beforeApplyQueries,
+        root,
+        store,
+      },
+    );
+
+    // SPEC.md §9.1/§9.4: transport-specific parsers hand decoded query and
+    // fragment chunks to one runtime apply path for store writes, update plans,
+    // and morphing.
+    expect(applied).toEqual({
+      appliedFragments: ['cart-badge'],
+      fragments: [{ html: '<cart-badge>11</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect(store.get('cart')).toEqual({ count: 11 });
+    expect(count.textContent).toBe('11');
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>11</cart-badge>');
+    expect(beforeApplyQueries).toHaveBeenCalledWith([{ name: 'cart', value: { count: 1 } }]);
   });
 
   it('keeps store-only apply on the hook-aware runtime apply path', () => {

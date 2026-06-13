@@ -5,7 +5,7 @@ import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
-import type { FragmentChunk, QueryChunk } from './wire-parser.js';
+import type { FragmentChunk, MutationResponseBodyChunks, QueryChunk } from './wire-parser.js';
 import type { IslandSignalScope } from './handler-context.js';
 
 export interface AppliedMutationResponse {
@@ -42,19 +42,32 @@ export type ApplyMutationResponseToRuntimeOptions = ApplyMutationResponseToRunti
   root?: MorphRoot | undefined;
 };
 
-function applyMutationResponseBody(
-  options: ApplyMutationResponseToRuntimeOptions & { root: MorphRoot },
+type ApplyMutationResponseChunksToRuntimeBaseOptions = Omit<
+  ApplyMutationResponseToRuntimeOptions,
+  'body'
+>;
+
+export type ApplyMutationResponseChunksToRuntimeOptions =
+  ApplyMutationResponseChunksToRuntimeBaseOptions;
+
+export function applyMutationResponseChunksToRuntime(
+  chunks: MutationResponseBodyChunks,
+  options: ApplyMutationResponseChunksToRuntimeOptions & { root: MorphRoot },
 ): AppliedMutationResponseToDom;
-function applyMutationResponseBody(
-  options: ApplyMutationResponseToRuntimeOptions & { root?: undefined },
+export function applyMutationResponseChunksToRuntime(
+  chunks: MutationResponseBodyChunks,
+  options: ApplyMutationResponseChunksToRuntimeOptions & { root?: undefined },
 ): AppliedMutationResponse;
-function applyMutationResponseBody(
-  options: ApplyMutationResponseToRuntimeOptions,
+export function applyMutationResponseChunksToRuntime(
+  chunks: MutationResponseBodyChunks,
+  options: ApplyMutationResponseChunksToRuntimeOptions,
 ): AppliedMutationResponseToRuntime;
-function applyMutationResponseBody(
-  options: ApplyMutationResponseToRuntimeOptions,
+export function applyMutationResponseChunksToRuntime(
+  chunks: MutationResponseBodyChunks,
+  options: ApplyMutationResponseChunksToRuntimeOptions,
 ): AppliedMutationResponseToRuntime {
-  const chunks = readMutationResponseBodyChunks(options.body, options.onError);
+  // SPEC.md §9.1: mutation, deferred, broadcast, and typed-read responses all
+  // converge here after their transport-specific parser has decoded wire chunks.
   options.beforeApplyQueries?.(chunks.queries);
   const applied: AppliedMutationResponse = {
     fragments: chunks.fragments,
@@ -94,11 +107,15 @@ export function applyMutationResponseToRuntime(
 export function applyMutationResponseToRuntime(
   options: ApplyMutationResponseToRuntimeOptions,
 ): AppliedMutationResponseToRuntime {
-  return applyMutationResponseBody(options);
+  const { body, ...applyOptions } = options;
+  return applyMutationResponseChunksToRuntime(
+    readMutationResponseBodyChunks(body, options.onError),
+    applyOptions,
+  );
 }
 
 export function applyMutationResponseToDom(
   options: ApplyMutationResponseToDomOptions,
 ): AppliedMutationResponseToDom {
-  return applyMutationResponseBody(options);
+  return applyMutationResponseToRuntime(options);
 }
