@@ -176,6 +176,43 @@ describe('query script hydration', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it('retries parsed query scripts when the shared runtime apply path rejects them', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const cartPlan = vi.fn();
+    const applyError = new Error('transient query apply failure');
+    const script: QueryScript = {
+      getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{"count":2}',
+    };
+    let attempts = 0;
+    const ledger = createQueryScriptHydrationLedger(store, {
+      applyQuery() {
+        attempts += 1;
+        if (attempts === 1) throw applyError;
+      },
+      onError,
+    });
+
+    store.subscribe('cart', cartPlan);
+
+    expect(ledger.hydrate([script])).toEqual([]);
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(applyError);
+
+    expect(ledger.hydrate([script])).toEqual(['cart']);
+    script.textContent = '{"count":99}';
+    expect(ledger.hydrate([script])).toEqual([]);
+
+    // SPEC.md §4.4/§9.4: hydration ledgers follow the same decoded apply path
+    // as mutation and typed-read chunks; a transient apply failure must not make
+    // server-authored query data permanently invisible to later passes.
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(cartPlan).toHaveBeenCalledOnce();
+    expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
+    expect(attempts).toBe(2);
+  });
+
   it('hydrates newly discovered query scripts as one decoded runtime batch', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

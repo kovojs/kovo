@@ -50,6 +50,7 @@ export function createQueryScriptHydrationLedger(
         ...definedProps({
           afterApplyQuery: options.afterApplyQuery,
           applyQuery: options.applyQuery,
+          onError: options.onError,
           queryPlans: options.queryPlans,
           root: options.root,
         }),
@@ -62,6 +63,7 @@ export function createQueryScriptHydrationLedger(
         }),
       };
       const records: Array<{ query: QueryChunk; script: QueryScriptLike }> = [];
+      const appliedQueries = new Set<QueryChunk>();
 
       for (const script of scripts) {
         if (seen.has(script)) continue;
@@ -81,15 +83,21 @@ export function createQueryScriptHydrationLedger(
         records.map((record) => record.query),
         {
           ...definedProps({
-            afterApplyQuery: mergedOptions.afterApplyQuery,
             applyQuery: mergedOptions.applyQuery,
+            onError: mergedOptions.onError,
             queryPlans: mergedOptions.queryPlans,
             root: mergedOptions.root,
           }),
+          afterApplyQuery(query, value) {
+            mergedOptions.afterApplyQuery?.(query, value);
+            appliedQueries.add(query);
+          },
         },
       );
       for (const record of records) {
-        seen.add(record.script);
+        if (appliedQueries.has(record.query)) {
+          seen.add(record.script);
+        }
       }
       return hydrated;
     },

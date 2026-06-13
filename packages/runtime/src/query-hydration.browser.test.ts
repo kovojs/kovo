@@ -98,6 +98,55 @@ describe('query hydration browser runtime', () => {
     loader.dispose();
   });
 
+  it('recovers parsed query scripts after a transient apply failure', async () => {
+    document.body.innerHTML = [
+      '<script fw-query="cart" type="application/json">{"count":2}</script>',
+      '<output data-bind="cart.count"></output>',
+    ].join('');
+    const store = createQueryStore();
+    const cartPlan = vi.fn();
+    const onError = vi.fn();
+    const refetchOnFocus = vi.fn();
+    const output = document.querySelector('output');
+    const applyError = new Error('transient browser apply failure');
+    let attempts = 0;
+    if (!output) throw new Error('missing cart binding output');
+
+    store.subscribe('cart', cartPlan);
+
+    const loader = installJisoLoader({
+      applyQuery() {
+        attempts += 1;
+        if (attempts === 1) throw applyError;
+      },
+      importModule: vi.fn(),
+      onError,
+      queryPlans: { cart: { bindings: true } },
+      queryStore: store,
+      refetchOnFocus,
+      root: document,
+    });
+
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(applyError, { phase: 'query-hydration' });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await vi.waitFor(() => {
+      expect(store.get('cart')).toEqual({ count: 2 });
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    });
+
+    // SPEC.md §4.4/§9.4: browser query hydration uses the same runtime apply
+    // path as typed reads; parsed scripts are only retired after that path
+    // succeeds, so transient apply failures remain recoverable.
+    expect(output.textContent).toBe('2');
+    expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
+    expect(attempts).toBe(2);
+
+    loader.dispose();
+  });
+
   it('hydrates inline query events into the runtime store and DOM bindings', async () => {
     document.body.innerHTML = '<output data-bind="cart.count"></output>';
     const store = createQueryStore();

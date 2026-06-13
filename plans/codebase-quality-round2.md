@@ -1268,6 +1268,9 @@ Hydrated query script ledgers now decode all unseen successful scripts first and
 `applyQueryChunksToRuntime` once per hydration pass, so visible-return hydration shares the same
 batched binding-index/update-plan path as mutation and typed-read query chunks while malformed
 scripts remain retryable.
+Parsed query scripts are also marked seen only after that shared runtime apply path succeeds, so
+transient apply-hook/update-plan failures report through the loader error seam and remain retryable
+on a later hydration pass.
 Query script hydration now lives in `packages/runtime/src/query-script-hydration.ts`, leaving
 `packages/runtime/src/query-apply.ts` as the decoded query chunk primitive only.
 DOM mutation response body parsing now lives in `packages/runtime/src/mutation-response-dom.ts`,
@@ -1366,6 +1369,26 @@ packages/runtime/src/query-visible-return.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`, and exact `pnpm exec vp check
 packages/runtime/src/query-apply.ts packages/runtime/src/query-refetch.ts
 packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`.
+- [x] Keep hydrated query script retry ledgers scoped to successful shared runtime apply.
+      Evidence 2026-06-13 round289 runtime: `packages/runtime/src/query-script-hydration.ts`
+      now forwards apply errors into `applyQueryChunksToRuntime` and marks script nodes seen only
+      after their decoded query object completes the SPEC.md §4.4/§9.4 shared apply path.
+      `packages/runtime/src/query-script-hydration.test.ts` proves a parsed script is retried after
+      a transient `applyQuery` failure, and
+      `packages/runtime/src/query-hydration.browser.test.ts` proves the installed browser loader
+      recovers the same script on a later `visibilitychange` pass. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/query-script-hydration.test.ts
+packages/runtime/src/query-visible-return.test.ts packages/runtime/src/loader-query-hydration.test.ts`,
+      browser `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/query-hydration.browser.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, and browser runtime
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/**/*.browser.test.ts`; inline-loader parity
+      `pnpm --filter @jiso/runtime run check:inline-loader`; exact `pnpm exec vp check
+packages/runtime/src/query-script-hydration.ts
+packages/runtime/src/query-script-hydration.test.ts
+packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`; and
+      `git diff --check`.
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
       Evidence 2026-06-13 round259: `packages/runtime/src/wire-parser.ts` deleted the unused
