@@ -136,6 +136,10 @@ Closed evidence so far:
 - `tests/fw-check.node.mjs` no longer owns its local Vite+ config evaluator, workflow `vp run`
   task extraction, or acceptance task-order helper; starter, conformance, browser, and perf gates
   consume `@jiso/test/command-fixtures` facts pinned by focused package tests and package exports.
+- `tests/fw-check.node.mjs` no longer owns the create-jiso starter package/CI/Vite/CSS/index
+  fact collection or fake browser client-template executor; the SPEC §13.1 stylesheet and §16
+  starter acceptance gate consumes `@jiso/test/starter-template-fixtures`, pinned by focused
+  package tests and package exports.
 
 Open:
 
@@ -193,6 +197,11 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact|P1 fragment targets emit typed registry facts|S1 production build proves the compiler 1:1 emit contract" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/typescript-fixtures.ts packages/test/src/typescript-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -847,6 +856,10 @@ Closed evidence so far:
 - `@jiso/test/command-fixtures` exposes reusable Vite+ config loading, workflow `vp run` task
   extraction, and ordered-task assertions for SPEC §16 acceptance gates; `fw-check` consumes those
   facts instead of owning local config-evaluation and ordering helpers.
+- `@jiso/test/starter-template-fixtures` exposes reusable create-jiso starter package, CI, Vite
+  task, Tailwind `@source`, index HTML, graph, and browser client-template facts for the SPEC
+  §13.1/§16 starter gate; `fw-check` consumes those facts instead of owning local starter parsing
+  or fake DOM execution.
 
 Open:
 
@@ -902,6 +915,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "D10 seeded diagnostics gate Vite" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -959,6 +977,9 @@ Closed evidence so far:
   wrappers for the styled H1 primitive surface, and `examples/gallery/src/demo-fixtures.test.ts`
   plus `examples/gallery/src/behavior-contracts.test.ts` pin the added static gallery route and
   behavior-contract coverage for collapsible, disclosure, hover-card, and popover.
+- `packages/test/src/starter-template-fixtures.ts` now owns reusable create-jiso starter package,
+  CI, Vite, CSS, index HTML, graph, and browser client-template fixtures; focused package tests,
+  package export tests, and the targeted starter `fw-check` node test pin the seam.
 
 Open:
 

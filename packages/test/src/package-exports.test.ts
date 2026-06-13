@@ -109,6 +109,15 @@ import {
   type ProjectSourceSiteFact,
 } from '@jiso/test/source-fixtures';
 import {
+  executeStarterClientTemplate,
+  starterTemplateFacts,
+  type StarterClientTemplateFixture,
+  type StarterTemplateFacts,
+  type StarterTemplateIndexHtmlFacts,
+  type StarterTemplatePackageFacts,
+  type StarterTemplateSources,
+} from '@jiso/test/starter-template-fixtures';
+import {
   observeSqlStatementArgument,
   observeSqlStatementIfString,
   sqlStatementText,
@@ -233,6 +242,8 @@ describe('@jiso/test package subpath exports', () => {
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expect(starterTemplateFacts).toBeTypeOf('function');
+    expect(executeStarterClientTemplate).toBeTypeOf('function');
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');
@@ -369,6 +380,11 @@ type _PublicSubpathTypes = [
   MarkdownFields,
   MarkdownTableRow,
   ProjectSourceSiteFact,
+  StarterClientTemplateFixture,
+  StarterTemplateFacts,
+  StarterTemplateIndexHtmlFacts,
+  StarterTemplatePackageFacts,
+  StarterTemplateSources,
   WireFixture,
   WireTranscriptExchange,
   WireTranscriptResponse,

@@ -58,7 +58,6 @@ import {
   runCommandSequenceSync,
   vitestTaskCommand,
   workflowVpRunTaskNames,
-  workflowStepCommands,
 } from '../packages/test/src/command-fixtures.ts';
 import {
   fwExplainField,
@@ -86,10 +85,13 @@ import {
   markdownTableRows,
 } from '../packages/test/src/markdown-fixtures.ts';
 import {
-  cssSourceDirectives,
   forbiddenBrowserArchitectureFacts,
   projectSourceSiteFact,
 } from '../packages/test/src/source-fixtures.ts';
+import {
+  executeStarterClientTemplate,
+  starterTemplateFacts,
+} from '../packages/test/src/starter-template-fixtures.ts';
 import {
   assertTypeScriptProgramHasNoDiagnostics,
   typeScriptInterfaceMemberTypes,
@@ -244,85 +246,6 @@ const generatedBootstrapRuntime = {
 
 const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
   loadVitePlusConfig(await readProjectFile(configPath));
-
-const executeStarterClientTemplate = async (source) => {
-  const ts = await import('typescript');
-  const appendCalls = [];
-  const deferredApplications = [];
-  const fetchCalls = [];
-  const loaderInstalls = [];
-  const queryStore = { kind: 'starter-query-store' };
-  const module = { exports: {} };
-  const fragmentById = {
-    'cart-badge': {
-      innerHTML: '<cart-badge>0</cart-badge>',
-      insertAdjacentHTML(position, html) {
-        appendCalls.push([position, html]);
-      },
-    },
-  };
-  const documentRoot = {
-    getElementById(id) {
-      return fragmentById[id] ?? null;
-    },
-    querySelector(selector) {
-      return selector === '[fw-fragment-target="cart-list"]'
-        ? {
-            innerHTML: '<ul></ul>',
-            insertAdjacentHTML(position, html) {
-              appendCalls.push([position, html]);
-            },
-          }
-        : null;
-    },
-    querySelectorAll() {
-      return [];
-    },
-  };
-  const runtime = {
-    applyDeferredStreamResponseToDom(options) {
-      deferredApplications.push(options);
-      return { applied: true };
-    },
-    createQueryStore() {
-      return queryStore;
-    },
-    installJisoLoader(options) {
-      loaderInstalls.push(options);
-    },
-  };
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText;
-
-  runInNewContext(compiled, {
-    CSS: { escape: (value) => value },
-    document: documentRoot,
-    exports: module.exports,
-    fetch(url, options) {
-      fetchCalls.push([url, options]);
-      return { ok: true };
-    },
-    module,
-    require(specifier) {
-      if (specifier === '@jiso/runtime') return runtime;
-      assert.fail(`unexpected starter client import ${specifier}`);
-    },
-  });
-
-  return {
-    appendCalls,
-    deferredApplications,
-    documentRoot,
-    exports: module.exports,
-    fetchCalls,
-    loaderInstalls,
-    queryStore,
-  };
-};
 
 const runGraphAssertionsTemplateScript = async () => {
   const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-fake-fw-'));
@@ -3470,12 +3393,13 @@ export const CartBadge = component('cart-badge', {
 void test('P10 starter wires graph assertions into CI', async () => {
   const [
     packageJsonSource,
-    ciWorkflow,
+    ciWorkflowSource,
     starterGraphSource,
     clientSource,
     appSource,
     stylesSource,
     indexHtml,
+    viteConfigSource,
   ] = await Promise.all([
     readProjectFile('packages/create-jiso/templates/package.json'),
     readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
@@ -3484,13 +3408,19 @@ void test('P10 starter wires graph assertions into CI', async () => {
     readProjectFile('packages/create-jiso/templates/src/app.tsx'),
     readProjectFile('packages/create-jiso/templates/src/styles.css'),
     readProjectFile('packages/create-jiso/templates/index.html'),
+    readProjectFile('packages/create-jiso/templates/vite.config.ts'),
   ]);
-  const packageJson = JSON.parse(packageJsonSource);
-  const viteTasks = (
-    await loadProjectVitePlusConfig('packages/create-jiso/templates/vite.config.ts')
-  ).run.tasks;
-  const ciSteps = workflowStepCommands(ciWorkflow);
-  const starterGraph = JSON.parse(starterGraphSource);
+  const starterFacts = await starterTemplateFacts({
+    ciWorkflowSource,
+    graphSource: starterGraphSource,
+    indexHtmlSource: indexHtml,
+    packageJsonSource,
+    stylesSource,
+    viteConfigSource,
+  });
+  const packageFacts = starterFacts.package;
+  const viteTasks = starterFacts.viteTasks;
+  const starterGraph = starterFacts.graph;
   const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
   const cartAddExplain = fwExplain(starterGraph, {
     kind: 'mutation',
@@ -3499,10 +3429,10 @@ void test('P10 starter wires graph assertions into CI', async () => {
   }).output;
   const cartPageExplain = fwExplain(starterGraph, { kind: 'page', target: '/cart' }).output;
 
-  assert.equal(packageJson.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
-  assert.equal(packageJson.scripts['fw-check'], undefined);
-  assert.equal(packageJson.scripts['graph-assertions'], undefined);
-  assert.deepEqual(Object.keys(packageJson.dependencies).sort(), [
+  assert.equal(packageFacts.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
+  assert.equal(packageFacts.scripts['fw-check'], undefined);
+  assert.equal(packageFacts.scripts['graph-assertions'], undefined);
+  assert.deepEqual(packageFacts.dependencies, [
     '@jiso/better-auth',
     '@jiso/core',
     '@jiso/runtime',
@@ -3519,7 +3449,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
       'vite',
       'vite-plus',
       'vitest',
-    ].filter((dependencyName) => dependencyName in packageJson.devDependencies),
+    ].filter((dependencyName) => packageFacts.devDependencies.includes(dependencyName)),
     [
       '@jiso/compiler',
       '@tailwindcss/vite',
@@ -3616,17 +3546,14 @@ void test('P10 starter wires graph assertions into CI', async () => {
       output: undefined,
     },
   );
-  assert.deepEqual(
-    ciSteps.filter((step) => step.run).map((step) => step.run),
-    [
-      'vp install',
-      'vp check',
-      'vp test',
-      'vp run build',
-      'vp run fw-check',
-      'vp run graph-assertions',
-    ],
-  );
+  assert.deepEqual(starterFacts.ciRunCommands, [
+    'vp install',
+    'vp check',
+    'vp test',
+    'vp run build',
+    'vp run fw-check',
+    'vp run graph-assertions',
+  ]);
 
   const taskOutputs = await Promise.all([
     runTemplateViteTaskCommand(viteTasks['fw-check'].command),
@@ -3719,31 +3646,29 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.equal(deferredApplication.root, loaderOptions.enhancedMutations.root);
   assert.equal(deferredApplication.store, starterClient.queryStore);
 
-  assert.deepEqual(cssSourceDirectives(stylesSource), [
+  assert.deepEqual(starterFacts.cssDirectives, [
     '"../index.html"',
     '"./**/*.{ts,tsx,html}"',
     'inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200")',
   ]);
-  const htmlElements = htmlElementFacts(indexHtml);
-  assert.deepEqual(
-    htmlElements.map((element) => element.tag),
-    ['html', 'head', 'meta', 'meta', 'link', 'title', 'body'],
-  );
-  assert.deepEqual(htmlElements.find((element) => element.tag === 'html')?.attrs, {
-    lang: 'en',
-  });
-  assert.deepEqual(
-    htmlElements.filter((element) => element.tag === 'meta').map((element) => element.attrs),
-    [{ charset: 'UTF-8' }, { content: 'width=device-width, initial-scale=1.0', name: 'viewport' }],
-  );
-  assert.deepEqual(
-    htmlElements.filter((element) => element.tag === 'link').map((element) => element.attrs),
-    [{ rel: 'stylesheet', href: '/src/styles.css' }],
-  );
-  assert.deepEqual(
-    htmlElements.filter((element) => element.tag === 'script').map((element) => element.attrs),
-    [],
-  );
+  assert.deepEqual(starterFacts.indexHtml.tags, [
+    'html',
+    'head',
+    'meta',
+    'meta',
+    'link',
+    'title',
+    'body',
+  ]);
+  assert.deepEqual(starterFacts.indexHtml.htmlAttrs, { lang: 'en' });
+  assert.deepEqual(starterFacts.indexHtml.metaAttrs, [
+    { charset: 'UTF-8' },
+    { content: 'width=device-width, initial-scale=1.0', name: 'viewport' },
+  ]);
+  assert.deepEqual(starterFacts.indexHtml.linkAttrs, [
+    { rel: 'stylesheet', href: '/src/styles.css' },
+  ]);
+  assert.deepEqual(starterFacts.indexHtml.scriptAttrs, []);
 
   execFileSync('pnpm', ['exec', 'vitest', '--run', 'packages/create-jiso/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),

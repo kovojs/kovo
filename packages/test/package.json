@@ -16,6 +16,7 @@
     "./page": "./src/page.ts",
     "./pglite": "./src/pglite.ts",
     "./source-fixtures": "./src/source-fixtures.ts",
+    "./starter-template-fixtures": "./src/starter-template-fixtures.ts",
     "./sql-observer": "./src/sql-observer.ts",
     "./test-case": "./src/test-case.ts",
     "./typescript-fixtures": "./src/typescript-fixtures.ts",
