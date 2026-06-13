@@ -33,6 +33,7 @@ import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlElementFacts,
+  htmlFormFacts,
 } from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
@@ -88,6 +89,11 @@ describe('@jiso/test package subpath exports', () => {
         'cart',
       ),
     ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'], target: 'cart' }]);
+    expect(
+      htmlFormFacts(
+        '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',
+      ),
+    ).toMatchObject([{ action: '/_m/cart/add', fields: [{ name: 'productId', value: 'p1' }] }]);
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');

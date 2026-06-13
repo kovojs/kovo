@@ -49,6 +49,7 @@ import {
   submitOptimisticEnhancedMutation,
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
+import { htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
   createApp,
   csrfField,
@@ -455,54 +456,18 @@ const parseCssSourceDirectives = (source) =>
     .filter((line) => line.startsWith('@source '))
     .map((line) => line.slice('@source '.length).replace(/;$/, ''));
 
-const parseHtmlElements = (source) => {
-  const elements = [];
-  const tagPattern = /<([a-zA-Z][\w:-]*)([^>]*)>/g;
-  const attributePattern = /([a-zA-Z_:][\w:.-]*)(?:=(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+const parseHtmlElements = (source) =>
+  htmlElementFacts(source).map((element) => ({
+    attributes: element.attrs,
+    tagName: element.tag,
+  }));
 
-  for (const tagMatch of source.matchAll(tagPattern)) {
-    const [, tagName, attributesSource] = tagMatch;
-    const attributes = {};
-
-    for (const attributeMatch of attributesSource.matchAll(attributePattern)) {
-      const [, name, doubleQuotedValue, singleQuotedValue, bareValue] = attributeMatch;
-      attributes[name] = doubleQuotedValue ?? singleQuotedValue ?? bareValue ?? true;
-    }
-
-    elements.push({ attributes, tagName });
-  }
-
-  return elements;
-};
-
-const parseHtmlElementBlocks = (source, tagName) => {
-  const blocks = [];
-  const openNeedle = `<${tagName}`;
-  const closeNeedle = `</${tagName}>`;
-  let cursor = 0;
-
-  while (cursor < source.length) {
-    const openStart = source.indexOf(openNeedle, cursor);
-    if (openStart === -1) break;
-
-    const openEnd = source.indexOf('>', openStart);
-    assert.notEqual(openEnd, -1, `${tagName} opening tag is closed`);
-
-    const closeStart = source.indexOf(closeNeedle, openEnd + 1);
-    assert.notEqual(closeStart, -1, `${tagName} closing tag is present`);
-
-    const [element] = parseHtmlElements(source.slice(openStart, openEnd + 1));
-    assert.ok(element, `${tagName} opening tag parses as an HTML element`);
-    blocks.push({
-      attributes: element.attributes,
-      innerHTML: source.slice(openEnd + 1, closeStart),
-      tagName: element.tagName,
-    });
-    cursor = closeStart + closeNeedle.length;
-  }
-
-  return blocks;
-};
+const parseHtmlElementBlocks = (source, tagName) =>
+  htmlElementFacts(source, { tag: tagName }).map((element) => ({
+    attributes: element.attrs,
+    innerHTML: element.innerHtml,
+    tagName: element.tag,
+  }));
 
 const parseDocumentRegions = (source) => {
   const htmlBlocks = parseHtmlElementBlocks(source, 'html');

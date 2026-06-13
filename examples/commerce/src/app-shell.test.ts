@@ -11,7 +11,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
 import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
-import { fwFragmentFacts, fwQueryFacts, htmlElementFacts } from '@jiso/test/html-fragment';
+import {
+  fwFragmentFacts,
+  fwQueryFacts,
+  htmlElementFacts,
+  htmlFormFacts,
+} from '@jiso/test/html-fragment';
 
 import {
   addToCart,
@@ -647,11 +652,11 @@ function expectCartQueryPayload(html: string, count: number): void {
 }
 
 function formActions(html: string): string[] {
-  return htmlElementFacts(html, { tag: 'form' }).map((form) => form.attrs.action ?? '');
+  return htmlFormFacts(html).map((form) => form.action);
 }
 
 function formFields(html: string, name: string) {
-  return htmlElementFacts(html, { attrs: { name }, tag: 'input' });
+  return htmlFormFacts(html).flatMap((form) => form.fields.filter((field) => field.name === name));
 }
 
 function modulePreloadHrefs(html: string): string[] {

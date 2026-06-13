@@ -68,6 +68,8 @@ Closed evidence so far:
   inferred touch facts, and structured line-numbered sites.
 - Commerce app-shell config and i18n catalog checks now use exported config/catalog seams plus
   `@jiso/test/html-fragment` element facts instead of parsing `vite.config.ts`/`app.ts` source.
+- `tests/fw-check.node.mjs` no longer owns its local regex/index-based HTML element/block parser;
+  its compatibility helpers delegate to the shared `@jiso/test/html-fragment` element-fact seam.
 
 Open:
 
@@ -83,6 +85,7 @@ Recent gates:
 - `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
+- `node --test --test-name-pattern "P3 server renders initial query scripts|D3 deferred stream responses are consumed by the runtime|P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically|D1 commerce enhanced fragments carry Tailwind stylesheet hints" tests/fw-check.node.mjs`
 - `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -316,6 +319,9 @@ Closed evidence so far:
 - `@jiso/test/html-fragment` also exposes structured `fwQueryFacts` and `fwFragmentFacts`; package
   export tests pin the subpath seam, and commerce HTTP/mutation tests now assert query payloads,
   fragment targets, and fragment stylesheet hints through those facts.
+- `@jiso/test/html-fragment` exposes structured `htmlFormFacts`; package export tests pin the
+  subpath seam, commerce form/error tests assert action, method, controls, and error output through
+  form/element facts, and `fw-check` delegates HTML element parsing to the same seam.
 - Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
   fake server module, keeping the local app-shell workflow out of source-text assertions.
 
@@ -332,7 +338,8 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
-- `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `node --test --test-name-pattern "P3 server renders initial query scripts|D3 deferred stream responses are consumed by the runtime|P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically|D1 commerce enhanced fragments carry Tailwind stylesheet hints" tests/fw-check.node.mjs`
 - `node examples/commerce/scripts/emit-graph.mjs --check`
 - `node examples/commerce/scripts/emit-components.mjs --check`
 - `pnpm exec vp run build`
@@ -352,6 +359,9 @@ Closed evidence so far:
 - Shared `fwQueryFacts`/`fwFragmentFacts` coverage in `packages/test/src/html-fragment.test.ts`
   replaces repeated commerce response substring probes for query names, fragment targets, and
   fragment stylesheet hints.
+- Shared `htmlFormFacts` coverage in `packages/test/src/html-fragment.test.ts` replaces commerce
+  substring probes for mutation form actions, methods, named controls, upload progress markers, and
+  rerendered validation output.
 
 Open:
 

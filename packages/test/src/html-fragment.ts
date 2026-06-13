@@ -40,6 +40,24 @@ export interface FwFragmentFact {
   target: string;
 }
 
+export interface HtmlFormFieldFact {
+  attrs: Record<string, string>;
+  html: string;
+  name: string;
+  tag: string;
+  type: string;
+  value: string;
+}
+
+export interface HtmlFormFact {
+  action: string;
+  attrs: Record<string, string>;
+  fields: HtmlFormFieldFact[];
+  html: string;
+  innerHtml: string;
+  method: string;
+}
+
 export function htmlElementFacts(
   html: string,
   selector: HtmlElementSelector = {},
@@ -117,6 +135,27 @@ export function fwFragmentFacts(html: string, target?: string): FwFragmentFact[]
       target: element.attrs.target ?? '',
     }))
     .filter((fact) => target === undefined || fact.target === target);
+}
+
+export function htmlFormFacts(html: string): HtmlFormFact[] {
+  return htmlElementFacts(html, { tag: 'form' }).map((form) => ({
+    action: form.attrs.action ?? '',
+    attrs: form.attrs,
+    fields: htmlElementFacts(form.innerHtml)
+      .filter((element) => ['button', 'input', 'select', 'textarea'].includes(element.tag))
+      .map((element) => ({
+        attrs: element.attrs,
+        html: element.html,
+        name: element.attrs.name ?? '',
+        tag: element.tag,
+        type: element.attrs.type ?? '',
+        value: element.attrs.value ?? element.innerHtml,
+      }))
+      .filter((field) => field.name !== ''),
+    html: form.html,
+    innerHtml: form.innerHtml,
+    method: form.attrs.method ?? 'get',
+  }));
 }
 
 function explicitFragmentHtml(html: string, target: string): string | undefined {

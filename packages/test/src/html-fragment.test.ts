@@ -5,6 +5,7 @@ import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlElementFacts,
+  htmlFormFacts,
 } from '@jiso/test/html-fragment';
 
 describe('@jiso/test html fragment seam', () => {
@@ -189,6 +190,67 @@ describe('@jiso/test html fragment seam', () => {
           '<link rel="stylesheet" href="/assets/tailwind.css"><section><article fw-key="p1">Mug</article></section>',
         stylesheetHrefs: ['/assets/tailwind.css'],
         target: 'product-grid',
+      },
+    ]);
+  });
+
+  it('returns structured form facts with named controls', () => {
+    expect(
+      htmlFormFacts(
+        [
+          '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add">',
+          '<input name="productId" value="p1">',
+          '<input name="quantity" type="number" min="1" max="5" value="1">',
+          '<textarea name="note">gift wrap</textarea>',
+          '<button type="submit">Add</button>',
+          '</form>',
+        ].join(''),
+      ),
+    ).toEqual([
+      {
+        action: '/_m/cart/add',
+        attrs: {
+          action: '/_m/cart/add',
+          'data-mutation': 'cart/add',
+          enhance: '',
+          method: 'post',
+        },
+        fields: [
+          {
+            attrs: { name: 'productId', value: 'p1' },
+            html: '<input name="productId" value="p1">',
+            name: 'productId',
+            tag: 'input',
+            type: '',
+            value: 'p1',
+          },
+          {
+            attrs: {
+              max: '5',
+              min: '1',
+              name: 'quantity',
+              type: 'number',
+              value: '1',
+            },
+            html: '<input name="quantity" type="number" min="1" max="5" value="1">',
+            name: 'quantity',
+            tag: 'input',
+            type: 'number',
+            value: '1',
+          },
+          {
+            attrs: { name: 'note' },
+            html: '<textarea name="note">gift wrap</textarea>',
+            name: 'note',
+            tag: 'textarea',
+            type: '',
+            value: 'gift wrap',
+          },
+        ],
+        html: '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add"><input name="productId" value="p1"><input name="quantity" type="number" min="1" max="5" value="1"><textarea name="note">gift wrap</textarea><button type="submit">Add</button></form>',
+        innerHtml:
+          '<input name="productId" value="p1"><input name="quantity" type="number" min="1" max="5" value="1"><textarea name="note">gift wrap</textarea><button type="submit">Add</button>',
+        method: 'post',
       },
     ]);
   });

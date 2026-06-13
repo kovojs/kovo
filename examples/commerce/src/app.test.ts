@@ -6,7 +6,12 @@ import { readFileSync, rmSync } from 'node:fs';
 import { storageBodyToBytes } from '@jiso/core';
 import { propertyTest } from '@jiso/test/assertions';
 import { createJisoTestHarness } from '@jiso/test/harness';
-import { fwFragmentFacts, fwQueryFacts, htmlElementFacts } from '@jiso/test/html-fragment';
+import {
+  fwFragmentFacts,
+  fwQueryFacts,
+  htmlElementFacts,
+  htmlFormFacts,
+} from '@jiso/test/html-fragment';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
 import { csrfToken, runMutation } from '@jiso/server';
@@ -208,6 +213,12 @@ function productGridInput(after: string | null, limit?: number): ProductGridInpu
     ...(after ? { after } : {}),
     ...(limit === undefined ? {} : { limit }),
   };
+}
+
+function formFieldsByName(
+  form: ReturnType<typeof htmlFormFacts>[number] | undefined,
+): Record<string, ReturnType<typeof htmlFormFacts>[number]['fields'][number]> {
+  return Object.fromEntries((form?.fields ?? []).map((field) => [field.name, field]));
 }
 
 describe('commerce example', () => {
@@ -682,29 +693,56 @@ describe('commerce example', () => {
   });
 
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', () => {
+    const form = renderAddToCartForm({ id: 'p1', stock: 5 });
     const html = renderCartPage();
+    const [addForm] = htmlFormFacts(form);
+    const fieldsByName = formFieldsByName(addForm);
 
-    expect(renderAddToCartForm({ id: 'p1', stock: 5 })).toContain(
-      '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
-    );
-    expect(html).toContain('name="productId" value="p1"');
-    expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
-    expect(html).toContain('type="submit">Add</button>');
+    expect(addForm).toMatchObject({
+      action: '/_m/cart/add',
+      attrs: {
+        'data-mutation': 'cart/add',
+        enhance: '',
+        method: 'post',
+      },
+      method: 'post',
+    });
+    expect(fieldsByName.productId).toMatchObject({ value: 'p1' });
+    expect(fieldsByName.quantity).toMatchObject({
+      attrs: { max: '5', min: '1', type: 'number' },
+      value: '1',
+    });
+    expect(htmlFormFacts(html).some((pageForm) => pageForm.action === '/_m/cart/add')).toBe(true);
   });
 
   it('renders a multipart receipt upload form on the commerce page', () => {
     const form = renderReceiptUploadForm('order-1');
     const html = renderCartPage();
+    const [uploadForm] = htmlFormFacts(form);
+    const fieldsByName = formFieldsByName(uploadForm);
 
-    expect(form).toContain(
-      '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data"',
-    );
-    expect(form).toContain('fw-deps="order"');
-    expect(form).toContain('aria-busy="false"');
-    expect(form).toContain('name="orderId" value="order-1"');
-    expect(form).toContain('name="receipt" type="file" accept="application/pdf,image/png"');
-    expect(form).toContain('fw-upload-progress value="0" max="100"');
-    expect(html).toContain('data-mutation="order/receipt"');
+    expect(uploadForm).toMatchObject({
+      action: '/_m/order/receipt',
+      attrs: {
+        'aria-busy': 'false',
+        'data-mutation': 'order/receipt',
+        enctype: 'multipart/form-data',
+        enhance: '',
+        'fw-deps': 'order',
+        method: 'post',
+      },
+      method: 'post',
+    });
+    expect(fieldsByName.orderId).toMatchObject({ value: 'order-1' });
+    expect(fieldsByName.receipt).toMatchObject({
+      attrs: { accept: 'application/pdf,image/png', type: 'file' },
+    });
+    expect(
+      htmlElementFacts(form, { attrs: { 'fw-upload-progress': true }, tag: 'progress' }),
+    ).toMatchObject([{ attrs: { max: '100', value: '0' } }]);
+    expect(
+      htmlFormFacts(html).some((pageForm) => pageForm.attrs['data-mutation'] === 'order/receipt'),
+    ).toBe(true);
   });
 
   it('coerces commerce receipt uploads through storage-backed s.file()', async () => {
@@ -1046,10 +1084,24 @@ describe('commerce example', () => {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 422,
     });
-    expect(response.body).toContain('<html>');
-    expect(response.body).toContain('<form method="post" action="/_m/cart/add" enhance');
-    expect(response.body).toContain('name="productId" value="p2"');
-    expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
+    expect(htmlElementFacts(response.body, { tag: 'html' })).toHaveLength(1);
+    expect(htmlFormFacts(response.body)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: '/_m/cart/add',
+          attrs: expect.objectContaining({ enhance: '', method: 'post' }),
+          fields: expect.arrayContaining([
+            expect.objectContaining({ name: 'productId', value: 'p2' }),
+          ]),
+        }),
+      ]),
+    );
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { 'data-error-code': 'OUT_OF_STOCK' },
+        tag: 'output',
+      }),
+    ).toHaveLength(1);
     expect(response.body).toContain('Only 2 available.');
     expect(renderOrderHistory(db)).not.toContain('order-1');
   });
@@ -1076,15 +1128,26 @@ describe('commerce example', () => {
       stylesheetHrefs: ['/assets/tailwind.css'],
       target: 'product-form:p2',
     });
+    expect(htmlFormFacts(formFragment?.innerHtml ?? '')).toMatchObject([
+      {
+        action: '/_m/cart/add',
+        attrs: { method: 'post' },
+        fields: expect.arrayContaining([
+          expect.objectContaining({ name: 'productId', value: 'p2' }),
+        ]),
+      },
+    ]);
     expect(
       htmlElementFacts(formFragment?.innerHtml ?? '', {
-        attrs: { action: '/_m/cart/add', method: 'post' },
-        tag: 'form',
+        attrs: { 'fw-fragment-target': 'product-form:p2' },
       }),
     ).toHaveLength(1);
-    expect(response.body).toContain('fw-fragment-target="product-form:p2"');
-    expect(response.body).toContain('name="productId" value="p2"');
-    expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
+    expect(
+      htmlElementFacts(formFragment?.innerHtml ?? '', {
+        attrs: { 'data-error-code': 'OUT_OF_STOCK' },
+        tag: 'output',
+      }),
+    ).toHaveLength(1);
     expect(response.body).toContain('Only 2 available.');
     expect(renderOrderHistory(db)).not.toContain('order-1');
   });
