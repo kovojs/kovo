@@ -3,10 +3,16 @@ import {
   csrfField,
   csrfToken,
   domain,
+  errorBoundary,
+  guards,
+  i18n,
+  metaFromQuery,
   mutation,
   notFound,
   query,
+  renderMutationEndpointResponse,
   renderMutationResponse,
+  renderPageHints,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   renderRoutePageResponse,
@@ -14,10 +20,14 @@ import {
   runMutation,
   runQuery,
   runRoutePage,
+  session,
   s,
+  t,
 } from '@jiso/server';
+import { createQueryStore, submitEnhancedMutation } from '../../runtime/src/index.ts';
 
 import {
+  serverCommerceAdoptDontInventBehaviorFact,
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
@@ -43,6 +53,20 @@ const dataPlaneRuntime = {
   route,
   runQuery,
   runRoutePage,
+};
+
+const commerceRuntime = {
+  ...dataPlaneRuntime,
+  createQueryStore,
+  errorBoundary,
+  guards,
+  i18n,
+  metaFromQuery,
+  renderMutationEndpointResponse,
+  renderPageHints,
+  session,
+  submitEnhancedMutation,
+  t,
 };
 
 describe('@jiso/test server fixture facts', () => {
@@ -168,6 +192,128 @@ describe('@jiso/test server fixture facts', () => {
           value: { count: 1 },
         },
       },
+    });
+  });
+
+  it('projects commerce adopt-dont-invent behavior through public server APIs', async () => {
+    const fact = await serverCommerceAdoptDontInventBehaviorFact(commerceRuntime, {
+      mutations: [
+        {
+          enctype: 'multipart/form-data',
+          fileFields: ['receipt'],
+          guards: ['authed', 'rateLimit:session'],
+          inputFields: ['orderId', 'receipt'],
+          key: 'order/receipt',
+          session: 'commerceSession',
+          writes: ['attachment'],
+        },
+      ],
+      pages: [
+        {
+          i18n: ['en-US:cartLabel,productStock'],
+          meta: {
+            description: 'Browse products and checkout with 0 verifiable cart item.',
+            title: 'Jiso Commerce (0)',
+          },
+          modulepreloads: [],
+          prefetch: false,
+          queries: ['cart', 'productGrid', 'orderHistory'],
+          route: '/cart',
+          stylesheets: ['/assets/tailwind.css'],
+        },
+      ],
+    });
+
+    expect(fact.graph.cartPage).toEqual({
+      i18n: ['en-US:cartLabel,productStock'],
+      meta: {
+        description: 'Browse products and checkout with 0 verifiable cart item.',
+        title: 'Jiso Commerce (0)',
+      },
+      modulepreloads: [],
+      prefetch: false,
+      queries: ['cart', 'productGrid', 'orderHistory'],
+      route: '/cart',
+      stylesheets: ['/assets/tailwind.css'],
+    });
+    expect(fact.graph.receiptMutation).toEqual({
+      enctype: 'multipart/form-data',
+      fileFields: ['receipt'],
+      guards: ['authed', 'rateLimit:session'],
+      inputFields: ['orderId', 'receipt'],
+      key: 'order/receipt',
+      session: 'commerceSession',
+      writes: ['attachment'],
+    });
+    expect(fact.pageHints).toEqual({
+      missingQueryMessage: 'Missing query data for route meta: cart',
+      rendered: {
+        earlyHints: {},
+        html: [
+          '<title>Jiso Commerce (1)</title>',
+          '<meta name="description" content="Browse products and checkout with 1 verifiable cart item.">',
+          '<meta property="og:description" content="Browse products and checkout with 1 verifiable cart item.">',
+          '<script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
+        ].join(''),
+      },
+      translation: 'Cart (1)',
+    });
+    expect(fact.guards).toEqual({
+      authenticatedSession: { id: 's1', user: { id: 'u1' } },
+      authedFailure: {
+        auth: 'unauthenticated',
+        code: 'UNAUTHORIZED',
+        payload: {},
+        status: 422,
+      },
+      firstRateLimitPasses: true,
+      secondRateLimitFailure: 'RATE_LIMITED',
+    });
+    expect(fact.upload.result).toEqual({
+      changes: [
+        {
+          domain: 'attachment',
+          input: {
+            orderId: 'o1',
+            receipt: {
+              file: expect.any(Blob),
+              key: 'receipts/receipt.pdf',
+              storage: {
+                body: new TextEncoder().encode('receipt'),
+                contentType: 'application/pdf',
+                key: 'receipts/receipt.pdf',
+                metadata: { filename: 'receipt.pdf' },
+                size: 7,
+              },
+            },
+          },
+        },
+      ],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        orderId: 'o1',
+        session: 'u1',
+        storageKey: 'receipts/receipt.pdf',
+      },
+    });
+    expect(fact.upload.stored).toEqual({
+      body: new TextEncoder().encode('receipt'),
+      contentType: 'application/pdf',
+      key: 'receipts/receipt.pdf',
+      metadata: { filename: 'receipt.pdf' },
+      size: 7,
+    });
+    expect(fact.upload.progress).toEqual({ max: '100', value: '50' });
+    expect(fact.upload.pendingDuringResponse).toBe('');
+    expect(fact.upload.pendingAfterSubmit).toBeNull();
+    expect(fact.fragmentFailure).toEqual({
+      body: '<fw-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></fw-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[]',
+      },
+      status: 200,
     });
   });
 });

@@ -182,6 +182,10 @@ Shared graph fixtures now own the commerce graph behavior projection for `fw-che
 query/mutation `fw-explain` facts, mutation-query matrix, coverage diagnostics, static graph facts,
 compiler component facts, registry facts, and touch graph keys; both the fw-check monolith and
 commerce source-truth matrix test consume the public fixture.
+Shared server fixtures now own the D4 commerce adopt-dont-invent behavior projection for graph
+page/mutation facts, route meta/i18n, guards/session, file-storage mutation upload progress, and
+fragment error-boundary responses, so the fw-check monolith no longer rebuilds that commerce
+mechanic inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -199,6 +203,18 @@ Latest evidence:
   re-exports app-shell-only raw handler, versioned client-module registry, or Node adapter handler
   types from the root `@jiso/server` barrel, while `packages/server/src/api/app.test.ts` pins those
   root aliases absent and proves the focused SPEC §9.5 app-shell subpaths still own the types.
+- Phase 1/6/7 D4 commerce adopt-dont-invent fixture slice:
+  `pnpm exec vitest --run packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `node --test --test-name-pattern "D4 commerce adopt-dont-invent" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/test/src/server-fixtures.ts packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/server-fixtures.ts` exposes
+  `serverCommerceAdoptDontInventBehaviorFact()` as the public fixture seam for SPEC §13.5/§16.5
+  commerce graph, meta/i18n, guard/session, file upload, progress, and fragment error-boundary
+  behavior, and `tests/fw-check.node.mjs` now asserts that structured fact instead of local DOM,
+  storage, session, and mutation mechanics.
 - Phase 5 Vite manifest-file URL boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;

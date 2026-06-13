@@ -324,9 +324,12 @@ import {
   type OptimismCleanupRuntime,
 } from '@jiso/test/runtime-fixtures';
 import {
+  serverCommerceAdoptDontInventBehaviorFact,
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
+  type ServerCommerceAdoptDontInventBehaviorFact,
+  type ServerCommerceAdoptDontInventRuntime,
   type ServerCommerceTransactionBehaviorFact,
   type ServerDataPlaneBehaviorFact,
   type ServerDataPlaneRuntime,
@@ -481,6 +484,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(serverMutationLifecycleBehaviorFact).toBeTypeOf('function');
     expect(serverDataPlaneBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceTransactionBehaviorFact).toBeTypeOf('function');
+    expect(serverCommerceAdoptDontInventBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
     ]);
@@ -526,6 +530,13 @@ describe('@jiso/test package subpath exports', () => {
     }>();
     expectTypeOf<ServerCommerceTransactionBehaviorFact>().toMatchTypeOf<{
       failed: { db: Record<string, unknown>; result: Record<string, unknown> };
+    }>();
+    expectTypeOf<ServerCommerceAdoptDontInventBehaviorFact>().toMatchTypeOf<{
+      graph: { cartPage: Record<string, unknown>; receiptMutation: Record<string, unknown> };
+      upload: { pendingAfterSubmit: string | null };
+    }>();
+    expectTypeOf<ServerCommerceAdoptDontInventRuntime>().toMatchTypeOf<{
+      submitEnhancedMutation: (options: Record<string, unknown>) => Promise<unknown>;
     }>();
     expectTypeOf<VerificationLayerBehaviorFact>().toMatchTypeOf<{
       failures: Record<string, string>;
@@ -1628,6 +1639,8 @@ type _PublicSubpathTypes = [
   ForbiddenBrowserArchitectureFact,
   ProjectFileSourceFact,
   ProjectFileTreeOptions,
+  ServerCommerceAdoptDontInventBehaviorFact,
+  ServerCommerceAdoptDontInventRuntime,
   JisoTestContext<{ cart: string[] }>,
   JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>,
   JisoTestHarnessOptions<{ cart: string[] }>,

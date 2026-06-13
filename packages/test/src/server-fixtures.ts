@@ -16,6 +16,24 @@ export interface ServerMutationLifecycleRuntime {
   };
 }
 
+export interface ServerCommerceAdoptDontInventRuntime {
+  createQueryStore(): unknown;
+  domain(name: string): unknown;
+  errorBoundary(...args: any[]): unknown;
+  guards: any;
+  i18n(locale: string, messages: Record<string, string>): unknown;
+  metaFromQuery(query: unknown, render: (value: any) => Record<string, string>): unknown;
+  mutation(key: string, config: Record<string, unknown>): unknown;
+  query(key: string, config: Record<string, unknown>): unknown;
+  renderMutationEndpointResponse(...args: any[]): Promise<any>;
+  renderPageHints(...args: any[]): any;
+  runMutation(...args: any[]): Promise<any>;
+  session(schema: unknown): { parse(request: unknown): unknown };
+  submitEnhancedMutation: any;
+  t: any;
+  s: any;
+}
+
 export interface ServerDataPlaneRuntime extends ServerMutationLifecycleRuntime {
   csrfField(...args: any[]): string;
   csrfToken(...args: any[]): string;
@@ -69,6 +87,32 @@ export interface ServerCommerceTransactionBehaviorFact {
   successful: {
     db: Record<string, unknown>;
     result: Record<string, unknown>;
+  };
+}
+
+export interface ServerCommerceAdoptDontInventBehaviorFact {
+  fragmentFailure: Record<string, unknown>;
+  graph: {
+    cartPage: Record<string, unknown>;
+    receiptMutation: Record<string, unknown>;
+  };
+  guards: {
+    authenticatedSession: unknown;
+    authedFailure: unknown;
+    firstRateLimitPasses: boolean;
+    secondRateLimitFailure: string | undefined;
+  };
+  pageHints: {
+    missingQueryMessage: string;
+    rendered: Record<string, unknown>;
+    translation: string;
+  };
+  upload: {
+    pendingDuringResponse: string | null;
+    pendingAfterSubmit: string | null;
+    progress: { max: string | null; value: string | null };
+    result: Record<string, unknown>;
+    stored: Record<string, unknown> | undefined;
   };
 }
 
@@ -340,6 +384,234 @@ export async function serverCommerceTransactionBehaviorFact(
     successful: {
       db: successfulDb,
       result: successful,
+    },
+  };
+}
+
+export async function serverCommerceAdoptDontInventBehaviorFact(
+  runtime: ServerCommerceAdoptDontInventRuntime,
+  graph: {
+    mutations: Array<Record<string, unknown>>;
+    pages: Array<Record<string, unknown>>;
+  },
+): Promise<ServerCommerceAdoptDontInventBehaviorFact> {
+  // SPEC.md §13.5 and §16.5: commerce covers platform features without custom client/state seams.
+  const cartPage = graph.pages.find((page) => page.route === '/cart');
+  const receiptMutation = graph.mutations.find((item) => item.key === 'order/receipt');
+
+  const cartQuery = runtime.query('cart', {
+    load: () => ({ count: 1 }),
+    reads: [runtime.domain('cart')],
+  });
+  const cartMeta = runtime.metaFromQuery(cartQuery, (cart: { count: number }) => ({
+    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
+    title: `Jiso Commerce (${cart.count})`,
+  }));
+  const messages = runtime.i18n('en-US', {
+    cartLabel: 'Cart ({count})',
+    productStock: '{stock} in stock',
+  });
+
+  let missingQueryMessage = '';
+  try {
+    runtime.renderPageHints({ meta: cartMeta });
+  } catch (error) {
+    missingQueryMessage = error instanceof Error ? error.message : String(error);
+  }
+
+  const commerceSession = runtime.session(
+    runtime.s.object({
+      id: runtime.s.string(),
+      user: runtime.s.object({ id: runtime.s.string() }),
+    }),
+  );
+  const authenticatedRequest = { session: { id: 's1', user: { id: 'u1' } } };
+  const guarded = runtime.guards.all(
+    runtime.guards.authed(),
+    runtime.guards.rateLimit({ max: 1, per: 'session' }),
+  );
+  const firstRateLimit = await guarded(authenticatedRequest);
+  const secondRateLimit = await guarded(authenticatedRequest);
+
+  const storedObjects = new Map<string, Record<string, unknown>>();
+  const storage = {
+    async get(key: string) {
+      return storedObjects.get(key);
+    },
+    async put(
+      key: string,
+      body: ArrayBuffer | ArrayBufferView | string,
+      options: { contentType?: string; metadata?: unknown } = {},
+    ) {
+      const bytes =
+        body instanceof ArrayBuffer
+          ? new Uint8Array(body)
+          : ArrayBuffer.isView(body)
+            ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
+            : new TextEncoder().encode(String(body));
+      const stored = {
+        body: bytes,
+        contentType: options.contentType,
+        key,
+        metadata: options.metadata,
+        size: bytes.byteLength,
+      };
+      storedObjects.set(key, stored);
+      return stored;
+    },
+    async stat(key: string) {
+      return storedObjects.get(key);
+    },
+    async stream(key: string) {
+      const stored = storedObjects.get(key);
+      return stored ? { ...stored, body: new Blob([stored.body as BlobPart]).stream() } : undefined;
+    },
+  };
+  const uploadReceipt = runtime.mutation('order/receipt', {
+    csrf: false,
+    handler(input: any, request: unknown) {
+      const session = commerceSession.parse(request) as { user: { id: string } };
+      return {
+        orderId: input.orderId,
+        session: session.user.id,
+        storageKey: input.receipt.storage.key,
+      };
+    },
+    input: runtime.s.object({
+      orderId: runtime.s.string(),
+      receipt: runtime.s
+        .file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] })
+        .store({
+          key: (file: { name: string }) => `receipts/${file.name}`,
+          storage,
+        }),
+    }),
+    registry: { touches: [runtime.domain('attachment')] },
+  });
+  const receiptForm = new FormData();
+  receiptForm.set('orderId', 'o1');
+  receiptForm.set('receipt', new Blob(['receipt'], { type: 'application/pdf' }), 'receipt.pdf');
+
+  const uploadResult = await runtime.runMutation(uploadReceipt, receiptForm, authenticatedRequest);
+
+  const element = (initialAttributes: Record<string, string>) => {
+    const attributes = { ...initialAttributes };
+    return {
+      getAttribute(name: string) {
+        return attributes[name] ?? null;
+      },
+      removeAttribute(name: string) {
+        delete attributes[name];
+      },
+      setAttribute(name: string, value: string) {
+        attributes[name] = value;
+      },
+    };
+  };
+  const progressElement = element({ 'fw-upload-progress': '', max: '100', value: '0' });
+  const pendingElement = element({ 'fw-deps': 'order' });
+  const form = {
+    ...element({ 'data-mutation': 'order/receipt', enhance: '', 'fw-deps': 'order' }),
+    action: '/_m/order/receipt',
+    method: 'post',
+    querySelectorAll(selector: string) {
+      return selector === '[fw-upload-progress]' ? [progressElement] : [];
+    },
+  };
+  const mutationRoot = {
+    findFragmentTarget() {
+      return null;
+    },
+    querySelectorAll(selector: string) {
+      return selector === '[fw-deps]' ? [pendingElement] : [];
+    },
+  };
+  let pendingDuringResponse: string | null = null;
+
+  await runtime.submitEnhancedMutation({
+    fetch: async (_url: unknown, options: { onUploadProgress?: (progress: any) => void }) => ({
+      headers: { get: () => null },
+      async text() {
+        options.onUploadProgress?.({ loaded: 32, total: 64 });
+        pendingDuringResponse = pendingElement.getAttribute('fw-pending');
+        return '<fw-query name="receipt">{"ok":true}</fw-query>';
+      },
+    }),
+    form,
+    formData: receiptForm,
+    onUploadProgress(progress: { loaded: number; total?: number }) {
+      const total = progress.total ?? 0;
+      progressElement.setAttribute('max', '100');
+      progressElement.setAttribute('value', String(Math.round((progress.loaded / total) * 100)));
+    },
+    pendingQueries: ['order'],
+    pendingRoot: mutationRoot,
+    root: mutationRoot,
+    store: runtime.createQueryStore(),
+  });
+
+  const fragmentFailure = runtime.mutation('product-grid/reload', {
+    csrf: false,
+    handler(input: unknown) {
+      return input;
+    },
+    input: runtime.s.object({ productId: runtime.s.string() }),
+  });
+  const failureResponse = await runtime.renderMutationEndpointResponse(fragmentFailure, {
+    fragmentRenderers: [
+      runtime.errorBoundary(
+        {
+          render() {
+            throw new Error('fragment failed');
+          },
+          stylesheets: ['/assets/tailwind.css'],
+          target: 'product-grid',
+        },
+        {
+          render(error: Error) {
+            return `<section role="alert">${error.message}</section>`;
+          },
+          target: 'product-grid-error',
+        },
+      ),
+    ],
+    headers: { 'FW-Fragment': 'true', 'FW-Targets': 'product-grid' },
+    rawInput: { productId: 'p1' },
+    request: {},
+  });
+
+  return {
+    fragmentFailure: failureResponse,
+    graph: {
+      cartPage: cartPage ?? {},
+      receiptMutation: receiptMutation ?? {},
+    },
+    guards: {
+      authenticatedSession: commerceSession.parse(authenticatedRequest),
+      authedFailure: await runtime.guards.authed()({ session: null }),
+      firstRateLimitPasses: firstRateLimit === true,
+      secondRateLimitFailure:
+        typeof secondRateLimit === 'object' && secondRateLimit !== null
+          ? String((secondRateLimit as { code?: unknown }).code)
+          : undefined,
+    },
+    pageHints: {
+      missingQueryMessage,
+      rendered: runtime.renderPageHints(
+        { i18n: messages, meta: cartMeta },
+        { queries: { cart: { count: 1 } } },
+      ),
+      translation: runtime.t(messages, 'cartLabel', { count: 1 }),
+    },
+    upload: {
+      pendingAfterSubmit: pendingElement.getAttribute('fw-pending'),
+      pendingDuringResponse,
+      progress: {
+        max: progressElement.getAttribute('max'),
+        value: progressElement.getAttribute('value'),
+      },
+      result: uploadResult,
+      stored: await storage.stat('receipts/receipt.pdf'),
     },
   };
 }

@@ -132,6 +132,7 @@ import {
   optimismCleanupBehaviorFact,
 } from '../packages/test/src/runtime-fixtures.ts';
 import {
+  serverCommerceAdoptDontInventBehaviorFact,
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
@@ -251,6 +252,20 @@ const serverDataPlaneRuntime = {
   route: serverRoute,
   runQuery,
   runRoutePage,
+};
+
+const serverCommerceAdoptDontInventRuntime = {
+  ...serverDataPlaneRuntime,
+  createQueryStore,
+  errorBoundary,
+  guards,
+  i18n,
+  metaFromQuery,
+  renderMutationEndpointResponse,
+  renderPageHints,
+  session,
+  submitEnhancedMutation,
+  t,
 };
 
 const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
@@ -1796,39 +1811,28 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
 });
 
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
-  const element = (initialAttributes) => {
-    const attributes = { ...initialAttributes };
-
-    return {
-      getAttribute(name) {
-        return attributes[name] ?? null;
-      },
-      removeAttribute(name) {
-        delete attributes[name];
-      },
-      setAttribute(name, value) {
-        attributes[name] = value;
-      },
-    };
-  };
   const commerceGraph = await graphFixtureFile(
     projectRootPath,
     'examples/commerce/src/generated/graph.json',
   );
-  const cartPage = commerceGraph.pages.find((page) => page.route === '/cart');
-  const receiptMutation = commerceGraph.mutations.find((item) => item.key === 'order/receipt');
+  const fact = await serverCommerceAdoptDontInventBehaviorFact(
+    serverCommerceAdoptDontInventRuntime,
+    commerceGraph,
+  );
 
-  assert.deepEqual(cartPage.i18n, ['en-US:cartLabel,productStock']);
-  assert.deepEqual(cartPage.modulepreloads, []);
-  assert.equal(cartPage.prefetch, false);
-  assert.deepEqual(cartPage.queries, ['cart', 'productGrid', 'orderHistory']);
-  assert.equal(cartPage.route, '/cart');
-  assert.deepEqual(cartPage.stylesheets, ['/assets/tailwind.css']);
-  assert.deepEqual(cartPage.meta, {
-    description: 'Browse products and checkout with 0 verifiable cart item.',
-    title: 'Jiso Commerce (0)',
+  assert.deepEqual(fact.graph.cartPage, {
+    i18n: ['en-US:cartLabel,productStock'],
+    meta: {
+      description: 'Browse products and checkout with 0 verifiable cart item.',
+      title: 'Jiso Commerce (0)',
+    },
+    modulepreloads: [],
+    prefetch: false,
+    queries: ['cart', 'productGrid', 'orderHistory'],
+    route: '/cart',
+    stylesheets: ['/assets/tailwind.css'],
   });
-  assert.deepEqual(receiptMutation, {
+  assert.deepEqual(fact.graph.receiptMutation, {
     enctype: 'multipart/form-data',
     fileFields: ['receipt'],
     guards: ['authed', 'rateLimit:session'],
@@ -1837,24 +1841,9 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     session: 'commerceSession',
     writes: ['attachment'],
   });
-
-  const cartQuery = query('cart', {
-    load: () => ({ count: 1 }),
-    reads: [domain('cart')],
-  });
-  const cartMeta = metaFromQuery(cartQuery, (cart) => ({
-    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
-    title: `Jiso Commerce (${cart.count})`,
-  }));
-  const messages = i18n('en-US', {
-    cartLabel: 'Cart ({count})',
-    productStock: '{stock} in stock',
-  });
-
-  assert.equal(t(messages, 'cartLabel', { count: 1 }), 'Cart (1)');
-  assert.deepEqual(
-    renderPageHints({ i18n: messages, meta: cartMeta }, { queries: { cart: { count: 1 } } }),
-    {
+  assert.deepEqual(fact.pageHints, {
+    missingQueryMessage: 'Missing query data for route meta: cart',
+    rendered: {
       earlyHints: {},
       html: [
         '<title>Jiso Commerce (1)</title>',
@@ -1863,95 +1852,29 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
         '<script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
       ].join(''),
     },
-  );
-  assert.throws(
-    () => renderPageHints({ meta: cartMeta }),
-    /Missing query data for route meta: cart/,
-  );
-
-  const commerceSession = session(
-    s.object({
-      id: s.string(),
-      user: s.object({ id: s.string() }),
-    }),
-  );
-  const authenticatedRequest = { session: { id: 's1', user: { id: 'u1' } } };
-  const guarded = guards.all(guards.authed(), guards.rateLimit({ max: 1, per: 'session' }));
-
-  assert.deepEqual(commerceSession.parse(authenticatedRequest), {
-    id: 's1',
-    user: { id: 'u1' },
+    translation: 'Cart (1)',
   });
-  assert.equal(await guarded(authenticatedRequest), true);
-  assert.equal((await guarded(authenticatedRequest)).code, 'RATE_LIMITED');
-  assert.deepEqual(await guards.authed()({ session: null }), {
-    auth: 'unauthenticated',
-    code: 'UNAUTHORIZED',
-    payload: {},
-    status: 422,
+  assert.deepEqual(fact.guards, {
+    authenticatedSession: { id: 's1', user: { id: 'u1' } },
+    authedFailure: {
+      auth: 'unauthenticated',
+      code: 'UNAUTHORIZED',
+      payload: {},
+      status: 422,
+    },
+    firstRateLimitPasses: true,
+    secondRateLimitFailure: 'RATE_LIMITED',
   });
-
-  const storedObjects = new Map();
-  const storage = {
-    async get(key) {
-      return storedObjects.get(key);
-    },
-    async put(key, body, options = {}) {
-      const bytes =
-        body instanceof ArrayBuffer
-          ? new Uint8Array(body)
-          : ArrayBuffer.isView(body)
-            ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
-            : new TextEncoder().encode(String(body));
-      const stored = {
-        body: bytes,
-        contentType: options.contentType,
-        key,
-        metadata: options.metadata,
-        size: bytes.byteLength,
-      };
-      storedObjects.set(key, stored);
-      return stored;
-    },
-    async stat(key) {
-      return storedObjects.get(key);
-    },
-    async stream(key) {
-      const stored = storedObjects.get(key);
-      return stored ? { ...stored, body: new Blob([stored.body]).stream() } : undefined;
-    },
-  };
-  const uploadReceipt = mutation('order/receipt', {
-    csrf: false,
-    input: s.object({
-      orderId: s.string(),
-      receipt: s.file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] }).store({
-        key: (file) => `receipts/${file.name}`,
-        storage,
-      }),
-    }),
-    handler(input, request) {
-      return {
-        orderId: input.orderId,
-        session: commerceSession.parse(request).user.id,
-        storageKey: input.receipt.storage.key,
-      };
-    },
-    registry: { touches: [domain('attachment')] },
-  });
-  const receiptForm = new FormData();
-  receiptForm.set('orderId', 'o1');
-  receiptForm.set('receipt', new Blob(['receipt'], { type: 'application/pdf' }), 'receipt.pdf');
-
-  const receiptResult = await runMutation(uploadReceipt, receiptForm, authenticatedRequest);
-  assert.deepEqual(receiptResult, {
+  const receiptFile = fact.upload.result.changes[0].input.receipt.file;
+  assert.equal(receiptFile instanceof Blob, true);
+  assert.deepEqual(fact.upload.result, {
     changes: [
       {
         domain: 'attachment',
         input: {
           orderId: 'o1',
           receipt: {
-            file: receiptForm.get('receipt'),
+            file: receiptFile,
             key: 'receipts/receipt.pdf',
             storage: {
               body: new TextEncoder().encode('receipt'),
@@ -1972,89 +1895,17 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
       storageKey: 'receipts/receipt.pdf',
     },
   });
-  assert.deepEqual(await storage.stat('receipts/receipt.pdf'), {
+  assert.deepEqual(fact.upload.stored, {
     body: new TextEncoder().encode('receipt'),
     contentType: 'application/pdf',
     key: 'receipts/receipt.pdf',
     metadata: { filename: 'receipt.pdf' },
     size: 7,
   });
-
-  const progressElement = element({ 'fw-upload-progress': '', max: '100', value: '0' });
-  const pendingElement = element({ 'fw-deps': 'order' });
-  const form = {
-    ...element({ 'data-mutation': 'order/receipt', enhance: '', 'fw-deps': 'order' }),
-    action: '/_m/order/receipt',
-    method: 'post',
-    querySelectorAll(selector) {
-      return selector === '[fw-upload-progress]' ? [progressElement] : [];
-    },
-  };
-  const mutationRoot = {
-    findFragmentTarget() {
-      return null;
-    },
-    querySelectorAll(selector) {
-      return selector === '[fw-deps]' ? [pendingElement] : [];
-    },
-  };
-
-  await submitEnhancedMutation({
-    fetch: async (_url, options) => ({
-      headers: { get: () => null },
-      async text() {
-        options.onUploadProgress?.({ loaded: 32, total: 64 });
-        assert.equal(pendingElement.getAttribute('fw-pending'), '');
-        return '<fw-query name="receipt">{"ok":true}</fw-query>';
-      },
-    }),
-    form,
-    formData: receiptForm,
-    onUploadProgress(progress) {
-      const total = progress.total ?? 0;
-      progressElement.setAttribute('max', '100');
-      progressElement.setAttribute('value', String(Math.round((progress.loaded / total) * 100)));
-    },
-    pendingQueries: ['order'],
-    pendingRoot: mutationRoot,
-    root: mutationRoot,
-    store: createQueryStore(),
-  });
-  assert.equal(progressElement.getAttribute('value'), '50');
-  assert.equal(progressElement.getAttribute('max'), '100');
-  assert.equal(pendingElement.getAttribute('fw-pending'), null);
-
-  const fragmentFailure = mutation('product-grid/reload', {
-    csrf: false,
-    input: s.object({ productId: s.string() }),
-    handler(input) {
-      return input;
-    },
-  });
-  const failureResponse = await renderMutationEndpointResponse(fragmentFailure, {
-    fragmentRenderers: [
-      errorBoundary(
-        {
-          render() {
-            throw new Error('fragment failed');
-          },
-          stylesheets: ['/assets/tailwind.css'],
-          target: 'product-grid',
-        },
-        {
-          render(error) {
-            return `<section role="alert">${error.message}</section>`;
-          },
-          target: 'product-grid-error',
-        },
-      ),
-    ],
-    headers: { 'FW-Fragment': 'true', 'FW-Targets': 'product-grid' },
-    rawInput: { productId: 'p1' },
-    request: {},
-  });
-
-  assert.deepEqual(failureResponse, {
+  assert.deepEqual(fact.upload.progress, { max: '100', value: '50' });
+  assert.equal(fact.upload.pendingDuringResponse, '');
+  assert.equal(fact.upload.pendingAfterSubmit, null);
+  assert.deepEqual(fact.fragmentFailure, {
     body: '<fw-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></fw-fragment>',
     headers: {
       'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
