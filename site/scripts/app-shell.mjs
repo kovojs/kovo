@@ -133,11 +133,47 @@ function registerPublicClientModules(clientModules, publicDir) {
 }
 
 function rewriteClientModuleHrefs(html, moduleHrefs) {
-  let rewritten = html;
-  for (const [pathName, href] of moduleHrefs) {
-    rewritten = rewritten.replaceAll(pathName, href);
+  return html.replace(/<[^>]+>/g, (tag) => rewriteClientModuleTagHrefs(tag, moduleHrefs));
+}
+
+function rewriteClientModuleTagHrefs(tag, moduleHrefs) {
+  if (/\son:[\w:-]+="/.test(tag)) {
+    return rewriteClientModuleAttribute(tag, /\son:[\w:-]+="([^"]+)"/g, moduleHrefs);
   }
-  return rewritten;
+
+  if (isModuleScriptTag(tag)) {
+    return rewriteClientModuleAttribute(tag, /\ssrc="([^"]+)"/g, moduleHrefs);
+  }
+
+  if (isModulepreloadLinkTag(tag)) {
+    return rewriteClientModuleAttribute(tag, /\shref="([^"]+)"/g, moduleHrefs);
+  }
+
+  return tag;
+}
+
+function rewriteClientModuleAttribute(tag, attributePattern, moduleHrefs) {
+  return tag.replace(attributePattern, (attribute, value) => {
+    const rewritten = rewriteClientModuleValue(value, moduleHrefs);
+    return attribute.replace(value, rewritten);
+  });
+}
+
+function rewriteClientModuleValue(value, moduleHrefs) {
+  for (const [pathName, href] of moduleHrefs) {
+    if (value === pathName || value.startsWith(`${pathName}#`)) {
+      return `${href}${value.slice(pathName.length)}`;
+    }
+  }
+  return value;
+}
+
+function isModuleScriptTag(tag) {
+  return /^<script\b/i.test(tag) && /\stype="module"/i.test(tag);
+}
+
+function isModulepreloadLinkTag(tag) {
+  return /^<link\b/i.test(tag) && /\srel="[^"]*\bmodulepreload\b[^"]*"/i.test(tag);
 }
 
 function escapePreClientModuleText(html) {

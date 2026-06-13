@@ -34,6 +34,11 @@ describe('site app-shell export adoption', () => {
         '<button on:click="/c/search.js#open">Search</button>',
         '<button on:click="/c/theme.js#toggle">Theme</button>',
         '<button class="code-copy" on:click="/c/code.js#copy">Copy</button>',
+        '<script type="module" src="/c/search.js"></script>',
+        '<link rel="modulepreload" href="/c/theme.js">',
+        '<script src="/c/code.js"></script>',
+        '<a href="/c/search.js">source example</a>',
+        '<p>Docs mention /c/theme.js as a static-host path.</p>',
         '<pre><code>&#x3C;button on:click="/c/example-only.js#copy">Copy&#x3C;/button></code></pre>',
         '</body></html>',
       ].join(''),
@@ -93,6 +98,11 @@ describe('site app-shell export adoption', () => {
     expect(searchModuleHref).toBeTruthy();
     expect(themeModuleHref).toBeTruthy();
     expect(codeModuleHref).toBeTruthy();
+    expect(shellHtml).toContain(`<script type="module" src="${searchModuleHref}"></script>`);
+    expect(shellHtml).toContain(`<link rel="modulepreload" href="${themeModuleHref}">`);
+    expect(shellHtml).toContain('<script src="/c/code.js"></script>');
+    expect(shellHtml).toContain('<a href="/c/search.js">source example</a>');
+    expect(shellHtml).toContain('Docs mention /c/theme.js as a static-host path.');
     expect(shellHtml).toContain('on:click="&#47;c/example-only.js#copy"');
     await expect(
       handler(new Request(`https://jiso.test${searchModuleHref}`)).then((response) =>
@@ -120,6 +130,11 @@ describe('site app-shell export adoption', () => {
     expect(exportedIndex).toContain('/c/search.js?v=site-r7-');
     expect(exportedIndex).toContain('/c/theme.js?v=site-r7-');
     expect(exportedIndex).toContain('/c/code.js?v=site-r7-');
+    expect(exportedIndex).toContain(`<script type="module" src="${searchModuleHref}"></script>`);
+    expect(exportedIndex).toContain(`<link rel="modulepreload" href="${themeModuleHref}">`);
+    expect(exportedIndex).toContain('<script src="/c/code.js"></script>');
+    expect(exportedIndex).toContain('<a href="/c/search.js">source example</a>');
+    expect(exportedIndex).toContain('Docs mention /c/theme.js as a static-host path.');
     expect(exportedIndex).toContain('on:click="&#47;c/example-only.js#copy"');
     expect(exportedInstallation).toContain('<h1>Installation</h1>');
     expect(result.clientModules.map((artifact) => artifact.path)).toEqual([

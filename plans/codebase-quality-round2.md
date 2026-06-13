@@ -189,6 +189,15 @@ store mechanics inline.
 
 Latest evidence:
 
+- Phase 5 docs-site client-module rewrite boundary slice:
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `site/scripts/app-shell.mjs` now versions public `/c/` client
+  module URLs only on SPEC §4.3/SPEC §9.5 module surfaces (`on:*`, module scripts, and
+  modulepreload links), and `site/scripts/app-shell.test.mjs` proves docs app-shell replay/static
+  export still copies immutable modules while ordinary docs links, text, non-module scripts, and
+  escaped examples remain unversioned source text.
 - Phase 5 Vite dev client-module predicate boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

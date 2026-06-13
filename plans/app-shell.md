@@ -135,6 +135,21 @@ Implemented areas:
 - Vite dev middleware now applies the SPEC §9.5 immutable `/c/` reservation before caller-provided
   ownership predicates, so unversioned client-module URLs keep falling through to Vite's static
   asset stack instead of being claimed by a compatibility predicate.
+- The docs site app-shell adoption path now rewrites public `/c/` client modules only on declared
+  SPEC §4.3/SPEC §9.5 module surfaces (`on:*`, module scripts, and modulepreload links), leaving
+  ordinary docs links, text, non-module scripts, and escaped examples as source text while static
+  export still copies the referenced immutable modules.
+
+Round325 docs-site client-module rewrite boundary evidence:
+
+- `site/scripts/app-shell.mjs` replaces the previous raw `/c/` string rewrite with tag/attribute
+  surface rewriting for handler refs, module scripts, and modulepreload links.
+- `site/scripts/app-shell.test.mjs` proves docs app-shell replay and static export version module
+  surfaces while preserving ordinary `/c/` links/text/non-module scripts and escaped examples.
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round322 Vite dev client-module predicate boundary evidence:
 
