@@ -56,8 +56,10 @@ import {
   pnpmFilterTestCommands,
   pnpmRunScriptNames,
   requiredVpRunTaskName,
+  vitePlusAcceptanceTaskFacts,
+  vitePlusTaskInputFacts,
+  vitePlusTaskInputPatternEndingWith,
   vitestTaskCommand,
-  workflowVpRunTaskNames,
 } from '../packages/test/src/command-fixtures.ts';
 import { viteDiagnosticMessageFacts } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
@@ -5977,27 +5979,27 @@ export const CartTotal = component('cart-total', {
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts.acceptance);
-  const ciTaskNames = workflowVpRunTaskNames(ciWorkflow);
-  const tasks = (await loadProjectVitePlusConfig()).run.tasks;
-  const browserTaskName = requiredVpRunTaskName('test:browser', packageJson);
-  const browserTask = tasks[browserTaskName];
-  assert.ok(browserTask, `${browserTaskName} task is defined`);
-  const { configPath } = vitestTaskCommand(browserTask.command);
-  const browserAcceptanceInput = browserTask.input.find((entry) =>
-    entry.pattern?.endsWith('/browser-acceptance.mjs'),
+  const browserGate = vitePlusAcceptanceTaskFacts({
+    ciWorkflowSource: ciWorkflow,
+    packageJson,
+    scriptName: 'test:browser',
+    viteConfig: await loadProjectVitePlusConfig(),
+  });
+  const { configPath } = vitestTaskCommand(browserGate.task.command);
+  const browserAcceptancePattern = vitePlusTaskInputPatternEndingWith(
+    browserGate.task,
+    '/browser-acceptance.mjs',
   );
-  assert.ok(browserAcceptanceInput, `${browserTaskName} task watches browser acceptance metadata`);
   const { browserSuiteAcceptance } = await import(
-    new URL(`../${browserAcceptanceInput.pattern}`, import.meta.url).href
+    new URL(`../${browserAcceptancePattern}`, import.meta.url).href
   );
 
-  assert.equal(acceptanceScripts.includes('test:browser'), true);
-  assert.equal(ciTaskNames.includes(browserTaskName), true);
-  assert.deepEqual(browserTask.input, [
+  assert.equal(browserGate.presentInAcceptance, true);
+  assert.equal(browserGate.presentInCi, true);
+  assert.deepEqual(vitePlusTaskInputFacts(browserGate.task), [
     { auto: true },
     { base: 'workspace', pattern: configPath },
-    { base: 'workspace', pattern: browserAcceptanceInput.pattern },
+    { base: 'workspace', pattern: browserAcceptancePattern },
     { base: 'workspace', pattern: browserSuiteAcceptance.include[0] },
   ]);
   assert.deepEqual(browserSuiteAcceptance, {
@@ -6011,24 +6013,25 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts.acceptance);
-  const ciTaskNames = workflowVpRunTaskNames(ciWorkflow);
-  const tasks = (await loadProjectVitePlusConfig()).run.tasks;
-  const perfTaskName = requiredVpRunTaskName('test:p10-perf', packageJson);
-  const perfTask = tasks[perfTaskName];
-  assert.ok(perfTask, `${perfTaskName} task is defined`);
-  const { modulePath } = nodeTaskCommand(perfTask.command);
+  const perfGate = vitePlusAcceptanceTaskFacts({
+    ciWorkflowSource: ciWorkflow,
+    packageJson,
+    scriptName: 'test:p10-perf',
+    viteConfig: await loadProjectVitePlusConfig(),
+  });
+  const { modulePath } = nodeTaskCommand(perfGate.task.command);
   const { p10PerfAcceptance, runP10PerfAcceptance } = await import(
     new URL(`../${modulePath}`, import.meta.url).href
   );
 
   assert.equal(typeof runP10PerfAcceptance, 'function');
-  assert.equal(acceptanceScripts.includes('test:p10-perf'), true);
-  assertOrderedItems(acceptanceScripts, 'check:build', 'test:p10-perf');
-  assertOrderedItems(acceptanceScripts, 'test:p10-perf', 'check:fw');
-  assertOrderedItems(ciTaskNames, 'build', perfTaskName);
-  assertOrderedItems(ciTaskNames, perfTaskName, 'fw-check');
-  assert.deepEqual(perfTask.input, [
+  assert.equal(perfGate.presentInAcceptance, true);
+  assertOrderedItems(perfGate.acceptanceScripts, 'check:build', 'test:p10-perf');
+  assertOrderedItems(perfGate.acceptanceScripts, 'test:p10-perf', 'check:fw');
+  assertOrderedItems(perfGate.ciTaskNames, 'build', perfGate.taskName);
+  assertOrderedItems(perfGate.ciTaskNames, perfGate.taskName, 'fw-check');
+  assert.equal(perfGate.presentInCi, true);
+  assert.deepEqual(vitePlusTaskInputFacts(perfGate.task), [
     { auto: true },
     { base: 'workspace', pattern: modulePath },
     { base: 'workspace', pattern: 'dist/**' },

@@ -264,6 +264,12 @@ Closed evidence so far:
   instead of monolithic template source reads and local dev-dependency membership checks.
   Same-session evidence: `pnpm exec vitest --run packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts`
   and `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`.
+- Round100 harness evidence 2026-06-13: browser and perf acceptance gates in
+  `tests/fw-check.node.mjs` now consume `@jiso/test/command-fixtures` acceptance-task and
+  Vite-task input facts instead of inline package/workflow/task membership checks.
+  Same-session evidence: `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`,
+  `pnpm exec vp run build`, and
+  `node --test --test-name-pattern "framework-owned browser suite is wired into acceptance|P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`.
 
 Open:
 

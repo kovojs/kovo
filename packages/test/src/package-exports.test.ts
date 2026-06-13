@@ -24,6 +24,9 @@ import {
   pnpmRunScriptNames,
   requiredVpRunTaskName,
   runCommandSequenceSync,
+  vitePlusAcceptanceTaskFacts,
+  vitePlusTaskInputFacts,
+  vitePlusTaskInputPatternEndingWith,
   vitestTaskCommand,
   vpRunTaskName,
   workflowVpRunTaskNames,
@@ -31,6 +34,8 @@ import {
   type CommandInvocation,
   type NodeTaskCommand,
   type PnpmFilterTestCommand,
+  type VitePlusAcceptanceTaskFacts,
+  type VitePlusTaskInputFact,
   type VitestTaskCommand,
   type VitePlusConfig,
   type VitePlusTask,
@@ -354,6 +359,9 @@ describe('@jiso/test package subpath exports', () => {
     expect(workflowVpRunTaskNames('steps:\n  - run: vp run fw-check')).toEqual(['fw-check']);
     expect(() => assertOrderedItems(['build', 'fw-check'], 'build', 'fw-check')).not.toThrow();
     expect(loadVitePlusConfig).toBeTypeOf('function');
+    expect(vitePlusAcceptanceTaskFacts).toBeTypeOf('function');
+    expect(vitePlusTaskInputFacts).toBeTypeOf('function');
+    expect(vitePlusTaskInputPatternEndingWith).toBeTypeOf('function');
     expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
       summary: { html: '0' },
     });
@@ -403,6 +411,8 @@ type _PublicSubpathTypes = [
   CommandInvocation,
   NodeTaskCommand,
   PnpmFilterTestCommand,
+  VitePlusAcceptanceTaskFacts,
+  VitePlusTaskInputFact,
   VitestTaskCommand,
   VitePlusConfig,
   VitePlusTask,

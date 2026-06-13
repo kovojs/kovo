@@ -40,6 +40,22 @@ export interface VitePlusConfig {
   };
 }
 
+export interface VitePlusTaskInputFact {
+  auto?: boolean;
+  base?: string;
+  pattern?: string;
+}
+
+export interface VitePlusAcceptanceTaskFacts {
+  acceptanceScripts: readonly string[];
+  ciTaskNames: readonly string[];
+  presentInAcceptance: boolean;
+  presentInCi: boolean;
+  scriptName: string;
+  task: VitePlusTask;
+  taskName: string;
+}
+
 function requireString(value: unknown, message: string): string {
   if (typeof value !== 'string') assert.fail(message);
   return value;
@@ -104,6 +120,73 @@ export function assertOrderedItems(items: readonly string[], before: string, aft
   assert.notEqual(beforeIndex, -1, `${before} is present`);
   assert.notEqual(afterIndex, -1, `${after} is present`);
   assert.ok(beforeIndex < afterIndex, `${before} precedes ${after}`);
+}
+
+export function vitePlusAcceptanceTaskFacts(options: {
+  ciWorkflowSource: string;
+  packageJson: { scripts?: Record<string, unknown> };
+  scriptName: string;
+  viteConfig: VitePlusConfig;
+}): VitePlusAcceptanceTaskFacts {
+  const acceptanceScripts = pnpmRunScriptNames(options.packageJson.scripts?.acceptance);
+  const ciTaskNames = workflowVpRunTaskNames(options.ciWorkflowSource);
+  const taskName = requiredVpRunTaskName(options.scriptName, options.packageJson);
+  const task = options.viteConfig.run?.tasks?.[taskName];
+  assert.ok(task, `${taskName} task is defined`);
+
+  return {
+    acceptanceScripts,
+    ciTaskNames,
+    presentInAcceptance: acceptanceScripts.includes(options.scriptName),
+    presentInCi: ciTaskNames.includes(taskName),
+    scriptName: options.scriptName,
+    task,
+    taskName,
+  };
+}
+
+export function vitePlusTaskInputFacts(task: VitePlusTask): VitePlusTaskInputFact[] {
+  assert.equal(Array.isArray(task.input), true, 'Vite+ task input is an array');
+  const inputEntries = task.input as unknown[];
+
+  return inputEntries.map((entry: unknown, index: number) => {
+    assert.equal(typeof entry, 'object', `Vite+ task input ${index} is an object`);
+    assert.notEqual(entry, null, `Vite+ task input ${index} is an object`);
+    const input = entry as Record<string, unknown>;
+    const fact: VitePlusTaskInputFact = {};
+
+    if (Object.hasOwn(input, 'auto')) {
+      const auto = input.auto;
+      if (typeof auto !== 'boolean') {
+        assert.fail(`Vite+ task input ${index} auto is boolean`);
+      }
+      fact.auto = auto;
+    }
+    if (Object.hasOwn(input, 'base')) {
+      const base = input.base;
+      if (typeof base !== 'string') {
+        assert.fail(`Vite+ task input ${index} base is string`);
+      }
+      fact.base = base;
+    }
+    if (Object.hasOwn(input, 'pattern')) {
+      const pattern = input.pattern;
+      if (typeof pattern !== 'string') {
+        assert.fail(`Vite+ task input ${index} pattern is string`);
+      }
+      fact.pattern = pattern;
+    }
+
+    return fact;
+  });
+}
+
+export function vitePlusTaskInputPatternEndingWith(task: VitePlusTask, suffix: string): string {
+  const pattern = vitePlusTaskInputFacts(task).find((entry) =>
+    entry.pattern?.endsWith(suffix),
+  )?.pattern;
+  assert.ok(pattern, `Vite+ task watches ${suffix}`);
+  return pattern;
 }
 
 export async function loadVitePlusConfig(source: string): Promise<VitePlusConfig> {

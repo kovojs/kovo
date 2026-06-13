@@ -10,6 +10,9 @@ import {
   pnpmRunScriptName,
   pnpmRunScriptNames,
   requiredVpRunTaskName,
+  vitePlusAcceptanceTaskFacts,
+  vitePlusTaskInputFacts,
+  vitePlusTaskInputPatternEndingWith,
   vitestTaskCommand,
   vpRunTaskName,
   workflowVpRunTaskNames,
@@ -138,5 +141,58 @@ describe('@jiso/test command fixtures', () => {
       input: [{ pattern: 'src/**/*', base: 'workspace' }],
       output: ['graph.json'],
     });
+  });
+
+  it('collects acceptance task facts from package scripts, CI, and Vite+ config', () => {
+    const packageJson = {
+      scripts: {
+        acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:fw',
+        'test:browser': 'vp run browser',
+      },
+    };
+    const ciWorkflowSource = [
+      'steps:',
+      '  - run: vp run build',
+      '  - run: vp run browser',
+      '  - run: vp run fw-check',
+    ].join('\n');
+    const viteConfig = {
+      run: {
+        tasks: {
+          browser: {
+            command: 'vitest --run --config vitest.browser.config.ts',
+            input: [
+              { auto: true },
+              { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+              { base: 'workspace', pattern: 'scripts/browser-acceptance.mjs' },
+            ],
+          },
+        },
+      },
+    };
+
+    const facts = vitePlusAcceptanceTaskFacts({
+      ciWorkflowSource,
+      packageJson,
+      scriptName: 'test:browser',
+      viteConfig,
+    });
+
+    expect(facts).toMatchObject({
+      acceptanceScripts: ['check:build', 'test:browser', 'check:fw'],
+      ciTaskNames: ['build', 'browser', 'fw-check'],
+      presentInAcceptance: true,
+      presentInCi: true,
+      scriptName: 'test:browser',
+      taskName: 'browser',
+    });
+    expect(vitePlusTaskInputFacts(facts.task)).toEqual([
+      { auto: true },
+      { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+      { base: 'workspace', pattern: 'scripts/browser-acceptance.mjs' },
+    ]);
+    expect(vitePlusTaskInputPatternEndingWith(facts.task, '/browser-acceptance.mjs')).toBe(
+      'scripts/browser-acceptance.mjs',
+    );
   });
 });
