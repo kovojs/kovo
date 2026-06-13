@@ -102,6 +102,78 @@ describe('server createApp request shell', () => {
     await expect(response.text()).resolves.toBe('<main>404:/missing</main>');
   });
 
+  it('reports failing error shells and falls back to stable no-internals documents', async () => {
+    const shellError = new Error('private shell detail');
+    const onError = vi.fn();
+    const handler = createRequestHandler(
+      createApp({
+        errorShells: {
+          notFound() {
+            throw shellError;
+          },
+        },
+        onError,
+      }),
+    );
+    const request = new Request('https://example.test/missing?from=test');
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(404);
+    const body = await response.text();
+    expect(body).toContain('<h1>Not Found</h1>');
+    expect(body).not.toContain('private shell detail');
+    expect(onError).toHaveBeenCalledWith(shellError, {
+      operation: 'error-shell',
+      request,
+      status: 404,
+      url: '/missing?from=test',
+    });
+  });
+
+  it('keeps app request failures private when the configured 500 shell also fails', async () => {
+    const endpointError = new Error('private endpoint detail');
+    const shellError = new Error('private 500 shell detail');
+    const onError = vi.fn();
+    const statusEndpoint = endpoint('/status', {
+      handler() {
+        throw endpointError;
+      },
+      method: 'GET',
+    });
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [statusEndpoint],
+        errorShells: {
+          serverError() {
+            throw shellError;
+          },
+        },
+        onError,
+      }),
+    );
+    const request = new Request('https://example.test/status');
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.text();
+    expect(body).toContain('<h1>Server Error</h1>');
+    expect(body).not.toContain('private endpoint detail');
+    expect(body).not.toContain('private 500 shell detail');
+    expect(onError).toHaveBeenCalledWith(endpointError, {
+      operation: 'app-request',
+      request,
+      url: '/status',
+    });
+    expect(onError).toHaveBeenCalledWith(shellError, {
+      operation: 'error-shell',
+      request,
+      status: 500,
+      url: '/status',
+    });
+  });
+
   it('dispatches endpoints before routes and strips ambient session from endpoint requests', async () => {
     const statusEndpoint = endpoint('/status', {
       handler(request) {

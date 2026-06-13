@@ -3,6 +3,7 @@ export interface ServerErrorDiagnosticContext {
   operation:
     | 'app-request'
     | 'client-module'
+    | 'error-shell'
     | 'mutation-handler'
     | 'mutation-render'
     | 'no-js-mutation-handler'
@@ -12,6 +13,7 @@ export interface ServerErrorDiagnosticContext {
   queryKey?: string;
   request?: unknown;
   routePath?: string;
+  status?: 403 | 404 | 500;
   targets?: readonly string[];
   url?: string;
 }

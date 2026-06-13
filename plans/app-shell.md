@@ -301,6 +301,16 @@ Round99 app-shell Vite client-module output atomicity evidence:
 - `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round100 app-shell error diagnostic seam evidence:
+
+- App-configured error shells now report renderer failures through the `error-shell` `onError`
+  context and fall back to the stable 404/500 document instead of letting shell internals escape
+  the public `Request -> Response` handler (SPEC §9.2/§9.5).
+- `pnpm exec vitest --run packages/server/src/app.test.ts`
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-replay.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:

@@ -212,13 +212,31 @@ async function renderConfiguredError(
         ? app.errorShells.notFound
         : app.errorShells.serverError;
 
-  if (renderer) return renderer({ request, status });
+  if (renderer) {
+    try {
+      return await renderer({ request, status });
+    } catch (error) {
+      reportServerError(app.onError, error, {
+        operation: 'error-shell',
+        request,
+        status,
+        url: requestPathAndSearch(request),
+      });
+    }
+  }
 
+  // SPEC §9.2/§9.5: error shells are app config, but unexpected failures
+  // still fall back to a stable no-internals document.
   return renderErrorDocument({
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     status,
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
   });
+}
+
+function requestPathAndSearch(request: Request): string {
+  const url = new URL(request.url);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function methodNotAllowedResponse(request: Request, allowedMethods: readonly string[]): Response {

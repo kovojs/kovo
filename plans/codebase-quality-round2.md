@@ -82,6 +82,12 @@ with same-session file/test evidence.
       `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
       `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
       and `git diff --check`.
+      Round100 evidence 2026-06-13: app-configured error shell failures now flow through a
+      distinct `error-shell` `onError` diagnostic context and then fall back to the stable
+      no-internals document, narrowing the server error seam at the app request boundary.
+      Same-session evidence: `pnpm exec vitest --run packages/server/src/app.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, and
+      `pnpm exec tsc --noEmit --pretty false`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;
