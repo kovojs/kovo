@@ -1,3 +1,5 @@
+import { readdir, readFile } from 'node:fs/promises';
+
 export interface WireTranscriptRequest {
   body: string;
   headers: Record<string, string>;
@@ -68,8 +70,54 @@ export interface WireFixtureContentTypesFact {
   name: string;
 }
 
+export const generatedWireResponseBodies: Record<string, readonly string[]> = {
+  'defer-stream.http': [
+    `<!doctype html>
+<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>
+
+--jiso-boundary
+<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
+<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
+<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>
+<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section></fw-fragment>
+--jiso-boundary--
+</body></html>
+`,
+  ],
+  'enhanced-mutation.http': [
+    `<fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>
+<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></fw-fragment>
+<fw-fragment target="recommendations"><section fw-c="recommendations" fw-deps="product:p1"></section></fw-fragment>
+`,
+  ],
+  'no-js-post-redirect-get.http': [
+    '',
+    `<!doctype html>
+<html><body><script type="application/json" fw-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>
+`,
+  ],
+  'typed-read.http': ['<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>\n'],
+  'validation-422-fragment.http': [
+    `<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></fw-fragment>
+`,
+  ],
+};
+
 const requestMarker = '>>> REQUEST';
 const responseMarker = '<<< RESPONSE';
+
+export async function loadWireFixtureSources(fixtureDirectory: URL): Promise<WireFixtureSource[]> {
+  const fixtureNames = (await readdir(fixtureDirectory))
+    .filter((name) => name.endsWith('.http'))
+    .sort();
+
+  return Promise.all(
+    fixtureNames.map(async (name) => ({
+      name,
+      source: await readFile(new URL(name, fixtureDirectory), 'utf8'),
+    })),
+  );
+}
 
 export function parseWireFixture(source: string): WireFixture {
   const title = parseWireFixtureTitle(source);
@@ -153,6 +201,24 @@ export function wireResponseBodyPinFacts(
       };
     });
   });
+}
+
+export function wireFixtureResponseBody(
+  sources: readonly WireFixtureSource[],
+  name: string,
+  responseIndex: number,
+): string {
+  const source = sources.find((candidate) => candidate.name === name)?.source;
+  if (source === undefined) {
+    throw new Error(`Wire fixture is present: ${name}`);
+  }
+
+  const response = parseWireResponses(source)[responseIndex - 1];
+  if (!response) {
+    throw new Error(`Wire fixture ${name} has response ${responseIndex}`);
+  }
+
+  return response.body;
 }
 
 export function wireResponseMetadataFacts(

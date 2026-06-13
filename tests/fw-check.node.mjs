@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -156,9 +156,11 @@ import {
   viteTransformElementFact,
 } from '../packages/test/src/vite-fixtures.ts';
 import {
-  parseWireResponses,
+  generatedWireResponseBodies,
+  loadWireFixtureSources,
   wireFixtureContentTypesFacts,
   wireFixturePresenceFacts,
+  wireFixtureResponseBody,
   wireFixturesWithContentType,
   wireFragmentModeFacts,
   wireResponseBodyPinFacts,
@@ -199,56 +201,9 @@ import {
 } from '../dist/server/src/index.mjs';
 import { fragmentTarget, href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
-const generatedWireBodies = {
-  'defer-stream.http': [
-    `<!doctype html>
-<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>
-
---jiso-boundary
-<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
-<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
-<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>
-<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section></fw-fragment>
---jiso-boundary--
-</body></html>
-`,
-  ],
-  'enhanced-mutation.http': [
-    `<fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>
-<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></fw-fragment>
-<fw-fragment target="recommendations"><section fw-c="recommendations" fw-deps="product:p1"></section></fw-fragment>
-`,
-  ],
-  'no-js-post-redirect-get.http': [
-    '',
-    `<!doctype html>
-<html><body><script type="application/json" fw-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>
-`,
-  ],
-  'typed-read.http': ['<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>\n'],
-  'validation-422-fragment.http': [
-    `<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></fw-fragment>
-`,
-  ],
-};
-
-const readWireFixture = async (name) =>
-  readFile(new URL(`../fixtures/wire/${name}`, import.meta.url), 'utf8');
-
-const loadWireFixtureSources = async () => {
-  const fixtureNames = (await readdir(new URL('../fixtures/wire/', import.meta.url)))
-    .filter((name) => name.endsWith('.http'))
-    .sort();
-
-  return Promise.all(
-    fixtureNames.map(async (name) => ({
-      name,
-      source: await readWireFixture(name),
-    })),
-  );
-};
-
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const loadProjectWireFixtureSources = () =>
+  loadWireFixtureSources(new URL('../fixtures/wire/', import.meta.url));
 const execFileAsync = promisify(execFile);
 
 const runCliCommand = async (args) => {
@@ -327,7 +282,7 @@ void test('fw-check wrapper explains the production build prerequisite', () => {
 });
 
 void test('Phase 0 wire fixtures are present and explicit', async () => {
-  const fixtureSources = await loadWireFixtureSources();
+  const fixtureSources = await loadProjectWireFixtureSources();
 
   assert.deepEqual(
     fixtureSources.map(({ name }) => name),
@@ -385,9 +340,9 @@ void test('Phase 0 wire fixtures are present and explicit', async () => {
 });
 
 void test('Phase 0 wire fixture response bodies match generated contracts byte-for-byte', async () => {
-  const fixtureSources = await loadWireFixtureSources();
+  const fixtureSources = await loadProjectWireFixtureSources();
   assert.deepEqual(
-    wireResponseBodyPinFacts(fixtureSources, generatedWireBodies).map(
+    wireResponseBodyPinFacts(fixtureSources, generatedWireResponseBodies).map(
       ({ matches, name, responseIndex }) => ({
         matches,
         name,
@@ -406,7 +361,7 @@ void test('Phase 0 wire fixture response bodies match generated contracts byte-f
 });
 
 void test('Phase 0 wire fixture responses keep stable protocol metadata', async () => {
-  assert.deepEqual(wireResponseMetadataFacts(await loadWireFixtureSources()), [
+  assert.deepEqual(wireResponseMetadataFacts(await loadProjectWireFixtureSources()), [
     {
       headers: {
         'content-type': 'text/html; charset=utf-8',
@@ -463,7 +418,7 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
 });
 
 void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
-  const fixtureSources = await loadWireFixtureSources();
+  const fixtureSources = await loadProjectWireFixtureSources();
 
   assert.deepEqual(wireFixtureContentTypesFacts(fixtureSources), [
     { contentTypes: ['text/html; charset=utf-8'], name: 'defer-stream.http' },
@@ -4760,7 +4715,11 @@ export const CartBadge = component('cart-badge', {
     },
   );
 
-  const fixtureBody = parseWireResponses(await readWireFixture('defer-stream.http'))[0].body;
+  const fixtureBody = wireFixtureResponseBody(
+    await loadProjectWireFixtureSources(),
+    'defer-stream.http',
+    1,
+  );
   assert.deepEqual(
     generatedWireDeferredBehaviorFact(fixtureBody, {
       applyCompiledQueryUpdatePlan,

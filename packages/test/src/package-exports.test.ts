@@ -403,10 +403,13 @@ import {
   type ViteTransformElementFact,
 } from '@jiso/test/vite-fixtures';
 import {
+  generatedWireResponseBodies,
+  loadWireFixtureSources,
   parseWireFixture,
   parseWireResponses,
   wireFixtureContentTypesFacts,
   wireFixturePresenceFacts,
+  wireFixtureResponseBody,
   wireFixturesWithContentType,
   wireFragmentModeFacts,
   wireResponseBodyPinFacts,
@@ -1401,6 +1404,11 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       wireResponseBodyPinFacts(wireSources, { 'cart-read.http': ['<main>Cart</main>'] }),
     ).toHaveProperty('0.matches', true);
+    expect(generatedWireResponseBodies['typed-read.http']).toEqual([
+      '<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>\n',
+    ]);
+    expect(loadWireFixtureSources).toBeTypeOf('function');
+    expect(wireFixtureResponseBody(wireSources, 'cart-read.http', 1)).toBe('<main>Cart</main>');
     expect(wireResponseMetadataFacts(wireSources)).toMatchObject([
       { headers: { 'content-type': 'text/html; charset=utf-8' } },
     ]);

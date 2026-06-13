@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  generatedWireResponseBodies,
+  loadWireFixtureSources,
   parseWireFixture,
   parseWireResponses,
   parseWireTranscript,
   wireFixtureContentTypesFacts,
   wireFixturePresenceFacts,
+  wireFixtureResponseBody,
   wireFixturesWithContentType,
   wireFragmentModeFacts,
   wireResponseBodyPinFacts,
@@ -115,6 +118,41 @@ describe('@jiso/test wire fixture seam', () => {
     expect(parseWireResponses(fixture).map((response) => response.body)).toEqual([
       '<fw-fragment target="cart"></fw-fragment>',
       '',
+    ]);
+    expect(wireFixtureResponseBody(sources, 'enhanced-mutation.http', 1)).toBe(
+      '<fw-fragment target="cart"></fw-fragment>',
+    );
+    expect(() => wireFixtureResponseBody(sources, 'missing.http', 1)).toThrow(
+      'Wire fixture is present: missing.http',
+    );
+    expect(() => wireFixtureResponseBody(sources, 'enhanced-mutation.http', 3)).toThrow(
+      'Wire fixture enhanced-mutation.http has response 3',
+    );
+  });
+
+  it('loads sorted .http fixture sources from a fixture directory URL', async () => {
+    const fixtures = await loadWireFixtureSources(
+      new URL('../../../fixtures/wire/', import.meta.url),
+    );
+
+    expect(fixtures.map(({ name }) => name)).toEqual([
+      'defer-stream.http',
+      'enhanced-mutation.http',
+      'no-js-post-redirect-get.http',
+      'typed-read.http',
+      'validation-422-fragment.http',
+    ]);
+    expect(
+      wireResponseBodyPinFacts(fixtures, generatedWireResponseBodies).map(
+        ({ matches, name, responseIndex }) => ({ matches, name, responseIndex }),
+      ),
+    ).toEqual([
+      { matches: true, name: 'defer-stream.http', responseIndex: 1 },
+      { matches: true, name: 'enhanced-mutation.http', responseIndex: 1 },
+      { matches: true, name: 'no-js-post-redirect-get.http', responseIndex: 1 },
+      { matches: true, name: 'no-js-post-redirect-get.http', responseIndex: 2 },
+      { matches: true, name: 'typed-read.http', responseIndex: 1 },
+      { matches: true, name: 'validation-422-fragment.http', responseIndex: 1 },
     ]);
   });
 

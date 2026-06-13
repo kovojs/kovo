@@ -140,6 +140,9 @@ Shared markdown fixtures now also own the legibility-study and prelaunch-checkli
 projections, including pending external evidence, dated ledger review facts, local checklist
 coverage, and packet-readiness counts, so the P10 fw-check gate no longer assembles those
 markdown tables inline.
+Shared wire fixtures now own sorted `.http` fixture source loading, the intentionally byte-for-byte
+generated response body pins, and named response-body selection, so the Phase 0 and D3 fw-check
+wire cases no longer keep fixture directory reads or generated wire pin maps in the monolith.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -159,6 +162,14 @@ Latest evidence:
   `site/scripts/app-shell.mjs` now validates the focused SPEC §9.5 docs server API before binding
   routes, and `site/scripts/app-shell.test.mjs` proves incomplete injection fails before export
   replay while the docs static export adoption path remains green.
+- Wire fixture package seam slice:
+  `pnpm exec vitest --run packages/test/src/wire-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "Phase 0 wire fixture|SSE remains a v2 backlog fixture|D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`.
+  Evidence: `packages/test/src/wire-fixtures.ts` exposes `loadWireFixtureSources()`,
+  `generatedWireResponseBodies`, and `wireFixtureResponseBody()`; `tests/fw-check.node.mjs`
+  consumes those public fixture seams for fixture loading, explicit byte pins, and deferred-stream
+  wire response selection instead of local directory reads, source parsing, or generated wire maps.
 - Project graph artifact acceptance fixture slice:
   `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
