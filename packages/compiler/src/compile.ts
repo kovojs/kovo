@@ -73,14 +73,14 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ],
     parseComponentModuleModel,
   );
-  const navigationState = preDerivePatch.state;
+  const preDeriveState = preDerivePatch.state;
   const deriveLowering = lowerInlineAttributeDerives(
-    navigationState.model,
+    preDeriveState.model,
     componentName,
     compileOptions,
   );
   const derivePatch = lowerComponentPipelinePatches(
-    navigationState,
+    preDeriveState,
     deriveLowering.replacements,
     parseComponentModuleModel,
     { prefix: deriveLowering.prefix },

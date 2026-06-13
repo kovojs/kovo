@@ -353,6 +353,8 @@ The now-unused ordered lowering sequence helper and tests were deleted after pro
 stopped using it, leaving explicit patch passes as the remaining compile-path abstraction.
 The compiler pipeline no longer exports dead lowering/result option types left behind by the
 sequence helper; only the active patch helpers keep annotated internal result shapes.
+The compile pipeline now names the combined pre-derive patch state for what it is rather than
+carrying the old navigation-only compatibility name.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -371,6 +373,10 @@ packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-compo
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/view-transitions.test.ts`; `pnpm exec tsc --noEmit --pretty false`.
 - Pipeline dead type cleanup: `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`.
+- Pre-derive state naming cleanup: `pnpm exec vitest --run
+packages/compiler/src/compile-component.test.ts packages/compiler/src/navigation-lowering.test.ts
+packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`.
 - Handler call-argument reference facts: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
