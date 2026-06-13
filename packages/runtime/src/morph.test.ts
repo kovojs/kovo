@@ -1,42 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { applyMutationResponseToDom } from './apply-mutation-response.js';
-import {
-  applyFragments,
-  morphStructuralTree,
-  type MorphRoot,
-  type MorphTarget,
-  type StructuralMorphNode,
-} from './morph.js';
+import { applyFragments, morphStructuralTree, type StructuralMorphNode } from './morph.js';
 import { createQueryStore } from './query-store.js';
-
-class FakeMorphTarget implements MorphTarget {
-  html: string;
-
-  constructor(html = '') {
-    this.html = html;
-  }
-
-  replaceWithHtml(html: string): void {
-    this.html = html;
-  }
-
-  appendHtml(html: string): void {
-    this.html += html;
-  }
-
-  readHtml(): string {
-    return this.html;
-  }
-}
-
-class FakeMorphRoot implements MorphRoot {
-  targets = new Map<string, FakeMorphTarget>();
-
-  findFragmentTarget(target: string): FakeMorphTarget | null {
-    return this.targets.get(target) ?? null;
-  }
-}
+import { FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
 
 function keyedListRow(key: string, text: string): StructuralMorphNode {
   return {

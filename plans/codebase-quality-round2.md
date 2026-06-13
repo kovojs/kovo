@@ -316,6 +316,14 @@ packages/runtime/src/morph.test.ts`.
 vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/mutation-apply.test.ts
 packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/query-bindings.test.ts
 packages/runtime/src/mutation-optimistic.test.ts`.
+      Evidence 2026-06-13: direct enhanced-submit integration coverage moved from
+      `packages/runtime/src/query-runtime-integration.test.ts` into
+      `packages/runtime/src/mutation-submit.test.ts`; remaining broadcast replay/sync cases moved
+      into `packages/runtime/src/broadcast.test.ts`; `packages/runtime/src/morph.test.ts` deleted
+      its local morph fakes and now uses shared `packages/runtime/src/runtime-test-fakes.ts`.
+      Verified by `pnpm exec vitest --run packages/runtime/src/query-runtime-integration.test.ts
+packages/runtime/src/broadcast.test.ts packages/runtime/src/mutation-submit.test.ts
+packages/runtime/src/morph.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted

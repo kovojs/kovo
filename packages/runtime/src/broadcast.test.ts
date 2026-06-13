@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast, withDefaultMutationBroadcast } from './broadcast.js';
 import { createQueryStore } from './query-store.js';
-import { FakeBroadcastChannel, FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
+import {
+  FakeBroadcastChannel,
+  FakeBroadcastHub,
+  FakeMorphRoot,
+  FakeMorphTarget,
+  FakeQueryBindingElement,
+  FakeQueryPlanElement,
+} from './runtime-test-fakes.js';
 
 describe('mutation broadcast', () => {
   it('publishes sanitized change records and applies received mutation wire bodies', () => {
@@ -71,6 +78,155 @@ describe('mutation broadcast', () => {
 
     expect(channel.onmessage).toBeNull();
     expect(channel.closed).toBe(true);
+  });
+
+  it('rebroadcasts and applies mutation responses for same-user tab sync', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const onChanges = vi.fn();
+    const broadcast = installMutationBroadcast({ channel, onChanges, store });
+
+    broadcast.publish('<fw-query name="cart">{"count":5}</fw-query>', [
+      { domain: 'cart', input: { productId: 'p1' } },
+    ] as never);
+    expect(channel.messages).toEqual([
+      {
+        body: '<fw-query name="cart">{"count":5}</fw-query>',
+        changes: [{ domain: 'cart' }],
+        type: 'jiso:mutation-response',
+      },
+    ]);
+
+    channel.onmessage?.({
+      data: {
+        body: '<fw-query name="cart">{"count":6}</fw-query>',
+        changes: [{ domain: 'cart', keys: ['cart_1'] }],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    expect(store.get('cart')).toEqual({ count: 6 });
+    expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart_1'] }]);
+  });
+
+  it('rebroadcasts keyed query chunks to the matching keyed store entry', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const keyedPlan = vi.fn();
+    const unkeyedPlan = vi.fn();
+
+    store.subscribe('reviews', keyedPlan, 'product:p1');
+    store.subscribe('reviews', unkeyedPlan);
+    installMutationBroadcast({ channel, store });
+
+    channel.onmessage?.({
+      data: {
+        body: '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
+        changes: [{ domain: 'product', keys: ['p1'] }],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+    expect(keyedPlan).toHaveBeenCalledWith({ items: [{ id: 'r1' }] });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
+  });
+
+  it('morphs rebroadcast mutation fragments when a root is configured', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary);
+    root.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
+
+    installMutationBroadcast({
+      channel,
+      morph(target, html) {
+        observed.push(`morph:${count.textContent}:${summary.textContent}`);
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+        },
+      },
+      root,
+      store,
+    });
+
+    channel.onmessage?.({
+      data: {
+        body: [
+          '<fw-query name="cart">{"count":6}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>6</cart-badge></fw-fragment>',
+        ].join('\n'),
+        changes: [],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    expect(store.get('cart')).toEqual({ count: 6 });
+    expect(observed).toEqual(['morph:6:6 items']);
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>6</cart-badge>');
+  });
+
+  it('syncs mutation responses from one tab to another over BroadcastChannel', () => {
+    const hub = new FakeBroadcastHub();
+    const channelA = new FakeBroadcastChannel(hub);
+    const channelB = new FakeBroadcastChannel(hub);
+    const storeA = createQueryStore();
+    const storeB = createQueryStore();
+    const onChangesA = vi.fn();
+    const onChangesB = vi.fn();
+    const rootB = new FakeMorphRoot();
+    rootB.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>1</cart-badge>'));
+
+    const broadcastA = installMutationBroadcast({
+      channel: channelA,
+      onChanges: onChangesA,
+      store: storeA,
+    });
+    installMutationBroadcast({
+      channel: channelB,
+      onChanges: onChangesB,
+      root: rootB,
+      store: storeB,
+    });
+
+    broadcastA.publish(
+      [
+        '<fw-query name="cart">{"count":5}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>5</cart-badge></fw-fragment>',
+      ].join('\n'),
+      [{ domain: 'cart', keys: ['cart_1'] }],
+    );
+
+    expect(channelA.messages).toEqual([
+      {
+        body: [
+          '<fw-query name="cart">{"count":5}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>5</cart-badge></fw-fragment>',
+        ].join('\n'),
+        changes: [{ domain: 'cart', keys: ['cart_1'] }],
+        type: 'jiso:mutation-response',
+      },
+    ]);
+    expect(channelB.messages).toEqual([]);
+    expect(storeA.get('cart')).toBeUndefined();
+    expect(onChangesA).not.toHaveBeenCalled();
+    expect(storeB.get('cart')).toEqual({ count: 5 });
+    expect(rootB.targets.get('cart-badge')?.html).toBe('<cart-badge>5</cart-badge>');
+    expect(onChangesB).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart_1'] }]);
   });
 
   it('owns default BroadcastChannel installation for enhanced mutation options', () => {
