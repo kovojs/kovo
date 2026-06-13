@@ -493,11 +493,18 @@ Closed evidence so far:
   rendering. Evidence: `packages/server/src/app-request.ts`, `packages/server/src/app.ts`,
   `packages/server/src/app.test.ts`, `pnpm exec vitest --run packages/server/src`, and
   `pnpm exec tsc --noEmit --pretty false`.
+- Static-export document reference discovery now lives in
+  `packages/server/src/static-export-document.ts`, leaving `static-replay.ts` to own replay
+  execution rather than HTML ref scanning, same-origin `/c/` selection, and SPEC §9.5 L0/L1
+  endpoint classification. Evidence: `packages/server/src/static-export-document.ts`,
+  `packages/server/src/static-replay.ts`, `packages/server/src/static-replay.test.ts`, and
+  `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 
-- Continue subtractive `packages/server` splits: document/app/replay/static-export boundaries
-  should own behavior rather than duplicating root code.
+- Continue subtractive `packages/server` splits: document/app/static-export boundaries should own
+  behavior rather than duplicating root code.
 - Unify response types and `onError` diagnostic seam.
 - Keep app-shell R5/R6/R7 work tracked in `plans/app-shell.md`; mirror only quality risks here.
 

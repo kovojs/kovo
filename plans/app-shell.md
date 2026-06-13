@@ -172,6 +172,18 @@ Round88 app request extraction evidence:
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round89 app-shell static document boundary evidence:
+
+- `packages/server/src/static-export-document.ts` now owns static-export document reference
+  discovery for same-origin `/c/` modules and SPEC §9.5 L0/L1 server endpoint rejection, so
+  `static-replay.ts` only choreographs synthetic requests, replay validation, and artifact
+  assembly.
+- `packages/server/src/static-replay.test.ts` pins the extracted boundary separately from replay
+  execution.
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:

@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { RequestHandler } from './app.js';
 import {
+  collectStaticExportClientModuleHrefs,
+  collectStaticExportServerEndpointRefs,
+} from './static-export-document.js';
+import {
   replayStaticExportClientModuleArtifacts,
   replayStaticExportRouteArtifact,
 } from './static-replay.js';
@@ -187,5 +191,43 @@ describe('server static export replay', () => {
         },
       ],
     });
+  });
+
+  it('keeps static document reference discovery separate from replay execution', () => {
+    const exportOrigin = 'https://shop.example.test';
+    const routeArtifacts = [
+      {
+        body: [
+          '<main>',
+          '<form action="/_m/cart/add"><button>Add</button></form>',
+          '<a href="/_q/cart?args=%7B%7D">Refresh</a>',
+          '<button on:click="/c/cart.client.js?v=1#Cart$add https://cdn.example.test/c/remote.js?v=1#Remote$open">',
+          'Add locally',
+          '</button>',
+          '<script type="module" src="https://shop.example.test/c/menu.client.js?v=2"></script>',
+          '</main>',
+        ].join(''),
+        headers: {
+          link: [
+            '</c/header.client.js?v=3>; rel=modulepreload',
+            '<https://cdn.example.test/c/external.client.js?v=4>; rel=modulepreload',
+          ].join(', '),
+        },
+        path: '/cart/index.html',
+        status: 200,
+      },
+    ];
+
+    expect(
+      collectStaticExportServerEndpointRefs(routeArtifacts[0]?.body ?? '', exportOrigin),
+    ).toEqual([
+      { name: 'action', path: '/_m/cart/add', phase: 'mutation', value: '/_m/cart/add' },
+      { name: 'href', path: '/_q/cart', phase: 'query', value: '/_q/cart?args=%7B%7D' },
+    ]);
+    expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
+      '/c/cart.client.js?v=1#Cart$add',
+      '/c/header.client.js?v=3',
+      '/c/menu.client.js?v=2',
+    ]);
   });
 });
