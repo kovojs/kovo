@@ -559,13 +559,24 @@ packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.
 packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 - Enhanced mutation form DOM mechanics are split out of the submitter: `mutation-form.ts` owns
   enhanced-form selector resolution, no-JS fallback/error stamping, and upload-progress element
-  updates, while `mutation-submit.ts` keeps submit/optimism orchestration and re-exports the
+  updates, while `mutation-submit.ts` keeps submit/form orchestration and re-exports the
   public form type (SPEC.md §9.1/§9.2). Same-session evidence: `pnpm exec vitest --run
 packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
 packages/runtime/src/mutation-form.ts packages/runtime/src/mutation-form.test.ts
 packages/runtime/src/mutation-submit.ts packages/runtime/src/index.ts
 packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`.
+- Optimistic enhanced mutation submission is split out of the basic submitter:
+  `mutation-optimistic.ts` now owns named-queue scheduling, optimistic prediction, failed-response
+  discard, server-truth rebase, uncovered-query diagnostics, and pending cleanup; the SPEC.md
+  §8/§10.4 coverage moved from `index.test.ts` into `mutation-optimistic.test.ts`, and
+  `index-exports.test.ts` pins the public barrel to the canonical split module. Same-session
+  evidence: `pnpm exec vitest --run packages/runtime/src/mutation-optimistic.test.ts
+packages/runtime/src/index-exports.test.ts` and `pnpm exec vp check
+packages/runtime/src/mutation-optimistic.ts packages/runtime/src/mutation-optimistic.test.ts
+packages/runtime/src/mutation-submit.ts packages/runtime/src/index.ts
+packages/runtime/src/index-exports.test.ts packages/runtime/src/index.test.ts IMPLEMENT_v1.md
 plans/codebase-quality-round2.md`.
 - Visible-return query lifecycle is split from typed-read HTTP refetch: `query-visible-return.ts`
   now owns the hydration/refetch ledger, initial and later `fw-query` script hydration, disposal,
@@ -647,6 +658,8 @@ IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 Open:
 
 - Continue shrinking broad runtime tests where split modules now have focused coverage.
+- Continue subtracting optimistic/query-focused cases from `index.test.ts` when changing their
+  canonical modules.
 - Expand browser/runtime gates where shared wire parsing can affect hydrated query behavior.
 
 Recent gates:

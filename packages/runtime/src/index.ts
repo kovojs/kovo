@@ -75,7 +75,6 @@ export {
   dispatchEnhancedFormSubmit,
   isEnhancedSubmitEvent,
   submitEnhancedMutation,
-  submitOptimisticEnhancedMutation,
 } from './mutation-submit.js';
 export type {
   EnhancedFormElementLike,
@@ -85,9 +84,10 @@ export type {
   EnhancedMutationLoaderOptions,
   EnhancedMutationResponseLike,
   EnhancedMutationSubmitOptions,
-  OptimisticEnhancedMutationSubmitOptions,
   UploadProgress,
 } from './mutation-submit.js';
+export { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
+export type { OptimisticEnhancedMutationSubmitOptions } from './mutation-optimistic.js';
 export type { TargetCollectorRoot } from './mutation-targets.js';
 export {
   applyOptimisticTransforms,

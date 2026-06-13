@@ -1,17 +1,13 @@
-import type { AppliedMutationResponse } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { DelegatedEvent } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
 import { defaultIslandSignalScope } from './handler-context.js';
 import type { IslandSignalScope } from './handler-context.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
-import { MutationQueue } from './mutation-queue.js';
 import type { MutationBroadcast } from './broadcast.js';
-import { createMutationIdem } from './mutation-response.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import {
   fetchEnhancedMutation,
-  isFailedMutationResponse,
   type EnhancedFormLike,
   type EnhancedMutationFetch,
   type UploadProgress,
@@ -25,16 +21,11 @@ import {
 import {
   applyFetchedEnhancedMutationResponseToDom,
   type EnhancedMutationAppliedResult,
-  type MutationDomApplyHooks,
 } from './mutation-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import { queryStoreKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
-import { optimisticChangeFromInput, OptimisticRebaser, resolveOptimisticKeys } from './optimism.js';
-import type { MutationChangeRecord, OptimisticChange, OptimisticPlan } from './optimism.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
-import type { QueryChunk } from './wire-parser.js';
 
 export type {
   EnhancedFormLike,
@@ -151,17 +142,6 @@ export interface EnhancedMutationSubmitOptions {
   store: QueryStore;
 }
 
-export interface OptimisticEnhancedMutationSubmitOptions<
-  Input,
-> extends EnhancedMutationSubmitOptions {
-  change?: OptimisticChange<Input>;
-  input: Input;
-  optimistic: OptimisticPlan<Input>;
-  pendingRoot?: PendingRoot;
-  queue?: MutationQueue;
-  rebaser: OptimisticRebaser;
-}
-
 export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {
@@ -176,119 +156,6 @@ export async function submitEnhancedMutation(
   } finally {
     stampEnhancedMutationPending(options, false);
   }
-}
-
-export async function submitOptimisticEnhancedMutation<Input>(
-  options: OptimisticEnhancedMutationSubmitOptions<Input>,
-): Promise<
-  AppliedMutationResponse & {
-    appliedFragments: string[];
-    changes: MutationChangeRecord[];
-    idem: string;
-    targets: string[];
-  }
-> {
-  if (options.queue) {
-    // SPEC.md §10.4: mutations that declare a named queue run as named FIFO.
-    return options.queue.run(options.optimistic.queue, () =>
-      submitOptimisticEnhancedMutationDirect(options),
-    );
-  }
-
-  return submitOptimisticEnhancedMutationDirect(options);
-}
-
-async function submitOptimisticEnhancedMutationDirect<Input>(
-  options: OptimisticEnhancedMutationSubmitOptions<Input>,
-): Promise<EnhancedMutationAppliedResult> {
-  const idem = options.idem ?? createMutationIdem();
-  const queryNames = Object.keys(options.optimistic.transforms);
-  const optimisticChange = optimisticChangeFromInput(options.input, options.change);
-  const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
-
-  // SPEC.md §10.4: predict against query data, mark dependent islands pending,
-  // then reconcile the server fragment/query truth over remaining predictions.
-  options.rebaser.addChange(idem, optimisticChange, options.optimistic);
-  if (options.pendingRoot) {
-    stampPendingQueries(options.pendingRoot, queryNames, true);
-  }
-
-  try {
-    const fetched = await fetchEnhancedMutation(options, idem);
-
-    if (isFailedMutationResponse(fetched.response)) {
-      options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
-      if (options.pendingRoot) {
-        stampPendingQueries(options.pendingRoot, queryNames, false);
-      }
-
-      return applyFetchedEnhancedMutationResponseToDom(options, fetched);
-    }
-
-    const applied = applyFetchedEnhancedMutationResponseToDom(
-      options,
-      fetched,
-      optimisticMutationDomApplyHooks(options, idem, queryNames, optimisticKeys),
-    );
-    const settledQueries = queryNames.filter(
-      (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
-    );
-    if (options.pendingRoot && settledQueries.length > 0) {
-      stampPendingQueries(options.pendingRoot, settledQueries, false);
-    }
-
-    return {
-      ...applied,
-    };
-  } catch (error) {
-    options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
-    if (options.pendingRoot) {
-      stampPendingQueries(options.pendingRoot, queryNames, false);
-    }
-    reportRuntimeError(options.onError, error);
-    throw error;
-  }
-}
-
-function optimisticMutationDomApplyHooks<Input>(
-  options: OptimisticEnhancedMutationSubmitOptions<Input>,
-  idem: string,
-  queryNames: readonly string[],
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
-): MutationDomApplyHooks {
-  return {
-    applyQuery(query) {
-      options.rebaser.applyServerTruth(query.name, query.value, query.key);
-      return { value: options.store.get(query.name, query.key) };
-    },
-    beforeApplyQueries(queryChunks) {
-      const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
-      for (const queryName of uncoveredQueries) {
-        options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
-        reportRuntimeError(
-          options.onError,
-          uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]),
-        );
-      }
-      options.rebaser.settle(idem);
-    },
-  };
-}
-
-function uncoveredOptimisticQueries(
-  queryChunks: readonly QueryChunk[],
-  queryNames: readonly string[],
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
-): string[] {
-  const covered = new Set(queryChunks.map((query) => queryStoreKey(query.name, query.key)));
-  return queryNames.filter(
-    (queryName) => !covered.has(queryStoreKey(queryName, optimisticKeys[queryName])),
-  );
-}
-
-function uncoveredOptimisticQueryError(queryName: string, key?: string): Error {
-  const identity = key ? `${queryName}:${key}` : queryName;
-  return new Error(`Optimistic transform for ${identity} was not covered by server query truth.`);
 }
 
 function stampEnhancedMutationPending(

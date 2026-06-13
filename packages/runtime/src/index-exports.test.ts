@@ -44,8 +44,8 @@ import {
   dispatchEnhancedFormSubmit,
   isEnhancedSubmitEvent,
   submitEnhancedMutation,
-  submitOptimisticEnhancedMutation,
 } from './mutation-submit.js';
+import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
 import {
   applyOptimisticTransforms,
   installPagehideOptimismCleanup,

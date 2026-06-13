@@ -283,14 +283,26 @@ plans/codebase-quality-round2.md`.
       `packages/runtime/src/mutation-response.test.ts` pins the public barrel to the
       canonical split-module apply functions (SPEC §9.1). `packages/runtime/src/mutation-form.ts`
       now owns enhanced-form selector resolution, fallback/error stamping, and upload-progress
-      element updates, leaving `packages/runtime/src/mutation-submit.ts` focused on submit and
-      optimism orchestration while preserving public form types (SPEC §9.1/§9.2). Same-session
+      element updates, leaving `packages/runtime/src/mutation-submit.ts` focused on submit/form
+      orchestration while preserving public form types (SPEC §9.1/§9.2). Same-session
       evidence: `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
       vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm exec
       vp check packages/runtime/src/mutation-form.ts packages/runtime/src/mutation-form.test.ts
       packages/runtime/src/mutation-submit.ts packages/runtime/src/index.ts
       packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md
       plans/codebase-quality-round2.md`.
+      Evidence 2026-06-13: optimistic enhanced mutation submission now lives in
+      `packages/runtime/src/mutation-optimistic.ts`, so queueing, prediction, failed-response
+      discard, server-truth rebase, uncovered-query diagnostics, and pending cleanup are no longer
+      embedded in the basic submitter; `packages/runtime/src/mutation-optimistic.test.ts` carries
+      the focused SPEC §8/§10.4 coverage formerly in `packages/runtime/src/index.test.ts` while
+      `packages/runtime/src/index-exports.test.ts` pins the public barrel to the split module.
+      Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/index-exports.test.ts`
+      and `pnpm exec vp check packages/runtime/src/mutation-optimistic.ts
+packages/runtime/src/mutation-optimistic.test.ts packages/runtime/src/mutation-submit.ts
+packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts
+packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
       Evidence 2026-06-13: visible-return query hydration/refetch lifecycle now lives in
       `packages/runtime/src/query-visible-return.ts`, leaving
       `packages/runtime/src/query-refetch.ts` focused on typed-read HTTP response application
