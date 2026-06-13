@@ -16,22 +16,24 @@ import {
   createJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
   exportJisoAppShellViteBuildFromManifestFile,
+  jisoAppShellViteManifestStylesheetHrefFromFile,
+  jisoAppShellViteDevPlugin,
+  jisoAppShellVitePlugin,
+  type JisoAppShellBuild,
+  type JisoAppShellViteBuildOutput,
+  type JisoAppShellViteMiddleware,
+} from './api/app-shell/vite.js';
+import { jisoAppShellViteStaticExportAssets } from './vite-build-assets.js';
+import { writeJisoAppShellViteBuildOutput } from './vite-build-output.js';
+import {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestAssetsFromFile,
   jisoAppShellViteManifestFromBundle,
   jisoAppShellViteManifestFromFile,
   jisoAppShellViteManifestHints,
   jisoAppShellViteManifestStylesheetHref,
-  jisoAppShellViteManifestStylesheetHrefFromFile,
-  jisoAppShellViteDevPlugin,
-  jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
-  jisoAppShellViteStaticExportAssets,
-  type JisoAppShellBuild,
-  type JisoAppShellViteBuildOutput,
-  type JisoAppShellViteMiddleware,
-} from './api/app-shell/vite.js';
-import { writeJisoAppShellViteBuildOutput } from './vite-build-output.js';
+} from './vite-manifest.js';
 import { jisoAppShellVitePlugin as splitJisoAppShellVitePlugin } from './vite-plugin.js';
 
 describe('server app shell Vite plugin', () => {

@@ -204,6 +204,16 @@ asserts one public `@jiso/test` behavior fact instead of rebuilding those mechan
 
 Latest evidence:
 
+- Phase 5 Vite manifest/asset helper public boundary slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/api/app-shell/vite.ts` no longer exports
+  low-level Vite manifest parser/asset, route-entry expansion, or static-export asset helper
+  values from the focused public Vite subpath, while `packages/server/src/api/app.test.ts` pins
+  those SPEC §9.5 internal helper values and option aliases absent and starter/commerce adoption
+  tests keep resolving the public Vite bridge plus manifest-file stylesheet preflight.
 - Broad mini-wave gate after UI/runtime/harness/Drizzle integrations:
   `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
   `pnpm run test:conformance`; `pnpm run check:build`. Evidence: clean main worktree at
@@ -3171,6 +3181,17 @@ constructor internal to the server build owner; public consumers use the Vite-sp
 
 Latest evidence:
 
+- Round350 Vite manifest/asset helper public boundary:
+  `packages/server/src/api/app-shell/vite.ts` stops forwarding low-level Vite manifest
+  parser/asset, route-entry expansion, and static-export asset helper values from the focused
+  public subpath; `packages/server/src/api/app.test.ts` pins those SPEC §9.5 internal helper
+  values and option aliases absent while preserving the Vite build/export bridge and
+  manifest-file stylesheet preflight used by starter/commerce adoption.
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Static export output root boundary:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check

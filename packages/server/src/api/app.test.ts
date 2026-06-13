@@ -97,6 +97,33 @@ type RemovedViteBuildOutputOptions = vt.JisoAppShellViteBuildOutputOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedViteOutputOptions = vt.JisoAppShellViteOutputOptions;
 
+// @ts-expect-error SPEC.md §9.5: raw route-entry arrays belong to the internal Vite build owner;
+// outside app-shell/Vite consumers pass routeEntryMap to the build/export bridge.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteRouteBuildEntry = vt.JisoAppShellRouteBuildEntry;
+
+// @ts-expect-error SPEC.md §9.5: direct manifest route-entry helper options are internal Vite
+// build plumbing, not an outside app-shell/Vite consumer alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteRouteEntryOptions = vt.JisoAppShellViteRouteEntryOptions;
+
+// @ts-expect-error SPEC.md §9.5: low-level Vite asset projection options stay inside the
+// build/export bridge instead of the focused public app-shell/Vite subpath.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteStaticExportAssetOptions = vt.JisoAppShellViteStaticExportAssetOptions;
+
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteManifestFileStaticExportAssetOptions =
+  // @ts-expect-error SPEC.md §9.5: manifest-file asset projection options stay inside the
+  // build/export bridge instead of the focused public app-shell/Vite subpath.
+  vt.JisoAppShellViteManifestFileStaticExportAssetOptions;
+
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteBuildStaticExportAssetOptions =
+  // @ts-expect-error SPEC.md §9.5: build asset projection options stay inside the build/export
+  // bridge instead of the focused public app-shell/Vite subpath.
+  vt.JisoAppShellViteBuildStaticExportAssetOptions;
+
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
 }
@@ -224,20 +251,10 @@ describe('server app-shell public API barrels', () => {
       'exportJisoAppShellViteBuildFromManifestFile',
       'exportJisoAppShellViteBuildWithManifest',
       'exportJisoAppShellViteBuildWithManifestFromManifestFile',
-      'jisoAppShellViteBuildStaticExportAssets',
       'jisoAppShellViteDevPlugin',
-      'jisoAppShellViteManifestAssets',
-      'jisoAppShellViteManifestAssetsFromFile',
       'jisoAppShellViteManifestFile',
-      'jisoAppShellViteManifestFromBundle',
-      'jisoAppShellViteManifestFromFile',
-      'jisoAppShellViteManifestHints',
-      'jisoAppShellViteManifestStylesheetHref',
       'jisoAppShellViteManifestStylesheetHrefFromFile',
       'jisoAppShellVitePlugin',
-      'jisoAppShellViteRouteEntries',
-      'jisoAppShellViteStaticExportAssets',
-      'jisoAppShellViteStaticExportAssetsFromManifestFile',
       'renderJisoAppShellViteDevDiagnosticResponse',
       'shouldHandleJisoAppShellViteRequest',
       'staticExportInventoryForJisoAppShellViteBuild',
@@ -329,17 +346,21 @@ describe('server app-shell public API barrels', () => {
       viteStaticExportManifestFileApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     );
     expect(packageViteApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
-    expect(packageViteApi.jisoAppShellViteBuildStaticExportAssets).toBe(
-      viteApi.jisoAppShellViteBuildStaticExportAssets,
-    );
-    expect(packageViteApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
-      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
-    );
     expect(packageViteApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
       viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
     );
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteBuildStaticExportAssets');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestAssets');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestAssetsFromFile');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestFromBundle');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestFromFile');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestHints');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHref');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefsFromFile');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteRouteEntries');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteStaticExportAssets');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteStaticExportAssetsFromManifestFile');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteSsrDevPlugin');
     expect(packageViteApi).not.toHaveProperty('shouldHandleJisoAppShellViteSsrRequest');
 

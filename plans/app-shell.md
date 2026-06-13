@@ -152,6 +152,25 @@ Implemented areas:
 - The focused `@jiso/server/app-shell/vite` public subpath no longer forwards Vite hook
   output-dir helpers or output-option aliases; those remain internal plugin writer plumbing while
   outside SPEC §9.5 consumers use the Vite build/export bridge.
+- The focused `@jiso/server/app-shell/vite` public subpath no longer forwards low-level Vite
+  manifest parsing, route-entry expansion, or static-export asset projection helpers. Starter and
+  commerce adoption keep using the public dev plugin, manifest-file stylesheet preflight, and
+  build/export-with-manifest bridge while server internals retain the lower-level owners.
+
+Round350 Vite manifest/asset helper public boundary evidence:
+
+- `packages/server/src/api/app-shell/vite.ts` removes direct manifest asset/parser, route-entry,
+  and Vite static-export asset helper forwards from the focused public subpath while preserving the
+  Vite-specific build/export bridge plus `jisoAppShellViteManifestStylesheetHrefFromFile()` for
+  starter/commerce stylesheet preflight.
+- `packages/server/src/api/app.test.ts` pins the removed values and helper option aliases absent
+  under SPEC §9.5, while starter/commerce adoption tests keep resolving the remaining public Vite
+  subpath helpers.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round346 Vite output helper public boundary evidence:
 
