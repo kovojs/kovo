@@ -31,6 +31,7 @@ jobs:
         working-directory: site
       - run: vp run check-links
         working-directory: site
+      - run: vp exec playwright install --with-deps chromium
       - run: vp run smoke
         working-directory: site
       - run: touch site/dist/.nojekyll
