@@ -71,6 +71,39 @@ describe('compiled interactive gallery demos', () => {
     }
   });
 
+  it('keeps rendered generated-client DOM refs in lockstep with client exports', () => {
+    for (const demo of generatedInteractiveDemoNames()) {
+      const componentName = demo.replace(/-demo$/, '');
+      const expectedModulePath = `/c/examples/gallery/src/generated/interactive/${demo}.client.js`;
+      const clientExports = extractClientExports(readGenerated(`${demo}.client.js`));
+      const loweredRefs = extractGeneratedClientRefs(readGenerated(`${demo}.tsx`));
+      const renderedDemo = interactiveGalleryDemos.find((entry) => entry.name === demo);
+      if (renderedDemo === undefined) throw new Error(`Missing docs route demo: ${demo}`);
+
+      const renderedRefs = extractGeneratedClientRefs(renderedDemo.render());
+
+      expect(clientExports, `${demo} client exports`).not.toEqual([]);
+      expect(renderedRefs, `${demo} rendered refs`).toEqual(loweredRefs);
+      expect(
+        renderedRefs.map((ref) => ref.modulePath),
+        `${demo} module paths`,
+      ).toEqual(renderedRefs.map(() => expectedModulePath));
+      expect(
+        renderedRefs.map((ref) => ref.version),
+        `${demo} version stamps`,
+      ).toEqual(renderedRefs.map(() => expect.stringMatching(/^[0-9a-f]{8}$/)));
+      expect(renderedRefs.map((ref) => ref.exportName).sort(compareStrings)).toEqual(clientExports);
+
+      for (const ref of renderedRefs) {
+        expect(ref.exportName, `${demo} ${ref.eventName} ref`).toMatch(
+          new RegExp(
+            `^Gallery${pascalCase(componentName)}Demo\\$[A-Za-z0-9]+_${ref.eventName}(?:_\\d+)?$`,
+          ),
+        );
+      }
+    }
+  });
+
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const accordion = readGenerated('accordion-demo.tsx');
     const alertDialog = readGenerated('alert-dialog-demo.tsx');
@@ -1131,6 +1164,44 @@ describe('compiled interactive gallery demos', () => {
 
 function readGenerated(fileName: string): string {
   return readFileSync(resolve(galleryRoot, `src/generated/interactive/${fileName}`), 'utf8');
+}
+
+function generatedInteractiveDemoNames(): string[] {
+  return readdirSync(resolve(galleryRoot, 'src/generated/interactive'))
+    .filter((fileName) => fileName.endsWith('-demo.tsx'))
+    .map((fileName) => fileName.replace(/\.tsx$/, ''))
+    .sort(compareStrings);
+}
+
+function extractClientExports(source: string): string[] {
+  return [...source.matchAll(/export const ([A-Za-z0-9_$]+) = handler/g)]
+    .map((match) => match[1] ?? '')
+    .sort(compareStrings);
+}
+
+function extractGeneratedClientRefs(
+  html: string,
+): Array<{ eventName: string; exportName: string; modulePath: string; version: string }> {
+  return [...html.matchAll(/on:([a-z]+)="([^"]+)"/g)].map((match) => {
+    const eventName = match[1] ?? '';
+    const ref = match[2] ?? '';
+    const parsed = ref.match(/^([^?#"]+)\?v=([0-9a-f]{8})#([A-Za-z0-9_$]+)$/);
+    if (parsed === null) throw new Error(`Unexpected generated client ref: ${ref}`);
+
+    return {
+      eventName,
+      exportName: parsed[3] ?? '',
+      modulePath: parsed[1] ?? '',
+      version: parsed[2] ?? '',
+    };
+  });
+}
+
+function pascalCase(value: string): string {
+  return value
+    .split('-')
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join('');
 }
 
 function compareStrings(left: string, right: string): number {

@@ -49,7 +49,7 @@ Implemented areas:
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
-  fixtures, and compiled interactive demos.
+  fixtures, compiled interactive demos, and generated-client DOM ref/export contracts.
 
 Recent gates:
 
@@ -83,6 +83,11 @@ Recent gates:
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
 - `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`
+- `git diff --check`
 
 ## Open Work
 
@@ -124,7 +129,8 @@ Gallery:
 - Add G2 `fw explain` coverage for representative primitives.
 - Add G3/G4 once the gallery surface is stable enough to avoid churn-heavy baselines.
 - Expand G5 merge fixtures to every exported primitive attrs record.
-- Finish G6 deployment/docs wiring and full browser-backed stateful-family coverage.
+- Finish G6 deployment/docs wiring and full browser-backed stateful-family coverage. Generated
+  client DOM ref/export inventory is covered for every checked-in compiled interactive demo.
 
 ## Rules
 

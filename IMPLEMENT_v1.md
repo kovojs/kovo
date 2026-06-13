@@ -347,6 +347,17 @@ plans/codebase-quality-round2.md`.
       `pnpm --filter @jiso/example-gallery run test:browser`,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/src/index.ts examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `examples/gallery/src/interactive-gallery.test.ts`
+      now derives the generated-client DOM contract for every checked-in compiled interactive
+      demo from rendered `on:*` refs and generated `.client.js` exports. The inventory verifies
+      SPEC §4.4/§4.6 load-bearing handler refs, versioned module paths, event-name suffixes, and
+      SPEC §5.2 lowered TSX/rendered route parity so stale, missing, or extra generated client
+      refs fail the gallery conformance suite. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `@jiso/ui` adds a vendorable styled
       checkbox-group wrapper over the headless native checkbox-group attrs, and the
       static gallery adds `/components/checkbox-group` behavior-contract coverage plus
