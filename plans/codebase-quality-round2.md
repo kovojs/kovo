@@ -293,6 +293,12 @@ Closed evidence so far:
   Same-session evidence: `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`,
   `pnpm exec vp run build`, and
   `node --test --test-name-pattern "framework-owned browser suite is wired into acceptance|P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`.
+- Round101 harness evidence 2026-06-13: D10 MCP stdio fallback checks in
+  `tests/fw-check.node.mjs` consume `@jiso/test/mcp-fixtures` JSON-RPC/compile-response facts
+  instead of splitting JSONL and parsing response objects inline. Same-session evidence:
+  `pnpm exec vitest --run packages/test/src/mcp-fixtures.test.ts packages/test/src/package-exports.test.ts`,
+  `pnpm exec vp run build`, and
+  `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`.
 
 Open:
 

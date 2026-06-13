@@ -113,6 +113,13 @@ import {
   type MarkdownFields,
   type MarkdownTableRow,
 } from '@jiso/test/markdown-fixtures';
+import {
+  mcpCompileResponseFacts,
+  mcpJsonRpcResponseFacts,
+  type McpCompileDiagnosticFact,
+  type McpCompileResponseFact,
+  type McpJsonRpcResponseFact,
+} from '@jiso/test/mcp-fixtures';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
@@ -265,6 +272,30 @@ describe('@jiso/test package subpath exports', () => {
     expect(markdownBoldSectionHeadings('**13.1 CSS:** details')).toEqual([
       { number: '13.1', title: 'CSS' },
     ]);
+    expect(
+      mcpCompileResponseFacts(
+        JSON.stringify({
+          id: 'compile',
+          result: {
+            structuredContent: {
+              diagnostics: [{ code: 'FW201', severity: 'error' }],
+              ok: false,
+              version: 'compile/v1',
+            },
+            version: 'fw-mcp/v1',
+          },
+        }),
+      ),
+    ).toEqual([
+      {
+        contentVersion: 'compile/v1',
+        diagnostics: [{ code: 'FW201', severity: 'error' }],
+        id: 'compile',
+        ok: false,
+        version: 'fw-mcp/v1',
+      },
+    ]);
+    expect(mcpJsonRpcResponseFacts).toBeTypeOf('function');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
     expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
       { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
@@ -441,6 +472,9 @@ type _PublicSubpathTypes = [
   MarkdownFields,
   MarkdownTableRow,
   MarkdownBoldSectionHeading,
+  McpCompileDiagnosticFact,
+  McpCompileResponseFact,
+  McpJsonRpcResponseFact,
   CssScopeRuleFact,
   ProjectSourceSiteFact,
   StarterClientTemplateFixture,

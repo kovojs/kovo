@@ -88,6 +88,7 @@ import {
   markdownSection,
   markdownTableRows,
 } from '../packages/test/src/markdown-fixtures.ts';
+import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
   cssScopeRules,
   forbiddenBrowserArchitectureFacts,
@@ -4831,29 +4832,25 @@ export default createApp({
     })(),
     { write: (chunk) => mcpStdioChunks.push(chunk) },
   );
-  const [redMcpStdio, greenMcpStdio] = mcpStdioChunks
-    .join('')
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => JSON.parse(line));
-
-  assert.equal(redMcpStdio.result.version, 'fw-mcp/v1');
-  assert.equal(redMcpStdio.result.structuredContent.version, 'compile/v1');
-  assert.equal(redMcpStdio.result.structuredContent.ok, false);
-  assert.deepEqual(
-    redMcpStdio.result.structuredContent.diagnostics.map((diagnostic) => ({
-      code: diagnostic.code,
-      severity: diagnostic.severity,
-    })),
-    [
-      { code: 'FW210', severity: 'lint' },
-      { code: 'FW201', severity: 'error' },
-    ],
-  );
-  assert.equal(greenMcpStdio.result.version, 'fw-mcp/v1');
-  assert.equal(greenMcpStdio.result.structuredContent.version, 'compile/v1');
-  assert.equal(greenMcpStdio.result.structuredContent.ok, true);
-  assert.deepEqual(greenMcpStdio.result.structuredContent.diagnostics, []);
+  assert.deepEqual(mcpCompileResponseFacts(mcpStdioChunks), [
+    {
+      contentVersion: 'compile/v1',
+      diagnostics: [
+        { code: 'FW210', severity: 'lint' },
+        { code: 'FW201', severity: 'error' },
+      ],
+      id: 'd10-stdio-0',
+      ok: false,
+      version: 'fw-mcp/v1',
+    },
+    {
+      contentVersion: 'compile/v1',
+      diagnostics: [],
+      id: 'd10-stdio-1',
+      ok: true,
+      version: 'fw-mcp/v1',
+    },
+  ]);
 });
 
 void test('P3 Drizzle query facts include select shapes and instance keys', async () => {

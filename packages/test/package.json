@@ -14,6 +14,7 @@
     "./harness": "./src/harness.ts",
     "./html-fragment": "./src/html-fragment.ts",
     "./markdown-fixtures": "./src/markdown-fixtures.ts",
+    "./mcp-fixtures": "./src/mcp-fixtures.ts",
     "./page": "./src/page.ts",
     "./pglite": "./src/pglite.ts",
     "./source-fixtures": "./src/source-fixtures.ts",
