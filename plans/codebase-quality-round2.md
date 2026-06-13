@@ -1140,7 +1140,10 @@ export, and inventory/manifest helpers share the same SPEC §9.5 asset/option ow
 Static export inventory/manifest projection now lives in `packages/server/src/static-export-result.ts`
 and response-header snapshots in `static-export-headers.ts`, leaving `static-export-types.ts` as a
 type/contract module while the app-shell static-export public subpath forwards from the focused
-result owner.
+result owner. Static export replay response validation now lives in
+`packages/server/src/static-export-response.ts`, so route documents and `/c/` client modules share
+one SPEC §9.5 status/content-type/body snapshot path while `static-export-document.ts` owns
+synthetic request replay, document inspection, artifact assembly, and client-module dedupe.
 Docs-site app-shell adoption now has a build-authored `.jiso-site-routes.json` route manifest:
 `site/scripts/build.mjs` records the exact HTML routes it writes, and `site/scripts/app-shell.mjs`
 uses that manifest for SPEC §9.5 export replay before falling back to recursive fixture discovery,
@@ -1229,6 +1232,17 @@ Latest evidence:
   `pnpm run check:build`;
   exact `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Round262 app-shell response boundary and R6 sweep:
+  `packages/server/src/static-export-response.ts` owns the shared route-document and `/c/` module
+  replay response reader; `packages/server/src/static-export-document.ts` delegates response
+  validation and keeps SPEC §9.5 synthetic replay/L0-L1/client-module artifact ownership; the stale
+  client-module test filename was renamed to
+  `packages/server/src/static-export-document-client-modules.test.ts`;
+  `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs packages/create-jiso/src/index.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

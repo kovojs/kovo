@@ -51,6 +51,10 @@ Implemented areas:
   SPEC §9.5 L0/L1 endpoint rejection for exported no-JS documents; it also discovers same-origin
   full-URL `/c/` module refs from route HTML and `Link` headers, preserving SPEC §4.3's full
   module URL contract while publishing static-host `/c/` files.
+- `static-export-response.ts` owns the shared SPEC §9.5 replay response reader and FW229
+  content-type/status diagnostics for both route documents and immutable `/c/` modules, leaving
+  `static-export-document.ts` focused on synthetic requests, document inspection, artifact
+  assembly, and client-module dedupe.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting,
   SPEC §11.3 compile-diagnostic blocking for SPEC §9.5 static export, and a public export
   manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
@@ -460,13 +464,32 @@ Round154 app-shell Vite output plan evidence:
 - `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round262 app-shell response boundary and R6 sweep evidence:
+
+- `packages/server/src/static-export-response.ts` now owns one replay response snapshot reader for
+  route-document HTML and `/c/` JavaScript module responses, and
+  `packages/server/src/static-export-document.ts` delegates those checks while keeping SPEC §9.5
+  synthetic replay, L0/L1 document validation, and client-module artifact dedupe in one document
+  boundary.
+- The stale `static-export-client-modules.test.ts` compatibility-style filename was renamed to
+  `static-export-document-client-modules.test.ts`, matching the document owner after the standalone
+  client-module replay seam was removed.
+- `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs packages/create-jiso/src/index.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+
 ## Open Work
 
 R6:
 
-- [ ] Keep R6 open until a same-session sweep proves replay, L0/L1 constraints, and manifest
+- [x] Keep R6 open until a same-session sweep proves replay, L0/L1 constraints, and manifest
       consumer adoption together; Round86b covers starter/docs manifest consumers, while commerce
       L0/L1 public output is already covered by the Round85 evidence above.
+  - Evidence: Round262 reran the static-export response/document/replay/export server suite,
+    starter app-shell export/dev checks, commerce app-shell HTTP/export checks, and docs-site
+    outside-consumer app-shell tests in the same session.
 
 R7:
 
