@@ -355,8 +355,8 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the Round138/Round139 integration wave through `386e5ad`:
-  inline loader check, 778 formatted files, 679 lint/typechecked files, and 7 typechecked
+- `pnpm run check` passed after the Round140/Round141 integration wave through `03fccaf`:
+  inline loader check, 781 formatted files, 681 lint/typechecked files, and 7 typechecked
   example/conformance projects.
   example/conformance projects.
 
@@ -407,6 +407,10 @@ Focused gates since that broad run:
   `vp check`, and `git diff --check` passed in Round138.
 - Harness: `fwCheckOkAssertionFact` empty-OK fixture assertions, commerce source-truth, targeted
   `fw-check`, `check:build`, exact `vp check`, and `git diff --check` passed in Round139.
+- Runtime: optimism/morph test split, full runtime suite, `tsc`, exact `vp check`, and
+  `git diff --check` passed in Round140.
+- UI: scroll-area native viewport state, headless/UI/gallery tests, primitive lint, exact
+  `vp check`, and `git diff --check` passed in Round141.
 
 Stale but useful broad references:
 
