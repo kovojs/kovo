@@ -43,8 +43,8 @@ Implemented areas:
 
 - Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
 - `@jiso/ui` ships vendorable styled source for pure-markup components plus checkbox,
-  checkbox-group, switch, tabs, toggle, radio-group, toggle-group, and toolbar wrappers over the
-  headless primitive attrs.
+  checkbox-group, switch, tabs, toggle, radio-group, toggle-group, toolbar, select, combobox,
+  autocomplete, slider, and toast wrappers over the headless primitive attrs.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
@@ -66,6 +66,7 @@ Recent gates:
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
 - `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm exec vp check packages/ui/src/autocomplete.tsx packages/ui/src/combobox.tsx packages/ui/src/select.tsx packages/ui/src/slider.tsx packages/ui/src/toast.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
 - `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
@@ -95,6 +96,9 @@ H2:
 H3:
 
 - Confirm wave-3 primitive implementation completeness against package exports and tests.
+- Select, combobox, autocomplete, slider, and toast now have styled vendorable wrappers, static
+  gallery routes, behavior-contract snippets, and catalog sync; broader H3 remains open for menu,
+  navigation-menu, and command styling plus full conformance closure.
 - Close any remaining state/focus/typeahead/menu edge cases with focused tests before checking H3.
 
 Styled UI:

@@ -6,6 +6,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   Alert,
+  Autocomplete,
+  AutocompleteInput,
+  AutocompleteList,
+  AutocompleteOption,
+  AutocompleteValue,
   Badge,
   Breadcrumb,
   BreadcrumbItem,
@@ -18,6 +23,11 @@ import {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
+  Combobox,
+  ComboboxInput,
+  ComboboxListbox,
+  ComboboxOption,
+  ComboboxValue,
   Drawer,
   Field,
   FieldControl,
@@ -45,8 +55,18 @@ import {
   ScrollAreaScrollbar,
   ScrollAreaThumb,
   ScrollAreaViewport,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Sheet,
   Skeleton,
+  Slider,
+  SliderInput,
+  SliderRange,
+  SliderThumb,
+  SliderTrack,
   Switch,
   Table,
   TableBody,
@@ -62,16 +82,32 @@ import {
   ToggleGroup,
   ToggleGroupButton,
   ToggleGroupItem,
+  Toast,
+  ToastAction,
+  ToastClose,
+  ToastDescription,
+  ToastTitle,
+  ToastViewport,
   Toolbar,
   ToolbarButton,
   ToolbarItem,
   breadcrumbClasses,
   buttonClasses,
+  autocompleteClasses,
+  autocompleteInputClasses,
+  autocompleteListClasses,
+  autocompleteOptionClasses,
+  autocompleteValueClasses,
   checkboxGroupClasses,
   checkboxGroupControlClasses,
   checkboxGroupItemClasses,
   checkboxGroupLabelClasses,
   checkboxClasses,
+  comboboxClasses,
+  comboboxInputClasses,
+  comboboxListboxClasses,
+  comboboxOptionClasses,
+  comboboxValueClasses,
   fieldClasses,
   fieldControlClasses,
   fieldDescriptionClasses,
@@ -96,6 +132,11 @@ import {
   scrollAreaScrollbarClasses,
   scrollAreaThumbClasses,
   scrollAreaViewportClasses,
+  selectClasses,
+  selectContentClasses,
+  selectItemClasses,
+  selectTriggerClasses,
+  selectValueClasses,
   tabsClasses,
   tabsListClasses,
   tabsPanelClasses,
@@ -103,10 +144,21 @@ import {
   sheetContentClasses,
   switchClasses,
   tableClasses,
+  sliderClasses,
+  sliderInputClasses,
+  sliderRangeClasses,
+  sliderThumbClasses,
+  sliderTrackClasses,
   toggleClasses,
   toggleGroupButtonClasses,
   toggleGroupClasses,
   toggleGroupItemClasses,
+  toastActionClasses,
+  toastClasses,
+  toastCloseClasses,
+  toastDescriptionClasses,
+  toastTitleClasses,
+  toastViewportClasses,
   toolbarButtonClasses,
   toolbarClasses,
   toolbarItemClasses,
@@ -138,6 +190,11 @@ describe('@jiso/ui styled package foundation', () => {
     expect(OtpField.name).toBe('otp-field');
     expect(ScrollArea.name).toBe('scroll-area');
     expect(Field.name).toBe('field');
+    expect(Select.name).toBe('select');
+    expect(Combobox.name).toBe('combobox');
+    expect(Autocomplete.name).toBe('autocomplete');
+    expect(Slider.name).toBe('slider');
+    expect(Toast.name).toBe('toast');
 
     expect(
       Button.definition.render({
@@ -194,6 +251,17 @@ describe('@jiso/ui styled package foundation', () => {
     expect(otpFieldClasses.join(' ')).toContain('data-[invalid]:text-red-950');
     expect(scrollAreaClasses.join(' ')).toContain('relative overflow-hidden');
     expect(fieldClasses.join(' ')).toContain('data-[required]');
+    expect(selectClasses.join(' ')).toContain('data-[invalid]:text-red-950');
+    expect(selectTriggerClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+    expect(comboboxClasses.join(' ')).toContain('data-[invalid]:text-red-950');
+    expect(comboboxListboxClasses.join(' ')).toContain('data-[state=closed]');
+    expect(comboboxInputClasses.join(' ')).toContain('aria-[invalid=true]:border-red-400');
+    expect(autocompleteClasses.join(' ')).toContain('data-[invalid]:text-red-950');
+    expect(autocompleteInputClasses.join(' ')).toContain('focus-visible:ring-2');
+    expect(sliderClasses.join(' ')).toContain('data-[orientation=vertical]:inline-grid');
+    expect(sliderInputClasses.join(' ')).toContain('accent-neutral-950');
+    expect(toastClasses.join(' ')).toContain('data-[variant=success]:bg-emerald-50');
+    expect(toastViewportClasses.join(' ')).toContain('data-[placement=bottom-end]');
   });
 
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {
@@ -727,6 +795,280 @@ describe('@jiso/ui styled package foundation', () => {
     expect(tableClasses).toContain('w-full overflow-x-auto');
   });
 
+  it('wraps the headless select primitive as styled native select markup', () => {
+    const items = [
+      { label: 'Starter', value: 'starter' },
+      { label: 'Growth', value: 'growth' },
+      { disabled: true, label: 'Enterprise', value: 'enterprise' },
+    ];
+    const state = {
+      descriptionId: 'plan-help',
+      errorId: 'plan-error',
+      invalid: true,
+      items,
+      name: 'plan',
+      required: true,
+      value: 'growth',
+    };
+
+    const root = Select.definition.render({ ...state, children: 'select body', id: 'plan-root' });
+    const trigger = SelectTrigger.definition.render({
+      ...state,
+      children: SelectContent.definition.render({
+        ...state,
+        children: items
+          .map((item) =>
+            SelectItem.definition.render({
+              ...state,
+              itemLabel: item.label,
+              itemValue: item.value,
+            }),
+          )
+          .join(''),
+        label: 'Plans',
+      }),
+      id: 'plan',
+      labelledBy: 'plan-label',
+    });
+    const value = SelectValue.definition.render({ ...state, id: 'plan-value' });
+
+    expect(SelectTrigger.name).toBe('select-trigger');
+    expect(SelectContent.name).toBe('select-content');
+    expect(SelectItem.name).toBe('select-item');
+    expect(SelectValue.name).toBe('select-value');
+    expect(root).toContain('data-invalid="" data-required="" data-state="closed" id="plan-root"');
+    expect(trigger).toContain('aria-describedby="plan-help plan-error"');
+    expect(trigger).toContain('aria-expanded="false"');
+    expect(trigger).toContain('aria-invalid="true"');
+    expect(trigger).toContain('id="plan" name="plan" required');
+    expect(trigger).toContain('<optgroup');
+    expect(trigger).toContain('label="Plans"');
+    expect(trigger).toContain('data-state="checked" label="Growth" selected value="growth"');
+    expect(trigger).toContain('data-disabled="" data-state="unchecked" disabled');
+    expect(trigger).toContain('value="enterprise"');
+    expect(value).toContain('id="plan-value">Growth</span>');
+    expect(selectContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
+    expect(selectItemClasses.join(' ')).toContain('data-[state=checked]:font-medium');
+    expect(selectValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+  });
+
+  it('wraps the headless combobox primitive as styled input and listbox markup', () => {
+    const items = [
+      { label: 'Ada Lovelace', value: 'ada' },
+      { label: 'Grace Hopper', value: 'grace' },
+      { disabled: true, label: 'Katherine Johnson', value: 'katherine' },
+    ];
+    const state = {
+      descriptionId: 'assignee-help',
+      highlightedValue: 'grace',
+      items,
+      listboxId: 'assignee-listbox',
+      name: 'assignee',
+      open: true,
+      placeholder: 'Search people',
+      required: true,
+      value: 'ada',
+    };
+
+    const input = ComboboxInput.definition.render({
+      ...state,
+      id: 'assignee',
+      labelledBy: 'assignee-label',
+    });
+    const listbox = ComboboxListbox.definition.render({
+      ...state,
+      children: items
+        .map((item, index) =>
+          ComboboxOption.definition.render({
+            ...state,
+            id: `assignee-listbox-option-${index}`,
+            itemLabel: item.label,
+            itemValue: item.value,
+          }),
+        )
+        .join(''),
+      id: 'assignee-listbox',
+      labelledBy: 'assignee-label',
+    });
+    const value = ComboboxValue.definition.render({ ...state, id: 'assignee-value' });
+
+    expect(ComboboxInput.name).toBe('combobox-input');
+    expect(ComboboxListbox.name).toBe('combobox-listbox');
+    expect(ComboboxOption.name).toBe('combobox-option');
+    expect(ComboboxValue.name).toBe('combobox-value');
+    expect(input).toContain('aria-activedescendant="assignee-listbox-option-1"');
+    expect(input).toContain('aria-autocomplete="list"');
+    expect(input).toContain('aria-controls="assignee-listbox"');
+    expect(input).toContain('aria-expanded="true"');
+    expect(input).toContain('list="assignee-listbox"');
+    expect(input).toContain('role="combobox" type="text" value="ada"');
+    expect(listbox).toContain('role="listbox"');
+    expect(listbox).toContain('data-state="open" id="assignee-listbox"');
+    expect(listbox).toContain('aria-selected="true"');
+    expect(listbox).toContain('data-highlighted="" data-state="unchecked"');
+    expect(listbox).toContain('aria-disabled="true"');
+    expect(value).toContain('id="assignee-value">Ada Lovelace</span>');
+    expect(comboboxListboxClasses.join(' ')).toContain('data-[state=closed]:hidden');
+    expect(comboboxOptionClasses.join(' ')).toContain('data-[highlighted]:bg-neutral-100');
+    expect(comboboxValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+  });
+
+  it('wraps the headless autocomplete primitive as styled input and datalist markup', () => {
+    const items = [
+      { label: 'Starter plan', value: 'starter' },
+      { label: 'Growth plan', value: 'growth' },
+      { disabled: true, label: 'Enterprise plan', value: 'enterprise' },
+    ];
+    const state = {
+      descriptionId: 'plan-search-help',
+      highlightedValue: 'growth',
+      inputValue: 'gr',
+      items,
+      listId: 'plan-suggestions',
+      name: 'plan-search',
+      open: true,
+      required: true,
+      value: 'growth',
+    };
+
+    const input = AutocompleteInput.definition.render({
+      ...state,
+      id: 'plan-search',
+      labelledBy: 'plan-search-label',
+    });
+    const list = AutocompleteList.definition.render({
+      ...state,
+      children: items
+        .map((item) =>
+          AutocompleteOption.definition.render({
+            ...state,
+            itemLabel: item.label,
+            itemValue: item.value,
+          }),
+        )
+        .join(''),
+      id: 'plan-suggestions',
+      labelledBy: 'plan-search-label',
+    });
+    const value = AutocompleteValue.definition.render({ ...state, id: 'plan-search-value' });
+
+    expect(AutocompleteInput.name).toBe('autocomplete-input');
+    expect(AutocompleteList.name).toBe('autocomplete-list');
+    expect(AutocompleteOption.name).toBe('autocomplete-option');
+    expect(AutocompleteValue.name).toBe('autocomplete-value');
+    expect(input).toContain('aria-activedescendant="plan-suggestions-option-1"');
+    expect(input).toContain('autocomplete="off"');
+    expect(input).toContain('list="plan-suggestions"');
+    expect(input).toContain('role="combobox" type="text" value="gr"');
+    expect(list).toContain('<datalist');
+    expect(list).toContain('aria-labelledby="plan-search-label"');
+    expect(list).toContain('data-state="open" id="plan-suggestions"');
+    expect(list).toContain('data-highlighted="" data-state="checked"');
+    expect(list).toContain('disabled');
+    expect(value).toContain('id="plan-search-value">Growth plan</span>');
+    expect(autocompleteListClasses.join(' ')).toContain('rounded-md border border-neutral-200');
+    expect(autocompleteOptionClasses.join(' ')).toContain('data-[highlighted]:font-medium');
+    expect(autocompleteValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
+  });
+
+  it('wraps the headless slider primitive as styled range input and decorative parts', () => {
+    const state = {
+      max: 100,
+      min: 0,
+      name: 'coverage',
+      required: true,
+      step: 5,
+      value: 65,
+    };
+
+    const root = Slider.definition.render({
+      ...state,
+      children: `${SliderInput.definition.render({
+        ...state,
+        descriptionId: 'coverage-help',
+        id: 'coverage',
+        label: 'Coverage',
+        valueText: '65 percent',
+      })}${SliderTrack.definition.render({
+        ...state,
+        children: SliderRange.definition.render(state),
+      })}${SliderThumb.definition.render(state)}`,
+      id: 'coverage-root',
+    });
+
+    expect(SliderInput.name).toBe('slider-input');
+    expect(SliderTrack.name).toBe('slider-track');
+    expect(SliderRange.name).toBe('slider-range');
+    expect(SliderThumb.name).toBe('slider-thumb');
+    expect(root).toContain('data-max="100" data-min="0" data-orientation="horizontal"');
+    expect(root).toContain('data-required="" data-value="65" id="coverage-root"');
+    expect(root).toContain('aria-describedby="coverage-help"');
+    expect(root).toContain('aria-label="Coverage"');
+    expect(root).toContain('aria-valuetext="65 percent"');
+    expect(root).toContain('id="coverage" max="100" min="0" name="coverage" required');
+    expect(root).toContain('step="5" type="range" value="65"');
+    expect(root).toContain('data-part="track"');
+    expect(root).toContain('data-part="range"');
+    expect(root).toContain('data-part="thumb"');
+    expect(root).toContain('data-value-ratio="0.65"');
+    expect(sliderTrackClasses.join(' ')).toContain('rounded-full bg-neutral-200');
+    expect(sliderRangeClasses.join(' ')).toContain('rounded-full bg-neutral-950');
+    expect(sliderThumbClasses.join(' ')).toContain('rounded-full border border-neutral-300');
+  });
+
+  it('wraps the headless toast primitive as styled live-region markup', () => {
+    const toast = Toast.definition.render({
+      children: `${ToastTitle.definition.render({
+        children: 'Deployment complete',
+        id: 'deploy-toast-title',
+      })}${ToastDescription.definition.render({
+        children: 'Production is serving the new build.',
+        id: 'deploy-toast-description',
+      })}${ToastAction.definition.render({
+        actionValue: 'open-deploy',
+        children: 'View',
+        id: 'deploy-toast',
+      })}${ToastClose.definition.render({ children: 'Dismiss', id: 'deploy-toast' })}`,
+      descriptionId: 'deploy-toast-description',
+      id: 'deploy-toast',
+      titleId: 'deploy-toast-title',
+      variant: 'success',
+    });
+    const viewport = ToastViewport.definition.render({
+      children: toast,
+      id: 'toast-viewport',
+      label: 'Build notifications',
+      placement: 'top-center',
+    });
+    const hiddenToast = Toast.definition.render({ id: 'hidden-toast', open: false });
+
+    expect(ToastViewport.name).toBe('toast-viewport');
+    expect(ToastTitle.name).toBe('toast-title');
+    expect(ToastDescription.name).toBe('toast-description');
+    expect(ToastAction.name).toBe('toast-action');
+    expect(ToastClose.name).toBe('toast-close');
+    expect(viewport).toContain('aria-label="Build notifications"');
+    expect(viewport).toContain('data-placement="top-center" id="toast-viewport"');
+    expect(viewport).toContain('role="region" tabIndex="-1"');
+    expect(viewport).toContain('aria-atomic="true"');
+    expect(viewport).toContain('aria-live="polite"');
+    expect(viewport).toContain('aria-describedby="deploy-toast-description"');
+    expect(viewport).toContain('aria-labelledby="deploy-toast-title"');
+    expect(viewport).toContain('data-state="open" data-variant="success"');
+    expect(viewport).toContain('role="status"');
+    expect(viewport).toContain('data-part="title" id="deploy-toast-title"');
+    expect(viewport).toContain('data-part="description" id="deploy-toast-description"');
+    expect(viewport).toContain('data-action=""');
+    expect(viewport).toContain('type="button" value="open-deploy"');
+    expect(viewport).toContain('data-dismiss=""');
+    expect(hiddenToast).toContain('data-state="closed"');
+    expect(hiddenToast).toContain('hidden id="hidden-toast"');
+    expect(toastTitleClasses.join(' ')).toContain('font-medium');
+    expect(toastDescriptionClasses.join(' ')).toContain('text-neutral-700');
+    expect(toastActionClasses.join(' ')).toContain('border border-neutral-300');
+    expect(toastCloseClasses.join(' ')).toContain('h-8 w-8');
+  });
+
   it('wraps the headless tabs primitive as styled tablist parts', () => {
     const items = [
       { value: 'overview' },
@@ -864,12 +1206,14 @@ describe('@jiso/ui styled package foundation', () => {
   it('keeps vendorable component sources TSX-authored with no lowered IR stamps', () => {
     const sources = [
       'alert.tsx',
+      'autocomplete.tsx',
       'badge.tsx',
       'breadcrumb.tsx',
       'button.tsx',
       'card.tsx',
       'checkbox.tsx',
       'checkbox-group.tsx',
+      'combobox.tsx',
       'field.tsx',
       'kbd.tsx',
       'number-field.tsx',
@@ -877,11 +1221,14 @@ describe('@jiso/ui styled package foundation', () => {
       'sheet.tsx',
       'skeleton.tsx',
       'scroll-area.tsx',
+      'select.tsx',
       'switch.tsx',
+      'slider.tsx',
       'table.tsx',
       'tabs.tsx',
       'toggle.tsx',
       'toggle-group.tsx',
+      'toast.tsx',
       'toolbar.tsx',
     ]
       .map(readSource)

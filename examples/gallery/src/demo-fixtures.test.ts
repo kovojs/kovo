@@ -11,6 +11,7 @@ const expectedRoutes = [
   '/components/accordion',
   '/components/alert',
   '/components/alert-dialog',
+  '/components/autocomplete',
   '/components/avatar',
   '/components/badge',
   '/components/breadcrumb',
@@ -18,6 +19,7 @@ const expectedRoutes = [
   '/components/card',
   '/components/checkbox',
   '/components/checkbox-group',
+  '/components/combobox',
   '/components/dialog',
   '/components/drawer',
   '/components/field',
@@ -32,9 +34,11 @@ const expectedRoutes = [
   '/components/separator',
   '/components/sheet',
   '/components/skeleton',
+  '/components/slider',
   '/components/switch',
   '/components/table',
   '/components/tabs',
+  '/components/toast',
   '/components/toggle',
   '/components/toggle-group',
   '/components/toolbar',
@@ -122,6 +126,30 @@ describe('gallery demo fixtures', () => {
     expect(alertDialog.html).toContain('command="request-close"');
   });
 
+  it('renders autocomplete fixture with native input and datalist wiring', () => {
+    const autocomplete = findFixture('/components/autocomplete');
+
+    expect(autocomplete.html).toContain('data-gallery-demo="autocomplete"');
+    expect(autocomplete.html).toContain('data-ui-demo="autocomplete"');
+    expect(autocomplete.html).toContain('id="gallery-autocomplete"');
+    expect(autocomplete.html).toContain('for="gallery-autocomplete-input"');
+    expect(autocomplete.html).toContain('role="combobox"');
+    expect(autocomplete.html).toContain('aria-autocomplete="list"');
+    expect(autocomplete.html).toContain('aria-expanded="true"');
+    expect(autocomplete.html).toContain('aria-controls="gallery-autocomplete-list"');
+    expect(autocomplete.html).toContain(
+      'aria-activedescendant="gallery-autocomplete-list-option-1"',
+    );
+    expect(autocomplete.html).toContain('list="gallery-autocomplete-list"');
+    expect(autocomplete.html).toContain('name="gallery-plan-search"');
+    expect(autocomplete.html).toContain('<datalist');
+    expect(autocomplete.html).toContain('id="gallery-autocomplete-list"');
+    expect(autocomplete.html).toContain('data-highlighted="" data-state="checked"');
+    expect(autocomplete.html).toContain('value="growth"');
+    expect(autocomplete.html).toContain('disabled');
+    expect(autocomplete.html).toContain('id="gallery-autocomplete-value">Growth plan</span>');
+  });
+
   it('renders checkbox fixture with native form states', () => {
     const checkbox = findFixture('/components/checkbox');
 
@@ -156,6 +184,27 @@ describe('gallery demo fixtures', () => {
     expect(checkboxGroup.html).toContain('value="security"');
     expect(checkboxGroup.html).toContain('disabled id="gallery-checkbox-group-security"');
     expect(checkboxGroup.html).toContain('tabIndex="-1" type="checkbox" value="security"');
+  });
+
+  it('renders combobox fixture with styled input, listbox, and option states', () => {
+    const combobox = findFixture('/components/combobox');
+
+    expect(combobox.html).toContain('data-gallery-demo="combobox"');
+    expect(combobox.html).toContain('data-ui-demo="combobox"');
+    expect(combobox.html).toContain('id="gallery-combobox"');
+    expect(combobox.html).toContain('for="gallery-combobox-input"');
+    expect(combobox.html).toContain('role="combobox"');
+    expect(combobox.html).toContain('aria-autocomplete="list"');
+    expect(combobox.html).toContain('aria-expanded="true"');
+    expect(combobox.html).toContain('aria-controls="gallery-combobox-listbox"');
+    expect(combobox.html).toContain('aria-activedescendant="gallery-combobox-listbox-option-1"');
+    expect(combobox.html).toContain('name="gallery-assignee"');
+    expect(combobox.html).toContain('role="listbox"');
+    expect(combobox.html).toContain('id="gallery-combobox-listbox"');
+    expect(combobox.html).toContain('aria-selected="true"');
+    expect(combobox.html).toContain('data-highlighted="" data-state="unchecked"');
+    expect(combobox.html).toContain('aria-disabled="true"');
+    expect(combobox.html).toContain('id="gallery-combobox-value">Ada Lovelace</span>');
   });
 
   it('renders dialog fixture with native invoker and IDREF wiring', () => {
@@ -342,13 +391,16 @@ describe('gallery demo fixtures', () => {
 
     expect(select.html).toContain('<select');
     expect(select.html).toContain('id="gallery-select"');
+    expect(select.html).toContain('data-ui-demo="select"');
     expect(select.html).toContain('name="gallery-plan"');
     expect(select.html).toContain('required');
     expect(select.html).toContain('aria-labelledby="gallery-select-label"');
     expect(select.html).toContain('value="growth"');
     expect(select.html).toContain('selected');
     expect(select.html).toContain('disabled');
-    expect(select.html).toContain('<span>Growth</span>');
+    expect(select.html).toContain('<optgroup');
+    expect(select.html).toContain('label="Plans"');
+    expect(select.html).toContain('id="gallery-select-value">Growth</span>');
   });
 
   it('renders separator fixture with decorative and semantic variants', () => {
@@ -370,6 +422,30 @@ describe('gallery demo fixtures', () => {
     expect(switchFixture.html).toContain('name="gallery-notifications"');
     expect(switchFixture.html).toContain('data-state="unchecked"');
     expect(switchFixture.html).toContain('data-disabled');
+  });
+
+  it('renders slider fixture with native range input and decorative parts', () => {
+    const slider = findFixture('/components/slider');
+
+    expect(slider.html).toContain('data-gallery-demo="slider"');
+    expect(slider.html).toContain('data-ui-demo="slider"');
+    expect(slider.html).toContain('id="gallery-slider"');
+    expect(slider.html).toContain('for="gallery-slider-input"');
+    expect(slider.html).toContain('type="range"');
+    expect(slider.html).toContain('name="gallery-coverage"');
+    expect(slider.html).toContain('min="0"');
+    expect(slider.html).toContain('max="100"');
+    expect(slider.html).toContain('step="5"');
+    expect(slider.html).toContain('value="65"');
+    expect(slider.html).toContain(
+      'aria-describedby="gallery-slider-description gallery-slider-error"',
+    );
+    expect(slider.html).toContain('aria-invalid="true"');
+    expect(slider.html).toContain('aria-valuetext="65 percent coverage"');
+    expect(slider.html).toContain('data-part="track"');
+    expect(slider.html).toContain('data-part="range"');
+    expect(slider.html).toContain('data-part="thumb"');
+    expect(slider.html).toContain('data-value-ratio="0.65"');
   });
 
   it('renders tabs fixture with tablist, trigger, and panel wiring', () => {
@@ -396,6 +472,31 @@ describe('gallery demo fixtures', () => {
     expect(progress.html).toContain('data-state="indeterminate"');
   });
 
+  it('renders toast fixture with live region, actions, and closed state', () => {
+    const toast = findFixture('/components/toast');
+
+    expect(toast.html).toContain('data-gallery-demo="toast"');
+    expect(toast.html).toContain('data-ui-demo="toast"');
+    expect(toast.html).toContain('aria-label="Gallery notifications"');
+    expect(toast.html).toContain('data-placement="top-center"');
+    expect(toast.html).toContain('id="gallery-toast-viewport"');
+    expect(toast.html).toContain('role="region"');
+    expect(toast.html).toContain('tabIndex="-1"');
+    expect(toast.html).toContain('aria-atomic="true"');
+    expect(toast.html).toContain('aria-live="polite"');
+    expect(toast.html).toContain('aria-labelledby="gallery-toast-title"');
+    expect(toast.html).toContain('aria-describedby="gallery-toast-description"');
+    expect(toast.html).toContain('data-state="open" data-variant="success"');
+    expect(toast.html).toContain('role="status"');
+    expect(toast.html).toContain('data-part="title" id="gallery-toast-title"');
+    expect(toast.html).toContain('data-part="description" id="gallery-toast-description"');
+    expect(toast.html).toContain('data-action=""');
+    expect(toast.html).toContain('type="button" value="open-deploy"');
+    expect(toast.html).toContain('data-dismiss=""');
+    expect(toast.html).toContain('data-state="closed" data-variant="error" hidden');
+    expect(toast.html).toContain('role="alert"');
+  });
+
   it('renders tooltip fixture with package-prefixed behavior and popover content', () => {
     const tooltip = findFixture('/components/tooltip');
 
@@ -412,13 +513,18 @@ describe('gallery demo fixtures', () => {
     const badge = findFixture('/components/badge');
     const breadcrumb = findFixture('/components/breadcrumb');
     const card = findFixture('/components/card');
+    const autocomplete = findFixture('/components/autocomplete');
     const checkboxGroup = findFixture('/components/checkbox-group');
+    const combobox = findFixture('/components/combobox');
     const drawer = findFixture('/components/drawer');
     const kbd = findFixture('/components/kbd');
+    const select = findFixture('/components/select');
     const sheet = findFixture('/components/sheet');
     const skeleton = findFixture('/components/skeleton');
+    const slider = findFixture('/components/slider');
     const table = findFixture('/components/table');
     const tabs = findFixture('/components/tabs');
+    const toast = findFixture('/components/toast');
     const toggleGroup = findFixture('/components/toggle-group');
     const toolbar = findFixture('/components/toolbar');
 
@@ -452,6 +558,16 @@ describe('gallery demo fixtures', () => {
     expect(checkboxGroup.html).toContain('accent-neutral-950');
     expect(checkboxGroup.html).toContain('gallery-checkbox-group-updates');
 
+    expect(autocomplete.html).toContain('data-ui-demo="autocomplete"');
+    expect(autocomplete.html).toContain('rounded-md border border-neutral-300');
+    expect(autocomplete.html).toContain('gallery-autocomplete-list');
+    expect(autocomplete.html).toContain('Growth plan');
+
+    expect(combobox.html).toContain('data-ui-demo="combobox"');
+    expect(combobox.html).toContain('rounded-md border border-neutral-300');
+    expect(combobox.html).toContain('role="listbox"');
+    expect(combobox.html).toContain('Ada Lovelace');
+
     expect(drawer.html).toContain('data-ui-demo="drawer"');
     expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');
     expect(drawer.html).toContain('<dialog aria-describedby="gallery-drawer-description"');
@@ -463,6 +579,11 @@ describe('gallery demo fixtures', () => {
     expect(kbd.html).toContain('<kbd class="inline-flex h-5 min-w-5');
     expect(kbd.html).toContain('uppercase">K</kbd>');
 
+    expect(select.html).toContain('data-ui-demo="select"');
+    expect(select.html).toContain('rounded-md border border-neutral-300');
+    expect(select.html).toContain('<optgroup');
+    expect(select.html).toContain('Growth</span>');
+
     expect(sheet.html).toContain('data-ui-demo="sheet"');
     expect(sheet.html).toContain('command="show-modal" commandfor="gallery-sheet"');
     expect(sheet.html).toContain('<dialog aria-describedby="gallery-sheet-description"');
@@ -472,6 +593,11 @@ describe('gallery demo fixtures', () => {
     expect(skeleton.html).toContain('data-ui-demo="skeleton"');
     expect(skeleton.html).toContain('aria-hidden="true"');
     expect(skeleton.html).toContain('animate-pulse rounded-md bg-neutral-200 h-4 w-40');
+
+    expect(slider.html).toContain('data-ui-demo="slider"');
+    expect(slider.html).toContain('accent-neutral-950');
+    expect(slider.html).toContain('data-value-ratio="0.65"');
+    expect(slider.html).toContain('type="range"');
 
     expect(table.html).toContain('data-ui-demo="table"');
     expect(table.html).toContain('<caption class="mt-3 text-sm text-neutral-500">');
@@ -484,6 +610,11 @@ describe('gallery demo fixtures', () => {
     expect(tabs.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
     expect(tabs.html).toContain('data-[state=active]:bg-white');
     expect(tabs.html).toContain('overview content');
+
+    expect(toast.html).toContain('data-ui-demo="toast"');
+    expect(toast.html).toContain('data-[variant=success]:bg-emerald-50');
+    expect(toast.html).toContain('aria-live="polite"');
+    expect(toast.html).toContain('data-dismiss=""');
 
     expect(toggleGroup.html).toContain('data-ui-demo="toggle-group"');
     expect(toggleGroup.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');

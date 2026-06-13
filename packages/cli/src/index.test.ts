@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, badge, breadcrumb, button, card, checkbox, checkbox-group, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, sheet, skeleton, switch, table, tabs, toggle, toggle-group, toolbar',
+      'alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar',
     );
 
     const manifest = JSON.parse(
@@ -107,20 +107,25 @@ describe('fw add', () => {
         main([
           'add',
           'alert',
+          'autocomplete',
           'badge',
           'breadcrumb',
           'button',
           'card',
           'checkbox',
           'checkbox-group',
+          'combobox',
           'kbd',
           'radio-group',
+          'select',
           'sheet',
           'skeleton',
+          'slider',
           'switch',
           'table',
           'toggle',
           'toggle-group',
+          'toast',
           'toolbar',
           '--out',
           outDir,
@@ -132,6 +137,9 @@ describe('fw add', () => {
       expect(output).toContain('fw-add/v1\n');
       expect(output).toContain(
         `ADD alert path=${JSON.stringify(join(outDir, 'alert.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD autocomplete path=${JSON.stringify(join(outDir, 'autocomplete.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD badge path=${JSON.stringify(join(outDir, 'badge.tsx'))} source=tsx`,
@@ -152,16 +160,25 @@ describe('fw add', () => {
         `ADD checkbox-group path=${JSON.stringify(join(outDir, 'checkbox-group.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD combobox path=${JSON.stringify(join(outDir, 'combobox.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD radio-group path=${JSON.stringify(join(outDir, 'radio-group.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD select path=${JSON.stringify(join(outDir, 'select.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD sheet path=${JSON.stringify(join(outDir, 'sheet.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD skeleton path=${JSON.stringify(join(outDir, 'skeleton.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD slider path=${JSON.stringify(join(outDir, 'slider.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD switch path=${JSON.stringify(join(outDir, 'switch.tsx'))} source=tsx`,
@@ -176,27 +193,37 @@ describe('fw add', () => {
         `ADD toggle-group path=${JSON.stringify(join(outDir, 'toggle-group.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD toast path=${JSON.stringify(join(outDir, 'toast.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD toolbar path=${JSON.stringify(join(outDir, 'toolbar.tsx'))} source=tsx`,
       );
 
       const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
+      const autocomplete = readFileSync(join(outDir, 'autocomplete.tsx'), 'utf8');
       const badge = readFileSync(join(outDir, 'badge.tsx'), 'utf8');
       const breadcrumb = readFileSync(join(outDir, 'breadcrumb.tsx'), 'utf8');
       const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
       const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
       const checkbox = readFileSync(join(outDir, 'checkbox.tsx'), 'utf8');
       const checkboxGroup = readFileSync(join(outDir, 'checkbox-group.tsx'), 'utf8');
+      const combobox = readFileSync(join(outDir, 'combobox.tsx'), 'utf8');
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
       const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
+      const select = readFileSync(join(outDir, 'select.tsx'), 'utf8');
       const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
       const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
+      const slider = readFileSync(join(outDir, 'slider.tsx'), 'utf8');
       const switchSource = readFileSync(join(outDir, 'switch.tsx'), 'utf8');
       const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
       const toggle = readFileSync(join(outDir, 'toggle.tsx'), 'utf8');
       const toggleGroup = readFileSync(join(outDir, 'toggle-group.tsx'), 'utf8');
+      const toast = readFileSync(join(outDir, 'toast.tsx'), 'utf8');
       const toolbar = readFileSync(join(outDir, 'toolbar.tsx'), 'utf8');
       expect(alert).toContain("export const Alert = component('alert'");
       expect(alert).toContain('export const alertClassNames = defineVariants');
+      expect(autocomplete).toContain("export const Autocomplete = component('autocomplete'");
+      expect(autocomplete).toContain('export const autocompleteClassNames = defineVariants');
       expect(badge).toContain("export const Badge = component('badge'");
       expect(badge).toContain('export const badgeClassNames = defineVariants');
       expect(breadcrumb).toContain("export const Breadcrumb = component('breadcrumb'");
@@ -210,14 +237,20 @@ describe('fw add', () => {
       expect(checkbox).toContain('export const checkboxClassNames = defineVariants');
       expect(checkboxGroup).toContain("export const CheckboxGroup = component('checkbox-group'");
       expect(checkboxGroup).toContain('export const checkboxGroupClassNames = defineVariants');
+      expect(combobox).toContain("export const Combobox = component('combobox'");
+      expect(combobox).toContain('export const comboboxClassNames = defineVariants');
       expect(kbd).toContain("export const Kbd = component('kbd'");
       expect(kbd).toContain('export const kbdClassNames =');
       expect(radioGroup).toContain("export const RadioGroup = component('radio-group'");
       expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
+      expect(select).toContain("export const Select = component('select'");
+      expect(select).toContain('export const selectClassNames = defineVariants');
       expect(sheet).toContain("export const Sheet = component('sheet'");
       expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
       expect(skeleton).toContain("export const Skeleton = component('skeleton'");
       expect(skeleton).toContain('export const skeletonClassNames =');
+      expect(slider).toContain("export const Slider = component('slider'");
+      expect(slider).toContain('export const sliderClassNames = defineVariants');
       expect(switchSource).toContain("export const Switch = component('switch'");
       expect(switchSource).toContain('export const switchClassNames = defineVariants');
       expect(table).toContain("export const Table = component('table'");
@@ -226,24 +259,31 @@ describe('fw add', () => {
       expect(toggle).toContain('export const toggleClassNames = defineVariants');
       expect(toggleGroup).toContain("export const ToggleGroup = component('toggle-group'");
       expect(toggleGroup).toContain('export const toggleGroupClassNames = defineVariants');
+      expect(toast).toContain("export const Toast = component('toast'");
+      expect(toast).toContain('export const toastClassNames = defineVariants');
       expect(toolbar).toContain("export const Toolbar = component('toolbar'");
       expect(toolbar).toContain('export const toolbarClassNames = defineVariants');
       const vendoredSource = [
         alert,
+        autocomplete,
         badge,
         breadcrumb,
         button,
         card,
         checkbox,
         checkboxGroup,
+        combobox,
         kbd,
         radioGroup,
+        select,
         sheet,
         skeleton,
+        slider,
         switchSource,
         table,
         toggle,
         toggleGroup,
+        toast,
         toolbar,
       ].join('\n');
       expect(vendoredSource).not.toContain('@jiso/ui');
@@ -288,7 +328,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, checkbox-group, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, sheet, skeleton, switch, table, tabs, toggle, toggle-group, toolbar.\n',
+        'fw: unknown component "dialog". available: alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar.\n',
       );
     } finally {
       stdout.mockRestore();

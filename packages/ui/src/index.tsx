@@ -28,6 +28,31 @@ export {
 export type { CheckboxProps } from './checkbox.js';
 export { Alert, alertClassNames, alertClasses } from './alert.js';
 export type { AlertProps, AlertVariant } from './alert.js';
+export {
+  Autocomplete,
+  AutocompleteInput,
+  AutocompleteList,
+  AutocompleteOption,
+  AutocompleteValue,
+  autocompleteClassNames,
+  autocompleteClasses,
+  autocompleteInputClassNames,
+  autocompleteInputClasses,
+  autocompleteListClassNames,
+  autocompleteListClasses,
+  autocompleteOptionClassNames,
+  autocompleteOptionClasses,
+  autocompleteValueClassNames,
+  autocompleteValueClasses,
+} from './autocomplete.js';
+export type {
+  AutocompleteInputProps,
+  AutocompleteListProps,
+  AutocompleteOptionProps,
+  AutocompleteProps,
+  AutocompleteStateProps,
+  AutocompleteValueProps,
+} from './autocomplete.js';
 export { Kbd, kbdClassNames, kbdClasses } from './kbd.js';
 export type { KbdProps } from './kbd.js';
 export {
@@ -51,6 +76,31 @@ export type {
   CheckboxGroupProps,
   CheckboxGroupStateProps,
 } from './checkbox-group.js';
+export {
+  Combobox,
+  ComboboxInput,
+  ComboboxListbox,
+  ComboboxOption,
+  ComboboxValue,
+  comboboxClassNames,
+  comboboxClasses,
+  comboboxInputClassNames,
+  comboboxInputClasses,
+  comboboxListboxClassNames,
+  comboboxListboxClasses,
+  comboboxOptionClassNames,
+  comboboxOptionClasses,
+  comboboxValueClassNames,
+  comboboxValueClasses,
+} from './combobox.js';
+export type {
+  ComboboxInputProps,
+  ComboboxListboxProps,
+  ComboboxOptionProps,
+  ComboboxProps,
+  ComboboxStateProps,
+  ComboboxValueProps,
+} from './combobox.js';
 export {
   RadioGroup,
   RadioGroupItem,
@@ -174,6 +224,31 @@ export type {
   ScrollAreaViewportProps,
 } from './scroll-area.js';
 export {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  selectClassNames,
+  selectClasses,
+  selectContentClassNames,
+  selectContentClasses,
+  selectItemClassNames,
+  selectItemClasses,
+  selectTriggerClassNames,
+  selectTriggerClasses,
+  selectValueClassNames,
+  selectValueClasses,
+} from './select.js';
+export type {
+  SelectContentProps,
+  SelectItemProps,
+  SelectProps,
+  SelectStateProps,
+  SelectTriggerProps,
+  SelectValueProps,
+} from './select.js';
+export {
   Switch,
   switchClassNames,
   switchClasses,
@@ -199,6 +274,24 @@ export {
   tableWrapperClassNames,
 } from './table.js';
 export type { TableCellProps, TableProps, TableSectionProps } from './table.js';
+export {
+  Slider,
+  SliderInput,
+  SliderRange,
+  SliderThumb,
+  SliderTrack,
+  sliderClassNames,
+  sliderClasses,
+  sliderInputClassNames,
+  sliderInputClasses,
+  sliderRangeClassNames,
+  sliderRangeClasses,
+  sliderThumbClassNames,
+  sliderThumbClasses,
+  sliderTrackClassNames,
+  sliderTrackClasses,
+} from './slider.js';
+export type { SliderInputProps, SliderPartProps, SliderProps, SliderStateProps } from './slider.js';
 export {
   Tabs,
   TabsList,
@@ -239,6 +332,33 @@ export type {
   ToggleGroupProps,
   ToggleGroupStateProps,
 } from './toggle-group.js';
+export {
+  Toast,
+  ToastAction,
+  ToastClose,
+  ToastDescription,
+  ToastTitle,
+  ToastViewport,
+  toastActionClassNames,
+  toastActionClasses,
+  toastClassNames,
+  toastClasses,
+  toastCloseClassNames,
+  toastCloseClasses,
+  toastDescriptionClassNames,
+  toastDescriptionClasses,
+  toastTitleClassNames,
+  toastTitleClasses,
+  toastViewportClassNames,
+  toastViewportClasses,
+} from './toast.js';
+export type {
+  ToastActionProps,
+  ToastCloseProps,
+  ToastPartProps,
+  ToastProps,
+  ToastViewportProps,
+} from './toast.js';
 export {
   Toolbar,
   ToolbarButton,

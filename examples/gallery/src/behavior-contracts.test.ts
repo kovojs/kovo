@@ -25,6 +25,11 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed, disabled',
     keyboard: 'Escape cancels the native alert dialog',
   },
+  '/components/autocomplete': {
+    changeReasons: 'input, option-select, typeahead, programmatic',
+    dataState: 'open, closed, checked, unchecked, highlighted, disabled',
+    keyboard: 'Native input editing plus Arrow and Escape primitive handlers',
+  },
   '/components/avatar': {
     changeReasons: 'image-load, image-error, programmatic',
     dataState: 'loading, loaded, error',
@@ -59,6 +64,11 @@ const expectedBehaviorContracts = {
     changeReasons: 'item-click, keyboard, programmatic',
     dataState: 'checked, unchecked, disabled',
     keyboard: 'Arrow keys move focus over enabled checkbox items; Space toggles focused item',
+  },
+  '/components/combobox': {
+    changeReasons: 'input, option-select, arrow-key, escape-key, typeahead, programmatic',
+    dataState: 'open, closed, checked, unchecked, highlighted, disabled',
+    keyboard: 'Arrow keys open and move; Escape closes the listbox',
   },
   '/components/dialog': {
     changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle, programmatic',
@@ -130,6 +140,11 @@ const expectedBehaviorContracts = {
     dataState: 'not emitted',
     keyboard: 'No custom keyboard handling',
   },
+  '/components/slider': {
+    changeReasons: 'input, programmatic',
+    dataState: 'horizontal, vertical, invalid, required, disabled',
+    keyboard: 'Native range input keyboard behavior',
+  },
   '/components/switch': {
     changeReasons: 'trigger-click, programmatic',
     dataState: 'checked, unchecked, disabled',
@@ -144,6 +159,11 @@ const expectedBehaviorContracts = {
     changeReasons: 'trigger-click, keyboard, programmatic',
     dataState: 'active, inactive, disabled',
     keyboard: 'Arrow keys move focus; activation mode controls selection',
+  },
+  '/components/toast': {
+    changeReasons: 'action-click, close-click, escape-key, timeout, programmatic',
+    dataState: 'open, closed, disabled, variant',
+    keyboard: 'Escape dismisses the active toast',
   },
   '/components/toggle': {
     changeReasons: 'trigger-click, programmatic',
@@ -202,6 +222,16 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'data-intent="destructive"',
     'command="request-close"',
   ],
+  '/components/autocomplete': [
+    'role="combobox"',
+    'aria-autocomplete="list"',
+    'aria-controls="gallery-autocomplete-list"',
+    'aria-activedescendant="gallery-autocomplete-list-option-1"',
+    'list="gallery-autocomplete-list"',
+    '<datalist',
+    'data-highlighted="" data-state="checked"',
+    'id="gallery-autocomplete-value">Growth plan</span>',
+  ],
   '/components/breadcrumb': [
     'aria-label="Account path"',
     'href="/account"',
@@ -228,6 +258,17 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'tabIndex="0"',
     'data-disabled="" data-state="unchecked" disabled',
     'tabIndex="-1" type="checkbox" value="security"',
+  ],
+  '/components/combobox': [
+    'role="combobox"',
+    'aria-autocomplete="list"',
+    'aria-controls="gallery-combobox-listbox"',
+    'aria-activedescendant="gallery-combobox-listbox-option-1"',
+    'role="listbox"',
+    'aria-selected="true"',
+    'data-highlighted="" data-state="unchecked"',
+    'aria-disabled="true"',
+    'id="gallery-combobox-value">Ada Lovelace</span>',
   ],
   '/components/dialog': [
     'command="show-modal"',
@@ -313,8 +354,10 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/select': [
     '<select',
     'aria-labelledby="gallery-select-label"',
+    '<optgroup',
     'selected',
     'disabled',
+    'id="gallery-select-value">Growth</span>',
   ],
   '/components/separator': ['role="none"', 'role="separator"', 'aria-orientation="vertical"'],
   '/components/sheet': [
@@ -326,6 +369,16 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/skeleton': [
     'aria-hidden="true"',
     'animate-pulse rounded-md bg-neutral-200 h-4 w-40',
+  ],
+  '/components/slider': [
+    'type="range"',
+    'name="gallery-coverage"',
+    'aria-describedby="gallery-slider-description gallery-slider-error"',
+    'aria-valuetext="65 percent coverage"',
+    'data-part="track"',
+    'data-part="range"',
+    'data-part="thumb"',
+    'data-value-ratio="0.65"',
   ],
   '/components/switch': ['role="switch"', 'type="checkbox"', 'aria-checked="true"', 'disabled'],
   '/components/table': [
@@ -343,6 +396,18 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'role="tabpanel"',
     'data-disabled="" data-state="inactive" disabled',
     'role="tab" tabIndex="-1" type="button" value="audit"',
+  ],
+  '/components/toast': [
+    'role="region"',
+    'aria-live="polite"',
+    'aria-labelledby="gallery-toast-title"',
+    'aria-describedby="gallery-toast-description"',
+    'data-state="open" data-variant="success"',
+    'role="status"',
+    'data-action=""',
+    'data-dismiss=""',
+    'data-state="closed" data-variant="error" hidden',
+    'role="alert"',
   ],
   '/components/toggle': [
     'data-state="pressed"',

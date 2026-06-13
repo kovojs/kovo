@@ -19,12 +19,6 @@ import {
   dialogTriggerAttributes,
   meterRootAttributes,
   progressRootAttributes,
-  selectContentAttributes,
-  selectItemAttributes,
-  selectRootAttributes,
-  selectTriggerAttributes,
-  selectValueAttributes,
-  selectValueText,
   separatorRootAttributes,
   tabsRootAttributes,
   tooltipContentAttributes,
@@ -33,6 +27,11 @@ import {
 } from '@jiso/headless-ui/primitives';
 import {
   Alert,
+  Autocomplete,
+  AutocompleteInput,
+  AutocompleteList,
+  AutocompleteOption,
+  AutocompleteValue,
   Badge,
   Breadcrumb,
   BreadcrumbItem,
@@ -45,6 +44,11 @@ import {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
+  Combobox,
+  ComboboxInput,
+  ComboboxListbox,
+  ComboboxOption,
+  ComboboxValue,
   Drawer,
   Field,
   FieldControl,
@@ -72,8 +76,18 @@ import {
   ScrollAreaScrollbar,
   ScrollAreaThumb,
   ScrollAreaViewport,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Sheet,
   Skeleton,
+  Slider,
+  SliderInput,
+  SliderRange,
+  SliderThumb,
+  SliderTrack,
   Switch,
   Table,
   TableBody,
@@ -89,6 +103,12 @@ import {
   ToggleGroup,
   ToggleGroupButton,
   ToggleGroupItem,
+  Toast,
+  ToastAction,
+  ToastClose,
+  ToastDescription,
+  ToastTitle,
+  ToastViewport,
   Toolbar,
   ToolbarButton,
   ToolbarItem,
@@ -98,6 +118,7 @@ export type GalleryComponent =
   | 'accordion'
   | 'alert'
   | 'alert-dialog'
+  | 'autocomplete'
   | 'avatar'
   | 'badge'
   | 'breadcrumb'
@@ -105,6 +126,7 @@ export type GalleryComponent =
   | 'card'
   | 'checkbox'
   | 'checkbox-group'
+  | 'combobox'
   | 'dialog'
   | 'drawer'
   | 'field'
@@ -119,9 +141,11 @@ export type GalleryComponent =
   | 'separator'
   | 'sheet'
   | 'skeleton'
+  | 'slider'
   | 'switch'
   | 'table'
   | 'tabs'
+  | 'toast'
   | 'toggle'
   | 'toggle-group'
   | 'toolbar'
@@ -161,6 +185,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/alert-dialog',
     render: () => AlertDialogDemo(),
     title: 'Alert Dialog',
+  },
+  {
+    component: 'autocomplete',
+    path: '/components/autocomplete',
+    render: () => AutocompleteDemo(),
+    title: 'Autocomplete',
   },
   {
     component: 'avatar',
@@ -203,6 +233,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/checkbox-group',
     render: () => CheckboxGroupDemo(),
     title: 'Checkbox Group',
+  },
+  {
+    component: 'combobox',
+    path: '/components/combobox',
+    render: () => ComboboxDemo(),
+    title: 'Combobox',
   },
   {
     component: 'dialog',
@@ -289,6 +325,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Skeleton',
   },
   {
+    component: 'slider',
+    path: '/components/slider',
+    render: () => SliderDemo(),
+    title: 'Slider',
+  },
+  {
     component: 'switch',
     path: '/components/switch',
     render: () => SwitchDemo(),
@@ -305,6 +347,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/tabs',
     render: () => TabsDemo(),
     title: 'Tabs',
+  },
+  {
+    component: 'toast',
+    path: '/components/toast',
+    render: () => ToastDemo(),
+    title: 'Toast',
   },
   {
     component: 'toggle',
@@ -538,6 +586,77 @@ export function AlertDialogDemo(): string {
   );
 }
 
+export function AutocompleteDemo(): string {
+  const items = [
+    { label: 'Starter plan', value: 'starter' },
+    { label: 'Growth plan', value: 'growth' },
+    { disabled: true, label: 'Enterprise plan', value: 'enterprise' },
+  ];
+  const state = {
+    descriptionId: 'gallery-autocomplete-description',
+    highlightedValue: 'growth',
+    inputValue: 'gr',
+    items,
+    listId: 'gallery-autocomplete-list',
+    name: 'gallery-plan-search',
+    open: true,
+    required: true,
+    value: 'growth',
+  };
+
+  return (
+    <section data-gallery-demo="autocomplete">
+      <p data-demo-summary="no-js">
+        Autocomplete keeps a native input and datalist pair for form submission and browser
+        suggestions.
+      </p>
+      <label id="gallery-autocomplete-label" for="gallery-autocomplete-input">
+        Plan search
+      </label>
+      <div data-ui-demo="autocomplete">
+        {Autocomplete.definition.render({
+          ...state,
+          children: (
+            <>
+              {AutocompleteInput.definition.render({
+                ...state,
+                id: 'gallery-autocomplete-input',
+                labelledBy: 'gallery-autocomplete-label',
+                placeholder: 'Search plans',
+              })}
+              {AutocompleteList.definition.render({
+                ...state,
+                children: items
+                  .map((item) =>
+                    AutocompleteOption.definition.render({
+                      ...state,
+                      itemLabel: item.label,
+                      itemValue: item.value,
+                    }),
+                  )
+                  .join(''),
+                id: 'gallery-autocomplete-list',
+                labelledBy: 'gallery-autocomplete-label',
+              })}
+              {AutocompleteValue.definition.render({
+                ...state,
+                id: 'gallery-autocomplete-value',
+              })}
+              <p id="gallery-autocomplete-description">Suggestions remain browser-native.</p>
+            </>
+          ),
+          id: 'gallery-autocomplete',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'input, option-select, typeahead, programmatic',
+        dataState: 'open, closed, checked, unchecked, highlighted, disabled',
+        keyboard: 'Native input editing plus Arrow and Escape primitive handlers',
+      })}
+    </section>
+  );
+}
+
 export function BadgeDemo(): string {
   return (
     <section data-gallery-demo="badge">
@@ -721,6 +840,74 @@ export function CheckboxGroupDemo(): string {
         changeReasons: 'item-click, keyboard, programmatic',
         dataState: 'checked, unchecked, disabled',
         keyboard: 'Arrow keys move focus over enabled checkbox items; Space toggles focused item',
+      })}
+    </section>
+  );
+}
+
+export function ComboboxDemo(): string {
+  const items = [
+    { label: 'Ada Lovelace', value: 'ada' },
+    { label: 'Grace Hopper', value: 'grace' },
+    { disabled: true, label: 'Katherine Johnson', value: 'katherine' },
+  ];
+  const state = {
+    descriptionId: 'gallery-combobox-description',
+    highlightedValue: 'grace',
+    items,
+    listboxId: 'gallery-combobox-listbox',
+    name: 'gallery-assignee',
+    open: true,
+    placeholder: 'Search people',
+    required: true,
+    value: 'ada',
+  };
+
+  return (
+    <section data-gallery-demo="combobox">
+      <p data-demo-summary="no-js">
+        Combobox keeps the submitted value on a native input while listbox options expose ARIA
+        selection and highlight state.
+      </p>
+      <label id="gallery-combobox-label" for="gallery-combobox-input">
+        Assignee
+      </label>
+      <div data-ui-demo="combobox">
+        {Combobox.definition.render({
+          ...state,
+          children: (
+            <>
+              {ComboboxInput.definition.render({
+                ...state,
+                id: 'gallery-combobox-input',
+                labelledBy: 'gallery-combobox-label',
+              })}
+              {ComboboxListbox.definition.render({
+                ...state,
+                children: items
+                  .map((item, index) =>
+                    ComboboxOption.definition.render({
+                      ...state,
+                      id: `gallery-combobox-listbox-option-${index}`,
+                      itemLabel: item.label,
+                      itemValue: item.value,
+                    }),
+                  )
+                  .join(''),
+                id: 'gallery-combobox-listbox',
+                labelledBy: 'gallery-combobox-label',
+              })}
+              {ComboboxValue.definition.render({ ...state, id: 'gallery-combobox-value' })}
+              <p id="gallery-combobox-description">Choose a release owner.</p>
+            </>
+          ),
+          id: 'gallery-combobox',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'input, option-select, arrow-key, escape-key, typeahead, programmatic',
+        dataState: 'open, closed, checked, unchecked, highlighted, disabled',
+        keyboard: 'Arrow keys open and move; Escape closes the listbox',
       })}
     </section>
   );
@@ -1304,35 +1491,43 @@ export function SelectDemo(): string {
   };
 
   return (
-    <section {...selectRootAttributes(state)} data-gallery-demo="select">
+    <section data-gallery-demo="select">
       <p data-demo-summary="no-js">
         Select keeps a real select control and option list for no-JS form submission.
       </p>
       <label id="gallery-select-label" for="gallery-select">
         Plan
       </label>
-      <select
-        {...selectTriggerAttributes({
+      <div data-ui-demo="select">
+        {Select.definition.render({
           ...state,
-          id: 'gallery-select',
-          labelledBy: 'gallery-select-label',
-        })}
-      >
-        <optgroup {...selectContentAttributes({ ...state, labelledBy: 'gallery-select-label' })}>
-          {items.map((item) => (
-            <option
-              {...selectItemAttributes({
+          children: (
+            <>
+              {SelectTrigger.definition.render({
                 ...state,
-                itemLabel: item.label,
-                itemValue: item.value,
+                children: SelectContent.definition.render({
+                  ...state,
+                  children: items
+                    .map((item) =>
+                      SelectItem.definition.render({
+                        ...state,
+                        itemLabel: item.label,
+                        itemValue: item.value,
+                      }),
+                    )
+                    .join(''),
+                  label: 'Plans',
+                  labelledBy: 'gallery-select-label',
+                }),
+                id: 'gallery-select',
+                labelledBy: 'gallery-select-label',
               })}
-            >
-              {item.label}
-            </option>
-          ))}
-        </optgroup>
-      </select>
-      <span {...selectValueAttributes(state)}>{selectValueText(state)}</span>
+              {SelectValue.definition.render({ ...state, id: 'gallery-select-value' })}
+            </>
+          ),
+          id: 'gallery-select-root',
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-change, programmatic',
         dataState: 'open, closed, checked, unchecked, disabled',
@@ -1427,6 +1622,60 @@ export function SkeletonDemo(): string {
         changeReasons: 'not stateful',
         dataState: 'not emitted',
         keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function SliderDemo(): string {
+  const state = {
+    invalid: true,
+    max: 100,
+    min: 0,
+    name: 'gallery-coverage',
+    required: true,
+    step: 5,
+    value: 65,
+  };
+
+  return (
+    <section data-gallery-demo="slider">
+      <p data-demo-summary="no-js">
+        Slider keeps a native range input for keyboard, form, and validation behavior while exposing
+        decorative track parts.
+      </p>
+      <label id="gallery-slider-label" for="gallery-slider-input">
+        Coverage
+      </label>
+      <div data-ui-demo="slider">
+        {Slider.definition.render({
+          ...state,
+          children: (
+            <>
+              {SliderInput.definition.render({
+                ...state,
+                descriptionId: 'gallery-slider-description',
+                errorId: 'gallery-slider-error',
+                id: 'gallery-slider-input',
+                labelledBy: 'gallery-slider-label',
+                valueText: '65 percent coverage',
+              })}
+              {SliderTrack.definition.render({
+                ...state,
+                children: SliderRange.definition.render(state),
+              })}
+              {SliderThumb.definition.render(state)}
+              <p id="gallery-slider-description">Choose a release coverage target.</p>
+              <p id="gallery-slider-error">Coverage must be reviewed.</p>
+            </>
+          ),
+          id: 'gallery-slider',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'input, programmatic',
+        dataState: 'horizontal, vertical, invalid, required, disabled',
+        keyboard: 'Native range input keyboard behavior',
       })}
     </section>
   );
@@ -1561,6 +1810,59 @@ export function TabsDemo(): string {
         changeReasons: 'trigger-click, keyboard, programmatic',
         dataState: 'active, inactive, disabled',
         keyboard: 'Arrow keys move focus; activation mode controls selection',
+      })}
+    </section>
+  );
+}
+
+export function ToastDemo(): string {
+  const toast = Toast.definition.render({
+    children: (
+      <>
+        {ToastTitle.definition.render({
+          children: 'Deployment complete',
+          id: 'gallery-toast-title',
+        })}
+        {ToastDescription.definition.render({
+          children: 'Production is serving the new build.',
+          id: 'gallery-toast-description',
+        })}
+        {ToastAction.definition.render({
+          actionValue: 'open-deploy',
+          children: 'View deploy',
+          id: 'gallery-toast',
+        })}
+        {ToastClose.definition.render({ children: 'Dismiss', id: 'gallery-toast' })}
+      </>
+    ),
+    descriptionId: 'gallery-toast-description',
+    id: 'gallery-toast',
+    titleId: 'gallery-toast-title',
+    variant: 'success',
+  });
+
+  return (
+    <section data-gallery-demo="toast">
+      <p data-demo-summary="no-js">
+        Toast exposes a live-region viewport and dismiss/action buttons with inspectable state.
+      </p>
+      <div data-ui-demo="toast">
+        {ToastViewport.definition.render({
+          children: `${toast}${Toast.definition.render({
+            id: 'gallery-toast-hidden',
+            open: false,
+            politeness: 'assertive',
+            variant: 'error',
+          })}`,
+          id: 'gallery-toast-viewport',
+          label: 'Gallery notifications',
+          placement: 'top-center',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'action-click, close-click, escape-key, timeout, programmatic',
+        dataState: 'open, closed, disabled, variant',
+        keyboard: 'Escape dismisses the active toast',
       })}
     </section>
   );
