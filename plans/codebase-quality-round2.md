@@ -2439,6 +2439,18 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- Round310 runtime wire scanner seam split:
+  `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/wire-response-scanner.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-build.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  exact `pnpm exec vp check packages/runtime/src/wire-response-scanner.ts packages/runtime/src/wire-response-scanner.test.ts packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/runtime/src/wire-response-scanner.ts` now keeps the single-fragment element
+  projector private while retaining the shared SPEC.md §4.4/§9.1 scanner readers consumed by
+  modular mutation parsing and inline-loader extraction; `packages/runtime/src/wire-response-scanner.test.ts`
+  owns scanner/entity/chunk projection coverage that was previously mixed into
+  `packages/runtime/src/wire-parser.test.ts`, leaving the parser suite focused on decoded query,
+  mutation-body, and deferred-stream behavior.
 - Runtime root DOM body parser export removal:
   `pnpm exec vitest --run packages/runtime/src/index-exports.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/delegated-runtime-integration.test.ts packages/runtime/src/morph.test.ts`;
   `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/mutation-response-dom.browser.test.ts`;

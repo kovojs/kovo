@@ -64,7 +64,7 @@ export function readMutationResponseElementChunks(
   };
 }
 
-export function readFragmentElementChunk(
+function readFragmentElementChunk(
   chunk: Pick<ElementChunk, 'attrs' | 'content'>,
 ): FragmentChunk | undefined {
   const target = readAttribute(chunk.attrs, 'target');
