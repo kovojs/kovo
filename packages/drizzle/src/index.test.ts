@@ -14042,7 +14042,38 @@ export interface CommerceInvalidationSets {
         unresolved: [
           {
             code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
+            message:
+              'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
+            site: 'product.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks unresolved update-from source tables as explicit FW406 read-source surfaces', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function importSnapshots(db) {
+            await db.update(products).set({ reserved: true }).from(tableFor("prices"));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      importSnapshots: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' }],
+        unresolved: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
             site: 'product.domain.ts:5',
           },
         ],
@@ -14075,7 +14106,8 @@ export interface CommerceInvalidationSets {
         unresolved: [
           {
             code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
+            message:
+              'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
             site: 'product.domain.ts:5',
           },
         ],

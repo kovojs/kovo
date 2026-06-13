@@ -7606,6 +7606,81 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins opaque real Drizzle write read sources as explicit FW406 surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', { id: text('id') }, jiso({ domain: 'product', key: 'id' }));",
+            "export const snapshots = pgTable('product_snapshots', { productId: text('product_id') }, jiso({ domain: 'snapshot', key: 'productId' }));",
+            '',
+            'function tableFor<T>(name: string): T { return name as T; }',
+            '',
+            'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
+            "  await db.insert(snapshots).select(db.select().from(tableFor('products')));",
+            "  await db.update(products).set({ refreshed: true }).from(tableFor('vendors'));",
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncCatalog: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
+            via: 'products',
+          },
+          {
+            domain: 'snapshot',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
+            via: 'product_snapshots',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
+          },
+        ],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
+        severity: 'warn',
+        site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
+      },
+      {
+        code: 'FW406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
+        severity: 'warn',
+        site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
+      },
+    ]);
+  });
+
   it('pins real Drizzle raw query execute as an explicit FW406 read surface', () => {
     expect(sql`select * from users`).toBeDefined();
 

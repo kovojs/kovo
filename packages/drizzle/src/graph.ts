@@ -92,10 +92,22 @@ export function createTouchGraphEntry(input: {
     unresolved: [...(input.unresolved ?? [])].map((site) => ({
       code: 'FW406',
       ...(site.domain === undefined ? {} : { domain: site.domain }),
-      message: diagnosticDefinitions.FW406.message,
+      message: unresolvedMessage(site),
       site: site.site,
     })),
   };
+}
+
+function unresolvedMessage(site: UnresolvedSummaryInput): string {
+  // SPEC §11.1: insert-select/update-from read sources are separate visible surfaces from the
+  // write target. Keep their FW406 diagnostics explicit when the source table cannot be proven.
+  if (site.operation === 'insert-select') {
+    return `${diagnosticDefinitions.FW406.message} Insert-select read source could not be resolved to a Drizzle table.`;
+  }
+  if (site.operation === 'update-from') {
+    return `${diagnosticDefinitions.FW406.message} Update-from read source could not be resolved to a Drizzle table.`;
+  }
+  return diagnosticDefinitions.FW406.message;
 }
 
 export function serializeTouchGraph(graph: TouchGraph): string {

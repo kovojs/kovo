@@ -1396,6 +1396,18 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round332: unresolved insert-select/update-from read-source tables now
+      emit operation-specific FW406 messages from `packages/drizzle/src/graph.ts`, keeping opaque
+      write-chain read surfaces visible separately from unresolved write targets per SPEC §11.1.
+      `packages/drizzle/src/index.test.ts` covers source insert-select/update-from degradation,
+      and `conformance/drizzle-pin/src/index.test.ts` pins the same behavior against real
+      `drizzle-orm` Postgres receivers. Verified by
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`,
+      `pnpm exec tsc --noEmit --pretty false`, exact
+      `pnpm exec vp check packages/drizzle/src/graph.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Evidence 2026-06-13 round256: domain action spreads such as
       `domain({ ...actionConfig })` now resolve statically proven `write(...)` callbacks through
       ts-morph property declarations, preserve later spread/direct override semantics, and keep
