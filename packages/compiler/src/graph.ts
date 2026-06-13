@@ -2,7 +2,7 @@ import { kebabCase } from './shared.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
-  componentOptionSource,
+  componentOptionStaticValue,
   firstComponentModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
@@ -40,8 +40,7 @@ export function findFragmentTargetFacts(
   componentName: string,
   model: ComponentModuleModel,
 ): FragmentTargetFact[] {
-  const fragmentTarget = componentOptionSource(model, 'fragmentTarget');
-  if (fragmentTarget !== 'true') return [];
+  if (componentOptionStaticValue(model, 'fragmentTarget') !== true) return [];
 
   const explicitName = firstComponentModel(model)?.explicitName;
   return [

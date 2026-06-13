@@ -1174,6 +1174,15 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Component option static-fact cleanup: `pnpm exec vitest --run
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-coverage.test.ts
+packages/compiler/src/fragment-targets.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/registry.test.ts packages/compiler/src/css.test.ts`; `pnpm exec tsc
+--noEmit --pretty false`; exact `pnpm exec vp check packages/compiler/src/scan/parse.ts
+packages/compiler/src/analyze/query-updates.ts packages/compiler/src/graph.ts`; `git diff
+--check`. Evidence: component option entries now carry parser-owned static values,
+  `isomorphic`/`fragmentTarget` consumers read those model facts, and the unused source-returning
+  `componentOptionSource()` helper is deleted.
 - Server-fact validator model-key cleanup: `pnpm exec vitest --run
 packages/compiler/src/state-events.test.ts packages/compiler/src/query-coverage.test.ts
 packages/compiler/src/compile-component.test.ts packages/compiler/src/id-content-model.test.ts`;

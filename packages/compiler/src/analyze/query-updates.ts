@@ -9,7 +9,7 @@ import {
 } from './query-shapes.js';
 import {
   callExpressions,
-  componentOptionSource,
+  componentOptionStaticValue,
   jsxElementChildBody,
   jsxElements,
   jsxExpressions,
@@ -165,7 +165,7 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  if (componentOptionSource(model, 'isomorphic')?.trim() === 'true') {
+  if (componentOptionStaticValue(model, 'isomorphic') === true) {
     for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
       const path = expression.path;
       if (coveredPaths.has(path)) continue;

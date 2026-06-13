@@ -5,6 +5,7 @@ import type { StaticLiteralValue } from './object.js';
 export interface ComponentOptionEntry {
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
+  staticValue?: StaticLiteralValue;
   value: string;
 }
 
@@ -314,13 +315,12 @@ export function inferComponentName(fileName: string, model: ComponentModuleModel
     .join('');
 }
 
-export function componentOptionSource(
+export function componentOptionStaticValue(
   model: ComponentModuleModel,
   propertyName: string,
-): string | null {
-  return (
-    firstComponentModel(model)?.options.find((option) => option.key === propertyName)?.value ?? null
-  );
+): StaticLiteralValue | undefined {
+  return firstComponentModel(model)?.options.find((option) => option.key === propertyName)
+    ?.staticValue;
 }
 
 export function componentOptionObjectEntries(
@@ -816,6 +816,7 @@ function componentOptions(
         ...(ts.isObjectLiteralExpression(property.initializer)
           ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
           : {}),
+        ...componentOptionStaticValueEntry(property.initializer),
         value: source.slice(
           property.initializer.getStart(sourceFile),
           property.initializer.getEnd(),
@@ -823,6 +824,13 @@ function componentOptions(
       },
     ];
   });
+}
+
+function componentOptionStaticValueEntry(
+  expression: ts.Expression,
+): { staticValue: StaticLiteralValue } | {} {
+  const value = staticLiteralValue(expression);
+  return value === undefined ? {} : { staticValue: value };
 }
 
 function stringRenderReturns(
