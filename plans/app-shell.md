@@ -672,3 +672,17 @@ Round190 commerce app-shell source subpath evidence:
   adoption on public app-shell boundaries.
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|static export"`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts -t "server app-shell public API barrels"`
+
+Round195 root app-shell compatibility boundary evidence:
+
+- `packages/server/src/index.ts` now exports root app-shell compatibility aliases directly from
+  the split public app-shell owner subpaths instead of routing root through the aggregate
+  `api/app-shell/index.ts` barrel, preserving SPEC §9.5's public `Request -> Response`,
+  static-export, node, client-module, and Vite helper surface while keeping the aggregate subpath
+  package-only.
+- `packages/server/src/api/app.test.ts` now compares the local and package app-shell aggregate
+  value exports and verifies each one is present on the root compatibility barrel, so future
+  split-owner export drift is caught through public module behavior.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`

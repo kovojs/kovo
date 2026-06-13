@@ -42,6 +42,19 @@ import type { JisoAppShellBuild as ViteJisoAppShellBuild } from './app-shell/vit
 
 describe('server app-shell public API barrels', () => {
   it('keeps the package app-shell API on the public barrel while splitting ownership', () => {
+    const localAppShellValues = appShellApi as Record<string, unknown>;
+    const packageAppShellValues = packageAppShellApi as Record<string, unknown>;
+    const publicValues = publicApi as Record<string, unknown>;
+
+    expect(Object.keys(packageAppShellValues).sort()).toEqual(
+      Object.keys(localAppShellValues).sort(),
+    );
+
+    for (const key of Object.keys(localAppShellValues)) {
+      expect(packageAppShellValues[key]).toBe(localAppShellValues[key]);
+      expect(publicValues[key]).toBe(localAppShellValues[key]);
+    }
+
     expect(publicApi.createApp).toBe(coreApi.createApp);
     expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
 

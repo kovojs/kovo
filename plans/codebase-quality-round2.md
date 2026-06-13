@@ -299,6 +299,10 @@ Commerce Vite dev/export adoption now uses the public `@jiso/server/app-shell/vi
 Commerce app-shell source also imports client-module registry, core request-shell, node adapter,
 and static export helpers from those public app-shell subpaths, leaving root imports for
 non-app-shell data/routing helpers.
+The root `@jiso/server` app-shell compatibility surface now exports directly from the split public
+app-shell owner subpaths instead of routing through the aggregate app-shell barrel; the public API
+test compares local/package app-shell aggregate values and root aliases so split-owner drift is
+observable through module behavior.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
@@ -341,6 +345,9 @@ Latest evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs .* with the built stylesheet href|scaffolds real template files"`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|delegates Vite dev middleware|wires .* public commerce shell static output"`
