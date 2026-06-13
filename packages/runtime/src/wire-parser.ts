@@ -200,7 +200,6 @@ export function readMutationResponseBodyChunks(
     },
   });
   const queries: QueryChunk[] = [];
-  const fragments: FragmentChunk[] = [];
 
   for (const chunk of chunks.queries) {
     const query = readQueryElementChunk(chunk, onError);
@@ -209,12 +208,8 @@ export function readMutationResponseBodyChunks(
   for (const reason of malformedFragments) {
     reportRuntimeError(onError, malformedFragmentError(reason));
   }
-  for (const chunk of chunks.fragments) {
-    const fragment = readFragmentElementChunk(chunk);
-    if (fragment) fragments.push(fragment);
-  }
 
-  return { fragments, queries };
+  return { fragments: readFragmentChunksFromElements(chunks.fragments), queries };
 }
 
 export function readInlineMutationResponseBodyChunks(
@@ -224,15 +219,9 @@ export function readInlineMutationResponseBodyChunks(
   // to the modular runtime, but fragment decoding still follows this canonical
   // response body projection instead of an inline-only apply parser.
   const chunks = readMutationResponseElementChunks(body);
-  const fragments: FragmentChunk[] = [];
-
-  for (const chunk of chunks.fragments) {
-    const fragment = readFragmentElementChunk(chunk);
-    if (fragment) fragments.push(fragment);
-  }
 
   return {
-    fragments,
+    fragments: readFragmentChunksFromElements(chunks.fragments),
     queries: chunks.queries,
   };
 }
@@ -261,19 +250,14 @@ function malformedQueryError(reason: string): Error {
 }
 
 export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter): FragmentChunk[] {
-  const fragments: FragmentChunk[] = [];
-
-  for (const chunk of readElementChunks(body, 'fw-fragment', {
-    nested: true,
-    onMalformed(reason) {
-      reportRuntimeError(onError, malformedFragmentError(reason));
-    },
-  })) {
-    const fragment = readFragmentElementChunk(chunk);
-    if (fragment) fragments.push(fragment);
-  }
-
-  return fragments;
+  return readFragmentChunksFromElements(
+    readElementChunks(body, 'fw-fragment', {
+      nested: true,
+      onMalformed(reason) {
+        reportRuntimeError(onError, malformedFragmentError(reason));
+      },
+    }),
+  );
 }
 
 export function readFragmentElementChunk(
@@ -287,6 +271,19 @@ export function readFragmentElementChunk(
     ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
     target,
   };
+}
+
+function readFragmentChunksFromElements(
+  chunks: Iterable<Pick<ElementChunk, 'attrs' | 'content'>>,
+): FragmentChunk[] {
+  const fragments: FragmentChunk[] = [];
+
+  for (const chunk of chunks) {
+    const fragment = readFragmentElementChunk(chunk);
+    if (fragment) fragments.push(fragment);
+  }
+
+  return fragments;
 }
 
 export function malformedFragmentError(reason: string): Error {

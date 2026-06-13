@@ -40,6 +40,7 @@ describe('inline loader parser parity', () => {
     expect(defaultReadable).toBe(inlineJisoLoaderInstallerReadableSource);
     expect(defaultReadable).toContain(inlineWireParserReadableSource);
     expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
+    expect(inlineWireParserReadableSource).toContain('function readFragmentChunksFromElements(');
     expect(inlineWireParserReadableSource).toContain(
       'function readInlineMutationResponseBodyChunks(',
     );
@@ -77,12 +78,15 @@ describe('inline loader parser parity', () => {
       'export function readFragmentElementChunk(fragment) {',
       '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
       '}',
+      'function readFragmentChunksFromElements(chunks) {',
+      '  return chunks.map(readFragmentElementChunk);',
+      '}',
       'export function readMutationResponseElementChunks(body) {',
       '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
       '}',
       'export function readInlineMutationResponseBodyChunks(body) {',
       '  const chunks = readMutationResponseElementChunks(body);',
-      '  return { fragments: chunks.fragments.map(readFragmentElementChunk), queries: chunks.queries };',
+      '  return { fragments: readFragmentChunksFromElements(chunks.fragments), queries: chunks.queries };',
       '}',
       'function unescapeHtml(value) {',
       '  return value.replaceAll("&amp;", "&");',
@@ -98,6 +102,7 @@ describe('inline loader parser parity', () => {
       /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\).*function readMutationResponseElementChunks\(body\)/s,
     );
     expect(extracted).toContain('function readFragmentElementChunk(fragment)');
+    expect(extracted).toContain('function readFragmentChunksFromElements(chunks)');
     expect(extracted).toContain('function readInlineMutationResponseBodyChunks(body)');
     expect(extracted).not.toContain('unusedHelper');
     expect(extracted).not.toContain('export function');

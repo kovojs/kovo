@@ -655,6 +655,22 @@ packages/runtime/src/derive.test.ts packages/runtime/src/optimism.test.ts`,
 check:inline-loader`, and browser runtime tests `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round252: fragment chunk decoding now runs through the shared
+      `readFragmentChunksFromElements` helper for mutation bodies, standalone fragment reads, and
+      inline response bodies in `packages/runtime/src/wire-parser.ts`; regenerated
+      `packages/runtime/src/inline-loader.ts` includes that helper in the extracted parser closure,
+      pinned by `packages/runtime/src/inline-loader-parser-parity.test.ts`. Decoded mutation apply
+      coverage moved from `packages/runtime/src/mutation-response.test.ts` into
+      `packages/runtime/src/mutation-response-apply.test.ts`. Verified by `pnpm exec vitest --run
+packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/mutation-response-apply.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-js-minifier.test.ts`, `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, and browser runtime tests `pnpm exec
+vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -665,6 +681,10 @@ packages/runtime/src/query-hydration.browser.test.ts`.
       `pnpm exec vitest --config vitest.browser.config.ts --run`; files:
       `packages/runtime/src/index.browser.test.ts` and
       `packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round252: browser runtime checks passed after the shared fragment
+      decoder/inline-loader extraction change. Command: `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
       Evidence 2026-06-13: browser runtime checks passed after readable loader parser-generation
       and parser-parity test split. Command: `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
