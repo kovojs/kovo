@@ -118,6 +118,56 @@ export function queryShapeAtPath(
   return queryShapeAtPath(current[head.name] ?? 'object', tail);
 }
 
+export function queryShapeAtBindingPath(
+  path: string,
+  queryShapes: Record<string, QueryShape>,
+): QueryShape | undefined {
+  const [querySegment, ...segments] = parseBindingPath(path);
+  const queryName = querySegment?.name;
+  const shape = queryName ? queryShapes[queryName] : undefined;
+  return shape === undefined ? undefined : queryShapeAtPath(shape, segments);
+}
+
+export function listItemShapeAtBindingPath(
+  path: string,
+  queryShapes: Record<string, QueryShape>,
+): QueryShape | undefined {
+  const shape = queryShapeAtBindingPath(path, queryShapes);
+  return shape !== undefined && isArrayQueryShape(shape) ? shape[0] : undefined;
+}
+
+export function validateListBindingInQueryShapes(
+  listPath: string,
+  keyPath: string,
+  itemBindingPaths: readonly string[],
+  queryShapes: Record<string, QueryShape>,
+): PathShapeValidation {
+  const [querySegment, ...segments] = parseBindingPath(listPath);
+  const queryName = querySegment?.name;
+  if (!queryName || segments.length === 0) return { exists: false };
+
+  const listShape = queryShapes[queryName];
+  if (!listShape) return { exists: false };
+
+  const itemShape = listItemShapeAtBindingPath(listPath, queryShapes);
+  if (itemShape === undefined) return { exists: false };
+  if (!validatePathInShape(itemShape, [requiredPathSegment(keyPath)]).exists) {
+    return { exists: false };
+  }
+
+  const listValidation = validatePathInShape(listShape, segments);
+  if (!listValidation.exists) return { exists: false };
+  if (listValidation.nullableTraversal) return listValidation;
+
+  for (const path of itemBindingPaths) {
+    if (!validatePathInShape(itemShape, parseBindingPath(relativeBindingPath(path))).exists) {
+      return { exists: false };
+    }
+  }
+
+  return { exists: true };
+}
+
 export function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
   return Object.entries(queryShapes).flatMap(([queryName, shape]) => [
     queryName,
@@ -137,6 +187,10 @@ export function parseBindingPath(path: string): BindingPathSegment[] {
 
 export function requiredPathSegment(name: string): BindingPathSegment {
   return { name, optional: false };
+}
+
+export function relativeBindingPath(path: string): string {
+  return path.startsWith('.') ? path.slice(1) : path;
 }
 
 function queryShapeChildPaths(shape: QueryShape): string[] {

@@ -32,8 +32,11 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       `packages/compiler/src/scan/object.ts`.
 - [ ] P1 final compiler cleanup evidence is partial: component graph facts live in the parser
       model and the dead `findMatchingClosingTag` path is absent, but `packages/compiler/src/index.ts`
-      still owns core fact types, the compile pipeline, and helpers, and duplicate query-shape
-      helpers remain in validator modules. Round-2 Phase 2 tracks the remaining compiler IR split.
+      still owns core fact types, the compile pipeline, and helpers. Round-2 Phase 2 tracks the
+      remaining compiler IR split.
+      Additional evidence 2026-06-12: list-stamp query-shape traversal now lives in
+      `packages/compiler/src/analyze/query-shapes.ts`; `validate/bindings.ts` consumes shared
+      analyzer helpers instead of carrying duplicate path-validation types and array item lookup.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.

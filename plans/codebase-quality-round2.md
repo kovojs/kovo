@@ -125,6 +125,9 @@ Closed evidence so far:
   `ComponentModuleModel`; `package-prefixes.ts` no longer reparses TSX source.
 - Client handler rewrites and server param-type emission now share one element-param attribute
   name normalizer instead of duplicating `data-p-*` lowering logic.
+- List-stamp query-shape traversal now lives in `analyze/query-shapes.ts`; binding validators
+  consume shared analyzer helpers instead of carrying duplicate path-validation types and
+  array-item lookup logic.
 
 Open:
 
@@ -147,6 +150,9 @@ Recent gates:
 - `git diff --check`
 - `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/handler-lowering.test.ts`
 - `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/compile.ts packages/compiler/src/model-pipeline.test.ts`
+- `git diff --check`
+- `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vp check packages/compiler/src/analyze/query-shapes.ts packages/compiler/src/validate/bindings.ts`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

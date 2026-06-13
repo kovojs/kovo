@@ -13,15 +13,15 @@ import {
 import {
   componentQueryShapes,
   knownQueryNames,
+  listItemShapeAtBindingPath,
   parseBindingPath,
   queryPathUsesKnownQuery,
-  queryShapeAtPath,
-  requiredPathSegment,
+  relativeBindingPath,
+  validateListBindingInQueryShapes,
   validatePathInQueryShapes,
   validatePathInShape,
 } from '../analyze/query-shapes.js';
 import type { CompileComponentOptions, QueryShape, QueryTemplateStampFact } from '../types.js';
-import { isArrayQueryShape } from '../types.js';
 
 interface DataBindAttribute {
   index: number;
@@ -206,46 +206,11 @@ function templateStamp(
   return template ? jsxElementChildBody(template) : null;
 }
 
-interface NullableTraversal {
-  segment: string;
-}
-
-interface PathShapeValidation {
-  exists: boolean;
-  nullableTraversal?: NullableTraversal;
-}
-
 function validateListStampInQueryShapes(
   stamp: QueryTemplateStampFact,
   queryShapes: Record<string, QueryShape>,
-): PathShapeValidation {
-  const [querySegment, ...segments] = parseBindingPath(stamp.list);
-  const queryName = querySegment?.name;
-  if (!queryName || segments.length === 0) return { exists: false };
-
-  const listShape = queryShapes[queryName];
-  if (!listShape) return { exists: false };
-
-  const shapeAtList = queryShapeAtPath(listShape, segments);
-  if (!isArrayQueryShape(shapeAtList)) return { exists: false };
-
-  const itemShape = shapeAtList[0];
-  if (itemShape === undefined) return { exists: false };
-  if (!validatePathInShape(itemShape, [requiredPathSegment(stamp.key)]).exists) {
-    return { exists: false };
-  }
-
-  const listValidation = validatePathInShape(listShape, segments);
-  if (!listValidation.exists) return { exists: false };
-  if (listValidation.nullableTraversal) return listValidation;
-
-  for (const path of stamp.itemBindings) {
-    if (!validatePathInShape(itemShape, parseBindingPath(path.slice(1))).exists) {
-      return { exists: false };
-    }
-  }
-
-  return { exists: true };
+): ReturnType<typeof validateListBindingInQueryShapes> {
+  return validateListBindingInQueryShapes(stamp.list, stamp.key, stamp.itemBindings, queryShapes);
 }
 
 function nullableItemBindingDiagnostics(
@@ -260,15 +225,7 @@ function nullableItemBindingDiagnostics(
   const diagnostics: CompilerDiagnostic[] = [];
 
   for (const stamp of listStamps) {
-    const [querySegment, ...segments] = parseBindingPath(stamp.list);
-    const queryName = querySegment?.name;
-    const listShape = queryName ? queryShapes[queryName] : undefined;
-    if (!listShape) continue;
-
-    const shapeAtList = queryShapeAtPath(listShape, segments);
-    if (!isArrayQueryShape(shapeAtList)) continue;
-
-    const itemShape = shapeAtList[0];
+    const itemShape = listItemShapeAtBindingPath(stamp.list, queryShapes);
     if (itemShape === undefined) continue;
 
     const containers = elements.filter(
@@ -289,7 +246,10 @@ function nullableItemBindingDiagnostics(
         );
         if (!element || !isWithinElement(element, container)) continue;
 
-        const result = validatePathInShape(itemShape, parseBindingPath(binding.path.slice(1)));
+        const result = validatePathInShape(
+          itemShape,
+          parseBindingPath(relativeBindingPath(binding.path)),
+        );
         if (result.exists && result.nullableTraversal) {
           diagnostics.push(fw227Diagnostic(source, fileName, binding, result.nullableTraversal));
         }
@@ -308,7 +268,7 @@ function fw227Diagnostic(
   source: string,
   fileName: string,
   binding: DataBindAttribute,
-  traversal: NullableTraversal,
+  traversal: { segment: string },
 ): CompilerDiagnostic {
   return {
     ...diagnosticFor(fileName, 'FW227', source, binding.index, binding.length),
