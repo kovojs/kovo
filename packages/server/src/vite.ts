@@ -18,7 +18,6 @@ import {
   writeJisoAppShellViteBuildOutput,
   type JisoAppShellViteOutputOptions,
 } from './vite-build-output.js';
-import { exportJisoAppShellViteBuild as exportJisoAppShellViteBuildForPlugin } from './vite-static-export.js';
 
 export {
   jisoAppShellViteManifestAssets,
@@ -82,6 +81,7 @@ export type {
 export type {
   JisoAppShellViteBuildOutput,
   JisoAppShellViteBuildOutputOptions,
+  JisoAppShellViteBuildOutputStaticExportOptions,
   JisoAppShellViteOutputOptions,
 } from './vite-build-output.js';
 export type {
@@ -173,27 +173,28 @@ export function jisoAppShellVitePlugin(
     ...(app && options.build
       ? {
           async writeBundle(outputOptions, bundle) {
-            const outDir = options.build?.outDir ?? jisoAppShellViteOutputDir(outputOptions);
+            const buildOptions = options.build;
+            if (!buildOptions) return;
+
+            const outDir = buildOptions.outDir ?? jisoAppShellViteOutputDir(outputOptions);
             const build = createJisoAppShellViteBuildFromBundle({
               app,
               bundle,
-              ...(options.build?.base === undefined ? {} : { base: options.build.base }),
-              ...(options.build?.clientModules === undefined
+              ...(buildOptions.base === undefined ? {} : { base: buildOptions.base }),
+              ...(buildOptions.clientModules === undefined
                 ? {}
-                : { clientModules: options.build.clientModules }),
-              ...(options.build?.routeEntryMap === undefined
+                : { clientModules: buildOptions.clientModules }),
+              ...(buildOptions.routeEntryMap === undefined
                 ? {}
-                : { routeEntryMap: options.build.routeEntryMap }),
+                : { routeEntryMap: buildOptions.routeEntryMap }),
             });
-            const output = await writeJisoAppShellViteBuildOutput(build, { outDir });
-            const staticExportOptions = options.build?.staticExport;
-            if (staticExportOptions) {
-              output.staticExport = await exportJisoAppShellViteBuildForPlugin(build, {
-                ...staticExportOptions,
-                distDir: outDir,
-              });
-            }
-            await options.build?.onBuild?.(build, output);
+            const output = await writeJisoAppShellViteBuildOutput(build, {
+              outDir,
+              ...(buildOptions.staticExport === undefined
+                ? {}
+                : { staticExport: buildOptions.staticExport }),
+            });
+            await buildOptions.onBuild?.(build, output);
           },
         }
       : {}),

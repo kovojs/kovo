@@ -73,7 +73,10 @@ describe('server app shell Vite build seam', () => {
         },
       ]);
 
-      const output = await writeJisoAppShellViteBuildOutput(build, { outDir: distDir });
+      const output = await writeJisoAppShellViteBuildOutput(build, {
+        outDir: distDir,
+        staticExport: { outDir },
+      });
       expect(output.staticExportAssets).toEqual([
         {
           contentType: 'text/css; charset=utf-8',
@@ -90,7 +93,8 @@ describe('server app shell Vite build seam', () => {
         'export const cartClient = true;',
       );
 
-      const exported = await exportJisoAppShellViteBuild(build, { distDir, outDir });
+      const exported = output.staticExport;
+      if (!exported) throw new Error('expected app-shell build output static export');
       expect(exported.artifacts[0]?.body).toContain(
         '<link rel="stylesheet" href="/assets/cart.css">',
       );
@@ -111,6 +115,23 @@ describe('server app shell Vite build seam', () => {
         rm(distDir, { force: true, recursive: true }),
         rm(outDir, { force: true, recursive: true }),
       ]);
+    }
+  });
+
+  it('requires an app when Vite build output is asked to run static export', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-static-export-dist-'));
+
+    try {
+      await expect(
+        writeJisoAppShellViteBuildOutput(
+          {
+            clientModules: [],
+          },
+          { outDir: distDir, staticExport: {} },
+        ),
+      ).rejects.toThrow('App shell Vite build output static export requires a Jiso app.');
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
     }
   });
 

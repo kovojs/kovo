@@ -8,6 +8,10 @@ import {
   viteDistSourcePath,
 } from './vite-build-assets.js';
 import type { StaticExportAssetInput, StaticExportResult } from './static-export.js';
+import {
+  exportJisoAppShellViteBuild,
+  type JisoAppShellViteBuildStaticExportOptions,
+} from './vite-static-export.js';
 
 export interface JisoAppShellViteOutputOptions {
   dir?: string;
@@ -16,6 +20,14 @@ export interface JisoAppShellViteOutputOptions {
 
 export interface JisoAppShellViteBuildOutputOptions {
   outDir: string | URL;
+  staticExport?: JisoAppShellViteBuildOutputStaticExportOptions | false;
+}
+
+export interface JisoAppShellViteBuildOutputStaticExportOptions extends Omit<
+  JisoAppShellViteBuildStaticExportOptions,
+  'distDir'
+> {
+  distDir?: never;
 }
 
 export interface JisoAppShellViteBuildOutput {
@@ -25,7 +37,8 @@ export interface JisoAppShellViteBuildOutput {
 }
 
 export async function writeJisoAppShellViteBuildOutput(
-  build: Pick<JisoAppShellBuild, 'clientModules'> & Partial<Pick<JisoAppShellBuild, 'assets'>>,
+  build: Pick<JisoAppShellBuild, 'clientModules'> &
+    Partial<Pick<JisoAppShellBuild, 'app' | 'assets'>>,
   options: JisoAppShellViteBuildOutputOptions,
 ): Promise<JisoAppShellViteBuildOutput> {
   const root = resolvedFileSystemPath(options.outDir);
@@ -38,10 +51,18 @@ export async function writeJisoAppShellViteBuildOutput(
     await writeFile(targetPath, module.source, 'utf8');
   }
 
-  return {
+  const output: JisoAppShellViteBuildOutput = {
     clientModules: build.clientModules,
     staticExportAssets: jisoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root }),
   };
+  if (!options.staticExport) return output;
+
+  output.staticExport = await exportJisoAppShellViteBuild(assertStaticExportBuild(build), {
+    ...options.staticExport,
+    distDir: root,
+  });
+
+  return output;
 }
 
 export function jisoAppShellViteOutputDir(options: JisoAppShellViteOutputOptions): string {
@@ -49,4 +70,20 @@ export function jisoAppShellViteOutputDir(options: JisoAppShellViteOutputOptions
   if (options.file) return path.dirname(options.file);
 
   throw new Error('App shell Vite build output requires output.dir or output.file.');
+}
+
+function assertStaticExportBuild(
+  build: Pick<JisoAppShellBuild, 'clientModules'> &
+    Partial<Pick<JisoAppShellBuild, 'app' | 'assets'>>,
+): JisoAppShellBuild {
+  if (!build.app) {
+    throw new Error('App shell Vite build output static export requires a Jiso app.');
+  }
+
+  return {
+    app: build.app,
+    assets: build.assets ?? [],
+    clientModules: build.clientModules,
+    routeHints: [],
+  };
 }

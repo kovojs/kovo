@@ -41,6 +41,14 @@ with same-session file/test evidence.
       task wiring from `packages/server/src/vite-build.ts`. Same-session evidence:
       `pnpm exec vitest --run packages/server/src` and
       `pnpm exec tsc --noEmit --pretty false`.
+      Round95 evidence 2026-06-13: `packages/server/src/vite-build-output.ts` owns optional
+      plugin-time SPEC §9.5 static export execution/reporting for Vite app-shell builds,
+      subtracting static-export result mutation from `packages/server/src/vite.ts`. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+      and `git diff --check`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;

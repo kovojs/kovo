@@ -47,6 +47,7 @@ export type {
   JisoAppShellViteBuildStaticExportAssetOptions,
   JisoAppShellViteBuildOutput,
   JisoAppShellViteBuildOutputOptions,
+  JisoAppShellViteBuildOutputStaticExportOptions,
   JisoAppShellViteBuildStaticExportInventoryOptions,
   JisoAppShellViteBuildStaticExportOptions,
   JisoAppShellViteDevServer,

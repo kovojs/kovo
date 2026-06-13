@@ -82,6 +82,14 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       construction while preserving the public Vite app-shell barrel. Same-session evidence:
       `pnpm exec vitest --run packages/server/src` and
       `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: `packages/server/src/vite-build-output.ts` now also owns
+      plugin-time SPEC §9.5 static export execution/reporting for Vite app-shell builds, so
+      `packages/server/src/vite.ts` only assembles the manifest-backed build and forwards the
+      unified output object to `onBuild`. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+      and `git diff --check`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

@@ -949,6 +949,18 @@ describe('server app shell Vite plugin', () => {
       );
 
       expect(outputs).toHaveLength(1);
+      expect(outputs[0]?.staticExportAssets).toEqual([
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/cart.css',
+          source: join(outDir, 'assets/cart.css'),
+        },
+        {
+          contentType: 'text/javascript; charset=utf-8',
+          path: '/assets/cart.js',
+          source: join(outDir, 'assets/cart.js'),
+        },
+      ]);
       expect(outputs[0]?.staticExport?.artifacts.map((artifact) => artifact.path)).toEqual([
         '/cart/index.html',
       ]);

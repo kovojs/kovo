@@ -241,6 +241,18 @@ Round94 app-shell Vite build output boundary evidence:
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round95 app-shell Vite output/static-export evidence:
+
+- `writeJisoAppShellViteBuildOutput()` now owns optional SPEC §9.5 static export execution for
+  Vite app-shell builds and returns one output object containing compiled `/c/` modules, Vite
+  static-export asset inputs, and the static export result.
+- `jisoAppShellVitePlugin().writeBundle()` now delegates plugin-time static export to that output
+  boundary, leaving `vite.ts` to assemble the manifest-backed build and call `onBuild`.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
