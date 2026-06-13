@@ -136,6 +136,22 @@ export interface GeneratedGraphArtifactAcceptanceEvidenceFact {
   };
 }
 
+export interface GeneratedGraphArtifactAcceptanceChecklistFact {
+  authoredGraphMatchesArtifact?: boolean;
+  emitCheckClean: boolean;
+  fwCheckOk: boolean;
+  invalidationKeys: string[];
+  staticBehavior: GraphStaticBehaviorFact;
+  touchGraph: {
+    entryKeys: string[];
+    sourceLineMismatchCount: number;
+    sourceSitePaths: string[];
+    sourceSitesHavePositiveLines: boolean;
+    touchCountsByMutation: Record<string, number>;
+    unresolvedMutations: string[];
+  };
+}
+
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
   const page = graph.pages?.find((item) => item.route === route);
   if (!page) throw new Error(`Graph includes page route ${route}`);
@@ -407,6 +423,32 @@ export function generatedGraphArtifactAcceptanceEvidenceFact(
         Object.entries(fact.summary.touchGraph.entries).map(([key, entry]) => [key, entry.touches]),
       ),
       unresolvedMutations: fact.summary.touchGraph.honesty.unresolvedMutations,
+    },
+  };
+}
+
+export function generatedGraphArtifactAcceptanceChecklistFact(
+  fact: GeneratedGraphArtifactAcceptanceFact,
+): GeneratedGraphArtifactAcceptanceChecklistFact {
+  const evidence = generatedGraphArtifactAcceptanceEvidenceFact(fact);
+
+  return {
+    ...(evidence.authoredGraphMatchesArtifact !== undefined
+      ? { authoredGraphMatchesArtifact: evidence.authoredGraphMatchesArtifact }
+      : {}),
+    emitCheckClean: evidence.emitCheck.clean,
+    fwCheckOk: evidence.fwCheck.status === 'ok' && evidence.fwCheck.issueCount === 0,
+    invalidationKeys: Object.keys(evidence.invalidations).sort((left, right) =>
+      left.localeCompare(right),
+    ),
+    staticBehavior: evidence.staticBehavior,
+    touchGraph: {
+      entryKeys: evidence.touchGraph.entryKeys,
+      sourceLineMismatchCount: evidence.touchGraph.sourceLineMismatches.length,
+      sourceSitePaths: evidence.touchGraph.sourceSites.paths,
+      sourceSitesHavePositiveLines: evidence.touchGraph.sourceSites.linesArePositive,
+      touchCountsByMutation: evidence.touchGraph.touchCountsByMutation,
+      unresolvedMutations: evidence.touchGraph.unresolvedMutations,
     },
   };
 }

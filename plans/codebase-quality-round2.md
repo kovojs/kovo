@@ -97,6 +97,11 @@ projection for emit-check cleanliness, `fw-check/v1` OK status, static graph beh
 invalidations, source-site provenance, and touches-by-mutation; the P4 fw-check commerce gate and
 commerce source-truth graph acceptance assert that public fixture instead of duplicated local
 summary object shape.
+Shared graph fixtures now also own a generated graph artifact acceptance checklist projection that
+keeps the P4 fw-check commerce gate and commerce source-truth graph acceptance on public fixture
+facts for clean emit, `fw-check/v1` OK status, invalidation keys, static behavior, source-site
+coverage, touch counts, and unresolved mutations instead of repeating the generated-artifact
+evidence object in those tests.
 Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
 component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
 output comparison against SPEC.md section 5.2 provenance.
@@ -142,6 +147,15 @@ markdown tables inline.
 
 Latest evidence:
 
+- Graph artifact acceptance checklist fixture slice:
+  `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`.
+  Evidence: `packages/test/src/graph-fixtures.ts` exposes
+  `generatedGraphArtifactAcceptanceChecklistFact()`; `tests/fw-check.node.mjs` and
+  `examples/commerce/src/source-truth.test.ts` assert that public checklist instead of duplicating
+  the full generated graph artifact evidence projection, while the focused graph fixture tests keep
+  projection coverage.
 - Phase 5 static-export path-style closure slice:
   `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`. Evidence:

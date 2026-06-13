@@ -102,7 +102,7 @@ import {
   graphComponentTargetFacts,
   graphFixtureFile,
   generatedGraphArtifactAcceptanceFact,
-  generatedGraphArtifactAcceptanceEvidenceFact,
+  generatedGraphArtifactAcceptanceChecklistFact,
   graphMutationFact,
   graphOptimisticFacts,
   graphMutationUpdateConsumers,
@@ -4461,82 +4461,45 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     fwCheck: fwCheckOkAssertionFact(fwCheck(commerceGraph)),
     provenance,
   });
-  assert.deepEqual(generatedGraphArtifactAcceptanceEvidenceFact(graphArtifactFact), {
-    emitCheck: {
-      clean: true,
+  assert.deepEqual(generatedGraphArtifactAcceptanceChecklistFact(graphArtifactFact), {
+    emitCheckClean: true,
+    fwCheckOk: true,
+    invalidationKeys: ['cart/add'],
+    staticBehavior: {
+      components: [
+        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
+        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+      ],
+      domains: ['attachment', 'auth', 'cart', 'order', 'product'],
+      invalidations: {
+        'cart/add': ['cart', 'orderHistory', 'productGrid'],
+      },
+      mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+      ],
+      routes: ['/admin', '/cart'],
+      touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
     },
-    fwCheck: {
-      exitCode: 0,
-      issueCount: 0,
-      status: 'ok',
-      version: 'fw-check/v1',
-    },
-    invalidations: {
-      'cart/add': ['cart', 'orderHistory', 'productGrid'],
-    },
-    staticBehavior: graphStaticBehaviorFact(commerceGraph),
     touchGraph: {
       entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
-      sourceLineMismatches: [],
-      sourceSites: {
-        count: 5,
-        linesArePositive: true,
-        paths: ['examples/commerce/src/app.ts'],
-      },
+      sourceLineMismatchCount: 0,
+      sourceSitePaths: ['examples/commerce/src/app.ts'],
+      sourceSitesHavePositiveLines: true,
       touchCountsByMutation: {
         'cart.addItem': 3,
         'order.receipt': 1,
         'payment.webhook': 1,
       },
-      touchesByMutation: {
-        'cart.addItem': [
-          {
-            domain: 'cart',
-            keys: null,
-            sitePath: 'examples/commerce/src/app.ts',
-            via: 'cart_items',
-          },
-          {
-            domain: 'order',
-            keys: null,
-            sitePath: 'examples/commerce/src/app.ts',
-            via: 'orders',
-          },
-          {
-            domain: 'product',
-            keys: 'arg:productId',
-            predicate: 'eq',
-            sitePath: 'examples/commerce/src/app.ts',
-            via: 'products',
-          },
-        ],
-        'payment.webhook': [
-          {
-            domain: 'order',
-            keys: 'arg:data.object.id',
-            predicate: 'eq',
-            sitePath: 'examples/commerce/src/app.ts',
-            via: 'orders',
-          },
-        ],
-        'order.receipt': [
-          {
-            domain: 'attachment',
-            keys: 'arg:orderId',
-            predicate: 'eq',
-            sitePath: 'examples/commerce/src/app.ts',
-            via: 'attachments',
-          },
-        ],
-      },
       unresolvedMutations: [],
     },
   });
   assert.deepEqual(
-    fwExplainListField(
-      fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output,
-      'domain-writes',
-    ),
+    fwExplainQueryAssertionFact(fwExplain(commerceGraph, { kind: 'query', target: 'cart' }))
+      .domainWrites,
     ['cart.addItem'],
   );
 });

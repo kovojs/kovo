@@ -184,6 +184,7 @@ import {
   type InlineEnhancedFormLoaderFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
+  generatedGraphArtifactAcceptanceChecklistFact,
   generatedGraphArtifactAcceptanceEvidenceFact,
   generatedGraphArtifactHonestyFact,
   graphFixtureFile,
@@ -203,6 +204,7 @@ import {
   graphRouteFacts,
   graphStaticBehaviorFact,
   graphTouchGraphKeys,
+  type GeneratedGraphArtifactAcceptanceChecklistFact,
   type GeneratedGraphArtifactAcceptanceEvidenceFact,
   type GeneratedGraphArtifactHonestyFact,
   type GraphInvalidationMatrix,
@@ -1086,6 +1088,31 @@ describe('@jiso/test package subpath exports', () => {
         },
       });
     expect(acceptanceEvidence.emitCheck.clean).toBe(true);
+    const acceptanceChecklist: GeneratedGraphArtifactAcceptanceChecklistFact =
+      generatedGraphArtifactAcceptanceChecklistFact({
+        fwCheck: {
+          exitCode: 0,
+          issueCount: 0,
+          status: 'ok',
+          version: 'fw-check/v1',
+        },
+        staticBehavior: graphStaticBehaviorFact(graph),
+        summary: {
+          emitCheck: { clean: true },
+          invalidations: { 'cart/add': ['cart'] },
+          touchGraph: {
+            entries: {},
+            honesty: {
+              entryKeys: [],
+              sourceLineMismatches: [],
+              sourceSites: { count: 0, linesArePositive: true, paths: [] },
+              touchCountsByMutation: {},
+              unresolvedMutations: [],
+            },
+          },
+        },
+      });
+    expect(acceptanceChecklist.emitCheckClean).toBe(true);
     expect(graphMutationKeys(graph)).toEqual(['cart/add']);
     expect(graphPageFact(graph, '/cart')).toMatchObject({ route: '/cart' });
     expect(graphMutationFact(graph, 'cart/add')).toMatchObject({ key: 'cart/add' });

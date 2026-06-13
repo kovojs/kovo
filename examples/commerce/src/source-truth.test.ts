@@ -19,7 +19,7 @@ import {
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
   generatedGraphArtifactAcceptanceFact,
-  generatedGraphArtifactAcceptanceEvidenceFact,
+  generatedGraphArtifactAcceptanceChecklistFact,
   graphFixtureFile,
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
@@ -106,74 +106,21 @@ describe('commerce source-truth graph acceptance', () => {
       fwCheck: fwCheckOkAssertionFact(fwCheck(graphArtifact)),
       provenance,
     });
-    expect(generatedGraphArtifactAcceptanceEvidenceFact(graphArtifactFact)).toEqual({
+    expect(generatedGraphArtifactAcceptanceChecklistFact(graphArtifactFact)).toEqual({
       authoredGraphMatchesArtifact: true,
-      emitCheck: {
-        clean: true,
-      },
-      fwCheck: {
-        exitCode: 0,
-        issueCount: 0,
-        status: 'ok',
-        version: 'fw-check/v1',
-      },
+      emitCheckClean: true,
+      fwCheckOk: true,
+      invalidationKeys: ['cart/add'],
       staticBehavior: graphStaticBehaviorFact(commerceGraph),
-      invalidations: {
-        'cart/add': ['cart', 'orderHistory', 'productGrid'],
-      },
       touchGraph: {
         entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
-        sourceLineMismatches: [],
-        sourceSites: {
-          count: 5,
-          linesArePositive: true,
-          paths: ['examples/commerce/src/app.ts'],
-        },
+        sourceLineMismatchCount: 0,
+        sourceSitePaths: ['examples/commerce/src/app.ts'],
+        sourceSitesHavePositiveLines: true,
         touchCountsByMutation: {
           'cart.addItem': 3,
           'order.receipt': 1,
           'payment.webhook': 1,
-        },
-        touchesByMutation: {
-          'cart.addItem': [
-            {
-              domain: 'cart',
-              keys: null,
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'cart_items',
-            },
-            {
-              domain: 'order',
-              keys: null,
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'orders',
-            },
-            {
-              domain: 'product',
-              keys: 'arg:productId',
-              predicate: 'eq',
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'products',
-            },
-          ],
-          'payment.webhook': [
-            {
-              domain: 'order',
-              keys: 'arg:data.object.id',
-              predicate: 'eq',
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'orders',
-            },
-          ],
-          'order.receipt': [
-            {
-              domain: 'attachment',
-              keys: 'arg:orderId',
-              predicate: 'eq',
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'attachments',
-            },
-          ],
         },
         unresolvedMutations: [],
       },
