@@ -126,9 +126,14 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
         },
         modulepreloads: [commerceClientModuleHref],
         page() {
-          return `<div data-commerce-shell="cart">${renderCartPageBody(db, undefined, {
+          return `<div data-commerce-shell="cart">${renderCartPageBody(
             db,
-          })}</div>`;
+            undefined,
+            {
+              db,
+            },
+            { readOnly: true },
+          )}</div>`;
         },
         stylesheets: commerceStylesheets,
       }),
@@ -140,9 +145,14 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
         },
         modulepreloads: [commerceClientModuleHref],
         page() {
-          return `<div data-commerce-shell="cart">${renderCartPageBody(db, undefined, {
+          return `<div data-commerce-shell="cart">${renderCartPageBody(
             db,
-          })}</div>`;
+            undefined,
+            {
+              db,
+            },
+            { readOnly: true },
+          )}</div>`;
         },
         stylesheets: commerceStylesheets,
       }),
@@ -151,15 +161,8 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           description: 'Sign in to the Jiso commerce reference app.',
           title: 'Jiso Commerce Sign In',
         },
-        page(_context, request) {
-          return `<main class="mx-auto max-w-md p-6">${renderCommerceLoginForm(
-            {
-              authCsrfId: 'commerce-shell-login',
-              db,
-              headers: request.headers,
-            },
-            { next: '/cart' },
-          )}</main>`;
+        page() {
+          return '<main class="mx-auto max-w-md p-6"><h1>Jiso Commerce Sign In</h1><p>Sign in is available on the dynamic commerce server.</p></main>';
         },
         stylesheets: commerceStylesheets,
       }),

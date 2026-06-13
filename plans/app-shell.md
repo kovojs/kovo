@@ -100,13 +100,17 @@ Round85 app-shell static replay evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-replay.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- Commerce public static export now renders home/cart/login as L0/L1-safe read-only documents with
+  no same-origin `/_m/` form actions, while the dynamic commerce shell keeps mutation forms.
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vp check examples/commerce/src/components/product-grid.tsx examples/commerce/src/generated/product-grid.tsx examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts`
+- `git diff --check`
 
 ## Open Work
 
 R6:
 
-- Prove remaining directory-index HTML output and manifest asset copying acceptance across public
-  export-task consumers.
+- Finish manifest asset-copying acceptance outside the commerce public export-task consumer.
 - Keep dry-run and write export validation equivalent.
 
 R7:

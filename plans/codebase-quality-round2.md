@@ -279,6 +279,8 @@ Closed evidence so far:
 - Static export replay now enforces SPEC §9.5 L0/L1-only route documents by rejecting same-origin
   `/_m/` and `/_q/` server endpoint references before generated HTML, `/c/` modules, or assets are
   written.
+- Commerce static export now proves that stricter L0/L1 guard end to end by rendering read-only
+  public home/cart/login documents while the dynamic commerce shell keeps mutation forms.
 
 Open:
 
@@ -316,6 +318,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-replay.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vp check examples/commerce/src/components/product-grid.tsx examples/commerce/src/generated/product-grid.tsx examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce

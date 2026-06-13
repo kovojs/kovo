@@ -29,6 +29,7 @@ import { productGridQuery } from '../queries.js';
 
 export interface ProductGridRenderContext {
   failure?: AddToCartFailureState | undefined;
+  readOnly?: boolean | undefined;
   request?: CommerceRequest | undefined;
 }
 
@@ -42,7 +43,9 @@ export const ProductGrid = component('product-grid', {
     const { nextCursor } = productGrid;
     return (
       <section data-page-cursor={nextCursor ?? ''} fw-c="product-grid" fw-deps="productGrid">
-        {renderProductGridItems(productGrid, context.failure, context.request)}
+        {renderProductGridItems(productGrid, context.failure, context.request, {
+          readOnly: context.readOnly,
+        })}
       </section>
     );
   },
@@ -54,9 +57,15 @@ export function renderProductGridItems(
   result: ProductGridResult,
   failure?: AddToCartFailureState,
   request?: CommerceRequest,
+  options: { readOnly?: boolean | undefined } = {},
 ): string {
   const cards = result.items.map((item) =>
-    renderProductCard(item, failure?.productId === item.id ? failure.failure : undefined, request),
+    renderProductCard(
+      item,
+      failure?.productId === item.id ? failure.failure : undefined,
+      request,
+      options,
+    ),
   );
   const cursor = result.nextCursor;
   return (
@@ -77,12 +86,13 @@ function renderProductCard(
   item: { id: string; stock: number },
   failure?: AddToCartFailure,
   request?: CommerceRequest,
+  options: { readOnly?: boolean | undefined } = {},
 ): string {
   return (
     <article fw-key={item.id} class="rounded border border-slate-200 bg-white p-4">
       <h2 class="font-semibold">{item.id}</h2>
       <p>{item.stock} in stock</p>
-      {renderAddToCartForm(item, failure, request)}
+      {options.readOnly ? '' : renderAddToCartForm(item, failure, request)}
     </article>
   );
 }

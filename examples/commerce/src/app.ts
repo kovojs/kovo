@@ -635,13 +635,14 @@ export function renderProductGrid(
   result: ProductGridResult,
   request?: CommerceRequest,
   addToCartFailure?: AddToCartFailureState,
+  options: { readOnly?: boolean | undefined } = {},
 ): string {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component;
   // fw-c and fw-deps are compiler-derived (section 4.8). SPEC.md section
   // 10.2 keeps query data separate from request-only form failure context.
   return ProductGrid.definition.render(
     { productGrid: result },
-    { failure: addToCartFailure, request },
+    { failure: addToCartFailure, readOnly: options.readOnly, request },
   );
 }
 
@@ -757,14 +758,17 @@ export function renderCartPageBody(
   db = createCommerceDb(),
   addToCartFailure?: AddToCartFailureState,
   request?: CommerceRequest,
+  options: { readOnly?: boolean | undefined } = {},
 ): string {
   const cartBadge = CartBadge.definition.render({ cart: loadCartQuery(db) });
   const productGrid = renderProductGrid(
     loadProductGridForRequest(db, undefined, request),
     request,
     addToCartFailure,
+    { readOnly: options.readOnly },
   );
-  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main>`;
+  const receiptForm = options.readOnly ? '' : renderReceiptUploadForm();
+  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${receiptForm}</fw-fragment></main>`;
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
