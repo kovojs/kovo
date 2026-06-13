@@ -1,7 +1,5 @@
 import {
   applySourceReplacementsWithOffsetMap,
-  composeSourceOffsetMaps,
-  identitySourceOffsetMap,
   type SourceOffsetMap,
   type SourceReplacement,
 } from './shared.js';
@@ -29,12 +27,6 @@ export interface ComponentPipelinePatchOptions {
 export interface ComponentPipelineLowering {
   prefix?: string;
   replacements: readonly SourceReplacement[];
-}
-
-export interface ComponentPipelineSequenceResult<
-  Model,
-> extends ComponentPipelinePatchResult<Model> {
-  steps: ComponentPipelinePatchResult<Model>[];
 }
 
 export function componentPipelineState<Model>(
@@ -65,31 +57,6 @@ export function lowerComponentPipelinePatches<Model>(
       source: patch.source,
     },
   };
-}
-
-export function lowerComponentPipelineSequence<Model>(
-  initial: ComponentPipelineState<Model>,
-  lowerings: readonly ((previous: ComponentPipelineState<Model>) => ComponentPipelineLowering)[],
-  parse: (fileName: string, source: string) => Model,
-): ComponentPipelineSequenceResult<Model> {
-  const steps: ComponentPipelinePatchResult<Model>[] = [];
-  let current = initial;
-  let sourceOffsetMap = identitySourceOffsetMap(initial.source.length);
-
-  for (const lower of lowerings) {
-    const lowering = lower(current);
-    const step = lowerComponentPipelinePatches(
-      current,
-      lowering.replacements,
-      parse,
-      lowering.prefix === undefined ? {} : { prefix: lowering.prefix },
-    );
-    steps.push(step);
-    sourceOffsetMap = composeSourceOffsetMaps(sourceOffsetMap, step.sourceOffsetMap);
-    current = step.state;
-  }
-
-  return { sourceOffsetMap, state: current, steps };
 }
 
 export function applyComponentPipelineEmitPatches(

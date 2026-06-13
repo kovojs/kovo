@@ -4,9 +4,7 @@ import {
   applyComponentPipelineEmitPatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
-  lowerComponentPipelineSequence,
 } from './model-pipeline.js';
-import { generatedOffsetToOriginal } from './shared.js';
 
 describe('compiler model pipeline', () => {
   it('carries an empty patch pass through the same parsed model', () => {
@@ -153,132 +151,6 @@ describe('compiler model pipeline', () => {
       originalStart: 0,
     });
     expect(parses).toEqual([`cart-badge.tsx:${lowered.state.source}`]);
-  });
-
-  it('runs ordered lowering passes against the latest parsed model', () => {
-    const state = componentPipelineState(
-      'cart-badge.tsx',
-      'export const CartBadge = component({ render: () => <Link to="/cart">Cart</Link> });',
-      { spans: ['link'] },
-    );
-    const parses: string[] = [];
-    const seenModels: string[][] = [];
-
-    const lowered = lowerComponentPipelineSequence(
-      state,
-      [
-        (previous) => {
-          seenModels.push(previous.model.spans);
-          return { replacements: [] };
-        },
-        (previous) => {
-          seenModels.push(previous.model.spans);
-          return {
-            replacements: [
-              {
-                end: previous.source.indexOf('</Link>') + '</Link>'.length,
-                replacement: '<a href="/cart">Cart</a>',
-                start: previous.source.indexOf('<Link'),
-              },
-            ],
-          };
-        },
-        (previous) => {
-          seenModels.push(previous.model.spans);
-          return { replacements: [] };
-        },
-      ],
-      (fileName, source) => {
-        parses.push(`${fileName}:${source}`);
-        return { spans: ['anchor'] };
-      },
-    );
-
-    expect(lowered.state).toEqual({
-      fileName: 'cart-badge.tsx',
-      model: { spans: ['anchor'] },
-      source: 'export const CartBadge = component({ render: () => <a href="/cart">Cart</a> });',
-    });
-    expect(lowered.steps).toHaveLength(3);
-    expect(seenModels).toEqual([['link'], ['link'], ['anchor']]);
-    expect(parses).toEqual([
-      'cart-badge.tsx:export const CartBadge = component({ render: () => <a href="/cart">Cart</a> });',
-    ]);
-  });
-
-  it('composes sequence offset maps back to the original source', () => {
-    const state = componentPipelineState(
-      'cart-badge.tsx',
-      'export const CartBadge = component({ render: () => <Link to="/cart">Cart</Link> });',
-      { spans: ['link'] },
-    );
-    const prefix = 'const generated = true;\n';
-
-    const lowered = lowerComponentPipelineSequence(
-      state,
-      [
-        (previous) => ({
-          replacements: [
-            {
-              end: previous.source.indexOf('</Link>') + '</Link>'.length,
-              replacement: '<a href="/cart">Cart</a>',
-              start: previous.source.indexOf('<Link'),
-            },
-          ],
-        }),
-        (previous) => ({
-          prefix,
-          replacements: [
-            {
-              end: previous.source.indexOf('Cart</a>') + 'Cart'.length,
-              replacement: 'Basket',
-              start: previous.source.indexOf('Cart</a>'),
-            },
-          ],
-        }),
-      ],
-      (_fileName, source) =>
-        source.includes('Basket') ? { spans: ['prefixed-basket'] } : { spans: ['anchor'] },
-    );
-
-    expect(lowered.state.source).toBe(
-      'const generated = true;\nexport const CartBadge = component({ render: () => <a href="/cart">Basket</a> });',
-    );
-    const mappedTail = generatedOffsetToOriginal(
-      lowered.sourceOffsetMap,
-      lowered.state.source.indexOf(' });'),
-    );
-    expect(mappedTail).toBe(state.source.indexOf(' });'));
-    expect(
-      generatedOffsetToOriginal(lowered.sourceOffsetMap, lowered.state.source.indexOf('Basket')),
-    ).toBeUndefined();
-    expect(
-      generatedOffsetToOriginal(
-        lowered.sourceOffsetMap,
-        lowered.state.source.indexOf('export const'),
-      ),
-    ).toBe(0);
-  });
-
-  it('returns an identity offset map for an empty lowering sequence', () => {
-    const state = componentPipelineState(
-      'cart-badge.tsx',
-      'export const CartBadge = component({ render: () => <span /> });',
-      { spans: ['span'] },
-    );
-    const parses: string[] = [];
-
-    const lowered = lowerComponentPipelineSequence(state, [], (fileName, source) => {
-      parses.push(`${fileName}:${source}`);
-      return { spans: ['reparsed'] };
-    });
-
-    expect(lowered.state).toBe(state);
-    expect(lowered.steps).toEqual([]);
-    expect(lowered.sourceOffsetMap.segments).toEqual([
-      { generatedStart: 0, length: state.source.length, originalStart: 0 },
-    ]);
-    expect(parses).toEqual([]);
   });
 
   it('applies terminal emit-only source patches without reparsing a model', () => {

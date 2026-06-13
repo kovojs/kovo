@@ -313,6 +313,8 @@ View-transition, platform, static `<Link>`, and static `href()` lowerings are no
 the original parsed model and applied as one pre-derive source-patch pass, removing the
 compatibility reparses between those independent lowerers while preserving the later reparse needed
 for generated derive/data-bind model facts.
+The now-unused ordered lowering sequence helper and tests were deleted after production compile
+stopped using it, leaving explicit patch passes as the remaining compile-path abstraction.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -326,6 +328,10 @@ Latest evidence:
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts
 packages/compiler/src/model-pipeline.test.ts`; `pnpm exec tsc --noEmit --pretty false`.
+- Ordered lowering sequence helper deletion: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts
+packages/compiler/src/view-transitions.test.ts`; `pnpm exec tsc --noEmit --pretty false`.
 - Handler call-argument reference facts: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
 tsc --noEmit --pretty false`.
