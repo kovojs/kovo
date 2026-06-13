@@ -232,7 +232,7 @@ describe('create-jiso starter', () => {
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
       expect(exportStaticScript).toContain(
-        'jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile)',
+        'jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile)',
       );
       expect(exportStaticScript).toContain('formatStaticExportDiagnostic');
       expect(exportStaticScript).toContain('formatStaticExportDiagnostics');

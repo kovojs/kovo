@@ -8,6 +8,7 @@ const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
 const defaultCssDistDir = path.join(siteRoot, 'dist-css');
+let staticExportTaskHelpers;
 
 export async function buildSiteStaticInputs() {
   execFileSync('pnpm', ['--dir', '..', 'exec', 'vp', 'run', 'build'], {
@@ -43,7 +44,9 @@ export async function exportSiteStaticApp({
     const { createSiteDistApp } = appShellModule;
     const {
       exportJisoAppShellViteBuildFromManifestFile,
-      jisoAppShellViteManifestStylesheetHrefsFromFile,
+      formatStaticExportDiagnostics,
+      isStaticExportDiagnosticError,
+      jisoAppShellViteManifestStylesheetHrefFromFile,
     } = serverModule;
 
     if (typeof createSiteDistApp !== 'function') {
@@ -53,17 +56,18 @@ export async function exportSiteStaticApp({
     if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
       throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
     }
-    if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
+    if (typeof formatStaticExportDiagnostics !== 'function') {
+      throw new Error('@jiso/server must export formatStaticExportDiagnostics.');
     }
-
-    const stylesheetHrefs = await jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile);
-
-    if (stylesheetHrefs.length !== 1) {
-      throw new Error(
-        `Expected exactly one built site CSS asset in dist-css/.vite/manifest.json, found ${stylesheetHrefs.length}.`,
-      );
+    if (typeof isStaticExportDiagnosticError !== 'function') {
+      throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
     }
+    if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
+    }
+    staticExportTaskHelpers = { formatStaticExportDiagnostics, isStaticExportDiagnosticError };
+
+    await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     const app = await createSiteDistApp({ distDir, publicDir, server: serverModule });
     // SPEC.md section 9.5 static export owns the final static host bytes:
@@ -106,12 +110,14 @@ if (isMainModule()) {
       ].join('\n'),
     );
   } catch (error) {
-    if (!isStaticExportDiagnosticError(error)) throw error;
+    if (!staticExportTaskHelpers?.isStaticExportDiagnosticError(error)) throw error;
 
     process.stderr.write(
-      ['site-export/v1', ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'), ''].join(
-        '\n',
-      ),
+      [
+        'site-export/v1',
+        ...staticExportTaskHelpers.formatStaticExportDiagnostics(error.diagnostics, 'ERROR'),
+        '',
+      ].join('\n'),
     );
     process.exitCode = 1;
   }
@@ -170,37 +176,4 @@ function requireValue(args, index, flag) {
   }
 
   return path.resolve(process.cwd(), value);
-}
-
-function isStaticExportDiagnosticError(error) {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    Array.isArray(error.diagnostics) &&
-    error.diagnostics.every(isStaticExportDiagnostic)
-  );
-}
-
-function isStaticExportDiagnostic(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof value.code === 'string' &&
-    typeof value.message === 'string' &&
-    typeof value.routePath === 'string'
-  );
-}
-
-function formatStaticExportDiagnostics(diagnostics, severity) {
-  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
-}
-
-function formatStaticExportDiagnostic(diagnostic, severity) {
-  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableText(
-    diagnostic.message,
-  )}`;
-}
-
-function stableText(value) {
-  return String(value).replace(/\s+/g, ' ').trim();
 }

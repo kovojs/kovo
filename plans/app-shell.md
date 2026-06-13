@@ -77,12 +77,23 @@ Round83 app-shell export-task evidence:
 - `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round84 docs outside-consumer export evidence:
+
+- Docs-site export now uses the public `@jiso/server` app-shell helpers for FW229 diagnostic
+  formatting/type guards and the singular Vite stylesheet manifest assertion. Starter and
+  commerce export tasks use the same singular stylesheet helper before manifest-backed static
+  replay.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vp check packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
 
-- Docs-site static export remains the adoption-task gap. Starter and commerce export tasks now
-  reuse the shared server app-shell Vite/export bridge plus server-owned FW229 task formatting.
 - Prove directory-index HTML output, manifest asset copying, duplicate target rejection, and
   L0/L1-only constraints through focused tests.
 - Keep dry-run and write export validation equivalent.
@@ -92,7 +103,7 @@ R7:
 - Move starter to routed app-shell dev/export tasks.
 - Move commerce over HTTP rather than package-internal shortcuts where user-facing examples are
   concerned.
-- Treat docs-site export as the first outside consumer, but keep P10 external launch/readiness
+- Keep docs-site export as the first outside consumer; remaining work is broader launch/readiness
   evidence outside the critical implementation path.
 
 Quality constraints:

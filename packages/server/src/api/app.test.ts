@@ -58,6 +58,9 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
       viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
     );
+    expect(publicApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
+      viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
+    );
 
     expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
@@ -93,6 +96,9 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
       viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
+    );
+    expect(appShellApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
+      viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
     );
 
     type PublicAppShellTypesStayAssignable = [
@@ -144,6 +150,9 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
       viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
     );
+    expect(packageViteApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
+      viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
+    );
 
     expect(packageAppShellApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(packageAppShellApi.renderVersionedClientModuleResponse).toBe(
@@ -173,6 +182,9 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageAppShellApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
       viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
+    );
+    expect(packageAppShellApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
+      viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
     );
   });
 });

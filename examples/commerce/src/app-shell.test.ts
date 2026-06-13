@@ -60,8 +60,10 @@ describe('commerce app shell HTTP entry', () => {
     ).toBe(true);
     expect(viteConfig.run?.tasks?.serve?.command).toBe('node scripts/serve.mjs');
     expect(viteConfig.run?.tasks?.export?.command).toBe('node scripts/export-static.mjs');
+    expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
     expect(exportScript).toContain('formatStaticExportDiagnostic');
     expect(exportScript).toContain('isStaticExportDiagnosticError');
+    expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
     expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
     expect(exportScript).not.toContain('function isStaticExportDiagnostic');
     expect(commerceServeCommands().map((command) => command.label)).toEqual([

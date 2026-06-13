@@ -12,7 +12,7 @@ let exportJisoAppShellViteBuildFromManifestFile;
 let formatStaticExportDiagnostic;
 let formatStaticExportDiagnostics;
 let isStaticExportDiagnosticError;
-let jisoAppShellViteManifestStylesheetHrefsFromFile;
+let jisoAppShellViteManifestStylesheetHrefFromFile;
 
 const server = await createServer({
   appType: 'custom',
@@ -27,7 +27,7 @@ try {
     formatStaticExportDiagnostic,
     formatStaticExportDiagnostics,
     isStaticExportDiagnosticError,
-    jisoAppShellViteManifestStylesheetHrefsFromFile,
+    jisoAppShellViteManifestStylesheetHrefFromFile,
   } = serverModule);
 
   if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
@@ -42,19 +42,12 @@ try {
   if (typeof isStaticExportDiagnosticError !== 'function') {
     throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
   }
-  if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
-    throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
+  if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
+    throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
   }
 
-  const stylesheetHrefs = await jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile);
-
-  if (stylesheetHrefs.length !== 1) {
-    throw new Error(
-      `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${stylesheetHrefs.length}.`,
-    );
-  }
-
-  process.env.JISO_STARTER_STYLESHEET_HREF = stylesheetHrefs[0];
+  process.env.JISO_STARTER_STYLESHEET_HREF =
+    await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
   const appModule = await server.ssrLoadModule('/src/app-shell.ts');
   const app = appModule.default ?? appModule.app;

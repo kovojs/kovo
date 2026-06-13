@@ -246,6 +246,9 @@ Closed evidence so far:
   asset paths produce FW229 even without `outDir`.
 - Server static export now owns the stable FW229 export-task diagnostic type guards/formatting
   consumed by the create-jiso starter and commerce export scripts.
+- Docs-site export now consumes the same server-owned FW229 formatting/type guards, and starter,
+  commerce, and docs export tasks share the singular Vite stylesheet manifest assertion before
+  manifest-backed app-shell static replay.
 - Vite plugin `writeBundle` can now run static export from the built app shell while reusing the
   same manifest asset planner and synthetic request replay path.
 - SSR Vite dev middleware now defaults to deriving its node adapter from the loaded app's
@@ -277,6 +280,12 @@ Recent gates:
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vp check packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce

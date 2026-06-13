@@ -116,6 +116,8 @@ describe('site app-shell export adoption', () => {
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
     const loadedModuleIds = [];
+    const stylesheetManifestFiles = [];
+    const exportScript = await readFile(path.join(siteRoot, 'scripts/export-static.mjs'), 'utf8');
 
     await mkdir(path.join(cssDistDir, '.vite'), { recursive: true });
     await mkdir(path.join(cssDistDir, 'assets'), { recursive: true });
@@ -151,7 +153,21 @@ describe('site app-shell export adoption', () => {
         async close() {},
         async ssrLoadModule(id) {
           loadedModuleIds.push(id);
-          if (id === '@jiso/server') return server;
+          if (id === '@jiso/server') {
+            return {
+              ...server,
+              async jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile, options) {
+                stylesheetManifestFiles.push(manifestFile);
+                return await server.jisoAppShellViteManifestStylesheetHrefFromFile(
+                  manifestFile,
+                  options,
+                );
+              },
+              async jisoAppShellViteManifestStylesheetHrefsFromFile() {
+                throw new Error('docs export must use the server-owned singular stylesheet helper');
+              },
+            };
+          }
           if (id === '/scripts/app-shell.mjs') return { createSiteDistApp };
           throw new Error(`unexpected SSR module ${id}`);
         },
@@ -161,7 +177,14 @@ describe('site app-shell export adoption', () => {
       publicDir,
     });
 
+    expect(exportScript).toContain('formatStaticExportDiagnostics');
+    expect(exportScript).toContain('isStaticExportDiagnosticError');
+    expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
+    expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
+    expect(exportScript).not.toContain('function isStaticExportDiagnostic');
+    expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
     expect(loadedModuleIds).toEqual(['/scripts/app-shell.mjs', '@jiso/server']);
+    expect(stylesheetManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
       '/docs/installation/index.html',
       '/index.html',

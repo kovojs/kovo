@@ -33,7 +33,7 @@ export async function exportCommerceStaticApp({
       formatStaticExportDiagnostic,
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
-      jisoAppShellViteManifestStylesheetHrefsFromFile,
+      jisoAppShellViteManifestStylesheetHrefFromFile,
     } = serverModule;
 
     if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
@@ -48,8 +48,8 @@ export async function exportCommerceStaticApp({
     if (typeof isStaticExportDiagnosticError !== 'function') {
       throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
     }
-    if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
+    if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
     }
     staticExportTaskHelpers = {
       formatStaticExportDiagnostic,
@@ -64,13 +64,7 @@ export async function exportCommerceStaticApp({
       throw new Error('src/app-shell.ts must export commerceStaticExportApp for public export.');
     }
 
-    const stylesheetHrefs = await jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile);
-
-    if (stylesheetHrefs.length !== 1) {
-      throw new Error(
-        `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${stylesheetHrefs.length}.`,
-      );
-    }
+    await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     // SPEC.md section 9.5: static export replays the public app shell and copies
     // the Vite manifest bytes through the public app-shell export bridge.
