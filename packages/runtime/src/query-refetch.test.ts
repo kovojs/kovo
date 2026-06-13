@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './query-store.js';
 import { refetchQueries } from './query-refetch.js';
+import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
 
 describe('query refetch', () => {
   it('applies successful typed read chunks and reports names for the loader ledger', async () => {
@@ -64,6 +65,42 @@ describe('query refetch', () => {
     expect(reviewsBinding.textContent).toBe('5');
     expect(cartPlan).toHaveBeenLastCalledWith({ count: 2 });
     expect(reviewsPlan).toHaveBeenLastCalledWith({ total: 5 });
+  });
+
+  it('batches successful typed read responses through one runtime query apply pass', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const badge = new FakeQueryBindingElement({ 'data-bind:aria-label': 'cart.label' });
+    const meter = new FakeQueryBindingElement({ 'data-bind:value': 'reviews.total' });
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? '<fw-query name="cart">{"label":"Cart has items"}</fw-query>'
+          : '<fw-query name="reviews">{"total":8}</fw-query>',
+    }));
+
+    root.bindings.push(badge, meter);
+
+    await expect(
+      refetchQueries({
+        fetch,
+        queryPlans: { cart: { bindings: true }, reviews: { bindings: true } },
+        queries: ['cart', 'reviews'],
+        queryStore: store,
+        root,
+      }),
+    ).resolves.toEqual([
+      { fragments: [], queries: ['cart'] },
+      { fragments: [], queries: ['reviews'] },
+    ]);
+
+    // SPEC.md §4.4/§9.4: a visible-return typed-read pass should share the
+    // batched runtime query apply path used by hydrated scripts and mutation
+    // responses, so the compiled binding index is built once for all chunks.
+    expect(root.wildcardSelectorCalls).toBe(1);
+    expect(badge.getAttribute('aria-label')).toBe('Cart has items');
+    expect(meter.getAttribute('value')).toBe('8');
   });
 
   it('applies keyed typed read chunks and reports canonical query keys', async () => {
@@ -147,6 +184,39 @@ describe('query refetch', () => {
     expect(store.get('reviews')).toEqual({ total: 2 });
     expect(onError).toHaveBeenCalledTimes(1);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+  });
+
+  it('reports typed read apply hook failures while continuing later chunks in the batch', async () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const applyError = new Error('cart hook failed');
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? '<fw-query name="cart">{"count":2}</fw-query>'
+          : '<fw-query name="reviews">{"total":4}</fw-query>',
+    }));
+
+    const applied = await refetchQueries({
+      applyQuery(query) {
+        if (query.name === 'cart') throw applyError;
+        store.set(query.name, query.value, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      fetch,
+      onError,
+      queries: ['cart', 'reviews'],
+      queryStore: store,
+    });
+
+    // SPEC.md §4.4/§9.4: visible-return typed reads are background hydration
+    // work; a bad apply hook for one decoded query must report through the
+    // runtime error seam without preventing later typed-read truth from applying.
+    expect(applied).toEqual([{ fragments: [], queries: ['reviews'] }]);
+    expect(onError).toHaveBeenCalledWith(applyError);
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('reviews')).toEqual({ total: 4 });
   });
 
   it('reports typed read transport failures and continues applying later queries', async () => {

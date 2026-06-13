@@ -1231,6 +1231,10 @@ DOM mutation response body parsing now lives in `packages/runtime/src/mutation-r
 leaving `packages/runtime/src/apply-mutation-response.ts` as the decoded chunk/query/fragment apply
 primitive used by enhanced submit, broadcast, deferred streams, and mutation-response tests; typed
 read refetch now parses query chunks and calls `applyQueryChunksToRuntime` directly.
+Visible-return typed-read refetch now decodes all successful response bodies for a refetch pass
+before entering `applyQueryChunksToRuntime`, so typed reads share the same batched binding-index
+path as hydrated query scripts while apply-hook failures still report through the runtime error
+seam and allow later chunks to apply.
 The old broad `packages/runtime/src/mutation-response.test.ts` has been split by ownership:
 parsed wire-body store apply lives in `packages/runtime/src/mutation-response-wire-apply.test.ts`,
 DOM body apply lives in `packages/runtime/src/mutation-response-dom.test.ts`, and decoded chunk
@@ -1301,6 +1305,24 @@ results, so deferred stream aggregation and DOM response parsing no longer depen
       `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/query-hydration.browser.test.ts`, and
       `pnpm --filter @jiso/runtime run check:inline-loader`.
+- [x] Batch visible-return typed-read response apply through the shared runtime query primitive.
+      Evidence 2026-06-13 round288 runtime: `packages/runtime/src/query-refetch.ts` now decodes
+      successful typed-read bodies first and enters `applyQueryChunksToRuntime` once per refetch
+      pass, using `afterApplyQuery` to keep the visible-return ledger scoped to actually applied
+      chunks. `packages/runtime/src/query-apply.ts` now supports explicit runtime error reporting
+      for per-query apply failures, and `packages/runtime/src/query-refetch.test.ts` proves
+      SPEC.md §4.4/§9.4 typed-read batching reuses one compiled binding index across multiple
+      responses while a failed apply hook reports and later chunks still apply. Verified by
+      focused `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts
+packages/runtime/src/query-visible-return.test.ts
+packages/runtime/src/loader-visible-return-refetch.test.ts
+packages/runtime/src/loader-query-apply-interposition.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, browser runtime
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/query-visible-return.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`, and exact `pnpm exec vp check
+packages/runtime/src/query-apply.ts packages/runtime/src/query-refetch.ts
+packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`.
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
       Evidence 2026-06-13 round259: `packages/runtime/src/wire-parser.ts` deleted the unused

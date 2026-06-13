@@ -1,4 +1,6 @@
 import { definedProps } from './defined-props.js';
+import { reportRuntimeError } from './error-policy.js';
+import type { RuntimeErrorReporter } from './error-policy.js';
 import {
   applyCompiledQueryUpdatePlan,
   createQueryBindingIndex,
@@ -19,6 +21,7 @@ export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } 
 interface ApplyQueryChunksOptions {
   afterApplyQuery?: (query: QueryChunk, value: unknown) => void;
   applyQuery?: QueryApplyInterposition;
+  onError?: RuntimeErrorReporter | undefined;
 }
 
 export interface ApplyQueryChunksToRuntimeOptions extends ApplyQueryChunksOptions {
@@ -46,9 +49,14 @@ function applyQueryChunks(
   const applied: string[] = [];
 
   for (const query of queries) {
-    const value = applyQueryChunk(store, query, options.applyQuery);
-    options.afterApplyQuery?.(query, value);
-    applied.push(queryWireKey(query.name, query.key));
+    try {
+      const value = applyQueryChunk(store, query, options.applyQuery);
+      options.afterApplyQuery?.(query, value);
+      applied.push(queryWireKey(query.name, query.key));
+    } catch (error) {
+      if (!('onError' in options)) throw error;
+      reportRuntimeError(options.onError, error);
+    }
   }
 
   return applied;
@@ -73,6 +81,7 @@ export function applyQueryChunksToRuntime(
       options.afterApplyQuery?.(query, value);
     },
     ...definedProps({ applyQuery: options.applyQuery }),
+    ...('onError' in options ? { onError: options.onError } : {}),
   });
 }
 

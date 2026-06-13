@@ -3,7 +3,9 @@ import { reportRuntimeError } from './error-policy.js';
 import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
+import { queryWireKey } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
+import type { QueryChunk } from './wire-parser.js';
 
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
@@ -45,10 +47,18 @@ export interface RefetchedQueryResponse {
   queries: readonly string[];
 }
 
+interface RefetchedQueryBody {
+  queries: QueryChunk[];
+}
+
+interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
+  decodedQueryCount: number;
+}
+
 export async function refetchQueries(
   options: RefetchQueriesOptions,
 ): Promise<RefetchedQueryResponse[]> {
-  const applied: RefetchedQueryResponse[] = [];
+  const bodies: RefetchedQueryBody[] = [];
 
   for (const query of options.queries) {
     const url = options.urlForQuery?.(query) ?? `/_q/${encodeURIComponent(query)}`;
@@ -67,25 +77,39 @@ export async function refetchQueries(
         continue;
       }
 
-      // SPEC.md §4.4/§9.4: typed reads are query-only transport. They share
-      // the canonical decoded query apply primitive without entering mutation
-      // fragment apply or preserving a second response-body apply wrapper.
-      const queries = applyQueryChunksToRuntime(
-        options.queryStore,
-        readQueryChunks(await response.text(), options.onError),
-        {
-          ...definedProps({
-            applyQuery: options.applyQuery,
-            queryPlans: options.queryPlans,
-            root: options.root,
-          }),
-        },
-      );
-      applied.push({ fragments: [], queries });
+      bodies.push({ queries: readQueryChunks(await response.text(), options.onError) });
     } catch (error) {
       reportRuntimeError(options.onError, error);
     }
   }
 
-  return applied;
+  const queries = bodies.flatMap((body) => body.queries);
+  const appliedQueries = new Set<QueryChunk>();
+
+  // SPEC.md §4.4/§9.4: typed reads are query-only transport. A visible-return
+  // refetch pass decodes successful response bodies first, then enters the same
+  // batched runtime query apply primitive as script hydration, mutation bodies,
+  // deferred streams, and inline query events.
+  applyQueryChunksToRuntime(options.queryStore, queries, {
+    afterApplyQuery(query) {
+      appliedQueries.add(query);
+    },
+    ...definedProps({
+      applyQuery: options.applyQuery,
+      queryPlans: options.queryPlans,
+      root: options.root,
+    }),
+    onError: options.onError,
+  });
+
+  return bodies
+    .map<AppliedRefetchedQueryBody>((body) => ({
+      decodedQueryCount: body.queries.length,
+      fragments: [],
+      queries: body.queries
+        .filter((query) => appliedQueries.has(query))
+        .map((query) => queryWireKey(query.name, query.key)),
+    }))
+    .filter((body) => body.decodedQueryCount === 0 || body.queries.length > 0)
+    .map(({ decodedQueryCount: _decodedQueryCount, ...body }) => body);
 }
