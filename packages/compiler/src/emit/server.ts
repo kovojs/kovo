@@ -228,7 +228,9 @@ function replaceOpeningTagAttribute(
 ): string {
   const start = attribute.start - hostElement.start;
   const end = attribute.end - hostElement.start;
-  return `${tagSource.slice(0, start)}${name}="${escapeAttribute(value)}"${tagSource.slice(end)}`;
+  return applySourceReplacements(tagSource, [
+    { end, replacement: `${name}="${escapeAttribute(value)}"`, start },
+  ]);
 }
 
 function insertOpeningTagAttribute(

@@ -346,6 +346,8 @@ Closed evidence so far:
 - Element-param attribute naming now lives beside the reverse `data-p-*` mapping in `types.ts`;
   handler lowering consumes the shared helper instead of carrying a duplicate source-expression
   normalizer.
+- Server emit host attribute replacement now routes through `applySourceReplacements`, removing
+  another hand-sliced source patch from the compiler emit path.
 
 Open:
 
