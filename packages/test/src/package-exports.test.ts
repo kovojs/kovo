@@ -34,6 +34,8 @@ import {
   fwQueryFacts,
   htmlElementFacts,
   htmlFormFacts,
+  htmlKeyFacts,
+  htmlTextContent,
 } from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
@@ -94,6 +96,10 @@ describe('@jiso/test package subpath exports', () => {
         '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',
       ),
     ).toMatchObject([{ action: '/_m/cart/add', fields: [{ name: 'productId', value: 'p1' }] }]);
+    expect(htmlKeyFacts('<li fw-key="order-1"><span>Order</span></li>', 'order-1')).toMatchObject([
+      { key: 'order-1', text: 'Order' },
+    ]);
+    expect(htmlTextContent('<p>Cart &amp; checkout</p>')).toBe('Cart & checkout');
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');

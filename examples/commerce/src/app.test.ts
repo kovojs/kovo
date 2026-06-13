@@ -11,6 +11,8 @@ import {
   fwQueryFacts,
   htmlElementFacts,
   htmlFormFacts,
+  htmlKeyFacts,
+  htmlTextContent,
 } from '@jiso/test/html-fragment';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
@@ -221,6 +223,14 @@ function formFieldsByName(
   return Object.fromEntries((form?.fields ?? []).map((field) => [field.name, field]));
 }
 
+function htmlKeys(html: string): string[] {
+  return htmlKeyFacts(html).map((fact) => fact.key);
+}
+
+function htmlKeyTextsByKey(html: string): Record<string, string> {
+  return Object.fromEntries(htmlKeyFacts(html).map((fact) => [fact.key, fact.text]));
+}
+
 describe('commerce example', () => {
   it('marks demo-only CSRF secrets as example-only source', () => {
     expect(commerceCsrf.secret).toBe(EXAMPLE_ONLY_COMMERCE_CSRF_SECRET);
@@ -285,9 +295,8 @@ describe('commerce example', () => {
       ok: true,
       rerunQueries: ['cart', 'productGrid', 'orderHistory'],
     });
-    await expect(
-      harness.page('/cart').then((page) => page.fragment('cart-badge')),
-    ).resolves.toContain('data-bind="cart.count"');
+    const cartBadge = await harness.page('/cart').then((page) => page.fragment('cart-badge'));
+    expect(htmlElementFacts(cartBadge, { attrs: { 'data-bind': 'cart.count' } })).toHaveLength(1);
   });
 
   it('loads declared commerce queries from the request database', async () => {
@@ -394,21 +403,25 @@ describe('commerce example', () => {
     const firstPage = loadProductGrid(db, { limit: 2 });
     const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
 
-    expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
-    expect(renderProductGrid(firstPage)).toContain('fw-key="p2"');
-    expect(renderProductGrid(firstPage)).toContain('href="/products?after=p2"');
-    expect(renderProductGrid(secondPage)).toContain('fw-key="p3"');
+    expect(htmlKeys(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(
+      htmlElementFacts(renderProductGrid(firstPage), {
+        attrs: { href: '/products?after=p2' },
+        tag: 'a',
+      }),
+    ).toHaveLength(1);
+    expect(htmlKeys(renderProductGrid(secondPage))).toEqual(['p3']);
 
     const appendFragment = renderProductGridPageFragment(
       db,
       productGridInput(firstPage.nextCursor, 2),
     );
 
-    expect(appendFragment).toContain('<fw-fragment target="product-grid" mode="append">');
-    expect(appendFragment).toContain('fw-key="p3"');
-    expect(appendFragment).not.toContain('fw-key="p1"');
-    expect(appendFragment).not.toContain('fw-key="p2"');
-    expect(appendFragment).not.toContain('<section fw-c="product-grid"');
+    expect(fwFragmentFacts(appendFragment, 'product-grid')).toMatchObject([
+      { attrs: { mode: 'append', target: 'product-grid' } },
+    ]);
+    expect(htmlKeys(appendFragment)).toEqual(['p3']);
+    expect(htmlElementFacts(appendFragment, { attrs: { 'fw-c': 'product-grid' } })).toHaveLength(0);
 
     await addToCart.handler(
       { productId: 'p1', quantity: 2 },
@@ -423,8 +436,9 @@ describe('commerce example', () => {
       },
     );
 
-    expect(renderOrderHistory(db)).toContain('fw-key="order-1"');
-    expect(renderOrderHistory(db)).toContain('p1 x 2 - 2998');
+    expect(htmlKeyTextsByKey(renderOrderHistory(db))).toMatchObject({
+      'order-1': 'p1 x 2 - 2998',
+    });
   });
 
   it('preserves commerce list identity through append and simultaneous optimistic reorder', async () => {
@@ -443,10 +457,13 @@ describe('commerce example', () => {
     );
     const thirdProduct = appendedGrid.children?.[2];
 
-    expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
-    expect(renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor))).toContain(
-      '<fw-fragment target="product-grid" mode="append">',
-    );
+    expect(htmlKeys(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(
+      fwFragmentFacts(
+        renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),
+        'product-grid',
+      ),
+    ).toMatchObject([{ attrs: { mode: 'append', target: 'product-grid' } }]);
     expect(appendedGrid.children?.[0]).toBe(firstProduct);
     expect(appendedGrid.children?.[1]).toBe(secondProduct);
     expect(thirdProduct).not.toBeUndefined();
@@ -486,7 +503,7 @@ describe('commerce example', () => {
       keyedListNode('order-history', ['order-1', 'order-draft']),
     );
 
-    expect(renderOrderHistory(db)).toContain('fw-key="order-1"');
+    expect(htmlKeys(renderOrderHistory(db))).toContain('order-1');
     expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
     expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
     expect(reconciledHistory.children?.[1]?.browserState).toEqual({
@@ -503,14 +520,27 @@ describe('commerce example', () => {
       },
       status: 200,
     });
-    expect(response.body).toContain(
-      '<main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
-    );
-    expect(fwQueryFacts(response.body).map((query) => query.name)).toContain('productGrid');
-    expect(fwFragmentFacts(response.body, 'product-grid')[0]?.stylesheetHrefs).toContain(
-      '/assets/tailwind.css',
-    );
-    expect(response.body).toContain('class="rounded border border-slate-200 bg-white p-4"');
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { class: 'min-h-dvh bg-slate-50 p-6' },
+        tag: 'main',
+      }),
+    ).toHaveLength(1);
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { state: 'pending', target: 'product-grid' },
+        tag: 'fw-defer',
+      }),
+    ).toHaveLength(1);
+    expect(fwQueryFacts(response.body).map((query) => query.name)).toEqual(['productGrid']);
+    expect(fwFragmentFacts(response.body, 'product-grid')).toMatchObject([
+      { stylesheetHrefs: ['/assets/tailwind.css'] },
+    ]);
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { class: 'rounded border border-slate-200 bg-white p-4' },
+      }).length,
+    ).toBeGreaterThan(0);
   });
 
   it('uses the typed commerce session schema in authenticated mutations', async () => {
@@ -566,9 +596,9 @@ describe('commerce example', () => {
   it('runs commerce login and logout through Better Auth credential mutations', async () => {
     const request = commerceAuthRequest();
 
-    expect(renderCommerceLoginForm(request, { next: '/admin' })).toContain(
-      'data-mutation="auth/sign-in"',
-    );
+    expect(htmlFormFacts(renderCommerceLoginForm(request, { next: '/admin' }))).toMatchObject([
+      { attrs: { 'data-mutation': 'auth/sign-in' } },
+    ]);
     await expect(
       submitCommerceSignInNoJs(
         {
@@ -611,7 +641,9 @@ describe('commerce example', () => {
       },
     };
 
-    expect(renderCommerceLogoutForm(authedRequest)).toContain('data-mutation="auth/sign-out"');
+    expect(htmlFormFacts(renderCommerceLogoutForm(authedRequest))).toMatchObject([
+      { attrs: { 'data-mutation': 'auth/sign-out' } },
+    ]);
     await expect(submitCommerceSignOutNoJs(authedRequest)).resolves.toMatchObject({
       headers: {
         'Cache-Control': 'no-store',
@@ -976,8 +1008,8 @@ describe('commerce example', () => {
       status: 303,
     });
 
-    expect(renderCartPage(db)).toContain('3 in stock');
-    expect(renderOrderHistory(db)).toContain('fw-key="order-1"');
+    expect(htmlTextContent(renderCartPage(db))).toContain('3 in stock');
+    expect(htmlKeys(renderOrderHistory(db))).toContain('order-1');
   });
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
@@ -1031,7 +1063,7 @@ describe('commerce example', () => {
       '/assets/tailwind.css',
       '/assets/tailwind.css',
     ]);
-    expect(response.body).toContain('fw-key="order-2"');
+    expect(htmlKeys(response.body)).toContain('order-2');
     expect(transactions).toBe(2);
   });
 
@@ -1065,7 +1097,9 @@ describe('commerce example', () => {
         stylesheetHrefs: ['/assets/tailwind.css'],
       },
     ]);
-    expect(response.body).toContain('Product grid failed: catalog unavailable');
+    expect(
+      htmlTextContent(fwFragmentFacts(response.body, 'product-grid')[0]?.innerHtml ?? ''),
+    ).toBe('Product grid failed: catalog unavailable');
     expect(fwFragmentFacts(response.body).map((fragment) => fragment.target)).toEqual([
       'cart-badge',
       'product-grid',
@@ -1102,8 +1136,8 @@ describe('commerce example', () => {
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(response.body).toContain('Only 2 available.');
-    expect(renderOrderHistory(db)).not.toContain('order-1');
+    expect(htmlTextContent(response.body)).toContain('Only 2 available.');
+    expect(htmlKeys(renderOrderHistory(db))).not.toContain('order-1');
   });
 
   it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
@@ -1148,8 +1182,8 @@ describe('commerce example', () => {
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(response.body).toContain('Only 2 available.');
-    expect(renderOrderHistory(db)).not.toContain('order-1');
+    expect(htmlTextContent(formFragment?.innerHtml ?? '')).toContain('Only 2 available.');
+    expect(htmlKeys(renderOrderHistory(db))).not.toContain('order-1');
   });
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
@@ -1197,11 +1231,18 @@ describe('commerce example', () => {
     db.write('cart_items', { productId: 'p2', qty: 2, unitPrice: 2599 });
 
     expect(loadCartQuery(db)).toEqual({ count: 5 });
-    expect(renderCommercePageHints(loadCartQuery(db)).html).toContain(
-      '<title>Jiso Commerce (5)</title>',
-    );
-    expect(renderCartPage(db)).toContain(
-      '<meta name="description" content="Browse products and checkout with 5 verifiable cart item.">',
+    expect(
+      htmlElementFacts(renderCommercePageHints(loadCartQuery(db)).html, { tag: 'title' }),
+    ).toMatchObject([{ innerHtml: 'Jiso Commerce (5)' }]);
+    expect(htmlElementFacts(renderCartPage(db), { tag: 'meta' })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attrs: expect.objectContaining({
+            content: 'Browse products and checkout with 5 verifiable cart item.',
+            name: 'description',
+          }),
+        }),
+      ]),
     );
   });
 

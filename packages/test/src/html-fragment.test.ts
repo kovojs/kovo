@@ -6,6 +6,8 @@ import {
   fwQueryFacts,
   htmlElementFacts,
   htmlFormFacts,
+  htmlKeyFacts,
+  htmlTextContent,
 } from '@jiso/test/html-fragment';
 
 describe('@jiso/test html fragment seam', () => {
@@ -253,5 +255,38 @@ describe('@jiso/test html fragment seam', () => {
         method: 'post',
       },
     ]);
+  });
+
+  it('returns keyed framework element facts with normalized text', () => {
+    expect(
+      htmlKeyFacts(
+        [
+          '<section>',
+          '<article fw-key="p1"><h2>Coffee &amp; mug</h2><span>3 in stock</span></article>',
+          '<article fw-key="p2"><span>Tea</span><span>&#36;25</span></article>',
+          '</section>',
+        ].join(''),
+      ),
+    ).toMatchObject([
+      {
+        key: 'p1',
+        tag: 'article',
+        text: 'Coffee & mug3 in stock',
+      },
+      {
+        key: 'p2',
+        tag: 'article',
+        text: 'Tea$25',
+      },
+    ]);
+    expect(htmlKeyFacts('<li fw-key="order-1">Order</li>', 'order-1')).toMatchObject([
+      { key: 'order-1', text: 'Order' },
+    ]);
+  });
+
+  it('normalizes HTML text content outside raw markup assertions', () => {
+    expect(
+      htmlTextContent('<p>Only <strong>2</strong> available &amp; ready.</p><span>&#x24;25</span>'),
+    ).toBe('Only 2 available & ready.$25');
   });
 });

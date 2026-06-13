@@ -343,6 +343,9 @@ Closed evidence so far:
 - `@jiso/test/html-fragment` exposes structured `htmlFormFacts`; package export tests pin the
   subpath seam, commerce form/error tests assert action, method, controls, and error output through
   form/element facts, and `fw-check` delegates HTML element parsing to the same seam.
+- `@jiso/test/html-fragment` exposes structured `htmlKeyFacts` and `htmlTextContent`; package
+  export tests pin the subpath seam, and commerce list/fragment tests assert framework keys,
+  selected text, and route meta through shared facts instead of raw HTML membership.
 - Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
   fake server module, keeping the local app-shell workflow out of source-text assertions.
 
@@ -366,6 +369,11 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts`
+- `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
+- `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -383,6 +391,9 @@ Closed evidence so far:
 - Shared `htmlFormFacts` coverage in `packages/test/src/html-fragment.test.ts` replaces commerce
   substring probes for mutation form actions, methods, named controls, upload progress markers, and
   rerendered validation output.
+- Shared `htmlKeyFacts`/`htmlTextContent` coverage in `packages/test/src/html-fragment.test.ts`
+  replaces commerce raw HTML probes for list keys, order rows, deferred fragments, auth forms,
+  route meta, and mutation error text.
 
 Open:
 

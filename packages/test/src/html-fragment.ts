@@ -58,6 +58,15 @@ export interface HtmlFormFact {
   method: string;
 }
 
+export interface HtmlKeyFact {
+  attrs: Record<string, string>;
+  html: string;
+  innerHtml: string;
+  key: string;
+  tag: string;
+  text: string;
+}
+
 export function htmlElementFacts(
   html: string,
   selector: HtmlElementSelector = {},
@@ -156,6 +165,45 @@ export function htmlFormFacts(html: string): HtmlFormFact[] {
     innerHtml: form.innerHtml,
     method: form.attrs.method ?? 'get',
   }));
+}
+
+export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {
+  return htmlElementFacts(html)
+    .filter((element) => element.attrs['fw-key'] !== undefined)
+    .map((element) => ({
+      attrs: element.attrs,
+      html: element.html,
+      innerHtml: element.innerHtml,
+      key: element.attrs['fw-key'] ?? '',
+      tag: element.tag,
+      text: htmlTextContent(element.innerHtml),
+    }))
+    .filter((fact) => key === undefined || fact.key === key);
+}
+
+export function htmlTextContent(html: string): string {
+  let text = '';
+  let offset = 0;
+
+  while (offset < html.length) {
+    const start = html.indexOf('<', offset);
+    if (start === -1) {
+      text += html.slice(offset);
+      break;
+    }
+
+    text += html.slice(offset, start);
+
+    const close = tagClose(html, start + 1);
+    if (close === undefined) {
+      text += html.slice(start);
+      break;
+    }
+
+    offset = close + 1;
+  }
+
+  return decodeHtmlText(text).replace(/\s+/g, ' ').trim();
 }
 
 function explicitFragmentHtml(html: string, target: string): string | undefined {
@@ -361,6 +409,36 @@ function isVoidElement(tag: string): boolean {
     'track',
     'wbr',
   ].includes(tag);
+}
+
+function decodeHtmlText(text: string): string {
+  const entity = /&(?:#(?<decimal>\d+)|#x(?<hex>[0-9a-f]+)|(?<named>amp|lt|gt|quot|apos));/gi;
+
+  return text.replace(entity, (match, ...args: unknown[]) => {
+    const groups = args[args.length - 1] as
+      | { decimal?: string; hex?: string; named?: string }
+      | undefined;
+    const decimal = groups?.decimal;
+    if (decimal !== undefined) return String.fromCodePoint(Number(decimal));
+
+    const hex = groups?.hex;
+    if (hex !== undefined) return String.fromCodePoint(Number.parseInt(hex, 16));
+
+    switch (groups?.named?.toLowerCase()) {
+      case 'amp':
+        return '&';
+      case 'lt':
+        return '<';
+      case 'gt':
+        return '>';
+      case 'quot':
+        return '"';
+      case 'apos':
+        return "'";
+      default:
+        return match;
+    }
+  });
 }
 
 function escapeRegExp(value: string): string {
