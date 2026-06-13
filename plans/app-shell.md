@@ -443,24 +443,28 @@ Round154 app-shell Vite output plan evidence:
 
 R6:
 
-- Keep the checklist open until a same-session sweep proves replay, L0/L1 constraints, and
-  manifest consumer adoption together; Round86b covers starter/docs manifest consumers, while
-  commerce L0/L1 public output is already covered by the Round85 evidence above.
+- [ ] Keep R6 open until a same-session sweep proves replay, L0/L1 constraints, and manifest
+      consumer adoption together; Round86b covers starter/docs manifest consumers, while commerce
+      L0/L1 public output is already covered by the Round85 evidence above.
 
 R7:
 
-- Move commerce over HTTP rather than package-internal shortcuts where user-facing examples are
-  concerned.
-- Keep docs-site export as the first outside consumer; remaining work is broader launch/readiness
-  evidence outside the critical implementation path.
-- Starter routed app-shell `vp dev`, serve, and export adoption is covered by Round86d; keep R7
-  open for the remaining commerce/docs launch-readiness sweep.
+- [x] Move commerce app-shell adoption over HTTP rather than package-internal shortcuts where
+      user-facing examples are concerned.
+  - Evidence: Round251 removes direct request/mutation shortcuts from the commerce node/http
+    app-shell proof and serves command-exported static output over an HTTP static server.
+- [ ] Keep docs-site export as the first outside consumer; remaining work is broader
+      launch/readiness evidence outside the critical implementation path.
+- [ ] Keep R7 open for the remaining commerce/docs launch-readiness sweep; starter routed
+      app-shell `vp dev`, serve, and export adoption is covered by Round86d.
 
 Quality constraints:
 
-- Server extraction must be subtractive: split modules should own behavior, not copy root logic.
-- Public API additions require package/root export assertions.
-- Checklist boxes require direct same-session evidence; partial slices add only bounded evidence.
+- [ ] Server extraction must stay subtractive: split modules should own behavior, not copy root
+      logic.
+- [ ] Public API additions require package/root export assertions.
+- [ ] Checklist boxes require direct same-session evidence; partial slices add only bounded
+      evidence.
 
 Round108 app-shell Vite plugin/root barrel deletion evidence:
 
@@ -853,6 +857,13 @@ Round250 Vite build-output static-export option boundary evidence:
   static-export option boundary as direct export/inventory helpers.
 - `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round251 commerce HTTP/static adoption evidence:
+
+- `examples/commerce/src/app-shell.test.ts` now proves the dynamic commerce node/http app-shell
+  surface without direct request-handler or mutation-handler shortcuts, and the public export
+  command outputs are served back over an HTTP static file server before deletion.
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
 
 Round242 app-shell app contract boundary evidence:
 

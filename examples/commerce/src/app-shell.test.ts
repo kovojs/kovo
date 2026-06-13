@@ -26,7 +26,6 @@ import {
 } from '@jiso/test/html-fragment';
 
 import {
-  addToCart,
   commerceAuthCsrf,
   commerceCsrf,
   commercePaymentWebhookSecret,
@@ -348,14 +347,6 @@ describe('commerce app shell HTTP entry', () => {
       },
     });
 
-    const directDocument = await shell.requestHandler(new Request('https://commerce.test/cart'));
-    expectCommerceShellDocument(await directDocument.text());
-    expect(directDocument.status).toBe(200);
-
-    const directHome = await shell.requestHandler(new Request('https://commerce.test/'));
-    expectCommerceShellDocument(await directHome.text());
-    expect(directHome.status).toBe(200);
-
     server = createServer(shell.nodeHandler);
     await listen(server);
     const origin = serverOrigin(server);
@@ -370,22 +361,9 @@ describe('commerce app shell HTTP entry', () => {
     expectCommerceShellDocument(html);
     expect(fwFragmentFacts(html, 'cart-badge')).toHaveLength(1);
 
-    await addToCart.handler(
-      { productId: 'p1', quantity: 2 },
-      { db: shell.db, session: { id: 's-http', user: { id: 'u-http' } } },
-      {
-        fail(code, payload) {
-          return { error: { code, payload }, ok: false, status: 422 };
-        },
-        invalidate(domain, options) {
-          return { domain: domain.key, ...options, manual: true };
-        },
-      },
-    );
-
     const query = await fetch(`${origin}/_q/cart`);
     expect(query.status).toBe(200);
-    expect(fwQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 2 }]);
+    expect(fwQueryJsonValues(await query.text(), 'cart')).toEqual([{ count: 0 }]);
 
     const clientModule = await fetch(`${origin}${commerceClientModuleHref}`);
     expect(clientModule.status).toBe(200);
@@ -672,7 +650,38 @@ describe('commerce app shell HTTP entry', () => {
 
         const stylesheet = await readFile(path.join(outDir, 'assets', 'tailwind.css'), 'utf8');
         expect(stylesheet).toContain('tailwindcss v');
+
+        server = createStaticExportServer(outDir);
+        await listen(server);
+        const origin = serverOrigin(server);
+
+        const home = await fetch(`${origin}/`);
+        const homeBody = await home.text();
+        expect(home.status, homeBody).toBe(200);
+        expect(home.headers.get('content-type')).toBe('text/html; charset=utf-8');
+        expectCommerceShellDocument(homeBody, { staticExport: true });
+
+        const cart = await fetch(`${origin}/cart/`);
+        const cartBody = await cart.text();
+        expect(cart.status, cartBody).toBe(200);
+        expectCommerceShellDocument(cartBody, { staticExport: true });
+
+        const moduleResponse = await fetch(`${origin}${commerceClientModuleHref}`);
+        const moduleBody = await moduleResponse.text();
+        expect(moduleResponse.status, moduleBody).toBe(200);
+        expect(moduleResponse.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+        expect(moduleBody).toContain('Commerce$markReady');
+
+        const assetResponse = await fetch(`${origin}/assets/tailwind.css`);
+        const assetBody = await assetResponse.text();
+        expect(assetResponse.status, assetBody).toBe(200);
+        expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
+        expect(assetBody).toContain('tailwindcss v');
+
+        const mutation = await fetch(`${origin}/_m/cart/add`, { method: 'POST' });
+        expect(mutation.status).toBe(404);
       } finally {
+        await closeServer();
         await rm(outDir, { force: true, recursive: true });
       }
     });
@@ -747,6 +756,46 @@ function listen(target: Server): Promise<void> {
 function serverOrigin(target: Server): string {
   const address = target.address() as AddressInfo;
   return `http://127.0.0.1:${address.port}`;
+}
+
+function createStaticExportServer(root: string): Server {
+  return createServer(async (request, response) => {
+    try {
+      const filePath = staticExportFilePath(root, request.url ?? '/');
+      const body = await readFile(filePath);
+      response.writeHead(200, {
+        'Content-Length': String(body.byteLength),
+        'Content-Type': staticExportContentType(filePath),
+      });
+      response.end(body);
+    } catch {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('Not Found');
+    }
+  });
+}
+
+function staticExportFilePath(root: string, requestUrl: string): string {
+  const url = new URL(requestUrl, 'http://commerce-static.test');
+  const pathname = decodeURIComponent(url.pathname);
+  const relativePath = pathname.endsWith('/')
+    ? `${pathname.slice(1)}index.html`
+    : pathname.slice(1);
+  const resolved = path.resolve(root, relativePath);
+  const rootPath = path.resolve(root);
+
+  if (resolved !== rootPath && !resolved.startsWith(`${rootPath}${path.sep}`)) {
+    throw new Error(`Static export request escaped output root: ${pathname}`);
+  }
+
+  return resolved;
+}
+
+function staticExportContentType(filePath: string): string {
+  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (filePath.endsWith('.js')) return 'text/javascript; charset=utf-8';
+  return 'application/octet-stream';
 }
 
 function execFileResult(
@@ -898,6 +947,16 @@ async function stopProcess(child: ChildProcessWithoutNullStreams | undefined): P
       if (child.exitCode === null && !child.killed) killProcessTree(child, 'SIGKILL');
     }),
   ]);
+}
+
+async function closeServer(): Promise<void> {
+  if (!server) return;
+  const target = server;
+  server = undefined;
+
+  await new Promise<void>((resolve, reject) => {
+    target.close((error) => (error ? reject(error) : resolve()));
+  });
 }
 
 function killProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {

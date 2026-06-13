@@ -735,6 +735,9 @@ Commerce Vite dev/export adoption now uses the public `@jiso/server/app-shell/vi
 Commerce app-shell source also imports client-module registry, core request-shell, node adapter,
 and static export helpers from those public app-shell subpaths, leaving root imports for
 non-app-shell data/routing helpers.
+Commerce app-shell adoption now proves dynamic node/http documents, query endpoints, client
+modules, and command-exported static output over HTTP rather than package-internal request or
+mutation shortcuts.
 The root `@jiso/server` app-shell compatibility surface now star-forwards directly from the split
 public app-shell owner subpaths instead of duplicating a manual symbol inventory; the public API
 test compares local/package app-shell aggregate values and root aliases so split-owner drift is
@@ -792,6 +795,10 @@ export, and inventory/manifest helpers share the same SPEC §9.5 asset/option ow
 
 Latest evidence:
 
+- Round251 commerce HTTP/static adoption:
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
+  exact `pnpm exec vp check examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Round250 Vite build-output static-export option boundary:
   `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`.
