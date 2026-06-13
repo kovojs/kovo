@@ -142,6 +142,30 @@ export const ProductLinks = component('product-links', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers static href params with explicit path scanning', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/products/:id.:format'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href={href('/products/:id.:format', { params: { id: 'p 1', format: 'json' }, search: { token: 'a:b' } })}>
+        Product
+      </a>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[0]?.source).toContain('href="/products/p%201.json?token=a%3Ab"');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('ignores static href call text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',

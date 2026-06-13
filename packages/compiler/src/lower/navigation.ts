@@ -163,9 +163,7 @@ function buildStaticHref(
   params: Record<string, string | number | boolean | null>,
   searchValues: Record<string, string | number | boolean | null>,
 ): string {
-  const pathname = path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
-    encodeURIComponent(String(params[key] ?? '')),
-  );
+  const pathname = substituteStaticRouteParams(path, params);
   const search = new URLSearchParams();
 
   for (const [key, value] of Object.entries(searchValues)) {
@@ -175,6 +173,43 @@ function buildStaticHref(
 
   const query = search.toString();
   return query ? `${pathname}?${query}` : pathname;
+}
+
+function substituteStaticRouteParams(
+  path: string,
+  params: Record<string, string | number | boolean | null>,
+): string {
+  let output = '';
+  let index = 0;
+
+  while (index < path.length) {
+    const char = path[index];
+    const next = path[index + 1];
+    if (char !== ':' || next === undefined || !isRouteParamNameStart(next)) {
+      output += char;
+      index += 1;
+      continue;
+    }
+
+    let end = index + 2;
+    while (end < path.length && isRouteParamNamePart(path[end] ?? '')) end += 1;
+
+    const key = path.slice(index + 1, end);
+    output += encodeURIComponent(String(params[key] ?? ''));
+    index = end;
+  }
+
+  return output;
+}
+
+function isRouteParamNameStart(char: string): boolean {
+  return (
+    char === '_' || char === '$' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
+  );
+}
+
+function isRouteParamNamePart(char: string): boolean {
+  return isRouteParamNameStart(char) || (char >= '0' && char <= '9');
 }
 
 function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {

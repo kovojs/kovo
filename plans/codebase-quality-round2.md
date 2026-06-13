@@ -104,6 +104,8 @@ Current state:
   route strings into regular expressions.
 - Event trigger validation now parses `on:*` names with direct string checks instead of a regex
   matcher.
+- Static `href()` route-param lowering now scans route params explicitly instead of regex
+  substitution, including multi-param path segments.
 
 Open:
 
@@ -121,6 +123,8 @@ Latest focused evidence:
 - `pnpm exec vp check packages/compiler/src/validate/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/execution-triggers.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/validate/event-triggers.ts packages/compiler/src/execution-triggers.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vp check packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction
