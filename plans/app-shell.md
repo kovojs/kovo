@@ -470,3 +470,16 @@ Round117 app-shell dispatch/Vite subpath evidence:
   of routing the app-shell Vite subpath through the aggregate `vite.ts`.
 - `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round120 app-shell static document/client replay evidence:
+
+- `packages/server/src/static-export-document.ts` now owns only SPEC §9.5 route-document replay,
+  output path selection, and L0/L1 endpoint rejection; document reference discovery lives in
+  `static-export-document-refs.ts`, and `/c/` artifact replay/dedupe lives in
+  `static-export-client-module-artifacts.ts`.
+- `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

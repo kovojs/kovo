@@ -179,7 +179,8 @@ Latest focused evidence:
 Current state:
 
 - Static export output, asset planning, Vite build output, request construction, document replay,
-  client-module replay, and compile-diagnostic blocking have been split into focused modules.
+  document reference discovery, client-module replay, and compile-diagnostic blocking have been
+  split into focused modules.
 - App request document assembly and mutation request handling have been subtracted from the main
   dispatcher.
 - Matched SPEC §9.5 dispatch branches now live in `app-dispatch.ts`, leaving `app-request.ts`
@@ -202,9 +203,10 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/server/src/app-request.ts packages/server/src/app-dispatch.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.ts packages/server/src/app-mutation-request.test.ts packages/server/src/response.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce

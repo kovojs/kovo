@@ -4,8 +4,8 @@ import type { RequestHandler } from './app.js';
 import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
-  replayStaticExportRouteDocumentArtifact,
-} from './static-export-document.js';
+} from './static-export-document-refs.js';
+import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 
 describe('server static export document boundary', () => {
   it('replays route documents as synthetic GET requests at normalized pathnames', async () => {
