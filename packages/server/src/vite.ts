@@ -53,6 +53,8 @@ export {
   jisoAppShellViteBuildStaticExportAssets,
   jisoAppShellViteStaticExportAssetsFromManifestFile,
   jisoAppShellViteStaticExportAssets,
+  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+  staticExportManifestForJisoAppShellViteBuild,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
   writeJisoAppShellViteBuildOutput,

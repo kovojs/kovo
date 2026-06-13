@@ -309,6 +309,9 @@ Closed evidence so far:
   written.
 - Commerce static export now proves that stricter L0/L1 guard end to end by rendering read-only
   public home/cart/login documents while the dynamic commerce shell keeps mutation forms.
+- Server static export now exposes a public manifest object for directory-index route documents,
+  `/c/` modules, and copied static assets, with Vite manifest-file dry-run helpers proving the
+  same manifest-backed asset set as write export.
 
 Open:
 
@@ -350,6 +353,8 @@ Recent gates:
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
 - `pnpm exec vp check examples/commerce/src/components/product-grid.tsx examples/commerce/src/generated/product-grid.tsx examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
 
 ## Phase 6 - Verification Harness And Commerce
 

@@ -22,6 +22,8 @@ export {
   jisoAppShellViteStaticExportAssetsFromManifestFile,
   jisoAppShellViteSsrDevPlugin,
   jisoAppShellViteStaticExportAssets,
+  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+  staticExportManifestForJisoAppShellViteBuild,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   shouldHandleJisoAppShellViteRequest,
   shouldHandleJisoAppShellViteSsrRequest,

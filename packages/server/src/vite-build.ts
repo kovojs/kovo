@@ -8,8 +8,10 @@ import type { PageHintOptions } from './hints.js';
 import {
   exportStaticApp,
   staticExportInventory,
+  staticExportManifest,
   type StaticExportAssetInput,
   type StaticExportInventoryItem,
+  type StaticExportManifest,
   type StaticExportOptions,
   type StaticExportResult,
 } from './static-export.js';
@@ -313,6 +315,27 @@ export async function staticExportInventoryForJisoAppShellViteBuildFromManifestF
   });
 }
 
+export async function staticExportManifestForJisoAppShellViteBuildFromManifestFile(
+  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+): Promise<StaticExportManifest> {
+  const build = await createJisoAppShellViteBuildFromManifestFile({
+    app: options.app,
+    ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+    manifestFile: options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
+    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+  });
+
+  return staticExportManifestForJisoAppShellViteBuild(build, {
+    ...(options.assets === undefined ? {} : { assets: options.assets }),
+    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
+    distDir: options.distDir,
+    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
+    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
+    ...(options.origin === undefined ? {} : { origin: options.origin }),
+  });
+}
+
 export async function exportJisoAppShellViteBuild(
   build: JisoAppShellBuild,
   options: JisoAppShellViteBuildStaticExportOptions,
@@ -346,6 +369,24 @@ export async function staticExportInventoryForJisoAppShellViteBuild(
   });
 
   return staticExportInventory(result);
+}
+
+export async function staticExportManifestForJisoAppShellViteBuild(
+  build: JisoAppShellBuild,
+  options: JisoAppShellViteBuildStaticExportInventoryOptions,
+): Promise<StaticExportManifest> {
+  const { assets, distDir, outDir: _outDir, ...exportOptions } = options;
+  const result = await exportStaticApp(build.app, {
+    ...exportOptions,
+    // SPEC §9.5: dry-run task wiring exposes the same manifest-backed
+    // documents, /c/ modules, and copied static assets as write export.
+    assets: jisoAppShellViteBuildStaticExportAssets(build, {
+      ...(assets === undefined ? {} : { assets }),
+      distDir,
+    }),
+  });
+
+  return staticExportManifest(result);
 }
 
 export async function writeJisoAppShellViteBuildOutput(

@@ -6,14 +6,17 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
+import { staticExportManifest } from './static-export.js';
 import {
   createJisoAppShellViteBuild,
+  exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
   jisoAppShellViteBuildStaticExportAssets,
   jisoAppShellViteManifestFile,
   jisoAppShellViteStaticExportAssetsFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
+  staticExportManifestForJisoAppShellViteBuildFromManifestFile,
   writeJisoAppShellViteBuildOutput,
 } from './vite-build.js';
 
@@ -424,6 +427,150 @@ describe('server app shell Vite build seam', () => {
       ]);
       await expect(readFile(join(outDir, 'catalog/index.html'))).rejects.toThrow();
       await expect(readFile(join(outDir, 'assets/catalog.css'))).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('returns manifest-file backed static export manifests matching write export output', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-proof-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-proof-export-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/docs.css'), '.docs{display:grid}');
+      await writeFile(join(distDir, 'assets/docs.js'), 'export const docs = true;');
+      await writeFile(
+        jisoAppShellViteManifestFile(distDir),
+        JSON.stringify({
+          'src/docs.client.ts': {
+            css: ['assets/docs.css'],
+            file: 'assets/docs.js',
+          },
+        }),
+      );
+
+      const app = createApp({
+        routes: [
+          route('/docs/intro', {
+            modulepreloads: ['/c/docs.client.js?v=docs-v1'],
+            page() {
+              return '<main class="docs">Intro</main>';
+            },
+          }),
+        ],
+      });
+      const clientModules = [
+        {
+          path: '/c/docs.client.js',
+          source: 'export const docsClient = true;',
+          version: 'docs-v1',
+        },
+      ];
+      const routeEntryMap = {
+        '/docs/intro': 'src/docs.client.ts',
+      };
+
+      const dryRunManifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
+        app,
+        clientModules,
+        distDir,
+        routeEntryMap,
+      });
+      const written = await exportJisoAppShellViteBuildFromManifestFile({
+        app,
+        clientModules,
+        distDir,
+        outDir,
+        routeEntryMap,
+      });
+
+      expect(dryRunManifest).toEqual({
+        assets: [
+          {
+            headers: { 'content-type': 'text/css; charset=utf-8' },
+            path: '/assets/docs.css',
+            source: join(distDir, 'assets/docs.css'),
+            status: 200,
+          },
+          {
+            headers: { 'content-type': 'text/javascript; charset=utf-8' },
+            path: '/assets/docs.js',
+            source: join(distDir, 'assets/docs.js'),
+            status: 200,
+          },
+        ],
+        clientModules: [
+          {
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'content-type': 'text/javascript; charset=utf-8',
+            },
+            href: '/c/docs.client.js?v=docs-v1',
+            path: '/c/docs.client.js',
+            status: 200,
+          },
+        ],
+        files: [
+          {
+            headers: {
+              'content-type': 'text/html; charset=utf-8',
+              link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
+            },
+            kind: 'route-document',
+            path: '/docs/intro/index.html',
+            status: 200,
+          },
+          {
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'content-type': 'text/javascript; charset=utf-8',
+            },
+            href: '/c/docs.client.js?v=docs-v1',
+            kind: 'client-module',
+            path: '/c/docs.client.js',
+            status: 200,
+          },
+          {
+            headers: { 'content-type': 'text/css; charset=utf-8' },
+            kind: 'static-asset',
+            path: '/assets/docs.css',
+            source: join(distDir, 'assets/docs.css'),
+            status: 200,
+          },
+          {
+            headers: { 'content-type': 'text/javascript; charset=utf-8' },
+            kind: 'static-asset',
+            path: '/assets/docs.js',
+            source: join(distDir, 'assets/docs.js'),
+            status: 200,
+          },
+        ],
+        routeDocuments: [
+          {
+            headers: {
+              'content-type': 'text/html; charset=utf-8',
+              link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
+            },
+            path: '/docs/intro/index.html',
+            status: 200,
+          },
+        ],
+      });
+      expect(dryRunManifest.files).toEqual(staticExportManifest(written).files);
+      await expect(readFile(join(outDir, 'docs/intro/index.html'), 'utf8')).resolves.toContain(
+        '<link rel="stylesheet" href="/assets/docs.css">',
+      );
+      await expect(readFile(join(outDir, 'c/docs.client.js'), 'utf8')).resolves.toBe(
+        'export const docsClient = true;',
+      );
+      await expect(readFile(join(outDir, 'assets/docs.css'), 'utf8')).resolves.toBe(
+        '.docs{display:grid}',
+      );
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),

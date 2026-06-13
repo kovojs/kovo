@@ -17,6 +17,7 @@ import {
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
   staticExportInventory,
+  staticExportManifest,
   StaticExportError,
 } from './static-export.js';
 
@@ -357,6 +358,115 @@ describe('server static export', () => {
         status: 200,
       },
     ]);
+  });
+
+  it('builds a stable public static export manifest from directory-index output', async () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const cartHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const cart = "manifest";',
+      version: 'cart-manifest',
+    });
+    const app = createApp({
+      clientModules: registry,
+      routes: [
+        route('/', {
+          modulepreloads: [cartHref],
+          page: () => '<main>Home</main>',
+        }),
+        route('/docs/intro', {
+          stylesheets: ['/assets/docs.css'],
+          page: () => '<main>Intro</main>',
+        }),
+      ],
+    });
+
+    const result = await exportStaticApp(app, {
+      assets: [
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/docs.css',
+          source: '/workspace/dist/assets/docs.css',
+        },
+      ],
+    });
+
+    expect(staticExportManifest(result)).toEqual({
+      assets: [
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          path: '/assets/docs.css',
+          source: '/workspace/dist/assets/docs.css',
+          status: 200,
+        },
+      ],
+      clientModules: [
+        {
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: cartHref,
+          path: '/c/cart.client.js',
+          status: 200,
+        },
+      ],
+      files: [
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            link: `<${cartHref}>; rel=modulepreload`,
+          },
+          kind: 'route-document',
+          path: '/index.html',
+          status: 200,
+        },
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            link: '</assets/docs.css>; rel=preload; as=style',
+          },
+          kind: 'route-document',
+          path: '/docs/intro/index.html',
+          status: 200,
+        },
+        {
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: cartHref,
+          kind: 'client-module',
+          path: '/c/cart.client.js',
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          kind: 'static-asset',
+          path: '/assets/docs.css',
+          source: '/workspace/dist/assets/docs.css',
+          status: 200,
+        },
+      ],
+      routeDocuments: [
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            link: `<${cartHref}>; rel=modulepreload`,
+          },
+          path: '/index.html',
+          status: 200,
+        },
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            link: '</assets/docs.css>; rel=preload; as=style',
+          },
+          path: '/docs/intro/index.html',
+          status: 200,
+        },
+      ],
+    });
   });
 
   it('rejects exported documents that reference server mutation or query endpoints', async () => {

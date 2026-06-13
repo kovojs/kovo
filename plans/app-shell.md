@@ -44,8 +44,9 @@ Implemented areas:
 - `static-replay.ts` rejects exported route documents that still reference same-origin `/_m/` or
   `/_q/` server endpoints, so SPEC §9.5 L0/L1-only constraints are enforced on the synthetic
   replayed no-JS artifact before client modules or files are written.
-- `static-export-types.ts` now owns stable export-task diagnostic type guards and formatting.
-  The create-jiso starter and commerce export tasks load those helpers from `@jiso/server`
+- `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting and a
+  public export manifest for directory-index documents, copied assets, and `/c/` modules. The
+  create-jiso starter and commerce export tasks load the diagnostic helpers from `@jiso/server`
   instead of duplicating local FW229 formatting.
 
 Recent gates:
@@ -106,12 +107,23 @@ Round85 app-shell static replay evidence:
 - `pnpm exec vp check examples/commerce/src/components/product-grid.tsx examples/commerce/src/generated/product-grid.tsx examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts`
 - `git diff --check`
 
+Round86 server public export manifest evidence:
+
+- `staticExportManifest()` exposes the directory-index route documents, copied static assets, and
+  referenced `/c/` modules as a stable public export-task object.
+- `staticExportManifestForJisoAppShellViteBuild()` and
+  `staticExportManifestForJisoAppShellViteBuildFromManifestFile()` prove the manifest-backed dry
+  run path through the same SPEC §9.5 replay/copy planning as write export, and public/root barrel
+  tests pin those exports.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:
 
-- Finish manifest asset-copying acceptance outside the commerce public export-task consumer.
-- Keep dry-run and write export validation equivalent.
+- Adopt or assert the public static export manifest in the remaining starter/docs export-task
+  consumers; commerce L0/L1 public output is already covered by the Round85 evidence above.
 
 R7:
 

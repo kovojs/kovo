@@ -51,6 +51,33 @@ export type StaticExportInventoryItem =
       status: number;
     };
 
+export interface StaticExportManifest {
+  assets: readonly StaticExportManifestAsset[];
+  clientModules: readonly StaticExportManifestClientModule[];
+  files: readonly StaticExportInventoryItem[];
+  routeDocuments: readonly StaticExportManifestRouteDocument[];
+}
+
+export interface StaticExportManifestRouteDocument {
+  headers: Record<string, string>;
+  path: string;
+  status: number;
+}
+
+export interface StaticExportManifestClientModule {
+  headers: Record<string, string>;
+  href: string;
+  path: string;
+  status: number;
+}
+
+export interface StaticExportManifestAsset {
+  headers: Record<string, string>;
+  path: string;
+  source: string;
+  status: number;
+}
+
 export interface StaticExportDiagnostic {
   code: DiagnosticCode | 'FW229';
   message: string;
@@ -155,6 +182,39 @@ export function staticExportInventory(result: {
       status: artifact.status,
     })),
   ];
+}
+
+// SPEC §9.5: export-task consumers need a stable public manifest for the
+// directory-index documents, copied assets, and /c/ modules that replay would publish.
+export function staticExportManifest(result: {
+  artifacts: readonly StaticExportArtifact[];
+  assets: readonly StaticExportAssetArtifact[];
+  clientModules: readonly StaticExportClientModuleArtifact[];
+}): StaticExportManifest {
+  const routeDocuments = result.artifacts.map((artifact) => ({
+    headers: artifact.headers,
+    path: artifact.path,
+    status: artifact.status,
+  }));
+  const clientModules = result.clientModules.map((artifact) => ({
+    headers: artifact.headers,
+    href: artifact.href,
+    path: artifact.path,
+    status: artifact.status,
+  }));
+  const assets = result.assets.map((artifact) => ({
+    headers: artifact.headers,
+    path: artifact.path,
+    source: artifact.source,
+    status: artifact.status,
+  }));
+
+  return {
+    assets,
+    clientModules,
+    files: staticExportInventory(result),
+    routeDocuments,
+  };
 }
 
 export function sortedHeaders(headers: Headers): Record<string, string> {

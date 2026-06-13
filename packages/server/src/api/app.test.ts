@@ -51,6 +51,12 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
     );
+    expect(publicApi.staticExportManifestForJisoAppShellViteBuild).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuild,
+    );
+    expect(publicApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+    );
     expect(publicApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
     expect(publicApi.jisoAppShellViteBuildStaticExportAssets).toBe(
       viteApi.jisoAppShellViteBuildStaticExportAssets,
@@ -64,6 +70,7 @@ describe('server app-shell public API barrels', () => {
 
     expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
+    expect(appApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
     expect(publicApi.formatStaticExportDiagnostic).toBe(
       staticExportApi.formatStaticExportDiagnostic,
     );
@@ -79,6 +86,7 @@ describe('server app-shell public API barrels', () => {
     expect(appShellApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
+    expect(appShellApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
     expect(appShellApi.formatStaticExportDiagnostics).toBe(
       staticExportApi.formatStaticExportDiagnostics,
     );
@@ -89,6 +97,12 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(appShellApi.staticExportManifestForJisoAppShellViteBuild).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuild,
+    );
+    expect(appShellApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     );
     expect(appShellApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
     expect(appShellApi.jisoAppShellViteBuildStaticExportAssets).toBe(
@@ -130,6 +144,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageStaticExportApi.staticExportInventory).toBe(
       staticExportApi.staticExportInventory,
     );
+    expect(packageStaticExportApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
     expect(packageStaticExportApi.formatStaticExportDiagnostic).toBe(
       staticExportApi.formatStaticExportDiagnostic,
     );
@@ -142,6 +157,12 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageViteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(packageViteApi.staticExportManifestForJisoAppShellViteBuild).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuild,
+    );
+    expect(packageViteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     );
     expect(packageViteApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
     expect(packageViteApi.jisoAppShellViteBuildStaticExportAssets).toBe(
@@ -161,6 +182,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageAppShellApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
     expect(packageAppShellApi.StaticExportError).toBe(staticExportApi.StaticExportError);
     expect(packageAppShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
+    expect(packageAppShellApi.staticExportManifest).toBe(staticExportApi.staticExportManifest);
     expect(packageAppShellApi.formatStaticExportDiagnostics).toBe(
       staticExportApi.formatStaticExportDiagnostics,
     );
@@ -173,6 +195,12 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageAppShellApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(packageAppShellApi.staticExportManifestForJisoAppShellViteBuild).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuild,
+    );
+    expect(packageAppShellApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
+      viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     );
     expect(packageAppShellApi.jisoAppShellViteManifestFile).toBe(
       viteApi.jisoAppShellViteManifestFile,

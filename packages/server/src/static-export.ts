@@ -31,6 +31,7 @@ export {
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
   staticExportInventory,
+  staticExportManifest,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,
@@ -40,6 +41,10 @@ export {
   type StaticExportDiagnosticSeverity,
   type StaticExportHtmlPathStyle,
   type StaticExportInventoryItem,
+  type StaticExportManifest,
+  type StaticExportManifestAsset,
+  type StaticExportManifestClientModule,
+  type StaticExportManifestRouteDocument,
 } from './static-export-types.js';
 
 export interface StaticExportOptions {

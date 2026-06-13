@@ -5,6 +5,7 @@ export {
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
   staticExportInventory,
+  staticExportManifest,
   StaticExportError,
 } from '../../static-export.js';
 export type {
@@ -17,6 +18,10 @@ export type {
   StaticExportDiagnosticSeverity,
   StaticExportHtmlPathStyle,
   StaticExportInventoryItem,
+  StaticExportManifest,
+  StaticExportManifestAsset,
+  StaticExportManifestClientModule,
+  StaticExportManifestRouteDocument,
   StaticExportOptions,
   StaticExportResult,
 } from '../../static-export.js';
