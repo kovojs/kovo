@@ -170,6 +170,8 @@ Implemented areas:
 - The create-jiso starter static preview now serves exported `/c/` modules with immutable cache
   headers, keeping local static-host adoption aligned with SPEC §9.5 exported client-module
   artifacts.
+- Commerce export commands now print the public Vite export bridge manifest file ledger and the
+  adoption test checks those route, `/c/`, and asset paths against the written static-host files.
 
 Round376 static-export client-module href boundary evidence:
 
@@ -180,6 +182,15 @@ Round376 static-export client-module href boundary evidence:
   invalid href syntax at the output target boundary.
 - `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
+Round381 commerce Vite/static-export manifest adoption evidence:
+
+- `examples/commerce/scripts/export-static.mjs` emits `manifest-files=` from the public
+  build-with-manifest bridge, and `examples/commerce/src/app-shell.test.ts` pins the command output
+  to `/index.html`, `/cart/index.html`, `/login/index.html`, `/c/commerce.client.js`, and
+  `/assets/tailwind.css` while reading the same files from `dist`.
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
 Round373 starter static-preview immutable module evidence:

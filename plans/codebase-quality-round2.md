@@ -212,6 +212,9 @@ Latest evidence:
 - [x] Static-export output planning rejects external or malformed client-module artifact hrefs before
       static-host writes. Verified with focused output-target/output/static-export/API tests and
       `tsc`.
+- [x] Commerce `vp run export`/`npm run static` now expose the public Vite build-with-manifest file
+      ledger and prove the listed route, `/c/`, and asset paths exist in the written static host.
+      Verified with focused commerce app-shell tests and `tsc`.
 
 ## Phase 6 - Verification Harness And Commerce
 

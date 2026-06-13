@@ -117,6 +117,7 @@ if (isMainModule()) {
         `manifest-html=${result.manifest?.routeDocuments.length ?? 0}`,
         `manifest-client-modules=${result.manifest?.clientModules.length ?? 0}`,
         `manifest-assets=${result.manifest?.assets.length ?? 0}`,
+        `manifest-files=${manifestFileLedger(result.manifest)}`,
         `diagnostics=${result.diagnostics.length}`,
         '',
       ].join('\n'),
@@ -160,4 +161,8 @@ function parseCliOptions(args) {
   }
 
   return options;
+}
+
+function manifestFileLedger(manifest) {
+  return manifest?.files.map((file) => `${file.kind}:${file.path}`).join(',') ?? 'missing';
 }

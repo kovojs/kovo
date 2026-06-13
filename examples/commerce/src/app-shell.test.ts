@@ -647,6 +647,15 @@ describe('commerce app shell HTTP entry', () => {
         expect(output).toContain('manifest-html=3');
         expect(output).toContain('manifest-client-modules=1');
         expect(output).toContain('manifest-assets=1');
+        expect(output).toContain(
+          [
+            'manifest-files=route-document:/index.html',
+            'route-document:/cart/index.html',
+            'route-document:/login/index.html',
+            'client-module:/c/commerce.client.js',
+            'static-asset:/assets/tailwind.css',
+          ].join(','),
+        );
         expect(output).toContain('diagnostics=0');
 
         const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
@@ -676,6 +685,8 @@ describe('commerce app shell HTTP entry', () => {
 
         const stylesheet = await readFile(path.join(outDir, 'assets', 'tailwind.css'), 'utf8');
         expect(stylesheet).toContain('tailwindcss v');
+        await expect(access(path.join(outDir, 'assets', 'tailwind.css'))).resolves.toBeUndefined();
+        await expect(access(path.join(outDir, 'c', 'commerce.client.js'))).resolves.toBeUndefined();
 
         server = createStaticExportServer(outDir);
         await listen(server);
