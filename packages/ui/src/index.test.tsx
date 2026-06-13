@@ -872,6 +872,7 @@ describe('@jiso/ui styled package foundation', () => {
       ...state,
       descriptionId: 'quantity-description',
       errorId: 'quantity-error',
+      form: 'cart-form',
       id: 'quantity-input',
       labelledBy: 'quantity-label',
     });
@@ -897,7 +898,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(decrement).toContain('data-action="decrement"');
     expect(input).toContain('aria-describedby="quantity-description quantity-error"');
     expect(input).toContain('aria-invalid="true"');
-    expect(input).toContain('id="quantity-input" max="10" min="0" name="quantity" required');
+    expect(input).toContain(
+      'form="cart-form" id="quantity-input" max="10" min="0" name="quantity" required',
+    );
     expect(input).toContain('step="2" type="number" value="2"');
     expect(increment).toContain('data-action="increment"');
     expect(disabledAtMax).toContain('data-disabled=""');

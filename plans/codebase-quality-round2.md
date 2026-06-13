@@ -792,6 +792,14 @@ Latest broad gate:
 
 Focused gates since that broad run:
 
+- UI/gallery H2 number-field native form/input slice:
+  `pnpm exec vitest --run packages/headless-ui/src/primitives/number-field.test.ts`;
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx -t number-field`;
+  `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+  `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t number-field)`;
+  exact `pnpm exec vp check packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts packages/ui/src/number-field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/number-field-demo.tsx examples/gallery/src/generated/interactive/number-field-demo.tsx examples/gallery/src/generated/interactive/number-field-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - UI/gallery H2 field/fieldset native form slice:
   `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`;
   `pnpm exec vitest --run packages/ui/src/index.test.tsx -t field`;

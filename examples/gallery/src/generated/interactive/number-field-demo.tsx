@@ -25,13 +25,15 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
       step: 1,
       value: state.value,
     };
+    const formId = 'gallery-number-field-form';
     const inputId = 'gallery-number-field-input';
 
     return (
-      <section
+      <form
         {...numberFieldRootAttributes(fieldState)}
         class="inline-grid gap-2"
         data-gallery-interactive="number-field"
+        id={formId}
         fw-c="gallery-number-field-demo"
         fw-state='{"value":2}'
       >
@@ -39,20 +41,28 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
         <div class="inline-flex items-center gap-1">
           <button
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=e2674935#GalleryNumberFieldDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=ee3cb050#GalleryNumberFieldDemo$button_click"
           >
             -
           </button>
-          <input {...numberFieldInputAttributes({ ...fieldState, id: inputId, label: 'Seats' })} />
+          <input
+            {...numberFieldInputAttributes({
+              ...fieldState,
+              form: formId,
+              id: inputId,
+              label: 'Seats',
+            })}
+            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=ee3cb050#GalleryNumberFieldDemo$input_input"
+          />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=e2674935#GalleryNumberFieldDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=ee3cb050#GalleryNumberFieldDemo$button_click_2"
           >
             +
           </button>
         </div>
         <output data-demo-state="value">{String(state.value)}</output>
-      </section>
+      </form>
     );
   },
 });

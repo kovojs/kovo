@@ -364,6 +364,7 @@ describe('gallery demo fixtures', () => {
     expect(numberField.html).toContain('id="gallery-number-field"');
     expect(numberField.html).toContain('for="gallery-number-field-input"');
     expect(numberField.html).toContain('type="number"');
+    expect(numberField.html).toContain('form="gallery-number-field-form"');
     expect(numberField.html).toContain('name="gallery-quantity"');
     expect(numberField.html).toContain('required');
     expect(numberField.html).toContain('min="0"');

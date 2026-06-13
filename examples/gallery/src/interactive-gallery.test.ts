@@ -402,6 +402,9 @@ describe('compiled interactive gallery demos', () => {
     expect(numberField).toContain('data-gallery-interactive="number-field"');
     expect(numberField).toContain('fw-state=\'{"value":2}\'');
     expect(numberField).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNumberFieldDemo\$input_input"/,
+    );
+    expect(numberField).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNumberFieldDemo\$button_click"/,
     );
     expect(numberField).toMatch(
@@ -929,18 +932,24 @@ describe('compiled interactive gallery demos', () => {
     });
 
     const numberFieldState = { value: 2 };
+    clientHandler(numberField, 'GalleryNumberFieldDemo$input_input')(inputEvent('4'), {
+      params: {},
+      signal,
+      state: numberFieldState,
+    });
+    expect(numberFieldState).toEqual({ value: 4 });
     clientHandler(numberField, 'GalleryNumberFieldDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
       state: numberFieldState,
     });
-    expect(numberFieldState).toEqual({ value: 3 });
+    expect(numberFieldState).toEqual({ value: 5 });
     clientHandler(numberField, 'GalleryNumberFieldDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: numberFieldState,
     });
-    expect(numberFieldState).toEqual({ value: 2 });
+    expect(numberFieldState).toEqual({ value: 4 });
 
     const fieldState = {
       email: 'ada@example',

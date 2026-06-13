@@ -64,6 +64,8 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       generated artifacts and a browser-backed focus assertion. Field/fieldset integration now
       exposes native fieldset `name`, keeps the disable toggle in the first legend, and proves
       browser `FormData` inclusion/omission for grouped controls as fieldset disabled state changes.
+      Number-field now preserves native input `form` ownership through headless/styled wrappers and
+      proves generated direct input plus stepper updates keep browser `FormData` current.
 
 ## Open Work
 
@@ -77,7 +79,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       headless tests, styled `activeValue` forwarding, static gallery tests, refreshed generated
       artifacts, and a browser-backed generated keydown selection test. Toolbar disabled/empty
       keyboard no-op behavior is covered by headless tests, while refreshed generated toolbar
-      artifacts and browser tests prove roving tabindex plus DOM focus movement.
+      artifacts and browser tests prove roving tabindex plus DOM focus movement. Number-field
+      native form ownership and generated direct input handling are covered by headless/styled
+      tests, static gallery contracts, refreshed generated artifacts, and browser-backed
+      `FormData` checks for input and stepper paths.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -126,6 +131,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Number-field native form/input slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/number-field.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t number-field`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t number-field)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts packages/ui/src/number-field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/number-field-demo.tsx examples/gallery/src/generated/interactive/number-field-demo.tsx examples/gallery/src/generated/interactive/number-field-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Field/fieldset native form closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t field`;

@@ -652,8 +652,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('updates number-field stamped state through generated steppers', async () => {
+  it('updates number-field stamped state and form data through generated input and steppers', async () => {
     const root = mountInteractiveDemo(GalleryNumberFieldDemo);
+    const form = root as HTMLFormElement;
     const input = required(root.querySelector<HTMLInputElement>('input'));
     const increment = required(root.querySelector<HTMLButtonElement>('[data-action="increment"]'));
     const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="value"]'));
@@ -662,23 +663,36 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('fw-state')).toBe('{"value":2}');
     expect(input.type).toBe('number');
     expect(input.name).toBe('gallery-seat-count');
+    expect(input.form).toBe(form);
     expect(input.required).toBe(true);
     expect(input.value).toBe('2');
     expect(output.textContent).toBe('2');
+    expect(new FormData(form).get('gallery-seat-count')).toBe('2');
 
-    increment.click();
+    input.value = '4';
+    input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"value":3}');
+      expect(root.getAttribute('fw-state')).toBe('{"value":4}');
+      expect(output.textContent).toBe('4');
+      expect(new FormData(form).get('gallery-seat-count')).toBe('4');
+    });
+
+    increment.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"value":5}');
+      expect(new FormData(form).get('gallery-seat-count')).toBe('5');
     });
 
     required(root.querySelector<HTMLButtonElement>('[data-action="decrement"]')).click();
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('fw-state')).toBe('{"value":2}');
+      expect(root.getAttribute('fw-state')).toBe('{"value":4}');
+      expect(new FormData(form).get('gallery-seat-count')).toBe('4');
     });
   });
 

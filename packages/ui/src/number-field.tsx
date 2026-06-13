@@ -32,6 +32,7 @@ export interface NumberFieldInputProps extends NumberFieldStateProps {
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
@@ -132,6 +133,7 @@ export const NumberFieldInput = component('number-field-input', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.label === undefined ? {} : { label: props.label }),
@@ -155,6 +157,7 @@ export const NumberFieldInput = component('number-field-input', {
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         max={attrs.max}
         min={attrs.min}

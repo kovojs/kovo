@@ -1766,6 +1766,7 @@ export function NumberFieldDemo(): string {
                       ...quantity,
                       descriptionId: 'gallery-number-field-description',
                       errorId: 'gallery-number-field-error',
+                      form: 'gallery-number-field-form',
                       id: 'gallery-number-field-input',
                       labelledBy: 'gallery-number-field-label',
                     })}

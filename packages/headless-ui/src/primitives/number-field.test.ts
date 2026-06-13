@@ -58,6 +58,7 @@ describe('headless-ui number-field primitive', () => {
       numberFieldInputAttributes({
         descriptionId: 'quantity-help',
         errorId: 'quantity-error',
+        form: 'cart-form',
         id: 'quantity',
         invalid: true,
         label: 'Quantity',
@@ -75,6 +76,7 @@ describe('headless-ui number-field primitive', () => {
       'data-invalid': '',
       'data-required': '',
       disabled: false,
+      form: 'cart-form',
       id: 'quantity',
       max: 10,
       min: 1,

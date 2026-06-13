@@ -434,6 +434,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   ],
   '/components/number-field': [
     'type="number"',
+    'form="gallery-number-field-form"',
     'name="gallery-quantity"',
     'aria-describedby="gallery-number-field-description gallery-number-field-error"',
     'aria-invalid="true"',

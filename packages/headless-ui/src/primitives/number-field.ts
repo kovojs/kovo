@@ -26,6 +26,7 @@ export interface NumberFieldRootAttributeOptions extends NumberFieldState {
 export interface NumberFieldInputAttributeOptions extends NumberFieldState {
   descriptionId?: string;
   errorId?: string;
+  form?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
@@ -85,6 +86,7 @@ export function numberFieldInputAttributes(
     ...(options.label === undefined ? {} : { 'aria-label': options.label }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     disabled: options.disabled === true,
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(numberFieldFinite(options.max) ? { max: options.max } : {}),
     ...(numberFieldFinite(options.min) ? { min: options.min } : {}),

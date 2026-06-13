@@ -24,13 +24,15 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
       step: 1,
       value: state.value,
     };
+    const formId = 'gallery-number-field-form';
     const inputId = 'gallery-number-field-input';
 
     return (
-      <section
+      <form
         {...numberFieldRootAttributes(fieldState)}
         class="inline-grid gap-2"
         data-gallery-interactive="number-field"
+        id={formId}
       >
         <label for={inputId}>Seats</label>
         <div class="inline-flex items-center gap-1">
@@ -38,22 +40,71 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
             onClick={() => {
               state.value = state.value <= 0 ? 0 : state.value - 1;
+              const doc = Reflect['get'](globalThis, 'document');
+              const input = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-number-field-input')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="value"]')
+                : undefined;
+
+              if (input) input['value'] = String(state.value);
+              if (output) output['textContent'] = String(state.value);
             }}
           >
             -
           </button>
-          <input {...numberFieldInputAttributes({ ...fieldState, id: inputId, label: 'Seats' })} />
+          <input
+            {...numberFieldInputAttributes({
+              ...fieldState,
+              form: formId,
+              id: inputId,
+              label: 'Seats',
+            })}
+            onInput={() => {
+              const delegatedEvent = event;
+              const eventTarget =
+                delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
+              const eventValue =
+                eventTarget === null || eventTarget === undefined
+                  ? state.value
+                  : +Reflect['get'](Object(eventTarget), 'value');
+              const nextValue = eventValue === eventValue ? eventValue : state.value;
+              state.value = nextValue <= 0 ? 0 : nextValue >= 5 ? 5 : nextValue;
+
+              const doc = Reflect['get'](globalThis, 'document');
+              const input = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-number-field-input')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="value"]')
+                : undefined;
+
+              if (input) input['value'] = String(state.value);
+              if (output) output['textContent'] = String(state.value);
+            }}
+          />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
             onClick={() => {
               state.value = state.value >= 5 ? 5 : state.value + 1;
+              const doc = Reflect['get'](globalThis, 'document');
+              const input = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-number-field-input')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="value"]')
+                : undefined;
+
+              if (input) input['value'] = String(state.value);
+              if (output) output['textContent'] = String(state.value);
             }}
           >
             +
           </button>
         </div>
         <output data-demo-state="value">{String(state.value)}</output>
-      </section>
+      </form>
     );
   },
 });
