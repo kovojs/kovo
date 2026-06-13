@@ -147,56 +147,6 @@ export function generatedOffsetToOriginal(
   return undefined;
 }
 
-export function composeSourceOffsetMaps(
-  first: SourceOffsetMap,
-  second: SourceOffsetMap,
-): SourceOffsetMap {
-  const segments: SourceOffsetSegment[] = [];
-
-  for (const secondSegment of second.segments) {
-    const secondStart = secondSegment.originalStart;
-    const secondEnd = secondStart + secondSegment.length;
-
-    for (const firstSegment of first.segments) {
-      const firstStart = firstSegment.generatedStart;
-      const firstEnd = firstStart + firstSegment.length;
-      const overlapStart = Math.max(secondStart, firstStart);
-      const overlapEnd = Math.min(secondEnd, firstEnd);
-
-      if (overlapStart >= overlapEnd) continue;
-
-      appendSourceOffsetSegment(segments, {
-        generatedStart: secondSegment.generatedStart + overlapStart - secondStart,
-        length: overlapEnd - overlapStart,
-        originalStart: firstSegment.originalStart + overlapStart - firstStart,
-      });
-    }
-  }
-
-  return {
-    generatedLength: second.generatedLength,
-    originalLength: first.originalLength,
-    segments,
-  };
-}
-
-function appendSourceOffsetSegment(
-  segments: SourceOffsetSegment[],
-  segment: SourceOffsetSegment,
-): void {
-  const previous = segments.at(-1);
-  if (
-    previous &&
-    previous.generatedStart + previous.length === segment.generatedStart &&
-    previous.originalStart + previous.length === segment.originalStart
-  ) {
-    previous.length += segment.length;
-    return;
-  }
-
-  segments.push(segment);
-}
-
 function patchedSourceLength(
   originalLength: number,
   replacements: readonly SourceReplacement[],

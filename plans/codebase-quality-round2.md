@@ -429,6 +429,8 @@ The compiler pipeline no longer exports dead lowering/result option types left b
 sequence helper; only the active patch helpers keep annotated internal result shapes.
 The compile pipeline now names the combined pre-derive patch state for what it is rather than
 carrying the old navigation-only compatibility name.
+The unused offset-map composition helper and stale data-bind template-body validator export were
+deleted after the single model-patch pass and analyzer-owned template stamp facts made them dead.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -443,6 +445,11 @@ packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lo
 packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts
 packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts`;
   `pnpm exec vitest --run packages/compiler/src`; `pnpm exec tsc --noEmit --pretty false`.
+- Dead compiler helper cleanup: `pnpm exec vitest --run packages/compiler/src/shared.test.ts
+packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts
+packages/compiler/src/id-content-model.test.ts`; `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/compiler/src/shared.ts
+packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`; `git diff --check`.
 - Pre-derive lowering reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts

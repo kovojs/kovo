@@ -5,7 +5,6 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
   jsxElements,
-  jsxElementChildBody,
   soleJsxExpressionChild,
   type ComponentModuleModel,
   type JsxElementModel,
@@ -32,11 +31,6 @@ interface DataBindAttribute {
   path: string;
   query: string | null;
   relativeReadPath: string | null;
-}
-
-interface TemplateBody {
-  offset: number;
-  source: string;
 }
 
 export function validateDataBindings(
@@ -121,20 +115,6 @@ export function validateStampExpressionDrift(
     });
 }
 
-export function dataBindListTemplateBodies(
-  source: string,
-  model: ComponentModuleModel,
-): TemplateBody[] {
-  const elements = jsxElements(model);
-
-  return elements.flatMap((element) => {
-    if (jsxStaticAttributeValue(element, 'data-bind-list') === undefined) return [];
-
-    const template = templateStamp(elements, element);
-    return template ? [template] : [];
-  });
-}
-
 function bindingExpressionStamps(
   model: ComponentModuleModel,
 ): Array<{ binding: string; expression: string; index: number; length: number }> {
@@ -186,19 +166,6 @@ function dataBindAttributeFact(
     query: isRelativeBindingPath(path) ? null : queryNameFromPath(path),
     relativeReadPath: isRelativeBindingPath(path) ? relativeBindingPath(path) : null,
   };
-}
-
-function templateStamp(
-  elements: readonly JsxElementModel[],
-  container: JsxElementModel,
-): TemplateBody | null {
-  const template = elements.find(
-    (element) =>
-      element.tag === 'template' &&
-      isWithinElement(element, container) &&
-      hasJsxAttribute(element, 'fw-stamp'),
-  );
-  return template ? jsxElementChildBody(template) : null;
 }
 
 function validateListStampInQueryShapes(
@@ -274,10 +241,6 @@ function fw227Diagnostic(
 
 function jsxAttributes(model: ComponentModuleModel) {
   return jsxElements(model).flatMap((element) => [...element.attributes]);
-}
-
-function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
-  return element.attributes.some((attribute) => attribute.name === name);
 }
 
 function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
