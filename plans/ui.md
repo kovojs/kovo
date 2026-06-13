@@ -83,7 +83,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       gallery proves a canceled action keeps visible/open state before a later dismiss closes it.
       Checkbox mixed state now has an exported native `indeterminate` property helper; the compiled
       checkbox demo clears the property after generated state transitions, and the route-level axe
-      gate enforces `aria-conditional-attr` without a checkbox exception.
+      gate enforces `aria-conditional-attr` without a checkbox exception. Toast disabled
+      non-dismissing actions now prevent native follow-up behavior in the primitive, render disabled
+      state through styled/static and compiled gallery surfaces, and stay stable under route-level
+      axe plus browser state checks.
 
 ## Open Work
 
@@ -259,6 +262,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       and invalid state through headless/styled wrappers; static fixtures and refreshed compiled
       command artifacts prove the authored TSX, while Chromium-backed gallery tests assert the
       external `FormData` value moves from empty to `invite` through the generated input handler.
+      Evidence 2026-06-13: `toastActionClick()` now prevents default for disabled
+      non-dismissing actions before returning unchanged state; `ToastAction` and the static toast
+      route prove disabled `data-disabled`/native `disabled` forwarding, while refreshed compiled
+      toast artifacts and Chromium-backed gallery checks prove the disabled action remains inert
+      and axe-clean.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -270,6 +278,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Toast disabled non-dismissing action closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/toast.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toast`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "toast fixture|static visual fixture|styled component fixtures"`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/toast.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/toast.html.txt plans/ui.md`;
+      `git diff --check`.
 - [x] Toast styled variant and static visual-baseline slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/toast.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toast`;

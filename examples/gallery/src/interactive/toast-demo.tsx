@@ -122,6 +122,27 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           >
             Dismiss
           </button>
+          <button
+            {...toastActionAttributes({
+              ...toastState,
+              actionValue: 'blocked',
+              disabled: true,
+              dismissOnAction: false,
+            })}
+            data-toast-disabled-action=""
+            onClick={() => {
+              if (!event) return;
+              Object(event)['preventDefault']?.call(event);
+
+              const doc = Reflect['get'](globalThis, 'document');
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
+                : undefined;
+              if (output) output['textContent'] = state.open ? 'disabled' : 'closed';
+            }}
+          >
+            Blocked
+          </button>
         </div>
         <output data-demo-state="toast-open">{state.open ? 'open' : 'closed'}</output>
       </section>

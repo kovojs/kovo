@@ -275,6 +275,12 @@ export function toastActionClick(
 ): ToastChangeResult | undefined {
   if (event.defaultPrevented) return;
 
+  if (state.disabled) {
+    const open = toastOpen(state);
+    event.preventDefault();
+    return { changed: false, id: state.id, open };
+  }
+
   if (options.dismissOnAction === false) {
     return { changed: false, id: state.id, open: toastOpen(state) };
   }

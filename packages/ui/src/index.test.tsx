@@ -1455,6 +1455,13 @@ describe('@jiso/ui styled package foundation', () => {
         dismissOnAction: false,
         id: 'deploy-toast',
         variant: 'success',
+      })}${ToastAction.definition.render({
+        actionValue: 'blocked',
+        children: 'Blocked',
+        disabled: true,
+        dismissOnAction: false,
+        id: 'deploy-toast',
+        variant: 'success',
       })}${ToastClose.definition.render({
         children: 'Dismiss',
         id: 'deploy-toast',
@@ -1494,6 +1501,8 @@ describe('@jiso/ui styled package foundation', () => {
     expect(viewport).toContain('data-dismiss-on-action="false"');
     expect(viewport).toContain('type="button" value="open-deploy"');
     expect(viewport).toContain('type="button" value="keep-open"');
+    expect(viewport).toContain('data-disabled=""');
+    expect(viewport).toContain('disabled type="button" value="blocked"');
     expect(viewport).toContain('data-dismiss="" data-state="open" data-variant="success"');
     expect(hiddenToast).toContain('data-state="closed"');
     expect(hiddenToast).toContain('hidden id="hidden-toast"');

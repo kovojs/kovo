@@ -35,7 +35,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
         })}
         class="grid gap-2"
         data-gallery-interactive="toast"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=fb1c6fcd#GalleryToastDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=55f6ce89#GalleryToastDemo$section_keydown"
         fw-c="gallery-toast-demo"
         fw-state='{"open":true}'
       >
@@ -46,7 +46,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           </p>
           <button
             {...toastActionAttributes({ ...toastState, actionValue: 'undo' })}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=fb1c6fcd#GalleryToastDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=55f6ce89#GalleryToastDemo$button_click"
           >
             Undo
           </button>
@@ -57,15 +57,27 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
               dismissOnAction: false,
             })}
             data-toast-cancel-dismiss=""
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=fb1c6fcd#GalleryToastDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=55f6ce89#GalleryToastDemo$button_click_2"
           >
             Keep open
           </button>
           <button
             {...toastCloseAttributes(toastState)}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=fb1c6fcd#GalleryToastDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=55f6ce89#GalleryToastDemo$button_click_3"
           >
             Dismiss
+          </button>
+          <button
+            {...toastActionAttributes({
+              ...toastState,
+              actionValue: 'blocked',
+              disabled: true,
+              dismissOnAction: false,
+            })}
+            data-toast-disabled-action=""
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=55f6ce89#GalleryToastDemo$button_click_4"
+          >
+            Blocked
           </button>
         </div>
         <output data-demo-state="toast-open">{state.open ? 'open' : 'closed'}</output>

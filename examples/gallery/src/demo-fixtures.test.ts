@@ -669,6 +669,8 @@ describe('gallery demo fixtures', () => {
     expect(toast.html).toContain('type="button" value="open-deploy"');
     expect(toast.html).toContain('data-dismiss-on-action="false"');
     expect(toast.html).toContain('type="button" value="keep-open"');
+    expect(toast.html).toContain('data-disabled=""');
+    expect(toast.html).toContain('disabled type="button" value="blocked"');
     expect(toast.html).toContain('data-dismiss="" data-state="open" data-variant="success"');
     expect(toast.html).toContain('data-state="closed" data-variant="error" hidden');
     expect(toast.html).toContain('role="alert"');

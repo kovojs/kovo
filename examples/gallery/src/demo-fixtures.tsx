@@ -2524,6 +2524,14 @@ export function ToastDemo(): string {
           id: 'gallery-toast',
           variant: 'success',
         })}
+        {ToastAction.definition.render({
+          actionValue: 'blocked',
+          children: 'Blocked',
+          disabled: true,
+          dismissOnAction: false,
+          id: 'gallery-toast',
+          variant: 'success',
+        })}
         {ToastClose.definition.render({
           children: 'Dismiss',
           id: 'gallery-toast',

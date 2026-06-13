@@ -57,3 +57,13 @@ export const GalleryToastDemo$button_click_3 = handler((event, ctx) => {
   }
   if (output) output['textContent'] = 'closed';
 });
+export const GalleryToastDemo$button_click_4 = handler((event, ctx) => {
+  if (!event) return;
+  Object(event)['preventDefault']?.call(event);
+
+  const doc = Reflect['get'](globalThis, 'document');
+  const output = doc
+    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
+    : undefined;
+  if (output) output['textContent'] = ctx.state.open ? 'disabled' : 'closed';
+});

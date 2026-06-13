@@ -569,7 +569,11 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_3"/,
     );
+    expect(toast).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_4"/,
+    );
     expect(toast).toContain('data-toast-cancel-dismiss=""');
+    expect(toast).toContain('data-toast-disabled-action=""');
     expect(toast).toContain('dismissOnAction: false');
   });
 
@@ -1285,6 +1289,15 @@ describe('compiled interactive gallery demos', () => {
       state: toastState,
     });
     expect(toastState).toEqual({ open: false });
+    toastState.open = true;
+    const disabledToastClick = new Event('click', { cancelable: true });
+    clientHandler(toast, 'GalleryToastDemo$button_click_4')(disabledToastClick, {
+      params: {},
+      signal,
+      state: toastState,
+    });
+    expect(disabledToastClick.defaultPrevented).toBe(true);
+    expect(toastState).toEqual({ open: true });
   });
 
   it('updates browser-observable ARIA, focus, visibility, and output contracts', () => {
@@ -1636,6 +1649,16 @@ describe('compiled interactive gallery demos', () => {
       expect(element(document, 'gallery-toast').hidden).toBe(true);
       expect(element(document, 'gallery-toast').attrs['data-state']).toBe('closed');
       expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('closed');
+      toastState.open = true;
+      const disabledToastClick = new Event('click', { cancelable: true });
+      clientHandler(toast, 'GalleryToastDemo$button_click_4')(disabledToastClick, {
+        params: {},
+        signal,
+        state: toastState,
+      });
+      expect(disabledToastClick.defaultPrevented).toBe(true);
+      expect(toastState).toEqual({ open: true });
+      expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('disabled');
     } finally {
       if (hadDocument) {
         Object.defineProperty(globalThis, 'document', {

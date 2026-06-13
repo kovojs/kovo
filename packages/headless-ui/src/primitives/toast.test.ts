@@ -306,6 +306,15 @@ describe('headless-ui toast primitive', () => {
     expect(disabledResult).toEqual({ changed: false, id: 'toast', open: true });
     expect(disabledEvent.defaultPrevented).toBe(true);
 
+    const disabledNonDismissEvent = new Event('click', { cancelable: true });
+    const disabledNonDismissResult = toastActionClick(
+      disabledNonDismissEvent,
+      { disabled: true, id: 'toast' },
+      { dismissOnAction: false },
+    );
+    expect(disabledNonDismissResult).toEqual({ changed: false, id: 'toast', open: true });
+    expect(disabledNonDismissEvent.defaultPrevented).toBe(true);
+
     const canceledEvent = new Event('click', { cancelable: true });
     const canceledResult = toastCloseClick(
       canceledEvent,

@@ -272,9 +272,15 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     const toastRoot = mountInteractiveDemo(GalleryToastDemo);
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
+    const disabledAction = required(
+      toastRoot.querySelector<HTMLButtonElement>('[data-toast-disabled-action]'),
+    );
 
     expect(toast.hidden).toBe(false);
     expect(toast.getAttribute('aria-live')).toBe('polite');
+    expect(disabledAction.disabled).toBe(true);
+    expect(disabledAction.getAttribute('data-dismiss-on-action')).toBe('false');
+    expect(disabledAction.getAttribute('data-disabled')).toBe('');
 
     await expectNoAxeViolations(toastRoot);
   });
@@ -403,7 +409,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(dropdownMenuRoute)).toBe('bc8bc631');
     expect(await visualBaselineHash(menubarRoute)).toBe('279cb945');
     expect(await visualBaselineHash(navigationMenuRoute)).toBe('3c8e6a99');
-    expect(await visualBaselineHash(toastRoute)).toBe('31f9f1c4');
+    expect(await visualBaselineHash(toastRoute)).toBe('d1664096');
 
     const hoverCardRoute = mountStaticGalleryRoute('/components/hover-card');
     const popoverRoute = mountStaticGalleryRoute('/components/popover');
@@ -2225,6 +2231,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       toastRoot.querySelector<HTMLButtonElement>('[data-toast-cancel-dismiss]'),
     );
     const dismiss = required(toastRoot.querySelector<HTMLButtonElement>('[data-dismiss]'));
+    const disabledAction = required(
+      toastRoot.querySelector<HTMLButtonElement>('[data-toast-disabled-action]'),
+    );
     const toastOutput = required(
       toastRoot.querySelector<HTMLOutputElement>('[data-demo-state="toast-open"]'),
     );
@@ -2235,7 +2244,17 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(toast.getAttribute('aria-live')).toBe('polite');
     expect(toast.getAttribute('data-state')).toBe('open');
     expect(toast.hidden).toBe(false);
+    expect(disabledAction.disabled).toBe(true);
     expect(toastOutput.textContent).toBe('open');
+
+    disabledAction.click();
+
+    await vi.waitFor(() => {
+      expect(toastRoot.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(toast.hidden).toBe(false);
+      expect(toast.getAttribute('data-state')).toBe('open');
+      expect(toastOutput.textContent).toBe('open');
+    });
 
     cancelDismiss.click();
 
