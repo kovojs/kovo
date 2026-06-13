@@ -2670,6 +2670,52 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('does not scan non-load query callbacks as loader facts', () => {
+    const files = [
+      {
+        fileName: 'product.queries.ts',
+        source: [
+          'import { sql } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const auditLog = pgTable("audit_log", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ exempt: true }));',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export const productQuery = query("product/non-loader-callback", {',
+          '  guard(_input, db: PgDatabase<any, any, any>) {',
+          '    db.execute(sql`select * from audit_log`);',
+          '    return db.select({ id: auditLog.id }).from(auditLog);',
+          '  },',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    for (const facts of [
+      extractQueryFactsFromSource(files),
+      extractQueryFactsFromProject({ files }),
+    ]) {
+      expect(facts).toEqual([
+        {
+          query: 'product/non-loader-callback',
+          reads: ['product'],
+          shape: {
+            id: 'string',
+          },
+          site: 'product.queries.ts:11',
+        },
+      ]);
+      expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    }
+  });
+
   it('does not discover query definitions from comments strings or templates', () => {
     const facts = extractQueryFactsFromSource([
       {

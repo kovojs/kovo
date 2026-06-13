@@ -183,6 +183,12 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Query fact extraction scans only the `load` callback on query declarations, so callback-shaped
+  config/helper properties no longer fabricate reads, FW411 exempt reads, raw-execute FW406
+  diagnostics, shapes, or instance keys. Evidence: `packages/drizzle/src/static.ts`,
+  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
+  `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

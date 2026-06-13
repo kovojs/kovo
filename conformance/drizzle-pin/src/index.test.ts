@@ -1878,6 +1878,51 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins non-load query callbacks as non-loader surfaces', () => {
+    expect(sql`select * from audit_log`).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const auditLog = pgTable('audit_log', {
+              id: text('id').primaryKey(),
+            }, jiso({ exempt: true }));
+            export const users = pgTable('users', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users/non-loader-callback', {
+              guard(_input, db: PgDatabase<any, any, any>) {
+                db.execute(sql\`select * from audit_log\`);
+                return db.select({ id: auditLog.id }).from(auditLog);
+              },
+              load(_input, db: PgDatabase<any, any, any>) {
+                return db.select({ id: users.id }).from(users);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'users/non-loader-callback',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/user.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins real Drizzle query-loader transaction aliases as explicit FW406 surfaces', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -2007,6 +2007,10 @@ function queryCallbackBodies(body: ObjectLiteralExpression): Node[] {
 }
 
 function queryCallbackFunction(node: Node): Node | undefined {
+  // SPEC §10.2/§11.1: query facts come from the query loader, not arbitrary callback-shaped
+  // config/helper properties that happen to accept a db-like parameter.
+  if (!queryCallbackPropertyIsLoad(node)) return undefined;
+
   if (Node.isMethodDeclaration(node)) return node;
   if (!Node.isPropertyAssignment(node)) return undefined;
 
@@ -2016,6 +2020,11 @@ function queryCallbackFunction(node: Node): Node | undefined {
   return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
     ? expression
     : undefined;
+}
+
+function queryCallbackPropertyIsLoad(node: Node): boolean {
+  if (!Node.isMethodDeclaration(node) && !Node.isPropertyAssignment(node)) return false;
+  return propertyNameText(node.getNameNode()) === 'load';
 }
 
 function queryHelperReceiverArgumentName(
