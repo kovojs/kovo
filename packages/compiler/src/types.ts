@@ -215,7 +215,6 @@ export interface QueryStampFact {
 }
 
 export interface QueryTemplateStampFact {
-  itemBindings: readonly string[];
   itemBindingPlaceholders?: readonly QueryTemplateStampBindingPlaceholder[];
   key: string;
   list: string;

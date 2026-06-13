@@ -356,7 +356,6 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
       return [
         {
           itemBindingPlaceholders,
-          itemBindings: itemBindingPlaceholders.map((placeholder) => placeholder.path),
           key,
           list,
           listReadPath: queryRelativePath(list),
@@ -366,7 +365,7 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
         },
       ];
     })
-    .filter((stamp) => stamp.itemBindings.length > 0);
+    .filter((stamp) => (stamp.itemBindingPlaceholders?.length ?? 0) > 0);
 }
 
 function queryRelativePath(path: string): string {

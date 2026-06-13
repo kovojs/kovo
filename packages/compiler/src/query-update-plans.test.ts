@@ -55,7 +55,6 @@ export const CartBadge = component('cart-badge', {
                 value: '0',
               },
             ],
-            itemBindings: ['.name', '.qty'],
             key: 'productId',
             list: 'cart.items',
             listReadPath: 'items',

@@ -614,6 +614,8 @@ contract.
 Template stamp item placeholders now carry template-relative parser spans, so generated client
 query-plan renderers assemble HTML from model-derived segments instead of emitting runtime
 `html.replace(...)` source-string patching.
+Template stamp facts no longer carry the duplicate `itemBindings` compatibility list; validation,
+shared test fixtures, and fw-check projections consume the structured placeholder paths directly.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -629,6 +631,13 @@ packages/compiler/src/query-bindings.test.ts`; `pnpm exec tsc --noEmit --pretty 
   `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts
 packages/compiler/src/emit/client.ts packages/compiler/src/query-update-plans.test.ts
 packages/compiler/src/query-coverage.test.ts`; `git diff --check`.
+- Template stamp duplicate-field deletion: `pnpm exec vitest --run
+packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
+packages/compiler/src/query-bindings.test.ts`; `pnpm exec vitest --run
+packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  targeted `node --test --test-name-pattern "P5 data-bind paths are checked against generated query
+shape facts|P1 fragment targets emit typed registry facts" tests/fw-check.node.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`.
 - Combined model-patch reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lowering.test.ts
 packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts

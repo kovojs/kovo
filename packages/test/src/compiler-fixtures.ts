@@ -43,7 +43,6 @@ export interface CompilerQueryUpdatePlanLike {
 
 export interface CompilerTemplateStampLike {
   itemBindingPlaceholders?: readonly CompilerTemplateStampPlaceholderLike[];
-  itemBindings?: readonly string[];
   key: string;
   list: string;
   listReadPath?: string;
@@ -76,7 +75,6 @@ export interface CompilerQueryUpdatePlanFact {
 
 export interface CompilerTemplateStampFact {
   itemBindingPlaceholders: CompilerTemplateStampPlaceholderFact[];
-  itemBindings: string[];
   key: string;
   list: string;
   listReadPath?: string;
@@ -160,7 +158,6 @@ export function compilerQueryUpdatePlanFacts(
           : { readSegments: compilerBindingPathSegmentFacts(placeholder.readSegments) }),
         value: placeholder.value,
       })),
-      itemBindings: [...(stamp.itemBindings ?? [])],
       key: stamp.key,
       list: stamp.list,
       ...(stamp.listReadPath === undefined ? {} : { listReadPath: stamp.listReadPath }),

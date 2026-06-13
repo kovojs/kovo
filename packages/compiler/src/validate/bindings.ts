@@ -172,7 +172,12 @@ function validateListStampInQueryShapes(
   stamp: QueryTemplateStampFact,
   queryShapes: Record<string, QueryShape>,
 ): ReturnType<typeof validateListBindingInQueryShapes> {
-  return validateListBindingInQueryShapes(stamp.list, stamp.key, stamp.itemBindings, queryShapes);
+  return validateListBindingInQueryShapes(
+    stamp.list,
+    stamp.key,
+    stamp.itemBindingPlaceholders?.map((placeholder) => placeholder.path) ?? [],
+    queryShapes,
+  );
 }
 
 function nullableItemBindingDiagnostics(
