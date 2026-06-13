@@ -11283,6 +11283,69 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts project receiver aliases from typed destructured declarations', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb { update(table: unknown): { set(value: unknown): Promise<void> } }',
+            '',
+            'export const auditLogs = pgTable("audit_logs", {}, jiso({ domain: "audit", key: "id" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function syncCatalog(context: { db: PgDatabase; nested: { tx: PgDatabase }; tuple: [PgDatabase] }, fake: { db: FakeDb }) {',
+            '  const { db: writer, nested: { tx } } = context;',
+            '  const [reader] = context.tuple;',
+            '  const { db: fakeWriter } = fake;',
+            '  await writer.update(products).set({});',
+            '  await tx.insert(auditLogs).values({});',
+            '  await reader.select().from(products);',
+            '  await fakeWriter.update(products).set({});',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncCatalog: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:14',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'audit',
+            keys: null,
+            site: 'catalog.domain.ts:13',
+            via: 'audit_logs',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:12',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('resolves wrapped project direct-select and write read-source tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [

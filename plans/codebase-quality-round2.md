@@ -442,6 +442,8 @@ indirect receiver, carrier, destructuring, nested destructuring, detached method
 quoted property surfaces now degrade to FW406 instead of fabricating exact facts. Project tuple
 receiver aliases now use ts-morph tuple/array element type facts for exact Postgres receiver proof,
 while source-mode array receiver carriers degrade destructured and assigned aliases to FW406.
+Project destructured variable declarations now use ts-morph object-property and tuple element type
+facts for exact Postgres receiver proof while fake sibling members remain ignored.
 Shorthand query loaders now resolve through ts-morph symbols instead of disappearing. Dynamic or
 otherwise unresolved query-loader and domain-write callback references now degrade to FW406 instead
 of dropping the executable surface. V1 proof remains Postgres-only; SQLite/MySQL conformance is
@@ -676,6 +678,17 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       degradation under package and real `drizzle-orm` Postgres receivers. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm --filter @jiso/conformance-drizzle-pin test`.
+      Evidence 2026-06-13 round271: project-mode variable declarations such as
+      `const { db: writer, nested: { tx } } = context` and
+      `const [reader] = context.tuple` now promote Drizzle receiver aliases only when ts-morph
+      proves the destructured property/element type is a Postgres Drizzle database receiver.
+      `packages/drizzle/src/index.test.ts` pins exact read/write extraction plus ignored fake
+      sibling members, and `conformance/drizzle-pin/src/index.test.ts` pins the same behavior
+      against real `drizzle-orm` Postgres receiver imports. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

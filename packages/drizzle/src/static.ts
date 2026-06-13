@@ -791,6 +791,7 @@ function appendProjectDrizzleReceiverBindingsFromBody(
         receivers.symbolKeys,
       );
       appendProjectDrizzleReceiverInitializerAlias(declaration, receivers);
+      appendProjectDrizzleReceiverBindingInitializerAliases(declaration, receivers);
     }
 
     appendProjectDrizzleReceiverAssignmentAliases(body, receivers);
@@ -812,6 +813,34 @@ function appendProjectDrizzleReceiverInitializerAlias(
   if (!isProjectDrizzleReceiverIdentifier(expression, receivers)) return;
 
   appendProjectDrizzleReceiverAliasIdentifier(binding, receivers);
+}
+
+function appendProjectDrizzleReceiverBindingInitializerAliases(
+  declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  const binding = declaration.getNameNode();
+  const initializer = declaration.getInitializer();
+  if (!initializer) return;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isObjectBindingPattern(binding)) {
+    appendProjectDrizzleReceiverObjectBindingAliasesForType(
+      binding,
+      expression,
+      expression.getType(),
+      receivers,
+    );
+    return;
+  }
+  if (Node.isArrayBindingPattern(binding)) {
+    appendProjectDrizzleReceiverArrayBindingAliasesForType(
+      binding,
+      expression,
+      expression.getType(),
+      receivers,
+    );
+  }
 }
 
 function appendProjectDrizzleReceiverAssignmentAliases(
@@ -837,6 +866,81 @@ function appendProjectDrizzleReceiverAssignmentAliases(
     if (!isProjectDrizzleReceiverIdentifier(right, receivers)) continue;
 
     appendProjectDrizzleReceiverAliasIdentifier(left, receivers);
+  }
+}
+
+function appendProjectDrizzleReceiverArrayBindingAliasesForType(
+  binding: Node,
+  location: Node,
+  sourceType: MorphType,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  if (!Node.isArrayBindingPattern(binding)) return;
+
+  binding.getElements().forEach((element, index) => {
+    if (!Node.isBindingElement(element)) return;
+
+    const elementType = projectArrayElementType(sourceType, index);
+    if (!elementType) return;
+
+    appendProjectDrizzleReceiverBindingAliasForType(
+      element.getNameNode(),
+      location,
+      elementType,
+      receivers,
+    );
+  });
+}
+
+function appendProjectDrizzleReceiverObjectBindingAliasesForType(
+  binding: Node,
+  location: Node,
+  sourceType: MorphType,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  if (!Node.isObjectBindingPattern(binding)) return;
+
+  for (const element of binding.getElements()) {
+    const propertyName = objectBindingElementPropertyName(element);
+    if (!propertyName) continue;
+
+    const propertyType = projectObjectPropertyType(sourceType, location, propertyName);
+    if (!propertyType) continue;
+
+    appendProjectDrizzleReceiverBindingAliasForType(
+      element.getNameNode(),
+      location,
+      propertyType,
+      receivers,
+    );
+  }
+}
+
+function appendProjectDrizzleReceiverBindingAliasForType(
+  target: Node,
+  location: Node,
+  targetType: MorphType,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  if (Node.isIdentifier(target)) {
+    if (!isDrizzleDatabaseTypeText(targetType.getText(location))) return;
+
+    appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
+    return;
+  }
+
+  if (Node.isObjectBindingPattern(target)) {
+    appendProjectDrizzleReceiverObjectBindingAliasesForType(
+      target,
+      location,
+      targetType,
+      receivers,
+    );
+    return;
+  }
+
+  if (Node.isArrayBindingPattern(target)) {
+    appendProjectDrizzleReceiverArrayBindingAliasesForType(target, location, targetType, receivers);
   }
 }
 
@@ -956,6 +1060,10 @@ function projectObjectPropertyType(
 
 function projectArrayElementType(sourceType: MorphType, index: number): MorphType | undefined {
   return sourceType.getTupleElements()[index] ?? sourceType.getArrayElementType();
+}
+
+function objectBindingElementPropertyName(element: BindingElement): string | undefined {
+  return propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
 }
 
 function appendProjectDrizzleReceiverAliasIdentifier(

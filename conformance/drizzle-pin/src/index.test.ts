@@ -553,6 +553,69 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins real Drizzle receiver proof through typed destructured declarations', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          "export const productQuery = query('product/destructured-receiver', {",
+          '  load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+          '    const context = { db, nested: { db }, tuple: [db] as [PgDatabase<any, any, any>] };',
+          '    const { nested: { db: reader } } = context;',
+          '    const [tupleReader] = context.tuple;',
+          '    const { select: fakeSelect } = fake;',
+          '    fakeSelect({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+          '',
+          'export async function syncProduct(context: { db: PgDatabase<any, any, any> }, fake: { db: FakeDb }) {',
+          '  const { db: writer } = context;',
+          '  const { db: fakeWriter } = fake;',
+          '  await writer.update(products).set({});',
+          '  await fakeWriter.update(products).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/destructured-receiver',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:26',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins containerized Drizzle receiver helper handoffs as FW406 under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
