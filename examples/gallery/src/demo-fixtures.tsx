@@ -49,7 +49,24 @@ import {
   ComboboxListbox,
   ComboboxOption,
   ComboboxValue,
+  Command,
+  CommandClose,
+  CommandDialog,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandListbox,
+  CommandTrigger,
+  CommandValue,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
   Drawer,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Field,
   FieldControl,
   FieldDescription,
@@ -58,6 +75,16 @@ import {
   Fieldset,
   FieldsetLegend,
   Kbd,
+  Menubar,
+  MenubarItem,
+  MenubarSubmenu,
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+  NavigationMenuViewport,
   NumberField,
   NumberFieldControl,
   NumberFieldDecrement,
@@ -127,11 +154,16 @@ export type GalleryComponent =
   | 'checkbox'
   | 'checkbox-group'
   | 'combobox'
+  | 'command'
+  | 'context-menu'
   | 'dialog'
   | 'drawer'
+  | 'dropdown-menu'
   | 'field'
   | 'kbd'
+  | 'menubar'
   | 'meter'
+  | 'navigation-menu'
   | 'number-field'
   | 'otp-field'
   | 'progress'
@@ -241,6 +273,18 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Combobox',
   },
   {
+    component: 'command',
+    path: '/components/command',
+    render: () => CommandDemo(),
+    title: 'Command',
+  },
+  {
+    component: 'context-menu',
+    path: '/components/context-menu',
+    render: () => ContextMenuDemo(),
+    title: 'Context Menu',
+  },
+  {
     component: 'dialog',
     path: '/components/dialog',
     render: () => DialogDemo(),
@@ -251,6 +295,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/drawer',
     render: () => DrawerDemo(),
     title: 'Drawer',
+  },
+  {
+    component: 'dropdown-menu',
+    path: '/components/dropdown-menu',
+    render: () => DropdownMenuDemo(),
+    title: 'Dropdown Menu',
   },
   {
     component: 'field',
@@ -265,10 +315,22 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Kbd',
   },
   {
+    component: 'menubar',
+    path: '/components/menubar',
+    render: () => MenubarDemo(),
+    title: 'Menubar',
+  },
+  {
     component: 'meter',
     path: '/components/meter',
     render: () => MeterDemo(),
     title: 'Meter',
+  },
+  {
+    component: 'navigation-menu',
+    path: '/components/navigation-menu',
+    render: () => NavigationMenuDemo(),
+    title: 'Navigation Menu',
   },
   {
     component: 'number-field',
@@ -913,6 +975,155 @@ export function ComboboxDemo(): string {
   );
 }
 
+export function CommandDemo(): string {
+  const items = [
+    { label: 'Open dashboard', value: 'dashboard' },
+    { label: 'Invite teammate', value: 'invite' },
+    { disabled: true, label: 'Delete project', value: 'delete' },
+  ];
+  const state = {
+    highlightedValue: 'invite',
+    inputValue: '',
+    items,
+    open: true,
+    placeholder: 'Type a command',
+    value: 'invite',
+  };
+
+  return (
+    <section data-gallery-demo="command">
+      <p data-demo-summary="no-js">
+        Command keeps a native dialog invoker with combobox/listbox semantics for command search.
+      </p>
+      <div data-ui-demo="command">
+        {Command.definition.render({
+          ...state,
+          children: (
+            <>
+              {CommandTrigger.definition.render({
+                ...state,
+                contentId: 'gallery-command-dialog',
+                id: 'gallery-command-trigger',
+              })}
+              {CommandDialog.definition.render({
+                ...state,
+                children: (
+                  <>
+                    <h2 id="gallery-command-title">Command menu</h2>
+                    <p id="gallery-command-description">Search project actions.</p>
+                    {CommandInput.definition.render({
+                      ...state,
+                      id: 'gallery-command-input',
+                      labelledBy: 'gallery-command-title',
+                      listboxId: 'gallery-command-listbox',
+                    })}
+                    {CommandListbox.definition.render({
+                      ...state,
+                      children: items
+                        .map((item) =>
+                          CommandItem.definition.render({
+                            ...state,
+                            id: `gallery-command-listbox-item-${items.indexOf(item)}`,
+                            ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
+                            itemLabel: item.label,
+                            itemValue: item.value,
+                          }),
+                        )
+                        .join(''),
+                      id: 'gallery-command-listbox',
+                      labelledBy: 'gallery-command-title',
+                    })}
+                    {CommandEmpty.definition.render({
+                      inputValue: 'zzz',
+                      items,
+                      children: 'No matching command',
+                    })}
+                    {CommandClose.definition.render({
+                      ...state,
+                      contentId: 'gallery-command-dialog',
+                    })}
+                    {CommandValue.definition.render({
+                      ...state,
+                      id: 'gallery-command-value',
+                    })}
+                  </>
+                ),
+                contentId: 'gallery-command-dialog',
+                descriptionId: 'gallery-command-description',
+                titleId: 'gallery-command-title',
+              })}
+            </>
+          ),
+          id: 'gallery-command',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons:
+          'trigger-click, input, item-click, enter-key, escape-key, close-click, cancel-event, native-beforetoggle, programmatic',
+        dataState: 'open, closed, active, inactive, highlighted, disabled',
+        keyboard: 'Arrow keys move command options; Enter selects; Escape closes the dialog',
+      })}
+    </section>
+  );
+}
+
+export function ContextMenuDemo(): string {
+  const items = [
+    { label: 'Copy link', value: 'copy' },
+    { disabled: true, label: 'Delete', value: 'delete' },
+    { label: 'Inspect', value: 'inspect' },
+  ];
+  const state = {
+    highlightedValue: 'inspect',
+    items,
+    open: true,
+    point: { x: 24, y: 32 },
+  };
+
+  return (
+    <section data-gallery-demo="context-menu">
+      <p data-demo-summary="no-js">
+        Context menu keeps package-prefixed trigger wiring and menuitem roving state inspectable.
+      </p>
+      <div data-ui-demo="context-menu">
+        {ContextMenu.definition.render({
+          ...state,
+          children: (
+            <>
+              {ContextMenuTrigger.definition.render({
+                ...state,
+                contentId: 'gallery-context-menu-content',
+                id: 'gallery-context-menu-trigger',
+              })}
+              {ContextMenuContent.definition.render({
+                ...state,
+                children: items
+                  .map((item) =>
+                    ContextMenuItem.definition.render({
+                      ...state,
+                      id: `gallery-context-menu-${item.value}`,
+                      ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
+                      itemLabel: item.label,
+                      itemValue: item.value,
+                    }),
+                  )
+                  .join(''),
+                id: 'gallery-context-menu-content',
+              })}
+            </>
+          ),
+          id: 'gallery-context-menu',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-context-menu, keyboard-open, item-click, escape-key, programmatic',
+        dataState: 'open, closed, highlighted, disabled',
+        keyboard: 'Context menu key or Shift+F10 opens; Arrow keys move over menu items',
+      })}
+    </section>
+  );
+}
+
 export function DialogDemo(): string {
   const root = dialogRootAttributes({ open: true });
   const trigger = dialogTriggerAttributes({
@@ -947,6 +1158,62 @@ export function DialogDemo(): string {
           'trigger-click, close-click, cancel-event, native-beforetoggle, programmatic',
         dataState: 'open, closed',
         keyboard: 'Escape closes the native dialog',
+      })}
+    </section>
+  );
+}
+
+export function DropdownMenuDemo(): string {
+  const items = [
+    { label: 'Duplicate', value: 'duplicate' },
+    { disabled: true, label: 'Archive', value: 'archive' },
+    { label: 'Rename', value: 'rename' },
+  ];
+  const state = {
+    highlightedValue: 'rename',
+    items,
+    open: true,
+  };
+
+  return (
+    <section data-gallery-demo="dropdown-menu">
+      <p data-demo-summary="no-js">
+        Dropdown menu keeps the trigger, menu, and menuitem roving state visible in static markup.
+      </p>
+      <div data-ui-demo="dropdown-menu">
+        {DropdownMenu.definition.render({
+          ...state,
+          children: (
+            <>
+              {DropdownMenuTrigger.definition.render({
+                ...state,
+                contentId: 'gallery-dropdown-menu-content',
+                id: 'gallery-dropdown-menu-trigger',
+              })}
+              {DropdownMenuContent.definition.render({
+                ...state,
+                children: items
+                  .map((item) =>
+                    DropdownMenuItem.definition.render({
+                      ...state,
+                      id: `gallery-dropdown-menu-${item.value}`,
+                      ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
+                      itemLabel: item.label,
+                      itemValue: item.value,
+                    }),
+                  )
+                  .join(''),
+                id: 'gallery-dropdown-menu-content',
+              })}
+            </>
+          ),
+          id: 'gallery-dropdown-menu',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, arrow-key, item-click, escape-key, typeahead, programmatic',
+        dataState: 'open, closed, highlighted, disabled',
+        keyboard: 'Arrow keys open and move over menu items; Escape closes the menu',
       })}
     </section>
   );
@@ -1035,6 +1302,163 @@ export function KbdDemo(): string {
         changeReasons: 'not stateful',
         dataState: 'not emitted',
         keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function MenubarDemo(): string {
+  const items = [
+    { hasPopup: true, label: 'File', value: 'file' },
+    { label: 'Edit', value: 'edit' },
+    { label: 'New', parentValue: 'file', value: 'new' },
+    { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
+  ];
+  const state = {
+    activeValue: 'file',
+    items,
+    openValue: 'file',
+  };
+
+  return (
+    <section data-gallery-demo="menubar">
+      <p data-demo-summary="no-js">
+        Menubar keeps top-level and submenu items in one roving collection with menu popup state.
+      </p>
+      <div data-ui-demo="menubar">
+        {Menubar.definition.render({
+          ...state,
+          children: (
+            <>
+              {MenubarItem.definition.render({
+                ...state,
+                contentId: 'gallery-menubar-file-menu',
+                id: 'gallery-menubar-file',
+                itemLabel: 'File',
+                itemValue: 'file',
+              })}
+              {MenubarItem.definition.render({
+                ...state,
+                id: 'gallery-menubar-edit',
+                itemLabel: 'Edit',
+                itemValue: 'edit',
+              })}
+              {MenubarSubmenu.definition.render({
+                ...state,
+                children: (
+                  <>
+                    {MenubarItem.definition.render({
+                      ...state,
+                      activeValue: 'new',
+                      id: 'gallery-menubar-new',
+                      itemLabel: 'New',
+                      itemParentValue: 'file',
+                      itemValue: 'new',
+                    })}
+                    {MenubarItem.definition.render({
+                      ...state,
+                      activeValue: 'new',
+                      id: 'gallery-menubar-import',
+                      itemDisabled: true,
+                      itemLabel: 'Import',
+                      itemParentValue: 'file',
+                      itemValue: 'import',
+                    })}
+                  </>
+                ),
+                id: 'gallery-menubar-file-menu',
+                labelledBy: 'gallery-menubar-file',
+                value: 'file',
+              })}
+            </>
+          ),
+          label: 'Document commands',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons:
+          'item-click, item-keyboard, item-pointer-enter, item-select, escape-key, programmatic',
+        dataState: 'open, closed, highlighted, disabled, orientation',
+        keyboard: 'Arrow keys move across top-level items and nested menus',
+      })}
+    </section>
+  );
+}
+
+export function NavigationMenuDemo(): string {
+  const items = [
+    { hasContent: true, label: 'Products', value: 'products' },
+    { label: 'Docs', value: 'docs' },
+  ];
+  const state = {
+    activeValue: 'products',
+    items,
+    openValue: 'products',
+  };
+
+  return (
+    <section data-gallery-demo="navigation-menu">
+      <p data-demo-summary="no-js">
+        Navigation menu keeps links native while trigger content uses roving and disclosure state.
+      </p>
+      <div data-ui-demo="navigation-menu">
+        {NavigationMenu.definition.render({
+          ...state,
+          children: (
+            <>
+              {NavigationMenuList.definition.render({
+                ...state,
+                children: (
+                  <>
+                    {NavigationMenuItem.definition.render({
+                      ...state,
+                      children: NavigationMenuTrigger.definition.render({
+                        ...state,
+                        contentId: 'gallery-navigation-products-panel',
+                        id: 'gallery-navigation-products-trigger',
+                        itemLabel: 'Products',
+                        itemValue: 'products',
+                      }),
+                      id: 'gallery-navigation-products-item',
+                      itemValue: 'products',
+                    })}
+                    {NavigationMenuItem.definition.render({
+                      ...state,
+                      children: NavigationMenuLink.definition.render({
+                        ...state,
+                        href: '/docs',
+                        id: 'gallery-navigation-docs-link',
+                        itemLabel: 'Docs',
+                        itemValue: 'docs',
+                      }),
+                      id: 'gallery-navigation-docs-item',
+                      itemValue: 'docs',
+                    })}
+                  </>
+                ),
+                id: 'gallery-navigation-list',
+              })}
+              {NavigationMenuContent.definition.render({
+                ...state,
+                children: 'Product links stay grouped with their trigger.',
+                id: 'gallery-navigation-products-panel',
+                labelledBy: 'gallery-navigation-products-trigger',
+                value: 'products',
+              })}
+              {NavigationMenuViewport.definition.render({
+                ...state,
+                id: 'gallery-navigation-viewport',
+              })}
+            </>
+          ),
+          label: 'Primary navigation',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons:
+          'trigger-click, trigger-focus, trigger-keyboard, trigger-pointer-enter, link-click, escape-key, programmatic',
+        dataState: 'open, closed, highlighted, disabled, orientation',
+        keyboard: 'Arrow keys move across navigation items; Enter activates links or triggers',
       })}
     </section>
   );

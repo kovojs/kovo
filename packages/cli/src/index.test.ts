@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar',
+      'alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, command, context-menu, drawer, dropdown-menu, field, kbd, menubar, navigation-menu, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar',
     );
 
     const manifest = JSON.parse(
@@ -115,7 +115,12 @@ describe('fw add', () => {
           'checkbox',
           'checkbox-group',
           'combobox',
+          'command',
+          'context-menu',
+          'dropdown-menu',
           'kbd',
+          'menubar',
+          'navigation-menu',
           'radio-group',
           'select',
           'sheet',
@@ -163,7 +168,22 @@ describe('fw add', () => {
         `ADD combobox path=${JSON.stringify(join(outDir, 'combobox.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD command path=${JSON.stringify(join(outDir, 'command.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD context-menu path=${JSON.stringify(join(outDir, 'context-menu.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD dropdown-menu path=${JSON.stringify(join(outDir, 'dropdown-menu.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD menubar path=${JSON.stringify(join(outDir, 'menubar.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD navigation-menu path=${JSON.stringify(join(outDir, 'navigation-menu.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD radio-group path=${JSON.stringify(join(outDir, 'radio-group.tsx'))} source=tsx`,
@@ -208,7 +228,12 @@ describe('fw add', () => {
       const checkbox = readFileSync(join(outDir, 'checkbox.tsx'), 'utf8');
       const checkboxGroup = readFileSync(join(outDir, 'checkbox-group.tsx'), 'utf8');
       const combobox = readFileSync(join(outDir, 'combobox.tsx'), 'utf8');
+      const command = readFileSync(join(outDir, 'command.tsx'), 'utf8');
+      const contextMenu = readFileSync(join(outDir, 'context-menu.tsx'), 'utf8');
+      const dropdownMenu = readFileSync(join(outDir, 'dropdown-menu.tsx'), 'utf8');
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
+      const menubar = readFileSync(join(outDir, 'menubar.tsx'), 'utf8');
+      const navigationMenu = readFileSync(join(outDir, 'navigation-menu.tsx'), 'utf8');
       const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
       const select = readFileSync(join(outDir, 'select.tsx'), 'utf8');
       const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
@@ -239,8 +264,18 @@ describe('fw add', () => {
       expect(checkboxGroup).toContain('export const checkboxGroupClassNames = defineVariants');
       expect(combobox).toContain("export const Combobox = component('combobox'");
       expect(combobox).toContain('export const comboboxClassNames = defineVariants');
+      expect(command).toContain("export const Command = component('command'");
+      expect(command).toContain('export const commandClassNames = defineVariants');
+      expect(contextMenu).toContain("export const ContextMenu = component('context-menu'");
+      expect(contextMenu).toContain('export const contextMenuClassNames = defineVariants');
+      expect(dropdownMenu).toContain("export const DropdownMenu = component('dropdown-menu'");
+      expect(dropdownMenu).toContain('export const dropdownMenuClassNames = defineVariants');
       expect(kbd).toContain("export const Kbd = component('kbd'");
       expect(kbd).toContain('export const kbdClassNames =');
+      expect(menubar).toContain("export const Menubar = component('menubar'");
+      expect(menubar).toContain('export const menubarClassNames = defineVariants');
+      expect(navigationMenu).toContain("export const NavigationMenu = component('navigation-menu'");
+      expect(navigationMenu).toContain('export const navigationMenuClassNames = defineVariants');
       expect(radioGroup).toContain("export const RadioGroup = component('radio-group'");
       expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
       expect(select).toContain("export const Select = component('select'");
@@ -273,7 +308,12 @@ describe('fw add', () => {
         checkbox,
         checkboxGroup,
         combobox,
+        command,
+        contextMenu,
+        dropdownMenu,
         kbd,
+        menubar,
+        navigationMenu,
         radioGroup,
         select,
         sheet,
@@ -328,7 +368,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, drawer, field, kbd, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar.\n',
+        'fw: unknown component "dialog". available: alert, autocomplete, badge, breadcrumb, button, card, checkbox, checkbox-group, combobox, command, context-menu, drawer, dropdown-menu, field, kbd, menubar, navigation-menu, number-field, otp-field, radio-group, scroll-area, select, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar.\n',
       );
     } finally {
       stdout.mockRestore();

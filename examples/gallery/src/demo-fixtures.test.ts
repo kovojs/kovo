@@ -20,11 +20,16 @@ const expectedRoutes = [
   '/components/checkbox',
   '/components/checkbox-group',
   '/components/combobox',
+  '/components/command',
+  '/components/context-menu',
   '/components/dialog',
   '/components/drawer',
+  '/components/dropdown-menu',
   '/components/field',
   '/components/kbd',
+  '/components/menubar',
   '/components/meter',
+  '/components/navigation-menu',
   '/components/number-field',
   '/components/otp-field',
   '/components/progress',
@@ -216,6 +221,60 @@ describe('gallery demo fixtures', () => {
     expect(dialog.html).toContain('aria-labelledby="gallery-dialog-title"');
     expect(dialog.html).toContain('aria-describedby="gallery-dialog-description"');
     expect(dialog.html).toContain('open');
+  });
+
+  it('renders H3 menu fixtures with styled menu semantics', () => {
+    const command = findFixture('/components/command');
+    const contextMenu = findFixture('/components/context-menu');
+    const dropdownMenu = findFixture('/components/dropdown-menu');
+    const menubar = findFixture('/components/menubar');
+    const navigationMenu = findFixture('/components/navigation-menu');
+
+    expect(command.html).toContain('data-ui-demo="command"');
+    expect(command.html).toContain('command="show-modal" commandfor="gallery-command-dialog"');
+    expect(command.html).toContain('aria-modal="true"');
+    expect(command.html).toContain('role="combobox"');
+    expect(command.html).toContain('aria-activedescendant="gallery-command-listbox-item-1"');
+    expect(command.html).toContain('role="listbox"');
+    expect(command.html).toContain('aria-selected="true"');
+    expect(command.html).toContain('data-highlighted="" data-state="active"');
+    expect(command.html).toContain('command="request-close" commandfor="gallery-command-dialog"');
+    expect(command.html).toContain('id="gallery-command-value">Invite teammate</span>');
+
+    expect(contextMenu.html).toContain('data-ui-demo="context-menu"');
+    expect(contextMenu.html).toContain('jiso-context-menu="gallery-context-menu-content"');
+    expect(contextMenu.html).toContain('aria-haspopup="menu"');
+    expect(contextMenu.html).toContain('data-anchor-x="24" data-anchor-y="32"');
+    expect(contextMenu.html).toContain('role="menu" tabIndex="-1"');
+    expect(contextMenu.html).toContain('id="gallery-context-menu-inspect"');
+    expect(contextMenu.html).toContain('data-highlighted="" data-state="active"');
+
+    expect(dropdownMenu.html).toContain('data-ui-demo="dropdown-menu"');
+    expect(dropdownMenu.html).toContain('aria-controls="gallery-dropdown-menu-content"');
+    expect(dropdownMenu.html).toContain('aria-expanded="true"');
+    expect(dropdownMenu.html).toContain('aria-haspopup="menu"');
+    expect(dropdownMenu.html).toContain('role="menu" tabIndex="-1"');
+    expect(dropdownMenu.html).toContain('id="gallery-dropdown-menu-rename"');
+    expect(dropdownMenu.html).toContain('tabIndex="0" type="button" value="rename"');
+
+    expect(menubar.html).toContain('data-ui-demo="menubar"');
+    expect(menubar.html).toContain('aria-label="Document commands"');
+    expect(menubar.html).toContain('role="menubar"');
+    expect(menubar.html).toContain('aria-controls="gallery-menubar-file-menu"');
+    expect(menubar.html).toContain('aria-expanded="true"');
+    expect(menubar.html).toContain('role="menu" tabIndex="-1"');
+    expect(menubar.html).toContain('id="gallery-menubar-import"');
+    expect(menubar.html).toContain('aria-disabled="true"');
+
+    expect(navigationMenu.html).toContain('data-ui-demo="navigation-menu"');
+    expect(navigationMenu.html).toContain('aria-label="Primary navigation"');
+    expect(navigationMenu.html).toContain('role="navigation"');
+    expect(navigationMenu.html).toContain('role="list"');
+    expect(navigationMenu.html).toContain('role="listitem"');
+    expect(navigationMenu.html).toContain('aria-controls="gallery-navigation-products-panel"');
+    expect(navigationMenu.html).toContain('aria-expanded="true"');
+    expect(navigationMenu.html).toContain('href="/docs"');
+    expect(navigationMenu.html).toContain('id="gallery-navigation-viewport"');
   });
 
   it('renders field fixture with native label, message, and fieldset wiring', () => {
@@ -516,8 +575,13 @@ describe('gallery demo fixtures', () => {
     const autocomplete = findFixture('/components/autocomplete');
     const checkboxGroup = findFixture('/components/checkbox-group');
     const combobox = findFixture('/components/combobox');
+    const command = findFixture('/components/command');
+    const contextMenu = findFixture('/components/context-menu');
     const drawer = findFixture('/components/drawer');
+    const dropdownMenu = findFixture('/components/dropdown-menu');
     const kbd = findFixture('/components/kbd');
+    const menubar = findFixture('/components/menubar');
+    const navigationMenu = findFixture('/components/navigation-menu');
     const select = findFixture('/components/select');
     const sheet = findFixture('/components/sheet');
     const skeleton = findFixture('/components/skeleton');
@@ -568,6 +632,14 @@ describe('gallery demo fixtures', () => {
     expect(combobox.html).toContain('role="listbox"');
     expect(combobox.html).toContain('Ada Lovelace');
 
+    expect(command.html).toContain('data-ui-demo="command"');
+    expect(command.html).toContain('backdrop:bg-black/20');
+    expect(command.html).toContain('Type a command');
+
+    expect(contextMenu.html).toContain('data-ui-demo="context-menu"');
+    expect(contextMenu.html).toContain('border-dashed border-neutral-300');
+    expect(contextMenu.html).toContain('gallery-context-menu-inspect');
+
     expect(drawer.html).toContain('data-ui-demo="drawer"');
     expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');
     expect(drawer.html).toContain('<dialog aria-describedby="gallery-drawer-description"');
@@ -575,9 +647,21 @@ describe('gallery demo fixtures', () => {
     expect(drawer.html).toContain('bottom-0 max-h-[85vh] border-t');
     expect(drawer.html).toContain('command="request-close" commandfor="gallery-drawer"');
 
+    expect(dropdownMenu.html).toContain('data-ui-demo="dropdown-menu"');
+    expect(dropdownMenu.html).toContain('data-[state=open]:bg-neutral-100');
+    expect(dropdownMenu.html).toContain('gallery-dropdown-menu-rename');
+
     expect(kbd.html).toContain('data-ui-demo="kbd"');
     expect(kbd.html).toContain('<kbd class="inline-flex h-5 min-w-5');
     expect(kbd.html).toContain('uppercase">K</kbd>');
+
+    expect(menubar.html).toContain('data-ui-demo="menubar"');
+    expect(menubar.html).toContain('data-[state=open]:bg-neutral-100');
+    expect(menubar.html).toContain('gallery-menubar-file-menu');
+
+    expect(navigationMenu.html).toContain('data-ui-demo="navigation-menu"');
+    expect(navigationMenu.html).toContain('data-[state=open]:bg-neutral-100');
+    expect(navigationMenu.html).toContain('gallery-navigation-products-panel');
 
     expect(select.html).toContain('data-ui-demo="select"');
     expect(select.html).toContain('rounded-md border border-neutral-300');

@@ -70,6 +70,17 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed, checked, unchecked, highlighted, disabled',
     keyboard: 'Arrow keys open and move; Escape closes the listbox',
   },
+  '/components/command': {
+    changeReasons:
+      'trigger-click, input, item-click, enter-key, escape-key, close-click, cancel-event, native-beforetoggle, programmatic',
+    dataState: 'open, closed, active, inactive, highlighted, disabled',
+    keyboard: 'Arrow keys move command options; Enter selects; Escape closes the dialog',
+  },
+  '/components/context-menu': {
+    changeReasons: 'trigger-context-menu, keyboard-open, item-click, escape-key, programmatic',
+    dataState: 'open, closed, highlighted, disabled',
+    keyboard: 'Context menu key or Shift+F10 opens; Arrow keys move over menu items',
+  },
   '/components/dialog': {
     changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle, programmatic',
     dataState: 'open, closed',
@@ -79,6 +90,11 @@ const expectedBehaviorContracts = {
     changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
     dataState: 'open, closed, disabled',
     keyboard: 'Escape closes the native dialog',
+  },
+  '/components/dropdown-menu': {
+    changeReasons: 'trigger-click, arrow-key, item-click, escape-key, typeahead, programmatic',
+    dataState: 'open, closed, highlighted, disabled',
+    keyboard: 'Arrow keys open and move over menu items; Escape closes the menu',
   },
   '/components/field': {
     changeReasons: 'native form control changes',
@@ -90,10 +106,22 @@ const expectedBehaviorContracts = {
     dataState: 'not emitted',
     keyboard: 'No custom keyboard handling',
   },
+  '/components/menubar': {
+    changeReasons:
+      'item-click, item-keyboard, item-pointer-enter, item-select, escape-key, programmatic',
+    dataState: 'open, closed, highlighted, disabled, orientation',
+    keyboard: 'Arrow keys move across top-level items and nested menus',
+  },
   '/components/meter': {
     changeReasons: 'value comes from app state',
     dataState: 'optimum, suboptimum, even-less-good',
     keyboard: 'No custom keyboard handling',
+  },
+  '/components/navigation-menu': {
+    changeReasons:
+      'trigger-click, trigger-focus, trigger-keyboard, trigger-pointer-enter, link-click, escape-key, programmatic',
+    dataState: 'open, closed, highlighted, disabled, orientation',
+    keyboard: 'Arrow keys move across navigation items; Enter activates links or triggers',
   },
   '/components/number-field': {
     changeReasons: 'input, increment, decrement, programmatic',
@@ -270,6 +298,27 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-disabled="true"',
     'id="gallery-combobox-value">Ada Lovelace</span>',
   ],
+  '/components/command': [
+    'command="show-modal"',
+    'commandfor="gallery-command-dialog"',
+    'aria-modal="true"',
+    'role="combobox"',
+    'aria-activedescendant="gallery-command-listbox-item-1"',
+    'role="listbox"',
+    'aria-selected="true"',
+    'data-highlighted="" data-state="active"',
+    'command="request-close"',
+    'id="gallery-command-value">Invite teammate</span>',
+  ],
+  '/components/context-menu': [
+    'jiso-context-menu="gallery-context-menu-content"',
+    'aria-haspopup="menu"',
+    'data-anchor-x="24"',
+    'data-anchor-y="32"',
+    'role="menu"',
+    'id="gallery-context-menu-inspect"',
+    'data-highlighted="" data-state="active"',
+  ],
   '/components/dialog': [
     'command="show-modal"',
     'commandfor="gallery-dialog-content"',
@@ -284,6 +333,14 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'bottom-0 max-h-[85vh] border-t',
     'command="request-close" commandfor="gallery-drawer"',
   ],
+  '/components/dropdown-menu': [
+    'aria-controls="gallery-dropdown-menu-content"',
+    'aria-expanded="true"',
+    'aria-haspopup="menu"',
+    'role="menu"',
+    'id="gallery-dropdown-menu-rename"',
+    'tabIndex="0" type="button" value="rename"',
+  ],
   '/components/field': [
     'for="gallery-field-email"',
     'aria-describedby="gallery-field-description gallery-field-error"',
@@ -291,12 +348,31 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'role="alert"',
   ],
   '/components/kbd': ['<kbd class="inline-flex h-5 min-w-5', 'uppercase">K</kbd>'],
+  '/components/menubar': [
+    'aria-label="Document commands"',
+    'role="menubar"',
+    'aria-controls="gallery-menubar-file-menu"',
+    'aria-expanded="true"',
+    'role="menu"',
+    'id="gallery-menubar-import"',
+    'aria-disabled="true"',
+  ],
   '/components/meter': [
     '<meter',
     'data-low="50"',
     'data-high="90"',
     'data-state="optimum"',
     'data-state="suboptimum"',
+  ],
+  '/components/navigation-menu': [
+    'aria-label="Primary navigation"',
+    'role="navigation"',
+    'role="list"',
+    'role="listitem"',
+    'aria-controls="gallery-navigation-products-panel"',
+    'aria-expanded="true"',
+    'href="/docs"',
+    'id="gallery-navigation-viewport"',
   ],
   '/components/number-field': [
     'type="number"',

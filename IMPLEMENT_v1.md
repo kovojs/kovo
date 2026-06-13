@@ -303,6 +303,18 @@ packages/runtime/src/mutation-submit.ts`.
       `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
       `pnpm --filter @jiso/example-gallery run test:browser`,
       `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/hover-card.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`.
+      Additional evidence 2026-06-12: `packages/ui/src/dropdown-menu.tsx`,
+      `packages/ui/src/context-menu.tsx`, `packages/ui/src/menubar.tsx`,
+      `packages/ui/src/navigation-menu.tsx`, and `packages/ui/src/command.tsx` add the remaining
+      H3 styled TSX wrappers over headless primitive attrs; `examples/gallery/src/demo-fixtures.tsx`
+      adds static routes and behavior-contract snippets for those styled H3 surfaces; and
+      `packages/cli/src/index.test.ts` syncs the `fw add` catalog. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+      `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check packages/ui/src/command.tsx packages/ui/src/context-menu.tsx packages/ui/src/dropdown-menu.tsx packages/ui/src/menubar.tsx packages/ui/src/navigation-menu.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `examples/gallery/src/interactive-docs.tsx`
       exports a docs/gallery `/interactive` route that renders every checked-in compiled
       interactive demo, and `examples/gallery/package.json` now records the complete

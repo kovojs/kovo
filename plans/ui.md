@@ -29,7 +29,7 @@ conformance. Keep this ledger compact: status, open work, and current gates only
 - [x] U2 `fw add <component>` vendoring pipeline.
 - [ ] U3 styled H1 and pure-markup components.
 - [x] U4 styled H2 components.
-- [ ] U5 styled H3 components.
+- [x] U5 styled H3 components.
 - [ ] G1 gallery static fixture surface: one route per component with source/markup snapshot.
 - [ ] G2 behavior-contract gates: keyboard/ARIA/native state checks and `fw explain` coverage.
 - [ ] G3 axe checks per component state.
@@ -44,7 +44,8 @@ Implemented areas:
 - Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
 - `@jiso/ui` ships vendorable styled source for pure-markup components plus checkbox,
   checkbox-group, switch, tabs, toggle, radio-group, toggle-group, toolbar, select, combobox,
-  autocomplete, slider, and toast wrappers over the headless primitive attrs.
+  autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, and command
+  wrappers over the headless primitive attrs.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
@@ -66,6 +67,12 @@ Recent gates:
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
 - `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check packages/ui/src/command.tsx packages/ui/src/context-menu.tsx packages/ui/src/dropdown-menu.tsx packages/ui/src/menubar.tsx packages/ui/src/navigation-menu.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts plans/ui.md IMPLEMENT_v1.md`
+- `git diff --check`
 - `pnpm exec vp check packages/ui/src/autocomplete.tsx packages/ui/src/combobox.tsx packages/ui/src/select.tsx packages/ui/src/slider.tsx packages/ui/src/toast.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`
 - `pnpm --filter @jiso/ui exec vitest --run`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
@@ -97,8 +104,11 @@ H3:
 
 - Confirm wave-3 primitive implementation completeness against package exports and tests.
 - Select, combobox, autocomplete, slider, and toast now have styled vendorable wrappers, static
-  gallery routes, behavior-contract snippets, and catalog sync; broader H3 remains open for menu,
-  navigation-menu, and command styling plus full conformance closure.
+  gallery routes, behavior-contract snippets, and catalog sync.
+- Dropdown-menu, context-menu, menubar, navigation-menu, and command now have styled vendorable
+  wrappers, static gallery routes, behavior-contract snippets, catalog sync, and browser-backed
+  gallery regression coverage through the existing compiled interactive H3 demos; broader H3
+  remains open for full primitive/conformance closure.
 - Close any remaining state/focus/typeahead/menu edge cases with focused tests before checking H3.
 
 Styled UI:
