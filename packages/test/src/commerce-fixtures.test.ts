@@ -3,6 +3,7 @@ import { domain, mutation, query, s } from '@jiso/server';
 import type { QueryLoadContext } from '@jiso/server';
 
 import {
+  commerceDeclaredQueriesHarnessFact,
   commerceFixtureFile,
   commerceHarnessQueryFact,
   commerceMutationQueryAcceptanceFact,
@@ -194,6 +195,38 @@ describe('@jiso/test commerce fixture facts', () => {
           { id: 'fixture-c', stock: 5 },
         ],
         nextCursor: null,
+      },
+    });
+  });
+
+  it('runs declared commerce query maps through one public harness verifier seam', async () => {
+    await expect(
+      commerceDeclaredQueriesHarnessFact({
+        createDb,
+        inputs: { productGrid: { after: 'fixture-a', limit: 2 } },
+        queries: {
+          cart: cartQuery,
+          productGrid: productGridQuery,
+        },
+        setupDb(db) {
+          db.write('products', { productId: 'seeded' });
+        },
+        verification: { domainByTable: { products: 'product' } },
+      }),
+    ).resolves.toEqual({
+      cart: {
+        diagnostics: [],
+        result: { count: 1 },
+      },
+      productGrid: {
+        diagnostics: [],
+        result: {
+          items: [
+            { id: 'fixture-b', stock: 4 },
+            { id: 'fixture-c', stock: 5 },
+          ],
+          nextCursor: null,
+        },
       },
     });
   });

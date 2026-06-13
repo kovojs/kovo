@@ -6,6 +6,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { storageBodyToBytes } from '@jiso/core';
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@jiso/compiler';
 import { propertyTest } from '@jiso/test/assertions';
+import { commerceDeclaredQueriesHarnessFact } from '@jiso/test/commerce-fixtures';
 import { generatedComponentCommittedIrFacts } from '@jiso/test/generated-module-fixtures';
 import { cookiePair, headerValues, setCookieValues } from '@jiso/test/headers';
 import { createJisoTestHarness } from '@jiso/test/harness';
@@ -344,39 +345,62 @@ describe('commerce example', () => {
   });
 
   it('verifies every declared query through the harness db read seam', async () => {
-    const db = createCommerceDb();
-    db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
-    db.cartItems = [{ productId: 'custom', qty: 3, unitPrice: 777 }];
-    db.orders = [
-      {
-        id: 'custom-order',
-        productId: 'custom',
-        qty: 3,
-        total: 2331,
-        userId: 'u-custom-query',
+    await expect(
+      commerceDeclaredQueriesHarnessFact({
+        createDb: createCommerceDb,
+        queries: {
+          cart: cartQuery,
+          orderHistory: orderHistoryQuery,
+          productGrid: productGridQuery,
+        },
+        setupDb(db) {
+          db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
+          db.cartItems = [{ productId: 'custom', qty: 3, unitPrice: 777 }];
+          db.orders = [
+            {
+              id: 'custom-order',
+              productId: 'custom',
+              qty: 3,
+              total: 2331,
+              userId: 'u-custom-query',
+            },
+          ];
+        },
+        verification: {
+          domainByTable: {
+            cart_items: 'cart',
+            orders: 'order',
+            products: 'product',
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      cart: {
+        diagnostics: [],
+        result: { count: 3 },
       },
-    ];
-    const harness = createJisoTestHarness({
-      db,
-      touchGraph: {},
-      verification: {
-        domainByTable: {
-          cart_items: 'cart',
-          orders: 'order',
-          products: 'product',
+      orderHistory: {
+        diagnostics: [],
+        result: {
+          items: [
+            {
+              id: 'custom-order',
+              productId: 'custom',
+              qty: 3,
+              total: 2331,
+              userId: 'u-custom-query',
+            },
+          ],
+        },
+      },
+      productGrid: {
+        diagnostics: [],
+        result: {
+          items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+          nextCursor: null,
         },
       },
     });
-
-    await expect(harness.query(cartQuery)).resolves.toEqual({ count: 3 });
-    await expect(harness.query(productGridQuery)).resolves.toEqual({
-      items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
-      nextCursor: null,
-    });
-    await expect(harness.query(orderHistoryQuery)).resolves.toEqual({
-      items: db.orders,
-    });
-    expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
   it('renders cursor-paged product grid and order history with stable list keys', async () => {

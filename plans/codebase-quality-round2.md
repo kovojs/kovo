@@ -67,6 +67,10 @@ Latest evidence:
 - [x] `fwCheckUnguardedAuditBehaviorFact()` extracted the route/query/mutation unguarded audit graph
       into `@jiso/test/fw-check-fixtures`, with fw-check consuming parsed structured facts. Verified
       with fixture/export tests, full `tests/fw-check.node.mjs`, `check:build`, and `pnpm run check`.
+- [x] Commerce declared-query harness verification moved into
+      `@jiso/test/commerce-fixtures` as `commerceDeclaredQueriesHarnessFact()`, keeping this slice off
+      recently extracted fw-check graph/diagnostic seams. Verified with focused fixture/export tests,
+      full commerce app tests, `tsc`, and `check:build`.
 
 ## Phase 2 - Compiler IR
 
@@ -212,6 +216,10 @@ Latest evidence:
 - [x] Unguarded route/query/mutation fw-check audit now runs through a public `@jiso/test` fixture
       seam rather than local monolith graph plumbing. Verified with fixture/export tests, full
       `tests/fw-check.node.mjs`, `check:build`, and `pnpm run check`.
+- [x] Commerce declared-query source-truth tests now use
+      `commerceDeclaredQueriesHarnessFact()` for public harness query execution and verifier
+      diagnostics instead of local harness loop mechanics. Verified with focused fixture/export tests,
+      full commerce app tests, `tsc`, and `check:build`.
 
 ## Phase 7 - Test Restructuring
 
@@ -229,6 +237,9 @@ Latest evidence:
       `fwCheckUnguardedAuditBehaviorFact()` and asserts parsed diagnostic/target structures; package
       fixture and export tests cover the reusable seam. Verified with focused fixture/export tests,
       full `tests/fw-check.node.mjs`, `check:build`, and `pnpm run check`.
+- [x] `examples/commerce/src/app.test.ts` now asserts structured declared-query harness facts from
+      `@jiso/test/commerce-fixtures`; package fixture and export tests cover the reusable seam.
+      Verified with focused fixture/export tests, full commerce app tests, `tsc`, and `check:build`.
 
 ## Current Gates
 

@@ -15,10 +15,13 @@ import {
   type PropertyTestResult,
 } from '@jiso/test/assertions';
 import {
+  commerceDeclaredQueriesHarnessFact,
   commerceFixtureFile,
   commerceHarnessQueryFact,
   commerceMutationQueryAcceptanceFact,
   commerceUpdateIntentFact,
+  type CommerceDeclaredQueriesHarnessFact,
+  type CommerceDeclaredQueriesHarnessOptions,
   type CommerceHarnessQueryFact,
   type CommerceHarnessQueryOptions,
   type CommerceMutationQueryAcceptanceFact,
@@ -504,6 +507,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
     expect(verificationLayerFwCheckDiagnosticsFact).toBeTypeOf('function');
+    expect(commerceDeclaredQueriesHarnessFact).toBeTypeOf('function');
     expect(commerceFixtureFile).toBeTypeOf('function');
     expect(commerceHarnessQueryFact).toBeTypeOf('function');
     expect(commerceMutationQueryAcceptanceFact).toBeTypeOf('function');
@@ -614,6 +618,12 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<CommerceHarnessQueryOptions<unknown>>()
       .toHaveProperty('createDb')
       .toMatchTypeOf<() => unknown>();
+    expectTypeOf<CommerceDeclaredQueriesHarnessFact>().toMatchTypeOf<
+      Record<string, { diagnostics: readonly unknown[]; result: unknown }>
+    >();
+    expectTypeOf<CommerceDeclaredQueriesHarnessOptions<unknown>>()
+      .toHaveProperty('queries')
+      .toMatchTypeOf<Record<string, unknown>>();
     expectTypeOf<CommerceUpdateIntentFact>().toMatchTypeOf<{
       missingComponentConsumers: string[];
       pageQueries: string[];

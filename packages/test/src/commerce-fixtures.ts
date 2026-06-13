@@ -91,6 +91,27 @@ export interface CommerceHarnessQueryFact {
   result: unknown;
 }
 
+export interface CommerceDeclaredQueryFact {
+  diagnostics: readonly DbVerificationDiagnostic[];
+  result: unknown;
+}
+
+export type CommerceDeclaredQueriesHarnessFact<QueryName extends string = string> = Record<
+  QueryName,
+  CommerceDeclaredQueryFact
+>;
+
+export interface CommerceDeclaredQueriesHarnessOptions<Db, QueryName extends string = string> {
+  createDb: () => Db;
+  inputs?: Partial<Record<QueryName, unknown>>;
+  queries: Record<QueryName, QueryDefinition>;
+  request?: Record<string, unknown>;
+  setupDb?: (db: Db) => void;
+  verification?: {
+    domainByTable: Record<string, string>;
+  };
+}
+
 export interface CommerceHarnessQueryOptions<Db> {
   createDb: () => Db;
   input?: unknown;
@@ -100,6 +121,35 @@ export interface CommerceHarnessQueryOptions<Db> {
   verification?: {
     domainByTable: Record<string, string>;
   };
+}
+
+export async function commerceDeclaredQueriesHarnessFact<Db, QueryName extends string = string>(
+  options: CommerceDeclaredQueriesHarnessOptions<Db, QueryName>,
+): Promise<CommerceDeclaredQueriesHarnessFact<QueryName>> {
+  // SPEC.md §11.2: declared commerce query acceptance runs through the public
+  // harness DB seam and keeps verifier diagnostics attached to each observed query.
+  const db = options.createDb();
+  options.setupDb?.(db);
+  const harness = createJisoTestHarness({
+    db,
+    touchGraph: {},
+    ...(options.request === undefined ? {} : { request: options.request }),
+    ...(options.verification === undefined ? {} : { verification: options.verification }),
+  });
+  const facts = {} as CommerceDeclaredQueriesHarnessFact<QueryName>;
+
+  for (const [name, query] of Object.entries(options.queries) as [QueryName, QueryDefinition][]) {
+    facts[name] = {
+      diagnostics: [],
+      result: await harness.query(query, options.inputs?.[name]),
+    };
+  }
+  const diagnostics = harness.verificationDiagnostics();
+  for (const name of Object.keys(options.queries) as QueryName[]) {
+    facts[name] = { ...facts[name], diagnostics };
+  }
+
+  return facts;
 }
 
 export function commerceFixtureFile(name: string, type: string, size: number): CommerceFixtureFile {
