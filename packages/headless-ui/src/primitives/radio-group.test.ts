@@ -306,6 +306,31 @@ describe('headless-ui radio-group primitive', () => {
     expect(canceledEvent.defaultPrevented).toBe(true);
   });
 
+  it('does not trap keyboard events for disabled, empty, or fully disabled collections', () => {
+    const disabledEvent = radioGroupKeyboardEvent('ArrowRight');
+    expect(
+      radioGroupKeyDown(disabledEvent, {
+        disabled: true,
+        items: shippingItems,
+        value: 'standard',
+      }),
+    ).toBeUndefined();
+    expect(disabledEvent.defaultPrevented).toBe(false);
+
+    const emptyEvent = radioGroupKeyboardEvent('ArrowRight');
+    expect(radioGroupKeyDown(emptyEvent, { items: [], value: 'standard' })).toBeUndefined();
+    expect(emptyEvent.defaultPrevented).toBe(false);
+
+    const allDisabledEvent = radioGroupKeyboardEvent('ArrowRight');
+    expect(
+      radioGroupKeyDown(allDisabledEvent, {
+        items: [{ disabled: true, value: 'only' }],
+        value: 'only',
+      }),
+    ).toBeUndefined();
+    expect(allDisabledEvent.defaultPrevented).toBe(false);
+  });
+
   it('returns frozen attribute records and exposes selection helpers', () => {
     expect(Object.isFrozen(radioGroupRootAttributes())).toBe(true);
     expect(Object.isFrozen(radioGroupRadioAttributes({ itemValue: 'standard' }))).toBe(true);

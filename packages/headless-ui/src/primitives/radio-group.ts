@@ -239,6 +239,8 @@ export function radioGroupKeyDown(
   if (intent === undefined) return;
 
   const next = radioGroupMoveValue(state, intent);
+  if (next.index < 0) return;
+
   const result = setRadioGroupValue(state, next.value, 'keyboard', options);
   event.preventDefault();
 

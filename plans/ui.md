@@ -89,7 +89,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       browser-backed `FormData` check across generated keyboard and click selection paths.
       Toggle-group disabled/empty keyboard no-op behavior is covered by headless tests, while
       refreshed generated toggle-group artifacts and browser tests prove roving tabindex plus DOM
-      focus movement.
+      focus movement. Radio-group keyboard handling now no-ops without trapping keys for disabled,
+      empty, or fully disabled collections, with existing static/generated/browser gallery gates
+      re-run for the radio route.
 - [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
       churn-heavy baselines.
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
@@ -155,6 +157,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Radio-group disabled/empty keyboard no-trap slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/radio-group.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t radio-group`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t radio-group)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/radio-group.ts packages/headless-ui/src/primitives/radio-group.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Select compiled disabled-option restoration slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts`;
       `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
