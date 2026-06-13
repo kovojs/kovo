@@ -931,6 +931,9 @@ Browser runtime coverage now follows the same Phase 4 seam split: the old broad
 `packages/runtime/src/loader.browser.test.ts`, visible-return typed-read refetch lives in
 `packages/runtime/src/query-visible-return.browser.test.ts`, and real DOM mutation-response apply
 lives in `packages/runtime/src/mutation-response-dom.browser.test.ts`.
+Deferred stream runtime result types no longer carry the old `*ToDom` compatibility name; rooted
+stream apply is named as root-aware runtime apply, while rootless stream parsing/apply coverage now
+lives in its own focused owner suite.
 
 - [x] Normalize canonical query instance wire identities at the shared runtime parser boundary.
       Evidence 2026-06-13 round276: `packages/runtime/src/wire-parser.ts` now decodes
@@ -1070,6 +1073,20 @@ packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-
       full runtime `pnpm exec vitest --run packages/runtime/src`, and `pnpm --filter
       @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+      Evidence 2026-06-13 round280: deferred stream apply deleted the runtime-only
+      `AppliedDeferredStreamResponseToDom` compatibility type/export in favor of
+      `AppliedDeferredStreamResponseWithRoot`, and rootless deferred stream parser/apply assertions
+      moved from `packages/runtime/src/apply-deferred-stream.test.ts` into
+      `packages/runtime/src/apply-deferred-stream-rootless.test.ts`. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/apply-deferred-stream.test.ts
+      packages/runtime/src/apply-deferred-stream-rootless.test.ts
+      packages/runtime/src/index-exports.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, and TypeScript
+      `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+      packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/index.ts
+      packages/runtime/src/apply-deferred-stream.test.ts
+      packages/runtime/src/apply-deferred-stream-rootless.test.ts plans/codebase-quality-round2.md`;
+      `git diff --check`.
       Evidence 2026-06-13 round275: broad browser runtime coverage was split along loader, query,
       and DOM response-apply seams. `packages/runtime/src/index.browser.test.ts` was deleted;
       `packages/runtime/src/loader.browser.test.ts` owns P2 first-paint loader, delegated idle, and

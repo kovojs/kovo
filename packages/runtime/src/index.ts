@@ -1,8 +1,8 @@
 export type { DiagnosticCode } from '@jiso/core';
 export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 export type {
-  AppliedDeferredStreamResponseToDom,
   AppliedDeferredStreamResponseToRuntime,
+  AppliedDeferredStreamResponseWithRoot,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
 export { applyMutationResponseToDom } from './mutation-response-dom.js';
