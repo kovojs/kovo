@@ -1961,11 +1961,10 @@ Inline and modular fragment response apply now share `applyResponseFragment` and
 inline helper supplies tiny DOM append/replace adapters, while `packages/runtime/src/morph.ts`
 supplies the modular morph and island-signal cleanup adapters around the same target/mode and
 applied-target-list decision.
-The inline HTML append/replace adapter now stays private to
-`packages/runtime/src/inline-response-apply.ts`, so
-`packages/runtime/src/response-fragment-apply.ts` exposes only neutral decoded fragment primitives
-while the extracted inline loader still enters `applyResponseFragments` for target filtering and
-applied-target reporting.
+The inline HTML append/replace adapter now also lives in
+`packages/runtime/src/response-fragment-apply.ts` as `applyHtmlResponseFragments`, so extracted
+inline response apply imports the same decoded fragment adapter that parity tests inspect instead
+of carrying a private inline-only clone.
 Inline enhanced-response apply now parses response bodies in the generated installer and enters the
 extracted helper at `applyInlineMutationResponseChunks`, deleting the inline-only
 `applyInlineMutationResponseBody` parser/apply wrapper while preserving readable/minified artifact
@@ -1993,6 +1992,21 @@ Fetched enhanced mutation response apply no longer carries the public `ToDom` co
 submit and optimistic mutation internals call the runtime-named helper directly, while the root
 runtime barrel keeps only the higher-level submit APIs and the submit result type.
 
+- [x] Share the inline HTML fragment adapter with the decoded fragment apply primitive.
+      Evidence 2026-06-13 round351 runtime: `packages/runtime/src/response-fragment-apply.ts`
+      now owns `applyHtmlResponseFragments` beside `applyResponseFragment(s)`, and
+      `packages/runtime/src/inline-response-apply.ts` imports that helper instead of defining a
+      private adapter clone. `packages/runtime/src/response-fragment-apply.test.ts` proves
+      replace/append target behavior through the shared helper, and
+      `packages/runtime/src/inline-loader-response-apply.test.ts` plus
+      `packages/runtime/src/inline-loader-artifact-minifier.test.ts` prove the extracted readable
+      and minified inline loader still embed the canonical helper closure. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/response-fragment-apply.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, and
+      `pnpm --filter @jiso/runtime run check:inline-loader`.
 - [x] Normalize canonical query instance wire identities at the shared runtime parser boundary.
       Evidence 2026-06-13 round276: `packages/runtime/src/wire-parser.ts` now decodes
       SPEC.md §9.4/§10.2 `query:key` names into the same `{ name, key }` query chunk shape used by

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyResponseFragment, applyResponseFragments } from './response-fragment-apply.js';
+import {
+  applyHtmlResponseFragments,
+  applyResponseFragment,
+  applyResponseFragments,
+} from './response-fragment-apply.js';
 
 interface TestFragmentTarget {
   html: string;
@@ -72,13 +76,40 @@ describe('response fragment apply primitive', () => {
     expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
   });
 
-  it('does not export the inline-only HTML fragment adapter', async () => {
+  it('shares the HTML fragment adapter used by the generated inline loader', () => {
+    const targets = new Map([
+      ['replace-target', { innerHTML: '<p>old</p>', insertAdjacentHTML: expect.unreachable }],
+      [
+        'append-target',
+        {
+          innerHTML: '<li>old</li>',
+          insertAdjacentHTML(_position: 'beforeend', html: string) {
+            this.innerHTML += html;
+          },
+        },
+      ],
+    ]);
+
+    const applied = applyHtmlResponseFragments(
+      [
+        { html: '<p>new</p>', target: 'replace-target' },
+        { html: '<li>new</li>', mode: 'append', target: 'append-target' },
+        { html: '<aside>ignored</aside>', target: 'missing-target' },
+      ],
+      (target) => targets.get(target) ?? null,
+    );
+
+    expect(applied).toEqual(['replace-target', 'append-target']);
+    expect(targets.get('replace-target')?.innerHTML).toBe('<p>new</p>');
+    expect(targets.get('append-target')?.innerHTML).toBe('<li>old</li><li>new</li>');
+  });
+
+  it('exports one shared decoded fragment primitive and HTML adapter', async () => {
     const fragmentApplyModule = await import('./response-fragment-apply.js');
 
-    // SPEC.md §4.4/§9.1: the HTML patch adapter belongs to the extracted
-    // inline loader closure; the shared module exposes only decoded fragment
-    // primitives that modular morph and inline apply both enter.
-    expect(Object.hasOwn(fragmentApplyModule, 'applyHtmlResponseFragments')).toBe(false);
+    // SPEC.md §4.4/§9.1: the generated inline loader embeds this canonical
+    // helper closure, so there is no second private HTML fragment adapter.
+    expect(fragmentApplyModule.applyHtmlResponseFragments).toBe(applyHtmlResponseFragments);
     expect(fragmentApplyModule.applyResponseFragments).toBe(applyResponseFragments);
   });
 });

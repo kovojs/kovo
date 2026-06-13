@@ -21,11 +21,10 @@ describe('inline loader response apply source', () => {
     const alternateReadableApply = [
       'function applyInlineMutationResponseChunks(chunks, options) {',
       '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
-      '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
+      '  return applyHtmlResponseFragments(chunks.fragments, options.findFragmentTarget);',
       '}',
-      'function applyInlineFragment(fragment, findFragmentTarget) {',
-      '  const element = findFragmentTarget(fragment.target);',
-      '  if (element) element.innerHTML = fragment.html;',
+      'function applyHtmlResponseFragments(fragments, findFragmentTarget) {',
+      '  return fragments.map((fragment) => findFragmentTarget(fragment.target));',
       '}',
     ].join('\n');
 
