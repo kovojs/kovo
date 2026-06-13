@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import type { RequestHandler } from './app.js';
+import type { RequestHandler } from './app-types.js';
 
 export interface NodeHandlerOptions {
   earlyHints?: boolean;

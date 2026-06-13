@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { RequestHandler } from './app.js';
+import type { RequestHandler } from './app-types.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-document.js';
 
 describe('server static export document client module replay boundary', () => {

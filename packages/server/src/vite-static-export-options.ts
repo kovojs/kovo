@@ -1,4 +1,4 @@
-import type { JisoApp } from './app.js';
+import type { JisoApp } from './app-types.js';
 import type { StaticExportAssetInput, StaticExportOptions } from './static-export-types.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {

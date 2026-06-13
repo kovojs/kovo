@@ -11,4 +11,4 @@ export type {
   ErrorShellRenderer,
   JisoApp,
   RequestHandler,
-} from '../../app.js';
+} from '../../app-types.js';

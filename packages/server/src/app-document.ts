@@ -2,7 +2,7 @@ import { reportServerError } from './diagnostics.js';
 import { renderErrorDocument, renderRouteDocumentResponse } from './document-core.js';
 import { routeResponseToDocumentResponse, type RoutePageResponse } from './response.js';
 import { renderRoutePageResponse, type RouteDeclaration, type RouteRequestInput } from './route.js';
-import type { JisoApp } from './app.js';
+import type { JisoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 

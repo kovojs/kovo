@@ -1,7 +1,7 @@
 import { reportServerError } from './diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
-import type { JisoApp } from './app.js';
+import type { JisoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 

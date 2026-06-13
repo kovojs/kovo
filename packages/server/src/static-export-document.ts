@@ -1,4 +1,4 @@
-import type { RequestHandler } from './app.js';
+import type { RequestHandler } from './app-types.js';
 import { normalizePathname } from './match.js';
 import {
   collectStaticExportClientModuleHrefs,

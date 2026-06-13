@@ -1,5 +1,6 @@
 import type { IncomingMessage } from 'node:http';
-import { createRequestHandler, type JisoApp, type RequestHandler } from './app.js';
+import { createRequestHandler } from './app.js';
+import type { JisoApp, RequestHandler } from './app-types.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
 import { routeResponseToWebResponse } from './response.js';
 import {

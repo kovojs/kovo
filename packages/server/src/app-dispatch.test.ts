@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createApp, type JisoApp } from './app.js';
+import { createApp } from './app.js';
+import type { JisoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';

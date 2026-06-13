@@ -1,4 +1,4 @@
-import type { JisoApp } from './app.js';
+import type { JisoApp } from './app-types.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,

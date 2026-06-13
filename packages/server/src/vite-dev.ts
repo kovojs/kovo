@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { diagnosticDefinitions } from '@jiso/core';
-import { createRequestHandler, type JisoApp } from './app.js';
+import { createRequestHandler } from './app.js';
+import type { JisoApp } from './app-types.js';
 import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,

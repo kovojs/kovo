@@ -1,4 +1,4 @@
-import type { RequestHandler } from './app.js';
+import type { RequestHandler } from './app-types.js';
 
 export interface StaticExportReplayRequestOptions {
   handler: RequestHandler;

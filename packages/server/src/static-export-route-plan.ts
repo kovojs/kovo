@@ -1,4 +1,4 @@
-import type { JisoApp } from './app.js';
+import type { JisoApp } from './app-types.js';
 import { matchRoute, normalizePathname } from './match.js';
 import {
   staticExportDiagnostic,
