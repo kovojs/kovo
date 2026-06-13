@@ -226,6 +226,20 @@ packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
 packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts
 packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md
 plans/codebase-quality-round2.md`.
+      Evidence 2026-06-13: `packages/runtime/src/apply-path.ts` was deleted as a
+      compatibility facade; `packages/runtime/src/index.ts` now exports
+      `apply-mutation-response.ts` and `apply-deferred-stream.ts` directly while
+      `packages/runtime/src/mutation-response.test.ts` pins the public barrel to the
+      canonical split-module apply functions (SPEC §9.1). `packages/runtime/src/mutation-form.ts`
+      now owns enhanced-form selector resolution, fallback/error stamping, and upload-progress
+      element updates, leaving `packages/runtime/src/mutation-submit.ts` focused on submit and
+      optimism orchestration while preserving public form types (SPEC §9.1/§9.2). Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+      vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm exec
+      vp check packages/runtime/src/mutation-form.ts packages/runtime/src/mutation-form.test.ts
+      packages/runtime/src/mutation-submit.ts packages/runtime/src/index.ts
+      packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md
+      plans/codebase-quality-round2.md`.
       Evidence 2026-06-13: visible-return query hydration/refetch lifecycle now lives in
       `packages/runtime/src/query-visible-return.ts`, leaving
       `packages/runtime/src/query-refetch.ts` focused on typed-read HTTP response application

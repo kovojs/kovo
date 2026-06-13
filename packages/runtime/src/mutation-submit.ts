@@ -1,6 +1,6 @@
 import type { AppliedMutationResponse } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
-import type { DelegatedEvent, EventElementLike } from './events.js';
+import type { DelegatedEvent } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
 import type { IslandSignalScope } from './handlers.js';
 import { defaultIslandSignalScope } from './handlers.js';
@@ -16,6 +16,12 @@ import {
   type EnhancedMutationFetch,
   type UploadProgress,
 } from './mutation-fetch.js';
+import {
+  closestEnhancedMutationForm,
+  fallbackEnhancedMutationSubmit,
+  updateUploadProgressElements,
+  type EnhancedFormElementLike,
+} from './mutation-form.js';
 import {
   applyFetchedEnhancedMutationResponseToDom,
   type EnhancedMutationAppliedResult,
@@ -37,6 +43,7 @@ export type {
   EnhancedMutationResponseLike,
   UploadProgress,
 } from './mutation-fetch.js';
+export type { EnhancedFormElementLike } from './mutation-form.js';
 
 export interface EnhancedMutationLoaderOptions {
   broadcast?: MutationBroadcast;
@@ -59,10 +66,6 @@ export interface EnhancedMutationLoaderOptions {
   store: QueryStore;
 }
 
-export interface EnhancedFormElementLike extends EventElementLike, EnhancedFormLike {
-  submit?: () => void;
-}
-
 interface EnhancedFormSubmitHooks {
   onAppliedQueries?: (queries: readonly string[]) => void;
 }
@@ -75,11 +78,8 @@ export async function dispatchEnhancedFormSubmit(
 ): Promise<boolean> {
   if (!options || event.type !== 'submit') return false;
 
-  const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]') as
-    | EnhancedFormElementLike
-    | null
-    | undefined;
-  if (!form || !isEnhancedForm(form)) return false;
+  const form = closestEnhancedMutationForm(event.target);
+  if (!form) return false;
 
   event.preventDefault?.();
   try {
@@ -126,47 +126,7 @@ export function isEnhancedSubmitEvent(
 ): boolean {
   if (!options || event.type !== 'submit') return false;
 
-  const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]') as
-    | EventElementLike
-    | null
-    | undefined;
-  return !!form && isEnhancedForm(form);
-}
-
-function fallbackEnhancedMutationSubmit(form: EnhancedFormElementLike): void {
-  if (typeof form.submit === 'function') {
-    form.submit();
-    return;
-  }
-
-  form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
-  form.setAttribute?.('fw-error', '');
-}
-
-function isEnhancedForm(form: EventElementLike): boolean {
-  return (
-    form.getAttribute('enhance') !== null ||
-    form.getAttribute('data-enhance') !== null ||
-    form.getAttribute('data-mutation') !== null
-  );
-}
-
-function updateUploadProgressElements(form: EventElementLike, progress: UploadProgress): void {
-  const progressElements = form.querySelectorAll?.('[fw-upload-progress]') ?? [];
-  const total = progress.total;
-  const value =
-    total !== undefined && total > 0
-      ? Math.min(100, Math.round((progress.loaded / total) * 100))
-      : undefined;
-
-  for (const element of progressElements) {
-    element.setAttribute('max', '100');
-    if (value === undefined) {
-      element.removeAttribute?.('value');
-      continue;
-    }
-    element.setAttribute('value', String(value));
-  }
+  return closestEnhancedMutationForm(event.target) !== null;
 }
 
 export interface EnhancedMutationSubmitOptions {

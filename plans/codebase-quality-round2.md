@@ -443,10 +443,12 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
   `pnpm --filter @jiso/runtime run check:inline-loader`, and `pnpm exec vp check
 packages/runtime/src/inline-js-minifier.ts packages/runtime/src/inline-js-minifier.test.ts
 IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
-- Runtime apply path split now keeps `apply-path.ts` as the stable facade while moving mutation
-  response and deferred-stream application into `apply-mutation-response.ts` and
-  `apply-deferred-stream.ts`; `mutation-response.test.ts` proves direct split-module exports still
-  share malformed-query handling, hooks, and aggregation behavior.
+- Runtime apply path split no longer keeps the `apply-path.ts` compatibility facade: the runtime
+  barrel exports `apply-mutation-response.ts` and `apply-deferred-stream.ts` directly, and
+  `mutation-response.test.ts` proves public barrel exports still share the canonical split-module
+  apply functions, malformed-query handling, hooks, and aggregation behavior (SPEC.md §9.1).
+  Same-session evidence: `pnpm exec vitest --run packages/runtime/src` and `pnpm exec vitest
+--config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
 - Query store/apply responsibilities are split: `query-store.ts` now owns only store identity,
   snapshots, and subscriptions, while `query-apply.ts` owns chunk application, hydrated script
   discovery, and the hydration replay ledger shared by mutation responses, typed-read refetch, and
@@ -501,6 +503,16 @@ packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
 packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-apply.test.ts
 packages/runtime/src/mutation-submit.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Enhanced mutation form DOM mechanics are split out of the submitter: `mutation-form.ts` owns
+  enhanced-form selector resolution, no-JS fallback/error stamping, and upload-progress element
+  updates, while `mutation-submit.ts` keeps submit/optimism orchestration and re-exports the
+  public form type (SPEC.md §9.1/§9.2). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/mutation-form.ts packages/runtime/src/mutation-form.test.ts
+packages/runtime/src/mutation-submit.ts packages/runtime/src/index.ts
+packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`.
 - Visible-return query lifecycle is split from typed-read HTTP refetch: `query-visible-return.ts`
   now owns the hydration/refetch ledger, initial and later `fw-query` script hydration, disposal,
   and the `visibilitychange` listener; `query-refetch.ts` is narrowed to typed-read fetch and
@@ -570,7 +582,7 @@ Recent gates:
 - `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
-- `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-submit.ts`
+- `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-submit.ts`
 - `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-store.ts packages/runtime/src/query.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader.ts packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`
@@ -606,6 +618,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/query-events.ts packages/runtime/src/query-apply.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader.ts packages/runtime/src/query.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts packages/runtime/src/index.browser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/mutation-form.ts packages/runtime/src/mutation-form.test.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server

@@ -5,18 +5,16 @@ import {
   applyDeferredStreamResponseToRuntime,
   applyMutationResponse,
   applyMutationResponseToDom,
+  applyMutationResponseToRuntime,
+  applyMutationResponseToStore,
   createQueryStore,
 } from './index.js';
-import {
-  applyDeferredStreamResponseToDom as applyDeferredStreamResponseToDomFromApplyPath,
-  applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromApplyPath,
-  applyMutationResponse as applyMutationResponseFromApplyPath,
-  applyMutationResponseToRuntime,
-  applyMutationResponseToDom as applyMutationResponseToDomFromApplyPath,
-  applyMutationResponseToStore,
-} from './apply-path.js';
 import { applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromDeferredModule } from './apply-deferred-stream.js';
-import { applyMutationResponseToRuntime as applyMutationResponseToRuntimeFromMutationModule } from './apply-mutation-response.js';
+import {
+  applyMutationResponse as applyMutationResponseFromMutationModule,
+  applyMutationResponseToDom as applyMutationResponseToDomFromMutationModule,
+  applyMutationResponseToRuntime as applyMutationResponseToRuntimeFromMutationModule,
+} from './apply-mutation-response.js';
 import {
   createMutationIdem,
   isMutationBroadcastMessage,
@@ -142,17 +140,13 @@ describe('mutation response wire chunks', () => {
   });
 
   it('exports canonical mutation response helpers through the runtime barrel', () => {
-    expect(applyMutationResponse).toBe(applyMutationResponseFromApplyPath);
+    expect(applyMutationResponse).toBe(applyMutationResponseFromMutationModule);
     expect(applyMutationResponse).toBe(applyMutationResponseToStore);
-    expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromApplyPath);
+    expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromMutationModule);
     expect(applyMutationResponseToRuntime).toBe(applyMutationResponseToRuntimeFromMutationModule);
   });
 
-  it('exports deferred stream response apply through the shared apply path', () => {
-    expect(applyDeferredStreamResponseToDom).toBe(applyDeferredStreamResponseToDomFromApplyPath);
-    expect(applyDeferredStreamResponseToRuntime).toBe(
-      applyDeferredStreamResponseToRuntimeFromApplyPath,
-    );
+  it('exports deferred stream response apply through the runtime barrel', () => {
     expect(applyDeferredStreamResponseToRuntime).toBe(
       applyDeferredStreamResponseToRuntimeFromDeferredModule,
     );
