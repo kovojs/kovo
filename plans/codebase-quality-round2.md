@@ -103,6 +103,9 @@ output comparison against SPEC.md section 5.2 provenance.
 Shared source fixtures now own allowed module-import failure projection for fw-check fallback paths,
 and shared touch-graph fixtures now own provenance honesty summaries used by both the fw-check
 commerce committed graph gate and commerce source-truth tests.
+Shared HTML fragment fixtures now own static export main-marker projections for the D10 fw-check
+gate, so the monolith no longer keeps a local helper that parses exported HTML for
+`data-fw-check-export`.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -114,6 +117,12 @@ commerce committed graph gate and commerce source-truth tests.
 
 Latest evidence:
 
+- Static export main-marker fixture slice:
+  `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`

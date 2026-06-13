@@ -224,6 +224,7 @@ import {
   htmlKeyTextMap,
   htmlKeyValues,
   htmlLinkHrefs,
+  htmlMainMarkerFact,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
 import {
@@ -430,6 +431,11 @@ describe('@jiso/test package subpath exports', () => {
         { rel: 'stylesheet' },
       ),
     ).toEqual(['/assets/tailwind.css']);
+    expect(htmlMainMarkerFact('<main data-fw-check-export="api"></main>')).toEqual({
+      attribute: 'data-fw-check-export',
+      mainCount: 1,
+      marker: 'api',
+    });
     expect(
       htmlJsonScriptFacts('<script type="application/json" data-id="cart">{"count":1}</script>', {
         'data-id': 'cart',

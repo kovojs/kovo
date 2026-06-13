@@ -113,6 +113,7 @@ import {
   fwQueryFacts,
   htmlDocumentRegions,
   htmlElementFacts,
+  htmlMainMarkerFact,
 } from '../packages/test/src/html-fragment.ts';
 import {
   markdownBoldSectionHeadings,
@@ -253,16 +254,6 @@ const runCliCommand = async (args) => {
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
   }
-};
-
-const assertHtmlMainMarker = (source, marker, message) => {
-  assert.equal(
-    htmlElementFacts(source).find((element) => element.tag === 'main')?.attrs[
-      'data-fw-check-export'
-    ],
-    marker,
-    message,
-  );
 };
 
 const generatedModuleRuntime = {
@@ -4455,7 +4446,15 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     assert.equal(exported.diagnostics.length, 0);
     const exportedHtml = await readFile(join(outDir, 'index.html'), 'utf8');
     assert.equal(exported.artifacts[0]?.body, exportedHtml);
-    assertHtmlMainMarker(exportedHtml, 'api', 'static export writes the rendered main marker');
+    assert.deepEqual(
+      htmlMainMarkerFact(exportedHtml),
+      {
+        attribute: 'data-fw-check-export',
+        mainCount: 1,
+        marker: 'api',
+      },
+      'static export writes the rendered main marker',
+    );
   } finally {
     await rm(outDir, { force: true, recursive: true });
   }
@@ -4517,9 +4516,13 @@ export default createApp({
       },
       version: 'fw-export/v1',
     });
-    assertHtmlMainMarker(
-      await readFile(join(cliGreenOutDir, 'index.html'), 'utf8'),
-      'cli',
+    assert.deepEqual(
+      htmlMainMarkerFact(await readFile(join(cliGreenOutDir, 'index.html'), 'utf8')),
+      {
+        attribute: 'data-fw-check-export',
+        mainCount: 1,
+        marker: 'cli',
+      },
       'fw export writes the rendered main marker',
     );
   } finally {

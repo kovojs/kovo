@@ -19,6 +19,7 @@ import {
   htmlKeyTextMap,
   htmlKeyValues,
   htmlLinkHrefs,
+  htmlMainMarkerFact,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
 
@@ -217,6 +218,30 @@ describe('@jiso/test html fragment seam', () => {
     expect(() => htmlDocumentRegions('<main>Fragment</main>')).toThrow(
       'Expected one html/head/body document region; found html=0 head=0 body=0',
     );
+  });
+
+  it('projects static export main marker facts without local fw-check HTML mechanics', () => {
+    expect(
+      htmlMainMarkerFact(
+        '<!doctype html><html><body><main data-fw-check-export="cli">Ready</main></body></html>',
+      ),
+    ).toEqual({
+      attribute: 'data-fw-check-export',
+      mainCount: 1,
+      marker: 'cli',
+    });
+    expect(
+      htmlMainMarkerFact('<main data-commerce-shell="checkout"></main>', 'data-commerce-shell'),
+    ).toEqual({
+      attribute: 'data-commerce-shell',
+      mainCount: 1,
+      marker: 'checkout',
+    });
+    expect(htmlMainMarkerFact('<section>No main</section>')).toEqual({
+      attribute: 'data-fw-check-export',
+      mainCount: 0,
+      marker: undefined,
+    });
   });
 
   it('returns structured framework query facts for element and script carriers', () => {

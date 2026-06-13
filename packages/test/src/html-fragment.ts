@@ -45,6 +45,12 @@ export interface HtmlDocumentRegions {
   html: HtmlElementFact;
 }
 
+export interface HtmlMainMarkerFact {
+  attribute: string;
+  mainCount: number;
+  marker: string | undefined;
+}
+
 export interface FwQueryFact {
   attrs: Record<string, string>;
   html: string;
@@ -187,6 +193,19 @@ export function htmlDocumentRegions(html: string): HtmlDocumentRegions {
     body: bodyRegions[0]!,
     head: headRegions[0]!,
     html: htmlRegions[0]!,
+  };
+}
+
+export function htmlMainMarkerFact(
+  html: string,
+  attribute = 'data-fw-check-export',
+): HtmlMainMarkerFact {
+  const mainElements = htmlElementFacts(html, { tag: 'main' });
+
+  return {
+    attribute,
+    mainCount: mainElements.length,
+    marker: mainElements[0]?.attrs[attribute],
   };
 }
 
