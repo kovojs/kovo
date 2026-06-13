@@ -1382,6 +1382,10 @@ lives in its own focused owner suite.
 Mutation response decoded runtime apply now uses `AppliedMutationResponseWithRoot` for root-aware
 results, so deferred stream aggregation and DOM response parsing no longer depend on the old
 `AppliedMutationResponseToDom` compatibility type/export.
+Mutation response decoded runtime apply now also forwards `onError` into the shared query apply
+primitive, so enhanced mutation responses, DOM body apply, deferred stream chunks, and broadcast
+replay report per-query apply failures without forking fragment apply or blocking later decoded
+query truth.
 
 - [x] Normalize canonical query instance wire identities at the shared runtime parser boundary.
       Evidence 2026-06-13 round276: `packages/runtime/src/wire-parser.ts` now decodes
@@ -1449,6 +1453,21 @@ packages/runtime/src/apply-deferred-stream-rootless.test.ts`, full runtime
 packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts
 packages/runtime/src/apply-deferred-stream.test.ts
 packages/runtime/src/apply-deferred-stream.browser.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
+- [x] Report mutation response query hook failures through the shared runtime apply seam.
+      Evidence 2026-06-13 round292 runtime: `packages/runtime/src/apply-mutation-response.ts`
+      now passes `onError` into `applyQueryChunksToRuntime`, so SPEC.md §9.1/§9.4 decoded
+      mutation responses share the same per-query error reporting path as hydration and typed-read
+      apply while continuing later query chunks and fragment morphing. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/mutation-response-apply.test.ts`,
+      browser DOM `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/mutation-response-dom.browser.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, browser runtime
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/**/*.browser.test.ts`, exact `pnpm exec vp check
+packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/mutation-response-apply.test.ts
+packages/runtime/src/mutation-response-dom.browser.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.

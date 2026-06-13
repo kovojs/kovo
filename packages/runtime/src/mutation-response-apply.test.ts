@@ -173,4 +173,45 @@ describe('decoded mutation response apply', () => {
     expect(count.textContent).toBe('9');
     expect(morph).not.toHaveBeenCalled();
   });
+
+  it('reports query apply failures while applying later queries and fragments', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    root.bindings.push(count);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    const hookError = new Error('cart hook drift');
+    const applied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(
+        [
+          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-query name="cart">{"count":2}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+        ].join(''),
+      ),
+      {
+        applyQuery(query) {
+          if ((query.value as { count: number }).count === 1) throw hookError;
+        },
+        onError,
+        root,
+        store,
+      },
+    );
+
+    // SPEC.md §9.1/§9.4: mutation response queries use the same decoded runtime
+    // apply primitive as hydration and typed reads, so a bad hook reports
+    // through the runtime error seam without forking fragment apply.
+    expect(onError).toHaveBeenCalledWith(hookError);
+    expect(applied).toEqual({
+      appliedFragments: ['cart-badge'],
+      fragments: [{ html: '<cart-badge>2</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(count.textContent).toBe('2');
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
+  });
 });

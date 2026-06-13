@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyMutationResponseToDom,
@@ -154,5 +154,40 @@ describe('browser mutation response DOM apply', () => {
     expect(root.querySelector('[fw-fragment-target="recommendations"]')?.textContent).toBe(
       'fresh recommendations',
     );
+  });
+
+  it('reports browser query apply failures and still applies later fragments', () => {
+    const root = document.createElement('main');
+    root.innerHTML =
+      '<section fw-c="cart-badge">stale</section><span data-bind="cart.count">0</span>';
+    document.body.append(root);
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const hookError = new Error('browser query hook failed');
+
+    const applied = applyMutationResponseToDom({
+      applyQuery(query) {
+        if ((query.value as { count: number }).count === 1) throw hookError;
+      },
+      body: [
+        '<fw-query name="cart">{"count":1}</fw-query>',
+        '<fw-query name="cart">{"count":2}</fw-query>',
+        '<fw-fragment target="cart-badge"><section fw-c="cart-badge">fresh</section></fw-fragment>',
+      ].join(''),
+      onError,
+      queryRoot: root,
+      root: new DomMorphRoot(root),
+      store,
+    });
+
+    // SPEC.md §9.1/§9.4: browser mutation responses share the decoded runtime
+    // query apply path, so hook failures report while later server truth and
+    // fragments continue through the same DOM apply pass.
+    expect(onError).toHaveBeenCalledWith(hookError);
+    expect(applied.queries).toEqual(['cart']);
+    expect(applied.appliedFragments).toEqual(['cart-badge']);
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(root.querySelector('[data-bind="cart.count"]')?.textContent).toBe('2');
+    expect(root.querySelector('[fw-c="cart-badge"]')?.textContent).toBe('fresh');
   });
 });

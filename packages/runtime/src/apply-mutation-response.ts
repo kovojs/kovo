@@ -53,6 +53,7 @@ export function applyMutationResponseChunksToRuntime(
       ...applyQueryChunksToRuntime(options.store, chunks.queries, {
         ...definedProps({
           applyQuery: options.applyQuery,
+          onError: options.onError,
           queryPlans: options.queryPlans,
           root: options.queryRoot ?? options.root,
         }),
