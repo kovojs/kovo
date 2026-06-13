@@ -3453,6 +3453,15 @@ Focused gates since that broad run:
   `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
   exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/toggle-group.html.txt examples/gallery/src/visual-fixtures/toolbar.html.txt plans/ui.md plans/codebase-quality-round2.md`;
   `git diff --check`.
+- UI/gallery styled checkbox/switch description and static form-owner slice:
+  `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts packages/ui/src/index.test.tsx`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "preserves styled checkbox and switch native form ownership in static routes")`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "keeps stable visual baselines for representative styled static gallery routes")`;
+  exact `pnpm exec vp check packages/ui/src/checkbox.tsx packages/ui/src/switch.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/checkbox.html.txt examples/gallery/src/visual-fixtures/switch.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/ui/src/checkbox.tsx` and `packages/ui/src/switch.tsx`
+  now expose native input `id`, `aria-describedby`, and `aria-labelledby` hooks while preserving
+  SPEC §3.1 light-DOM/native-form fallback; the static gallery routes prove those hooks stay
+  synchronized with raw fixtures and browser `FormData` for externally owned controls.
 - Runtime body apply closure:
   `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts`;
   `pnpm exec vitest --run packages/runtime/src`;

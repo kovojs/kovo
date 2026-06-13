@@ -730,7 +730,10 @@ describe('@jiso/ui styled package foundation', () => {
     const checkbox = Checkbox.definition.render({
       checked: 'indeterminate',
       children: 'Some permissions',
+      describedBy: 'permissions-help permissions-error',
       form: 'permissions-form',
+      id: 'permissions-partial',
+      labelledBy: 'permissions-label',
       name: 'permissions',
       required: true,
       value: 'partial',
@@ -738,7 +741,10 @@ describe('@jiso/ui styled package foundation', () => {
     const switchControl = Switch.definition.render({
       checked: true,
       children: 'Notifications',
+      describedBy: 'notifications-help',
       form: 'preferences-form',
+      id: 'notifications-switch',
+      labelledBy: 'notifications-label',
       name: 'notifications',
       value: 'enabled',
     });
@@ -750,12 +756,21 @@ describe('@jiso/ui styled package foundation', () => {
 
     expect(checkbox).toContain('data-state="indeterminate"');
     expect(checkbox).toContain('aria-checked="mixed"');
-    expect(checkbox).toContain('form="permissions-form" name="permissions"');
+    expect(checkbox).toContain('aria-describedby="permissions-help permissions-error"');
+    expect(checkbox).toContain('aria-labelledby="permissions-label"');
+    expect(checkbox).toContain('form="permissions-form"');
+    expect(checkbox).toContain('id="permissions-partial"');
+    expect(checkbox).toContain('name="permissions"');
     expect(checkbox).toContain('required type="checkbox" value="partial"');
     expect(checkbox).toContain('Some permissions</label>');
     expect(switchControl).toContain('data-state="checked"');
-    expect(switchControl).toContain('aria-checked="true" checked');
-    expect(switchControl).toContain('form="preferences-form" name="notifications"');
+    expect(switchControl).toContain('aria-checked="true"');
+    expect(switchControl).toContain('checked');
+    expect(switchControl).toContain('aria-describedby="notifications-help"');
+    expect(switchControl).toContain('aria-labelledby="notifications-label"');
+    expect(switchControl).toContain('form="preferences-form"');
+    expect(switchControl).toContain('id="notifications-switch"');
+    expect(switchControl).toContain('name="notifications"');
     expect(switchControl).toContain('role="switch" type="checkbox" value="enabled"');
     expect(toggle).toContain('data-state="pressed"');
     expect(toggle).toContain('aria-pressed="true"');

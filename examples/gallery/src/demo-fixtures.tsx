@@ -891,12 +891,17 @@ export function CheckboxDemo(): string {
         Checkbox preserves real checkbox controls for form submission and validation.
       </p>
       <form id="gallery-checkbox-form" data-gallery-form="checkbox" />
+      <span hidden id="gallery-checkbox-help">
+        Required native checkbox linked to an external form owner.
+      </span>
       <div data-ui-demo="checkbox">
         <span data-fixture-state="checked">
           {Checkbox.definition.render({
             checked: true,
             children: 'Accept terms',
+            describedBy: 'gallery-checkbox-help',
             form: 'gallery-checkbox-form',
+            id: 'gallery-checkbox-consent',
             name: 'gallery-consent',
             required: true,
             value: 'accepted',
@@ -2433,12 +2438,17 @@ export function SwitchDemo(): string {
     <section data-gallery-demo="switch">
       <p data-demo-summary="no-js">Switch renders a native checkbox with switch semantics.</p>
       <form id="gallery-switch-form" data-gallery-form="switch" />
+      <span hidden id="gallery-switch-help">
+        Native switch input submitted through an external form owner.
+      </span>
       <div data-ui-demo="switch">
         <span data-fixture-state="checked">
           {Switch.definition.render({
             checked: true,
             children: 'Notifications',
+            describedBy: 'gallery-switch-help',
             form: 'gallery-switch-form',
+            id: 'gallery-switch-notifications',
             name: 'gallery-notifications',
             value: 'enabled',
           })}

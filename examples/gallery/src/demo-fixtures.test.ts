@@ -222,7 +222,10 @@ describe('gallery demo fixtures', () => {
 
     expect(checkbox.html).toContain('type="checkbox"');
     expect(checkbox.html).toContain('id="gallery-checkbox-form"');
+    expect(checkbox.html).toContain('id="gallery-checkbox-help"');
     expect(checkbox.html).toContain('form="gallery-checkbox-form"');
+    expect(checkbox.html).toContain('id="gallery-checkbox-consent"');
+    expect(checkbox.html).toContain('aria-describedby="gallery-checkbox-help"');
     expect(checkbox.html).toContain('name="gallery-consent"');
     expect(checkbox.html).toContain('required');
     expect(checkbox.html).toContain('data-state="checked"');
@@ -304,6 +307,22 @@ describe('gallery demo fixtures', () => {
     expect(popover.html).toContain('data-gallery-demo="popover"');
     expect(popover.html).toContain('popovertarget="gallery-popover-content"');
     expect(popover.html).toContain('popover="auto"');
+  });
+
+  it('renders switch fixture with native form and description wiring', () => {
+    const switchFixture = findFixture('/components/switch');
+
+    expect(switchFixture.html).toContain('type="checkbox"');
+    expect(switchFixture.html).toContain('role="switch"');
+    expect(switchFixture.html).toContain('id="gallery-switch-form"');
+    expect(switchFixture.html).toContain('id="gallery-switch-help"');
+    expect(switchFixture.html).toContain('form="gallery-switch-form"');
+    expect(switchFixture.html).toContain('id="gallery-switch-notifications"');
+    expect(switchFixture.html).toContain('aria-describedby="gallery-switch-help"');
+    expect(switchFixture.html).toContain('name="gallery-notifications"');
+    expect(switchFixture.html).toContain('value="enabled"');
+    expect(switchFixture.html).toContain('data-fixture-state="disabled"');
+    expect(switchFixture.html).toContain('disabled');
   });
 
   it('renders dialog fixture with native invoker and IDREF wiring', () => {

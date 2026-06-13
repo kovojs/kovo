@@ -9,12 +9,15 @@ import {
 } from '@jiso/headless-ui';
 
 export interface CheckboxProps {
+  describedBy?: string;
   checked?: CheckboxCheckedState;
   children?: string;
   class?: ClassValue;
   disabled?: boolean;
   form?: string;
+  id?: string;
   inputClass?: ClassValue;
+  labelledBy?: string;
   name?: string;
   required?: boolean;
   value?: string;
@@ -51,12 +54,15 @@ export const Checkbox = component('checkbox', {
       >
         <input
           aria-checked={attrs['aria-checked']}
+          aria-describedby={props.describedBy}
+          aria-labelledby={props.labelledBy}
           checked={attrs.checked}
           class={cn(checkboxInputClassNames(), props.inputClass)}
           data-disabled={attrs['data-disabled']}
           data-state={attrs['data-state']}
           disabled={attrs.disabled}
           form={props.form}
+          id={props.id}
           name={attrs.name}
           required={attrs.required}
           type={attrs.type}

@@ -685,6 +685,37 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(toolbarRoute)).toBe('c1d2d1b8');
   });
 
+  it('preserves styled checkbox and switch native form ownership in static routes', async () => {
+    const checkboxRoute = mountStaticGalleryRoute('/components/checkbox');
+    const checkboxForm = required(
+      checkboxRoute.querySelector<HTMLFormElement>('#gallery-checkbox-form'),
+    );
+    const checkbox = required(
+      checkboxRoute.querySelector<HTMLInputElement>('#gallery-checkbox-consent'),
+    );
+
+    expect(checkbox.getAttribute('aria-describedby')).toBe('gallery-checkbox-help');
+    expect(checkbox.form).toBe(checkboxForm);
+    expect(new FormData(checkboxForm).get('gallery-consent')).toBe('accepted');
+
+    checkbox.checked = false;
+    expect(new FormData(checkboxForm).get('gallery-consent')).toBeNull();
+
+    const switchRoute = mountStaticGalleryRoute('/components/switch');
+    const switchForm = required(switchRoute.querySelector<HTMLFormElement>('#gallery-switch-form'));
+    const switchInput = required(
+      switchRoute.querySelector<HTMLInputElement>('#gallery-switch-notifications'),
+    );
+
+    expect(switchInput.getAttribute('aria-describedby')).toBe('gallery-switch-help');
+    expect(switchInput.getAttribute('role')).toBe('switch');
+    expect(switchInput.form).toBe(switchForm);
+    expect(new FormData(switchForm).get('gallery-notifications')).toBe('enabled');
+
+    switchInput.checked = false;
+    expect(new FormData(switchForm).get('gallery-notifications')).toBeNull();
+  });
+
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAccordionDemo);
     const shipping = required(

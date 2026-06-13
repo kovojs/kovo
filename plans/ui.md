@@ -315,6 +315,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Styled checkbox/switch description and static form-owner slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts packages/ui/src/index.test.tsx`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "preserves styled checkbox and switch native form ownership in static routes")`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "keeps stable visual baselines for representative styled static gallery routes")`;
+      exact `pnpm exec vp check packages/ui/src/checkbox.tsx packages/ui/src/switch.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/checkbox.html.txt examples/gallery/src/visual-fixtures/switch.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] H2 roving-control static visual-baseline slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;

@@ -3,12 +3,15 @@ import { component } from '@jiso/core';
 import { cn, defineVariants, switchRootAttributes, type ClassValue } from '@jiso/headless-ui';
 
 export interface SwitchProps {
+  describedBy?: string;
   checked?: boolean;
   children?: string;
   class?: ClassValue;
   disabled?: boolean;
   form?: string;
+  id?: string;
   inputClass?: ClassValue;
+  labelledBy?: string;
   name?: string;
   required?: boolean;
   value?: string;
@@ -46,12 +49,15 @@ export const Switch = component('switch', {
       >
         <input
           aria-checked={attrs['aria-checked']}
+          aria-describedby={props.describedBy}
+          aria-labelledby={props.labelledBy}
           checked={attrs.checked}
           class={cn(switchInputClassNames(), props.inputClass)}
           data-disabled={attrs['data-disabled']}
           data-state={attrs['data-state']}
           disabled={attrs.disabled}
           form={attrs.form}
+          id={props.id}
           name={attrs.name}
           required={attrs.required}
           role={attrs.role}
