@@ -62,8 +62,24 @@ function eventTriggerAttributes(
 }
 
 function eventTriggerName(attributeName: string): string | null {
-  const match = /^on:(?<name>[a-z][a-z0-9-]*)$/.exec(attributeName);
-  return match?.groups?.name ?? null;
+  if (!attributeName.startsWith('on:')) return null;
+  const name = attributeName.slice('on:'.length);
+  if (name === '') return null;
+  const [first, ...rest] = name;
+  if (!first || !isLowerAlpha(first)) return null;
+  return rest.every(isTriggerNameChar) ? name : null;
+}
+
+function isTriggerNameChar(char: string): boolean {
+  return isLowerAlpha(char) || isDigit(char) || char === '-';
+}
+
+function isLowerAlpha(char: string): boolean {
+  return char >= 'a' && char <= 'z';
+}
+
+function isDigit(char: string): boolean {
+  return char >= '0' && char <= '9';
 }
 
 function isKnownEventOrTrigger(name: string): boolean {

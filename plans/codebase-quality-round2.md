@@ -84,6 +84,8 @@ Current state:
 - Obsolete `removeJsxAttribute(s)` compatibility helpers were deleted.
 - Literal route validation now compares parsed route/path segments directly instead of compiling
   route strings into regular expressions.
+- Event trigger validation now parses `on:*` names with direct string checks instead of a regex
+  matcher.
 
 Open:
 
@@ -99,6 +101,8 @@ Latest focused evidence:
 - `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/lower/view-transitions.ts`
 - `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/validate/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/execution-triggers.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vp check packages/compiler/src/validate/event-triggers.ts packages/compiler/src/execution-triggers.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

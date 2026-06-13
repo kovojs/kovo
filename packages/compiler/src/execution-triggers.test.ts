@@ -63,6 +63,25 @@ export const ExecutionTriggers = component('execution-triggers', {
     ]);
   });
 
+  it('ignores malformed on-colon attribute names before trigger validation', () => {
+    const result = compileComponentModule({
+      fileName: 'execution-triggers.tsx',
+      source: `
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <button on:Click="/c/cart.client.js#Cart$add">Add</button>
+      <button on:="/c/cart.client.js#Cart$add">Add</button>
+      <button on:-click="/c/cart.client.js#Cart$add">Add</button>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('ignores execution trigger text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
