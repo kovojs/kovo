@@ -96,11 +96,12 @@ import {
 } from '../packages/test/src/source-fixtures.ts';
 import {
   executeStarterClientTemplate,
+  loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
   runStarterTemplateEmitGraph,
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
-  starterTemplateFacts,
+  starterTemplateDevDependencyCoverage,
 } from '../packages/test/src/starter-template-fixtures.ts';
 import {
   assertTypeScriptProgramHasNoDiagnostics,
@@ -3184,33 +3185,11 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {
-  const [
-    packageJsonSource,
-    ciWorkflowSource,
-    starterGraphSource,
-    clientSource,
-    appSource,
-    stylesSource,
-    indexHtml,
-    viteConfigSource,
-  ] = await Promise.all([
-    readProjectFile('packages/create-jiso/templates/package.json'),
-    readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
-    readProjectFile('packages/create-jiso/templates/graph.json'),
-    readProjectFile('packages/create-jiso/templates/src/client.ts'),
-    readProjectFile('packages/create-jiso/templates/src/app.tsx'),
-    readProjectFile('packages/create-jiso/templates/src/styles.css'),
-    readProjectFile('packages/create-jiso/templates/index.html'),
-    readProjectFile('packages/create-jiso/templates/vite.config.ts'),
-  ]);
-  const starterFacts = await starterTemplateFacts({
-    ciWorkflowSource,
-    graphSource: starterGraphSource,
-    indexHtmlSource: indexHtml,
-    packageJsonSource,
-    stylesSource,
-    viteConfigSource,
-  });
+  const starterFacts = await loadStarterTemplateFacts(starterTemplatePaths);
+  const appSource = starterFacts.appSource;
+  const clientSource = starterFacts.clientSource;
+  assert.equal(typeof appSource, 'string');
+  assert.equal(typeof clientSource, 'string');
   const packageFacts = starterFacts.package;
   const viteTasks = starterFacts.viteTasks;
   const starterGraph = starterFacts.graph;
@@ -3232,7 +3211,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
     '@jiso/server',
   ]);
   assert.deepEqual(
-    [
+    starterTemplateDevDependencyCoverage(packageFacts, [
       '@jiso/compiler',
       '@tailwindcss/vite',
       '@typescript/native-preview',
@@ -3242,18 +3221,32 @@ void test('P10 starter wires graph assertions into CI', async () => {
       'vite',
       'vite-plus',
       'vitest',
-    ].filter((dependencyName) => packageFacts.devDependencies.includes(dependencyName)),
-    [
-      '@jiso/compiler',
-      '@tailwindcss/vite',
-      '@typescript/native-preview',
-      'fw',
-      'tailwindcss',
-      'typescript',
-      'vite',
-      'vite-plus',
-      'vitest',
-    ],
+    ]),
+    {
+      expected: [
+        '@jiso/compiler',
+        '@tailwindcss/vite',
+        '@typescript/native-preview',
+        'fw',
+        'tailwindcss',
+        'typescript',
+        'vite',
+        'vite-plus',
+        'vitest',
+      ],
+      missing: [],
+      present: [
+        '@jiso/compiler',
+        '@tailwindcss/vite',
+        '@typescript/native-preview',
+        'fw',
+        'tailwindcss',
+        'typescript',
+        'vite',
+        'vite-plus',
+        'vitest',
+      ],
+    },
   );
 
   assert.deepEqual(fwCheck(starterGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });

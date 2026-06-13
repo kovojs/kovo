@@ -17,6 +17,8 @@ import { cssSourceDirectives } from './source-fixtures.ts';
 
 export interface StarterTemplateSources {
   ciWorkflowSource: string;
+  appSource?: string;
+  clientSource?: string;
   graphSource: string;
   indexHtmlSource: string;
   packageJsonSource: string;
@@ -39,7 +41,9 @@ export interface StarterTemplateIndexHtmlFacts {
 }
 
 export interface StarterTemplateFacts {
+  appSource?: string;
   ciRunCommands: readonly string[];
+  clientSource?: string;
   cssDirectives: readonly string[];
   graph: Record<string, unknown>;
   indexHtml: StarterTemplateIndexHtmlFacts;
@@ -51,6 +55,12 @@ export interface StarterTemplateFixturePaths {
   compilerModuleUrl?: string;
   projectRoot: string | URL;
   templateRoot: string | URL;
+}
+
+export interface StarterTemplateDevDependencyCoverage {
+  expected: readonly string[];
+  missing: readonly string[];
+  present: readonly string[];
 }
 
 export interface StarterTemplateFwOutput {
@@ -100,8 +110,13 @@ export async function starterTemplateFacts(
     .split('\n')
     .map((line) => /^\s*-\s+run:\s*(.+?)\s*$/.exec(line)?.[1])
     .filter((command): command is string => Boolean(command));
+  const sourceFacts = {
+    ...(sources.appSource === undefined ? {} : { appSource: sources.appSource }),
+    ...(sources.clientSource === undefined ? {} : { clientSource: sources.clientSource }),
+  };
 
   return {
+    ...sourceFacts,
     ciRunCommands:
       ciRunCommands.length > 0
         ? commandSequence(ciRunCommands.join(' && ')).map((command) => command.raw)
@@ -125,6 +140,56 @@ export async function starterTemplateFacts(
 }
 
 const pathFrom = (path: string | URL): string => (path instanceof URL ? fileURLToPath(path) : path);
+
+export async function loadStarterTemplateFacts(
+  paths: StarterTemplateFixturePaths,
+): Promise<StarterTemplateFacts> {
+  const templateRoot = pathFrom(paths.templateRoot);
+  const [
+    packageJsonSource,
+    ciWorkflowSource,
+    graphSource,
+    clientSource,
+    appSource,
+    stylesSource,
+    indexHtmlSource,
+    viteConfigSource,
+  ] = await Promise.all([
+    readFile(join(templateRoot, 'package.json'), 'utf8'),
+    readFile(join(templateRoot, '.github/workflows/ci.yml'), 'utf8'),
+    readFile(join(templateRoot, 'graph.json'), 'utf8'),
+    readFile(join(templateRoot, 'src/client.ts'), 'utf8'),
+    readFile(join(templateRoot, 'src/app.tsx'), 'utf8'),
+    readFile(join(templateRoot, 'src/styles.css'), 'utf8'),
+    readFile(join(templateRoot, 'index.html'), 'utf8'),
+    readFile(join(templateRoot, 'vite.config.ts'), 'utf8'),
+  ]);
+
+  return starterTemplateFacts({
+    appSource,
+    ciWorkflowSource,
+    clientSource,
+    graphSource,
+    indexHtmlSource,
+    packageJsonSource,
+    stylesSource,
+    viteConfigSource,
+  });
+}
+
+export function starterTemplateDevDependencyCoverage(
+  packageFacts: StarterTemplatePackageFacts,
+  expected: readonly string[],
+): StarterTemplateDevDependencyCoverage {
+  const devDependencyNames = new Set(packageFacts.devDependencies);
+  const present = expected.filter((dependencyName) => devDependencyNames.has(dependencyName));
+
+  return {
+    expected: [...expected],
+    missing: expected.filter((dependencyName) => !devDependencyNames.has(dependencyName)),
+    present,
+  };
+}
 
 const compilerModuleUrlFor = (paths: StarterTemplateFixturePaths): string =>
   paths.compilerModuleUrl ??

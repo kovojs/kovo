@@ -233,6 +233,11 @@ Closed evidence so far:
   diagnostic-output, and command fixture facts instead of local parsers. Same-session evidence:
   `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts`
   and `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|Conformance suites are an explicit gate" tests/fw-check.node.mjs`.
+- Round99 harness evidence 2026-06-13: the starter CI gate in `tests/fw-check.node.mjs` now
+  consumes `@jiso/test/starter-template-fixtures` file-loading and dependency-coverage facts
+  instead of monolithic template source reads and local dev-dependency membership checks.
+  Same-session evidence: `pnpm exec vitest --run packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts`
+  and `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`.
 
 Open:
 

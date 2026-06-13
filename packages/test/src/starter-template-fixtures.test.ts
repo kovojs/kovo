@@ -6,51 +6,58 @@ import { pathToFileURL } from 'node:url';
 
 import {
   executeStarterClientTemplate,
+  loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
   runStarterTemplateEmitGraph,
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
+  starterTemplateDevDependencyCoverage,
   starterTemplateFacts,
 } from '@jiso/test/starter-template-fixtures';
 
 describe('@jiso/test starter template fixtures', () => {
   it('collects package, task, CI, CSS, graph, and HTML facts through reusable seams', async () => {
-    await expect(
-      starterTemplateFacts({
-        ciWorkflowSource: [
-          'name: CI',
-          'jobs:',
-          '  check:',
-          '    steps:',
-          '      - run: vp install',
-          '      - run: vp run fw-check',
-        ].join('\n'),
-        graphSource: '{"queries":[{"query":"cart","domains":["cart"]}]}',
-        indexHtmlSource:
-          '<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/styles.css"></head><body></body></html>',
-        packageJsonSource: JSON.stringify({
-          dependencies: { '@jiso/core': 'workspace:*' },
-          devDependencies: { vite: '^7.0.0' },
-          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
-        }),
-        stylesSource: '@import "tailwindcss";\n@source "../index.html";\n',
-        viteConfigSource: [
-          "import { defineConfig } from 'vite-plus';",
-          'export default defineConfig({',
-          '  run: {',
-          '    tasks: {',
-          "      'fw-check': {",
-          "        command: 'node scripts/emit-graph.mjs && fw check graph.json',",
-          "        input: [{ pattern: 'src/**/*', base: 'workspace' }],",
-          "        output: ['graph.json'],",
-          '      },',
-          '    },',
-          '  },',
-          '});',
-        ].join('\n'),
+    const templateSources = {
+      appSource: 'export const app = true;',
+      ciWorkflowSource: [
+        'name: CI',
+        'jobs:',
+        '  check:',
+        '    steps:',
+        '      - run: vp install',
+        '      - run: vp run fw-check',
+      ].join('\n'),
+      clientSource: 'export const client = true;',
+      graphSource: '{"queries":[{"query":"cart","domains":["cart"]}]}',
+      indexHtmlSource:
+        '<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/styles.css"></head><body></body></html>',
+      packageJsonSource: JSON.stringify({
+        dependencies: { '@jiso/core': 'workspace:*' },
+        devDependencies: { typescript: '^5.9.0', vite: '^7.0.0' },
+        scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
       }),
-    ).resolves.toMatchObject({
+      stylesSource: '@import "tailwindcss";\n@source "../index.html";\n',
+      viteConfigSource: [
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({',
+        '  run: {',
+        '    tasks: {',
+        "      'fw-check': {",
+        "        command: 'node scripts/emit-graph.mjs && fw check graph.json',",
+        "        input: [{ pattern: 'src/**/*', base: 'workspace' }],",
+        "        output: ['graph.json'],",
+        '      },',
+        '    },',
+        '  },',
+        '});',
+      ].join('\n'),
+    };
+    const facts = await starterTemplateFacts(templateSources);
+
+    expect(facts).toMatchObject({
+      appSource: 'export const app = true;',
       ciRunCommands: ['vp install', 'vp run fw-check'],
+      clientSource: 'export const client = true;',
       cssDirectives: ['"../index.html"'],
       graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
       indexHtml: {
@@ -62,7 +69,7 @@ describe('@jiso/test starter template fixtures', () => {
       },
       package: {
         dependencies: ['@jiso/core'],
-        devDependencies: ['vite'],
+        devDependencies: ['typescript', 'vite'],
         scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
       },
       viteTasks: {
@@ -73,6 +80,68 @@ describe('@jiso/test starter template fixtures', () => {
         },
       },
     });
+    expect(
+      starterTemplateDevDependencyCoverage(facts.package, ['vite', 'typescript', 'vitest']),
+    ).toEqual({
+      expected: ['vite', 'typescript', 'vitest'],
+      missing: ['vitest'],
+      present: ['vite', 'typescript'],
+    });
+  });
+
+  it('loads starter template files before deriving reusable facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-starter-template-facts-'));
+
+    try {
+      await mkdir(join(root, '.github/workflows'), { recursive: true });
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(
+        join(root, '.github/workflows/ci.yml'),
+        'jobs:\n  check:\n    steps:\n      - run: vp run fw-check\n',
+      );
+      await writeFile(join(root, 'graph.json'), '{"pages":[{"route":"/"}]}');
+      await writeFile(
+        join(root, 'index.html'),
+        '<html><body><script type="module"></script></body></html>',
+      );
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({
+          dependencies: { '@jiso/core': 'workspace:*' },
+          devDependencies: { fw: 'workspace:*', vite: '^7.0.0' },
+          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+        }),
+      );
+      await writeFile(join(root, 'src/app.tsx'), 'export const app = "loaded";');
+      await writeFile(join(root, 'src/client.ts'), 'export const client = "loaded";');
+      await writeFile(join(root, 'src/styles.css'), '@source "./src/**/*";\n');
+      await writeFile(
+        join(root, 'vite.config.ts'),
+        [
+          "import { defineConfig } from 'vite-plus';",
+          'export default defineConfig({ run: { tasks: {} } });',
+        ].join('\n'),
+      );
+
+      await expect(
+        loadStarterTemplateFacts({ projectRoot: root, templateRoot: root }),
+      ).resolves.toMatchObject({
+        appSource: 'export const app = "loaded";',
+        ciRunCommands: ['vp run fw-check'],
+        clientSource: 'export const client = "loaded";',
+        cssDirectives: ['"./src/**/*"'],
+        graph: { pages: [{ route: '/' }] },
+        indexHtml: { scriptAttrs: [{ type: 'module' }] },
+        package: {
+          dependencies: ['@jiso/core'],
+          devDependencies: ['fw', 'vite'],
+          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+        },
+        viteTasks: {},
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('executes the starter browser client template and records loader behavior', async () => {
