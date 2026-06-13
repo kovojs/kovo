@@ -231,6 +231,10 @@ Closed evidence so far:
 - Inline-loader `--check` now parses the checked-in generated module and fails when the exported
   source literal drifts from the executable installer artifact, with tests mutating only one
   embedded artifact to prove the check.
+- Runtime apply path split now keeps `apply-path.ts` as the stable facade while moving mutation
+  response and deferred-stream application into `apply-mutation-response.ts` and
+  `apply-deferred-stream.ts`; `mutation-response.test.ts` proves direct split-module exports still
+  share malformed-query handling, hooks, and aggregation behavior.
 
 Open:
 
@@ -246,6 +250,9 @@ Recent gates:
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts`
 - `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-submit.ts`
 - `git diff --check`
 
 ## Phase 5 - Server

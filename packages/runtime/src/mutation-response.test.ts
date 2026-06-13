@@ -15,6 +15,8 @@ import {
   applyMutationResponseToDom as applyMutationResponseToDomFromApplyPath,
   applyMutationResponseToStore,
 } from './apply-path.js';
+import { applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromDeferredModule } from './apply-deferred-stream.js';
+import { applyMutationResponseToRuntime as applyMutationResponseToRuntimeFromMutationModule } from './apply-mutation-response.js';
 import {
   createMutationIdem,
   isMutationBroadcastMessage,
@@ -143,12 +145,16 @@ describe('mutation response wire chunks', () => {
     expect(applyMutationResponse).toBe(applyMutationResponseFromApplyPath);
     expect(applyMutationResponse).toBe(applyMutationResponseToStore);
     expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromApplyPath);
+    expect(applyMutationResponseToRuntime).toBe(applyMutationResponseToRuntimeFromMutationModule);
   });
 
   it('exports deferred stream response apply through the shared apply path', () => {
     expect(applyDeferredStreamResponseToDom).toBe(applyDeferredStreamResponseToDomFromApplyPath);
     expect(applyDeferredStreamResponseToRuntime).toBe(
       applyDeferredStreamResponseToRuntimeFromApplyPath,
+    );
+    expect(applyDeferredStreamResponseToRuntime).toBe(
+      applyDeferredStreamResponseToRuntimeFromDeferredModule,
     );
 
     const store = createQueryStore();
@@ -227,6 +233,56 @@ describe('mutation response wire chunks', () => {
     expect(beforeApplyQueries).toHaveBeenNthCalledWith(2, [
       { key: 'cart:primary', name: 'cart', value: { count: 2 } },
     ]);
+  });
+
+  it('keeps the split deferred module on the mutation runtime parser', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const beforeApplyQueries = vi.fn();
+
+    // SPEC.md §9.1: deferred stream parts carry the same fw-query/fw-fragment
+    // mutation vocabulary, so the split stream module must keep routing each
+    // part through the mutation response apply path.
+    const applied = applyDeferredStreamResponseToRuntimeFromDeferredModule({
+      beforeApplyQueries,
+      body: [
+        '--jiso-boundary',
+        '<fw-query name="cart">{</fw-query>',
+        '<fw-query name="inventory">{"available":true}</fw-query>',
+        '<fw-fragment target="inventory"><section>ready</section></fw-fragment>',
+        '--jiso-boundary',
+        '<fw-query name="reviews">{"total":2}</fw-query>',
+        '--jiso-boundary--',
+      ].join('\n'),
+      onError,
+      root: undefined,
+      store,
+    });
+
+    expect(applied).toEqual({
+      chunks: [
+        {
+          fragments: [{ html: '<section>ready</section>', target: 'inventory' }],
+          queries: ['inventory'],
+        },
+        {
+          fragments: [],
+          queries: ['reviews'],
+        },
+      ],
+      fragments: [{ html: '<section>ready</section>', target: 'inventory' }],
+      queries: ['inventory', 'reviews'],
+    });
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('inventory')).toEqual({ available: true });
+    expect(store.get('reviews')).toEqual({ total: 2 });
+    expect(beforeApplyQueries).toHaveBeenNthCalledWith(1, [
+      { name: 'inventory', value: { available: true } },
+    ]);
+    expect(beforeApplyQueries).toHaveBeenNthCalledWith(2, [
+      { name: 'reviews', value: { total: 2 } },
+    ]);
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
   });
 
   it('keeps rootless deferred streams on the hook-aware runtime apply path', () => {
