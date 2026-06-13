@@ -25,7 +25,7 @@ export function lowerEventHandlers(
   const anonymousNameCounts = new Map<string, number>();
 
   for (const eventAttribute of eventAttributes(model)) {
-    const { attributeEnd, attributeStart, event, expression, tag } = eventAttribute;
+    const { attributeEnd, attributeStart, eventName, expression, tag } = eventAttribute;
     const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
     const params = namedHandler
       ? []
@@ -34,7 +34,6 @@ export function lowerEventHandlers(
           eventAttribute.zeroArgArrow,
           eventAttribute.expressionPropertyAccesses,
         );
-    const eventName = event.toLowerCase();
     const exportName = namedHandler
       ? `${componentName}$${expression}`
       : uniqueAnonymousHandlerName(componentName, tag, eventName, anonymousNameCounts);
@@ -42,7 +41,7 @@ export function lowerEventHandlers(
     const diagnostics: CompilerDiagnostic[] = [];
     if (!namedHandler) {
       diagnostics.push(
-        diagnosticFor(options.fileName, 'FW210', options.source, attributeStart, event.length),
+        diagnosticFor(options.fileName, 'FW210', options.source, attributeStart, eventName.length),
       );
     }
 
@@ -151,7 +150,7 @@ export function clientModuleVersion(source: string): string {
 function eventAttributes(model: ComponentModuleModel): Array<{
   attributeEnd: number;
   attributeStart: number;
-  event: string;
+  eventName: string;
   expression: string;
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionReferences?: readonly string[];
@@ -161,7 +160,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
   const attributes: Array<{
     attributeEnd: number;
     attributeStart: number;
-    event: string;
+    eventName: string;
     expression: string;
     expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
     expressionReferences?: readonly string[];
@@ -171,12 +170,12 @@ function eventAttributes(model: ComponentModuleModel): Array<{
 
   for (const element of jsxElements(model)) {
     for (const attribute of element.attributes) {
-      const event = jsxEventAttributeName(attribute.name);
-      if (!event || attribute.expression === undefined) continue;
+      const eventName = attribute.domEventName;
+      if (!eventName || attribute.expression === undefined) continue;
       attributes.push({
         attributeEnd: attribute.end,
         attributeStart: attribute.start,
-        event,
+        eventName,
         expression: attribute.expression,
         ...(attribute.expressionPropertyAccesses
           ? { expressionPropertyAccesses: attribute.expressionPropertyAccesses }
@@ -191,11 +190,6 @@ function eventAttributes(model: ComponentModuleModel): Array<{
   }
 
   return attributes;
-}
-
-function jsxEventAttributeName(name: string): string | null {
-  if (!/^on[A-Z][A-Za-z0-9]*$/.test(name)) return null;
-  return name.slice(2);
 }
 
 function uniqueAnonymousHandlerName(

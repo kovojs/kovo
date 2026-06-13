@@ -281,6 +281,7 @@ export const CartActions = component('cart-actions', {
     const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
     const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
 
+    expect(click?.domEventName).toBe('click');
     expect(click?.zeroArgArrow).toEqual({
       body: "log('item.id'); state.count += item.quantity;",
       bodyEnd: source.indexOf(' }}>Add') + 1,
@@ -354,7 +355,10 @@ export const ExecutionTriggers = component('execution-triggers', {
 `;
     const model = parseComponentModule('execution-triggers.tsx', source);
     const [comment] = model.jsxComments;
+    const [, stockTicker] = jsxElements(model);
+    const load = stockTicker?.attributes.find((attribute) => attribute.name === 'on:load');
 
+    expect(load?.executionTriggerName).toBe('load');
     expect(comment?.attachedAttributeStart).toBe(source.indexOf('on:load'));
   });
 

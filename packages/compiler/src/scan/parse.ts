@@ -85,7 +85,9 @@ export interface JsxCommentModel {
 }
 
 export interface JsxAttributeModel {
+  domEventName?: string;
   end: number;
+  executionTriggerName?: string;
   expression?: string;
   expressionEnd?: number;
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
@@ -1181,11 +1183,13 @@ function jsxElementModel(
 
       const value = staticJsxAttributeValue(property);
       const expression = jsxAttributeExpression(sourceFile, source, property);
+      const name = property.name.getText(sourceFile);
       return [
         {
+          ...jsxAttributeEventFacts(name),
           end: property.getEnd(),
           leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
-          name: property.name.getText(sourceFile),
+          name,
           start: property.getStart(sourceFile),
           ...(expression === null ? {} : expression),
           ...(value === undefined ? {} : { value }),
@@ -1210,6 +1214,47 @@ function jsxElementModel(
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
   };
+}
+
+function jsxAttributeEventFacts(name: string): {
+  domEventName?: string;
+  executionTriggerName?: string;
+} {
+  return {
+    ...jsxDomEventName(name),
+    ...jsxExecutionTriggerName(name),
+  };
+}
+
+function jsxDomEventName(name: string): { domEventName: string } | {} {
+  if (!/^on[A-Z][A-Za-z0-9]*$/.test(name)) return {};
+  return { domEventName: name.slice(2).toLowerCase() };
+}
+
+function jsxExecutionTriggerName(name: string): { executionTriggerName: string } | {} {
+  if (!name.startsWith('on:')) return {};
+  const triggerName = name.slice('on:'.length);
+  if (!validExecutionTriggerName(triggerName)) return {};
+  return { executionTriggerName: triggerName };
+}
+
+function validExecutionTriggerName(name: string): boolean {
+  if (name === '') return false;
+  const [first, ...rest] = name;
+  if (!first || !isLowerAlpha(first)) return false;
+  return rest.every(isExecutionTriggerNameChar);
+}
+
+function isExecutionTriggerNameChar(char: string): boolean {
+  return isLowerAlpha(char) || isDigit(char) || char === '-';
+}
+
+function isLowerAlpha(char: string): boolean {
+  return char >= 'a' && char <= 'z';
+}
+
+function isDigit(char: string): boolean {
+  return char >= '0' && char <= '9';
 }
 
 function jsxChildBody(

@@ -170,6 +170,8 @@ Template stamp placeholders now carry analyzed relative read paths, so client qu
 longer derives item reads by slicing `.field` binding strings while producing source.
 Template stamp list facts now also carry their analyzed relative read path, so client query-plan
 emission no longer derives list reads by splitting `query.path` strings.
+JSX event attributes now carry normalized DOM event and execution-trigger names as parser facts, so
+handler lowering and event-trigger validation no longer derive those names from raw attribute text.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -204,6 +206,8 @@ Latest evidence:
 - exact `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/query-update-plans.test.ts`
 - exact `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/query-update-plans.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/execution-triggers.test.ts packages/compiler/src/compile-component.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/validate/event-triggers.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction
