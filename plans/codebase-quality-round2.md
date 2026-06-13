@@ -1229,6 +1229,12 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "transaction"`,
       `pnpm exec vitest --run packages/drizzle/src conformance/drizzle-pin`, and
       `pnpm exec tsc --noEmit`.
+      Evidence 2026-06-13 round311: visible zero-argument query/domain factories returning static
+      object literals now resolve through ts-morph function symbols, so `query(...,
+      makeOptions())` and `domain(makeActions())` contribute exact loader/write facts while the
+      existing declared-factory cases remain FW406 per SPEC §10.2/§11.1. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "factory"` and
+      `pnpm exec vitest --run packages/drizzle/src conformance/drizzle-pin`.
       Evidence 2026-06-13: detached Drizzle receiver method aliases now resolve only by
       ts-morph symbol keys; `packages/drizzle/src/static.ts` deleted the receiver-method alias
       source-name map/fallback, while `packages/drizzle/src/index.test.ts` and

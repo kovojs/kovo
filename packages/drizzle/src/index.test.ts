@@ -13342,6 +13342,98 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts visible project query and domain factories returning static objects', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): Promise<void> };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  name: text("name").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, name: products.name }).from(products);',
+          '}',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ name: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'function makeOptions() {',
+          '  return { load: loadProducts };',
+          '}',
+          '',
+          'const makeActions = () => ({',
+          '  add: write(addItem),',
+          '});',
+          '',
+          'export const productDomain = domain(makeActions());',
+          '',
+          'export const productQuery = query("product/factory-return-loader", makeOptions());',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:10',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/factory-return-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'product.domain.ts:27',
+      },
+    ]);
+  });
+
   it('keeps wrapped opaque domain actions visible as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

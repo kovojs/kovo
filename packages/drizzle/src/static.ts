@@ -3188,6 +3188,12 @@ function queryBodyObjectLiteralFromNode(
     return { unresolved: true };
   }
 
+  const factoryReturn = staticObjectFactoryReturnExpression(expression, seen);
+  if (factoryReturn) {
+    const body = queryBodyObjectLiteralFromNode(factoryReturn, seen, mode);
+    if (body) return body;
+  }
+
   const literalReference = staticLiteralReferenceFromExpression(expression, seen);
   if (literalReference && literalReference !== expression) {
     const body = queryBodyObjectLiteralFromNode(literalReference, seen, mode);
@@ -3777,6 +3783,73 @@ function staticLiteralContainerInitializer(declaration: Node): Node | undefined 
     }
   }
   return undefined;
+}
+
+function staticObjectFactoryReturnExpression(node: Node, seen: Set<string>): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return undefined;
+  if (expression.getArguments().length > 0) return undefined;
+
+  const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}:factory`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  for (const declaration of symbolForCallbackReference(
+    expression.getExpression(),
+  )?.getDeclarations() ?? []) {
+    const callback = callbackFunctionFromDeclaration(declaration, seen);
+    if (!callback || !factoryHasNoParameters(callback)) continue;
+
+    const returned = functionLikeSingleReturnExpression(callback);
+    if (returned) return returned;
+  }
+
+  return undefined;
+}
+
+function factoryHasNoParameters(callback: Node): boolean {
+  if (
+    !Node.isArrowFunction(callback) &&
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
+  ) {
+    return false;
+  }
+
+  return callback.getParameters().length === 0;
+}
+
+function functionLikeSingleReturnExpression(callback: Node): Node | undefined {
+  if (Node.isArrowFunction(callback)) {
+    if (callback.getParameters().length > 0) return undefined;
+    const body = callback.getBody();
+    return Node.isBlock(body) ? singleStatementReturnExpression(body) : body;
+  }
+
+  if (
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
+  ) {
+    return undefined;
+  }
+  if (callback.getParameters().length > 0) return undefined;
+
+  const body = callback.getBody();
+  return body && Node.isBlock(body) ? singleStatementReturnExpression(body) : undefined;
+}
+
+function singleStatementReturnExpression(body: Node): Node | undefined {
+  if (!Node.isBlock(body)) return undefined;
+
+  const statements = body.getStatements();
+  if (statements.length !== 1) return undefined;
+
+  const statement = statements[0];
+  if (!statement || !Node.isReturnStatement(statement)) return undefined;
+
+  return statement.getExpression();
 }
 
 function objectLiteralStaticPropertyReference(
@@ -5821,6 +5894,12 @@ function domainWriteObjectFromNode(
   // followed through ts-morph symbols, while opaque aliases stay visible as FW406.
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
+
+  const factoryReturn = staticObjectFactoryReturnExpression(expression, seen);
+  if (factoryReturn) {
+    const body = domainWriteObjectFromNode(factoryReturn, seen);
+    if (body) return body;
+  }
 
   const literalReference = staticLiteralReferenceFromExpression(expression, seen);
   if (literalReference && literalReference !== expression) {
