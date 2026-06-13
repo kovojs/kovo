@@ -1316,6 +1316,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('updates,billing');
       expect(new FormData(form).getAll('gallery-notifications')).toEqual(['updates', 'billing']);
     });
+
+    // SPEC §13.1 G3: the checkbox-group multi-checked/roving state after keyboard move and
+    // toggle must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('updates disclosure stamped state from generated click and keyboard handlers', async () => {
@@ -1386,6 +1390,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"value":4}');
       expect(new FormData(form).get('gallery-seat-count')).toBe('4');
     });
+
+    // SPEC §13.1 G3: the number-field value/required/stepper state after input and stepper
+    // changes must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('updates field IDREF, native select, and fieldset state through generated handlers', async () => {
@@ -1542,6 +1550,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).get('gallery-seat')).toBe('window');
       expect(new FormData(form).get('gallery-shipping-disabled')).toBeNull();
     });
+
+    // SPEC §13.1 G3: the field/fieldset valid + re-enabled state after clearing the error and
+    // toggling fieldset disablement must stay axe-clean, complementing the initial error state.
+    await expectNoAxeViolations(root);
   });
 
   it('updates OTP aggregate value, visible slots, and focus through generated handlers', async () => {
@@ -1967,6 +1979,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentSms.checked).toBe(false);
       expect(new FormData(currentForm).get('gallery-contact-channel')).toBe('email');
     });
+
+    // SPEC §13.1 G3: the radio-group selected/roving state after keyboard and click changes
+    // must stay axe-clean, including the disabled item.
+    await expectNoAxeViolations(root);
   });
 
   it('updates slider stamped state while the native range input moves', async () => {
@@ -2321,6 +2337,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentAudit.disabled).toBe(true);
       expect(currentAuditPanel.hidden).toBe(true);
     });
+
+    // SPEC §13.1 G3: the active tab/panel state after keyboard roving and activation must
+    // stay axe-clean, not only the initial render.
+    await expectNoAxeViolations(root);
   });
 
   it('updates toolbar roving tabindex and pressed state through generated handlers', async () => {
@@ -2374,6 +2394,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(link.getAttribute('data-pressed')).toBe('true');
       expect(pressedOutput.textContent).toBe('link');
     });
+
+    // SPEC §13.1 G3: the toolbar roving/pressed state after keyboard move and press must stay
+    // axe-clean, including the disabled toolbar button.
+    await expectNoAxeViolations(root);
   });
 
   it('updates toggle-group pressed state and roving tabindex through generated handlers', async () => {
@@ -2436,6 +2460,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentItalic.getAttribute('data-state')).toBe('pressed');
       expect(currentOutput.textContent).toBe('bold,italic');
     });
+
+    // SPEC §13.1 G3: the toggle-group multi-pressed/roving state after keyboard move and
+    // press must stay axe-clean, including the disabled item.
+    await expectNoAxeViolations(root);
   });
 
   it('opens and selects from generated dropdown and context menu handlers', async () => {
