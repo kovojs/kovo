@@ -52,7 +52,11 @@ import {
   type ViteDiagnosticMessageFacts,
 } from '@jiso/test/diagnostic-output-fixtures';
 import {
+  fwExportCliResultFact,
   parseFwExportOutput,
+  type FwExportCliArtifactFact,
+  type FwExportCliResultFact,
+  type FwExportCliResultLike,
   type FwExportError,
   type FwExportHtmlArtifact,
   type FwExportOutput,
@@ -697,6 +701,17 @@ describe('@jiso/test package subpath exports', () => {
     expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
       summary: { html: '0' },
     });
+    expect(
+      fwExportCliResultFact({
+        exitCode: 0,
+        stderr: '',
+        stdout: 'fw-export/v1\nHTML /index.html status=200 bytes=1\n',
+      }),
+    ).toMatchObject({
+      exitCode: 0,
+      html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
+      outputStream: 'stdout',
+    });
     expect(parseFwCheckOutput('fw-check/v1\nOK\n')).toMatchObject({ status: 'ok' });
     expect(fwCheckResultFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toMatchObject({
       exitCode: 0,
@@ -869,6 +884,9 @@ type _PublicSubpathTypes = [
   FwExplainResultLike,
   FwExplainScopeAuditFact,
   FwExplainUpdateConsumerFact,
+  FwExportCliArtifactFact,
+  FwExportCliResultFact,
+  FwExportCliResultLike,
   FwExportError,
   FwExportHtmlArtifact,
   FwExportOutput,

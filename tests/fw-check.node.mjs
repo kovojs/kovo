@@ -73,7 +73,7 @@ import {
   fwCheckDiagnosticAssertionFacts,
   fwCheckOkAssertionFact,
 } from '../packages/test/src/fw-check-fixtures.ts';
-import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
+import { fwExportCliResultFact } from '../packages/test/src/fw-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
@@ -4995,9 +4995,7 @@ export default createApp({
   try {
     await writeFile(cliRedModule, cliAppModuleSource([errorDiagnostic]), 'utf8');
     const redExport = await runCliCommand(['export', cliRedModule, '--out', cliRedOutDir]);
-    assert.equal(redExport.exitCode, 1);
-    assert.equal(redExport.stdout, '');
-    assert.deepEqual(parseFwExportOutput(redExport.stderr), {
+    assert.deepEqual(fwExportCliResultFact(redExport), {
       errors: [
         {
           code: 'FW201',
@@ -5005,31 +5003,28 @@ export default createApp({
           route: fileName,
         },
       ],
+      exitCode: 1,
       html: [],
+      outputStream: 'stderr',
       version: 'fw-export/v1',
     });
     await assert.rejects(readFile(join(cliRedOutDir, 'index.html'), 'utf8'));
 
     await writeFile(cliGreenModule, cliAppModuleSource([lintDiagnostic]), 'utf8');
     const greenExport = await runCliCommand(['export', cliGreenModule, '--out', cliGreenOutDir]);
-    assert.equal(greenExport.exitCode, 0);
-    assert.equal(greenExport.stderr, '');
-    const greenExportOutput = parseFwExportOutput(greenExport.stdout);
-    assert.deepEqual(greenExportOutput.errors, []);
-    assert.deepEqual(
-      greenExportOutput.html.map(({ path, status }) => ({ path, status })),
-      [{ path: '/index.html', status: 200 }],
-    );
-    assert.equal(greenExportOutput.html[0].bytes > 0, true);
-    assert.deepEqual(
-      {
-        clientModules: greenExportOutput.summary?.clientModules,
-        diagnostics: greenExportOutput.summary?.diagnostics,
-        html: greenExportOutput.summary?.html,
+    assert.deepEqual(fwExportCliResultFact(greenExport), {
+      errors: [],
+      exitCode: 0,
+      html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
+      outputStream: 'stdout',
+      summary: {
+        clientModules: '0',
+        diagnostics: '0',
+        html: '1',
+        outDir: JSON.stringify(cliGreenOutDir),
       },
-      { clientModules: '0', diagnostics: '0', html: '1' },
-    );
-    assert.equal(greenExportOutput.summary?.outDir, JSON.stringify(cliGreenOutDir));
+      version: 'fw-export/v1',
+    });
     assertHtmlMainMarker(
       await readFile(join(cliGreenOutDir, 'index.html'), 'utf8'),
       'cli',

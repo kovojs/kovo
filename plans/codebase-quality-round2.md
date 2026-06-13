@@ -47,7 +47,9 @@ summaries for commerce app/source-truth tests. Shared markdown fixtures now own 
 canonicalization for doc gates, so `tests/fw-check.node.mjs` no longer keeps that local normalizer.
 Shared source/command fixtures now own conformance package manifest and Vite+ gate projections for
 the conformance fw-check case. Shared source fixtures also own the Drizzle query/touch source
-fixtures and query/diagnostic/touch behavior projections used by the fw-check Drizzle gate.
+fixtures and query/diagnostic/touch behavior projections used by the fw-check Drizzle gate. Shared
+`fw-export` fixtures now own static export CLI stream, artifact byte, and summary projections for
+the D10 fw-check gate.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -93,6 +95,11 @@ Latest evidence:
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/fw-export-fixtures.ts packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -501,8 +508,9 @@ Current state: commerce source-truth tests use shared structured facts for graph
 query/fragment/key output, source-site provenance, app-shell command/export behavior, and
 `fw-explain` query/mutation/page assertions. `@jiso/test` owns reusable fixture seams for generated
 modules/source facts, fw-explain, TypeScript, fw-check output, source/project facts, commands,
-starter templates, wire, static export, touch graphs, graph invalidation/consumer facts, and
-reusable HTML fragment field/key projections. Commerce app/source-truth tests no longer own local
+starter templates, wire, static export output/result facts, touch graphs, graph
+invalidation/consumer facts, and reusable HTML fragment field/key projections. Commerce
+app/source-truth tests no longer own local
 form-field, keyed-element, or generated-IR source-stamp projection helpers for currently covered
 no-JS form, list identity, enhanced fragment, and committed-IR assertions. Shared header fixtures
 now own response header value and Set-Cookie pair projection for commerce app/app-shell tests.
@@ -567,6 +575,11 @@ Latest evidence:
 - `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/fw-export-fixtures.ts packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -585,7 +598,9 @@ parsing helpers. `fw-check` doc-gate rule-title canonicalization now lives in
 `@jiso/test/markdown-fixtures`. The fw-check conformance gate now consumes shared source and command
 fixtures for package manifest, acceptance script, Vite+ task, and pnpm-filter command facts. The
 fw-check Drizzle gate now consumes shared source fixtures for query source bodies and structured
-query/diagnostic/touch behavior projections.
+query/diagnostic/touch behavior projections. The D10 static export CLI assertions now consume
+shared `@jiso/test/fw-export-fixtures` result facts instead of local stream, byte, and summary
+checks.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -599,6 +614,11 @@ Latest evidence:
 - exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
 - `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/fw-export-fixtures.ts packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`

@@ -19,6 +19,27 @@ export interface FwExportOutput {
   version: 'fw-export/v1';
 }
 
+export interface FwExportCliResultLike {
+  exitCode: number;
+  stderr: string;
+  stdout: string;
+}
+
+export interface FwExportCliArtifactFact {
+  bytesArePositive: boolean;
+  path: string;
+  status: number;
+}
+
+export interface FwExportCliResultFact {
+  errors: FwExportError[];
+  exitCode: number;
+  html: FwExportCliArtifactFact[];
+  outputStream: 'stderr' | 'stdout';
+  summary?: FwExportSummary;
+  version: 'fw-export/v1';
+}
+
 export function parseFwExportOutput(output: string): FwExportOutput {
   const lines = output.trimEnd().split('\n');
   const version = lines[0];
@@ -56,6 +77,38 @@ export function parseFwExportOutput(output: string): FwExportOutput {
   }
 
   return summary === undefined ? { errors, html, version } : { errors, html, summary, version };
+}
+
+export function fwExportCliResultFact(result: FwExportCliResultLike): FwExportCliResultFact {
+  const outputStream = fwExportOutputStream(result);
+  const output = outputStream === 'stdout' ? result.stdout : result.stderr;
+  const parsed = parseFwExportOutput(output);
+
+  return {
+    errors: parsed.errors,
+    exitCode: result.exitCode,
+    html: parsed.html.map((artifact) => ({
+      bytesArePositive: artifact.bytes > 0,
+      path: artifact.path,
+      status: artifact.status,
+    })),
+    outputStream,
+    ...(parsed.summary === undefined ? {} : { summary: parsed.summary }),
+    version: parsed.version,
+  };
+}
+
+function fwExportOutputStream(result: FwExportCliResultLike): 'stderr' | 'stdout' {
+  const hasStdout = result.stdout.trim().length > 0;
+  const hasStderr = result.stderr.trim().length > 0;
+
+  if (hasStdout && hasStderr) {
+    throw new Error('fw export CLI result writes structured output to exactly one stream');
+  }
+  if (hasStdout) return 'stdout';
+  if (hasStderr) return 'stderr';
+
+  throw new Error('fw export CLI result includes structured output');
 }
 
 function parseFwExportHtmlLine(line: string): FwExportHtmlArtifact {
