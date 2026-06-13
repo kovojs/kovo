@@ -223,6 +223,19 @@ Round296 static export manifest inventory directory-index evidence:
 - `pnpm exec vp check packages/server/src/static-export-result.ts packages/server/src/vite-static-export-result.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round300 Vite SSR dev node-handler boundary evidence:
+
+- `packages/server/src/vite-dev.ts` now narrows explicit `nodeHandlerExportName` exports to
+  adapter-edge Node handlers with `(request, response)`, so stale web `Request -> Response`
+  handlers cannot re-enter the SPEC §9.5 Vite dev middleware as a compatibility alias.
+- `packages/server/src/vite-dev.test.ts` proves one-argument web handler exports fail before the
+  middleware chain hangs, while `packages/server/src/vite.test.ts` keeps the explicit Node handler
+  path covered through HTTP.
+- `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

@@ -7,7 +7,7 @@ import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
 } from './document-diagnostics.js';
-import { toNodeHandler } from './node.js';
+import { toNodeHandler, type NodeRequestHandler } from './node.js';
 import { readHeader, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
@@ -300,15 +300,27 @@ function readJisoAppShellViteSsrNodeHandler(
 ): JisoAppShellViteMiddleware {
   if (exportName !== undefined) {
     const handler = module[exportName];
-    if (typeof handler === 'function') return handler as JisoAppShellViteMiddleware;
+    if (isJisoAppShellViteSsrNodeHandler(handler)) {
+      return (request, response, next) => {
+        Promise.resolve(handler(request, response)).catch(next);
+      };
+    }
 
-    throw new Error(`${moduleId} must export ${exportName} as a Node app-shell handler.`);
+    throw new Error(
+      `${moduleId} must export ${exportName} as a Node app-shell handler with (request, response).`,
+    );
   }
 
   const nodeOptions =
     options.earlyHints === undefined ? undefined : { earlyHints: options.earlyHints };
   const nodeHandler = toNodeHandler(createRequestHandler(app), nodeOptions);
   return (request, response) => nodeHandler(request, response);
+}
+
+function isJisoAppShellViteSsrNodeHandler(value: unknown): value is NodeRequestHandler {
+  // SPEC §9.5 keeps the public handler currency as Request -> Response; this
+  // optional dev hook is only for the adapter edge and must be a Node handler.
+  return typeof value === 'function' && value.length >= 2;
 }
 
 function slashPath(fileName: string): string {

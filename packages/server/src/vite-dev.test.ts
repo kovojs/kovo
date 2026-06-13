@@ -202,6 +202,41 @@ describe('server app shell Vite dev seam', () => {
       });
     }
   });
+
+  it('rejects Request -> Response exports at the explicit node handler boundary', async () => {
+    const app = createApp({ routes: [route('/cart', {})] });
+    let middleware: JisoAppShellViteMiddleware | undefined;
+    const plugin = jisoAppShellViteSsrDevPlugin({
+      moduleId: '/src/app-shell.ts',
+      nodeHandlerExportName: 'handler',
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return {
+          default: app,
+          async handler(_request: Request) {
+            return new Response('stale web handler');
+          },
+        };
+      },
+    });
+
+    await expect(
+      new Promise<void>((resolve, reject) => {
+        middleware?.(request('/cart'), {} as Parameters<JisoAppShellViteMiddleware>[1], (error) =>
+          error ? reject(error) : resolve(),
+        );
+      }),
+    ).rejects.toThrow(
+      '/src/app-shell.ts must export handler as a Node app-shell handler with (request, response).',
+    );
+  });
 });
 
 function request(

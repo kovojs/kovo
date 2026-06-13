@@ -175,6 +175,15 @@ checks, so the monolith asserts public diagnostic facts without rebuilding those
 
 Latest evidence:
 
+- Phase 5 Vite SSR dev node-handler boundary slice:
+  `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/vite-dev.ts` now rejects explicit Vite SSR dev
+  `nodeHandlerExportName` exports unless they are adapter-edge Node handlers with
+  `(request, response)`, and `packages/server/src/vite-dev.test.ts` proves stale web
+  `Request -> Response` exports fail before entering the middleware chain.
 - Phase 5 static export manifest inventory directory-index slice:
   `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

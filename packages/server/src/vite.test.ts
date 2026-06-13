@@ -1310,7 +1310,7 @@ describe('server app shell Vite plugin', () => {
       await expect(
         nodeFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/cart`),
       ).resolves.toMatchObject({
-        body: '/src/app-shell.ts must export commerceNodeHandler as a Node app-shell handler.',
+        body: '/src/app-shell.ts must export commerceNodeHandler as a Node app-shell handler with (request, response).',
         status: 500,
       });
     } finally {
