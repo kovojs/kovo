@@ -33,6 +33,9 @@
 - Treat active plan files as compact current-state ledgers, not append-only audit logs. Keep them
   focused on the checklist, open work, current risks, and latest proving commands; summarize or
   archive repetitive historical evidence instead of growing long transcripts of partial slices.
+- When integrating a branch forked before a plan compaction, do not accept the branch's stale plan
+  version wholesale. Keep the compact main-thread ledger, manually port only the new implementation
+  evidence needed for the integrated slice, and verify line counts stay reasonable before committing.
 - When creating or updating active plan files, express every actionable open item as a GitHub
   task-list checkbox: `- [ ]` for open items and `- [x]` only when the exact item is fully
   verified. Keep evidence nested under the checkbox it proves, and avoid free-form open-item
