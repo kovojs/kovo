@@ -149,6 +149,52 @@ describe('inline loader parser parity', () => {
     );
   });
 
+  it('includes inline parser dependencies from destructured computed keys and defaults', () => {
+    // SPEC.md §4.4/§9.1: parser helper extraction must close over helper
+    // calls hidden in binding patterns before the readable source is minified
+    // into the always-loaded bootstrap.
+    const source = [
+      'export function readElementChunks(body, { [readDefaultTagName()]: tagName = readDefaultTagName() } = {}) {',
+      '  const { [readDefaultAttrName()]: attrs = readDefaultAttrs() } = { target: body };',
+      '  return [{ attrs: readAttribute(attrs, "target"), content: tagName }];',
+      '}',
+      'function readDefaultTagName() {',
+      '  return "fw-fragment";',
+      '}',
+      'function readDefaultAttrName() {',
+      '  return "target";',
+      '}',
+      'function readDefaultAttrs() {',
+      '  return "";',
+      '}',
+      'export function readAttribute(attrs, name) {',
+      '  return attrs + name;',
+      '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
+      'function readFragmentChunksFromElements(chunks) {',
+      '  return chunks.map(readFragmentElementChunk);',
+      '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return { fragments: readElementChunks(body), queries: readElementChunks(body, { "fw-query": "fw-query" }) };',
+      '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  const chunks = readMutationResponseElementChunks(body);',
+      '  return { fragments: readFragmentChunksFromElements(chunks.fragments), queries: chunks.queries };',
+      '}',
+    ].join('\n');
+
+    const extracted = extractInlineWireParserReadableSource(source);
+
+    expect(extracted).toMatch(
+      /function readDefaultTagName\(\).*function readDefaultAttrName\(\).*function readDefaultAttrs\(\).*function readAttribute\(attrs, name\).*function readElementChunks/s,
+    );
+    expect(extracted).toContain('[readDefaultTagName()]');
+    expect(extracted).toContain('[readDefaultAttrName()]');
+    expect(extracted).toContain('attrs = readDefaultAttrs()');
+  });
+
   it('checks readable and minified inline parser embeds against the modular parser', () => {
     // SPEC.md §4.4/§9.1: inline response scanning is allowed to be tiny, but
     // build-time checks must keep it byte-tied to the modular wire parser.

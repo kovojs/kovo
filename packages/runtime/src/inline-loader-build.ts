@@ -567,11 +567,13 @@ function collectInlineHelperFunctionDependencies(
     }
 
     if (ts.isParameter(node)) {
+      visitBindingName(node.name, scopes);
       if (node.initializer) visit(node.initializer, scopes);
       return;
     }
 
     if (ts.isVariableDeclaration(node)) {
+      visitBindingName(node.name, scopes);
       if (node.initializer) visit(node.initializer, scopes);
       return;
     }
@@ -626,6 +628,7 @@ function collectInlineHelperFunctionDependencies(
 
     const functionScopes = [functionScope, ...parentScopes];
     for (const parameter of functionNode.parameters) {
+      visitBindingName(parameter.name, functionScopes);
       if (parameter.initializer) visit(parameter.initializer, functionScopes);
     }
 
@@ -635,6 +638,21 @@ function collectInlineHelperFunctionDependencies(
       return;
     }
     visit(functionNode.body, functionScopes);
+  };
+
+  const visitBindingName = (
+    name: ts.BindingName | ts.Identifier,
+    scopes: readonly ReadonlySet<string>[],
+  ): void => {
+    if (ts.isIdentifier(name)) return;
+    for (const element of name.elements) {
+      if (ts.isOmittedExpression(element)) continue;
+      if (element.propertyName && ts.isComputedPropertyName(element.propertyName)) {
+        visit(element.propertyName.expression, scopes);
+      }
+      visitBindingName(element.name, scopes);
+      if (element.initializer) visit(element.initializer, scopes);
+    }
   };
 
   const visitBlock = (block: ts.Block, parentScopes: readonly ReadonlySet<string>[]): void => {

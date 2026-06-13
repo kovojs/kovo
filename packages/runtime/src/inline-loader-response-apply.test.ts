@@ -147,6 +147,50 @@ describe('inline loader response apply source', () => {
     ).toThrow('canonical minified response apply helper closure exactly once; found 0');
   });
 
+  it('includes response apply dependencies from destructured computed keys and defaults', () => {
+    // SPEC.md §4.4/§9.1: response-apply extraction uses the same closed
+    // binding-pattern dependency walk as parser extraction before the inline
+    // bootstrap is minified.
+    const source = [
+      'export function applyInlineMutationResponseChunks({ fragments = defaultFragments(), [readQueryKey()]: queries = defaultQueries() }, options) {',
+      '  dispatchInlineMutationQueries(queries, options);',
+      '  const { [readTargetKey()]: findFragmentTarget = options.findFragmentTarget } = options;',
+      '  return applyHtmlResponseFragments(fragments, (target) => findFragmentTarget(target));',
+      '}',
+      'function readQueryKey() {',
+      '  return "queries";',
+      '}',
+      'function readTargetKey() {',
+      '  return "findFragmentTarget";',
+      '}',
+      'function defaultFragments() {',
+      '  return [];',
+      '}',
+      'function defaultQueries() {',
+      '  return [];',
+      '}',
+      'function dispatchInlineMutationQueries(queries, options) {',
+      '  options.dispatchQueryEvent("jiso:query", { detail: { queries } });',
+      '}',
+      'function applyHtmlResponseFragments(fragments, findFragmentTarget) {',
+      '  return fragments.map((fragment) => findFragmentTarget(fragment.target));',
+      '}',
+    ].join('\n');
+
+    const extracted = extractInlineResponseApplyReadableSource(source);
+
+    expect(extracted).toContain('function readQueryKey()');
+    expect(extracted).toContain('function readTargetKey()');
+    expect(extracted).toContain('function defaultFragments()');
+    expect(extracted).toContain('function defaultQueries()');
+    expect(extracted).toMatch(/function dispatchInlineMutationQueries.*function readTargetKey/s);
+    expect(extracted).toMatch(/function readTargetKey\(\).*function applyHtmlResponseFragments/s);
+    expect(extracted).toContain('[readQueryKey()]');
+    expect(extracted).toContain('[readTargetKey()]');
+    expect(extracted).toContain('fragments = defaultFragments()');
+    expect(extracted).toContain('queries = defaultQueries()');
+  });
+
   it.each(inlineSourceInstallCases)(
     'keeps inline response application in parity with the modular DOM apply path through %s',
     async (_name, installSource) => {

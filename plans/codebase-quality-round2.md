@@ -369,6 +369,16 @@ Latest evidence:
   `packages/runtime/src/inline-loader.ts` installer against canonical `ImportHandlerModule`
   directly instead of the duplicated `InlineImportHandlerModule` alias, and
   `packages/runtime/src/index.ts` no longer re-exports that compatibility type.
+- Phase 4 inline-loader binding-pattern closure parity slice:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-response-apply.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/runtime/src/inline-loader-build.ts` now includes
+  helper dependencies referenced from destructured parameter and variable binding computed keys
+  and defaults before extracting readable/minified inline helper closures, while parser and
+  response-apply parity tests pin both SPEC §4.4/§9.1 helper families.
 - Phase 1/6/7 D9 lowered-IR fw-check fixture closure:
   `pnpm exec vitest --run packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
