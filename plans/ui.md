@@ -50,6 +50,8 @@ Implemented areas:
   catalog list.
 - Gallery routes and tests cover a growing fixture matrix, static behavior contracts, merge
   fixtures, compiled interactive demos, and generated-client DOM ref/export contracts.
+- The compiled interactive gallery now includes progress and meter value-display demos with
+  generated handlers covering native value, `data-state`, `aria-valuetext`, and output updates.
 - G5 exported primitive attrs inventory is closed: `examples/gallery/src/merge-fixtures.test.tsx`
   renders inline merge goldens for all 134 exported primitive `*Attributes` builders, with author
   stress attrs, merged HTML, and SPEC §4.6 diagnostic checks.
@@ -92,6 +94,9 @@ Recent gates:
 - `pnpm exec vp check examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`
 - `git diff --check`
 - `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
 
 ## Open Work
 
@@ -134,6 +139,8 @@ Gallery:
 - Add G3/G4 once the gallery surface is stable enough to avoid churn-heavy baselines.
 - G5 is closed for the exported primitive attrs inventory and rendered merge goldens; keep future
   merge work scoped to new primitive exports or compiler/runtime diagnostic parity.
+- Progress and meter now have compiled interactive gallery coverage; continue extending remaining
+  non-commanding display/native families only where browser-observable state can move.
 - Finish G6 deployment/docs wiring and full browser-backed stateful-family coverage. Generated
   client DOM ref/export inventory is covered for every checked-in compiled interactive demo.
 

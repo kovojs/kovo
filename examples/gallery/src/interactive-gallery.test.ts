@@ -120,10 +120,12 @@ describe('compiled interactive gallery demos', () => {
     const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
     const hoverCard = readGenerated('hover-card-demo.tsx');
     const menubar = readGenerated('menubar-demo.tsx');
+    const meter = readGenerated('meter-demo.tsx');
     const navigationMenu = readGenerated('navigation-menu-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
     const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
+    const progress = readGenerated('progress-demo.tsx');
     const radioGroup = readGenerated('radio-group-demo.tsx');
     const select = readGenerated('select-demo.tsx');
     const slider = readGenerated('slider-demo.tsx');
@@ -295,6 +297,13 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_click"/,
     );
 
+    expect(meter).toContain('data-gallery-interactive="meter"');
+    expect(meter).toContain('fw-state=\'{"value":72}\'');
+    expect(meter).toContain('meterRootAttributes(meterState)');
+    expect(meter).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/meter-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMeterDemo\$button_click"/,
+    );
+
     expect(navigationMenu).toContain('data-gallery-interactive="navigation-menu"');
     expect(navigationMenu).toContain(
       'fw-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
@@ -339,6 +348,18 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(popover).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$button_click"/,
+    );
+
+    expect(progress).toContain('data-gallery-interactive="progress"');
+    expect(progress).toContain('fw-state=\'{"value":40}\'');
+    expect(progress).toContain(
+      'progressRootAttributes({ max: 100, value: state.value, valueText })',
+    );
+    expect(progress).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js\?v=[0-9a-f]{8}#GalleryProgressDemo\$button_click"/,
+    );
+    expect(progress).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/progress-demo\.client\.js\?v=[0-9a-f]{8}#GalleryProgressDemo\$button_click_2"/,
     );
 
     expect(radioGroup).toContain('data-gallery-interactive="radio-group"');
@@ -441,10 +462,12 @@ describe('compiled interactive gallery demos', () => {
     const dropdownMenu = evaluateClientModule('dropdown-menu-demo.client.js');
     const hoverCard = evaluateClientModule('hover-card-demo.client.js');
     const menubar = evaluateClientModule('menubar-demo.client.js');
+    const meter = evaluateClientModule('meter-demo.client.js');
     const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
     const otpField = evaluateClientModule('otp-field-demo.client.js');
     const popover = evaluateClientModule('popover-demo.client.js');
+    const progress = evaluateClientModule('progress-demo.client.js');
     const radioGroup = evaluateClientModule('radio-group-demo.client.js');
     const select = evaluateClientModule('select-demo.client.js');
     const slider = evaluateClientModule('slider-demo.client.js');
@@ -728,6 +751,14 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(menubarState).toEqual({ activeValue: 'file', openValue: 'file', value: 'new' });
 
+    const meterState = { value: 72 };
+    clientHandler(meter, 'GalleryMeterDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: meterState,
+    });
+    expect(meterState).toEqual({ value: 92 });
+
     const navigationMenuState = { activeValue: 'products', openValue: '', value: 'none' };
     clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
       new Event('keydown'),
@@ -804,6 +835,20 @@ describe('compiled interactive gallery demos', () => {
       state: popoverState,
     });
     expect(popoverState).toEqual({ open: false });
+
+    const progressState: { value: number | null } = { value: 40 };
+    clientHandler(progress, 'GalleryProgressDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: progressState,
+    });
+    expect(progressState).toEqual({ value: 100 });
+    clientHandler(progress, 'GalleryProgressDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: progressState,
+    });
+    expect(progressState).toEqual({ value: null });
 
     const radioGroupState = { value: 'email' };
     clientHandler(radioGroup, 'GalleryRadioGroupDemo$section_keydown')(new Event('keydown'), {

@@ -45,6 +45,9 @@ import { GalleryHoverCardDemo } from './generated/interactive/hover-card-demo.js
 import * as menubarClient from './generated/interactive/menubar-demo.client.js';
 import { GalleryMenubarDemo } from './generated/interactive/menubar-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as meterClient from './generated/interactive/meter-demo.client.js';
+import { GalleryMeterDemo } from './generated/interactive/meter-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as navigationMenuClient from './generated/interactive/navigation-menu-demo.client.js';
 import { GalleryNavigationMenuDemo } from './generated/interactive/navigation-menu-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -56,6 +59,9 @@ import { GalleryOtpFieldDemo } from './generated/interactive/otp-field-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as popoverClient from './generated/interactive/popover-demo.client.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as progressClient from './generated/interactive/progress-demo.client.js';
+import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
@@ -110,11 +116,13 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js': dropdownMenuClient,
   '/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js': hoverCardClient,
   '/c/examples/gallery/src/generated/interactive/menubar-demo.client.js': menubarClient,
+  '/c/examples/gallery/src/generated/interactive/meter-demo.client.js': meterClient,
   '/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js':
     navigationMenuClient,
   '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
   '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js': otpFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
+  '/c/examples/gallery/src/generated/interactive/progress-demo.client.js': progressClient,
   '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
   '/c/examples/gallery/src/generated/interactive/select-demo.client.js': selectClient,
   '/c/examples/gallery/src/generated/interactive/slider-demo.client.js': sliderClient,
@@ -900,6 +908,100 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentInput.getAttribute('aria-valuetext')).toBe('75 percent');
       expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');
       expect(currentOutput.textContent).toBe('75');
+    });
+  });
+
+  it('updates progress native value and indeterminate state through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryProgressDemo);
+    const progress = required(root.querySelector<HTMLProgressElement>('#gallery-progress-value'));
+    const complete = required(root.querySelector<HTMLButtonElement>('button'));
+    const pending = required(root.querySelectorAll<HTMLButtonElement>('button').item(1));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="progress-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":40}');
+    expect(progress.max).toBe(100);
+    expect(progress.value).toBe(40);
+    expect(progress.getAttribute('data-state')).toBe('loading');
+    expect(progress.getAttribute('aria-valuetext')).toBe('40 percent uploaded');
+    expect(output.textContent).toBe('40%');
+
+    complete.click();
+
+    await vi.waitFor(() => {
+      const currentProgress = required(
+        root.querySelector<HTMLProgressElement>('#gallery-progress-value'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="progress-value"]'),
+      );
+
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/progress-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe('{"value":100}');
+      expect(currentProgress.value).toBe(100);
+      expect(currentProgress.getAttribute('data-state')).toBe('complete');
+      expect(currentProgress.getAttribute('aria-valuetext')).toBe('100 percent uploaded');
+      expect(currentOutput.textContent).toBe('100%');
+    });
+
+    pending.click();
+
+    await vi.waitFor(() => {
+      const currentProgress = required(
+        root.querySelector<HTMLProgressElement>('#gallery-progress-value'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="progress-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"value":null}');
+      expect(currentProgress.hasAttribute('value')).toBe(false);
+      expect(currentProgress.getAttribute('data-state')).toBe('indeterminate');
+      expect(currentProgress.getAttribute('aria-valuetext')).toBe('Upload pending');
+      expect(currentOutput.textContent).toBe('pending');
+    });
+  });
+
+  it('updates meter native value and qualitative state through a generated handler', async () => {
+    const root = mountInteractiveDemo(GalleryMeterDemo);
+    const meter = required(root.querySelector<HTMLMeterElement>('#gallery-meter-value'));
+    const button = required(root.querySelector<HTMLButtonElement>('button'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="meter-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":72}');
+    expect(meter.min).toBe(0);
+    expect(meter.max).toBe(100);
+    expect(meter.low).toBe(40);
+    expect(meter.high).toBe(80);
+    expect(meter.optimum).toBe(90);
+    expect(meter.value).toBe(72);
+    expect(meter.getAttribute('data-state')).toBe('suboptimum');
+    expect(meter.getAttribute('aria-valuetext')).toBe('72 percent capacity');
+    expect(output.textContent).toBe('72');
+
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentMeter = required(root.querySelector<HTMLMeterElement>('#gallery-meter-value'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="meter-value"]'),
+      );
+
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/meter-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"value":92}');
+      expect(currentMeter.value).toBe(92);
+      expect(currentMeter.getAttribute('data-state')).toBe('optimum');
+      expect(currentMeter.getAttribute('aria-valuetext')).toBe('92 percent capacity');
+      expect(currentOutput.textContent).toBe('92');
     });
   });
 

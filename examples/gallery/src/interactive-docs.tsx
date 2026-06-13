@@ -13,10 +13,12 @@ import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.j
 import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
 import { GalleryHoverCardDemo } from './generated/interactive/hover-card-demo.js';
 import { GalleryMenubarDemo } from './generated/interactive/menubar-demo.js';
+import { GalleryMeterDemo } from './generated/interactive/meter-demo.js';
 import { GalleryNavigationMenuDemo } from './generated/interactive/navigation-menu-demo.js';
 import { GalleryNumberFieldDemo } from './generated/interactive/number-field-demo.js';
 import { GalleryOtpFieldDemo } from './generated/interactive/otp-field-demo.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
+import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
 import { GallerySelectDemo } from './generated/interactive/select-demo.js';
 import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
@@ -106,6 +108,11 @@ export const interactiveGalleryDemos = Object.freeze([
     title: 'Menubar',
   },
   {
+    name: 'meter-demo',
+    render: renderInteractiveDemo(GalleryMeterDemo),
+    title: 'Meter',
+  },
+  {
     name: 'navigation-menu-demo',
     render: renderInteractiveDemo(GalleryNavigationMenuDemo),
     title: 'Navigation Menu',
@@ -124,6 +131,11 @@ export const interactiveGalleryDemos = Object.freeze([
     name: 'popover-demo',
     render: renderInteractiveDemo(GalleryPopoverDemo),
     title: 'Popover',
+  },
+  {
+    name: 'progress-demo',
+    render: renderInteractiveDemo(GalleryProgressDemo),
+    title: 'Progress',
   },
   {
     name: 'radio-group-demo',
