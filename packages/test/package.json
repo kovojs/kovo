@@ -17,7 +17,8 @@
     "./test-case": "./src/test-case.ts",
     "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./verifier-sql": "./src/verifier-sql.ts",
-    "./verifier": "./src/verifier.ts"
+    "./verifier": "./src/verifier.ts",
+    "./wire-fixtures": "./src/wire-fixtures.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",

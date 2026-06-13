@@ -93,6 +93,9 @@ Closed evidence so far:
 - `tests/fw-check.node.mjs` no longer owns the TypeScript AST scanner for forbidden browser
   architecture facts; the SPEC.md §2 constitution gate consumes structured
   `@jiso/test/source-fixtures` facts pinned by `packages/test/src/source-fixtures.test.ts`.
+- `tests/fw-check.node.mjs` no longer owns its local HTTP wire fixture/request-response parser;
+  Phase 0 wire gates consume structured `@jiso/test/wire-fixtures` facts while preserving
+  byte-for-byte response body pins.
 
 Open:
 
@@ -132,6 +135,11 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "Phase 0 wire fixtures are present and explicit|Phase 0 wire fixture response bodies match generated contracts byte-for-byte|Phase 0 wire fixture responses keep stable protocol metadata|SSE remains a v2 backlog fixture|D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/wire-fixtures.ts packages/test/src/wire-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -657,6 +665,9 @@ Closed evidence so far:
 - `@jiso/test/source-fixtures` also exposes structured forbidden-browser-architecture facts;
   package export tests pin the subpath seam, and the P10 constitution gate now consumes those facts
   instead of a local `fw-check` TypeScript parser.
+- `@jiso/test/wire-fixtures` exposes structured titled HTTP transcript, request, response, and
+  response-only facts; package export tests pin the subpath seam, and Phase 0 `fw-check` wire gates
+  consume it instead of a local parser.
 
 Open:
 
@@ -745,6 +756,9 @@ Closed evidence so far:
 - `packages/test/src/source-fixtures.ts` now owns the reusable forbidden-browser-architecture
   scanner fixture; `packages/test/src/source-fixtures.test.ts`,
   `packages/test/src/package-exports.test.ts`, and the targeted P10 `fw-check` node test pin the
+  seam.
+- `packages/test/src/wire-fixtures.ts` now owns reusable wire fixture parsing; focused
+  `wire-fixtures.test.ts`, package export tests, and targeted Phase 0 `fw-check` node tests pin the
   seam.
 
 Open:

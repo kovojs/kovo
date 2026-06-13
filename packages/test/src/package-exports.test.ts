@@ -100,6 +100,13 @@ import {
   type DbVerificationDiagnostic as DirectDbVerificationDiagnostic,
 } from '@jiso/test/verifier-diagnostics';
 import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
+import {
+  parseWireFixture,
+  parseWireResponses,
+  type WireFixture,
+  type WireTranscriptExchange,
+  type WireTranscriptResponse,
+} from '@jiso/test/wire-fixtures';
 import type { DiagnosticCode as RootDiagnosticCode } from '@jiso/test';
 
 describe('@jiso/test package subpath exports', () => {
@@ -235,6 +242,23 @@ describe('@jiso/test package subpath exports', () => {
         ['steps:', '  - uses: actions/checkout@v4', '  - run: vp check'].join('\n'),
       ),
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
+    const wireFixture = [
+      '### Cart read',
+      '>>> REQUEST',
+      'GET /cart HTTP/1.1',
+      '',
+      '<<< RESPONSE',
+      'HTTP/1.1 200 OK',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      '<main>Cart</main>',
+    ].join('\n');
+    expect(parseWireFixture(wireFixture)).toMatchObject({
+      request: { method: 'GET', path: '/cart' },
+      response: { headersByName: { 'content-type': 'text/html; charset=utf-8' }, status: 200 },
+      title: 'Cart read',
+    });
+    expect(parseWireResponses(wireFixture)).toMatchObject([{ status: 200 }]);
     expect(runCommandSequenceSync).toBeTypeOf('function');
   });
 
@@ -269,6 +293,9 @@ type _PublicSubpathTypes = [
   MarkdownFields,
   MarkdownTableRow,
   ProjectSourceSiteFact,
+  WireFixture,
+  WireTranscriptExchange,
+  WireTranscriptResponse,
   ParsedSqlOperation,
   DbObservationOptions,
   DbVerificationConfig,
