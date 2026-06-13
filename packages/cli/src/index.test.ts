@@ -465,7 +465,7 @@ describe('fw export', () => {
     }
   });
 
-  it('passes pretty URL output through to the server exporter', async () => {
+  it('exports nested routes as directory-index HTML by default', async () => {
     const root = mkdtempSync(join(tmpdir(), 'fw-export-cli-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -493,9 +493,7 @@ describe('fw export', () => {
         'utf8',
       );
 
-      await expect(mainAsync(['export', appPath, '--out', outDir, '--pretty-urls'])).resolves.toBe(
-        0,
-      );
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');

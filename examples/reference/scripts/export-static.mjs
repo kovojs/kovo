@@ -43,7 +43,7 @@ export async function exportReferenceStaticApp({
 
     // SPEC.md section 9.5: static export replays the same request shell and
     // refuses session-dependent routes with FW229 instead of writing HTML.
-    return await exportStaticApp(app, { outDir, htmlPathStyle: 'directory' });
+    return await exportStaticApp(app, { outDir });
   } finally {
     await viteServer.close();
   }

@@ -35,7 +35,7 @@ export async function exportGalleryInteractiveStatic({
       );
     }
 
-    return await exportStaticApp(app, { outDir, htmlPathStyle: 'directory' });
+    return await exportStaticApp(app, { outDir });
   } finally {
     await viteServer.close();
   }

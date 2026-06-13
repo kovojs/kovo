@@ -671,7 +671,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 interface FwExportOptions {
   appModulePath: string;
-  htmlPathStyle?: 'directory' | 'flat';
   onNonExportable?: 'error' | 'skip';
   origin?: string;
   outDir: string;
@@ -788,7 +787,6 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   let appModulePath: string | undefined;
   let origin: string | undefined;
   let outDir = 'dist';
-  let htmlPathStyle: 'directory' | 'flat' | undefined;
   let onNonExportable: 'error' | 'skip' | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -832,11 +830,6 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       continue;
     }
 
-    if (arg === '--pretty-urls') {
-      htmlPathStyle = 'directory';
-      continue;
-    }
-
     if (arg.startsWith('-')) {
       return {
         message: `fw: unknown export option ${stableValue(arg)}.\n${exportUsage()}`,
@@ -858,7 +851,6 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
     ok: true,
     options: {
       appModulePath,
-      ...(htmlPathStyle === undefined ? {} : { htmlPathStyle }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
       outDir,
@@ -868,7 +860,7 @@ function parseExportArgs(args: readonly string[]): ExportArgParseResult {
 
 function exportUsage(): string {
   return [
-    'usage: fw export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable] [--pretty-urls]',
+    'usage: fw export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
     '',
   ].join('\n');
 }
@@ -885,7 +877,6 @@ async function runExportCommand(options: FwExportOptions): Promise<CliCommandRes
         ? {}
         : { onNonExportable: options.onNonExportable }),
       diagnostics: staticExportDiagnosticsFromModule(appModule),
-      ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
       ...(options.origin === undefined ? {} : { origin: options.origin }),
       outDir: options.outDir,
     });

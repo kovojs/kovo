@@ -471,6 +471,7 @@ interface InlineEnhancedFormEventFact {
     content?: string;
     key?: string;
     name?: string;
+    queries?: Array<{ attrs?: unknown; content?: unknown }>;
   };
   type: string;
 }
@@ -1384,7 +1385,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
 
   return {
     appendCalls,
-    dispatchedQueries: dispatched.map(inlineEnhancedFormQueryEvent),
+    dispatchedQueries: dispatched.flatMap(inlineEnhancedFormQueryEvents),
     fetchCalls,
     fragmentHtmlByTarget: { 'cart-badge': fragmentTarget.innerHTML },
     listenerEvents: [...listeners.keys()],
@@ -1394,30 +1395,52 @@ export async function executeInlineEnhancedFormLoaderFixture(
   };
 }
 
-function inlineEnhancedFormQueryEvent(event: InlineEnhancedFormEventFact): {
+function inlineEnhancedFormQueryEvents(event: InlineEnhancedFormEventFact): Array<{
   body: string;
   key: string;
   name: string;
   type: string;
-} {
-  if (event.detail?.attrs !== undefined || event.detail?.content !== undefined) {
-    const query = htmlElementFacts(
-      `<fw-query ${event.detail.attrs ?? ''}>${event.detail.content ?? ''}</fw-query>`,
-      { tag: 'fw-query' },
-    )[0];
-    return {
-      body: event.detail.content ?? '',
-      key: query?.attrs.key ?? '',
-      name: query?.attrs.name ?? '',
-      type: event.type,
-    };
+}> {
+  if (Array.isArray(event.detail?.queries)) {
+    return event.detail.queries.map((query) =>
+      inlineEnhancedFormQueryChunk(event.type, {
+        attrs: typeof query.attrs === 'string' ? query.attrs : '',
+        content: typeof query.content === 'string' ? query.content : '',
+      }),
+    );
   }
 
+  if (event.detail?.attrs !== undefined || event.detail?.content !== undefined) {
+    return [
+      inlineEnhancedFormQueryChunk(event.type, {
+        attrs: event.detail.attrs ?? '',
+        content: event.detail.content ?? '',
+      }),
+    ];
+  }
+
+  return [
+    {
+      body: event.detail?.body ?? '',
+      key: event.detail?.key ?? '',
+      name: event.detail?.name ?? '',
+      type: event.type,
+    },
+  ];
+}
+
+function inlineEnhancedFormQueryChunk(
+  type: string,
+  chunk: { attrs: string; content: string },
+): { body: string; key: string; name: string; type: string } {
+  const query = htmlElementFacts(`<fw-query ${chunk.attrs}>${chunk.content}</fw-query>`, {
+    tag: 'fw-query',
+  })[0];
   return {
-    body: event.detail?.body ?? '',
-    key: event.detail?.key ?? '',
-    name: event.detail?.name ?? '',
-    type: event.type,
+    body: chunk.content,
+    key: query?.attrs.key ?? '',
+    name: query?.attrs.name ?? '',
+    type,
   };
 }
 
