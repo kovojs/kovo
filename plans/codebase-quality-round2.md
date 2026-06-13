@@ -106,6 +106,9 @@ commerce committed graph gate and commerce source-truth tests.
 Shared HTML fragment fixtures now own static export main-marker projections for the D10 fw-check
 gate, so the monolith no longer keeps a local helper that parses exported HTML for
 `data-fw-check-export`.
+Shared generated-module fixtures now own generated view-transition stamp behavior projections,
+including rendered host attributes, registry member types, and JSX prop elision for the P2
+fw-check gate.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -117,6 +120,12 @@ gate, so the monolith no longer keeps a local helper that parses exported HTML f
 
 Latest evidence:
 
+- Generated view-transition stamp fixture slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P2 compiler merges view transition stamps into existing styles" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Static export main-marker fixture slice:
   `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

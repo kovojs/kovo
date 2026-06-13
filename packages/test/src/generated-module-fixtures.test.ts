@@ -24,6 +24,7 @@ import {
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
+  generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedArtifactFile,
   generatedArtifactSource,
@@ -79,6 +80,30 @@ describe('@jiso/test generated module fixtures', () => {
     ).toEqual([
       { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
     ]);
+  });
+
+  it('projects generated view-transition stamp behavior without local artifact parsing', async () => {
+    await expect(
+      generatedViewTransitionStampBehaviorFact({
+        files: [
+          {
+            kind: 'server',
+            source:
+              'export function renderSource() { return `<img fw-c="product-card" src="/p1.png" style="opacity: .8; view-transition-name: product-p1-image" />`; }',
+          },
+        ],
+        registryMemberTypes: Promise.resolve({ 'product-p1-image': 'unknown' }),
+        viewTransitions: [{ name: 'product-p1-image' }],
+      }),
+    ).resolves.toEqual({
+      componentAttr: 'product-card',
+      jsxPropPreserved: false,
+      registryMemberTypes: { 'product-p1-image': 'unknown' },
+      src: '/p1.png',
+      styledElementCount: 1,
+      style: 'opacity: .8; view-transition-name: product-p1-image',
+      viewTransitionNames: ['product-p1-image'],
+    });
   });
 
   it('summarizes authored and generated component source facts', () => {

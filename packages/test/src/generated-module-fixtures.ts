@@ -46,6 +46,16 @@ export interface GeneratedComponentCommittedIrFact extends GeneratedComponentSou
   renderEquivalenceAsserted: boolean;
 }
 
+export interface GeneratedViewTransitionStampBehaviorFact {
+  componentAttr: string | undefined;
+  jsxPropPreserved: boolean;
+  registryMemberTypes: Record<string, string>;
+  src: string | undefined;
+  styledElementCount: number;
+  style: string | undefined;
+  viewTransitionNames: string[];
+}
+
 const loweredStampAttributePattern = /\b((?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+))=/g;
 
 export function generatedComponentSourceFacts(options: {
@@ -643,6 +653,26 @@ export function generatedClientExportTypeFacts(
   names: readonly string[],
 ): Record<string, string> {
   return Object.fromEntries(names.map((name) => [name, typeof exports[name]]));
+}
+
+export async function generatedViewTransitionStampBehaviorFact(options: {
+  files: readonly GeneratedArtifactFile[];
+  registryMemberTypes: Promise<Record<string, string>>;
+  viewTransitions: readonly { name: string }[];
+}): Promise<GeneratedViewTransitionStampBehaviorFact> {
+  const renderedElements = generatedRenderedElementFactsFromArtifact(options.files);
+  const renderedImage = renderedElements.find((element) => element.tag === 'img');
+
+  return {
+    componentAttr: renderedImage?.attrs['fw-c'],
+    jsxPropPreserved: Object.hasOwn(renderedImage?.attrs ?? {}, 'viewTransitionName'),
+    registryMemberTypes: await options.registryMemberTypes,
+    src: renderedImage?.attrs.src,
+    styledElementCount: renderedElements.filter((element) => Object.hasOwn(element.attrs, 'style'))
+      .length,
+    style: renderedImage?.attrs.style,
+    viewTransitionNames: options.viewTransitions.map((transition) => transition.name),
+  };
 }
 
 export function generatedMinifierNamePreservationBehaviorFact(

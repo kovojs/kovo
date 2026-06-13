@@ -93,6 +93,7 @@ import {
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
+  generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
@@ -966,22 +967,23 @@ export const ProductCard = component('product-card', {
 `,
   });
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
-  // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
-  const renderedElements = generatedRenderedElementFactsFromArtifact(result.files);
-  const renderedImage = renderedElements.find((element) => element.tag === 'img');
-  assert.deepEqual(renderedImage?.attrs, {
-    'fw-c': 'product-card',
-    src: '/p1.png',
-    style: 'opacity: .8; view-transition-name: product-p1-image',
-  });
-  assert.equal(
-    renderedElements.filter((element) => Object.hasOwn(element.attrs, 'style')).length,
-    1,
+  assert.deepEqual(
+    await generatedViewTransitionStampBehaviorFact({
+      files: result.files,
+      registryMemberTypes: generatedRegistryInterfaceMemberTypes(result.files, 'ViewTransitions'),
+      viewTransitions: result.viewTransitions,
+    }),
+    {
+      componentAttr: 'product-card',
+      jsxPropPreserved: false,
+      registryMemberTypes: { 'product-p1-image': 'unknown' },
+      src: '/p1.png',
+      styledElementCount: 1,
+      // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
+      style: 'opacity: .8; view-transition-name: product-p1-image',
+      viewTransitionNames: ['product-p1-image'],
+    },
   );
-  assert.equal(renderedImage?.attrs.viewTransitionName, undefined);
-  assert.deepEqual(await generatedRegistryInterfaceMemberTypes(result.files, 'ViewTransitions'), {
-    'product-p1-image': 'unknown',
-  });
 });
 
 void test('P1 compiler validates component-scoped IDREFs', async () => {

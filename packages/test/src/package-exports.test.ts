@@ -138,6 +138,7 @@ import {
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
+  generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
@@ -149,6 +150,7 @@ import {
   type GeneratedRenderEquivalenceBehaviorFact,
   type GeneratedRegistryConsumerTypeOptions,
   type GeneratedTypedDataParamCoercionBehaviorFact,
+  type GeneratedViewTransitionStampBehaviorFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -536,6 +538,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(generatedBootstrapDeferredBehaviorFact).toBeTypeOf('function');
     expect(generatedServerDeferredBehaviorFact).toBeTypeOf('function');
     expect(generatedTypedDataParamCoercionBehaviorFact).toBeTypeOf('function');
+    expect(generatedViewTransitionStampBehaviorFact).toBeTypeOf('function');
     expect(generatedWireDeferredBehaviorFact).toBeTypeOf('function');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
     expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
@@ -594,6 +597,10 @@ describe('@jiso/test package subpath exports', () => {
     expect(graphFixtureFile).toBeTypeOf('function');
     expectTypeOf<GeneratedGraphArtifactHonestyFact>().toMatchTypeOf<{
       emitCheck: { clean: boolean };
+    }>();
+    expectTypeOf<GeneratedViewTransitionStampBehaviorFact>().toMatchTypeOf<{
+      jsxPropPreserved: boolean;
+      viewTransitionNames: string[];
     }>();
     expectTypeOf<ProjectGraphFixture>().toMatchTypeOf<Record<string, unknown>>();
     expect(touchGraphProvenanceFact).toBeTypeOf('function');
