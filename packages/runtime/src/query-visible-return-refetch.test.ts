@@ -3,43 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DelegatedEvent } from './events.js';
 import { createQueryStore } from './query-store.js';
 import { FakeQueryBindingElement, FakeRoot } from './runtime-test-fakes.js';
-import {
-  createRefetchQueryLedger,
-  installQueryVisibleReturnRefetch,
-  readVisibleReturnQueryScripts,
-} from './query-visible-return.js';
+import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 
 function visibleReturnEvent(): DelegatedEvent {
   return { target: null, type: 'visibilitychange' };
 }
 
-describe('query visible-return refetch ledger', () => {
-  it('dedupes hydrated and later-applied query names while preserving first-seen order', () => {
-    const ledger = createRefetchQueryLedger(['cart', 'inventory', 'cart']);
-
-    ledger.remember(['reviews', 'cart', 'recommendations', 'inventory']);
-
-    // SPEC.md section 4.4: visible-return refetch follows successfully hydrated/applied query data.
-    expect(ledger.eligible()).toEqual(['cart', 'inventory', 'reviews', 'recommendations']);
-    expect(ledger.eligible(['inventory', 'recommendations'])).toEqual(['cart', 'reviews']);
-  });
-
-  it('reads only fw-query hydration scripts from the visible-return root', () => {
-    const root = new FakeRoot();
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
-    root.bindings = [new FakeQueryBindingElement('cart.count')];
-
-    // SPEC.md §4.4/§9.4: visible-return eligibility starts from hydrated query
-    // scripts and must not drift into a second DOM binding scan.
-    expect([...readVisibleReturnQueryScripts(root)]).toEqual(root.scripts);
-  });
-});
-
+// SPEC.md §4.4/§9.4: installing visible-return refetch hydrates initial scripts
+// as loader lifecycle work, installs a deduped visibilitychange listener only
+// when typed-read refetch is configured, threads typed-read chunks and parse/
+// callback failures through the one runtime apply/error path, and goes inert on
+// disposal. The pure eligibility-ledger seam lives in the sibling
+// query-visible-return-ledger.test.ts file.
 describe('query visible-return refetch', () => {
   it('hydrates initial scripts without installing a visible-return listener when refetch is disabled', () => {
     const root = new FakeRoot();
