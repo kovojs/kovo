@@ -289,6 +289,18 @@ Round98 app-shell static export output atomicity evidence:
 - `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round99 app-shell Vite client-module output atomicity evidence:
+
+- `writeJisoAppShellViteBuildOutput()` now stages helper-owned compiled `/c/` module writes under
+  the Vite output root and validates duplicate/directory targets before committing, so a rejected
+  Vite client-module target does not leave earlier module files behind (SPEC §9.5).
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

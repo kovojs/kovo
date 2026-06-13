@@ -62,6 +62,14 @@ with same-session file/test evidence.
       and `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
       `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
       and `git diff --check`.
+      Round99 evidence 2026-06-13: `packages/server/src/vite-build-output.ts` now stages
+      compiled `/c/` module writes under the Vite output root and validates duplicate/directory
+      targets before committing, so rejected Vite client-module output does not leave earlier
+      helper-owned module files behind. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src` and
+      `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+      and `git diff --check`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;

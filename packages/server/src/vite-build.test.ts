@@ -185,6 +185,41 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('validates Vite app-shell client module targets before committing staged output', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-target-dist-'));
+
+    try {
+      await mkdir(join(distDir, 'c', 'blocked.client.js'), { recursive: true });
+
+      await expect(
+        writeJisoAppShellViteBuildOutput(
+          {
+            clientModules: [
+              {
+                file: 'c/ok.client.js',
+                href: '/c/ok.client.js?v=ok',
+                path: '/c/ok.client.js',
+                source: 'export const ok = true;',
+                version: 'ok',
+              },
+              {
+                file: 'c/blocked.client.js',
+                href: '/c/blocked.client.js?v=blocked',
+                path: '/c/blocked.client.js',
+                source: 'export const blocked = true;',
+                version: 'blocked',
+              },
+            ],
+          },
+          { outDir: distDir },
+        ),
+      ).rejects.toThrow(/target '.*blocked\.client\.js' is a directory/);
+      await expect(readFile(join(distDir, 'c/ok.client.js'))).rejects.toThrow();
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
   it('returns Vite build-backed static export inventory without writing output', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-dist-'));
     const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-export-'));
