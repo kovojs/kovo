@@ -17,7 +17,7 @@ export interface ComponentPipelinePatchResult<Model> {
   state: ComponentPipelineState<Model>;
 }
 
-export interface ComponentPipelineSourcePatchResult {
+export interface ComponentPipelineEmitPatchResult {
   source: string;
   sourceOffsetMap: SourceOffsetMap;
 }
@@ -92,10 +92,10 @@ export function lowerComponentPipelineSequence<Model>(
   return { sourceOffsetMap, state: current, steps };
 }
 
-export function applyComponentPipelinePatches(
+export function applyComponentPipelineEmitPatches(
   previous: Pick<ComponentPipelineState<unknown>, 'source'>,
   replacements: readonly SourceReplacement[],
   options: ComponentPipelinePatchOptions = {},
-): ComponentPipelineSourcePatchResult {
+): ComponentPipelineEmitPatchResult {
   return applySourceReplacementsWithOffsetMap(previous.source, replacements, options.prefix ?? '');
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  applyComponentPipelinePatches,
+  applyComponentPipelineEmitPatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
   lowerComponentPipelineSequence,
@@ -281,7 +281,7 @@ describe('compiler model pipeline', () => {
     expect(parses).toEqual([]);
   });
 
-  it('applies terminal source patches without reparsing a model', () => {
+  it('applies terminal emit-only source patches without reparsing a model', () => {
     const state = componentPipelineState(
       'cart-badge.tsx',
       'export const CartBadge = component({ render: () => <button onClick={save}>Save</button> });',
@@ -289,7 +289,7 @@ describe('compiler model pipeline', () => {
     );
     const start = state.source.indexOf('onClick={save}');
 
-    const lowered = applyComponentPipelinePatches(state, [
+    const lowered = applyComponentPipelineEmitPatches(state, [
       {
         end: start + 'onClick={save}'.length,
         replacement: 'on:click="/c/cart-badge.client.js#CartBadge$button_click"',

@@ -299,14 +299,15 @@ Closed evidence so far:
   offset map.
 - Compiler validation now composes navigation/platform/view offset maps with inline-derive prefix
   maps and reports FW311 against the original author source after both lowering phases.
+- Server-render terminal patching now calls the explicitly emit-only
+  `applyComponentPipelineEmitPatches` helper; its offset map is not part of model validation or
+  reparse sequencing.
 
 Open:
 
 - Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - Audit remaining production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex uses:
   keep parser/scanner internals and diagnostics; retire source-string lowerers/validators.
-- Decide whether server-render diagnostics ever need the returned offset map; currently
-  server-render patching is emit-only.
 - Keep the broader Phase 2 checkbox open until source-returning lowering is gone from the compile
   path or explicitly justified.
 

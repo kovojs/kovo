@@ -19,7 +19,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import {
-  applyComponentPipelinePatches,
+  applyComponentPipelineEmitPatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
   lowerComponentPipelineSequence,
@@ -126,7 +126,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverRender = serverRenderLowering(versionedHandlers, model);
-  const serverRenderPatch = applyComponentPipelinePatches(
+  const serverRenderPatch = applyComponentPipelineEmitPatches(
     derivePatch.state,
     serverRender.replacements,
   );
