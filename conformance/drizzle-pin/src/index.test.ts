@@ -353,6 +353,51 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins project query loader getters returning static callbacks under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              name: text('name').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {
+              return db.select({
+                id: products.id,
+                name: products.name,
+              }).from(products);
+            }
+
+            const options = {
+              get load() {
+                return loadProducts;
+              },
+            };
+
+            export const productQuery = query('product/getter-loader', options);
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/getter-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:22',
+      },
+    ]);
+  });
+
   it('pins nullable project query shapes for real Drizzle left joins', () => {
     const facts = extractQueryFactsFromProject({
       files: [
