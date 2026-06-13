@@ -100,7 +100,7 @@ try {
   await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
   check(scriptRequests.length === 0, 'JS: zero island bytes before first interaction');
 
-  await page.click('button[on\\:click="/c/search.js#open"]');
+  await page.click('button[on\\:click^="/c/search.js"]');
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);
   check(scriptRequests.includes('/c/search.js'), 'JS: search module loads on first interaction');
 
@@ -116,6 +116,35 @@ try {
   await page.keyboard.press('Meta+k');
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);
   check(true, 'JS: ⌘K reopens after first use');
+
+  const galleryScripts = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/c/examples/gallery/src/generated/interactive/')) {
+      galleryScripts.push(url.pathname);
+    }
+  });
+  await page.goto(`${origin}/gallery/interactive/`, { waitUntil: 'networkidle' });
+  check(
+    await page
+      .locator('main[data-gallery-route="/gallery/interactive"]')
+      .count()
+      .then((count) => count === 1),
+    'JS: interactive gallery route renders',
+  );
+  const accordionButton = page
+    .locator('#accordion-demo button[on\\:click*="accordion-demo.client.js"]')
+    .first();
+  await accordionButton.click();
+  await page.waitForFunction(
+    () => document.querySelector('#accordion-demo [data-state="open"]') !== null,
+  );
+  check(
+    galleryScripts.includes(
+      '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
+    ),
+    'JS: interactive gallery client module loads on interaction',
+  );
   await context.close();
 } finally {
   await browser.close();

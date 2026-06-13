@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { createServer } from 'vite-plus';
 
+import { exportGalleryInteractiveStatic } from '../../examples/gallery/scripts/export-static.mjs';
+
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
@@ -111,6 +113,9 @@ if (isMainModule()) {
     }
 
     const result = await exportSiteStaticApp(options);
+    const galleryResult = options.skipGallery
+      ? undefined
+      : await exportGalleryInteractiveStatic({ outDir: options.outDir ?? defaultDistDir });
 
     process.stdout.write(
       [
@@ -121,6 +126,13 @@ if (isMainModule()) {
         `manifest-html=${result.manifest?.routeDocuments.length ?? 0}`,
         `manifest-client-modules=${result.manifest?.clientModules.length ?? 0}`,
         `manifest-assets=${result.manifest?.assets.length ?? 0}`,
+        ...(galleryResult === undefined
+          ? []
+          : [
+              `gallery-html=${galleryResult.artifacts.length}`,
+              `gallery-client-modules=${galleryResult.clientModules.length}`,
+              `gallery-assets=${galleryResult.assets.length}`,
+            ]),
         `diagnostics=${result.diagnostics.length}`,
         '',
       ].join('\n'),
@@ -151,6 +163,11 @@ function parseSiteExportArgs(args) {
 
     if (arg === '--skip-build') {
       options.skipBuild = true;
+      continue;
+    }
+
+    if (arg === '--skip-gallery') {
+      options.skipGallery = true;
       continue;
     }
 

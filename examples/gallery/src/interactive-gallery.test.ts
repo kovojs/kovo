@@ -62,7 +62,7 @@ describe('compiled interactive gallery demos', () => {
     expect(docsDemos).toEqual(generatedDemos);
 
     const html = renderInteractiveGalleryRoute();
-    expect(html).toContain('data-gallery-route="/interactive"');
+    expect(html).toContain('data-gallery-route="/gallery/interactive"');
     expect(html).toContain('data-demo-summary="compiled"');
 
     for (const demo of generatedDemos) {
@@ -89,9 +89,9 @@ describe('compiled interactive gallery demos', () => {
       expect(output).toContain(`client-modules=${interactiveGalleryDemos.length}`);
       expect(output).toContain('diagnostics=0');
 
-      const html = readFileSync(join(distDir, 'interactive/index.html'), 'utf8');
+      const html = readFileSync(join(distDir, 'gallery/interactive/index.html'), 'utf8');
       expect(html).toContain('<title>Jiso Interactive Gallery</title>');
-      expect(html).toContain('data-gallery-route="/interactive"');
+      expect(html).toContain('data-gallery-route="/gallery/interactive"');
       expect(html).toContain('data-gallery-interactive="progress"');
       expect(html).toContain('data-gallery-interactive="meter"');
 

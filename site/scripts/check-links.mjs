@@ -33,7 +33,7 @@ function pageLinks(html) {
 }
 
 function targetFor(urlPath) {
-  const clean = urlPath.replace(/^\//, '');
+  const clean = urlPath.split('?')[0].replace(/^\//, '');
   if (clean === '') return path.join(distDir, 'index.html');
   if (clean.endsWith('/')) return path.join(distDir, clean, 'index.html');
   if (path.extname(clean)) return path.join(distDir, clean);

@@ -21,6 +21,7 @@ export default defineConfig({
         command: 'vp build && node scripts/build.mjs',
         input: [
           { pattern: 'content/**/*', base: 'workspace' },
+          { pattern: 'examples/gallery/scripts/**/*', base: 'workspace' },
           { pattern: 'examples/gallery/src/**/*', base: 'workspace' },
           { pattern: 'packages/ui/src/**/*', base: 'workspace' },
           { pattern: 'public/**/*', base: 'workspace' },
@@ -39,6 +40,7 @@ export default defineConfig({
         command: 'node scripts/export-static.mjs',
         input: [
           { pattern: 'content/**/*', base: 'workspace' },
+          { pattern: 'examples/gallery/scripts/**/*', base: 'workspace' },
           { pattern: 'examples/gallery/src/**/*', base: 'workspace' },
           { pattern: 'packages/ui/src/**/*', base: 'workspace' },
           { pattern: 'public/**/*', base: 'workspace' },

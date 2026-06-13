@@ -18,7 +18,7 @@ export const galleryInteractiveClientModuleHrefs = Object.freeze(
   interactiveGalleryDemos.map((demo) => registerGalleryInteractiveClientModule(demo.name)),
 );
 
-export const galleryInteractiveRoute = route('/interactive', {
+export const galleryInteractiveRoute = route('/gallery/interactive', {
   meta: {
     description: 'Compiled Jiso UI primitive demos with generated client handlers.',
     title: 'Jiso Interactive Gallery',

@@ -28,7 +28,7 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
       >
         <a
           {...hoverCardTriggerAttributes({ contentId, open: state.open })}
-          href="/authors/ada"
+          href="#hover-card-demo"
           on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_blur"
           on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_focus"
           on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_keydown"

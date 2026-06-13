@@ -18,7 +18,7 @@ It takes resumability from Qwik, server-driven UI from htmx/LiveView, tag-based 
 
 ### 1.2 Who it's for
 
-- **Teams building content-and-CRUD products** (commerce, SaaS dashboards, marketplaces, internal tools) — the structural majority of the web — who want SPA-feeling UX without owning a client-state architecture.
+- **Teams building content-and-CRUD products** (commerce, CRM and SaaS dashboards, Q&A/forum communities, marketplaces, internal tools) — the structural majority of the web: data-heavy apps that must load fast and stay maintainable — who want SPA-feeling UX without owning a client-state architecture.
 - **AI app builders and code-generation systems.** Jiso is designed to be the most machine-auditable compilation target an agent can emit: generated apps fail TypeScript static checking if wiring is wrong, and intent can be verified against printed dependency graphs without headless browsers.
 - **Anyone debugging at 11pm.** The framework's promise: debugging always proceeds _down_ into plainer code, never _up_ into compiler internals.
 

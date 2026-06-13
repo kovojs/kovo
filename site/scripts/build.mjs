@@ -221,10 +221,16 @@ async function main() {
   const galleryRoutes = await loadGalleryRoutes();
   const gallerySection = {
     key: 'gallery',
-    pages: galleryRoutes.map((route) => ({
-      title: route.title,
-      url: galleryUrl(route.path),
-    })),
+    pages: [
+      {
+        title: 'Interactive Gallery',
+        url: '/gallery/interactive/',
+      },
+      ...galleryRoutes.map((route) => ({
+        title: route.title,
+        url: galleryUrl(route.path),
+      })),
+    ],
     title: 'Gallery',
   };
   const groups = sections
@@ -314,6 +320,29 @@ async function main() {
     ),
   );
 
+  await writePage(
+    '/gallery/interactive/',
+    finishPage(
+      renderDocument({
+        body: renderDocsPage({
+          activePath: '/gallery/interactive/',
+          groups,
+          html: `<div class="gallery-page">
+    <header class="gallery-head">
+      <p class="eyebrow">Gallery</p>
+      <h1>Interactive Gallery</h1>
+      <p>Compiled Jiso UI primitive demos with generated client handlers.</p>
+    </header>
+  </div>`,
+          prose: false,
+        }),
+        description: 'Compiled Jiso UI primitive demos with generated client handlers.',
+        path: '/gallery/interactive/',
+        title: 'Interactive Gallery · Jiso',
+      }),
+    ),
+  );
+
   for (const [position, route] of galleryRoutes.entries()) {
     const prev = galleryRoutes[position - 1];
     const next = galleryRoutes[position + 1];
@@ -346,6 +375,13 @@ async function main() {
       url,
     });
   }
+
+  searchIndex.push({
+    section: 'Gallery',
+    text: 'Compiled Jiso UI primitive demos with generated client handlers.',
+    title: 'Interactive Gallery',
+    url: '/gallery/interactive/',
+  });
 
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
   await writePage(
@@ -440,7 +476,10 @@ async function main() {
   );
 
   const pageCount =
-    sections.reduce((total, section) => total + section.pages.length, 0) + galleryRoutes.length + 1;
+    sections.reduce((total, section) => total + section.pages.length, 0) +
+    galleryRoutes.length +
+    1 +
+    1;
   process.stdout.write(
     `site-build/v1\npages=${pageCount + sections.length + 2} sections=${sections.length} loader=${captures.loader.gzipBytes}B-gzip\nOK\n`,
   );

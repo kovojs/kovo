@@ -25,7 +25,7 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
       >
         <a
           {...hoverCardTriggerAttributes({ contentId, open: state.open })}
-          href="/authors/ada"
+          href="#hover-card-demo"
           onBlur={() => {
             state.open = false;
             const doc = Reflect['get'](globalThis, 'document');

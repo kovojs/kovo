@@ -205,7 +205,7 @@ export type InteractiveGalleryDemoName = (typeof interactiveGalleryDemos)[number
 
 export function renderInteractiveGalleryRoute(): string {
   return (
-    <main data-gallery-route="/interactive">
+    <main data-gallery-route="/gallery/interactive">
       <h1>Interactive Gallery</h1>
       <p data-demo-summary="compiled">
         Stateful examples below are app-authored TSX compiled through Jiso into checked-in server

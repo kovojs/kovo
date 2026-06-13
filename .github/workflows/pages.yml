@@ -26,9 +26,12 @@ jobs:
           node-version: 24
 
       - run: vp install
+      - run: pnpm --filter @jiso/example-gallery run emit:interactive-gallery
       - run: vp run export
         working-directory: site
       - run: vp run check-links
+        working-directory: site
+      - run: vp run smoke
         working-directory: site
       - run: touch site/dist/.nojekyll
 
