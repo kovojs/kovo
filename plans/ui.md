@@ -98,6 +98,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       indeterminate state, and the menubar state-output fixture. Context-menu triggers now expose
       `role="button"`, OTP requiredness stays on native inputs instead of unsupported group
       `aria-required`, and toast live regions render on neutral elements.
+      Evidence 2026-06-13: `examples/gallery/src/interactive-gallery.browser.test.ts` now includes
+      a deterministic Chromium visual-baseline scaffold for the compiled interactive route plus
+      switch and dropdown-menu representative states, asserting viewport geometry and stable
+      screenshot hashes without committing binary screenshots.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and

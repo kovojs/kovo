@@ -1,7 +1,7 @@
 import axe from 'axe-core';
 import { installJisoLoader, type JisoLoader } from '@jiso/runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as accordionClient from './generated/interactive/accordion-demo.client.js';
@@ -160,6 +160,42 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
 
     expect(formatAxeViolations(results.violations)).toEqual([]);
+  });
+
+  it('keeps stable visual baselines for the compiled route and representative states', async () => {
+    await page.viewport(900, 700);
+
+    const host = document.createElement('div');
+    host.innerHTML = renderInteractiveGalleryRoute();
+    installVisualBaselineStyles();
+    document.body.append(host);
+
+    const route = required(
+      host.querySelector<HTMLElement>('[data-gallery-route="/gallery/interactive"]'),
+    );
+    const switchDemo = required(
+      host.querySelector<HTMLElement>('[data-gallery-interactive-route="switch-demo"]'),
+    );
+    const menuDemo = required(
+      host.querySelector<HTMLElement>('[data-gallery-interactive-route="dropdown-menu-demo"]'),
+    );
+
+    expect(visualGeometry(route)).toEqual({
+      height: 5401,
+      width: 820,
+    });
+    expect(visualGeometry(switchDemo)).toEqual({
+      height: 102,
+      width: 780,
+    });
+    expect(visualGeometry(menuDemo)).toEqual({
+      height: 183,
+      width: 780,
+    });
+
+    expect(await visualBaselineHash(route)).toBe('148b8b61');
+    expect(await visualBaselineHash(switchDemo)).toBe('3538153f');
+    expect(await visualBaselineHash(menuDemo)).toBe('94604e9e');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
@@ -2033,6 +2069,161 @@ function required<ElementType extends Element>(element: ElementType | null): Ele
   if (!element) throw new Error('Missing interactive gallery browser fixture element');
 
   return element;
+}
+
+async function visualBaselineHash(element: HTMLElement): Promise<string> {
+  const screenshot = await page.screenshot({
+    element,
+    save: false,
+  });
+
+  return fnv1a(screenshot);
+}
+
+function visualGeometry(element: HTMLElement): { height: number; width: number } {
+  const rect = element.getBoundingClientRect();
+
+  return {
+    height: Math.round(rect.height),
+    width: Math.round(rect.width),
+  };
+}
+
+function fnv1a(value: string): string {
+  let hash = 0x811c9dc5;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+function installVisualBaselineStyles(): void {
+  const style = document.createElement('style');
+  style.dataset.galleryVisualBaseline = 'true';
+  style.textContent = `
+    *, *::before, *::after {
+      box-sizing: border-box;
+      caret-color: transparent !important;
+      transition-duration: 0s !important;
+      animation-duration: 0s !important;
+    }
+
+    body {
+      margin: 0;
+      background: #f8fafc;
+      color: #0f172a;
+      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    [data-gallery-route="/gallery/interactive"] {
+      width: 820px;
+      margin: 0;
+      padding: 24px 20px 32px;
+      background: #ffffff;
+    }
+
+    [data-gallery-route="/gallery/interactive"] > h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    [data-demo-summary="compiled"] {
+      margin: 0 0 18px;
+      max-width: 680px;
+      color: #475569;
+    }
+
+    nav[aria-label="Interactive demos"] {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 18px;
+    }
+
+    nav[aria-label="Interactive demos"] a {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    [data-gallery-interactive-route] {
+      width: 780px;
+      margin: 0 0 12px;
+      padding: 14px;
+      border: 1px solid #dbe3ec;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+    }
+
+    [data-gallery-interactive-route] h2,
+    [data-gallery-interactive] h3,
+    [data-gallery-interactive] p {
+      margin-top: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button,
+    [role="button"],
+    [role="menuitem"],
+    [role="option"],
+    [role="tab"] {
+      border: 1px solid #94a3b8;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #0f172a;
+      padding: 5px 9px;
+    }
+
+    [aria-selected="true"],
+    [aria-checked="true"],
+    [aria-pressed="true"],
+    [data-state="open"] {
+      border-color: #2563eb;
+      background: #dbeafe;
+    }
+
+    [role="menu"],
+    [role="listbox"],
+    [role="tablist"],
+    [role="toolbar"],
+    [role="radiogroup"],
+    [role="group"] {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-block: 8px;
+    }
+
+    [role="progressbar"],
+    [role="meter"] {
+      display: block;
+      min-height: 14px;
+      border-radius: 999px;
+      background: #dbeafe;
+    }
+
+    output {
+      display: inline-block;
+      min-width: 4ch;
+      border-radius: 4px;
+      padding: 2px 5px;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+  `;
+  document.head.append(style);
 }
 
 const interactiveGalleryAxeRules = {
