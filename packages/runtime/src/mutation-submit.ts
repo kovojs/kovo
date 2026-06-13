@@ -1,5 +1,3 @@
-import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
-
 import {
   applyMutationResponseToDom,
   type AppliedMutationResponse,
@@ -24,7 +22,6 @@ import { optimisticChangeFromInput, OptimisticRebaser, resolveOptimisticKeys } f
 import type { MutationChangeRecord, OptimisticChange, OptimisticPlan } from './optimism.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
-import { parseMutationFailure } from './mutation-failure.js';
 import type { QueryChunk } from './wire-parser.js';
 
 export interface EnhancedMutationLoaderOptions {
@@ -229,121 +226,6 @@ type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   idem: string;
   targets: string[];
 };
-
-export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
-
-export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure> {
-  action?: string;
-  idem?: string;
-  input: Input;
-  method?: string;
-  onError?: (failure: Failure) => void | Promise<void>;
-  parseError?: (body: string) => Failure;
-}
-
-export interface SubmitContextOptions {
-  actionFor?: (form: SubmitFormDefinition) => string;
-  broadcast?: MutationBroadcast;
-  fetch: EnhancedMutationFetch;
-  method?: string;
-  morph?: MorphFragment;
-  queryPlans?: CompiledQueryUpdatePlans;
-  root: MorphRoot & TargetCollectorRoot;
-  store: QueryStore;
-}
-
-export interface SubmitContext {
-  submit<Definition extends SubmitFormDefinition>(
-    form: Definition,
-    options: SubmitOptions<FormInput<Definition>, FormFailure<Definition>>,
-  ): Promise<
-    AppliedMutationResponse & { appliedFragments: string[]; idem: string; targets: string[] }
-  >;
-}
-
-export function createSubmitContext(options: SubmitContextOptions): SubmitContext {
-  return {
-    async submit(form, submitOptions) {
-      let body = '';
-      let ok: boolean | undefined;
-      let status: number | undefined;
-      const response = await submitEnhancedMutation({
-        fetch: async (url, fetchOptions) => {
-          const result = await options.fetch(url, fetchOptions);
-          ok = result.ok;
-          status = result.status;
-
-          return {
-            ...result,
-            async text() {
-              body = await result.text();
-              return body;
-            },
-          };
-        },
-        form: createEnhancedFormLike(
-          submitOptions.action ?? options.actionFor?.(form) ?? `/_m/${form.key}`,
-          submitOptions.method ?? options.method,
-        ),
-        formData: formDataFromInput(submitOptions.input),
-        ...definedProps({
-          broadcast: options.broadcast,
-          idem: submitOptions.idem,
-          morph: options.morph,
-          queryPlans: options.queryPlans,
-        }),
-        root: options.root,
-        store: options.store,
-      });
-
-      if (submitOptions.onError && isValidationFailure(status, ok)) {
-        const parseError =
-          submitOptions.parseError ??
-          ((value: string) => parseMutationFailure(value) as FormFailure<typeof form>);
-        await submitOptions.onError(parseError(body));
-      }
-
-      return response;
-    },
-  };
-}
-
-function createEnhancedFormLike(action: string, method: string | undefined): EnhancedFormLike {
-  return {
-    action,
-    ...(method ? { method } : {}),
-  };
-}
-
-function formDataFromInput(input: Record<string, JsonValue>): FormData {
-  const data = new FormData();
-
-  for (const [name, value] of Object.entries(input)) {
-    appendFormValue(data, name, value);
-  }
-
-  return data;
-}
-
-function appendFormValue(data: FormData, name: string, value: JsonValue): void {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      appendFormValue(data, name, item);
-    }
-    return;
-  }
-
-  if (value === null) {
-    data.append(name, '');
-    return;
-  }
-
-  data.append(name, typeof value === 'object' ? JSON.stringify(value) : String(value));
-}
-
-function isValidationFailure(status: number | undefined, ok: boolean | undefined): boolean {
-  return status === 422 || ok === false;
-}
 
 type MutationDomApplyHooks = Pick<
   ApplyMutationResponseToDomOptions,

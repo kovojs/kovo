@@ -6,6 +6,8 @@ import {
   createSubmitContext,
   type EnhancedMutationFetchOptions,
 } from './index.js';
+import { createSubmitContext as createSubmitContextFromMutationBarrel } from './mutation.js';
+import { createSubmitContext as createSubmitContextFromSubmitContextModule } from './submit-context.js';
 
 declare module '@jiso/core' {
   interface RouteRegistry {
@@ -132,6 +134,11 @@ class FakeQueryBindingElement {
 }
 
 describe('submit context', () => {
+  it('exports the split submit context implementation through the public runtime barrels', () => {
+    expect(createSubmitContext).toBe(createSubmitContextFromSubmitContextModule);
+    expect(createSubmitContextFromMutationBarrel).toBe(createSubmitContextFromSubmitContextModule);
+  });
+
   it('submits typed forms through a ctx.submit-style helper', async () => {
     const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
     const store = createQueryStore();

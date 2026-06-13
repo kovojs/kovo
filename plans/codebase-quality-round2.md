@@ -301,6 +301,13 @@ packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`.
 packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts` and
   `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`.
+- Typed submit context implementation is split out of the enhanced/optimistic mutation submitter:
+  `submit-context.ts` now owns `ctx.submit` form serialization, action selection, validation
+  failure parsing, and public submit-context types, while `mutation-submit.ts` stays focused on
+  enhanced form dispatch, fetch/apply, optimistic reconciliation, broadcast, and pending state
+  (SPEC.md §9.1/§9.2). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts` and `pnpm exec
+vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
 
 Open:
 
@@ -328,6 +335,8 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
+- `pnpm exec vitest --run packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `git diff --check`
 
 ## Phase 5 - Server

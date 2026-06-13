@@ -27,7 +27,6 @@ export type {
 export { stampPendingQueries } from './pending.js';
 export type { PendingElementLike, PendingRoot } from './pending.js';
 export {
-  createSubmitContext,
   dispatchEnhancedFormSubmit,
   isEnhancedSubmitEvent,
   submitEnhancedMutation,
@@ -42,9 +41,12 @@ export type {
   EnhancedMutationResponseLike,
   EnhancedMutationSubmitOptions,
   OptimisticEnhancedMutationSubmitOptions,
+  UploadProgress,
+} from './mutation-submit.js';
+export { createSubmitContext } from './submit-context.js';
+export type {
   SubmitContext,
   SubmitContextOptions,
   SubmitFormDefinition,
   SubmitOptions,
-  UploadProgress,
-} from './mutation-submit.js';
+} from './submit-context.js';
