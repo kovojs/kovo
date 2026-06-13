@@ -85,10 +85,9 @@ function openingTagStyleInsertion(
   }
 
   const position = element.openingEnd - 2;
-  const hasSpaceBeforeSlash = /\s/.test(element.openingSource.at(-3) ?? '');
   return {
     position,
-    replacement: hasSpaceBeforeSlash ? `${attribute} ` : ` ${attribute} `,
+    replacement: element.selfClosingSlashHasLeadingWhitespace ? `${attribute} ` : ` ${attribute} `,
   };
 }
 

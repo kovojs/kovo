@@ -112,6 +112,7 @@ export interface JsxElementModel {
   openingTagNameStart: number;
   openingSource: string;
   selfClosing: boolean;
+  selfClosingSlashHasLeadingWhitespace: boolean;
   start: number;
   tag: string;
 }
@@ -1205,9 +1206,24 @@ function jsxElementModel(
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
     openingSource: source.slice(openingElement.getStart(sourceFile), openingElement.getEnd()),
     selfClosing: !ts.isJsxElement(node),
+    selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
+      source,
+      openingElement,
+      node,
+    ),
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
   };
+}
+
+function selfClosingSlashHasLeadingWhitespace(
+  source: string,
+  openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  node: ts.JsxElement | ts.JsxSelfClosingElement,
+): boolean {
+  if (ts.isJsxElement(node)) return false;
+
+  return /\s/.test(source[openingElement.getEnd() - 3] ?? '');
 }
 
 function jsxChildFacts(

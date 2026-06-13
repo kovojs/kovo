@@ -219,10 +219,11 @@ function openingTagAttributeInsertion(
   }
 
   const position = hostElement.openingEnd - 2;
-  const hasSpaceBeforeSlash = /\s/.test(hostElement.openingSource.at(-3) ?? '');
   return {
     position,
-    replacement: hasSpaceBeforeSlash ? `${attributeSource} ` : ` ${attributeSource} `,
+    replacement: hostElement.selfClosingSlashHasLeadingWhitespace
+      ? `${attributeSource} `
+      : ` ${attributeSource} `,
   };
 }
 

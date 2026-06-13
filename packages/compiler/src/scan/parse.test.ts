@@ -442,13 +442,25 @@ export const CartShell = component('cart-shell', {
   it('records JSX opening tag and child source for model-driven lowerers', () => {
     const source = `
 export const ProductCard = component('product-card', {
-  render: () => <Link to="/products/:id" params={{ id: 'p1' }}>Product</Link>,
+  render: () => (
+    <section>
+      <Link to="/products/:id" params={{ id: 'p1' }}>Product</Link>
+      <img src="/p1.png"/>
+      <img src="/p2.png" />
+    </section>
+  ),
 });
 `;
-    const [link] = jsxElements(parseComponentModule('product-card.tsx', source));
+    const elements = jsxElements(parseComponentModule('product-card.tsx', source));
+    const link = elements.find((element) => element.tag === 'Link');
+    const images = elements.filter((element) => element.tag === 'img');
 
     expect(link?.openingSource).toBe('<Link to="/products/:id" params={{ id: \'p1\' }}>');
     expect(link?.childSource).toBe('Product');
+    expect(images.map((element) => element.selfClosingSlashHasLeadingWhitespace)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it('records call argument property access facts', () => {
