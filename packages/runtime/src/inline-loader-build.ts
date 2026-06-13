@@ -550,44 +550,157 @@ function collectInlineHelperFunctionDependencies(
 ): Set<string> {
   const dependencies = new Set<string>();
   const ownName = declaration.name?.text;
+  const isLocallyBound = (name: string, scopes: readonly ReadonlySet<string>[]): boolean =>
+    scopes.some((scope) => scope.has(name));
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: ts.Node, scopes: readonly ReadonlySet<string>[]): void => {
     if (node === declaration.name) return;
+
+    if (isFunctionLikeWithBody(node)) {
+      visitFunctionLike(node, scopes);
+      return;
+    }
+
+    if (ts.isBlock(node)) {
+      visitBlock(node, scopes);
+      return;
+    }
+
+    if (ts.isParameter(node)) {
+      if (node.initializer) visit(node.initializer, scopes);
+      return;
+    }
+
+    if (ts.isVariableDeclaration(node)) {
+      if (node.initializer) visit(node.initializer, scopes);
+      return;
+    }
+
+    if (ts.isBindingElement(node)) {
+      if (node.propertyName && ts.isComputedPropertyName(node.propertyName)) {
+        visit(node.propertyName.expression, scopes);
+      }
+      if (node.initializer) visit(node.initializer, scopes);
+      return;
+    }
+
+    if (ts.isPropertyAccessExpression(node)) {
+      visit(node.expression, scopes);
+      return;
+    }
+
+    if (ts.isPropertyAssignment(node)) {
+      if (ts.isComputedPropertyName(node.name)) visit(node.name.expression, scopes);
+      visit(node.initializer, scopes);
+      return;
+    }
 
     if (ts.isIdentifier(node)) {
       const name = node.text;
-      if (name !== ownName && declarations.has(name)) dependencies.add(name);
-      if (unsupportedTopLevelBindings.has(name) && !declarations.has(name)) {
+      const local = isLocallyBound(name, scopes);
+      if (name !== ownName && declarations.has(name) && !local) dependencies.add(name);
+      if (unsupportedTopLevelBindings.has(name) && !declarations.has(name) && !local) {
         throw new Error(
           `Inline Jiso loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
         );
       }
     }
 
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, (child) => visit(child, scopes));
   };
 
-  for (const parameter of declaration.parameters) {
-    if (parameter.initializer) visit(parameter.initializer);
-  }
-  if (declaration.body) visit(declaration.body);
+  const visitFunctionLike = (
+    functionNode: ts.SignatureDeclarationBase & { body?: ts.ConciseBody },
+    parentScopes: readonly ReadonlySet<string>[],
+  ): void => {
+    const functionScope = new Set<string>();
+    if (
+      (ts.isFunctionDeclaration(functionNode) || ts.isFunctionExpression(functionNode)) &&
+      functionNode.name
+    ) {
+      functionScope.add(functionNode.name.text);
+    }
+    for (const parameter of functionNode.parameters) {
+      addInlineHelperBindingName(parameter.name, functionScope);
+    }
+
+    const functionScopes = [functionScope, ...parentScopes];
+    for (const parameter of functionNode.parameters) {
+      if (parameter.initializer) visit(parameter.initializer, functionScopes);
+    }
+
+    if (!functionNode.body) return;
+    if (ts.isBlock(functionNode.body)) {
+      visitBlock(functionNode.body, functionScopes);
+      return;
+    }
+    visit(functionNode.body, functionScopes);
+  };
+
+  const visitBlock = (block: ts.Block, parentScopes: readonly ReadonlySet<string>[]): void => {
+    const blockScope = new Set<string>();
+    collectInlineHelperStatementBindings(block.statements, blockScope);
+    const blockScopes = [blockScope, ...parentScopes];
+    for (const statement of block.statements) {
+      visit(statement, blockScopes);
+    }
+  };
+
+  visitFunctionLike(declaration, []);
   return dependencies;
+}
+
+function isFunctionLikeWithBody(
+  node: ts.Node,
+): node is ts.SignatureDeclarationBase & { body?: ts.ConciseBody } {
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node)
+  );
+}
+
+function collectInlineHelperStatementBindings(
+  statements: ts.NodeArray<ts.Statement>,
+  bindings: Set<string>,
+): void {
+  for (const statement of statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      bindings.add(statement.name.text);
+      continue;
+    }
+    if (ts.isClassDeclaration(statement) && statement.name) {
+      bindings.add(statement.name.text);
+      continue;
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        addInlineHelperBindingName(declaration.name, bindings);
+      }
+    }
+  }
+}
+
+function addInlineHelperBindingName(
+  name: ts.BindingName | ts.Identifier,
+  bindings: Set<string>,
+): void {
+  if (ts.isIdentifier(name)) {
+    bindings.add(name.text);
+    return;
+  }
+
+  for (const element of name.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+    addInlineHelperBindingName(element.name, bindings);
+  }
 }
 
 function collectUnsupportedInlineHelperTopLevelBindings(sourceFile: ts.SourceFile): Set<string> {
   const bindings = new Set<string>();
-
-  const addBindingName = (name: ts.BindingName | ts.Identifier): void => {
-    if (ts.isIdentifier(name)) {
-      bindings.add(name.text);
-      return;
-    }
-
-    for (const element of name.elements) {
-      if (ts.isOmittedExpression(element)) continue;
-      addBindingName(element.name);
-    }
-  };
 
   const addImportClauseBindings = (clause: ts.ImportClause): void => {
     if (clause.name) bindings.add(clause.name.text);
@@ -608,7 +721,7 @@ function collectUnsupportedInlineHelperTopLevelBindings(sourceFile: ts.SourceFil
     }
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
-        addBindingName(declaration.name);
+        addInlineHelperBindingName(declaration.name, bindings);
       }
       continue;
     }

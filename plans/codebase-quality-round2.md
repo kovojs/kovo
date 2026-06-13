@@ -2112,6 +2112,15 @@ check:inline-loader`.
 packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-minifier.test.ts`,
       full runtime `pnpm exec vitest --run packages/runtime/src`, and `pnpm --filter
       @jiso/runtime run check:inline-loader`.
+      Evidence 2026-06-13 round334 runtime closure:
+      `packages/runtime/src/inline-loader-build.ts` now distinguishes local helper bindings from
+      unsupported top-level bindings while extracting SPEC.md §4.4 inline parser/apply helper
+      closures, so shadowed parameter/local names do not look like hidden imports or module state.
+      `packages/runtime/src/inline-loader-parser-parity.test.ts` and
+      `packages/runtime/src/inline-loader-response-apply.test.ts` pin the local-shadowing behavior
+      while preserving top-level dependency rejection. Verified by focused inline helper tests,
+      inline-loader generation, browser runtime, TypeScript, exact `vp check`, and
+      `git diff --check`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
       Evidence 2026-06-13 round301 runtime: `packages/runtime/src/query-events.ts` now types
       `InlineQueryEventDetail` as the batched `fw-query` element-chunk payload emitted by the

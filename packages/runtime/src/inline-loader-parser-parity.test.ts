@@ -283,4 +283,41 @@ describe('inline loader parser parity', () => {
       'references top-level binding defaultTagName',
     );
   });
+
+  it('allows local helper bindings to shadow unsupported top-level parser names', () => {
+    // SPEC.md §4.4: inline parser extraction rejects module-level state but
+    // must not confuse local parameter or variable bindings for hidden imports.
+    const source = [
+      'import { parseJsonValue } from "./json.js";',
+      'const attributePattern = /target/;',
+      'export function readElementChunks(body) {',
+      '  const parseJsonValue = (value) => value;',
+      '  return [{ attrs: parseJsonValue(body), content: body }];',
+      '}',
+      'export function readAttribute(attrs, name) {',
+      '  const attributePattern = { test: (value) => value.includes(name) };',
+      '  return attributePattern.test(attrs) ? attrs : "";',
+      '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
+      'function readFragmentChunksFromElements(chunks) {',
+      '  return chunks.map(readFragmentElementChunk);',
+      '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return { fragments: readElementChunks(body), queries: readElementChunks(body) };',
+      '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  const chunks = readMutationResponseElementChunks(body);',
+      '  return { fragments: readFragmentChunksFromElements(chunks.fragments), queries: chunks.queries };',
+      '}',
+    ].join('\n');
+
+    const extracted = extractInlineWireParserReadableSource(source);
+
+    expect(extracted).toContain('const parseJsonValue = (value) => value;');
+    expect(extracted).toContain('const attributePattern = {');
+    expect(extracted).not.toContain('import { parseJsonValue }');
+    expect(extracted).not.toContain('const attributePattern = /target/;');
+  });
 });

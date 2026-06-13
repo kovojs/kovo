@@ -261,4 +261,37 @@ describe('inline loader response apply source', () => {
       'references top-level binding defaultChunks',
     );
   });
+
+  it('allows local response-apply bindings to shadow unsupported top-level names', () => {
+    // SPEC.md §4.4/§9.1: response apply extraction must fail closed on module
+    // dependencies while still accepting self-contained local helpers.
+    const source = [
+      'import { applyResponseFragments } from "./inline-response-apply.js";',
+      'const applyTarget = (target, html) => { target.innerHTML = html; };',
+      'export function applyInlineMutationResponseChunks(chunks, options) {',
+      '  const applyResponseFragments = (fragments) => fragments.map((fragment) => fragment.target);',
+      '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
+      '  return applyResponseFragments(chunks.fragments).map((target) =>',
+      '    applyInlineFragment(target, options.findFragmentTarget),',
+      '  );',
+      '}',
+      'function applyInlineFragment(target, findFragmentTarget) {',
+      '  const applyTarget = (element, html) => { element.innerHTML = html; };',
+      '  const element = findFragmentTarget(target);',
+      '  if (element) applyTarget(element, target);',
+      '  return target;',
+      '}',
+    ].join('\n');
+
+    const extracted = extractInlineResponseApplyReadableSource(source);
+
+    expect(extracted).toContain(
+      'const applyResponseFragments = (fragments) => fragments.map((fragment) => fragment.target);',
+    );
+    expect(extracted).toContain(
+      'const applyTarget = (element, html) => { element.innerHTML = html; };',
+    );
+    expect(extracted).not.toContain('import { applyResponseFragments }');
+    expect(extracted).not.toContain('const applyTarget = (target, html)');
+  });
 });
