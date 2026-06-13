@@ -121,6 +121,18 @@ Round284 manifest-file Vite replay cleanup evidence:
 - `pnpm exec vp check packages/server/src/vite-static-export-manifest-file.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round285 docs-site app-shell server API guard evidence:
+
+- `site/scripts/app-shell.mjs` now validates the focused SPEC §9.5 server API shape before docs
+  routes bind to the app-shell authoring helpers, so docs export adoption fails fast if the
+  injected API lacks `createApp()`, `route()`, `respond`, or the client-module registry.
+- `site/scripts/app-shell.test.mjs` proves incomplete docs server API injection is rejected before
+  route replay while the existing docs app-shell static export paths remain green.
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round278 docs-site app-shell boundary evidence:
 
 - `packages/server/src/api/app-shell/core.ts` forwards `route()` and `respond` for app

@@ -22,6 +22,7 @@ export async function createSiteDistApp({
   server,
 } = {}) {
   const serverApi = server ?? (await loadDefaultServerApi());
+  assertSiteAppShellServerApi(serverApi);
   const clientModules = serverApi.createMemoryVersionedClientModuleRegistry();
   const moduleHrefs = registerPublicClientModules(clientModules, publicDir);
 
@@ -55,6 +56,25 @@ async function loadAppShellSubpath(builtModulePath, packageSubpath, requiredExpo
   }
 
   return await import(packageSubpath);
+}
+
+function assertSiteAppShellServerApi(serverApi) {
+  const missing = Object.entries({
+    createApp: 'function',
+    createMemoryVersionedClientModuleRegistry: 'function',
+    respond: 'object',
+    route: 'function',
+  }).flatMap(([name, type]) => (typeof serverApi?.[name] === type ? [] : [name]));
+
+  if (missing.length === 0) return;
+
+  throw new Error(
+    [
+      'site app shell: server API must provide focused @jiso/server app-shell authoring exports.',
+      `Missing exports: ${missing.join(', ')}.`,
+      'SPEC §9.5 docs export must replay through createApp(), route(), respond(), and the client-module registry.',
+    ].join(' '),
+  );
 }
 
 export function siteDocumentRoutes(distDir = defaultDistDir, moduleHrefs = new Map(), server) {

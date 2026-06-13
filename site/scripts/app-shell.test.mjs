@@ -166,6 +166,31 @@ describe('site app-shell export adoption', () => {
     ).resolves.toContain('<h1>Installation</h1>');
   });
 
+  it('rejects incomplete server APIs before docs routes bind to the app-shell boundary', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-server-api-'));
+    const distDir = path.join(root, 'dist-source');
+    const publicDir = path.join(root, 'public');
+
+    await mkdir(distDir, { recursive: true });
+    await writeFile(
+      path.join(distDir, 'index.html'),
+      '<!doctype html><html><body><h1>Home</h1></body></html>',
+    );
+
+    await expect(
+      createSiteDistApp({
+        distDir,
+        publicDir,
+        server: {
+          createApp: serverAppShellCore.createApp,
+          route: serverAppShellCore.route,
+        },
+      }),
+    ).rejects.toThrow(
+      'site app shell: server API must provide focused @jiso/server app-shell authoring exports. Missing exports: createMemoryVersionedClientModuleRegistry, respond. SPEC §9.5 docs export must replay through createApp(), route(), respond(), and the client-module registry.',
+    );
+  });
+
   it('loads the docs app shell and server package through Vite SSR for export', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-source-'));
     const cssDistDir = path.join(root, 'dist-css');

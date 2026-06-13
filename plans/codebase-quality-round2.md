@@ -151,6 +151,14 @@ markdown tables inline.
 
 Latest evidence:
 
+- Phase 5 docs-site app-shell server API guard slice:
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence:
+  `site/scripts/app-shell.mjs` now validates the focused SPEC §9.5 docs server API before binding
+  routes, and `site/scripts/app-shell.test.mjs` proves incomplete injection fails before export
+  replay while the docs static export adoption path remains green.
 - Project graph artifact acceptance fixture slice:
   `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
