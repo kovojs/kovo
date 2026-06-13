@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyMutationResponseToDom, createQueryStore } from './index.js';
+import { createQueryStore } from './index.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
+import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import { applyInlineQueryEventToRuntime } from './query-events.js';
 
 describe('inline loader response apply source', () => {

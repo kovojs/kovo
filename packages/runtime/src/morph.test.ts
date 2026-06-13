@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyMutationResponseToDom } from './apply-mutation-response.js';
+import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import { applyFragments, morphStructuralTree, type StructuralMorphNode } from './morph.js';
 import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';

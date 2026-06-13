@@ -4,7 +4,6 @@ import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import { readMutationResponseBodyChunks } from './wire-parser.js';
 import type { FragmentChunk, MutationResponseBodyChunks, QueryChunk } from './wire-parser.js';
 import type { IslandSignalScope } from './handler-context.js';
 
@@ -15,30 +14,21 @@ export interface AppliedMutationResponse {
 
 export type ApplyQueryInterposition = QueryApplyInterposition;
 
-export interface ApplyMutationResponseToDomOptions {
+export interface ApplyMutationResponseChunksToRuntimeOptions {
   applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
-  body: string;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   onError?: (error: unknown) => void;
   queryRoot?: unknown;
   queryPlans?: CompiledQueryUpdatePlans;
-  root: MorphRoot;
+  root?: MorphRoot | undefined;
   store: QueryStore;
 }
 
 export type AppliedMutationResponseToDom = AppliedMutationResponse & {
   appliedFragments: string[];
 };
-
-type ApplyMutationResponseChunksToRuntimeBaseOptions = Omit<
-  ApplyMutationResponseToDomOptions,
-  'body' | 'root'
-> & { root?: MorphRoot | undefined };
-
-export type ApplyMutationResponseChunksToRuntimeOptions =
-  ApplyMutationResponseChunksToRuntimeBaseOptions;
 
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
@@ -83,14 +73,4 @@ export function applyMutationResponseChunksToRuntime(
       options.islandSignalScope,
     ),
   };
-}
-
-export function applyMutationResponseToDom(
-  options: ApplyMutationResponseToDomOptions,
-): AppliedMutationResponseToDom {
-  const { body, ...applyOptions } = options;
-  return applyMutationResponseChunksToRuntime(
-    readMutationResponseBodyChunks(body, options.onError),
-    applyOptions,
-  );
 }

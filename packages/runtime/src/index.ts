@@ -5,12 +5,12 @@ export type {
   AppliedDeferredStreamResponseToRuntime,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
-export { applyMutationResponseToDom } from './apply-mutation-response.js';
+export type { ApplyQueryInterposition } from './apply-mutation-response.js';
+export { applyMutationResponseToDom } from './mutation-response-dom.js';
 export type {
   AppliedMutationResponseToDom,
   ApplyMutationResponseToDomOptions,
-  ApplyQueryInterposition,
-} from './apply-mutation-response.js';
+} from './mutation-response-dom.js';
 export * from './events.js';
 export {
   abortRemovedIslandSignals,

@@ -38,6 +38,7 @@ import {
   readMutationChangeHeader,
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
+import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import {
   dispatchEnhancedFormSubmit,
   isEnhancedSubmitEvent,
@@ -107,6 +108,7 @@ describe('runtime root exports', () => {
     expect(runtime.applyFetchedEnhancedMutationResponseToDom).toBe(
       applyFetchedEnhancedMutationResponseToDom,
     );
+    expect(runtime.applyMutationResponseToDom).toBe(applyMutationResponseToDom);
     expect(runtime.MutationQueue).toBe(MutationQueue);
     expect(runtime.createMutationIdem).toBe(createMutationIdem);
     expect(runtime.isMutationBroadcastMessage).toBe(isMutationBroadcastMessage);

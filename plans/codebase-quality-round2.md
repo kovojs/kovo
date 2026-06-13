@@ -359,6 +359,9 @@ Hydrated query script ledgers now decode all unseen successful scripts first and
 `applyQueryChunksToRuntime` once per hydration pass, so visible-return hydration shares the same
 batched binding-index/update-plan path as mutation and typed-read query chunks while malformed
 scripts remain retryable.
+DOM mutation response body parsing now lives in `packages/runtime/src/mutation-response-dom.ts`,
+leaving `packages/runtime/src/apply-mutation-response.ts` as the decoded chunk/query/fragment apply
+primitive used by enhanced submit, broadcast, deferred streams, typed-read refetch, and tests.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -513,6 +516,28 @@ packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-response-apply.test.ts
 packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader.ts
 plans/codebase-quality-round2.md`; `git diff --check`.
+      Evidence 2026-06-13: DOM mutation response body parsing moved into
+      `packages/runtime/src/mutation-response-dom.ts`; `packages/runtime/src/apply-mutation-response.ts`
+      now owns only decoded `MutationResponseBodyChunks` apply, and the broad
+      `packages/runtime/src/inline-loader.test.ts` no longer carries the redundant enhanced
+      response round-trip already covered by inline enhanced-submit and response-apply suites.
+      Verified by `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/mutation-response-metadata.test.ts packages/runtime/src/mutation-apply.test.ts
+packages/runtime/src/apply-deferred-stream.test.ts
+packages/runtime/src/query-runtime-integration.test.ts packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/index-exports.test.ts packages/runtime/src/morph.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`, `pnpm exec vitest --run
+packages/runtime/src`, exact `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/mutation-response-dom.ts packages/runtime/src/index.ts
+packages/runtime/src/mutation-apply.ts packages/runtime/src/apply-deferred-stream.ts
+packages/runtime/src/index-exports.test.ts packages/runtime/src/mutation-response-metadata.test.ts
+packages/runtime/src/morph.test.ts packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Evidence 2026-06-13: `packages/runtime/src/wire-parser.ts` now decodes mutation-body and
       standalone `fw-fragment` element chunks through `readFragmentElementChunk`, and
       `packages/runtime/src/wire-parser.test.ts` pins target filtering plus append-mode parity

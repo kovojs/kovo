@@ -1,13 +1,13 @@
 import {
   applyMutationResponseChunksToRuntime,
   type AppliedMutationResponse,
-  type ApplyMutationResponseToDomOptions,
 } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { IslandSignalScope } from './handler-context.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { MutationBroadcast } from './broadcast.js';
 import { isFailedMutationResponse, type FetchedEnhancedMutation } from './mutation-fetch.js';
+import type { ApplyMutationResponseToDomOptions } from './mutation-response-dom.js';
 import type { MutationChangeRecord } from './optimism.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
