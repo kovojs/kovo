@@ -290,6 +290,20 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Evidence 2026-06-13: local helper summary propagation now resolves static member helper
+      calls such as `helpers.loadProducts(db)` and `helpers.touchProduct(db)` through ts-morph
+      callback symbols, so query loaders and mutations fold proven local helper reads/touches
+      instead of also degrading them as external opaque calls. `packages/drizzle/src/index.test.ts`
+      covers project query-loader and mutation member helpers with fake siblings ignored, and
+      `conformance/drizzle-pin/src/index.test.ts` pins the same surface against real
+      `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check --fix packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts`, exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

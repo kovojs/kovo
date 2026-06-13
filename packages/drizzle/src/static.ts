@@ -1049,10 +1049,7 @@ function extractProjectExternalDbArgumentCalls(
 
     const { name } = surface;
     if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
-    if (
-      surface.identifier &&
-      localFunctionKeyForIdentifier(surface.identifier, localFunctionNames)
-    ) {
+    if (localFunctionKeyForReference(surface.reference, localFunctionNames)) {
       continue;
     }
     if (
@@ -2395,10 +2392,7 @@ function externalQueryHelperDiagnostics(
 
     const { name } = surface;
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
-    if (
-      surface.identifier &&
-      localFunctionKeyForIdentifier(surface.identifier, localFunctionKeys)
-    ) {
+    if (localFunctionKeyForReference(surface.reference, localFunctionKeys)) {
       return [];
     }
 
@@ -2432,9 +2426,8 @@ function queryLocalHelperCalls(
 
   for (const call of queryExecutableCallExpressions(body)) {
     const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) continue;
 
-    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    const key = localFunctionKeyForReference(expression, localFunctionKeys);
     if (!key) continue;
     const requirements = localFunctionsByKey.get(key) ?? [];
     if (requirements.length === 0) continue;
@@ -2469,9 +2462,8 @@ function opaqueLocalQueryHelperDiagnostics(
 
   return queryExecutableCallExpressions(body).flatMap((call) => {
     const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) return [];
 
-    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    const key = localFunctionKeyForReference(expression, localFunctionKeys);
     if (!key) return [];
 
     const receiverName = queryHelperReceiverArgumentName(
@@ -2502,7 +2494,7 @@ function opaqueLocalQueryHelperDiagnostics(
     return [
       {
         code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to local helper ${expression.getText()}().`,
+        message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
         severity: diagnosticDefinitions.FW406.severity,
         site: '',
       },
@@ -4867,12 +4859,11 @@ function extractLocalFunctionCallsFromBody(
 
   for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) continue;
 
-    const name = expression.getText();
+    const name = staticExpressionPath(expression) ?? expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
 
-    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    const key = localFunctionKeyForReference(expression, localFunctionKeys);
     if (
       key &&
       !localFunctionCallSatisfiesReceiverRequirements(
@@ -4973,9 +4964,7 @@ function extractExternalDbArgumentCallsFromBody(
 
     const { name } = surface;
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
-    const key = surface.identifier
-      ? localFunctionKeyForIdentifier(surface.identifier, localFunctionKeys)
-      : undefined;
+    const key = localFunctionKeyForReference(surface.reference, localFunctionKeys);
     if (key && localFunctionKeys.has(key)) continue;
 
     if (
@@ -5012,9 +5001,8 @@ function extractOpaqueLocalHelperReceiverCallsFromBody(
 
   for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) continue;
 
-    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    const key = localFunctionKeyForReference(expression, localFunctionKeys);
     if (!key || !localFunctionKeys.has(key)) continue;
     if (!call.getArguments().some((argument) => receiverArgumentReference(argument))) continue;
 
@@ -5027,25 +5015,53 @@ function extractOpaqueLocalHelperReceiverCallsFromBody(
     }
 
     const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name: expression.getText() });
+    if (index >= 0) {
+      calls.push({ index, name: staticExpressionPath(expression) ?? expression.getText() });
+    }
   }
 
   return calls;
 }
 
 interface ExternalHelperCallSurface {
-  identifier?: Node;
   name: string;
+  reference: Node;
 }
 
 function externalHelperCallSurface(call: CallExpression): ExternalHelperCallSurface | undefined {
   const expression = call.getExpression();
   if (Node.isIdentifier(expression)) {
-    return { identifier: expression, name: expression.getText() };
+    return { name: expression.getText(), reference: expression };
   }
 
   const name = staticExpressionPath(expression);
-  return name ? { name } : undefined;
+  return name ? { name, reference: expression } : undefined;
+}
+
+function localFunctionKeyForReference(
+  reference: Node,
+  localFunctionKeys: ReadonlySet<string>,
+): string | undefined {
+  if (Node.isIdentifier(reference)) {
+    return localFunctionKeyForIdentifier(reference, localFunctionKeys);
+  }
+
+  // SPEC §10.2/§11.1: local helper summaries follow static member references through
+  // ts-morph symbols, so query loaders and mutations cannot hide Drizzle work behind object
+  // containers while avoiding source-name compatibility guesses.
+  const symbol = symbolForCallbackReference(reference);
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    const directKey = localFunctionKeyForDeclaration(declaration);
+    if (directKey && localFunctionKeys.has(directKey)) return directKey;
+
+    const callback = callbackFunctionFromDeclaration(declaration);
+    if (!callback) continue;
+
+    const callbackKey = localFunctionKeyForCallback(callback);
+    if (callbackKey && localFunctionKeys.has(callbackKey)) return callbackKey;
+  }
+
+  return undefined;
 }
 
 function localFunctionKeyForIdentifier(
@@ -5061,6 +5077,26 @@ function localFunctionKeyForIdentifier(
   for (const declaration of symbol?.getDeclarations() ?? []) {
     const key = localFunctionKeyForDeclaration(declaration);
     if (key && localFunctionKeys.has(key)) return key;
+  }
+
+  return undefined;
+}
+
+function localFunctionKeyForCallback(callback: Node): string | undefined {
+  if (Node.isFunctionDeclaration(callback)) {
+    const name = callback.getName();
+    const nameNode = callback.getNameNode();
+    return name && nameNode ? extractedFunctionKey(name, callback, nameNode) : undefined;
+  }
+
+  if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) {
+    const parent = callback.getParent();
+    if (Node.isVariableDeclaration(parent)) {
+      const name = parent.getNameNode();
+      return Node.isIdentifier(name)
+        ? extractedFunctionKey(name.getText(), callback, name)
+        : undefined;
+    }
   }
 
   return undefined;
@@ -5253,10 +5289,7 @@ function sourceReceiverHelperCallSurface(
   const index = call.getStart() - bodyOffset;
   if (index < 0) return null;
 
-  const key = surface.identifier
-    ? localFunctionKeyForIdentifier(surface.identifier, localFunctionKeys)
-    : undefined;
-  return { index, name: key ? (surface.identifier?.getText() ?? name) : name };
+  return { index, name };
 }
 
 function dedupeExternalDbArgumentCalls(

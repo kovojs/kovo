@@ -836,6 +836,102 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins member-referenced local helpers under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function loadProducts(db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '}',
+          'function touchProduct(db: PgDatabase<any, any, any>) {',
+          '  return db.update(products).set({ stock: 1 });',
+          '}',
+          'function fakeLoad(fake: FakeDb) {',
+          '  return fake.select({ id: products.id }).from(products);',
+          '}',
+          'function fakeTouch(fake: FakeDb) {',
+          '  return fake.update(products).set({ stock: 2 });',
+          '}',
+          '',
+          'const helpers = { loadProducts, touchProduct, fakeLoad, fakeTouch };',
+          '',
+          "export const productQuery = query('product/member-local-helper', {",
+          '  load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+          '    helpers.fakeLoad(fake);',
+          '    return helpers.loadProducts(db);',
+          '  },',
+          '});',
+          '',
+          'export async function syncProduct(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+          '  await helpers.fakeTouch(fake);',
+          '  await helpers.touchProduct(db);',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/member-local-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.domain.ts:28',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:14',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:17',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      touchProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:17',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins nested static callback containers under real Drizzle Postgres receiver types', () => {
     const files = [
       {

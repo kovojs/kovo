@@ -7643,6 +7643,123 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('uses project member-referenced local query helpers from typed receiver symbols', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): Promise<void> };',
+      ]),
+      {
+        fileName: 'product.queries.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function loadProducts(db: PgDatabase) {',
+          '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '}',
+          '',
+          'function fakeLoad(fake: FakeDb) {',
+          '  return fake.select({ id: products.id }).from(products);',
+          '}',
+          '',
+          'const helpers = { loadProducts, fakeLoad };',
+          '',
+          'export const productQuery = query("product/member-local-helper", {',
+          '  load(_input, db: PgDatabase, fake: FakeDb) {',
+          '    helpers.fakeLoad(fake);',
+          '    return helpers.loadProducts(db);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/member-local-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'product.queries.ts:23',
+      },
+    ]);
+  });
+
+  it('uses project member-referenced local mutation helpers from typed receiver symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function touchProduct(db: PgDatabase) {',
+            '  return db.update(products).set({ stock: 1 });',
+            '}',
+            '',
+            'function fakeTouch(fake: FakeDb) {',
+            '  return fake.update(products).set({ stock: 2 });',
+            '}',
+            '',
+            'const helpers = { touchProduct, fakeTouch };',
+            '',
+            'export async function syncProduct(db: PgDatabase, fake: FakeDb) {',
+            '  await helpers.fakeTouch(fake);',
+            '  await helpers.touchProduct(db);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      touchProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('uses project assignment receiver aliases without fake context fabrication', () => {
     const files = [
       pgDatabaseTypes([
