@@ -10,7 +10,9 @@ const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', i
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
-const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
+const wireResponseScannerSourcePath = fileURLToPath(
+  new URL('./wire-response-scanner.ts', import.meta.url),
+);
 
 const inlineHelperSpecs = {
   responseApply: {
@@ -26,8 +28,8 @@ const inlineHelperSpecs = {
     readableParityLabel: 'canonical wire parser helper closure',
     minifiedParityLabel: 'canonical minified wire parser helper closure',
     rootFunctionNames: ['readInlineMutationResponseBodyChunks'],
-    sourceFileName: 'wire-parser.ts',
-    sourcePath: wireParserSourcePath,
+    sourceFileName: 'wire-response-scanner.ts',
+    sourcePath: wireResponseScannerSourcePath,
   },
 } as const;
 
@@ -377,7 +379,7 @@ function extractInlineHelperReadableSource({
 
 export function assertInlineJisoLoaderInstallerWireParserParity(
   installerSource: string,
-  wireParserSource: string = readFileSync(wireParserSourcePath, 'utf8'),
+  wireParserSource: string = readFileSync(wireResponseScannerSourcePath, 'utf8'),
 ): void {
   assertInlineJisoLoaderInstallerHelperParity(
     inlineHelperSpecs.wireParser,
@@ -388,7 +390,7 @@ export function assertInlineJisoLoaderInstallerWireParserParity(
 
 export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
   installerSource: string,
-  wireParserSource: string = readFileSync(wireParserSourcePath, 'utf8'),
+  wireParserSource: string = readFileSync(wireResponseScannerSourcePath, 'utf8'),
 ): void {
   assertMinifiedInlineJisoLoaderInstallerHelperParity(
     inlineHelperSpecs.wireParser,

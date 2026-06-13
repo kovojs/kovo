@@ -2,16 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   deferredStreamChunks,
-  readAttribute,
-  readElementChunks,
-  readInlineMutationResponseBodyChunks,
   readMutationResponseBodyChunks,
-  readMutationResponseElementChunks,
   readQueryChunks,
   readQueryElementChunk,
   readQueryScriptChunks,
-  unescapeHtml,
 } from './wire-parser.js';
+import {
+  readAttribute,
+  readElementChunks,
+  readInlineMutationResponseBodyChunks,
+  readMutationResponseElementChunks,
+  unescapeHtml,
+} from './wire-response-scanner.js';
 
 describe('wire parser HTML entity handling', () => {
   it('keeps fragment element internals behind the decoded reader surface', async () => {
@@ -19,9 +21,15 @@ describe('wire parser HTML entity handling', () => {
 
     // SPEC.md §4.4/§9.1: inline and modular response paths share decoded body
     // readers; individual fragment element decoding is not a compatibility API.
+    expect(Object.hasOwn(wireParserModule, 'readAttribute')).toBe(false);
+    expect(Object.hasOwn(wireParserModule, 'readElementChunks')).toBe(false);
     expect(Object.hasOwn(wireParserModule, 'readFragmentElementChunk')).toBe(false);
+    expect(Object.hasOwn(wireParserModule, 'readInlineMutationResponseBodyChunks')).toBe(false);
+    expect(Object.hasOwn(wireParserModule, 'readMutationResponseElementChunks')).toBe(false);
     expect(Object.hasOwn(wireParserModule, 'malformedFragmentError')).toBe(false);
     expect(Object.hasOwn(wireParserModule, 'readFragmentChunks')).toBe(false);
+    expect(Object.hasOwn(wireParserModule, 'tagClose')).toBe(false);
+    expect(Object.hasOwn(wireParserModule, 'unescapeHtml')).toBe(false);
     expect(wireParserModule.readMutationResponseBodyChunks).toBe(readMutationResponseBodyChunks);
   });
 

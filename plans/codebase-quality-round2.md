@@ -968,6 +968,10 @@ decoded body readers remain the shared parser surface used by modular apply and 
 inline-loader parser closure. Delegated handler reference parsing is now private inside
 `handlers.ts`; dispatch behavior remains covered through focused handler tests instead of root
 barrel exports.
+Low-level wire element scanning and HTML entity helpers now live in
+`packages/runtime/src/wire-response-scanner.ts`, so `packages/runtime/src/wire-parser.ts` owns only
+decoded query/body readers while handler-context, mutation-failure, deferred stream filtering, and
+the extracted inline-loader parser closure share the same scanner module.
 Query script hydration helpers now remain internal to the loader/visible-return modules instead of
 root `@jiso/runtime` exports; `query-apply.test.ts` covers decoded chunk application while
 `query-script-hydration.test.ts` owns script parsing, ledger replay, retry, and hydration/apply
@@ -1019,6 +1023,25 @@ packages/runtime/src/query-hydration.browser.test.ts`, and
       `pnpm --filter @jiso/runtime run check:inline-loader`. Formatting/lint/type evidence:
       targeted `pnpm exec vp check`, `pnpm exec tsc --noEmit --pretty false`, and
       `git diff --check`.
+      Evidence 2026-06-13 round282 worker C: `packages/runtime/src/wire-response-scanner.ts` now
+      owns `readElementChunks`, `readAttribute`, entity decoding, mutation response element
+      scanning, and the inline response-body projection used by SPEC.md §4.4/§9.1 inline loader
+      extraction. `packages/runtime/src/wire-parser.ts` imports that scanner for decoded
+      query/body readers and no longer exports the low-level scanner helpers; handler context and
+      mutation failure parsing import the same scanner instead of reaching through the decoded
+      wire parser. Verified by focused `pnpm exec vitest --run
+packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts
+packages/runtime/src/mutation-failure.test.ts packages/runtime/src/handler-context.test.ts`,
+      full runtime `pnpm exec vitest --run packages/runtime/src`, inline generation
+      `pnpm run check:inline-loader`, exact `pnpm exec vp check
+packages/runtime/src/wire-response-scanner.ts packages/runtime/src/wire-parser.ts
+packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader-build.ts
+packages/runtime/src/inline-response-apply.ts packages/runtime/src/handler-context.ts
+packages/runtime/src/mutation-failure.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Evidence 2026-06-13 round281: `packages/runtime/src/apply-mutation-response.ts` renamed the
       rooted decoded apply result to `AppliedMutationResponseWithRoot`, and
       `packages/runtime/src/mutation-response-dom.ts`, `packages/runtime/src/apply-deferred-stream.ts`,
@@ -1034,7 +1057,7 @@ packages/runtime/src/index-exports.test.ts` and TypeScript
       Evidence 2026-06-13: `packages/runtime/src/inline-loader-build.ts` generates
       `inlineJisoLoaderInstallerReadableSource` through
       `buildInlineJisoLoaderInstallerReadableSource(inlineWireParserReadableSource)`, where
-      `inlineWireParserReadableSource` is extracted from `wire-parser.ts`. New
+      `inlineWireParserReadableSource` is extracted from `wire-response-scanner.ts`. New
       `packages/runtime/src/inline-loader-parser-parity.test.ts` owns readable generation,
       helper-closure extraction, readable/minified parser embed drift failures, and rejection of
       non-self-contained helper dependencies. Verified by `pnpm exec vitest --run
@@ -1100,8 +1123,8 @@ packages/runtime/src/inline-js-minifier.test.ts` and
       TypeScript `pnpm exec tsc --noEmit --pretty false`, `git diff --check`, and inline
       generation `pnpm --filter @jiso/runtime run check:inline-loader`.
       Evidence 2026-06-13 round270: inline enhanced-response application now extracts both sides of
-      the inline parser/apply boundary from runtime-owned source. `packages/runtime/src/wire-parser.ts`
-      still owns `readInlineMutationResponseBodyChunks`, while
+      the inline parser/apply boundary from runtime-owned source. `packages/runtime/src/wire-response-scanner.ts`
+      owns `readInlineMutationResponseBodyChunks`, while
       `packages/runtime/src/inline-response-apply.ts` owns
       the extracted response apply helper closure; `packages/runtime/src/inline-loader-build.ts` rejects
       readable/minified drift for both helper closures before regenerating

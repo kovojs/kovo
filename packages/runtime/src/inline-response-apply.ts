@@ -2,7 +2,7 @@ import type {
   ElementChunk,
   FragmentChunk,
   InlineMutationResponseBodyChunks,
-} from './wire-parser.js';
+} from './wire-response-scanner.js';
 
 export interface InlineResponseApplyTarget {
   innerHTML: string;
