@@ -1221,7 +1221,9 @@ also own static behavior summaries for component targets, domains, routes, inval
 optimistic rows, and touch-graph keys. Shared HTML fragment fixtures now own selected-element
 counts and named query JSON projections used by commerce app-shell tests. Shared `fw-explain`
 fixtures now own endpoint and scope-audit assertion facts, so commerce source-truth tests no
-longer parse those subjects and summaries locally.
+longer parse those subjects and summaries locally. Shared generated-module fixtures now own
+commerce authored/generated component source-pair loading and projection for the committed-IR
+freshness gate, so commerce app tests no longer reimplement generated artifact file-pair reads.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -1280,6 +1282,11 @@ Latest evidence:
 - `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/fw-export-fixtures.ts packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- Generated component source-pair fixture slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`.
 
 ## Phase 7 - Test Restructuring
 
@@ -1304,7 +1311,9 @@ checks. The D10 Vite diagnostic lowered-event assertion now consumes
 `@jiso/test/diagnostic-output-fixtures` instead of parsing help text and generated handler hrefs
 inside `tests/fw-check.node.mjs`. The P1 generated-module minifier, typed-param, and
 render-equivalence assertions now consume shared `@jiso/test/generated-module-fixtures` behavior
-facts instead of local fake-client invocation and render-projection mechanics.
+facts instead of local fake-client invocation and render-projection mechanics. Commerce committed-IR
+freshness tests now consume `@jiso/test/generated-module-fixtures` file-pair facts instead of
+local generated/authored source reads.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.

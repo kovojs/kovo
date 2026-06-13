@@ -127,6 +127,7 @@ import {
   executeInlineEnhancedFormLoaderFixture,
   generatedBootstrapDeferredBehaviorFact,
   generatedClientExportTypeFacts,
+  generatedComponentSourceFileFacts,
   generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
@@ -140,6 +141,7 @@ import {
   generatedRenderedElementFactsFromArtifact,
   generatedRenderedElementFactsFromSource,
   type GeneratedComponentSourceFacts,
+  type GeneratedComponentSourceFileFact,
   type GeneratedMinifierNamePreservationBehaviorFact,
   type GeneratedRenderEquivalenceBehaviorFact,
   type GeneratedRegistryConsumerTypeOptions,
@@ -936,6 +938,16 @@ describe('@jiso/test package subpath exports', () => {
       authoredLoweredStampAttributes: [],
       generatedHasLoweredIrMarker: true,
     } satisfies GeneratedComponentSourceFacts);
+    expect(
+      generatedComponentSourceFileFacts({
+        components: ['cart-badge'],
+        sourceRootUrl: new URL('../../../examples/commerce/src/', import.meta.url),
+      })[0],
+    ).toMatchObject({
+      authoredPath: 'components/cart-badge.tsx',
+      generatedPath: 'generated/cart-badge.tsx',
+      name: 'cart-badge',
+    } satisfies Partial<GeneratedComponentSourceFileFact>);
     expect(generatedHandlerReferenceFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toMatchObject({
       handlerName: 'Cart$click',
       modulePath: '/c/cart.client.js',

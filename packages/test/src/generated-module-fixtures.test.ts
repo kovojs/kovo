@@ -11,6 +11,7 @@ import {
   assertGeneratedRegistryConsumerTypes,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
+  generatedComponentSourceFileFacts,
   generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
   generatedRenderEquivalenceBehaviorFact,
@@ -74,6 +75,23 @@ describe('@jiso/test generated module fixtures', () => {
       authoredLoweredStampAttributes: ['fw-deps', 'data-p-id'],
       generatedHasLoweredIrMarker: false,
     });
+  });
+
+  it('loads generated component source pairs by component name', () => {
+    expect(
+      generatedComponentSourceFileFacts({
+        components: ['cart-badge'],
+        sourceRootUrl: new URL('../../../examples/commerce/src/', import.meta.url),
+      }),
+    ).toEqual([
+      {
+        authoredLoweredStampAttributes: [],
+        authoredPath: 'components/cart-badge.tsx',
+        generatedHasLoweredIrMarker: true,
+        generatedPath: 'generated/cart-badge.tsx',
+        name: 'cart-badge',
+      },
+    ]);
   });
 
   it('executes generated client modules through explicit runtime bindings', () => {

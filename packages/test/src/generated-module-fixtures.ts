@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
@@ -21,6 +22,12 @@ export interface GeneratedComponentSourceFacts {
   generatedHasLoweredIrMarker: boolean;
 }
 
+export interface GeneratedComponentSourceFileFact extends GeneratedComponentSourceFacts {
+  authoredPath: string;
+  generatedPath: string;
+  name: string;
+}
+
 const loweredStampAttributePattern = /\b((?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+))=/g;
 
 export function generatedComponentSourceFacts(options: {
@@ -34,6 +41,32 @@ export function generatedComponentSourceFacts(options: {
     ),
     generatedHasLoweredIrMarker: options.generatedSource.includes('// @jiso-ir'),
   };
+}
+
+export function generatedComponentSourceFileFacts(options: {
+  authoredDir?: string;
+  components: readonly string[];
+  generatedDir?: string;
+  sourceRootUrl: URL;
+}): GeneratedComponentSourceFileFact[] {
+  const authoredDir = options.authoredDir ?? 'components';
+  const generatedDir = options.generatedDir ?? 'generated';
+
+  return options.components.map((name) => {
+    const authoredPath = `${authoredDir}/${name}.tsx`;
+    const generatedPath = `${generatedDir}/${name}.tsx`;
+    const facts = generatedComponentSourceFacts({
+      authoredSource: readFileSync(new URL(`./${authoredPath}`, options.sourceRootUrl), 'utf8'),
+      generatedSource: readFileSync(new URL(`./${generatedPath}`, options.sourceRootUrl), 'utf8'),
+    });
+
+    return {
+      ...facts,
+      authoredPath,
+      generatedPath,
+      name,
+    };
+  });
 }
 
 export function generatedArtifactFile(
