@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import * as packageAppShellApi from '@jiso/server/app-shell';
 import * as packageClientModulesApi from '@jiso/server/app-shell/client-modules';
 import * as packageCoreApi from '@jiso/server/app-shell/core';
 import * as packageNodeApi from '@jiso/server/app-shell/node';
 import * as packageStaticExportApi from '@jiso/server/app-shell/static-export';
 import * as packageViteApi from '@jiso/server/app-shell/vite';
+import serverPackage from '../../package.json' with { type: 'json' };
 import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
-import * as appShellApi from './app-shell/index.js';
 import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
@@ -30,33 +29,38 @@ function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): str
 
 describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on app-shell subpaths while root preserves CLI static export', () => {
-    const localAppShellValues = appShellApi as Record<string, unknown>;
-    const packageAppShellValues = packageAppShellApi as Record<string, unknown>;
     const publicValues = publicApi as Record<string, unknown>;
     const rootAppShellCompatibility = new Set([
       'createApp',
       'createRequestHandler',
       'exportStaticApp',
     ]);
+    const rootAppShellCompatibilityValues = {
+      createApp: coreApi.createApp,
+      createRequestHandler: coreApi.createRequestHandler,
+      exportStaticApp: staticExportApi.exportStaticApp,
+    };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: coreApi.createApp,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
     });
 
-    expect(Object.keys(packageAppShellValues).sort()).toEqual(
-      Object.keys(localAppShellValues).sort(),
-    );
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
-    expect(Object.keys(localAppShellValues).sort()).toEqual(
-      aggregateValueKeys(clientModulesApi, coreApi, nodeApi, staticExportApi, viteApi),
-    );
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
-    for (const key of Object.keys(localAppShellValues)) {
-      expect(packageAppShellValues[key]).toBe(localAppShellValues[key]);
+    const splitAppShellValues = aggregateValueKeys(
+      clientModulesApi,
+      coreApi,
+      nodeApi,
+      staticExportApi,
+      viteApi,
+    );
+    for (const key of splitAppShellValues) {
       if (rootAppShellCompatibility.has(key)) {
-        expect(publicValues[key]).toBe(localAppShellValues[key]);
+        expect(publicValues[key]).toBe(
+          rootAppShellCompatibilityValues[key as keyof typeof rootAppShellCompatibilityValues],
+        );
       } else {
         expect(publicValues).not.toHaveProperty(key);
       }
@@ -80,53 +84,7 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
 
-    expect(appShellApi.createApp).toBe(coreApi.createApp);
-    expect(appShellApi.createMemoryVersionedClientModuleRegistry).toBe(
-      clientModulesApi.createMemoryVersionedClientModuleRegistry,
-    );
-    expect(appShellApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
-    expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
-    expect(appShellApi.staticExportInventory).toBe(staticExportResultApi.staticExportInventory);
-    expect(appShellApi.staticExportManifest).toBe(staticExportResultApi.staticExportManifest);
-    expect(appShellApi.assertStaticExportManifestMatchesResult).toBe(
-      staticExportResultApi.assertStaticExportManifestMatchesResult,
-    );
-    expect(appShellApi.staticExportOutputPlan).toBe(staticExportOutputApi.staticExportOutputPlan);
-    expect(appShellApi.formatStaticExportDiagnostics).toBe(
-      staticExportDiagnosticsApi.formatStaticExportDiagnostics,
-    );
-    expect(appShellApi.isStaticExportDiagnostic).toBe(
-      staticExportDiagnosticsApi.isStaticExportDiagnostic,
-    );
-    expect(appShellApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
-    expect(appShellApi.writeJisoAppShellVitePluginBuild).toBe(
-      viteApi.writeJisoAppShellVitePluginBuild,
-    );
-    expect(appShellApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.exportJisoAppShellViteBuildFromManifestFile,
-    );
-    expect(appShellApi.staticExportInventoryForJisoAppShellViteBuild).toBe(
-      viteApi.staticExportInventoryForJisoAppShellViteBuild,
-    );
-    expect(appShellApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
-    );
-    expect(appShellApi.staticExportManifestForJisoAppShellViteBuild).toBe(
-      viteApi.staticExportManifestForJisoAppShellViteBuild,
-    );
-    expect(appShellApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
-    );
-    expect(appShellApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
-    expect(appShellApi.jisoAppShellViteBuildStaticExportAssets).toBe(
-      viteApi.jisoAppShellViteBuildStaticExportAssets,
-    );
-    expect(appShellApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
-      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
-    );
-    expect(appShellApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
-      viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
-    );
+    expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
   });
 
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {
@@ -186,67 +144,12 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefsFromFile');
 
-    expect(packageAppShellApi.createRequestHandler).toBe(coreApi.createRequestHandler);
-    expect(packageAppShellApi.renderVersionedClientModuleResponse).toBe(
-      clientModulesApi.renderVersionedClientModuleResponse,
-    );
-    expect(packageAppShellApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
-    expect(packageAppShellApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
-    expect(packageAppShellApi.staticExportInventory).toBe(
-      staticExportResultApi.staticExportInventory,
-    );
-    expect(packageAppShellApi.staticExportManifest).toBe(
-      staticExportResultApi.staticExportManifest,
-    );
-    expect(packageAppShellApi.assertStaticExportManifestMatchesResult).toBe(
-      staticExportResultApi.assertStaticExportManifestMatchesResult,
-    );
-    expect(packageAppShellApi.staticExportOutputPlan).toBe(
-      staticExportOutputApi.staticExportOutputPlan,
-    );
-    expect(packageAppShellApi.formatStaticExportDiagnostics).toBe(
-      staticExportDiagnosticsApi.formatStaticExportDiagnostics,
-    );
-    expect(packageAppShellApi.isStaticExportDiagnostic).toBe(
-      staticExportApi.isStaticExportDiagnostic,
-    );
-    expect(packageAppShellApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);
-    expect(packageAppShellApi.writeJisoAppShellVitePluginBuild).toBe(
-      viteApi.writeJisoAppShellVitePluginBuild,
-    );
-    expect(packageAppShellApi.jisoAppShellViteSsrDevPlugin).toBe(
-      viteApi.jisoAppShellViteSsrDevPlugin,
-    );
-    expect(packageAppShellApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.exportJisoAppShellViteBuildFromManifestFile,
-    );
-    expect(packageAppShellApi.staticExportInventoryForJisoAppShellViteBuild).toBe(
-      viteApi.staticExportInventoryForJisoAppShellViteBuild,
-    );
-    expect(packageAppShellApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
-    );
-    expect(packageAppShellApi.staticExportManifestForJisoAppShellViteBuild).toBe(
-      viteApi.staticExportManifestForJisoAppShellViteBuild,
-    );
-    expect(packageAppShellApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
-      viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
-    );
-    expect(packageAppShellApi.jisoAppShellViteManifestFile).toBe(
-      viteApi.jisoAppShellViteManifestFile,
-    );
-    expect(packageAppShellApi.jisoAppShellViteBuildStaticExportAssets).toBe(
-      viteApi.jisoAppShellViteBuildStaticExportAssets,
-    );
-    expect(packageAppShellApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
-      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
-    );
-    expect(packageAppShellApi.jisoAppShellViteManifestStylesheetHrefFromFile).toBe(
-      viteApi.jisoAppShellViteManifestStylesheetHrefFromFile,
-    );
-    expect(packageAppShellApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
-    expect(packageAppShellApi).not.toHaveProperty(
-      'jisoAppShellViteManifestStylesheetHrefsFromFile',
-    );
+    expect(serverPackage.exports as Record<string, string>).toMatchObject({
+      './app-shell/client-modules': './src/api/app-shell/client-modules.ts',
+      './app-shell/core': './src/api/app-shell/core.ts',
+      './app-shell/node': './src/api/app-shell/node.ts',
+      './app-shell/static-export': './src/api/app-shell/static-export.ts',
+      './app-shell/vite': './src/api/app-shell/vite.ts',
+    });
   });
 });

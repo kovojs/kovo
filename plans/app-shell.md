@@ -39,6 +39,8 @@ Implemented areas:
   `vite-dev.ts` now defaults SSR dev middleware to the loaded app's SPEC §9.5
   `Request -> Response` handler while keeping explicit node-handler exports available for apps
   that add request context at the adapter edge.
+- The aggregate `@jiso/server/app-shell` compatibility subpath is removed; R5/R6/R7 consumers use
+  the focused `client-modules`, `core`, `node`, `static-export`, and `vite` app-shell subpaths.
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
@@ -140,6 +142,22 @@ Round86 server public export manifest evidence:
   tests pin those exports.
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round260 app-shell aggregate subpath deletion evidence:
+
+- `packages/server/package.json` no longer exports `./app-shell`, and
+  `packages/server/src/api/app-shell/index.ts` was deleted after starter, commerce, and docs
+  adoption pinned focused app-shell subpaths for SPEC §9.5 static export/dev flows.
+- `packages/server/src/api/app.test.ts` now proves the package exports only the focused app-shell
+  subpaths while root keeps the narrow `createApp`, `createRequestHandler`, and CLI
+  `exportStaticApp` compatibility surface.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm exec vp check packages/server/package.json packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 
 Round86b app-shell consumer manifest evidence:
 

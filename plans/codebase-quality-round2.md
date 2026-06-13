@@ -1078,9 +1078,10 @@ Static export option normalization now lives in `static-export-options.ts`: repl
 owner for html path-style FW229 diagnostics, `static-export-types.ts` remains data/option shapes,
 and `StaticExportNonExportablePolicy` is the single public policy type exported through app-shell
 static-export subpaths.
-The `@jiso/server/app-shell` aggregate now composes from the split public app-shell subpaths, and
-the public API test proves its runtime values equal the union of those subpaths so manual aggregate
-inventory drift cannot hide behind the compatibility barrel.
+The `@jiso/server/app-shell` aggregate compatibility subpath has been removed after starter,
+commerce, and docs adoption pinned the split public app-shell subpaths. The public API test now
+proves only `client-modules`, `core`, `node`, `static-export`, and `vite` remain exported app-shell
+package subpaths, so R5/R6/R7 consumers cannot drift back to the aggregate barrel.
 The internal `static-export.ts` orchestration facade now exports only `exportStaticApp`;
 compile/static-export diagnostics, manifest/inventory helpers, and output-plan helpers stay on
 their focused owner modules and the public `@jiso/server/app-shell/static-export` replacement seam.
@@ -1138,6 +1139,14 @@ stylesheet evidence.
 
 Latest evidence:
 
+- Round260 app-shell aggregate subpath deletion:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  exact `pnpm exec vp check packages/server/package.json packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts plans/app-shell.md plans/codebase-quality-round2.md`.
 - Round252 static document replay contraction:
   `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run packages/server/src`;

@@ -4,7 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./app-shell": "./src/api/app-shell/index.ts",
     "./app-shell/client-modules": "./src/api/app-shell/client-modules.ts",
     "./app-shell/core": "./src/api/app-shell/core.ts",
     "./app-shell/node": "./src/api/app-shell/node.ts",
