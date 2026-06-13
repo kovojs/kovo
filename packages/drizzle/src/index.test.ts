@@ -3045,6 +3045,83 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts project query loaders and domain actions from static property declarations', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'class ProductLoaders {',
+          '  static loadProduct = (_input: unknown, db: PgDatabase<any, any, any>) => {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  };',
+          '  static options = { load: ProductLoaders.loadProduct };',
+          '}',
+          '',
+          'class ProductActions {',
+          '  static add = write(addItem);',
+          '  static actions = { add: ProductActions.add };',
+          '}',
+          '',
+          'export const productDomain = domain(ProductActions.actions);',
+          '',
+          'export const productQuery = query("product/static-property-loader", ProductLoaders.options);',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/static-property-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.domain.ts:26',
+      },
+    ]);
+  });
+
   it('extracts project callbacks through destructured static callback containers', () => {
     const files = [
       {

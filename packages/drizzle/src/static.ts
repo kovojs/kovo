@@ -3091,6 +3091,11 @@ function queryBodyObjectLiteralFromDeclaration(
     return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
   }
 
+  if (Node.isPropertyDeclaration(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     const initializer = declaration.getInitializer();
     return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
@@ -3376,6 +3381,8 @@ function callbackFunctionFromDeclaration(
   if (Node.isMethodDeclaration(declaration)) return declaration;
   if (Node.isVariableDeclaration(declaration))
     return callbackFunctionFromVariable(declaration, seen);
+  if (Node.isPropertyDeclaration(declaration))
+    return callbackFunctionFromPropertyDeclaration(declaration, seen);
   if (Node.isBindingElement(declaration))
     return callbackFunctionFromBindingElement(declaration, seen);
   if (Node.isPropertyAssignment(declaration))
@@ -3409,6 +3416,20 @@ function callbackFunctionFromVariable(
   declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
   seen: Set<string>,
 ): Node | undefined {
+  const initializer = declaration.getInitializer();
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  return callbackFunctionFromReference(expression, seen);
+}
+
+function callbackFunctionFromPropertyDeclaration(
+  declaration: Node,
+  seen: Set<string>,
+): Node | undefined {
+  if (!Node.isPropertyDeclaration(declaration)) return undefined;
+
   const initializer = declaration.getInitializer();
   if (!initializer) return undefined;
 
@@ -3552,7 +3573,18 @@ function staticLiteralReferenceFromExpression(
   if (!access || access.path.length === 0) return undefined;
 
   const container = staticLiteralContainerExpression(access.root, seen);
-  return container ? callbackReferenceFromStaticLiteralPath(container, access.path) : undefined;
+  const literalReference = container
+    ? callbackReferenceFromStaticLiteralPath(container, access.path)
+    : undefined;
+  if (literalReference) return literalReference;
+
+  const symbol = symbolForStaticTypePath(access.root, access.path, node);
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    const initializer = staticLiteralContainerInitializer(declaration);
+    if (initializer) return initializer;
+  }
+
+  return undefined;
 }
 
 function staticAccessSegments(node: Node): { path: string[]; root: Node } | undefined {
@@ -3572,7 +3604,11 @@ function staticAccessSegments(node: Node): { path: string[]; root: Node } | unde
 }
 
 function staticLiteralContainerInitializer(declaration: Node): Node | undefined {
-  if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
+  if (
+    Node.isVariableDeclaration(declaration) ||
+    Node.isPropertyAssignment(declaration) ||
+    Node.isPropertyDeclaration(declaration)
+  ) {
     return declaration.getInitializer();
   }
   if (Node.isIdentifier(declaration)) {
@@ -5615,6 +5651,11 @@ function domainWriteObjectFromDeclaration(
     return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
   }
 
+  if (Node.isPropertyDeclaration(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     const initializer = declaration.getInitializer();
     return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
@@ -5863,6 +5904,19 @@ function domainWritePropertyFromDeclaration(
     };
   }
 
+  if (Node.isPropertyDeclaration(declaration)) {
+    const name = declaration.getNameNode();
+    const initializer = declaration.getInitializer();
+    if (!initializer) return undefined;
+    if (!writeActionCallbackFunction(initializer, seen)) return undefined;
+
+    return {
+      initializer,
+      keyNode: name,
+      memberName,
+    };
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     return {
       initializer: declaration.getInitializer(),
@@ -5980,6 +6034,10 @@ function writeActionCallbackFromDeclaration(
   seen: Set<string>,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
   if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
+    return writeActionCallbackFunction(declaration.getInitializer(), seen);
+  }
+
+  if (Node.isPropertyDeclaration(declaration)) {
     return writeActionCallbackFunction(declaration.getInitializer(), seen);
   }
 
@@ -6357,6 +6415,10 @@ function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
     }
     if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
       const callback = callbackFunctionFromProperty(parent, new Set());
+      return callback ? localFunctionKeyForCallback(callback) : undefined;
+    }
+    if (Node.isPropertyDeclaration(parent) && parent.getNameNode() === declaration) {
+      const callback = callbackFunctionFromPropertyDeclaration(parent, new Set());
       return callback ? localFunctionKeyForCallback(callback) : undefined;
     }
   }

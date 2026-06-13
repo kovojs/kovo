@@ -745,6 +745,15 @@ duplicate parenthesis-only projection logic.
       callback declarations; `packages/drizzle/src/index.test.ts` covers project query loaders plus
       source/project domain write callbacks; `conformance/drizzle-pin/src/index.test.ts` pins the
       same surfaces against real `drizzle-orm` Postgres receiver types.
+      Evidence 2026-06-13 round287: `packages/drizzle/src/static.ts` now falls back from local
+      literal-container walking to ts-morph `symbolForStaticTypePath()` member facts for static
+      callback/config containers and accepts `PropertyDeclaration` initializers in query body,
+      callback, literal-container, and domain action resolution. `packages/drizzle/src/index.test.ts`
+      and `conformance/drizzle-pin/src/index.test.ts` pin `ProductLoaders.options` and
+      `ProductActions.actions` under Postgres `PgDatabase` receivers. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "static property declarations"`
+      and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "static property callback containers"`.
       Evidence 2026-06-13: `packages/drizzle/src/static.ts` now treats project member receiver
       expressions such as `carrier.db` as exact only when ts-morph proves their Postgres Drizzle
       database type, removing the carrier-member FW406 fallback for proven reads/writes while

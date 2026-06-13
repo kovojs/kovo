@@ -1374,6 +1374,79 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins static property callback containers under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import { eq } from 'drizzle-orm';",
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'class ProductLoaders {',
+          '  static loadProduct = (_input: unknown, db: PgDatabase<any, any, any>) => {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  };',
+          '  static options = { load: ProductLoaders.loadProduct };',
+          '}',
+          '',
+          'class ProductActions {',
+          '  static add = write(addItem);',
+          '  static actions = { add: ProductActions.add };',
+          '}',
+          '',
+          'export const productDomain = domain(ProductActions.actions);',
+          '',
+          "export const productQuery = query('product/static-property-loader', ProductLoaders.options);",
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/static-property-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:26',
+      },
+    ]);
+  });
+
   it('pins destructured static callback containers under real Drizzle Postgres receiver types', () => {
     const files = [
       {
