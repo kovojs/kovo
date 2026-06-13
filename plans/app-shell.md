@@ -122,6 +122,22 @@ Implemented areas:
   partial compatibility shells before SPEC §9.5 replay, route-hint wiring, client-module
   registration, or static-host writes, keeping static export and Vite adoption on the closed
   `createApp()` aggregate boundary.
+- Static-export output planning now rejects stale public client-module artifacts whose path/href
+  evidence is not a matching versioned `/c/` module URL, keeping SPEC §4.3 immutable client-module
+  evidence aligned with SPEC §9.5 static-host output.
+
+Round313 static export client-module output evidence:
+
+- `packages/server/src/static-export-output-targets.ts` now validates public client-module output
+  artifacts before static-host writes: paths must stay under `/c/`, href pathnames must match the
+  artifact path, and hrefs must carry a `v=` version.
+- `packages/server/src/static-export-output.test.ts` proves stale non-`/c/`, mismatched href/path,
+  and unversioned client-module artifacts fail through the public output-plan boundary while the
+  existing unsafe-segment diagnostic remains intact.
+- `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round309 static export/Vite build closed-app boundary evidence:
 

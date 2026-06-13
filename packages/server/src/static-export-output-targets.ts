@@ -46,12 +46,14 @@ export function staticExportOutputTargets(
   });
 
   plan.clientModules.forEach((artifact, itemIndex) => {
+    const targetPath = staticExportClientModuleTargetPath(root, artifact.path);
+    assertStaticExportClientModuleTarget(artifact);
     targets.push({
       diagnosticPath: artifact.path,
       itemIndex,
       itemKind: 'client-module',
       kind: 'client module',
-      targetPath: staticExportClientModuleTargetPath(root, artifact.path),
+      targetPath,
     });
   });
 
@@ -67,6 +69,25 @@ export function staticExportOutputTargets(
 
   assertNoStaticExportOutputConflicts(targets);
   return targets;
+}
+
+function assertStaticExportClientModuleTarget(artifact: StaticExportClientModuleArtifact): void {
+  const hrefUrl = new URL(artifact.href, 'https://jiso.local');
+
+  if (
+    artifact.path.startsWith('/c/') &&
+    hrefUrl.pathname === artifact.path &&
+    hrefUrl.searchParams.get('v')
+  ) {
+    return;
+  }
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      artifact.path,
+      `FW229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §4.3 and §9.5 publish immutable versioned /c/ module URLs, so artifact path and href pathname must match under /c/ with a v= version.`,
+    ),
+  ]);
 }
 
 function assertNoStaticExportOutputConflicts(targets: readonly StaticExportOutputTarget[]): void {

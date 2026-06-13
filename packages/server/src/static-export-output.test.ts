@@ -129,6 +129,58 @@ describe('server static export output boundary', () => {
     ).toThrow(/conflicts with route document '\/index\.html'/);
   });
 
+  it('rejects stale client-module output evidence outside versioned /c/ URLs', () => {
+    const base = {
+      artifacts: [],
+      assets: [],
+      outDir: '/tmp/jiso-static-export-output',
+    };
+    const moduleArtifact = {
+      body: 'export {};',
+      headers: {},
+      status: 200,
+    };
+
+    expect(() =>
+      createStaticExportOutputPlan({
+        ...base,
+        clientModules: [
+          {
+            ...moduleArtifact,
+            href: '/assets/cart.client.js?v=cart',
+            path: '/assets/cart.client.js',
+          },
+        ],
+      }),
+    ).toThrow(/immutable versioned \/c\/ module URLs/);
+
+    expect(() =>
+      createStaticExportOutputPlan({
+        ...base,
+        clientModules: [
+          {
+            ...moduleArtifact,
+            href: '/c/cart.client.js?v=cart',
+            path: '/c/other.client.js',
+          },
+        ],
+      }),
+    ).toThrow(/artifact path and href pathname must match/);
+
+    expect(() =>
+      createStaticExportOutputPlan({
+        ...base,
+        clientModules: [
+          {
+            ...moduleArtifact,
+            href: '/c/cart.client.js',
+            path: '/c/cart.client.js',
+          },
+        ],
+      }),
+    ).toThrow(/with a v= version/);
+  });
+
   it('validates static asset sources before writing any output files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-write-'));
     try {

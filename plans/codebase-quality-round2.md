@@ -181,6 +181,15 @@ longer assembles that lowered string-render source or diagnostic-to-fw-check map
 
 Latest evidence:
 
+- Phase 5 static export client-module output boundary slice:
+  `pnpm exec vitest --run packages/server/src/static-export-output.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/static-export-output-targets.ts` now rejects stale public
+  client-module output artifacts whose path/href evidence is not a matching versioned `/c/`
+  module URL, and `packages/server/src/static-export-output.test.ts` proves non-`/c/`,
+  mismatched href/path, and unversioned artifacts fail before static-host writes.
 - Phase 5 static export/Vite build closed-app boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
