@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  applyComponentPipelineEmitPatches,
+  applyTerminalEmitPatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
 } from './model-pipeline.js';
@@ -161,7 +161,7 @@ describe('compiler model pipeline', () => {
     );
     const start = state.source.indexOf('onClick={save}');
 
-    const lowered = applyComponentPipelineEmitPatches(state, [
+    const lowered = applyTerminalEmitPatches(state, [
       {
         end: start + 'onClick={save}'.length,
         replacement: 'on:click="/c/cart-badge.client.js#CartBadge$button_click"',

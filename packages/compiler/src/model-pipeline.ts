@@ -50,7 +50,7 @@ export function lowerComponentPipelinePatches<Model>(
   };
 }
 
-export function applyComponentPipelineEmitPatches(
+export function applyTerminalEmitPatches(
   previous: Pick<ComponentPipelineState<unknown>, 'source'>,
   replacements: readonly SourceReplacement[],
 ): string {

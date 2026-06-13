@@ -19,7 +19,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import {
-  applyComponentPipelineEmitPatches,
+  applyTerminalEmitPatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
 } from './model-pipeline.js';
@@ -115,10 +115,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverRenderReplacements = serverRenderLowering(versionedHandlers, model);
-  const serverRenderedSource = applyComponentPipelineEmitPatches(
-    modelPatch.state,
-    serverRenderReplacements,
-  );
+  const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
   const serverModule = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
     clientFileName: fileNames.client,
