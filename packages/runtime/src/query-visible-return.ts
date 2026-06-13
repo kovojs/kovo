@@ -5,6 +5,7 @@ import type {
   VisibilityStateLike,
 } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
+import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { refetchQueries } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
@@ -24,6 +25,7 @@ export interface QueryVisibleReturnRefetchRoot
     VisibilityStateLike {}
 
 export interface QueryVisibleReturnRefetchOptions {
+  applyQuery?: QueryApplyInterposition;
   onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
@@ -84,6 +86,7 @@ export function installQueryVisibleReturnRefetch(
   const hydrationLedger = options.queryStore
     ? createQueryScriptHydrationLedger(options.queryStore, {
         ...definedProps({
+          applyQuery: options.applyQuery,
           queryPlans: options.queryPlans,
           root: options.root,
         }),
@@ -139,6 +142,7 @@ export function installQueryVisibleReturnRefetch(
         ...options.queryRefetch,
         ...definedProps({ onError }),
         ...definedProps({
+          applyQuery: options.applyQuery,
           queryPlans: options.queryPlans,
           root: options.root,
         }),

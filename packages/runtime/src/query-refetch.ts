@@ -1,6 +1,6 @@
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
-import { applyQueryChunksToRuntime } from './query-apply.js';
+import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
@@ -33,6 +33,7 @@ export interface QueryRefetchResponse {
 }
 
 export interface RefetchQueriesOptions extends QueryRefetchOptions {
+  applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
   queries: readonly string[];
   queryStore: QueryStore;
@@ -74,6 +75,7 @@ export async function refetchQueries(
         readQueryChunks(await response.text(), options.onError),
         {
           ...definedProps({
+            applyQuery: options.applyQuery,
             queryPlans: options.queryPlans,
             root: options.root,
           }),

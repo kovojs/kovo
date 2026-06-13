@@ -14,6 +14,7 @@ import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
 import { installInlineQueryEventHydration } from './query-events.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
+import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
@@ -26,6 +27,7 @@ export interface JisoLoaderOptions {
   focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
+  applyQuery?: QueryApplyInterposition;
   queryEventTarget?: QueryEventHydrationTarget;
   queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
@@ -53,6 +55,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
     },
     ...definedProps({
+      applyQuery: options.applyQuery,
       queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
       queryRefetch: options.queryRefetch,
       queryStore: options.queryStore,
@@ -116,6 +119,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
           globalQueryEventTarget() ??
           (options.root as unknown as QueryEventHydrationTarget),
         ...definedProps({
+          applyQuery: options.applyQuery,
           queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
         }),
       }),

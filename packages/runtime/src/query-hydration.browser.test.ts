@@ -145,4 +145,42 @@ describe('query hydration browser runtime', () => {
     expect(store.get('cart')).toEqual({ count: 5 });
     expect(output.textContent).toBe('5');
   });
+
+  it('threads the loader query apply hook through browser hydration events', () => {
+    document.body.innerHTML = '<output data-bind="cart.count"></output>';
+    const store = createQueryStore();
+    const output = document.querySelector('output');
+    if (!output) throw new Error('missing query binding output');
+
+    const loader = installJisoLoader({
+      applyQuery(query) {
+        const value =
+          typeof query.value === 'object' && query.value !== null
+            ? (query.value as { count?: unknown })
+            : {};
+        store.set(query.name, { count: Number(value.count) + 1 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      importModule: vi.fn(),
+      queryPlans: { cart: { bindings: true } },
+      queryStore: store,
+      root: document,
+    });
+
+    window.dispatchEvent(
+      new CustomEvent('jiso:query', {
+        detail: {
+          attrs: ' name="cart"',
+          content: '{"count":5}',
+        },
+      }),
+    );
+
+    // SPEC.md §9.1/§9.4: browser inline hydration uses the same configured
+    // query apply hook as decoded mutation, typed-read, and script hydration.
+    expect(store.get('cart')).toEqual({ count: 6 });
+    expect(output.textContent).toBe('6');
+
+    loader.dispose();
+  });
 });

@@ -980,6 +980,14 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       full runtime `pnpm exec vitest --run packages/runtime/src`, browser runtime `pnpm exec vitest
       --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
       packages/runtime/src/query-hydration.browser.test.ts`, and `git diff --check`.
+      Evidence 2026-06-13 round263: `packages/runtime/src/loader.ts` now threads the configured
+      `applyQuery` hook into initial script hydration, visible-return script hydration, typed-read
+      refetch, and inline `jiso:query` hydration through `query-visible-return.ts`,
+      `query-refetch.ts`, and `query-events.ts`. New
+      `packages/runtime/src/loader-query-apply-interposition.test.ts` pins the fake-root loader
+      boundary, and `packages/runtime/src/query-hydration.browser.test.ts` pins the browser inline
+      hydration path. Verified by the focused runtime, full runtime, browser runtime, TypeScript,
+      inline-loader, exact `vp check`, and `git diff --check` commands listed in Latest evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1042,6 +1050,10 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       refetch integration coverage moved into its own owner suite. Command: `pnpm exec vitest
       --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
       packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round263: browser runtime checks passed after the loader query
+      `applyQuery` hook was threaded through browser inline hydration. Command: `pnpm exec vitest
+      --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 
@@ -1090,6 +1102,14 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - exact `pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.ts plans/codebase-quality-round2.md`
+- Round263 loader query apply interposition:
+  `pnpm exec vitest --run packages/runtime/src/loader-query-apply-interposition.test.ts packages/runtime/src/query-script-hydration.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-events.test.ts packages/runtime/src/loader-query-hydration.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  exact `pnpm exec vp check packages/runtime/src/loader.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts packages/runtime/src/loader-query-apply-interposition.test.ts packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell
