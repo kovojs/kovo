@@ -156,6 +156,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       fixtures are synchronized against `renderGalleryRoute()`, and the Chromium browser gate
       asserts deterministic route geometry plus screenshot hashes `e9a5f503`, `80d7704e`,
       `d5277948`, `6b72f908`, and `5ff031a5`.
+      Evidence 2026-06-13: the static visual baseline now covers the H3 menu/navigation route
+      family: context-menu, dropdown-menu, menubar, and navigation-menu. Their raw route fixtures
+      are synchronized against `renderGalleryRoute()`, and the Chromium browser gate asserts
+      deterministic route geometry plus screenshot hashes `08c100b6`, `bc8bc631`, `279cb945`,
+      and `3c8e6a99`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -248,6 +253,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] H3 menu/navigation styled static visual-baseline slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/context-menu.html.txt examples/gallery/src/visual-fixtures/dropdown-menu.html.txt examples/gallery/src/visual-fixtures/menubar.html.txt examples/gallery/src/visual-fixtures/navigation-menu.html.txt plans/ui.md`;
+      `git diff --check`.
 - [x] Styled static gallery visual-baseline slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;

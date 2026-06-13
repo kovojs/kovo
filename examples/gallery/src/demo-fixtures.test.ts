@@ -94,6 +94,10 @@ describe('gallery demo fixtures', () => {
     for (const [path, fileName] of [
       ['/components/checkbox-group', 'checkbox-group.html.txt'],
       ['/components/command', 'command.html.txt'],
+      ['/components/context-menu', 'context-menu.html.txt'],
+      ['/components/dropdown-menu', 'dropdown-menu.html.txt'],
+      ['/components/menubar', 'menubar.html.txt'],
+      ['/components/navigation-menu', 'navigation-menu.html.txt'],
       ['/components/number-field', 'number-field.html.txt'],
       ['/components/otp-field', 'otp-field.html.txt'],
       ['/components/radio-group', 'radio-group.html.txt'],

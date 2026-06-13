@@ -102,6 +102,10 @@ import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
 import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.txt?raw';
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
+import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
+import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
+import menubarStaticRouteHtml from './visual-fixtures/menubar.html.txt?raw';
+import navigationMenuStaticRouteHtml from './visual-fixtures/navigation-menu.html.txt?raw';
 import numberFieldStaticRouteHtml from './visual-fixtures/number-field.html.txt?raw';
 import otpFieldStaticRouteHtml from './visual-fixtures/otp-field.html.txt?raw';
 import radioGroupStaticRouteHtml from './visual-fixtures/radio-group.html.txt?raw';
@@ -121,6 +125,10 @@ interface InteractiveDemoComponent {
 type StaticVisualFixturePath =
   | '/components/checkbox-group'
   | '/components/command'
+  | '/components/context-menu'
+  | '/components/dropdown-menu'
+  | '/components/menubar'
+  | '/components/navigation-menu'
   | '/components/number-field'
   | '/components/otp-field'
   | '/components/radio-group'
@@ -132,6 +140,10 @@ type StaticVisualFixturePath =
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/checkbox-group': checkboxGroupStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
+  '/components/context-menu': contextMenuStaticRouteHtml,
+  '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
+  '/components/menubar': menubarStaticRouteHtml,
+  '/components/navigation-menu': navigationMenuStaticRouteHtml,
   '/components/number-field': numberFieldStaticRouteHtml,
   '/components/otp-field': otpFieldStaticRouteHtml,
   '/components/radio-group': radioGroupStaticRouteHtml,
@@ -298,6 +310,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     const numberFieldRoute = mountStaticGalleryRoute('/components/number-field');
     const otpFieldRoute = mountStaticGalleryRoute('/components/otp-field');
     const sliderRoute = mountStaticGalleryRoute('/components/slider');
+    const contextMenuRoute = mountStaticGalleryRoute('/components/context-menu');
+    const dropdownMenuRoute = mountStaticGalleryRoute('/components/dropdown-menu');
+    const menubarRoute = mountStaticGalleryRoute('/components/menubar');
+    const navigationMenuRoute = mountStaticGalleryRoute('/components/navigation-menu');
 
     expect(visualGeometry(tabsRoute)).toEqual({
       height: 539,
@@ -335,6 +351,22 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 637,
       width: 860,
     });
+    expect(visualGeometry(contextMenuRoute)).toEqual({
+      height: 531,
+      width: 860,
+    });
+    expect(visualGeometry(dropdownMenuRoute)).toEqual({
+      height: 540,
+      width: 860,
+    });
+    expect(visualGeometry(menubarRoute)).toEqual({
+      height: 551,
+      width: 860,
+    });
+    expect(visualGeometry(navigationMenuRoute)).toEqual({
+      height: 561,
+      width: 860,
+    });
 
     expect(await visualBaselineHash(tabsRoute)).toBe('9044926b');
     expect(await visualBaselineHash(selectRoute)).toBe('e0f770a7');
@@ -345,6 +377,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(numberFieldRoute)).toBe('d5277948');
     expect(await visualBaselineHash(otpFieldRoute)).toBe('6b72f908');
     expect(await visualBaselineHash(sliderRoute)).toBe('5ff031a5');
+    expect(await visualBaselineHash(contextMenuRoute)).toBe('08c100b6');
+    expect(await visualBaselineHash(dropdownMenuRoute)).toBe('bc8bc631');
+    expect(await visualBaselineHash(menubarRoute)).toBe('279cb945');
+    expect(await visualBaselineHash(navigationMenuRoute)).toBe('3c8e6a99');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
