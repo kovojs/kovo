@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RequestHandler } from './app.js';
-import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
+import { replayStaticExportClientModuleArtifacts } from './static-export-document.js';
 
-describe('server static export client module replay boundary', () => {
+describe('server static export document client module replay boundary', () => {
   it('replays discovered client modules once per output path and rejects query-version drift', async () => {
     const seen: string[] = [];
     const handler: RequestHandler = async (request) => {

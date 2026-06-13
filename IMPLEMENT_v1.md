@@ -189,6 +189,18 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
       `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
       and `git diff --check`.
+      Additional evidence 2026-06-13: SPEC §9.5 discovered `/c/` client-module artifact replay,
+      same-output-path dedupe, and FW229 query-version drift diagnostics now also live in
+      `packages/server/src/static-export-document.ts`, so
+      `packages/server/src/static-export-client-modules.ts` was deleted; the static export
+      response seam now exposes only the unified policy-discriminated replay reader instead of
+      route/client wrapper readers. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src`, and
+      `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-response.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-response.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+      and `git diff --check`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

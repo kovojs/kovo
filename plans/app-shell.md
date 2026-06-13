@@ -379,6 +379,21 @@ Round105 app-shell static replay compatibility deletion evidence:
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round106 app-shell static document/client replay evidence:
+
+- `packages/server/src/static-export-document.ts` now also owns discovered `/c/` client-module
+  artifact replay, same-output-path dedupe, and FW229 query-version drift diagnostics for
+  SPEC §9.5 static export, deleting the standalone `static-export-client-modules.ts` seam.
+- `packages/server/src/static-export-response.ts` now exposes only the policy-discriminated
+  replay response reader; route-document and client-module wrapper readers were removed so both
+  artifact paths use the same response snapshot boundary directly.
+- `pnpm exec vitest --run packages/server/src/static-export-response.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-response.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-response.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

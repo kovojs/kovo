@@ -7,12 +7,12 @@ import {
 
 export type StaticExportReplayedResponseBody = StaticExportResponseSnapshot;
 
-export interface StaticExportRouteDocumentResponseOptions {
+interface StaticExportRouteDocumentResponseOptions {
   response: Response;
   routePath: string;
 }
 
-export interface StaticExportClientModuleResponseOptions {
+interface StaticExportClientModuleResponseOptions {
   href: string;
   path: string;
   response: Response;
@@ -21,30 +21,6 @@ export interface StaticExportClientModuleResponseOptions {
 export type StaticExportReplayedResponseReadOptions =
   | (StaticExportRouteDocumentResponseOptions & { kind: 'route-document' })
   | (StaticExportClientModuleResponseOptions & { kind: 'client-module' });
-
-export async function readStaticExportRouteDocumentResponse({
-  response,
-  routePath,
-}: StaticExportRouteDocumentResponseOptions): Promise<StaticExportReplayedResponseBody> {
-  return await readStaticExportReplayedResponse({
-    kind: 'route-document',
-    response,
-    routePath,
-  });
-}
-
-export async function readStaticExportClientModuleResponse({
-  href,
-  path,
-  response,
-}: StaticExportClientModuleResponseOptions): Promise<StaticExportReplayedResponseBody> {
-  return await readStaticExportReplayedResponse({
-    href,
-    kind: 'client-module',
-    path,
-    response,
-  });
-}
 
 export async function readStaticExportReplayedResponse(
   options: StaticExportReplayedResponseReadOptions,
