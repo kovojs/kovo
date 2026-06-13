@@ -1,5 +1,7 @@
 import {
   applySourceReplacementsWithOffsetMap,
+  composeSourceOffsetMaps,
+  identitySourceOffsetMap,
   type SourceOffsetMap,
   type SourceReplacement,
 } from './shared.js';
@@ -72,6 +74,7 @@ export function lowerComponentPipelineSequence<Model>(
 ): ComponentPipelineSequenceResult<Model> {
   const steps: ComponentPipelinePatchResult<Model>[] = [];
   let current = initial;
+  let sourceOffsetMap = identitySourceOffsetMap(initial.source.length);
 
   for (const lower of lowerings) {
     const lowering = lower(current);
@@ -82,12 +85,9 @@ export function lowerComponentPipelineSequence<Model>(
       lowering.prefix === undefined ? {} : { prefix: lowering.prefix },
     );
     steps.push(step);
+    sourceOffsetMap = composeSourceOffsetMaps(sourceOffsetMap, step.sourceOffsetMap);
     current = step.state;
   }
-
-  const sourceOffsetMap =
-    steps.at(-1)?.sourceOffsetMap ??
-    lowerComponentPipelinePatches(initial, [], parse).sourceOffsetMap;
 
   return { sourceOffsetMap, state: current, steps };
 }

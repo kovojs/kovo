@@ -6,6 +6,7 @@ import {
   lowerComponentPipelinePatches,
   lowerComponentPipelineSequence,
 } from './model-pipeline.js';
+import { generatedOffsetToOriginal } from './shared.js';
 
 describe('compiler model pipeline', () => {
   it('carries an empty patch pass through the same parsed model', () => {
@@ -203,6 +204,60 @@ describe('compiler model pipeline', () => {
     expect(parses).toEqual([
       'cart-badge.tsx:export const CartBadge = component({ render: () => <a href="/cart">Cart</a> });',
     ]);
+  });
+
+  it('composes sequence offset maps back to the original source', () => {
+    const state = componentPipelineState(
+      'cart-badge.tsx',
+      'export const CartBadge = component({ render: () => <Link to="/cart">Cart</Link> });',
+      { spans: ['link'] },
+    );
+    const prefix = 'const generated = true;\n';
+
+    const lowered = lowerComponentPipelineSequence(
+      state,
+      [
+        (previous) => ({
+          replacements: [
+            {
+              end: previous.source.indexOf('</Link>') + '</Link>'.length,
+              replacement: '<a href="/cart">Cart</a>',
+              start: previous.source.indexOf('<Link'),
+            },
+          ],
+        }),
+        (previous) => ({
+          prefix,
+          replacements: [
+            {
+              end: previous.source.indexOf('Cart</a>') + 'Cart'.length,
+              replacement: 'Basket',
+              start: previous.source.indexOf('Cart</a>'),
+            },
+          ],
+        }),
+      ],
+      (_fileName, source) =>
+        source.includes('Basket') ? { spans: ['prefixed-basket'] } : { spans: ['anchor'] },
+    );
+
+    expect(lowered.state.source).toBe(
+      'const generated = true;\nexport const CartBadge = component({ render: () => <a href="/cart">Basket</a> });',
+    );
+    const mappedTail = generatedOffsetToOriginal(
+      lowered.sourceOffsetMap,
+      lowered.state.source.indexOf(' });'),
+    );
+    expect(mappedTail).toBe(state.source.indexOf(' });'));
+    expect(
+      generatedOffsetToOriginal(lowered.sourceOffsetMap, lowered.state.source.indexOf('Basket')),
+    ).toBeUndefined();
+    expect(
+      generatedOffsetToOriginal(
+        lowered.sourceOffsetMap,
+        lowered.state.source.indexOf('export const'),
+      ),
+    ).toBe(0);
   });
 
   it('returns an identity offset map for an empty lowering sequence', () => {
