@@ -172,6 +172,7 @@ function extractTouchGraphFromPreparedFiles(
 ): TouchGraph {
   const unresolvedIdentifiers = new Set<string>();
   const graph: Record<string, TouchGraphEntry> = {};
+  const graphSummaries = new Map<string, FunctionTouchSummary>();
 
   for (const file of files) {
     const fileTables = tablesForFile(file, sourceContext);
@@ -191,7 +192,7 @@ function extractTouchGraphFromPreparedFiles(
     );
 
     for (const unresolved of unresolvedDomainWriteCallbacks(file)) {
-      graph[unresolved.name] = createTouchGraphEntry({
+      const summary: FunctionTouchSummary = {
         reads: [],
         unresolved: [
           {
@@ -200,7 +201,19 @@ function extractTouchGraphFromPreparedFiles(
           },
         ],
         writes: [],
-      });
+      };
+      if (unresolved.mergeWithExact) {
+        const graphSummary = graphSummaries.get(unresolved.name) ?? {
+          reads: [],
+          unresolved: [],
+          writes: [],
+        };
+        mergeSummary(graphSummary, summary);
+        graphSummaries.set(unresolved.name, graphSummary);
+        graph[unresolved.name] = createTouchGraphEntry(graphSummary);
+      } else {
+        graph[unresolved.name] = createTouchGraphEntry(summary);
+      }
     }
 
     for (const fn of functions) {
@@ -212,7 +225,14 @@ function extractTouchGraphFromPreparedFiles(
         writes: [],
       };
       if (reads.length > 0 || writes.length > 0 || unresolved.length > 0) {
-        graph[fn.name] = createTouchGraphEntry({ reads, unresolved, writes });
+        const graphSummary = graphSummaries.get(fn.name) ?? {
+          reads: [],
+          unresolved: [],
+          writes: [],
+        };
+        mergeSummary(graphSummary, { reads, unresolved, writes });
+        graphSummaries.set(fn.name, graphSummary);
+        graph[fn.name] = createTouchGraphEntry(graphSummary);
       }
     }
   }
@@ -2882,39 +2902,6 @@ function queryCallbackBodies(
   return queryLoadCallbackFunctions(body, mode).map(functionBody);
 }
 
-function queryCallbackFunction(node: Node, mode: 'project' | 'source'): Node | undefined {
-  // SPEC §10.2/§11.1: query facts come from the query loader, not arbitrary callback-shaped
-  // config/helper properties that happen to accept a db-like parameter.
-  if (!queryCallbackPropertyIsLoad(node)) return undefined;
-
-  if (mode === 'source') {
-    // SPEC §11.1: source-mode has no Drizzle receiver type proof. Only inline loader callbacks
-    // are inspected; indirect loader references degrade to FW406 instead of fabricating facts
-    // from a `db`-named parameter. Project mode below follows ts-morph symbols/types.
-    if (Node.isMethodDeclaration(node)) return node;
-    if (!Node.isPropertyAssignment(node)) return undefined;
-
-    const initializer = node.getInitializer();
-    if (!initializer) return undefined;
-    const expression = unwrappedStaticExpressionNode(initializer);
-    return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
-      ? expression
-      : undefined;
-  }
-
-  if (Node.isShorthandPropertyAssignment(node)) {
-    return referencedQueryCallbackFunction(node.getNameNode());
-  }
-  if (Node.isMethodDeclaration(node)) return node;
-  if (!Node.isPropertyAssignment(node)) return undefined;
-
-  const initializer = node.getInitializer();
-  if (!initializer) return undefined;
-  const expression = unwrappedStaticExpressionNode(initializer);
-  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
-  return referencedQueryCallbackFunction(expression);
-}
-
 function queryLoadCallbackFunctions(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source' = 'source',
@@ -3029,13 +3016,16 @@ function queryLoadCallbackResolution(
     }
 
     if (!queryCallbackPropertyIsLoad(property)) continue;
-    const propertyCallback = queryCallbackFunction(property, mode);
-    if (propertyCallback) {
-      callbacks = [propertyCallback];
-      unresolvedNode = undefined;
-    } else {
+    const propertyResolution = queryCallbackPropertyResolution(property, mode);
+    if (propertyResolution.kind === 'found') {
+      callbacks = propertyResolution.callbacks;
+      unresolvedNode = propertyResolution.unresolved ? property : undefined;
+    } else if (propertyResolution.kind === 'unresolved') {
       callbacks = [];
       unresolvedNode = property;
+    } else {
+      callbacks = [];
+      unresolvedNode = undefined;
     }
   }
 
@@ -3113,6 +3103,61 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
     return false;
   }
   return propertyNameText(node.getNameNode()) === 'load';
+}
+
+function queryCallbackPropertyResolution(
+  node: Node,
+  mode: 'project' | 'source',
+): QueryLoadSpreadResolution {
+  if (!queryCallbackPropertyIsLoad(node)) return { kind: 'none' };
+
+  if (Node.isMethodDeclaration(node)) {
+    return { kind: 'found', callbacks: [node], unresolved: false };
+  }
+
+  if (Node.isShorthandPropertyAssignment(node)) {
+    if (mode === 'source') return { kind: 'unresolved' };
+    const callback = referencedQueryCallbackFunction(node.getNameNode());
+    return callback
+      ? { kind: 'found', callbacks: [callback], unresolved: false }
+      : { kind: 'unresolved' };
+  }
+
+  if (!Node.isPropertyAssignment(node)) return { kind: 'none' };
+
+  const initializer = node.getInitializer();
+  if (!initializer) return { kind: 'unresolved' };
+  return queryCallbackExpressionResolution(unwrappedStaticExpressionNode(initializer), mode);
+}
+
+function queryCallbackExpressionResolution(
+  expression: Node,
+  mode: 'project' | 'source',
+): QueryLoadSpreadResolution {
+  if (Node.isConditionalExpression(expression)) {
+    // SPEC §10.2/§11.1: direct conditional loader members are executable surfaces. Static
+    // branches contribute exact callbacks; opaque branches stay visible as FW406.
+    const branches = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
+      queryCallbackExpressionResolution(unwrappedStaticExpressionNode(branch), mode),
+    );
+    const callbacks = branches.flatMap((branch) =>
+      branch.kind === 'found' ? branch.callbacks : [],
+    );
+    const unresolved = branches.some((branch) => branch.kind === 'unresolved');
+    if (callbacks.length > 0) return { kind: 'found', callbacks, unresolved };
+    return unresolved ? { kind: 'unresolved' } : { kind: 'none' };
+  }
+
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+    return { kind: 'found', callbacks: [expression], unresolved: false };
+  }
+
+  if (mode === 'source') return { kind: 'unresolved' };
+
+  const callback = referencedQueryCallbackFunction(expression);
+  return callback
+    ? { kind: 'found', callbacks: [callback], unresolved: false }
+    : { kind: 'unresolved' };
 }
 
 function unresolvedQueryCallbackDiagnostics(
@@ -5236,25 +5281,29 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
     if (!domainObject.body) continue;
 
     for (const property of domainWriteProperties(domainObject.body)) {
-      const callback = writeActionCallbackFunction(property.initializer);
-      if (!callback) continue;
+      const callbackResolution = writeActionCallbackResolution(property.initializer);
+      if (callbackResolution.callbacks.length === 0) continue;
 
-      callbacks.push(
-        extractedFunctionFromCallback(
-          `${domainName.getText()}.${property.memberName}`,
-          callback,
-          property.keyNode,
-        ),
-      );
+      for (const callback of callbackResolution.callbacks) {
+        callbacks.push(
+          extractedFunctionFromCallback(
+            `${domainName.getText()}.${property.memberName}`,
+            callback,
+            property.keyNode,
+          ),
+        );
+      }
     }
   }
 
   return callbacks;
 }
 
-function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; site: string }[] {
+function unresolvedDomainWriteCallbacks(
+  file: SourceFileInput,
+): { mergeWithExact: boolean; name: string; site: string }[] {
   return withParsedSourceFile(file, (sourceFile) => {
-    const unresolved: { name: string; site: string }[] = [];
+    const unresolved: { mergeWithExact: boolean; name: string; site: string }[] = [];
 
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const domainName = declaration.getNameNode();
@@ -5269,6 +5318,7 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
       const domainObject = domainWriteObject(domainArgument);
       if (domainObject.unresolved && domainArgument) {
         unresolved.push({
+          mergeWithExact: false,
           name: `${domainName.getText()}.${UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER}`,
           site: `${file.fileName}:${lineForIndex(file.source, domainArgument.getStart())}`,
         });
@@ -5277,17 +5327,30 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
 
       for (const spread of unresolvedDomainWriteSpreads(domainObject.body)) {
         unresolved.push({
+          mergeWithExact: false,
           name: `${domainName.getText()}.${spread.memberName}`,
           site: `${file.fileName}:${lineForIndex(file.source, spread.siteNode.getStart())}`,
         });
       }
 
       for (const property of domainWriteProperties(domainObject.body)) {
-        if (writeActionCallbackFunction(property.initializer)) continue;
+        const callbackResolution = writeActionCallbackResolution(property.initializer);
+        const initializer = property.initializer
+          ? unwrappedStaticExpressionNode(property.initializer)
+          : undefined;
+        if (
+          !callbackResolution.unresolved ||
+          (callbackResolution.callbacks.length > 0 && !Node.isConditionalExpression(initializer))
+        ) {
+          continue;
+        }
 
         const siteNode = property.initializer ?? property.keyNode;
+        const mergeWithExact =
+          callbackResolution.callbacks.length > 0 && Node.isConditionalExpression(initializer);
 
         unresolved.push({
+          mergeWithExact,
           name: `${domainName.getText()}.${property.memberName}`,
           site: `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
         });
@@ -5622,22 +5685,46 @@ function writeActionCallbackFunction(
   initializer: Node | undefined,
   seen: Set<string> = new Set(),
 ): ReturnType<CallExpression['getArguments']>[number] | null {
-  if (!initializer) return null;
+  return writeActionCallbackResolution(initializer, seen).callbacks[0] ?? null;
+}
+
+interface WriteActionCallbackResolution {
+  callbacks: Node[];
+  unresolved: boolean;
+}
+
+function writeActionCallbackResolution(
+  initializer: Node | undefined,
+  seen: Set<string> = new Set(),
+): WriteActionCallbackResolution {
+  if (!initializer) return { callbacks: [], unresolved: true };
 
   const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isConditionalExpression(expression)) {
+    // SPEC §10-§11: direct conditional domain action members are mutation surfaces. Exact static
+    // write branches contribute touches, while opaque branches remain named FW406 entries.
+    const branches = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
+      writeActionCallbackResolution(unwrappedStaticExpressionNode(branch), seen),
+    );
+    return {
+      callbacks: branches.flatMap((branch) => branch.callbacks),
+      unresolved: branches.some((branch) => branch.unresolved),
+    };
+  }
+
   const callback = writeCallbackFunction(expression);
-  if (callback) return callback;
+  if (callback) return { callbacks: [callback], unresolved: false };
 
   const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
-  if (seen.has(key)) return null;
+  if (seen.has(key)) return { callbacks: [], unresolved: true };
   seen.add(key);
 
   for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
     const referenced = writeActionCallbackFromDeclaration(declaration, seen);
-    if (referenced) return referenced;
+    if (referenced) return { callbacks: [referenced], unresolved: false };
   }
 
-  return null;
+  return { callbacks: [], unresolved: true };
 }
 
 function writeActionCallbackFromDeclaration(

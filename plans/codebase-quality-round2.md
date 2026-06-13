@@ -810,6 +810,12 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       `packages/drizzle/src/index.test.ts` covers source/project exact aliases plus direct
       degradation, and `conformance/drizzle-pin/src/index.test.ts` pins the same surface against
       real `drizzle-orm` Postgres receiver imports.
+      Evidence 2026-06-13 round278: direct conditional query-loader and domain-action members
+      such as `load: flag ? dynamicLoad : loadProducts` and
+      `add: flag ? dynamicAction : write(addItem)` now preserve proven ts-morph callback facts
+      while keeping the opaque branch visible as FW406. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
+      receiver behavior.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -817,6 +823,11 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 
 Latest evidence:
 
+- round278 direct conditional loader/action member slice:
+  `pnpm exec vitest --run packages/drizzle/src`;
+  `pnpm --filter @jiso/conformance-drizzle-pin test`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - round277 direct opaque domain action member slice:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
   `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;

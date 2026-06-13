@@ -2743,6 +2743,57 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project query loaders from direct conditional load members', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const useDynamic: boolean;',
+            'declare const dynamicLoad: any;',
+            '',
+            'export const productQuery = query("product/project-conditional-load-member", {',
+            '  load: useDynamic ? dynamicLoad : loadProducts,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.queries.ts:15',
+          },
+        ],
+        query: 'product/project-conditional-load-member',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:15',
+      },
+    ]);
+  });
+
   it('extracts project query loaders from static external config objects and degrades unresolved configs', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -8668,6 +8719,66 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: null,
             site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts direct conditional domain action members and degrades opaque branches', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'declare const useDynamic: boolean;',
+            'declare const dynamicAction: any;',
+            '',
+            'export const cart = domain({',
+            '  add: useDynamic ? dynamicAction : write(addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:13',
+          },
+        ],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
             via: 'cart_items',
           },
         ],
