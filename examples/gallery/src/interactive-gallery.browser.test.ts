@@ -1002,6 +1002,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
       expect(currentOutput.textContent).toBe('Express');
     });
+
+    // SPEC §13.1 G3: the select end-state after a canceled disabled change (labelled
+    // native select with grouped/disabled options) must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('updates combobox listbox ARIA and selected value through generated handlers', async () => {
@@ -1064,6 +1068,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentChicago.getAttribute('aria-selected')).toBe('true');
       expect(currentOutput.textContent).toBe('Chicago city');
     });
+
+    // SPEC §13.1 G3: the combobox open state (expanded combobox with an active descendant
+    // over a visible role="listbox" carrying a disabled option) must stay axe-clean.
+    await expectNoAxeViolations(root);
 
     required(root.querySelector<HTMLInputElement>('#gallery-combobox-input')).dispatchEvent(
       new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }),
@@ -1153,6 +1161,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentDevelopment.value).toBe('development');
       expect(currentDevelopment.getAttribute('data-highlighted')).toBe('');
     });
+
+    // SPEC §13.1 G3: the autocomplete open state (expanded combobox with an active
+    // descendant over the suggestion datalist) must stay axe-clean.
+    await expectNoAxeViolations(root);
 
     required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input')).dispatchEvent(
       new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }),
@@ -2028,6 +2040,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');
       expect(currentOutput.textContent).toBe('75');
     });
+
+    // SPEC §13.1 G3: the slider end-state after the native range moves to 75 (updated
+    // aria-valuetext and range ratio) must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('updates scroll-area viewport position and primitive state through a generated handler', async () => {
@@ -2509,6 +2525,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dropdownContent.hidden).toBe(false);
     });
 
+    // SPEC §13.1 G3: the dropdown-menu open state (expanded trigger, visible role="menu"
+    // with a disabled item) must stay axe-clean.
+    await expectNoAxeViolations(dropdownRoot);
+
     rename.focus();
     await userEvent.keyboard('{Enter}');
 
@@ -2555,6 +2575,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(trigger.getAttribute('aria-expanded')).toBe('true');
       expect(content.hidden).toBe(false);
     });
+
+    // SPEC §13.1 G3: the context-menu open state (anchored, visible role="menu" with a
+    // disabled item) must stay axe-clean.
+    await expectNoAxeViolations(contextRoot);
 
     inspect.focus();
     await userEvent.keyboard('{Space}');
@@ -2616,6 +2640,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(openOutput.textContent).toBe('file');
     });
 
+    // SPEC §13.1 G3: the menubar open state (expanded top-level item, visible nested
+    // role="menu" with a disabled item) must stay axe-clean.
+    await expectNoAxeViolations(menubarDemo);
+
     newFile.focus();
     await userEvent.keyboard('{Space}');
 
@@ -2665,6 +2693,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(productsContent.hidden).toBe(false);
       expect(viewport.hidden).toBe(false);
     });
+
+    // SPEC §13.1 G3: the navigation-menu open state (expanded trigger, visible content
+    // viewport) must stay axe-clean.
+    await expectNoAxeViolations(navRoot);
 
     await userEvent.keyboard('{Escape}');
 
@@ -2760,6 +2792,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(commandInput.textContent).toBe('invite');
     });
 
+    // SPEC §13.1 G3: the command open dialog state (filtered listbox with an active
+    // descendant and a disabled item) must stay axe-clean.
+    await expectNoAxeViolations(commandRoot);
+
     const canceledEnter = new KeyboardEvent('keydown', {
       bubbles: true,
       cancelable: true,
@@ -2826,6 +2862,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(toast.getAttribute('data-state')).toBe('open');
       expect(toastOutput.textContent).toBe('canceled');
     });
+
+    // SPEC §13.1 G3: the toast open state after a canceled dismiss (live region with a
+    // disabled action that did not auto-dismiss) must stay axe-clean.
+    await expectNoAxeViolations(toastRoot);
 
     dismiss.click();
 
