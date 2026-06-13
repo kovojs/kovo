@@ -9,6 +9,7 @@ import { GalleryComboboxDemo } from './generated/interactive/combobox-demo.js';
 import { GalleryCommandDemo } from './generated/interactive/command-demo.js';
 import { GalleryContextMenuDemo } from './generated/interactive/context-menu-demo.js';
 import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
+import { GalleryDrawerDemo } from './generated/interactive/drawer-demo.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
 import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
 import { GalleryFieldDemo } from './generated/interactive/field-demo.js';
@@ -24,6 +25,7 @@ import { GalleryPureMarkupDemo } from './generated/interactive/pure-markup-demo.
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
 import { GalleryScrollAreaDemo } from './generated/interactive/scroll-area-demo.js';
 import { GallerySelectDemo } from './generated/interactive/select-demo.js';
+import { GallerySheetDemo } from './generated/interactive/sheet-demo.js';
 import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
 import { GallerySwitchDemo } from './generated/interactive/switch-demo.js';
 import { GalleryTabsDemo } from './generated/interactive/tabs-demo.js';
@@ -89,6 +91,11 @@ export const interactiveGalleryDemos = Object.freeze([
     name: 'dialog-demo',
     render: renderInteractiveDemo(GalleryDialogDemo),
     title: 'Dialog',
+  },
+  {
+    name: 'drawer-demo',
+    render: renderInteractiveDemo(GalleryDrawerDemo),
+    title: 'Drawer',
   },
   {
     name: 'disclosure-demo',
@@ -164,6 +171,11 @@ export const interactiveGalleryDemos = Object.freeze([
     name: 'select-demo',
     render: renderInteractiveDemo(GallerySelectDemo),
     title: 'Select',
+  },
+  {
+    name: 'sheet-demo',
+    render: renderInteractiveDemo(GallerySheetDemo),
+    title: 'Sheet',
   },
   {
     name: 'slider-demo',

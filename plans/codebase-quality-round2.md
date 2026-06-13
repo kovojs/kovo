@@ -200,6 +200,10 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 
 - [x] Broad gate after first integration wave through `ea06b9c7`: `pnpm run check` passed on
       844 formatted files, 744 lint/typechecked files, and 7 example/conformance typecheck projects.
+- [x] UI G6 sheet/drawer compiled gallery slice added app-authored demos, generated artifacts,
+      manifest/docs wiring, browser `commandfor`/`request-close` coverage, and visual baseline
+      update. Verified with gallery emit check, UI/gallery tests, full gallery browser test, gallery
+      `tsc`, exact `vp check`, and `git diff --check`.
 - [ ] After the next mini-wave, run at least `pnpm run check`; add `pnpm run test`,
       `pnpm run test:browser`, `pnpm run test:conformance`, and `pnpm run check:build` when touched
       surfaces justify broader gates.
@@ -207,6 +211,5 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 ## Integration Queue
 
 - [ ] Continue polling active workers:
-      `agent/round364-ui-closure`, `agent/round366-drizzle-closure`,
-      `agent/round367-harness-closure`, `agent/round368-appshell-closure`.
+      refill worker lanes after current integrations settle.
 - [ ] Refill toward five large-slice worker lanes when disjoint ownership and capacity allow.

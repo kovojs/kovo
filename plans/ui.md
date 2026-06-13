@@ -75,6 +75,11 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
 
 ## Current Evidence
 
+- [x] G6 compiled sheet and drawer demos are app-authored TSX, generated into checked server/client
+      artifacts, wired into gallery docs/manifest/export registry, and browser-tested for native
+      dialog `commandfor` open plus `request-close` close behavior. Verified with gallery emit
+      check, UI/gallery tests, full gallery browser test, gallery `tsc`, exact `vp check`, and
+      `git diff --check`.
 - [x] H3 styled menu/listbox native disabled behavior is covered for command, dropdown-menu,
       context-menu, and menubar. Verified with `packages/ui/src/index.test.tsx`,
       gallery demo-fixture tests, browser native-disabled and representative styled route checks,
@@ -104,8 +109,8 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
 
 ## Active Queue
 
-- [ ] Integrate active UI worker `agent/round364-ui-closure` when it returns, preserving this compact
-      ledger format and adding only concise evidence for the implemented slice.
+- [ ] Refill UI worker lane from the latest integrated head if more disjoint G2/G3/G4/G6 work is
+      available.
 
 ## Rules
 

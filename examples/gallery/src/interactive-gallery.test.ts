@@ -159,6 +159,7 @@ describe('compiled interactive gallery demos', () => {
     const contextMenu = readGenerated('context-menu-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
+    const drawer = readGenerated('drawer-demo.tsx');
     const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
     const field = readGenerated('field-demo.tsx');
     const hoverCard = readGenerated('hover-card-demo.tsx');
@@ -173,6 +174,7 @@ describe('compiled interactive gallery demos', () => {
     const radioGroup = readGenerated('radio-group-demo.tsx');
     const scrollArea = readGenerated('scroll-area-demo.tsx');
     const select = readGenerated('select-demo.tsx');
+    const sheet = readGenerated('sheet-demo.tsx');
     const slider = readGenerated('slider-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
     const tabs = readGenerated('tabs-demo.tsx');
@@ -337,6 +339,24 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click_2"/,
     );
 
+    expect(drawer).toContain('data-gallery-interactive="drawer"');
+    expect(drawer).toContain('data-side="bottom"');
+    expect(drawer).toContain('fw-state=\'{"open":false}\'');
+    expect(drawer).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
+    expect(drawer).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(drawer).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$button_click"/,
+    );
+    expect(drawer).toMatch(
+      /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$dialog_cancel"/,
+    );
+    expect(drawer).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$section_keydown"/,
+    );
+    expect(drawer).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$button_click_2"/,
+    );
+
     expect(dropdownMenu).toContain('data-gallery-interactive="dropdown-menu"');
     expect(dropdownMenu).toContain(
       'fw-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
@@ -497,6 +517,24 @@ describe('compiled interactive gallery demos', () => {
     expect(select).toContain('selectItemAttributes({');
     expect(select).toMatch(
       /on:change="\/c\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js\?v=[0-9a-f]{8}#GallerySelectDemo\$select_change"/,
+    );
+
+    expect(sheet).toContain('data-gallery-interactive="sheet"');
+    expect(sheet).toContain('data-side="right"');
+    expect(sheet).toContain('fw-state=\'{"open":false}\'');
+    expect(sheet).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
+    expect(sheet).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(sheet).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$button_click"/,
+    );
+    expect(sheet).toMatch(
+      /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$dialog_cancel"/,
+    );
+    expect(sheet).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$section_keydown"/,
+    );
+    expect(sheet).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$button_click_2"/,
     );
 
     expect(slider).toContain('data-gallery-interactive="slider"');

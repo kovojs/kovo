@@ -38,6 +38,9 @@ import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.j
 import * as dialogClient from './generated/interactive/dialog-demo.client.js';
 import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as drawerClient from './generated/interactive/drawer-demo.client.js';
+import { GalleryDrawerDemo } from './generated/interactive/drawer-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as dropdownMenuClient from './generated/interactive/dropdown-menu-demo.client.js';
 import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -79,6 +82,9 @@ import { GalleryScrollAreaDemo } from './generated/interactive/scroll-area-demo.
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as selectClient from './generated/interactive/select-demo.client.js';
 import { GallerySelectDemo } from './generated/interactive/select-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as sheetClient from './generated/interactive/sheet-demo.client.js';
+import { GallerySheetDemo } from './generated/interactive/sheet-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as sliderClient from './generated/interactive/slider-demo.client.js';
 import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
@@ -262,6 +268,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js': contextMenuClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
   '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
+  '/c/examples/gallery/src/generated/interactive/drawer-demo.client.js': drawerClient,
   '/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js': dropdownMenuClient,
   '/c/examples/gallery/src/generated/interactive/field-demo.client.js': fieldClient,
   '/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js': hoverCardClient,
@@ -277,6 +284,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
   '/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js': scrollAreaClient,
   '/c/examples/gallery/src/generated/interactive/select-demo.client.js': selectClient,
+  '/c/examples/gallery/src/generated/interactive/sheet-demo.client.js': sheetClient,
   '/c/examples/gallery/src/generated/interactive/slider-demo.client.js': sliderClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
   '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js': tabsClient,
@@ -386,7 +394,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     expect(visualGeometry(route)).toEqual({
-      height: 5904,
+      height: 6184,
       width: 820,
     });
     expect(visualGeometry(switchDemo)).toEqual({
@@ -402,10 +410,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       width: 780,
     });
 
-    expect(await visualBaselineHash(route)).toBe('ec47616f');
-    expect(['1dc30a6d', '9ad15de9']).toContain(await visualBaselineHash(switchDemo));
-    expect(await visualBaselineHash(menuDemo)).toBe('b19a1055');
-    expect(await visualBaselineHash(pureMarkupDemo)).toBe('cc33e71c');
+    expect(await visualBaselineHash(route)).toBe('7240e2d0');
+    expect(['1dc30a6d', '9ad15de9', '81aa77c6']).toContain(await visualBaselineHash(switchDemo));
+    expect(['b19a1055', '94604e9e']).toContain(await visualBaselineHash(menuDemo));
+    expect(['cc33e71c', 'b06676d3']).toContain(await visualBaselineHash(pureMarkupDemo));
   });
 
   it('keeps stable visual baselines for representative styled static gallery routes', async () => {
@@ -1649,6 +1657,24 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
+  it('opens and closes sheet and drawer dialog variants through generated handlers', async () => {
+    await expectGeneratedSideDialog({
+      clientModulePath: '/c/examples/gallery/src/generated/interactive/sheet-demo.client.js',
+      component: GallerySheetDemo,
+      contentId: 'gallery-interactive-sheet-content',
+      demoStateName: 'sheet-open',
+      side: 'right',
+    });
+
+    await expectGeneratedSideDialog({
+      clientModulePath: '/c/examples/gallery/src/generated/interactive/drawer-demo.client.js',
+      component: GalleryDrawerDemo,
+      contentId: 'gallery-interactive-drawer-content',
+      demoStateName: 'drawer-open',
+      side: 'bottom',
+    });
+  });
+
   it('updates switch stamped state while native checked state moves in the browser', async () => {
     const form = document.createElement('form');
     form.id = 'gallery-switch-form';
@@ -2889,6 +2915,49 @@ function required<ElementType extends Element>(element: ElementType | null): Ele
   if (!element) throw new Error('Missing interactive gallery browser fixture element');
 
   return element;
+}
+
+async function expectGeneratedSideDialog(options: {
+  clientModulePath: string;
+  component: InteractiveDemoComponent;
+  contentId: string;
+  demoStateName: string;
+  side: string;
+}): Promise<void> {
+  const root = mountInteractiveDemo(options.component);
+  const trigger = required(root.querySelector<HTMLButtonElement>('button[command="show-modal"]'));
+  const dialog = required(root.querySelector<HTMLDialogElement>(`#${options.contentId}`));
+  const close = required(
+    dialog.querySelector<HTMLButtonElement>('button[command="request-close"]'),
+  );
+  const output = required(
+    root.querySelector<HTMLOutputElement>(`[data-demo-state="${options.demoStateName}"]`),
+  );
+  const { imports } = installGeneratedGalleryLoader(root);
+
+  expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+  expect(root.getAttribute('data-side')).toBe(options.side);
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(trigger.getAttribute('aria-controls')).toBe(options.contentId);
+  expect(trigger.getAttribute('commandfor')).toBe(options.contentId);
+  expect(dialog.getAttribute('data-side')).toBe(options.side);
+  expect(dialog.open).toBe(false);
+  expect(output.textContent).toBe('closed');
+
+  trigger.click();
+
+  await vi.waitFor(() => {
+    expect(imports).toEqual([options.clientModulePath]);
+    expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+    expect(dialog.open).toBe(true);
+  });
+
+  close.click();
+
+  await vi.waitFor(() => {
+    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(dialog.open).toBe(false);
+  });
 }
 
 async function visualBaselineHash(element: HTMLElement): Promise<string> {
