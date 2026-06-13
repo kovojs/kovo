@@ -10530,6 +10530,95 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('folds typed referenced project transaction callbacks through local summaries', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export async function addItem(db: PgDatabase, productId: string) {',
+            '  async function runInTx(tx: PgDatabase) {',
+            '    await tx.update(cartItems).set({ productId });',
+            '  }',
+            '  await db.transaction(runInTx);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      runInTx: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks unresolved referenced project transaction callbacks as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export async function addItem(db: PgDatabase, productId: string) {',
+            '  async function runInTx(writer: unknown) {',
+            '    await writer.update(cartItems).set({ productId });',
+            '  }',
+            '  await db.transaction(runInTx);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('does not infer source body-local destructured receiver aliases', () => {
     const graph = extractTouchGraphFromSource([
       {

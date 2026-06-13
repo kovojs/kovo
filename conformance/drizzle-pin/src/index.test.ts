@@ -5240,6 +5240,95 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins typed referenced transaction callbacks under real Drizzle imports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { pgTable } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  async function runInTx(tx: PgDatabase<any, any, any>) {',
+            '    await tx.update(cartItems).set({ productId });',
+            '  }',
+            '  await db.transaction(runInTx);',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:8',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      runInTx: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:8',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins unresolved referenced transaction callbacks as FW406 under real Drizzle imports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { pgTable } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  async function runInTx(writer: unknown) {',
+            '    await writer.update(cartItems).set({ productId });',
+            '  }',
+            '  await db.transaction(runInTx);',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins source transaction callback receiver aliases for write extraction', () => {
     const graph = extractTouchGraphFromSource([
       {

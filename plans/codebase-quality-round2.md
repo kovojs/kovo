@@ -1182,6 +1182,15 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       same behavior against real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round304: referenced project transaction callbacks such as
+      `db.transaction(runInTx)` now fold typed local callback summaries when callback slot 0 is
+      ts-morph-proven as a Postgres Drizzle receiver, while unproven referenced transaction
+      callbacks stay visible as FW406 per SPEC §11.1. `packages/drizzle/src/index.test.ts` covers
+      package project exact/degraded callbacks, and `conformance/drizzle-pin/src/index.test.ts`
+      pins the same behavior against real `drizzle-orm` `PgDatabase` receivers. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "transaction"`,
+      `pnpm exec vitest --run packages/drizzle/src conformance/drizzle-pin`, and
+      `pnpm exec tsc --noEmit`.
       Evidence 2026-06-13: detached Drizzle receiver method aliases now resolve only by
       ts-morph symbol keys; `packages/drizzle/src/static.ts` deleted the receiver-method alias
       source-name map/fallback, while `packages/drizzle/src/index.test.ts` and
