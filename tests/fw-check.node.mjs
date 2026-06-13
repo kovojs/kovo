@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { runInNewContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
@@ -82,6 +81,7 @@ import {
   executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
+  executeInlineEnhancedFormLoaderFixture,
   generatedClientExportTypeFacts,
   generatedArtifactSource,
   generatedHandlerReferenceFact,
@@ -834,174 +834,27 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     `inline loader gzip size ${gzipSync(jisoLoaderSource).byteLength} exceeds 4096 bytes`,
   );
 
-  const listeners = new Map();
-  const dispatched = [];
-  const fragmentTarget = { innerHTML: '' };
-  const appendCalls = [];
-  const appendTarget = {
-    insertAdjacentHTML(position, html) {
-      appendCalls.push([position, html]);
+  const fact = await executeInlineEnhancedFormLoaderFixture(jisoLoaderSource);
+  assert.deepEqual(fact.listenerEvents, ['click', 'submit', 'input', 'change']);
+  assert.equal(fact.listenerOptions.click?.capture, true);
+  assert.equal(fact.fetchCalls.length, 1);
+  assert.deepEqual(fact.fetchCalls[0], {
+    body: { kind: 'form-data' },
+    headers: {
+      Accept: 'text/vnd.jiso.fragment+html',
+      'FW-Fragment': 'true',
+      'FW-Idem': 'idem-inline',
+      'FW-Targets': 'cart-badge=cart; inventory=inventory stock',
     },
-  };
-  const formData = { kind: 'form-data' };
-  const fetchCalls = [];
-  const form = {
-    action: '/_m/cart/add',
-    getAttribute(name) {
-      return name === 'enhance' ? '' : null;
-    },
-    method: 'post',
-  };
-  const depElements = [
-    {
-      id: 'cart-badge',
-      getAttribute(name) {
-        if (name === 'fw-deps') return 'cart';
-        if (name === 'fw-fragment-target') return null;
-        return null;
-      },
-    },
-    {
-      id: 'inventory-panel',
-      getAttribute(name) {
-        if (name === 'fw-deps') return 'inventory stock';
-        if (name === 'fw-fragment-target') return 'inventory';
-        return null;
-      },
-    },
-  ];
-  const context = {
-    CustomEvent: class CustomEvent {
-      constructor(type, init) {
-        this.type = type;
-        this.detail = init?.detail;
-      }
-    },
-    DOMParser: class DOMParser {
-      parseFromString(body) {
-        const queryElements = htmlElementFacts(body, { tag: 'fw-query' });
-        const fragmentElements = htmlElementFacts(body, { tag: 'fw-fragment' }).map((element) => ({
-          getAttribute(name) {
-            return element.attrs[name] ?? null;
-          },
-          innerHTML: element.innerHtml,
-        }));
-
-        return {
-          querySelectorAll(selector) {
-            if (selector === 'fw-query') {
-              return queryElements.map((element) => ({
-                getAttribute(name) {
-                  return element.attrs[name] ?? null;
-                },
-                textContent: element.innerHtml,
-              }));
-            }
-            if (selector === 'fw-fragment') return fragmentElements;
-            return [];
-          },
-        };
-      }
-    },
-    FormData: class FormData {
-      constructor() {
-        return formData;
-      }
-    },
-    addEventListener(type, listener, options) {
-      assert.notEqual(type, 'unload', 'inline loader must not register unload handlers');
-      listeners.set(type, { listener, options });
-    },
-    attachShadow() {
-      assert.fail('inline loader must not attach shadow roots');
-    },
-    crypto: {
-      randomUUID() {
-        return 'idem-inline';
-      },
-    },
-    customElements: {
-      define() {
-        assert.fail('inline loader must not define custom elements');
-      },
-    },
-    dispatchEvent(event) {
-      dispatched.push(event);
-      return true;
-    },
-    document: {
-      getElementById(id) {
-        return id === 'cart-badge' ? fragmentTarget : null;
-      },
-      querySelector(selector) {
-        return selector === '[fw-fragment-target="cart-list"]' ? appendTarget : null;
-      },
-      querySelectorAll(selector) {
-        if (selector === '[fw-deps]') return depElements;
-        return [];
-      },
-      visibilityState: 'visible',
-    },
-    fetch: async (url, options) => {
-      fetchCalls.push([url, options]);
-      return {
-        async text() {
-          return [
-            '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
-            '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-            '<fw-fragment target="cart-list" mode="append"><li>2</li></fw-fragment>',
-          ].join('\n');
-        },
-      };
-    },
-    setTimeout,
-  };
-
-  runInNewContext(jisoLoaderSource, context);
-  assert.deepEqual([...listeners.keys()], ['click', 'submit', 'input', 'change']);
-  assert.equal(listeners.get('click')?.options.capture, true);
-  listeners.get('submit')?.listener({
-    preventDefault() {},
-    target: {
-      closest(selector) {
-        return selector === 'form[enhance],form[data-enhance],form[data-mutation]' ? form : null;
-      },
-    },
-    type: 'submit',
+    keepalive: true,
+    method: 'POST',
+    url: '/_m/cart/add',
   });
-  await Promise.resolve();
-  await Promise.resolve();
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-
-  assert.equal(fetchCalls.length, 1);
-  const [[fetchUrl, fetchOptions]] = fetchCalls;
-  assert.equal(fetchUrl, '/_m/cart/add');
-  assert.equal(fetchOptions.body, formData);
-  assert.deepEqual(
-    {
-      headers: { ...fetchOptions.headers },
-      keepalive: fetchOptions.keepalive,
-      method: fetchOptions.method,
-    },
-    {
-      headers: {
-        Accept: 'text/vnd.jiso.fragment+html',
-        'FW-Fragment': 'true',
-        'FW-Idem': 'idem-inline',
-        'FW-Targets': 'cart-badge=cart; inventory=inventory stock',
-      },
-      keepalive: true,
-      method: 'POST',
-    },
-  );
-  assert.deepEqual(
-    dispatched.map((event) => ({ detail: { ...event.detail }, type: event.type })),
-    [{ detail: { body: '{"count":1}', key: 'cart:c1', name: 'cart' }, type: 'jiso:query' }],
-  );
-  assert.equal(fragmentTarget.innerHTML, '<cart-badge>1</cart-badge>');
-  assert.deepEqual(appendCalls, [['beforeend', '<li>2</li>']]);
+  assert.deepEqual(fact.dispatchedQueries, [
+    { body: '{"count":1}', key: 'cart:c1', name: 'cart', type: 'jiso:query' },
+  ]);
+  assert.deepEqual(fact.fragmentHtmlByTarget, { 'cart-badge': '<cart-badge>1</cart-badge>' });
+  assert.deepEqual(fact.appendCalls, [['beforeend', '<li>2</li>']]);
 });
 
 void test('P2 loader smoke evidence is asserted through runtime behavior', async () => {

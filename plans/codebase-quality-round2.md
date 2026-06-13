@@ -57,6 +57,9 @@ fw-check compiler harness cases, so those assertions no longer compare source of
 Shared generated-module fixtures now own generated server render element facts, compact handler
 reference summaries, and generated client export type summaries used by the fw-check generated
 artifact harness cases, reducing repeated local render/HTML parsing/export-shape mechanics.
+Shared generated-module fixtures also own the inline enhanced-form loader VM fixture and project
+listener/fetch/query/fragment effects into structured facts, so the S2 fw-check gate no longer
+keeps a local DOMParser/FormData/fetch VM harness.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -129,6 +132,13 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P2 compiler merges view transition stamps into existing styles|P3 typed routes validate navigation targets|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Inline enhanced-form loader fixture projection slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "S2 loader budget and inline enhanced form behavior are acceptance evidence" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check --fix tests/fw-check.node.mjs packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
+  exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR

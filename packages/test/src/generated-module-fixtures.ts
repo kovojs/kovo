@@ -170,6 +170,51 @@ export interface ExecuteGeneratedBootstrapModuleResult {
   store: unknown;
 }
 
+export interface InlineEnhancedFormLoaderFact {
+  appendCalls: Array<[string, string]>;
+  dispatchedQueries: Array<{
+    body: string;
+    key: string;
+    name: string;
+    type: string;
+  }>;
+  fetchCalls: Array<{
+    body: unknown;
+    headers: Record<string, string>;
+    keepalive: boolean;
+    method: string;
+    url: string;
+  }>;
+  fragmentHtmlByTarget: Record<string, string>;
+  listenerEvents: string[];
+  listenerOptions: Record<string, { capture?: boolean }>;
+}
+
+type InlineEnhancedFormListener = (event: unknown) => void;
+
+interface InlineEnhancedFormListenerFact {
+  listener: InlineEnhancedFormListener;
+  options: { capture?: boolean };
+}
+
+interface InlineEnhancedFormEventFact {
+  detail?: {
+    attrs?: string;
+    body?: string;
+    content?: string;
+    key?: string;
+    name?: string;
+  };
+  type: string;
+}
+
+interface InlineEnhancedFormFetchOptions {
+  body: unknown;
+  headers: Headers | Record<string, string>;
+  keepalive: boolean;
+  method: string;
+}
+
 export type GeneratedHandlerReferenceVersionShape = 'lower-hex-8' | 'invalid';
 
 export interface GeneratedHandlerReferenceFact {
@@ -360,4 +405,219 @@ export function executeGeneratedBootstrapModule(
   });
 
   return { calls, deferredApplications, documentRoot, exports, store };
+}
+
+export async function executeInlineEnhancedFormLoaderFixture(
+  loaderSource: string,
+): Promise<InlineEnhancedFormLoaderFact> {
+  const listeners = new Map<string, InlineEnhancedFormListenerFact>();
+  const dispatched: InlineEnhancedFormEventFact[] = [];
+  const fragmentTarget = { innerHTML: '' };
+  const appendCalls: Array<[string, string]> = [];
+  const appendTarget = {
+    insertAdjacentHTML(position: string, html: string) {
+      appendCalls.push([position, html]);
+    },
+  };
+  const formData = { kind: 'form-data' };
+  const fetchCalls: InlineEnhancedFormLoaderFact['fetchCalls'] = [];
+  const form = {
+    action: '/_m/cart/add',
+    getAttribute(name: string) {
+      return name === 'enhance' ? '' : null;
+    },
+    method: 'post',
+  };
+  const depElements = [
+    {
+      id: 'cart-badge',
+      getAttribute(name: string) {
+        if (name === 'fw-deps') return 'cart';
+        if (name === 'fw-fragment-target') return null;
+        return null;
+      },
+    },
+    {
+      id: 'inventory-panel',
+      getAttribute(name: string) {
+        if (name === 'fw-deps') return 'inventory stock';
+        if (name === 'fw-fragment-target') return 'inventory';
+        return null;
+      },
+    },
+  ];
+  const context = {
+    CustomEvent: class CustomEvent {
+      detail: unknown;
+      type: string;
+
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
+    DOMParser: class DOMParser {
+      parseFromString(body: string) {
+        const queryElements = htmlElementFacts(body, { tag: 'fw-query' });
+        const fragmentElements = htmlElementFacts(body, { tag: 'fw-fragment' }).map((element) => ({
+          getAttribute(name: string) {
+            return element.attrs[name] ?? null;
+          },
+          innerHTML: element.innerHtml,
+        }));
+
+        return {
+          querySelectorAll(selector: string) {
+            if (selector === 'fw-query') {
+              return queryElements.map((element) => ({
+                getAttribute(name: string) {
+                  return element.attrs[name] ?? null;
+                },
+                textContent: element.innerHtml,
+              }));
+            }
+            if (selector === 'fw-fragment') return fragmentElements;
+            return [];
+          },
+        };
+      }
+    },
+    FormData: class FormData {
+      constructor() {
+        return formData;
+      }
+    },
+    Headers,
+    addEventListener(
+      type: string,
+      listener: InlineEnhancedFormListener,
+      options: { capture?: boolean },
+    ) {
+      if (type === 'unload') throw new Error('inline loader must not register unload handlers');
+      listeners.set(type, { listener, options });
+    },
+    attachShadow() {
+      throw new Error('inline loader must not attach shadow roots');
+    },
+    crypto: {
+      randomUUID() {
+        return 'idem-inline';
+      },
+    },
+    customElements: {
+      define() {
+        throw new Error('inline loader must not define custom elements');
+      },
+    },
+    dispatchEvent(event: InlineEnhancedFormEventFact) {
+      dispatched.push(event);
+      return true;
+    },
+    document: {
+      getElementById(id: string) {
+        return id === 'cart-badge' ? fragmentTarget : null;
+      },
+      querySelector(selector: string) {
+        return selector === '[fw-fragment-target="cart-list"]' ? appendTarget : null;
+      },
+      querySelectorAll(selector: string) {
+        if (selector === '[fw-deps]') return depElements;
+        return [];
+      },
+      visibilityState: 'visible',
+    },
+    fetch: async (url: string, options: InlineEnhancedFormFetchOptions) => {
+      fetchCalls.push({
+        body: options.body,
+        headers: inlineEnhancedFormHeaders(options.headers),
+        keepalive: options.keepalive,
+        method: options.method,
+        url,
+      });
+      return {
+        async text() {
+          return [
+            '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
+            '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+            '<fw-fragment target="cart-list" mode="append"><li>2</li></fw-fragment>',
+          ].join('\n');
+        },
+      };
+    },
+    setTimeout,
+  };
+
+  runInNewContext(loaderSource, context);
+  listeners.get('submit')?.listener({
+    preventDefault() {},
+    target: {
+      closest(selector: string) {
+        return selector === 'form[enhance],form[data-enhance],form[data-mutation]' ? form : null;
+      },
+    },
+    type: 'submit',
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+  return {
+    appendCalls,
+    dispatchedQueries: dispatched.map(inlineEnhancedFormQueryEvent),
+    fetchCalls,
+    fragmentHtmlByTarget: { 'cart-badge': fragmentTarget.innerHTML },
+    listenerEvents: [...listeners.keys()],
+    listenerOptions: Object.fromEntries(
+      [...listeners.entries()].map(([event, { options }]) => [event, { ...options }]),
+    ),
+  };
+}
+
+function inlineEnhancedFormQueryEvent(event: InlineEnhancedFormEventFact): {
+  body: string;
+  key: string;
+  name: string;
+  type: string;
+} {
+  if (event.detail?.attrs !== undefined || event.detail?.content !== undefined) {
+    const query = htmlElementFacts(
+      `<fw-query ${event.detail.attrs ?? ''}>${event.detail.content ?? ''}</fw-query>`,
+      { tag: 'fw-query' },
+    )[0];
+    return {
+      body: event.detail.content ?? '',
+      key: query?.attrs.key ?? '',
+      name: query?.attrs.name ?? '',
+      type: event.type,
+    };
+  }
+
+  return {
+    body: event.detail?.body ?? '',
+    key: event.detail?.key ?? '',
+    name: event.detail?.name ?? '',
+    type: event.type,
+  };
+}
+
+function inlineEnhancedFormHeaders(
+  headers: Headers | Record<string, string>,
+): Record<string, string> {
+  const entries =
+    headers instanceof Headers ? Object.fromEntries(headers.entries()) : { ...headers };
+  const canonicalNames: Record<string, string> = {
+    accept: 'Accept',
+    'fw-fragment': 'FW-Fragment',
+    'fw-idem': 'FW-Idem',
+    'fw-targets': 'FW-Targets',
+  };
+
+  return Object.fromEntries(
+    Object.entries(entries).map(([name, value]) => [
+      canonicalNames[name.toLowerCase()] ?? name,
+      value,
+    ]),
+  );
 }

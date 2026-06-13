@@ -117,6 +117,7 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
+  executeInlineEnhancedFormLoaderFixture,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
@@ -131,6 +132,7 @@ import {
   type GeneratedHandlerReferenceFact,
   type GeneratedHandlerReferenceSummaryFact,
   type GeneratedRenderedElementFact,
+  type InlineEnhancedFormLoaderFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
   graphFixtureFile,
@@ -888,6 +890,10 @@ describe('@jiso/test package subpath exports', () => {
         Cart$click: 'function',
       },
     );
+    expect(typeof executeInlineEnhancedFormLoaderFixture).toBe('function');
+    expectTypeOf<InlineEnhancedFormLoaderFact>().toMatchTypeOf<{
+      listenerEvents: string[];
+    }>();
     expect(new GeneratedFixtureMorphRoot().querySelectorAll('*')).toEqual([]);
     expect(new GeneratedFixtureMorphTarget('ready').readHtml()).toBe('ready');
     expect(

@@ -6,6 +6,7 @@ import {
   executeGeneratedClientModule,
   executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
+  executeInlineEnhancedFormLoaderFixture,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedArtifactFile,
@@ -316,5 +317,75 @@ export function applyJisoDeferredStreamResponse(body, options) {
     expect(fixture.deferredApplications).toMatchObject([
       { body: 'body', root: fixture.documentRoot, store: fixture.store },
     ]);
+  });
+
+  it('summarizes inline enhanced-form loader behavior as structured facts', async () => {
+    const fact = await executeInlineEnhancedFormLoaderFixture(`
+const listeners = {};
+addEventListener('click', () => {}, { capture: true });
+addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.target.closest('form[enhance],form[data-enhance],form[data-mutation]');
+  const response = await fetch(form.action, {
+    body: new FormData(form),
+    headers: new Headers({
+      Accept: 'text/vnd.jiso.fragment+html',
+      'FW-Fragment': 'true',
+      'FW-Idem': crypto.randomUUID(),
+      'FW-Targets': Array.from(document.querySelectorAll('[fw-deps]')).map((element) => {
+        const target = element.getAttribute('fw-fragment-target') || element.id;
+        return target + '=' + element.getAttribute('fw-deps');
+      }).join('; '),
+    }),
+    keepalive: true,
+    method: form.method.toUpperCase(),
+  });
+  const body = await response.text();
+  const parsed = new DOMParser().parseFromString(body, 'text/html');
+  for (const query of parsed.querySelectorAll('fw-query')) {
+    dispatchEvent(new CustomEvent('jiso:query', {
+      detail: {
+        body: query.textContent,
+        key: query.getAttribute('key'),
+        name: query.getAttribute('name'),
+      },
+    }));
+  }
+  for (const fragment of parsed.querySelectorAll('fw-fragment')) {
+    const target = fragment.getAttribute('target');
+    if (fragment.getAttribute('mode') === 'append') {
+      document.querySelector('[fw-fragment-target="' + target + '"]').insertAdjacentHTML('beforeend', fragment.innerHTML);
+    } else {
+      document.getElementById(target).innerHTML = fragment.innerHTML;
+    }
+  }
+});
+addEventListener('input', () => {}, {});
+addEventListener('change', () => {}, {});
+`);
+
+    expect(fact).toMatchObject({
+      appendCalls: [['beforeend', '<li>2</li>']],
+      dispatchedQueries: [
+        { body: '{"count":1}', key: 'cart:c1', name: 'cart', type: 'jiso:query' },
+      ],
+      fetchCalls: [
+        {
+          body: { kind: 'form-data' },
+          headers: {
+            Accept: 'text/vnd.jiso.fragment+html',
+            'FW-Fragment': 'true',
+            'FW-Idem': 'idem-inline',
+            'FW-Targets': 'cart-badge=cart; inventory=inventory stock',
+          },
+          keepalive: true,
+          method: 'POST',
+          url: '/_m/cart/add',
+        },
+      ],
+      fragmentHtmlByTarget: { 'cart-badge': '<cart-badge>1</cart-badge>' },
+      listenerEvents: ['click', 'submit', 'input', 'change'],
+      listenerOptions: { click: { capture: true } },
+    });
   });
 });
