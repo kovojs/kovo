@@ -294,7 +294,9 @@ function manifestAssetHref(file: string, base = '/'): string {
     return file;
   }
 
-  return `${base.replace(/\/?$/, '/')}${file.replace(/^\/+/, '')}`;
+  // SPEC §9.5: Vite build hints and static-export asset copies must describe the
+  // same static-host files, so hint hrefs use the shared dist-file boundary.
+  return `${base.replace(/\/?$/, '/')}${normalizedDistFile(file)}`;
 }
 
 function isExternalAssetHref(file: string): boolean {

@@ -168,6 +168,20 @@ Round292 static export client-module discovery boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 
+Round293 Vite manifest hint static-host boundary evidence:
+
+- `packages/server/src/vite-manifest.ts` now routes non-external Vite manifest hint assets through
+  the same dist-file validator used by SPEC §9.5 static-export asset copy planning, so route
+  `modulepreload`/stylesheet hints cannot publish unsafe `..` or encoded-dot static-host paths
+  that the export asset pipeline would reject.
+- `packages/server/src/vite-manifest.test.ts` proves absolute in-dist manifest paths and external
+  stylesheet hints still resolve while unsafe `file` and `css` manifest entries fail before Vite
+  route-hint/static-export wiring.
+- `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

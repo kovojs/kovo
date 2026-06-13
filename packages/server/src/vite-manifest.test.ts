@@ -43,6 +43,48 @@ describe('server app shell Vite manifest planning', () => {
     });
   });
 
+  it('validates Vite hint asset paths through the static-host dist boundary', () => {
+    expect(
+      jisoAppShellViteManifestHints(
+        {
+          'src/cart.client.ts': {
+            css: ['/assets/cart.css', 'https://cdn.example.test/reset.css'],
+            file: '/assets/cart.js',
+          },
+        },
+        ['src/cart.client.ts'],
+        { base: '/static/' },
+      ),
+    ).toEqual({
+      modulepreloads: ['/static/assets/cart.js'],
+      stylesheets: ['/static/assets/cart.css', 'https://cdn.example.test/reset.css'],
+    });
+
+    expect(() =>
+      jisoAppShellViteManifestHints(
+        {
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: '../cart.js',
+          },
+        },
+        ['src/cart.client.ts'],
+      ),
+    ).toThrow('App shell build asset must stay within the Vite output directory');
+
+    expect(() =>
+      jisoAppShellViteManifestHints(
+        {
+          'src/cart.client.ts': {
+            css: ['assets/%2e%2e/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        ['src/cart.client.ts'],
+      ),
+    ).toThrow('App shell build asset must stay within the Vite output directory');
+  });
+
   it('normalizes route-to-Vite-entry build facts in app route order', () => {
     const cartRoute = route('/cart', {});
     const accountRoute = route('/account', {});

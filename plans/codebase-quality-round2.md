@@ -175,6 +175,14 @@ checks, so the monolith asserts public diagnostic facts without rebuilding those
 
 Latest evidence:
 
+- Phase 5 Vite manifest hint static-host boundary slice:
+  `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/vite-manifest.ts` now sends non-external
+  Vite manifest hint assets through the shared dist-file validator before route hint generation,
+  keeping SPEC §9.5 Vite route hints aligned with static-export asset copy planning and rejecting
+  unsafe `..` or encoded-dot paths before adoption/export wiring.
 - Phase 5 static export client-module discovery boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
