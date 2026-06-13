@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { route } from './route.js';
+import { StaticExportError } from './static-export-diagnostics.js';
 import {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestAssetsFromFile,
@@ -204,6 +205,33 @@ describe('server app shell Vite manifest planning', () => {
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }
+  });
+
+  it('rejects non-file Vite manifest URLs before filesystem reads', async () => {
+    await expect(
+      jisoAppShellViteManifestFromFile(new URL('https://cdn.example.test/.vite/manifest.json')),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining(
+            'Vite app-shell manifest files must be filesystem paths or file: URLs',
+          ),
+          routePath: 'vite-manifestFile',
+        },
+      ],
+    });
+    await expect(
+      jisoAppShellViteManifestAssetsFromFile(
+        new URL('https://cdn.example.test/.vite/manifest.json'),
+      ),
+    ).rejects.toBeInstanceOf(StaticExportError);
+    await expect(
+      jisoAppShellViteManifestStylesheetHrefFromFile(
+        new URL('https://cdn.example.test/.vite/manifest.json'),
+      ),
+    ).rejects.toBeInstanceOf(StaticExportError);
   });
 
   it('rejects multi-stylesheet manifests for singular export task stylesheet lookup', () => {

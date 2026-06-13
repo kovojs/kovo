@@ -140,6 +140,22 @@ Implemented areas:
   SPEC §4.3/SPEC §9.5 module surfaces (`on:*`, module scripts, and modulepreload links), leaving
   ordinary docs links, text, non-module scripts, and escaped examples as source text while static
   export still copies the referenced immutable modules.
+- Vite manifest-file app-shell helpers now reject non-`file:` `manifestFile` URLs with FW229
+  before manifest reads, route-hint wiring, static-export replay, or Vite build output planning.
+
+Round331 Vite manifest-file URL boundary evidence:
+
+- `packages/server/src/vite-manifest.ts` validates explicit manifest file URLs before filesystem
+  reads, preserving SPEC §9.5's local Vite manifest/build boundary for manifest-backed app-shell
+  export tasks.
+- `packages/server/src/vite-manifest.test.ts` and `packages/server/src/vite-build.test.ts` prove
+  non-`file:` manifest URLs fail with FW229 through direct manifest helpers and the public
+  manifest-backed Vite build constructor.
+- `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round325 docs-site client-module rewrite boundary evidence:
 

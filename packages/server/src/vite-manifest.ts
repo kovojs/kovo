@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import type { PageHintOptions } from './hints.js';
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 export interface JisoAppShellViteManifestChunk {
   css?: readonly string[];
@@ -145,7 +147,7 @@ export function jisoAppShellViteManifestAssets(
 export async function jisoAppShellViteManifestFromFile(
   manifestFile: string | URL,
 ): Promise<JisoAppShellViteManifest> {
-  const source = await readFile(manifestFile, 'utf8');
+  const source = await readFile(resolvedManifestFile(manifestFile), 'utf8');
   return jisoAppShellViteManifestFromSource(source);
 }
 
@@ -301,6 +303,18 @@ function manifestAssetHref(file: string, base = '/'): string {
 
 function isExternalAssetHref(file: string): boolean {
   return file.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(file);
+}
+
+function resolvedManifestFile(manifestFile: string | URL): string | URL {
+  if (!(manifestFile instanceof URL)) return manifestFile;
+  if (manifestFile.protocol === 'file:') return fileURLToPath(manifestFile);
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      'vite-manifestFile',
+      `FW229 Vite app-shell manifest files must be filesystem paths or file: URLs, received '${manifestFile.href}'. SPEC §9.5 static export reads Vite manifests from a local output file.`,
+    ),
+  ]);
 }
 
 function jisoAppShellViteManifestFromUnknown(value: unknown): JisoAppShellViteManifest {

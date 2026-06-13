@@ -7,7 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { route } from './route.js';
 import { staticExportManifest } from './static-export-result.js';
-import { createJisoAppShellViteBuild } from './vite-build.js';
+import {
+  createJisoAppShellViteBuild,
+  createJisoAppShellViteBuildFromManifestFile,
+} from './vite-build.js';
 import {
   jisoAppShellViteOutputDir,
   writeJisoAppShellViteBuildOutput,
@@ -484,6 +487,37 @@ describe('server app shell Vite build seam', () => {
         rm(outDir, { force: true, recursive: true }),
       ]);
     }
+  });
+
+  it('rejects non-file Vite manifest URLs before manifest-backed build wiring', async () => {
+    await expect(
+      createJisoAppShellViteBuildFromManifestFile({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return '<main>Cart</main>';
+              },
+            }),
+          ],
+        }),
+        manifestFile: new URL('https://cdn.example.test/.vite/manifest.json'),
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining(
+            'Vite app-shell manifest files must be filesystem paths or file: URLs',
+          ),
+          routePath: 'vite-manifestFile',
+        },
+      ],
+    });
   });
 
   it('keeps Vite output path selection and writes inside the build output directory', async () => {

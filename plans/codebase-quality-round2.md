@@ -193,6 +193,16 @@ commerce source-truth matrix test consume the public fixture.
 
 Latest evidence:
 
+- Phase 5 Vite manifest-file URL boundary slice:
+  `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`;
+  `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/vite-manifest.ts` rejects non-`file:` explicit Vite
+  `manifestFile` URLs with FW229 before manifest reads, route-hint wiring, or manifest-backed
+  SPEC §9.5 app-shell export/build replay; focused manifest and build tests prove the direct
+  helper and public build constructor paths.
 - Phase 5 Vite dev public alias removal slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
