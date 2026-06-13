@@ -449,6 +449,15 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round256: domain action spreads such as
+      `domain({ ...actionConfig })` now resolve statically proven `write(...)` callbacks through
+      ts-morph property declarations, preserve later spread/direct override semantics, and keep
+      unresolved callback entries inside known spreads visible as FW406 instead of dropping the
+      mutation surface. `packages/drizzle/src/index.test.ts` covers source/project spread actions,
+      overrides, and unresolved callbacks; `conformance/drizzle-pin/src/index.test.ts` pins the
+      same behavior against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
       Evidence 2026-06-13: detached Drizzle receiver method aliases now resolve only by
       ts-morph symbol keys; `packages/drizzle/src/static.ts` deleted the receiver-method alias
       source-name map/fallback, while `packages/drizzle/src/index.test.ts` and

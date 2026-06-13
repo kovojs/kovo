@@ -2673,6 +2673,87 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project domain actions from static config spreads and degrades unresolved callbacks', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            'function fakeAdd(db: FakeDb, productId: string) {',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'declare const actionName: string;',
+            'const callbacks = { addItem };',
+            'const base = {',
+            '  addItem: write(addItem),',
+            '  unresolved: write(callbacks[actionName]),',
+            '};',
+            'const spread = { ...base };',
+            'const overridden = { ...base, addItem: write(fakeAdd) };',
+            '',
+            'export const cart = domain({',
+            '  ...spread,',
+            '  addDirect: write(addItem),',
+            '  ...overridden,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addDirect': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.unresolved': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:21',
+          },
+        ],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts project query-loader callbacks through nested static object aliases', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -7400,6 +7481,77 @@ export interface CommerceInvalidationSets {
           },
         ],
         unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts source domain actions from static config spreads and degrades unresolved callbacks', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          'function noop() {',
+          '  return undefined;',
+          '}',
+          '',
+          'declare const actionName: string;',
+          'const callbacks = { addItem };',
+          'const base = {',
+          '  addItem: write(addItem),',
+          '  unresolved: write(callbacks[actionName]),',
+          '};',
+          'const spread = { ...base };',
+          'const overridden = { ...base, addItem: write(noop) };',
+          '',
+          'export const cart = domain({',
+          '  ...spread,',
+          '  addDirect: write(addItem),',
+          '  ...overridden,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addDirect': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.unresolved': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:14',
+          },
+        ],
       },
       addItem: {
         reads: [],

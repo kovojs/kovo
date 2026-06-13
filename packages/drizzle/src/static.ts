@@ -624,6 +624,12 @@ interface QueryReceiverReferences {
   symbolKeys: ReadonlySet<string>;
 }
 
+interface DomainWriteProperty {
+  initializer: Node | undefined;
+  keyNode: Node;
+  memberName: string;
+}
+
 function projectDomainWriteCallbacks(
   sourceFile: SourceFile,
 ): Map<string, { body: Node; fn: Node; key: string; name: string }> {
@@ -640,19 +646,15 @@ function projectDomainWriteCallbacks(
     const domainObject = initializer.getArguments()[0];
     if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
 
-    for (const property of domainObject.getProperties()) {
-      if (!Node.isPropertyAssignment(property)) continue;
-      const memberName = propertyNameText(property.getNameNode());
-      if (!memberName) continue;
-
-      const callback = writeCallbackFunction(property.getInitializer());
+    for (const property of domainWriteProperties(domainObject)) {
+      const callback = writeCallbackFunction(property.initializer);
       if (!callback) continue;
 
-      const name = `${domainName.getText()}.${memberName}`;
+      const name = `${domainName.getText()}.${property.memberName}`;
       callbacks.set(name, {
         body: functionBody(callback),
         fn: callback,
-        key: extractedFunctionKey(name, callback, property.getNameNode()),
+        key: extractedFunctionKey(name, callback, property.keyNode),
         name,
       });
     }
@@ -4777,19 +4779,15 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
     const domainObject = initializer.getArguments()[0];
     if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
 
-    for (const property of domainObject.getProperties()) {
-      if (!Node.isPropertyAssignment(property)) continue;
-      const memberName = propertyNameText(property.getNameNode());
-      if (!memberName) continue;
-
-      const callback = writeCallbackFunction(property.getInitializer());
+    for (const property of domainWriteProperties(domainObject)) {
+      const callback = writeCallbackFunction(property.initializer);
       if (!callback) continue;
 
       callbacks.push(
         extractedFunctionFromCallback(
-          `${domainName.getText()}.${memberName}`,
+          `${domainName.getText()}.${property.memberName}`,
           callback,
-          property.getNameNode(),
+          property.keyNode,
         ),
       );
     }
@@ -4813,19 +4811,15 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
       const domainObject = initializer.getArguments()[0];
       if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
 
-      for (const property of domainObject.getProperties()) {
-        if (!Node.isPropertyAssignment(property)) continue;
-        const memberName = propertyNameText(property.getNameNode());
-        if (!memberName) continue;
-
-        const initializer = property.getInitializer();
+      for (const property of domainWriteProperties(domainObject)) {
+        const initializer = property.initializer;
         if (!initializer || !Node.isCallExpression(initializer)) continue;
         const callExpression = initializer.getExpression();
         if (!Node.isIdentifier(callExpression) || callExpression.getText() !== 'write') continue;
         if (writeCallbackFunction(initializer)) continue;
 
         unresolved.push({
-          name: `${domainName.getText()}.${memberName}`,
+          name: `${domainName.getText()}.${property.memberName}`,
           site: `${file.fileName}:${lineForIndex(file.source, initializer.getStart())}`,
         });
       }
@@ -4833,6 +4827,92 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
 
     return unresolved;
   });
+}
+
+function domainWriteProperties(
+  object: ObjectLiteralExpression,
+  seen: Set<string> = new Set(),
+): DomainWriteProperty[] {
+  const properties = new Map<string, DomainWriteProperty>();
+
+  for (const property of object.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      for (const spreadProperty of domainWritePropertiesFromSpread(property, seen)) {
+        properties.set(spreadProperty.memberName, spreadProperty);
+      }
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    const memberName = propertyNameText(property.getNameNode());
+    if (!memberName) continue;
+
+    properties.set(memberName, {
+      initializer: property.getInitializer(),
+      keyNode: property.getNameNode(),
+      memberName,
+    });
+  }
+
+  return [...properties.values()];
+}
+
+function domainWritePropertiesFromSpread(property: Node, seen: Set<string>): DomainWriteProperty[] {
+  if (!Node.isSpreadAssignment(property)) return [];
+
+  const expression = unwrappedStaticExpressionNode(property.getExpression());
+  if (Node.isObjectLiteralExpression(expression)) {
+    return domainWriteProperties(expression, seen);
+  }
+
+  const key = resolvedSymbolKey(expression.getSymbol()) ?? expression.getText();
+  if (seen.has(key)) return [];
+  seen.add(key);
+
+  const properties: DomainWriteProperty[] = [];
+  for (const symbol of expression.getType().getProperties()) {
+    const memberName = symbol.getName();
+    for (const declaration of symbol.getDeclarations()) {
+      const domainProperty = domainWritePropertyFromDeclaration(memberName, declaration, seen);
+      if (domainProperty) {
+        properties.push(domainProperty);
+        break;
+      }
+    }
+  }
+
+  seen.delete(key);
+  return properties;
+}
+
+function domainWritePropertyFromDeclaration(
+  memberName: string,
+  declaration: Node,
+  seen: Set<string>,
+): DomainWriteProperty | undefined {
+  if (Node.isPropertyAssignment(declaration)) {
+    return {
+      initializer: declaration.getInitializer(),
+      keyNode: declaration.getNameNode(),
+      memberName,
+    };
+  }
+
+  if (Node.isShorthandPropertyAssignment(declaration)) {
+    return {
+      initializer: declaration.getObjectAssignmentInitializer(),
+      keyNode: declaration.getNameNode(),
+      memberName,
+    };
+  }
+
+  if (Node.isSpreadAssignment(declaration)) {
+    return domainWritePropertiesFromSpread(declaration, seen).find(
+      (property) => property.memberName === memberName,
+    );
+  }
+
+  return undefined;
 }
 
 function writeCallbackFunction(
