@@ -361,10 +361,14 @@ function templateItemBindingPlaceholders(
             attribute.value !== '' &&
             attribute.value.startsWith('.'),
         )
-        .map((attribute) => ({
-          path: attribute.value ?? '',
-          value: jsxElementChildBody(candidate)?.source ?? '',
-        })),
+        .map((attribute) => {
+          const path = attribute.value ?? '';
+          return {
+            path,
+            readPath: path.slice(1),
+            value: jsxElementChildBody(candidate)?.source ?? '',
+          };
+        }),
     )
     .sort((left, right) => left.path.localeCompare(right.path));
 }

@@ -38,8 +38,8 @@ export const CartBadge = component('cart-badge', {
         templateStamps: [
           {
             itemBindingPlaceholders: [
-              { path: '.name', value: 'Item' },
-              { path: '.qty', value: '0' },
+              { path: '.name', readPath: 'name', value: 'Item' },
+              { path: '.qty', readPath: 'qty', value: '0' },
             ],
             itemBindings: ['.name', '.qty'],
             key: 'productId',

@@ -230,6 +230,7 @@ export interface QueryTemplateStampFact {
 
 export interface QueryTemplateStampBindingPlaceholder {
   path: string;
+  readPath: string;
   value: string;
 }
 

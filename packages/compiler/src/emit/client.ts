@@ -166,8 +166,7 @@ function emitStampPlan(stamp: QueryStampFact): string {
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
   const placeholders = new Map(
-    stamp.itemBindingPlaceholders?.map((placeholder) => [placeholder.path, placeholder.value]) ??
-      [],
+    stamp.itemBindingPlaceholders?.map((placeholder) => [placeholder.path, placeholder]) ?? [],
   );
 
   return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(
@@ -180,10 +179,10 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
       }, record);
       let html = ${JSON.stringify(stamp.template)};
 ${stamp.itemBindings
-  .map(
-    (binding) =>
-      `      html = html.replace(${JSON.stringify(placeholders.get(binding) ?? '')}, String(read(${JSON.stringify(binding.slice(1))}) ?? ""));`,
-  )
+  .map((binding) => {
+    const placeholder = placeholders.get(binding);
+    return `      html = html.replace(${JSON.stringify(placeholder?.value ?? '')}, String(read(${JSON.stringify(placeholder?.readPath ?? '')}) ?? ""));`;
+  })
   .join('\n')}
       return html;
     } }`;
