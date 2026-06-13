@@ -240,6 +240,34 @@ describe('inline loader parser parity', () => {
     ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
   });
 
+  it('checks generated inline parser embeds through the default canonical helper source', () => {
+    // SPEC.md §4.4/§9.1: the default parity assertions must use the same
+    // scanner plus shared HTML helper closure as the generated inline loader.
+    const readableInstaller = buildInlineJisoLoaderInstallerReadableSource();
+    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
+
+    expect(() => assertInlineJisoLoaderInstallerWireParserParity(readableInstaller)).not.toThrow();
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerWireParserParity(minifiedInstaller),
+    ).not.toThrow();
+    expect(() =>
+      assertInlineJisoLoaderInstallerWireParserParity(
+        readableInstaller.replace(
+          'function unescapeHtml(value) {\n',
+          'function unescapeHtml(value) {\n    value = String(value);\n',
+        ),
+      ),
+    ).toThrow('canonical wire parser helper closure exactly once; found 0');
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerWireParserParity(
+        minifiedInstaller.replace(
+          'function unescapeHtml(value){',
+          'function unescapeHtml(value){value=String(value);',
+        ),
+      ),
+    ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
+  });
+
   it('rejects inline wire parser helpers that reach outside the function closure', () => {
     // SPEC.md §4.4: the inline parser extractor is intentionally narrow; new
     // helper dependencies must be self-contained before they enter the bootstrap.

@@ -381,7 +381,7 @@ function extractInlineHelperReadableSource({
 
 export function assertInlineJisoLoaderInstallerWireParserParity(
   installerSource: string,
-  wireParserSource: string = readFileSync(wireResponseScannerSourcePath, 'utf8'),
+  wireParserSource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.wireParser),
 ): void {
   assertInlineJisoLoaderInstallerHelperParity(
     inlineHelperSpecs.wireParser,
@@ -392,7 +392,7 @@ export function assertInlineJisoLoaderInstallerWireParserParity(
 
 export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
   installerSource: string,
-  wireParserSource: string = readFileSync(wireResponseScannerSourcePath, 'utf8'),
+  wireParserSource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.wireParser),
 ): void {
   assertMinifiedInlineJisoLoaderInstallerHelperParity(
     inlineHelperSpecs.wireParser,

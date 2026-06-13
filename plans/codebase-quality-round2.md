@@ -124,6 +124,10 @@ boundaries.
 
 Latest evidence:
 
+- [x] Default inline parser parity now checks the same canonical multi-file helper source used by
+      generated inline-loader builds: `wire-html.ts` plus `wire-response-scanner.ts`. Verified with
+      inline-loader parser parity tests, runtime inline-loader check, full runtime tests, `tsc`,
+      exact `vp check`, and `git diff --check`.
 - [x] Broadcast replay now threads `onError` into the canonical mutation response apply path and
       loader default BroadcastChannel errors report `mutation-broadcast` phase context. Verified with
       focused and full runtime tests, `tsc`, exact `vp check`, and `git diff --check`.
@@ -191,8 +195,6 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 
 ## Integration Queue
 
-- [ ] Integrate `agent/round365-runtime-closure` (`14d052d6`) inline-loader parser parity branch with
-      focused runtime gates, then clean its worktree/branch/agent.
 - [ ] Continue polling active workers:
       `agent/round364-ui-closure`, `agent/round366-drizzle-closure`,
       `agent/round367-harness-closure`, `agent/round368-appshell-closure`.
