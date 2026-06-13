@@ -172,7 +172,8 @@ query/apply/loader/optimism/morph/delegated-handler integration tests; the broad
 focused on public loader installation smoke only, while loader query hydration, enhanced mutations,
 and disposal live in dedicated runtime tests. Inline readable/minified/generated/extracted loader
 parity coverage now owns parser-helper extraction in `inline-loader-parser-parity.test.ts` and
-inline enhanced-form, delegated handler, and handler-error behavior in `inline-loader.test.ts`.
+inline enhanced-submit behavior in `inline-loader-enhanced-submit.test.ts`, leaving delegated
+handler, trigger, and response-apply parity in `inline-loader.test.ts`.
 Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
 transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
 decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
@@ -210,6 +211,20 @@ packages/runtime/src/loader-disposal.test.ts`.
       `packages/runtime/src/inline-loader-parser-parity.test.ts`; the build test now stays focused
       on generated module/package-script/budget behavior. Verified by the focused inline-loader
       vitest command listed under parser-helper evidence.
+      Evidence 2026-06-13: inline enhanced-submit gate/failure/request-target parity moved from
+      `packages/runtime/src/inline-loader.test.ts` into
+      `packages/runtime/src/inline-loader-enhanced-submit.test.ts`, with shared source-install
+      cases owned by `packages/runtime/src/inline-loader-test-utils.ts`. Verified by `pnpm exec
+vitest --run packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-js-minifier.test.ts`.
+      Supporting checks: `pnpm --filter @jiso/runtime run check:inline-loader`; `pnpm exec vp
+check packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/inline-loader-test-utils.ts plans/codebase-quality-round2.md`; `git diff
+--check`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -224,6 +239,9 @@ packages/runtime/src/loader-disposal.test.ts`.
       and parser-parity test split. Command: `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
 packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after the inline enhanced-submit test
+      split. Command: `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 
