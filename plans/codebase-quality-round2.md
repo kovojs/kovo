@@ -69,8 +69,9 @@ Latest evidence:
 
 Current state: the compiler threads `ComponentPipelineState` and `SourceOffsetMap`s through ordered
 lowerings. View-transition, platform, navigation, inline-derive, server-render, opening-tag, static
-`href()`, and static `<Link>` lowering use explicit patch helpers in several paths. Many validators
-now consume parser/model facts instead of regex or source-string facts.
+`href()`, and static `<Link>` lowering use explicit patch helpers in several paths; parsed JSX tag
+name spans now drive static `<Link>` tag renaming. Many validators now consume parser/model facts
+instead of regex or source-string facts.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -83,7 +84,8 @@ Latest evidence:
 - `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/execution-triggers.test.ts packages/compiler/src/compile-component.test.ts`
-- exact `pnpm exec vp check ... packages/compiler/src/... plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/compile-component.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

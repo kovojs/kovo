@@ -106,6 +106,8 @@ export interface JsxElementModel {
   closingStart: number;
   end: number;
   openingEnd: number;
+  openingTagNameEnd: number;
+  openingTagNameStart: number;
   openingSource: string;
   selfClosing: boolean;
   start: number;
@@ -1179,6 +1181,8 @@ function jsxElementModel(
     closingStart,
     end: node.getEnd(),
     openingEnd: openingElement.getEnd(),
+    openingTagNameEnd: openingElement.tagName.getEnd(),
+    openingTagNameStart: openingElement.tagName.getStart(sourceFile),
     openingSource: source.slice(openingElement.getStart(sourceFile), openingElement.getEnd()),
     selfClosing: !ts.isJsxElement(node),
     start: node.getStart(sourceFile),

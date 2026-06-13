@@ -56,11 +56,17 @@ function lowerLinkOpeningTag(link: JsxElementModel, href: string): string {
       })),
   );
 
-  return insertOpeningTagAttribute(lowerParsedLinkTagName(opening), link, 'href', href);
+  return insertOpeningTagAttribute(lowerParsedLinkTagName(opening, link), link, 'href', href);
 }
 
-function lowerParsedLinkTagName(openingSource: string): string {
-  return `<a${openingSource.slice('<Link'.length)}`;
+function lowerParsedLinkTagName(openingSource: string, link: JsxElementModel): string {
+  return applySourceReplacements(openingSource, [
+    {
+      end: link.openingTagNameEnd - link.start,
+      replacement: 'a',
+      start: link.openingTagNameStart - link.start,
+    },
+  ]);
 }
 
 export function navigationHrefLowering(model: ComponentModuleModel): NavigationLowering {
