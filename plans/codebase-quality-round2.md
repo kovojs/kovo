@@ -25,8 +25,10 @@ queue. Do not restore long historical transcripts; preserve durable evidence as 
       path, stable public export boundaries, static export and Vite adoption closed.
 - [x] Phase 6 verification harness and commerce honesty: `@jiso/test` seams prove behavior through
       public fixtures; commerce source/dependency/generated-artifact story is honest.
-- [ ] Phase 7 test restructuring: monolith tests split along module seams, shared fixtures used
-      deliberately, diagnostics asserted through `diagnosticDefinitions`.
+- [x] Phase 7 test restructuring: monolith tests split along module seams, shared fixtures used
+      deliberately, diagnostics asserted through `diagnosticDefinitions`. (Major runtime monoliths
+      split this round; fixtures shared via `runtime-test-fakes`/`@jiso/test`; diagnostics
+      registry-tied per Phase 1. The steady-state on-touch items below remain standing practice.)
 
 ## Operating Rules
 
@@ -170,9 +172,10 @@ response apply now share canonical apply seams. Inline loader build checks exist
 tightened around parser/minifier parity. Runtime test files are partially split by apply/query/loader
 boundaries.
 
-- [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams. (Next
-      candidates ≥330 lines: `inline-loader-response-apply`, `query-script-hydration`,
-      `query-visible-return`, `delegated-runtime-integration`, `submit-context`.)
+- [x] Continue splitting large runtime tests along apply/query/loader/minifier seams. All five
+      ≥330-line candidates split: `submit-context` (+ inline-fake dedup to `runtime-test-fakes.ts`),
+      `inline-loader-response-apply`, `query-script-hydration`, `query-visible-return`,
+      `delegated-runtime-integration`. Package 64→69 files, 306 tests preserved (zero loss).
 - [x] Finish inline-loader parser/minifier parity so readable and minified output are mechanically
       tied to canonical helpers. (Parity test asserts canonical `wire-html`/`wire-response-scanner`
       helper parity, not token pins; `check:inline-loader` EXIT=0.)
@@ -294,6 +297,11 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 
 Latest evidence:
 
+- [x] Nine runtime monoliths split into seam-focused files this round (mutation-optimistic,
+      loader-enhanced-mutation, optimism, broadcast, submit-context, inline-loader-response-apply,
+      query-script-hydration, query-visible-return, delegated-runtime-integration), each preserving
+      its test count; submit-context inline fakes replaced by shared `runtime-test-fakes.ts`. Runtime
+      package 69 files / 306 tests pass.
 - [x] `tests/fw-check.node.mjs` P10 architecture audit now asserts structured
       `forbiddenBrowserArchitectureProjectFact()` behavior while fixture/export tests cover the
       reusable scan seam. Verified with focused fixture/export tests, full `tests/fw-check.node.mjs`,

@@ -24,17 +24,19 @@ separately and do not gate the v1 framework freeze.
 - [x] Drizzle: close Postgres extraction by deleting bespoke paths in favor of ts-morph/project facts
       and covering or FW406-degrading remaining invisible loader/mutation surfaces. (Phase 3 closed;
       `test:conformance` + drizzle suite 479 pass.)
-- [ ] Runtime: unify inline-loader minifier/apply paths and finish splitting broad runtime tests across
+- [x] Runtime: unify inline-loader minifier/apply paths and finish splitting broad runtime tests across
       apply, query, loader, and minifier boundaries. (Apply-path unification + inline-loader parity +
-      compat-export removal done; opportunistic test-seam splitting continues — ~5 monoliths remain.)
+      compat-export removal done; the five remaining ≥330-line monoliths are now split — Phase 4/7
+      closed. Runtime 69 files / 306 tests + 16 browser pass.)
 - [x] Server/app-shell: finish subtractive extraction across root exports, Vite, static export, replay,
       document, and app boundaries; remove compatibility aliases only after replacements are proven.
       (Phase 5 / app-shell R1–R7 closed; `check`, `test`, `check:build` green this session.)
 - [x] App-shell adoption: prove Vite build/static export behavior across server, starter, commerce, and
       docs. (Starter/commerce/docs export adoption tests green within `pnpm run test` 2508 + `check:build`.)
-- [ ] UI: finish remaining primitive exports, behavior contracts, wrappers, gallery routes, compiled
+- [x] UI: finish remaining primitive exports, behavior contracts, wrappers, gallery routes, compiled
       demos, state/focus/form/validity behavior, canceled-change restoration, axe checks, and visual
-      baselines. (H1/H2 complete; H3 built and under audit/gap-fill — see `plans/ui.md`.)
+      baselines. (H1–H3 primitive families and the G1–G6 gallery gates all closed — see
+      `plans/ui.md`. 530 unit + 39 gallery-browser pass.)
 
 ## Deferred (post-freeze workstreams, not v1-blocking)
 
