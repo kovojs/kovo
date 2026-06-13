@@ -1233,6 +1233,8 @@ describe('@jiso/ui styled package foundation', () => {
     expect(trigger).toContain('data-state="checked" label="Growth" selected value="growth"');
     expect(trigger).toContain('data-disabled="" data-state="unchecked" disabled');
     expect(trigger).toContain('value="enterprise"');
+    expect(trigger).not.toMatch(/<select[^>]*\sdisabled(?:\s|>|=)/);
+    expect(trigger).not.toMatch(/value="starter"[^>]*\sselected(?:\s|>|=)/);
     expect(value).toContain('id="plan-value">Growth</span>');
     expect(selectContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
     expect(selectItemClasses.join(' ')).toContain('data-[state=checked]:font-medium');

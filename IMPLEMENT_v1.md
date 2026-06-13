@@ -1368,6 +1368,14 @@ IMPLEMENT_v1.md plans/ui.md`.
       `pnpm exec vitest --run examples/gallery/src/merge-fixtures.test.tsx`,
       `pnpm exec vp check packages/headless-ui/src/primitives/checkbox-group.ts packages/headless-ui/src/primitives/checkbox-group.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`,
       and `git diff --check`.
+      Additional D7 evidence 2026-06-13: `packages/headless-ui/src/primitives/select.ts`
+      now omits inactive native boolean `disabled`/`selected` attributes while preserving active
+      native select and option state, keeping SPEC §6.3 real control semantics and SPEC §4.6
+      primitive merge output free of false boolean markup. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts`,
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t select`,
+      focused gallery vitest and browser select tests, targeted `pnpm exec vp check`, and
+      `git diff --check`.
       Additional D7 evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts`
       now omits inactive native `disabled` boolean attributes for field controls and fieldsets
       while preserving active disabled presence, keeping the SPEC §6.3 real form-control

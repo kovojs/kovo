@@ -68,7 +68,6 @@ describe('headless-ui select primitive', () => {
       'data-invalid': '',
       'data-required': '',
       'data-state': 'closed',
-      disabled: false,
       id: 'color',
       name: 'color',
       required: true,
@@ -96,7 +95,6 @@ describe('headless-ui select primitive', () => {
     });
     expect(selectItemAttributes({ ...state, itemLabel: 'Red', itemValue: 'red' })).toEqual({
       'data-state': 'checked',
-      disabled: false,
       label: 'Red',
       selected: true,
       value: 'red',
@@ -105,7 +103,6 @@ describe('headless-ui select primitive', () => {
       'data-disabled': '',
       'data-state': 'unchecked',
       disabled: true,
-      selected: false,
       value: 'green',
     });
     expect(selectValueAttributes({ ...state, id: 'color-value' })).toEqual({
@@ -122,6 +119,20 @@ describe('headless-ui select primitive', () => {
     expect(selectValueText({ value: 'custom' })).toBe('custom');
     expect(selectValueText({ placeholder: 'Choose color', value: '' })).toBe('Choose color');
     expect(selectValueText({ placeholder: 'Choose color' })).toBe('Choose color');
+  });
+
+  it('omits inactive native boolean attributes from select and option records', () => {
+    expect(selectTriggerAttributes({ disabled: false, id: 'color' })).toEqual({
+      'aria-expanded': 'false',
+      'data-placeholder': '',
+      'data-state': 'closed',
+      id: 'color',
+    });
+
+    expect(selectItemAttributes({ itemDisabled: false, itemValue: 'red', value: 'blue' })).toEqual({
+      'data-state': 'unchecked',
+      value: 'red',
+    });
   });
 
   it('dispatches cancelable value changes before committing state', () => {

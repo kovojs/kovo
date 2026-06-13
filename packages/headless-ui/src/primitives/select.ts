@@ -103,7 +103,7 @@ export function selectTriggerAttributes(
   return Object.freeze({
     ...selectDataAttributes(options),
     'aria-expanded': String(options.open === true),
-    disabled: options.disabled === true,
+    ...(options.disabled === true ? { disabled: true } : {}),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
@@ -131,8 +131,8 @@ export function selectItemAttributes(
 
   return Object.freeze({
     ...selectItemDataAttributes(options),
-    disabled,
-    selected,
+    ...(disabled ? { disabled: true } : {}),
+    ...(selected ? { selected: true } : {}),
     value: options.itemValue,
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
   });

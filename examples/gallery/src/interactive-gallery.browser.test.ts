@@ -295,13 +295,21 @@ describe('compiled interactive gallery demos in the browser', () => {
       root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
     );
     const disabled = required(select.querySelector<HTMLOptionElement>('option[value="drone"]'));
+    const standard = required(select.querySelector<HTMLOptionElement>('option[value="standard"]'));
+    const express = required(select.querySelector<HTMLOptionElement>('option[value="express"]'));
     const { imports } = installGeneratedGalleryLoader(root, { events: ['change'] });
 
     expect(root.getAttribute('fw-state')).toBe('{"value":"standard"}');
     expect(select.name).toBe('gallery-shipping-speed');
     expect(select.required).toBe(true);
+    expect(select.disabled).toBe(false);
+    expect(select.hasAttribute('disabled')).toBe(false);
     expect(select.value).toBe('standard');
     expect(select.getAttribute('aria-labelledby')).toBe('gallery-select-label');
+    expect(standard.selected).toBe(true);
+    expect(standard.hasAttribute('selected')).toBe(true);
+    expect(express.selected).toBe(false);
+    expect(express.hasAttribute('selected')).toBe(false);
     expect(disabled.disabled).toBe(true);
     expect(output.textContent).toBe('Standard');
 

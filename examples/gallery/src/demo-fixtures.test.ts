@@ -511,6 +511,8 @@ describe('gallery demo fixtures', () => {
     expect(select.html).toContain('value="growth"');
     expect(select.html).toContain('selected');
     expect(select.html).toContain('disabled');
+    expect(select.html).not.toMatch(/<select[^>]*\sdisabled(?:\s|>|=)/);
+    expect(select.html).not.toMatch(/value="starter"[^>]*\sselected(?:\s|>|=)/);
     expect(select.html).toContain('<optgroup');
     expect(select.html).toContain('label="Plans"');
     expect(select.html).toContain('id="gallery-select-value">Growth</span>');

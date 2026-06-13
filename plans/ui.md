@@ -71,7 +71,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       and compiled/browser interactive gallery keydown selection. Menubar submenu item keyboard
       activation now covers Enter, Space, legacy Spacebar, disabled/canceled state, headless barrel
       exports, generated-client DOM refs, and compiled/browser interactive gallery keydown
-      selection.
+      selection. Select now omits inactive native boolean attributes while preserving active
+      `selected`/`disabled` option state through headless records, styled markup, static gallery
+      fixtures, and browser-backed compiled gallery output.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -108,6 +110,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/behavior-contracts.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t navigation-menu`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/navigation-menu.ts packages/headless-ui/src/primitives/navigation-menu.test.ts examples/gallery/src/demo-fixtures.tsx examples/gallery/src/behavior-contracts.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
+- [x] Select native boolean closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t select`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t select)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/select.ts packages/headless-ui/src/primitives/select.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`;
       `git diff --check`.
 - [x] Broad gate after `0cac62d`: `pnpm run check` passed with 782 formatted files, 682
       lint/typechecked files, and 7 typechecked example/conformance projects.
