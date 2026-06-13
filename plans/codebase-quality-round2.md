@@ -121,6 +121,9 @@ P10 fw-check cases no longer rebuild that gate mechanic locally.
 Shared command fixtures now also own browser-suite project-root fixture assembly, including package
 manifest, CI workflow, Vite+ config, and acceptance module import, so the P10 browser acceptance
 fw-check case no longer reads those project files locally.
+Shared runtime fixtures now own the keyed morph and fragment-application behavior projection used by
+the P5 fw-check gate, so the monolith no longer builds that fake structural tree, fragment target,
+and query-store fixture inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -137,6 +140,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P8 component explain includes handler, derive, trigger, and merge facts" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- P5 keyed morph runtime fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P5 morph evidence preserves keyed identity and applies fragments" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 - Phase 4 inline query batch apply slice:
   `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;

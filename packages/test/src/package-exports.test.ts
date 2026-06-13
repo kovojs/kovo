@@ -279,11 +279,14 @@ import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
+  morphFragmentBehaviorFact,
   optimismCleanupBehaviorFact,
   type EnhancedMutationBehaviorFact,
   type EnhancedMutationRuntime,
   type LoaderSmokeBehaviorFact,
   type LoaderSmokeRuntime,
+  type MorphFragmentBehaviorFact,
+  type MorphFragmentRuntime,
   type OptimismCleanupBehaviorFact,
   type OptimismCleanupRuntime,
 } from '@jiso/test/runtime-fixtures';
@@ -421,6 +424,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
     expect(enhancedMutationBehaviorFact).toBeTypeOf('function');
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
+    expect(morphFragmentBehaviorFact).toBeTypeOf('function');
     expect(optimismCleanupBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
@@ -433,6 +437,12 @@ describe('@jiso/test package subpath exports', () => {
       calls: Array<[string, boolean]>;
     }>();
     expectTypeOf<LoaderSmokeRuntime>().toMatchTypeOf<{
+      createQueryStore: () => unknown;
+    }>();
+    expectTypeOf<MorphFragmentBehaviorFact>().toMatchTypeOf<{
+      keyedIdentity: { firstItemReusedAfterReorder: boolean; secondItemReusedAtFront: boolean };
+    }>();
+    expectTypeOf<MorphFragmentRuntime>().toMatchTypeOf<{
       createQueryStore: () => unknown;
     }>();
     expectTypeOf<OptimismCleanupBehaviorFact>().toMatchTypeOf<{

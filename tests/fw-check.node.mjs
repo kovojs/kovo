@@ -152,6 +152,7 @@ import {
 import {
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
+  morphFragmentBehaviorFact,
   optimismCleanupBehaviorFact,
 } from '../packages/test/src/runtime-fixtures.ts';
 import {
@@ -2053,80 +2054,29 @@ void test('P3 route and query guard removal is mechanically audited by fw check'
 });
 
 void test('P5 morph evidence preserves keyed identity and applies fragments', () => {
-  const first = {
-    browserState: {
-      focused: true,
-      scroll: { left: 4, top: 24 },
-      selection: { direction: 'forward', end: 3, start: 1 },
-    },
-    children: [{ key: 'label', text: 'Alpha', type: 'span' }],
-    key: 'p1',
-    type: 'article',
-  };
-  const second = {
-    children: [{ key: 'label', text: 'Beta', type: 'span' }],
-    key: 'p2',
-    type: 'article',
-  };
-  const current = { children: [first, second], type: 'section' };
-
-  morphStructuralTree(current, {
-    children: [
-      {
-        children: [{ key: 'label', text: 'Beta next', type: 'span' }],
-        key: 'p2',
-        type: 'article',
+  assert.deepEqual(
+    morphFragmentBehaviorFact({
+      applyMutationResponseToDom,
+      createQueryStore,
+      morphStructuralTree,
+    }),
+    {
+      appliedFragments: ['products'],
+      ignoredMissingTarget: true,
+      keyedIdentity: {
+        firstItemReusedAfterReorder: true,
+        secondItemReusedAtFront: true,
       },
-      {
-        children: [{ key: 'label', text: 'Alpha next', type: 'span' }],
-        key: 'p1',
-        type: 'article',
+      preservedBrowserState: {
+        focused: true,
+        scroll: { left: 4, top: 24 },
+        selection: { direction: 'forward', end: 3, start: 1 },
       },
-      { key: 'p3', text: 'Gamma', type: 'article' },
-    ],
-    type: 'section',
-  });
-
-  assert.strictEqual(current.children[0], second);
-  assert.strictEqual(current.children[1], first);
-  assert.deepEqual(current.children[1].browserState, {
-    focused: true,
-    scroll: { left: 4, top: 24 },
-    selection: { direction: 'forward', end: 3, start: 1 },
-  });
-  assert.equal(current.children[1].children[0].text, 'Alpha next');
-
-  const target = {
-    html: '<article fw-key="p1">Old</article>',
-    appendHtml(html) {
-      this.html += html;
+      queryStoreValue: { count: 2 },
+      renderedTargetHtml: '<article fw-key="p1">Old</article><article fw-key="p2">New</article>',
+      reorderedText: 'Alpha next',
     },
-    readHtml() {
-      return this.html;
-    },
-    replaceWithHtml(html) {
-      this.html = html;
-    },
-  };
-  const root = {
-    findFragmentTarget(fragmentTarget) {
-      return fragmentTarget === 'products' ? target : null;
-    },
-  };
-  const store = createQueryStore();
-  const result = applyMutationResponseToDom({
-    body: [
-      '<fw-query name="productGrid" key="category:all">{"count":2}</fw-query>',
-      '<fw-fragment target="products" mode="append"><article fw-key="p2">New</article></fw-fragment>',
-      '<fw-fragment target="missing"><article>Ignored</article></fw-fragment>',
-    ].join('\n'),
-    root,
-    store,
-  });
-
-  assert.deepEqual(result.appliedFragments, ['products']);
-  assert.deepEqual(store.get('productGrid', 'category:all'), { count: 2 });
-  assert.equal(target.html, '<article fw-key="p1">Old</article><article fw-key="p2">New</article>');
+  );
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {

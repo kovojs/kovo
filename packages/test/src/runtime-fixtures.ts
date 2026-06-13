@@ -56,6 +56,24 @@ export interface EnhancedMutationRuntime {
   }>;
 }
 
+export interface MorphFragmentRuntime {
+  applyMutationResponseToDom: (options: {
+    body: string;
+    root: unknown;
+    store: {
+      get(name: string, key?: string): unknown;
+      set(name: string, value: unknown, key?: string): void;
+    };
+  }) => {
+    appliedFragments: string[];
+  };
+  createQueryStore: () => {
+    get(name: string, key?: string): unknown;
+    set(name: string, value: unknown, key?: string): void;
+  };
+  morphStructuralTree: <T extends { children?: unknown[] }>(current: T, next: T) => T;
+}
+
 export interface LoaderSmokeBehaviorFact {
   appliedTemplateStamps: string[];
   calls: Array<[string, boolean]>;
@@ -147,6 +165,19 @@ export interface EnhancedMutationBehaviorFact {
     storeAfterResponse: unknown;
     storeDuringFetch: unknown;
   };
+}
+
+export interface MorphFragmentBehaviorFact {
+  appliedFragments: string[];
+  ignoredMissingTarget: boolean;
+  keyedIdentity: {
+    firstItemReusedAfterReorder: boolean;
+    secondItemReusedAtFront: boolean;
+  };
+  preservedBrowserState: unknown;
+  queryStoreValue: unknown;
+  renderedTargetHtml: string;
+  reorderedText: string | undefined;
 }
 
 export async function loaderSmokeBehaviorFact(
@@ -304,6 +335,98 @@ export async function loaderSmokeBehaviorFact(
     storeValues: {
       cart: store.get('cart'),
     },
+  };
+}
+
+export function morphFragmentBehaviorFact(
+  runtime: MorphFragmentRuntime,
+): MorphFragmentBehaviorFact {
+  // SPEC.md §4.4/§9.3: server-owned query and fragment responses must update
+  // the client tree while preserving keyed browser state.
+  interface FixtureMorphNode {
+    browserState?: unknown;
+    children?: FixtureMorphNode[];
+    key: string;
+    text?: string;
+    type: string;
+  }
+
+  const first: FixtureMorphNode = {
+    browserState: {
+      focused: true,
+      scroll: { left: 4, top: 24 },
+      selection: { direction: 'forward', end: 3, start: 1 },
+    },
+    children: [{ key: 'label', text: 'Alpha', type: 'span' }],
+    key: 'p1',
+    type: 'article',
+  };
+  const second: FixtureMorphNode = {
+    children: [{ key: 'label', text: 'Beta', type: 'span' }],
+    key: 'p2',
+    type: 'article',
+  };
+  const current: { children: FixtureMorphNode[]; type: string } = {
+    children: [first, second],
+    type: 'section',
+  };
+
+  runtime.morphStructuralTree(current, {
+    children: [
+      {
+        children: [{ key: 'label', text: 'Beta next', type: 'span' }],
+        key: 'p2',
+        type: 'article',
+      },
+      {
+        children: [{ key: 'label', text: 'Alpha next', type: 'span' }],
+        key: 'p1',
+        type: 'article',
+      },
+      { key: 'p3', text: 'Gamma', type: 'article' },
+    ],
+    type: 'section',
+  });
+
+  const target = {
+    html: '<article fw-key="p1">Old</article>',
+    appendHtml(html: string) {
+      this.html += html;
+    },
+    readHtml() {
+      return this.html;
+    },
+    replaceWithHtml(html: string) {
+      this.html = html;
+    },
+  };
+  const root = {
+    findFragmentTarget(fragmentTarget: string) {
+      return fragmentTarget === 'products' ? target : null;
+    },
+  };
+  const store = runtime.createQueryStore();
+  const result = runtime.applyMutationResponseToDom({
+    body: [
+      '<fw-query name="productGrid" key="category:all">{"count":2}</fw-query>',
+      '<fw-fragment target="products" mode="append"><article fw-key="p2">New</article></fw-fragment>',
+      '<fw-fragment target="missing"><article>Ignored</article></fw-fragment>',
+    ].join('\n'),
+    root,
+    store,
+  });
+
+  return {
+    appliedFragments: result.appliedFragments,
+    ignoredMissingTarget: !target.html.includes('Ignored'),
+    keyedIdentity: {
+      firstItemReusedAfterReorder: current.children[1] === first,
+      secondItemReusedAtFront: current.children[0] === second,
+    },
+    preservedBrowserState: current.children[1]?.browserState,
+    queryStoreValue: store.get('productGrid', 'category:all'),
+    renderedTargetHtml: target.html,
+    reorderedText: current.children[1]?.children?.[0]?.text,
   };
 }
 

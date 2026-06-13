@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
+  morphFragmentBehaviorFact,
   optimismCleanupBehaviorFact,
   type EnhancedMutationRuntime,
   type LoaderSmokeRuntime,
+  type MorphFragmentRuntime,
   type OptimismCleanupRuntime,
 } from './runtime-fixtures.ts';
 
@@ -107,6 +109,73 @@ describe('@jiso/test runtime fixture facts', () => {
       listenerEvents: ['click', 'submit'],
       observer: { observedCount: 1, unobservedCount: 1 },
       storeValues: { cart: { count: 2 } },
+    });
+  });
+
+  it('projects keyed morph and fragment behavior without keeping fake DOM mechanics in fw-check', () => {
+    const values = new Map<string, unknown>();
+    const runtime: MorphFragmentRuntime = {
+      applyMutationResponseToDom(options) {
+        const fixtureOptions = options as {
+          body: string;
+          root: {
+            findFragmentTarget(target: string): {
+              appendHtml(html: string): void;
+            } | null;
+          };
+          store: {
+            set(name: string, value: unknown, key?: string): void;
+          };
+        };
+        if (fixtureOptions.body.includes('"count":2')) {
+          fixtureOptions.store.set('productGrid', { count: 2 }, 'category:all');
+        }
+        fixtureOptions.root
+          .findFragmentTarget('products')
+          ?.appendHtml('<article fw-key="p2">New</article>');
+        return { appliedFragments: ['products'] };
+      },
+      createQueryStore() {
+        return {
+          get(name: string, key?: string) {
+            return values.get(key === undefined ? name : `${name}:${key}`);
+          },
+          set(name: string, value: unknown, key?: string) {
+            values.set(key === undefined ? name : `${name}:${key}`, value);
+          },
+        };
+      },
+      morphStructuralTree(current, next) {
+        const existingByKey = new Map(
+          (current.children as Array<Record<string, unknown>>).map((child) => [child.key, child]),
+        );
+        current.children = (next.children as Array<Record<string, unknown>>).map((child) => {
+          const existing = existingByKey.get(child.key);
+          if (existing) {
+            Object.assign(existing, child);
+            return existing;
+          }
+          return child;
+        });
+        return current;
+      },
+    };
+
+    expect(morphFragmentBehaviorFact(runtime)).toEqual({
+      appliedFragments: ['products'],
+      ignoredMissingTarget: true,
+      keyedIdentity: {
+        firstItemReusedAfterReorder: true,
+        secondItemReusedAtFront: true,
+      },
+      preservedBrowserState: {
+        focused: true,
+        scroll: { left: 4, top: 24 },
+        selection: { direction: 'forward', end: 3, start: 1 },
+      },
+      queryStoreValue: { count: 2 },
+      renderedTargetHtml: '<article fw-key="p1">Old</article><article fw-key="p2">New</article>',
+      reorderedText: 'Alpha next',
     });
   });
 
