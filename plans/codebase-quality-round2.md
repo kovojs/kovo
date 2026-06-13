@@ -49,11 +49,17 @@ Current state:
 - Shared `fw-explain` fixtures now cover list fields, optimistic statuses, update consumers,
   endpoint facts, and scope-audit facts; selected commerce and `fw-check` gates consume those
   facts instead of raw sentinel/string snapshots.
+- Shared `fw-check` fixtures now parse `fw-check/v1` OK, diagnostic, and coverage output into
+  structured result facts; commerce/starter graph gates assert result facts instead of raw OK
+  strings.
 - Integration fix: `fw-check` now uses the canonical
   `applyDeferredStreamResponseToRuntime` API after runtime compatibility export deletion.
 - Shared `@jiso/test/graph-fixtures` now derive graph page, fragment target, invalidation,
   query-consumer, and optimistic-status facts; commerce and `fw-check` compare CLI output against
   those structured graph facts instead of local graph parsers or handpicked update strings.
+- Touch-graph provenance fixtures now return source-site summary, source-line mismatch, unresolved
+  mutation, and behavior entries separately, so commerce tests no longer rebuild generated-site
+  projections inline.
 
 Open:
 
@@ -68,12 +74,14 @@ Latest focused evidence:
 
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`
+- `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
-- `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/test/package.json packages/test/src/fw-check-fixtures.ts packages/test/src/fw-check-fixtures.test.ts packages/test/src/touch-graph-fixtures.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -235,8 +243,8 @@ Current state:
 - Commerce source-truth tests use shared structured facts for graph, HTML/query/fragment/key
   output, source-site provenance, and app-shell command/export behavior.
 - `@jiso/test` includes reusable fixture seams for generated modules, fw-explain, TypeScript,
-  source/project facts, commands, starter templates, wire, static export, touch graphs, and graph
-  invalidation/consumer facts.
+  fw-check output, source/project facts, commands, starter templates, wire, static export, touch
+  graphs, and graph invalidation/consumer facts.
 - Commerce source-truth no longer owns local `fw-explain` parsing helpers for the currently
   covered graph/update/scope facts.
 - Commerce source-truth no longer owns local graph page/fragment/invalidation helpers for the
@@ -254,7 +262,7 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
-- `node --test --test-name-pattern "P4 commerce touch graph|P10 commerce graph assertions" tests/fw-check.node.mjs`
+- `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `pnpm run check:build`
 
 ## Phase 7 - Test Restructuring

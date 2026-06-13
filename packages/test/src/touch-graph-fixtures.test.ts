@@ -4,7 +4,12 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { touchGraphSourceFacts, touchGraphSummaryFacts } from './touch-graph-fixtures.js';
+import {
+  touchGraphProvenanceFact,
+  touchGraphSourceFacts,
+  touchGraphSourceSiteSummaryFact,
+  touchGraphSummaryFacts,
+} from './touch-graph-fixtures.js';
 
 describe('@jiso/test touch graph fixture seam', () => {
   it('summarizes touch-graph source provenance against resolved source lines', async () => {
@@ -82,6 +87,42 @@ describe('@jiso/test touch graph fixture seam', () => {
           ],
           unresolved: [],
         },
+      });
+      expect(touchGraphSourceSiteSummaryFact(touchGraph)).toEqual({
+        count: 2,
+        linesArePositive: true,
+        paths: ['src/cart.ts'],
+      });
+      await expect(touchGraphProvenanceFact(root, touchGraph)).resolves.toEqual({
+        entries: {
+          'cart.addItem': {
+            reads: [],
+            touches: [
+              {
+                domain: 'cart',
+                keys: null,
+                predicate: undefined,
+                sitePath: 'src/cart.ts',
+                via: 'cart_items',
+              },
+              {
+                domain: 'product',
+                keys: 'arg:productId',
+                predicate: 'eq',
+                sitePath: 'src/cart.ts',
+                via: 'products',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+        siteSummary: {
+          count: 2,
+          linesArePositive: true,
+          paths: ['src/cart.ts'],
+        },
+        sourceLineMismatches: [],
+        unresolvedMutations: [],
       });
     } finally {
       await rm(root, { force: true, recursive: true });

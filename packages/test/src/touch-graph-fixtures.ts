@@ -1,4 +1,9 @@
-import { projectSourceLineFacts, type ProjectSourceLineFact } from './source-fixtures.ts';
+import {
+  projectSourceLineFacts,
+  projectSourceSiteSummaryFact,
+  type ProjectSourceLineFact,
+  type ProjectSourceSiteSummaryFact,
+} from './source-fixtures.ts';
 
 export interface TouchGraphTouchFact {
   domain: string;
@@ -37,6 +42,75 @@ export interface TouchGraphSummaryEntryFact {
   reads: readonly unknown[];
   touches: TouchGraphTouchSummaryFact[];
   unresolved: readonly unknown[];
+}
+
+export interface TouchGraphProvenanceTouchFact {
+  domain: string;
+  keys: string | null | undefined;
+  predicate: string | undefined;
+  sitePath: string;
+  via: string;
+}
+
+export interface TouchGraphProvenanceEntryFact {
+  reads: readonly unknown[];
+  touches: TouchGraphProvenanceTouchFact[];
+  unresolved: readonly unknown[];
+}
+
+export interface TouchGraphProvenanceFact {
+  entries: Record<string, TouchGraphProvenanceEntryFact>;
+  siteSummary: ProjectSourceSiteSummaryFact;
+  sourceLineMismatches: string[];
+  unresolvedMutations: string[];
+}
+
+export function touchGraphSourceSites(touchGraph: TouchGraphFixture): string[] {
+  return Object.values(touchGraph)
+    .flatMap((entry) => entry.touches ?? [])
+    .map((touch) => {
+      if (!touch.site) {
+        throw new Error(`Touch graph fact includes a source site: ${touch.domain}`);
+      }
+      return touch.site;
+    });
+}
+
+export function touchGraphSourceSiteSummaryFact(
+  touchGraph: TouchGraphFixture,
+): ProjectSourceSiteSummaryFact {
+  return projectSourceSiteSummaryFact(touchGraphSourceSites(touchGraph));
+}
+
+export async function touchGraphProvenanceFact(
+  rootPath: string,
+  touchGraph: TouchGraphFixture,
+): Promise<TouchGraphProvenanceFact> {
+  const summary = await touchGraphSummaryFacts(rootPath, touchGraph);
+
+  return {
+    entries: Object.fromEntries(
+      Object.entries(summary).map(([mutation, entry]) => [
+        mutation,
+        {
+          reads: entry.reads,
+          touches: entry.touches.map(
+            ({ sourceLineIncludesVia: _sourceLineIncludesVia, ...touch }) => touch,
+          ),
+          unresolved: entry.unresolved,
+        },
+      ]),
+    ),
+    siteSummary: touchGraphSourceSiteSummaryFact(touchGraph),
+    sourceLineMismatches: Object.entries(summary).flatMap(([mutation, entry]) =>
+      entry.touches
+        .filter((touch) => !touch.sourceLineIncludesVia)
+        .map((touch) => `${mutation}:${touch.sitePath}:${touch.via}`),
+    ),
+    unresolvedMutations: Object.entries(summary)
+      .filter(([, entry]) => entry.unresolved.length > 0)
+      .map(([mutation]) => mutation),
+  };
 }
 
 export async function touchGraphSourceFacts(

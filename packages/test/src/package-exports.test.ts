@@ -55,6 +55,16 @@ import {
   type FwExportSummary,
 } from '@jiso/test/fw-export-fixtures';
 import {
+  fwCheckCoverageFacts,
+  fwCheckDiagnosticFacts,
+  fwCheckResultFact,
+  parseFwCheckOutput,
+  type FwCheckCoverageFact,
+  type FwCheckDiagnosticFact,
+  type FwCheckOutput,
+  type FwCheckResultFact,
+} from '@jiso/test/fw-check-fixtures';
+import {
   fwExplainEndpointFacts,
   fwExplainField,
   fwExplainListField,
@@ -182,8 +192,11 @@ import {
 } from '@jiso/test/sql-observer';
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
 import {
+  touchGraphProvenanceFact,
   touchGraphSourceFacts,
+  touchGraphSourceSiteSummaryFact,
   touchGraphSummaryFacts,
+  type TouchGraphProvenanceFact,
   type TouchGraphSourceFact,
   type TouchGraphSummaryEntryFact,
 } from '@jiso/test/touch-graph-fixtures';
@@ -341,7 +354,15 @@ describe('@jiso/test package subpath exports', () => {
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expect(touchGraphProvenanceFact).toBeTypeOf('function');
     expect(touchGraphSourceFacts).toBeTypeOf('function');
+    expect(
+      touchGraphSourceSiteSummaryFact({
+        'cart.addItem': {
+          touches: [{ domain: 'cart', site: 'src/cart.ts:3', via: 'cart_items' }],
+        },
+      }),
+    ).toEqual({ count: 1, linesArePositive: true, paths: ['src/cart.ts'] });
     expect(touchGraphSummaryFacts).toBeTypeOf('function');
     expect(
       viteDiagnosticMessageFacts(
@@ -508,6 +529,21 @@ describe('@jiso/test package subpath exports', () => {
     expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
       summary: { html: '0' },
     });
+    expect(parseFwCheckOutput('fw-check/v1\nOK\n')).toMatchObject({ status: 'ok' });
+    expect(fwCheckResultFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toMatchObject({
+      exitCode: 0,
+      status: 'ok',
+    });
+    expect(
+      fwCheckDiagnosticFacts(
+        'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+      ),
+    ).toMatchObject([{ code: 'FW310', target: 'cart/add -> cart' }]);
+    expect(
+      fwCheckCoverageFacts(
+        'fw-check/v1\nCOVERAGE component=Cart query=cart position=replace status=fragment\n',
+      ),
+    ).toMatchObject([{ properties: { component: 'Cart', status: 'fragment' } }]);
     expect(executeGeneratedClientModule).toBeTypeOf('function');
     expect(executeGeneratedServerRenderSource).toBeTypeOf('function');
     expect(executeGeneratedBootstrapModule).toBeTypeOf('function');
@@ -576,6 +612,10 @@ type _PublicSubpathTypes = [
   FwExportHtmlArtifact,
   FwExportOutput,
   FwExportSummary,
+  FwCheckCoverageFact,
+  FwCheckDiagnosticFact,
+  FwCheckOutput,
+  FwCheckResultFact,
   GraphInvalidationMatrix,
   GraphQueryConsumerFact,
   ForbiddenBrowserArchitectureFact,
@@ -600,6 +640,7 @@ type _PublicSubpathTypes = [
   CssScopeRuleFact,
   ProjectSourceLineFact,
   ProjectSourceSiteFact,
+  TouchGraphProvenanceFact,
   TouchGraphSourceFact,
   TouchGraphSummaryEntryFact,
   StarterClientTemplateFixture,

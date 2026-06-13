@@ -7,6 +7,7 @@
     "./assertions": "./src/assertions.ts",
     "./command-fixtures": "./src/command-fixtures.ts",
     "./diagnostic-output-fixtures": "./src/diagnostic-output-fixtures.ts",
+    "./fw-check-fixtures": "./src/fw-check-fixtures.ts",
     "./fw-explain-fixtures": "./src/fw-explain-fixtures.ts",
     "./fw-export-fixtures": "./src/fw-export-fixtures.ts",
     "./graph-fixtures": "./src/graph-fixtures.ts",

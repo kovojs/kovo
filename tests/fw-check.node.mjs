@@ -69,6 +69,11 @@ import {
   fwExplainSummary,
   fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
+import {
+  fwCheckCoverageFacts,
+  fwCheckDiagnosticFacts,
+  fwCheckResultFact,
+} from '../packages/test/src/fw-check-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
@@ -109,9 +114,8 @@ import {
   projectDirectoryNames,
   projectFileSources,
   projectJsonFile,
-  projectSourceSiteSummaryFact,
 } from '../packages/test/src/source-fixtures.ts';
-import { touchGraphSummaryFacts } from '../packages/test/src/touch-graph-fixtures.ts';
+import { touchGraphProvenanceFact } from '../packages/test/src/touch-graph-fixtures.ts';
 import {
   executeStarterClientTemplate,
   loadStarterTemplateFacts,
@@ -3087,7 +3091,13 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     target: 'order/receipt',
   }).output;
 
-  assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.deepEqual(fwCheckResultFact(fwCheck(commerceGraph)), {
+    coverage: [],
+    diagnostics: [],
+    exitCode: 0,
+    status: 'ok',
+    version: 'fw-check/v1',
+  });
   assert.deepEqual(fwExplainListField(cartQueryExplain, 'consumers'), [
     'component:CartBadge',
     'page:/cart',
@@ -3119,44 +3129,77 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     diagnosticDefinitions.FW311.message,
     'Query-dependent DOM position has no update status.',
   );
-  assert.equal(
-    fwCheck(
-      {
-        mutations: [{ key: 'cart/add', writes: ['cart'] }],
-        optimistic: [{ mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' }],
-        queries: [
-          { domains: ['cart'], query: 'cart' },
-          { domains: ['order'], query: 'orderHistory' },
-        ],
-        touchGraph: {
-          'order.write': {
-            touches: [{ domain: 'order', keys: null, site: 'order.ts:1', via: 'orders' }],
-            unresolved: [],
-          },
+  const coverageCheck = fwCheck(
+    {
+      mutations: [{ key: 'cart/add', writes: ['cart'] }],
+      optimistic: [{ mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' }],
+      queries: [
+        { domains: ['cart'], query: 'cart' },
+        { domains: ['order'], query: 'orderHistory' },
+      ],
+      touchGraph: {
+        'order.write': {
+          touches: [{ domain: 'order', keys: null, site: 'order.ts:1', via: 'orders' }],
+          unresolved: [],
         },
-        updateCoverage: [
-          {
-            component: 'CartBadge',
-            query: 'cart.discount',
-            status: 'UNHANDLED',
-          },
-          {
-            component: 'OrderHistory',
-            query: 'orderHistory',
-            status: 'fragment',
-          },
-        ],
       },
-      { family: 'all' },
-    ).output,
+      updateCoverage: [
+        {
+          component: 'CartBadge',
+          query: 'cart.discount',
+          status: 'UNHANDLED',
+        },
+        {
+          component: 'OrderHistory',
+          query: 'orderHistory',
+          status: 'fragment',
+        },
+      ],
+    },
+    { family: 'all' },
+  );
+  assert.deepEqual(
+    fwCheckDiagnosticFacts(coverageCheck.output).map(({ raw: _raw, ...fact }) => fact),
     [
-      'fw-check/v1',
-      'WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.',
-      'WARN FW311 component=CartBadge query=cart.discount position=undefined Query-dependent DOM position has no update status.',
-      'COVERAGE component=OrderHistory query=orderHistory position=undefined status=fragment',
-      'WARN UNGUARDED cart/add mutation is reachable without an auth guard.',
-      '',
-    ].join('\n'),
+      {
+        code: 'FW310',
+        message: diagnosticDefinitions.FW310.message,
+        properties: {},
+        severity: 'WARN',
+        target: 'cart/add -> cart',
+      },
+      {
+        code: 'FW311',
+        message: diagnosticDefinitions.FW311.message,
+        properties: {
+          component: 'CartBadge',
+          position: 'undefined',
+          query: 'cart.discount',
+        },
+        severity: 'WARN',
+        target: '',
+      },
+      {
+        code: 'UNGUARDED',
+        message: 'mutation is reachable without an auth guard.',
+        properties: {},
+        severity: 'WARN',
+        target: 'cart/add',
+      },
+    ],
+  );
+  assert.deepEqual(
+    fwCheckCoverageFacts(coverageCheck.output).map(({ raw: _raw, ...fact }) => fact),
+    [
+      {
+        properties: {
+          component: 'OrderHistory',
+          position: 'undefined',
+          query: 'orderHistory',
+          status: 'fragment',
+        },
+      },
+    ],
   );
   const registryFacts = deriveRegistryFactsFromGraph(commerceGraph);
   assert.deepEqual(registryFacts.components, ['cart-badge', 'order-history', 'product-grid']);
@@ -3268,7 +3311,13 @@ void test('P10 starter wires graph assertions into CI', async () => {
     },
   );
 
-  assert.deepEqual(fwCheck(starterGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.deepEqual(fwCheckResultFact(fwCheck(starterGraph)), {
+    coverage: [],
+    diagnostics: [],
+    exitCode: 0,
+    status: 'ok',
+    version: 'fw-check/v1',
+  });
   assert.deepEqual(
     starterGraph.components?.map((component) => component.name),
     ['CartBadge', 'CartPanel'],
@@ -5286,7 +5335,15 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     },
     { stderr: '', stdout: '' },
   );
-  assert.deepEqual(await touchGraphSummaryFacts(projectRootPath, commerceGraph.touchGraph), {
+  const provenance = await touchGraphProvenanceFact(projectRootPath, commerceGraph.touchGraph);
+  assert.deepEqual(provenance.siteSummary, {
+    count: 5,
+    linesArePositive: true,
+    paths: ['examples/commerce/src/app.ts'],
+  });
+  assert.deepEqual(provenance.sourceLineMismatches, []);
+  assert.deepEqual(provenance.unresolvedMutations, []);
+  assert.deepEqual(provenance.entries, {
     'cart.addItem': {
       reads: [],
       touches: [
@@ -5295,7 +5352,6 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           keys: null,
           predicate: undefined,
           sitePath: 'examples/commerce/src/app.ts',
-          sourceLineIncludesVia: true,
           via: 'cart_items',
         },
         {
@@ -5303,7 +5359,6 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           keys: null,
           predicate: undefined,
           sitePath: 'examples/commerce/src/app.ts',
-          sourceLineIncludesVia: true,
           via: 'orders',
         },
         {
@@ -5311,7 +5366,6 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           keys: 'arg:productId',
           predicate: 'eq',
           sitePath: 'examples/commerce/src/app.ts',
-          sourceLineIncludesVia: true,
           via: 'products',
         },
       ],
@@ -5325,7 +5379,6 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           keys: 'arg:data.object.id',
           predicate: 'eq',
           sitePath: 'examples/commerce/src/app.ts',
-          sourceLineIncludesVia: true,
           via: 'orders',
         },
       ],
@@ -5339,24 +5392,21 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           keys: 'arg:orderId',
           predicate: 'eq',
           sitePath: 'examples/commerce/src/app.ts',
-          sourceLineIncludesVia: true,
           via: 'attachments',
         },
       ],
       unresolved: [],
     },
   });
-  const generatedSites = Object.values(commerceGraph.touchGraph)
-    .flatMap((entry) => entry.touches)
-    .map((touch) => touch.site);
-  assert.deepEqual(projectSourceSiteSummaryFact(generatedSites), {
-    count: 5,
-    linesArePositive: true,
-    paths: ['examples/commerce/src/app.ts'],
-  });
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
-  assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.deepEqual(fwCheckResultFact(fwCheck(commerceGraph)), {
+    coverage: [],
+    diagnostics: [],
+    exitCode: 0,
+    status: 'ok',
+    version: 'fw-check/v1',
+  });
   assert.deepEqual(
     fwExplainListField(
       fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output,
