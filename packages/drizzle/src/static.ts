@@ -2181,7 +2181,8 @@ function extractQueryDefinitionsFromSourceFile(
     }
 
     const query = queryArgument.getLiteralText();
-    const bodyResolution = queryBodyObjectLiteral(bodyArgument);
+    const receiverMode = options.receiverMode ?? 'source';
+    const bodyResolution = queryBodyObjectLiteral(bodyArgument, receiverMode);
     if (!bodyResolution.body) {
       if (bodyResolution.unresolved) {
         definitions.push({
@@ -2206,10 +2207,7 @@ function extractQueryDefinitionsFromSourceFile(
       (options.receiverMode ?? 'source') === 'source'
         ? sourceQueryDestructuredReceiverNames(bodyObject)
         : { names: new Set<string>(), projectContainers: false, symbolKeys: new Set<string>() };
-    const receiverReferences = queryCallbackReceiverReferences(
-      bodyObject,
-      options.receiverMode ?? 'source',
-    );
+    const receiverReferences = queryCallbackReceiverReferences(bodyObject, receiverMode);
     const localFunctionsByKey =
       options.localFunctionReceiverParameters ??
       localFunctionReceiverParametersFromSourceFile(sourceFile);
@@ -2217,23 +2215,24 @@ function extractQueryDefinitionsFromSourceFile(
       bodyObject,
       receiverReferences,
       options.columnShapes,
+      receiverMode,
     );
     const readResolutionOptions: QueryReadResolutionOptions = {
       ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
-      ...unresolvedQueryCallbackDiagnostics(bodyObject),
+      ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyObject, receiverReferences),
       ...receiverMethodAliasQueryDiagnostics(bodyObject, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyObject, receiverReferences, readResolutionOptions),
-      ...((options.receiverMode ?? 'source') === 'source'
+      ...(receiverMode === 'source'
         ? ambientSourceQueryReceiverDiagnostics(bodyObject, localFunctionKeys)
         : []),
-      ...((options.receiverMode ?? 'source') === 'source'
+      ...(receiverMode === 'source'
         ? sourceQueryReceiverAliasDiagnostics(bodyObject, receiverReferences, localFunctionKeys)
         : []),
       ...sourceDestructuredQueryReceiverDiagnostics(
@@ -2290,8 +2289,9 @@ function selectShapeFromQueryBody(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
+  mode: 'project' | 'source' = 'source',
 ): QueryShapeSelection | null {
-  const selectCall = selectCallFromQueryBody(body, receiverReferences);
+  const selectCall = selectCallFromQueryBody(body, receiverReferences, mode);
   if (!selectCall) return null;
 
   const projection = selectProjectionArgument(selectCall);
@@ -2317,7 +2317,7 @@ function selectShapeFromQueryBody(
 
   return queryShapeFromObjectLiteralNode(projection.compilerNode, {
     columnShapes,
-    nullableTables: nullableJoinTables(body, receiverReferences),
+    nullableTables: nullableJoinTables(body, receiverReferences, mode),
   });
 }
 
@@ -2333,8 +2333,9 @@ function selectCallDisplayName(call: CallExpression): string {
 function selectCallFromQueryBody(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source' = 'source',
 ): CallExpression | undefined {
-  const selectCalls = queryBodyCallExpressions(body, (call) =>
+  const selectCalls = queryBodyCallExpressions(body, mode, (call) =>
     isSelectQueryCallName(staticAccessName(call.getExpression())) &&
     isQueryCallOnReceiver(call, receiverReferences)
       ? [call]
@@ -2358,7 +2359,7 @@ function queryCallbackReceiverReferences(
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
 
-  for (const callback of queryLoadCallbackFunctions(body)) {
+  for (const callback of queryLoadCallbackFunctions(body, mode)) {
     const receiverParameter = queryCallbackParameterNodes(callback)[1];
     const receiver = receiverParameter?.getNameNode();
     if (!receiverParameter || !receiver) continue;
@@ -2406,7 +2407,7 @@ function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
 
 function appendQueryTransactionReceiverAliases(
   body: ObjectLiteralExpression,
-  receiverReferences: { names: Set<string>; symbolKeys: Set<string> },
+  receiverReferences: QueryReceiverReferences & { names: Set<string>; symbolKeys: Set<string> },
 ): void {
   // SPEC §10-§11: callback-local transaction aliases remain visible query-loader surfaces when
   // they originate from a proven Drizzle receiver.
@@ -2415,7 +2416,10 @@ function appendQueryTransactionReceiverAliases(
   while (changed) {
     changed = false;
 
-    for (const call of queryExecutableCallExpressions(body)) {
+    for (const call of queryExecutableCallExpressions(
+      body,
+      queryReceiverMode(receiverReferences),
+    )) {
       if (staticAccessName(call.getExpression()) !== 'transaction') continue;
 
       const receiver = staticAccessExpression(call.getExpression());
@@ -2482,7 +2486,7 @@ function unclassifiedQueryReceiverDiagnostics(
 ): TouchGraphDiagnostic[] {
   // SPEC §10.2/§11.1: query loaders may not hide raw SQL, writes, transactions, or other
   // unclassified Drizzle receiver work under an empty fact set.
-  return queryBodyCallExpressions(body, (call) => {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
     if (
       boundReceiverMethodAccessName(call, (node) =>
         isQueryReceiverIdentifier(node, receiverReferences),
@@ -2515,41 +2519,43 @@ function externalQueryHelperDiagnostics(
   // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit FW406
   // boundary until their read/write summaries are proven interprocedurally.
   const carrierSymbolKeys = queryReceiverCarrierSymbolKeys(body, receiverReferences);
-  return queryExecutableCallExpressions(body).flatMap((call) => {
-    if (
-      boundReceiverMethodAccessName(call, (node) =>
-        isQueryReceiverIdentifier(node, receiverReferences),
-      )
-    ) {
-      return [];
-    }
+  return queryExecutableCallExpressions(body, queryReceiverMode(receiverReferences)).flatMap(
+    (call) => {
+      if (
+        boundReceiverMethodAccessName(call, (node) =>
+          isQueryReceiverIdentifier(node, receiverReferences),
+        )
+      ) {
+        return [];
+      }
 
-    const surface = externalHelperCallSurface(call);
-    if (!surface) return [];
+      const surface = externalHelperCallSurface(call);
+      if (!surface) return [];
 
-    const { name } = surface;
-    if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
-    if (localFunctionKeyForReference(surface.reference, localFunctionKeys)) {
-      return [];
-    }
+      const { name } = surface;
+      if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
+      if (localFunctionKeyForReference(surface.reference, localFunctionKeys)) {
+        return [];
+      }
 
-    const receiverName = queryHelperReceiverArgumentName(
-      call,
-      receiverReferences,
-      carrierSymbolKeys,
-      queryReceiverAliasReferencesForCall(body, call, receiverReferences),
-    );
-    if (!receiverName) return [];
+      const receiverName = queryHelperReceiverArgumentName(
+        call,
+        receiverReferences,
+        carrierSymbolKeys,
+        queryReceiverAliasReferencesForCall(body, call, receiverReferences),
+      );
+      if (!receiverName) return [];
 
-    return [
-      {
-        code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
-        severity: diagnosticDefinitions.FW406.severity,
-        site: '',
-      },
-    ];
-  });
+      return [
+        {
+          code: 'FW406' as const,
+          message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
+          severity: diagnosticDefinitions.FW406.severity,
+          site: '',
+        },
+      ];
+    },
+  );
 }
 
 function queryLocalHelperCalls(
@@ -2561,7 +2567,7 @@ function queryLocalHelperCalls(
   const localFunctionKeys = new Set(localFunctionsByKey.keys());
   const carrierSymbolKeys = queryReceiverCarrierSymbolKeys(body, receiverReferences);
 
-  for (const call of queryExecutableCallExpressions(body)) {
+  for (const call of queryExecutableCallExpressions(body, queryReceiverMode(receiverReferences))) {
     const expression = call.getExpression();
 
     const key = localFunctionKeyForReference(expression, localFunctionKeys);
@@ -2597,46 +2603,48 @@ function opaqueLocalQueryHelperDiagnostics(
   const localFunctionKeys = new Set(localFunctionsByKey.keys());
   const carrierSymbolKeys = queryReceiverCarrierSymbolKeys(body, receiverReferences);
 
-  return queryExecutableCallExpressions(body).flatMap((call) => {
-    const expression = call.getExpression();
+  return queryExecutableCallExpressions(body, queryReceiverMode(receiverReferences)).flatMap(
+    (call) => {
+      const expression = call.getExpression();
 
-    const key = localFunctionKeyForReference(expression, localFunctionKeys);
-    if (!key) return [];
+      const key = localFunctionKeyForReference(expression, localFunctionKeys);
+      if (!key) return [];
 
-    const receiverName = queryHelperReceiverArgumentName(
-      call,
-      receiverReferences,
-      carrierSymbolKeys,
-      queryReceiverAliasReferencesForCall(body, call, receiverReferences),
-    );
-    if (!receiverName) return [];
-    const requirements = localFunctionsByKey.get(key) ?? [];
-    if (
-      requirements.length > 0 &&
-      localFunctionCallSatisfiesReceiverRequirements(
+      const receiverName = queryHelperReceiverArgumentName(
         call,
-        requirements,
-        (argument) =>
-          queryReceiverReferenceInArgument(
-            argument,
-            receiverReferences,
-            carrierSymbolKeys,
-            queryReceiverAliasReferencesForCall(body, call, receiverReferences),
-          ) !== undefined,
-      )
-    ) {
-      return [];
-    }
+        receiverReferences,
+        carrierSymbolKeys,
+        queryReceiverAliasReferencesForCall(body, call, receiverReferences),
+      );
+      if (!receiverName) return [];
+      const requirements = localFunctionsByKey.get(key) ?? [];
+      if (
+        requirements.length > 0 &&
+        localFunctionCallSatisfiesReceiverRequirements(
+          call,
+          requirements,
+          (argument) =>
+            queryReceiverReferenceInArgument(
+              argument,
+              receiverReferences,
+              carrierSymbolKeys,
+              queryReceiverAliasReferencesForCall(body, call, receiverReferences),
+            ) !== undefined,
+        )
+      ) {
+        return [];
+      }
 
-    return [
-      {
-        code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
-        severity: diagnosticDefinitions.FW406.severity,
-        site: '',
-      },
-    ];
-  });
+      return [
+        {
+          code: 'FW406' as const,
+          message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
+          severity: diagnosticDefinitions.FW406.severity,
+          site: '',
+        },
+      ];
+    },
+  );
 }
 
 function receiverMethodAliasQueryDiagnostics(
@@ -2645,7 +2653,7 @@ function receiverMethodAliasQueryDiagnostics(
 ): TouchGraphDiagnostic[] {
   const isReceiverIdentifier = (node: Node) => isQueryReceiverIdentifier(node, receiverReferences);
 
-  return queryCallbackBodies(body).flatMap((callbackBody) =>
+  return queryCallbackBodies(body, queryReceiverMode(receiverReferences)).flatMap((callbackBody) =>
     extractReceiverMethodAliasCallsFromBody(callbackBody, isReceiverIdentifier).map((call) => ({
       code: 'FW406' as const,
       message: `${diagnosticDefinitions.FW406.message} Query uses detached Drizzle receiver method ${call.name}().`,
@@ -2705,20 +2713,41 @@ function sourceDestructuredQueryReceiverDiagnostics(
   );
 }
 
-function queryExecutableCallExpressions(body: ObjectLiteralExpression): CallExpression[] {
-  return queryCallbackBodies(body)
+function queryExecutableCallExpressions(
+  body: ObjectLiteralExpression,
+  mode: 'project' | 'source' = 'source',
+): CallExpression[] {
+  return queryCallbackBodies(body, mode)
     .flatMap((callbackBody) => touchBodyCallExpressions(callbackBody))
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
 }
 
-function queryCallbackBodies(body: ObjectLiteralExpression): Node[] {
-  return queryLoadCallbackFunctions(body).map(functionBody);
+function queryCallbackBodies(
+  body: ObjectLiteralExpression,
+  mode: 'project' | 'source' = 'source',
+): Node[] {
+  return queryLoadCallbackFunctions(body, mode).map(functionBody);
 }
 
-function queryCallbackFunction(node: Node): Node | undefined {
+function queryCallbackFunction(node: Node, mode: 'project' | 'source'): Node | undefined {
   // SPEC §10.2/§11.1: query facts come from the query loader, not arbitrary callback-shaped
   // config/helper properties that happen to accept a db-like parameter.
   if (!queryCallbackPropertyIsLoad(node)) return undefined;
+
+  if (mode === 'source') {
+    // SPEC §11.1: source-mode has no Drizzle receiver type proof. Only inline loader callbacks
+    // are inspected; indirect loader references degrade to FW406 instead of fabricating facts
+    // from a `db`-named parameter. Project mode below follows ts-morph symbols/types.
+    if (Node.isMethodDeclaration(node)) return node;
+    if (!Node.isPropertyAssignment(node)) return undefined;
+
+    const initializer = node.getInitializer();
+    if (!initializer) return undefined;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
+      ? expression
+      : undefined;
+  }
 
   if (Node.isShorthandPropertyAssignment(node)) {
     return referencedQueryCallbackFunction(node.getNameNode());
@@ -2733,8 +2762,11 @@ function queryCallbackFunction(node: Node): Node | undefined {
   return referencedQueryCallbackFunction(expression);
 }
 
-function queryLoadCallbackFunctions(body: ObjectLiteralExpression): Node[] {
-  return queryLoadCallbackResolution(body).callbacks;
+function queryLoadCallbackFunctions(
+  body: ObjectLiteralExpression,
+  mode: 'project' | 'source' = 'source',
+): Node[] {
+  return queryLoadCallbackResolution(body, mode).callbacks;
 }
 
 interface QueryLoadCallbackResolution {
@@ -2747,26 +2779,33 @@ interface QueryBodyObjectResolution {
   unresolved: boolean;
 }
 
-function queryBodyObjectLiteral(argument: Node | undefined): QueryBodyObjectResolution {
+function queryBodyObjectLiteral(
+  argument: Node | undefined,
+  mode: 'project' | 'source',
+): QueryBodyObjectResolution {
   if (!argument) return { unresolved: true };
-  return queryBodyObjectLiteralFromNode(argument, new Set()) ?? { unresolved: true };
+  return queryBodyObjectLiteralFromNode(argument, new Set(), mode) ?? { unresolved: true };
 }
 
 function queryBodyObjectLiteralFromNode(
   node: Node,
   seen: Set<string>,
+  mode: 'project' | 'source',
 ): QueryBodyObjectResolution | undefined {
   // SPEC §10.2/§11.1: query option objects are executable loader surfaces; unresolved external
   // configs stay visible as FW406 rather than disappearing from query facts.
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
+  if (mode === 'source') {
+    return { unresolved: true };
+  }
 
   const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
   if (seen.has(key)) return { unresolved: true };
   seen.add(key);
 
   for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
-    const body = queryBodyObjectLiteralFromDeclaration(declaration, seen);
+    const body = queryBodyObjectLiteralFromDeclaration(declaration, seen, mode);
     if (body) return body;
   }
 
@@ -2777,33 +2816,34 @@ function queryBodyObjectLiteralFromNode(
 function queryBodyObjectLiteralFromDeclaration(
   declaration: Node,
   seen: Set<string>,
+  mode: 'project' | 'source',
 ): QueryBodyObjectResolution | undefined {
   if (Node.isVariableDeclaration(declaration)) {
     const initializer = declaration.getInitializer();
-    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
   }
 
   if (Node.isPropertyAssignment(declaration)) {
     const initializer = declaration.getInitializer();
-    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
   }
 
   if (Node.isShorthandPropertyAssignment(declaration)) {
-    return queryBodyObjectLiteralFromNode(declaration.getNameNode(), seen);
+    return queryBodyObjectLiteralFromNode(declaration.getNameNode(), seen, mode);
   }
 
   if (Node.isIdentifier(declaration)) {
     const parent = declaration.getParent();
     if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
       const initializer = parent.getInitializer();
-      return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+      return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
     }
     if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
       const initializer = parent.getInitializer();
-      return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+      return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
     }
     if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration) {
-      return queryBodyObjectLiteralFromNode(parent.getNameNode(), seen);
+      return queryBodyObjectLiteralFromNode(parent.getNameNode(), seen, mode);
     }
   }
 
@@ -2815,13 +2855,16 @@ type QueryLoadSpreadResolution =
   | { kind: 'none' }
   | { kind: 'unresolved' };
 
-function queryLoadCallbackResolution(body: ObjectLiteralExpression): QueryLoadCallbackResolution {
+function queryLoadCallbackResolution(
+  body: ObjectLiteralExpression,
+  mode: 'project' | 'source' = 'source',
+): QueryLoadCallbackResolution {
   let callback: Node | undefined;
   let unresolvedNode: Node | undefined;
 
   for (const property of body.getProperties()) {
     if (Node.isSpreadAssignment(property)) {
-      const resolution = queryLoadCallbackFromSpread(property);
+      const resolution = queryLoadCallbackFromSpread(property, mode);
       if (resolution.kind === 'found') {
         callback = resolution.callback;
         unresolvedNode = undefined;
@@ -2833,7 +2876,7 @@ function queryLoadCallbackResolution(body: ObjectLiteralExpression): QueryLoadCa
     }
 
     if (!queryCallbackPropertyIsLoad(property)) continue;
-    const propertyCallback = queryCallbackFunction(property);
+    const propertyCallback = queryCallbackFunction(property, mode);
     if (propertyCallback) {
       callback = propertyCallback;
       unresolvedNode = undefined;
@@ -2849,12 +2892,16 @@ function queryLoadCallbackResolution(body: ObjectLiteralExpression): QueryLoadCa
   };
 }
 
-function queryLoadCallbackFromSpread(property: Node): QueryLoadSpreadResolution {
+function queryLoadCallbackFromSpread(
+  property: Node,
+  mode: 'project' | 'source',
+): QueryLoadSpreadResolution {
   if (!Node.isSpreadAssignment(property)) return { kind: 'none' };
+  if (mode === 'source') return { kind: 'unresolved' };
 
   const expression = unwrappedStaticExpressionNode(property.getExpression());
   if (Node.isObjectLiteralExpression(expression)) {
-    const resolution = queryLoadCallbackResolution(expression);
+    const resolution = queryLoadCallbackResolution(expression, mode);
     if (resolution.callbacks[0]) return { kind: 'found', callback: resolution.callbacks[0] };
     return resolution.unresolvedNodes.length > 0 ? { kind: 'unresolved' } : { kind: 'none' };
   }
@@ -2884,9 +2931,12 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
   return propertyNameText(node.getNameNode()) === 'load';
 }
 
-function unresolvedQueryCallbackDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
+function unresolvedQueryCallbackDiagnostics(
+  body: ObjectLiteralExpression,
+  mode: 'project' | 'source',
+): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
-  const unresolvedNodes = queryLoadCallbackResolution(body).unresolvedNodes;
+  const unresolvedNodes = queryLoadCallbackResolution(body, mode).unresolvedNodes;
 
   for (let index = 0; index < unresolvedNodes.length; index++) {
     diagnostics.push(unresolvedQueryLoadCallbackDiagnostic());
@@ -3116,7 +3166,7 @@ function queryReceiverAliasReferencesForCall(
   call: CallExpression,
   receiverReferences: QueryReceiverReferences,
 ): SourceReceiverAliasReferences | undefined {
-  const callbackBody = queryCallbackBodyForNode(body, call);
+  const callbackBody = queryCallbackBodyForNode(body, call, queryReceiverMode(receiverReferences));
   return callbackBody
     ? sourceReceiverAliasReferencesForBody(callbackBody, (node) =>
         isQueryReceiverIdentifier(node, receiverReferences),
@@ -3124,8 +3174,12 @@ function queryReceiverAliasReferencesForCall(
     : undefined;
 }
 
-function queryCallbackBodyForNode(body: ObjectLiteralExpression, node: Node): Node | undefined {
-  for (const callbackBody of queryCallbackBodies(body)) {
+function queryCallbackBodyForNode(
+  body: ObjectLiteralExpression,
+  node: Node,
+  mode: 'project' | 'source',
+): Node | undefined {
+  for (const callbackBody of queryCallbackBodies(body, mode)) {
     if (node === callbackBody || node.getAncestors().includes(callbackBody)) {
       return callbackBody;
     }
@@ -3286,11 +3340,12 @@ function nullableShape(shape: QueryShape): QueryShape {
 function nullableJoinTables(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source' = 'source',
 ): ReadonlySet<string> {
   const tables = new Set<string>();
   const relationTables: string[] = [];
 
-  for (const { operation, table } of queryBodyCallExpressions(body, (call) => {
+  for (const { operation, table } of queryBodyCallExpressions(body, mode, (call) => {
     const operation = propertyAccessCallName(call);
     if (!operation || !isJoinReadCallName(operation)) return [];
     if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
@@ -3501,7 +3556,7 @@ function queryJoinTableExpressions(
   receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
 ): string[] {
-  return queryBodyCallExpressions(body, (call) => {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
     if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
@@ -3516,7 +3571,7 @@ function queryRelationalTableExpressions(
   receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
 ): string[] {
-  return queryBodyCallExpressions(body, (call) => {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
     const expression = call.getExpression();
     const method = staticAccessName(expression);
     if (method !== 'findMany' && method !== 'findFirst') return [];
@@ -3542,23 +3597,27 @@ function unresolvedQueryReadDiagnostics(
   receiverReferences: QueryReceiverReferences,
   options: QueryReadResolutionOptions = {},
 ): TouchGraphDiagnostic[] {
-  const diagnostics: TouchGraphDiagnostic[] = queryBodyCallExpressions(body, (call) => {
-    const name = propertyAccessCallName(call);
-    if (!name || !isQueryReadCallName(name)) return [];
-    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
+  const diagnostics: TouchGraphDiagnostic[] = queryBodyCallExpressions(
+    body,
+    queryReceiverMode(receiverReferences),
+    (call) => {
+      const name = propertyAccessCallName(call);
+      if (!name || !isQueryReadCallName(name)) return [];
+      if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
-    const tableArgument = call.getArguments()[0];
-    if (staticExpressionPath(tableArgument, options.readTableIdentifier)) return [];
+      const tableArgument = call.getArguments()[0];
+      if (staticExpressionPath(tableArgument, options.readTableIdentifier)) return [];
 
-    return [
-      {
-        code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query read source for db.${name}() could not be resolved to a Drizzle table.`,
-        severity: diagnosticDefinitions.FW406.severity,
-        site: '',
-      },
-    ];
-  });
+      return [
+        {
+          code: 'FW406' as const,
+          message: `${diagnosticDefinitions.FW406.message} Query read source for db.${name}() could not be resolved to a Drizzle table.`,
+          severity: diagnosticDefinitions.FW406.severity,
+          site: '',
+        },
+      ];
+    },
+  );
 
   diagnostics.push(
     ...unresolvedRelationalQueryReadDiagnostics(
@@ -3575,7 +3634,7 @@ function unresolvedRelationalQueryReadDiagnostics(
   receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
 ): TouchGraphDiagnostic[] {
-  return queryBodyCallExpressions(body, (call) => {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
     const expression = call.getExpression();
     const method = staticAccessName(expression);
     if (method !== 'findMany' && method !== 'findFirst') return [];
@@ -3603,14 +3662,19 @@ function unresolvedRelationalQueryReadDiagnostics(
 
 function queryBodyCallExpressions<T>(
   body: ObjectLiteralExpression,
+  mode: 'project' | 'source',
   extract: (call: CallExpression) => readonly T[],
 ): T[] {
   // SPEC §10-§11: query facts come from executable query-loader callback surfaces; nested helper
   // bodies are summarized only when called instead of fabricating reads from declarations.
-  return queryCallbackBodies(body)
+  return queryCallbackBodies(body, mode)
     .flatMap((callbackBody) => touchBodyCallExpressions(callbackBody))
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
     .flatMap(extract);
+}
+
+function queryReceiverMode(receiverReferences: QueryReceiverReferences): 'project' | 'source' {
+  return receiverReferences.projectContainers ? 'project' : 'source';
 }
 
 function isQueryCallOnReceiver(
@@ -3732,7 +3796,7 @@ function queryInstanceKeyComparisons(
   receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
 ): QueryInstanceKeyComparison[] {
-  return queryBodyCallExpressions(body, (call) => {
+  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
     if (propertyAccessCallName(call) !== 'where') return [];
     if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
@@ -6860,7 +6924,7 @@ function queryReceiverCarrierSymbolKeys(
 ): ReadonlySet<string> {
   const carrierSymbolKeys = new Set<string>();
 
-  for (const callbackBody of queryCallbackBodies(body)) {
+  for (const callbackBody of queryCallbackBodies(body, queryReceiverMode(receiverReferences))) {
     for (const symbolKey of receiverCarrierSymbolKeysForBody(callbackBody, (node) =>
       isQueryReceiverIdentifier(node, receiverReferences),
     )) {

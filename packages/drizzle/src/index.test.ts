@@ -40,6 +40,24 @@ function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
   };
 }
 
+function unresolvedQueryLoadFact(query: string, site: string) {
+  return {
+    diagnostics: [
+      {
+        code: 'FW406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+        severity: 'warn',
+        site,
+      },
+    ],
+    query,
+    reads: [],
+    shape: {},
+    site,
+  };
+}
+
 describe('@jiso/drizzle touch graph helpers', () => {
   it('extracts writes and query facts through real drizzle-orm pgTable/select/update types', () => {
     const products = pgTable(
@@ -9756,7 +9774,7 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
-  it('extracts source shorthand query-loader functions from resolved loader symbols', () => {
+  it('marks source shorthand query-loader functions as FW406 instead of following untyped symbols', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -9775,19 +9793,11 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        query: 'users/source-shorthand-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:7',
-      },
+      unresolvedQueryLoadFact('users/source-shorthand-loader', 'user.queries.ts:7'),
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('extracts source member query-loader aliases from resolved loader symbols', () => {
+  it('marks source member query-loader aliases as FW406 instead of following untyped symbols', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -9815,27 +9825,12 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        query: 'users/source-member-aliased-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:12',
-      },
-      {
-        query: 'users/source-member-shorthand-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:16',
-      },
+      unresolvedQueryLoadFact('users/source-member-aliased-loader', 'user.queries.ts:12'),
+      unresolvedQueryLoadFact('users/source-member-shorthand-loader', 'user.queries.ts:16'),
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('extracts source static element-access query-loader aliases from resolved loader symbols', () => {
+  it('marks source element-access query-loader aliases as FW406 without static symbol fallback', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -9863,27 +9858,12 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        query: 'users/source-static-member-aliased-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:12',
-      },
-      {
-        query: 'users/source-static-member-shorthand-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:16',
-      },
+      unresolvedQueryLoadFact('users/source-static-member-aliased-loader', 'user.queries.ts:12'),
+      unresolvedQueryLoadFact('users/source-static-member-shorthand-loader', 'user.queries.ts:16'),
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('extracts source query-loader callbacks through static object aliases and spreads', () => {
+  it('marks source query-loader callbacks through object aliases and spreads as FW406', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -9918,27 +9898,13 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        query: 'users/source-object-alias-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:15',
-      },
-      {
-        query: 'users/source-object-spread-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:19',
-      },
+      unresolvedQueryLoadFact('users/source-object-alias-loader', 'user.queries.ts:15'),
+      unresolvedQueryLoadFact('users/source-object-spread-loader', 'user.queries.ts:19'),
+      unresolvedQueryLoadFact('users/source-overridden-object-spread-loader', 'user.queries.ts:23'),
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
-  it('extracts source query loaders from static config spreads and degrades obscuring spreads', () => {
+  it('marks source query loaders from config spreads as FW406', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -9966,33 +9932,12 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
-            site: 'user.queries.ts:15',
-          },
-        ],
-        query: 'users/source-config-obscured-loader',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:15',
-      },
-      {
-        query: 'users/source-config-spread-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-        },
-        site: 'user.queries.ts:11',
-      },
+      unresolvedQueryLoadFact('users/source-config-obscured-loader', 'user.queries.ts:15'),
+      unresolvedQueryLoadFact('users/source-config-spread-loader', 'user.queries.ts:11'),
     ]);
   });
 
-  it('extracts source query loaders from static external config objects and degrades unresolved configs', () => {
+  it('marks source query loaders from external config objects as FW406', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -10013,30 +9958,8 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
-            site: 'user.queries.ts:11',
-          },
-        ],
-        query: 'users/source-dynamic-config-loader',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:11',
-      },
-      {
-        query: 'users/source-external-config-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-          stock: 'number',
-        },
-        site: 'user.queries.ts:10',
-      },
+      unresolvedQueryLoadFact('users/source-dynamic-config-loader', 'user.queries.ts:11'),
+      unresolvedQueryLoadFact('users/source-external-config-loader', 'user.queries.ts:10'),
     ]);
   });
 
@@ -10080,7 +10003,7 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
-  it('extracts source query-loader callbacks through nested static object aliases', () => {
+  it('marks source query-loader callbacks through nested object aliases as FW406', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'user.queries.ts',
@@ -10115,26 +10038,10 @@ export interface CommerceInvalidationSets {
     ]);
 
     expect(facts).toEqual([
-      {
-        query: 'users/source-nested-object-alias-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-          stock: 'number',
-        },
-        site: 'user.queries.ts:15',
-      },
-      {
-        query: 'users/source-nested-object-spread-loader',
-        reads: ['user'],
-        shape: {
-          id: 'string',
-          stock: 'number',
-        },
-        site: 'user.queries.ts:19',
-      },
+      unresolvedQueryLoadFact('users/source-nested-object-alias-loader', 'user.queries.ts:15'),
+      unresolvedQueryLoadFact('users/source-nested-object-spread-loader', 'user.queries.ts:19'),
+      unresolvedQueryLoadFact('users/source-overridden-nested-object-loader', 'user.queries.ts:23'),
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
   it('marks source query-loader destructuring assignment receiver aliases as FW406', () => {
