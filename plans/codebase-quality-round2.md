@@ -200,6 +200,14 @@ fw-check monolith no longer rebuilds those server/HTML mechanics inline.
 
 Latest evidence:
 
+- UI G1 static route source/markup closure slice:
+  `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+  `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `examples/gallery/src/demo-fixtures.test.ts` derives the current
+  44-route gallery matrix from route paths and proves every static route has app-authored source
+  plus synchronized rendered markup without SPEC §5.2 lowered/generated markers.
 - Phase 5 Vite output helper public boundary slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`;

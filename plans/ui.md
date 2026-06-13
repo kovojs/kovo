@@ -31,7 +31,7 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 - [x] U3 styled H1 and pure-markup components.
 - [x] U4 styled H2 components.
 - [x] U5 styled H3 components.
-- [ ] G1 gallery static fixture surface: one route per component with source/markup snapshot.
+- [x] G1 gallery static fixture surface: one route per component with source/markup snapshot.
 - [ ] G2 behavior-contract gates: keyboard, ARIA, native state, and `fw explain` coverage.
 - [ ] G3 axe checks per component state.
 - [ ] G4 visual regression baseline for `@jiso/ui`.
@@ -236,6 +236,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       and `pnpm exec vitest --run packages/ui/src/index.test.tsx`; Chromium asserts route geometry
       `820x5904`, pure-markup geometry `780x450`, route hash `ec47616f`, and pure-markup hash
       `cc33e71c`.
+      Evidence 2026-06-13: G1 is closed for the current 44-route gallery inventory.
+      `examples/gallery/src/demo-fixtures.test.ts` now derives the route/source/markup matrix from
+      `expectedRoutes`, proves every route has a synchronized raw markup fixture, and verifies each
+      demo remains app-authored TSX source with `data-gallery-demo`, no-JS summary text,
+      `renderBehaviorContract()` calls, and no SPEC §5.2 lowered/generated markers. Verified by
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -330,8 +336,8 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
       catalog fixture drift whenever new UI subpaths are exported.
-- [ ] Expand G1/G2 until every primitive and styled component has a static route, source/markup
-      snapshot, relevant behavior contract, and provenance coverage.
+- [ ] Expand G2 until every primitive and styled component has relevant behavior-contract and
+      provenance coverage.
       Evidence 2026-06-13: the H3 search/selection route family now has structured authored
       source snapshot facts for autocomplete, combobox, command, and select in
       `examples/gallery/src/demo-fixtures.test.ts`, pinning styled wrapper render calls, native
@@ -341,6 +347,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] G1 static route source/markup closure slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
+      `pnpm exec tsc --noEmit --pretty false`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] H3 search/selection source-fixture slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;

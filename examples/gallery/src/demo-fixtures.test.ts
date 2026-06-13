@@ -91,57 +91,52 @@ describe('gallery demo fixtures', () => {
   });
 
   it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
-    for (const [path, fileName] of [
-      ['/components/accordion', 'accordion.html.txt'],
-      ['/components/alert', 'alert.html.txt'],
-      ['/components/alert-dialog', 'alert-dialog.html.txt'],
-      ['/components/autocomplete', 'autocomplete.html.txt'],
-      ['/components/avatar', 'avatar.html.txt'],
-      ['/components/badge', 'badge.html.txt'],
-      ['/components/breadcrumb', 'breadcrumb.html.txt'],
-      ['/components/button', 'button.html.txt'],
-      ['/components/card', 'card.html.txt'],
-      ['/components/checkbox', 'checkbox.html.txt'],
-      ['/components/checkbox-group', 'checkbox-group.html.txt'],
-      ['/components/collapsible', 'collapsible.html.txt'],
-      ['/components/combobox', 'combobox.html.txt'],
-      ['/components/command', 'command.html.txt'],
-      ['/components/context-menu', 'context-menu.html.txt'],
-      ['/components/dialog', 'dialog.html.txt'],
-      ['/components/disclosure', 'disclosure.html.txt'],
-      ['/components/drawer', 'drawer.html.txt'],
-      ['/components/dropdown-menu', 'dropdown-menu.html.txt'],
-      ['/components/field', 'field.html.txt'],
-      ['/components/hover-card', 'hover-card.html.txt'],
-      ['/components/menubar', 'menubar.html.txt'],
-      ['/components/meter', 'meter.html.txt'],
-      ['/components/navigation-menu', 'navigation-menu.html.txt'],
-      ['/components/number-field', 'number-field.html.txt'],
-      ['/components/otp-field', 'otp-field.html.txt'],
-      ['/components/popover', 'popover.html.txt'],
-      ['/components/progress', 'progress.html.txt'],
-      ['/components/kbd', 'kbd.html.txt'],
-      ['/components/radio-group', 'radio-group.html.txt'],
-      ['/components/scroll-area', 'scroll-area.html.txt'],
-      ['/components/tabs', 'tabs.html.txt'],
-      ['/components/select', 'select.html.txt'],
-      ['/components/separator', 'separator.html.txt'],
-      ['/components/sheet', 'sheet.html.txt'],
-      ['/components/slider', 'slider.html.txt'],
-      ['/components/skeleton', 'skeleton.html.txt'],
-      ['/components/switch', 'switch.html.txt'],
-      ['/components/table', 'table.html.txt'],
-      ['/components/toast', 'toast.html.txt'],
-      ['/components/toggle', 'toggle.html.txt'],
-      ['/components/toggle-group', 'toggle-group.html.txt'],
-      ['/components/toolbar', 'toolbar.html.txt'],
-      ['/components/tooltip', 'tooltip.html.txt'],
-    ] as const) {
+    expect(staticRouteFixtureMatrix.map((fixture) => fixture.path)).toEqual(expectedRoutes);
+
+    for (const { fileName, path } of staticRouteFixtureMatrix) {
       const route = galleryRoutes.find((candidate) => candidate.path === path);
       if (!route) throw new Error(`Missing gallery route fixture for ${path}`);
 
       expect(readVisualFixture(fileName)).toBe(`${renderGalleryRoute(route)}\n`);
     }
+  });
+
+  it('keeps every static gallery route pinned to authored TSX source and a markup snapshot', () => {
+    const moduleSource = readFileSync(new URL('./demo-fixtures.tsx', import.meta.url), 'utf8');
+
+    // SPEC.md §5.2 requires app components to stay authored as TSX/JSX; generated lowered IR
+    // belongs under generated artifacts, not in the source fixture surface.
+    expect(
+      staticRouteFixtureMatrix.map((fixture) => {
+        const source = extractDemoSource(moduleSource, fixture.functionName);
+
+        return {
+          demoMarker: source.includes(`data-gallery-demo="${fixture.component}"`),
+          forbiddenMarkers: forbiddenAuthoredSourceMarkers.filter((marker) =>
+            source.includes(marker),
+          ),
+          functionName: fixture.functionName,
+          markupSnapshot: readVisualFixture(fixture.fileName).includes(
+            `data-gallery-route="${fixture.path}"`,
+          ),
+          path: fixture.path,
+          renderedContract: readVisualFixture(fixture.fileName).includes('data-gallery-contract'),
+          sourceContractCall: source.includes('renderBehaviorContract({'),
+          summary: source.includes('data-demo-summary="no-js"'),
+        };
+      }),
+    ).toEqual(
+      staticRouteFixtureMatrix.map((fixture) => ({
+        demoMarker: true,
+        forbiddenMarkers: [],
+        functionName: fixture.functionName,
+        markupSnapshot: true,
+        path: fixture.path,
+        renderedContract: true,
+        sourceContractCall: true,
+        summary: true,
+      })),
+    );
   });
 
   it('keeps H3 search and selection routes pinned to authored styled source fixtures', () => {
@@ -1053,6 +1048,20 @@ function readVisualFixture(fileName: string): string {
 }
 
 const forbiddenAuthoredSourceMarkers = ['fw-c=', 'data-bind=', '__fw', 'generated/interactive'];
+
+const staticRouteFixtureMatrix = expectedRoutes.map((path) => {
+  const component = path.slice('/components/'.length) as GalleryRoute['component'];
+
+  return {
+    component,
+    fileName: `${component}.html.txt`,
+    functionName: `${component
+      .split('-')
+      .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+      .join('')}Demo`,
+    path,
+  };
+});
 
 const h3SearchSelectionSourceFixtures = [
   {
