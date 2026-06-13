@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { assertFixpoint, compileComponentModule } from './index.js';
 import { navigationHrefLowering, navigationLinkLowering } from './lower/navigation.js';
 import { parseComponentModule } from './scan/parse.js';
+import { applySourceReplacements } from './shared.js';
 
 describe('navigation lowering', () => {
   it('exposes static Link lowering as explicit source patches', () => {
@@ -12,14 +13,36 @@ export const ProductLinks = component('product-links', {
 });
 `;
     const lowering = navigationLinkLowering(parseComponentModule('product-links.tsx', source));
+    const tagNameStart = source.indexOf('<Link') + 1;
+    const toStart = source.indexOf(' to="/products/:id"');
+    const paramsStart = source.indexOf(' params={{');
+    const closingNameStart = source.indexOf('</Link>') + 2;
 
     expect(lowering.replacements).toEqual([
       {
-        end: source.indexOf('</Link>') + '</Link>'.length,
-        replacement: '<a href="/products/p%201">Product</a>',
-        start: source.indexOf('<Link'),
+        end: tagNameStart + 'Link'.length,
+        replacement: 'a href="/products/p%201"',
+        start: tagNameStart,
+      },
+      {
+        end: toStart + ' to="/products/:id"'.length,
+        replacement: '',
+        start: toStart,
+      },
+      {
+        end: paramsStart + " params={{ id: 'p 1' }}".length,
+        replacement: '',
+        start: paramsStart,
+      },
+      {
+        end: closingNameStart + 'Link'.length,
+        replacement: 'a',
+        start: closingNameStart,
       },
     ]);
+    expect(applySourceReplacements(source, lowering.replacements)).toContain(
+      '<a href="/products/p%201">Product</a>',
+    );
   });
 
   it('lowers parsed multiline Link opening tags without source-regex matching', () => {
@@ -37,17 +60,39 @@ export const ProductLinks = component('product-links', {
 });
 `;
     const lowering = navigationLinkLowering(parseComponentModule('product-links.tsx', source));
+    const tagNameStart = source.indexOf('<Link') + 1;
+    const toStart = source.indexOf('\n      to="/products/:id"');
+    const paramsStart = source.indexOf('\n      params={{');
+    const closingNameStart = source.indexOf('</Link>') + 2;
 
     expect(lowering.replacements).toEqual([
       {
-        end: source.indexOf('</Link>') + '</Link>'.length,
-        replacement: `<a
-      className="product-link" href="/products/p%201">
-      Product
-    </a>`,
-        start: source.indexOf('<Link'),
+        end: tagNameStart + 'Link'.length,
+        replacement: 'a href="/products/p%201"',
+        start: tagNameStart,
+      },
+      {
+        end: toStart + '\n      to="/products/:id"'.length,
+        replacement: '',
+        start: toStart,
+      },
+      {
+        end: paramsStart + "\n      params={{ id: 'p 1' }}".length,
+        replacement: '',
+        start: paramsStart,
+      },
+      {
+        end: closingNameStart + 'Link'.length,
+        replacement: 'a',
+        start: closingNameStart,
       },
     ]);
+    expect(applySourceReplacements(source, lowering.replacements)).toContain(`
+    <a href="/products/p%201"
+      className="product-link"
+    >
+      Product
+    </a>`);
   });
 
   it('exposes static href lowering as explicit source patches', () => {
@@ -113,7 +158,7 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.files[0]?.source).toContain(
-      '<a className="product-link" href="/products/p%201?max=500&amp;sort=price">',
+      '<a href="/products/p%201?max=500&amp;sort=price" className="product-link">',
     );
     expect(result.files[0]?.source).not.toContain('<Link');
     expect(() => assertFixpoint(result)).not.toThrow();

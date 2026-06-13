@@ -5,13 +5,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
-import {
-  applySourceReplacements,
-  escapeAttribute,
-  insertOpeningTagAttribute,
-  openingTagAttributeRange,
-  type SourceReplacement,
-} from '../shared.js';
+import { escapeAttribute, type SourceReplacement } from '../shared.js';
 
 export interface NavigationLowering {
   replacements: SourceReplacement[];
@@ -31,42 +25,32 @@ export function navigationLinkLowering(model: ComponentModuleModel): NavigationL
     if (params === null || search === null) continue;
 
     const href = buildStaticHref(target, params ?? {}, search ?? {});
-    const anchorOpening = lowerLinkOpeningTag(link, href);
-
-    replacements.push({
-      end: link.end,
-      replacement: `${anchorOpening}${link.childSource}</a>`,
-      start: link.start,
-    });
+    replacements.push(...lowerLinkElementPatches(link, href));
   }
 
   return { replacements };
 }
 
-function lowerLinkOpeningTag(link: JsxElementModel, href: string): string {
-  const opening = applySourceReplacements(
-    link.openingSource,
-    link.attributes
+function lowerLinkElementPatches(link: JsxElementModel, href: string): SourceReplacement[] {
+  return [
+    {
+      end: link.openingTagNameEnd,
+      replacement: `a href="${escapeAttribute(href)}"`,
+      start: link.openingTagNameStart,
+    },
+    ...link.attributes
       .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))
       .map((attribute) => ({
-        ...openingTagAttributeRange(link.openingSource, link, attribute, {
-          includeLeadingWhitespace: true,
-        }),
+        end: attribute.end,
         replacement: '',
+        start: attribute.leadingStart,
       })),
-  );
-
-  return insertOpeningTagAttribute(lowerParsedLinkTagName(opening, link), link, 'href', href);
-}
-
-function lowerParsedLinkTagName(openingSource: string, link: JsxElementModel): string {
-  return applySourceReplacements(openingSource, [
     {
-      end: link.openingTagNameEnd - link.start,
+      end: link.closingStart + 2 + link.tag.length,
       replacement: 'a',
-      start: link.openingTagNameStart - link.start,
+      start: link.closingStart + 2,
     },
-  ]);
+  ];
 }
 
 export function navigationHrefLowering(model: ComponentModuleModel): NavigationLowering {

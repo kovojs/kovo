@@ -25,6 +25,11 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       (`<Link>`, `href()`, and literal `href={...}` normalization) now lives in
       `packages/compiler/src/lower/navigation.ts`, continuing the Phase 2 module split
       without changing emitted IR.
+      Additional evidence 2026-06-13: static `<Link>` lowering now emits non-overlapping parsed
+      source patches for the opening tag name/`href`, removed navigation-only attrs, and closing
+      tag name instead of reconstructing the whole element body from `childSource`. Same-session
+      evidence: `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`.
       Additional evidence 2026-06-11: handler lowering/FW201-FW210 event attribute analysis
       now lives in `packages/compiler/src/lower/handlers.ts`, server IR emission and
       render-equivalence stamping now live in `packages/compiler/src/emit/server.ts`, and
