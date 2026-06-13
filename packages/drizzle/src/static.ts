@@ -558,14 +558,31 @@ function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
   for (const param of callback.getParameters()) {
-    const name = param.getNameNode();
-    if (!Node.isIdentifier(name) || !isDrizzleReceiver(name)) continue;
-    names.add(name.getText());
-    const symbolKey = resolvedSymbolKey(name.getSymbol());
-    if (symbolKey) symbolKeys.add(symbolKey);
+    appendProjectDrizzleReceiverBinding(param.getNameNode(), names, symbolKeys);
   }
   appendProjectTransactionReceiverAliases(callback, { names, symbolKeys });
   return { names, symbolKeys };
+}
+
+function appendProjectDrizzleReceiverBinding(
+  name: Node,
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
+  if (Node.isIdentifier(name)) {
+    if (!isDrizzleReceiver(name)) return;
+
+    names.add(name.getText());
+    const symbolKey = resolvedSymbolKey(name.getSymbol());
+    if (symbolKey) symbolKeys.add(symbolKey);
+    return;
+  }
+
+  if (!Node.isObjectBindingPattern(name)) return;
+
+  for (const element of name.getElements()) {
+    appendProjectDrizzleReceiverBinding(element.getNameNode(), names, symbolKeys);
+  }
 }
 
 function appendProjectTransactionReceiverAliases(
@@ -1811,19 +1828,33 @@ function queryCallbackReceiverReferences(
 
     const receiverParameter = queryCallbackParameterNodes(callback)[1];
     const receiver = receiverParameter?.getNameNode();
-    if (!receiverParameter || !Node.isIdentifier(receiver)) continue;
-    if (mode === 'project' && !isProjectQueryReceiverParameter(receiverParameter, receiver)) {
-      continue;
-    }
-
-    names.add(receiver.getText());
-    const symbolKey = resolvedSymbolKey(receiver.getSymbol());
-    if (symbolKey) symbolKeys.add(symbolKey);
+    if (!receiverParameter || !receiver) continue;
+    appendQueryReceiverParameterReferences(receiverParameter, receiver, mode, names, symbolKeys);
   }
 
   const references = { names, symbolKeys };
   appendQueryTransactionReceiverAliases(body, references);
   return references;
+}
+
+function appendQueryReceiverParameterReferences(
+  parameter: ParameterDeclaration,
+  name: Node,
+  mode: 'project' | 'source',
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
+  if (mode === 'project') {
+    if (!parameter.getTypeNode()) {
+      appendUntypedQueryReceiverBinding(name, names, symbolKeys);
+      return;
+    }
+
+    appendProjectDrizzleReceiverBinding(name, names, symbolKeys);
+    return;
+  }
+
+  appendUntypedQueryReceiverBinding(name, names, symbolKeys);
 }
 
 function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
@@ -1836,12 +1867,6 @@ function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
   }
 
   return [];
-}
-
-function isProjectQueryReceiverParameter(parameter: ParameterDeclaration, receiver: Node): boolean {
-  // SPEC §10-§11: project-mode query loaders should not fabricate Drizzle facts from a lookalike
-  // parameter named `db`; an explicit non-Drizzle type is an unsupported receiver, not proof.
-  return !parameter.getTypeNode() || isDrizzleReceiver(receiver);
 }
 
 function appendQueryTransactionReceiverAliases(
@@ -2046,6 +2071,25 @@ function queryHelperArgumentReceiverName(
   return isQueryReceiverIdentifier(argument, receiverReferences) && Node.isIdentifier(argument)
     ? argument.getText()
     : undefined;
+}
+
+function appendUntypedQueryReceiverBinding(
+  name: Node,
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
+  if (Node.isIdentifier(name)) {
+    names.add(name.getText());
+    const symbolKey = resolvedSymbolKey(name.getSymbol());
+    if (symbolKey) symbolKeys.add(symbolKey);
+    return;
+  }
+
+  if (!Node.isObjectBindingPattern(name)) return;
+
+  for (const element of name.getElements()) {
+    appendUntypedQueryReceiverBinding(element.getNameNode(), names, symbolKeys);
+  }
 }
 
 interface QueryShapeContext {

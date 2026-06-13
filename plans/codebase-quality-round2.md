@@ -195,6 +195,12 @@ Closed evidence so far:
   `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
   `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Project-mode typed destructured Drizzle receiver bindings now contribute write and query facts
+  from the resolved binding symbol while explicitly typed fake contexts stay invisible; untyped
+  query-loader receiver compatibility remains pinned. Evidence: `packages/drizzle/src/static.ts`,
+  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
+  `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

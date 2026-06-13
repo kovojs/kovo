@@ -42,6 +42,12 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       against a graph with removed mutation, route, and query guards and pins the
       stable `fw-check/v1` unguarded warnings required by SPEC §6.4 and the P3 exit.
 - [x] P4 Drizzle extraction has ts-morph-backed project/table/write coverage, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage. Round-2 audit caveat 2026-06-11: source-mode/query extraction still includes string/regex parsing and AST discoveries are rewritten back into source text, so end-to-end ts-morph extraction remains open in `plans/codebase-quality-round2.md` Phase 3.
+      Additional evidence 2026-06-12: project-mode typed destructured Drizzle receiver
+      bindings now resolve through ts-morph binding symbols for write and query facts while
+      explicitly typed fake contexts remain invisible; package and real `drizzle-orm`
+      conformance tests pin the behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query
