@@ -178,6 +178,8 @@ import {
 } from '@jiso/test/html-fragment';
 import {
   markdownBoldSectionHeadings,
+  markdownCanonicalSpecRuleTitle,
+  markdownCanonicalSpecRuleTitles,
   markdownFields,
   markdownLeadingTitle,
   markdownNumberedListItems,
@@ -388,6 +390,10 @@ describe('@jiso/test package subpath exports', () => {
     expect(markdownNumberedListItems('1. **One.** Details')).toEqual(['One. Details']);
     expect(markdownNumberedListTitles('1. **One.** Details')).toEqual(['One']);
     expect(markdownLeadingTitle('**One.** Details')).toBe('One');
+    expect(markdownCanonicalSpecRuleTitle('One-to-one file mapping')).toBe('1:1 file mapping');
+    expect(markdownCanonicalSpecRuleTitles(['Platform behavior emission'])).toEqual([
+      'Platform-behavior emission',
+    ]);
     expect(normalizeMarkdownCell('`one` **two**')).toBe('one two');
     expect(markdownBoldSectionHeadings('**13.1 CSS:** details')).toEqual([
       { number: '13.1', title: 'CSS' },

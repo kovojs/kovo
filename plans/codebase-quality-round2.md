@@ -43,7 +43,8 @@ fragments, generated modules/source facts, command output/Vite facts, markdown/s
 static export, starter templates, `fw-explain`, TypeScript, wire, touch-graph provenance, graph
 facts, and structured `fw-check/v1` result facts. Shared `@jiso/test/html-fragment` now owns
 form-field maps, keyed-element projections, and response-body query/fragment/stylesheet/key
-summaries for commerce app/source-truth tests.
+summaries for commerce app/source-truth tests. Shared markdown fixtures now own SPEC rule-title
+canonicalization for doc gates, so `tests/fw-check.node.mjs` no longer keeps that local normalizer.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -77,6 +78,9 @@ Latest evidence:
 - `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`
 
 ## Phase 2 - Compiler IR
 
@@ -448,11 +452,17 @@ local helpers; commerce source-truth matrix projection now lives in
 `@jiso/test/graph-fixtures`, along with graph static behavior projections consumed by
 `tests/fw-check.node.mjs`. Commerce app-shell tests now consume shared `@jiso/test/html-fragment`
 selected-element counts and named query JSON projections instead of local response-body/shell
-parsing helpers.
+parsing helpers. `fw-check` doc-gate rule-title canonicalization now lives in
+`@jiso/test/markdown-fixtures`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
 - [ ] Keep `plans/*` evidence terse: current status plus command list, not repeated history.
+
+Latest evidence:
+
+- `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`
 
 ## Current Gates
 

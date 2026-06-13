@@ -54,6 +54,17 @@ export function markdownNumberedListTitles(source: string): string[] {
   );
 }
 
+export function markdownCanonicalSpecRuleTitle(title: string): string {
+  return normalizeMarkdownCell(title)
+    .replace('Local code must not require global knowledge', 'No global knowledge at local sites')
+    .replace('One-to-one file mapping', '1:1 file mapping')
+    .replace('Platform behavior emission', 'Platform-behavior emission');
+}
+
+export function markdownCanonicalSpecRuleTitles(titles: readonly string[]): string[] {
+  return titles.map(markdownCanonicalSpecRuleTitle);
+}
+
 export function markdownBoldSectionHeadings(source: string): MarkdownBoldSectionHeading[] {
   return source
     .split('\n')

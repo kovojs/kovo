@@ -109,6 +109,7 @@ import {
 } from '../packages/test/src/html-fragment.ts';
 import {
   markdownBoldSectionHeadings,
+  markdownCanonicalSpecRuleTitles,
   markdownFields,
   markdownLeadingTitle,
   markdownNumberedListItems,
@@ -245,12 +246,6 @@ const assertHtmlMainMarker = (source, marker, message) => {
     message,
   );
 };
-
-const canonicalDocRuleTitle = (title) =>
-  title
-    .replace('Local code must not require global knowledge', 'No global knowledge at local sites')
-    .replace('One-to-one file mapping', '1:1 file mapping')
-    .replace('Platform behavior emission', 'Platform-behavior emission');
 
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
@@ -530,8 +525,10 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   );
   const specHardRuleTitles = markdownNumberedListTitles(
     markdownSection(spec, '5.2 Hard rules (normative)'),
-  ).map(canonicalDocRuleTitle);
-  const compilerRuleTitles = markdownNumberedListTitles(compilerRules).map(canonicalDocRuleTitle);
+  );
+  const compilerRuleTitles = markdownCanonicalSpecRuleTitles(
+    markdownNumberedListTitles(compilerRules),
+  );
   const compilerRuleItems = markdownNumberedListItems(compilerRules);
   const cssContractHeadings = markdownBoldSectionHeadings(
     markdownSection(spec, '13. Open Design Areas (named, not hand-waved)'),
@@ -568,7 +565,7 @@ export const DocCard = component('doc-card', {
   );
   assert.deepEqual(
     constitutionRows.map((row) => markdownLeadingTitle(row.Test)),
-    markdownNumberedListTitles(constitution).map(canonicalDocRuleTitle),
+    markdownCanonicalSpecRuleTitles(markdownNumberedListTitles(constitution)),
   );
   assert.deepEqual(compilerRuleTitles, [
     'Source-derived names',
@@ -580,7 +577,9 @@ export const DocCard = component('doc-card', {
   ]);
   assert.deepEqual(
     compilerRuleTitles,
-    specHardRuleTitles.filter((title) => title !== 'Registry atomicity'),
+    markdownCanonicalSpecRuleTitles(specHardRuleTitles).filter(
+      (title) => title !== 'Registry atomicity',
+    ),
   );
   assert.equal(
     compilerRuleItems.length,

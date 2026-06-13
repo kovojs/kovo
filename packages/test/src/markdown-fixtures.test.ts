@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   markdownBoldSectionHeadings,
+  markdownCanonicalSpecRuleTitle,
+  markdownCanonicalSpecRuleTitles,
   markdownFields,
   markdownLeadingTitle,
   markdownNumberedListItems,
@@ -55,6 +57,23 @@ describe('@jiso/test markdown fixture seam', () => {
     expect(markdownLeadingTitle('**Platform behavior emission.** Details')).toBe(
       'Platform behavior emission',
     );
+  });
+
+  it('canonicalizes SPEC rule titles used by documentation gates', () => {
+    expect(
+      markdownCanonicalSpecRuleTitles([
+        'Local code must not require global knowledge',
+        'One-to-one file mapping',
+        'Platform behavior emission',
+        '`Teaching errors`',
+      ]),
+    ).toEqual([
+      'No global knowledge at local sites',
+      '1:1 file mapping',
+      'Platform-behavior emission',
+      'Teaching errors',
+    ]);
+    expect(markdownCanonicalSpecRuleTitle('Source-derived names')).toBe('Source-derived names');
   });
 
   it('extracts bold numbered section headings used by SPEC open-area gates', () => {
