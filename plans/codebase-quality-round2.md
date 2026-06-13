@@ -247,6 +247,8 @@ Latest evidence:
 
 ## Current Gates
 
+- [x] Broad gate after mini-wave through `9575927c`: `pnpm run check` passed on 852 formatted
+      files, 752 lint/typechecked files, and 7 example/conformance typecheck projects.
 - [x] Broad gate after mini-wave through `8d4b595f`: `pnpm run check` passed on 850 formatted
       files, 750 lint/typechecked files, and 7 example/conformance typecheck projects.
 - [x] Broad gate after first integration wave through `ea06b9c7`: `pnpm run check` passed on
