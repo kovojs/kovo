@@ -1111,6 +1111,7 @@ describe('@jiso/ui styled package foundation', () => {
       form: 'profile-form',
       id: 'plan-fieldset',
       invalid: true,
+      name: 'plan-options',
     });
 
     expect(FieldLabel.name).toBe('field-label');
@@ -1157,6 +1158,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(fieldset).toContain('aria-invalid="true"');
     expect(fieldset).toContain('data-disabled=""');
     expect(fieldset).toContain('disabled form="profile-form" id="plan-fieldset"');
+    expect(fieldset).toContain('name="plan-options"');
     expect(fieldset).toContain('form="profile-form"');
     expect(fieldset).toContain('id="seat" name="seat"');
     expect(fieldset).toContain('id="plan-fieldset"');

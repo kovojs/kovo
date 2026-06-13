@@ -90,6 +90,7 @@ export interface FieldsetProps extends FieldStateProps {
   errorId?: string;
   form?: string;
   id?: string;
+  name?: string;
 }
 
 export interface FieldsetLegendProps extends FieldStateProps {
@@ -382,6 +383,7 @@ export const Fieldset = component('fieldset', {
       ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
 
@@ -396,6 +398,7 @@ export const Fieldset = component('fieldset', {
         disabled={attrs.disabled}
         form={attrs.form}
         id={attrs.id}
+        name={attrs.name}
       >
         {props.children}
       </fieldset>

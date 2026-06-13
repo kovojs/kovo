@@ -1475,6 +1475,7 @@ export function FieldDemo(): string {
           form: 'gallery-field-external-form',
           id: 'gallery-fieldset',
           invalid: true,
+          name: 'seat-options',
         })}
       </div>
       {renderBehaviorContract({

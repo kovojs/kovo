@@ -104,11 +104,13 @@ describe('headless-ui field primitive', () => {
         descriptionId: 'shipping-help',
         form: 'checkout-form',
         id: 'shipping',
+        name: 'shipping-options',
       }),
     ).toEqual({
       'aria-describedby': 'shipping-help',
       form: 'checkout-form',
       id: 'shipping',
+      name: 'shipping-options',
     });
   });
 

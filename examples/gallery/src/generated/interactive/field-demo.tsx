@@ -69,7 +69,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
             type="email"
             value={state.email}
-            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=a36271b4#GalleryFieldDemo$input_input"
+            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=9b1992a4#GalleryFieldDemo$input_input"
           />
           <p
             {...fieldDescriptionAttributes({
@@ -133,7 +133,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               required: true,
             })}
             value={state.plan}
-            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=a36271b4#GalleryFieldDemo$select_change"
+            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=9b1992a4#GalleryFieldDemo$select_change"
           >
             <option value="team" selected={state.plan === 'team'}>
               Team
@@ -154,6 +154,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             descriptionId: 'gallery-interactive-fieldset-description',
             form: 'gallery-interactive-field-form',
             id: 'gallery-interactive-fieldset',
+            name: 'gallery-shipping',
           })}
         >
           <legend
@@ -163,18 +164,27 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
           >
             Shipping options
+            <label>
+              <input
+                name="gallery-shipping-disabled"
+                type="checkbox"
+                checked={state.shippingDisabled}
+                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=9b1992a4#GalleryFieldDemo$input_click"
+              />
+              Disable shipping group
+            </label>
           </legend>
           <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}>
             Grouped controls inherit native fieldset disabled behavior.
           </p>
           <label>
             <input
-              name="gallery-shipping-disabled"
-              type="checkbox"
-              checked={state.shippingDisabled}
-              on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=a36271b4#GalleryFieldDemo$input_click"
+              form="gallery-interactive-field-form"
+              name="gallery-seat"
+              type="text"
+              value="window"
             />
-            Disable shipping group
+            Seat preference
           </label>
         </fieldset>
       </form>

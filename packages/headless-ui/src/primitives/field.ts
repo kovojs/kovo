@@ -31,6 +31,7 @@ export interface FieldsetAttributeOptions extends FieldAttributeOptions {
   descriptionId?: string;
   errorId?: string;
   form?: string;
+  name?: string;
 }
 
 export type FieldPrimitiveAttributes = PrimitiveDataAttributes &
@@ -110,6 +111,7 @@ export function fieldsetRootAttributes(
     ...(options.disabled === true ? { disabled: true } : {}),
     ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.id === undefined ? {} : { id: options.id }),
+    ...(options.name === undefined ? {} : { name: options.name }),
   });
 }
 

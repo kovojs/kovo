@@ -703,6 +703,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const fieldset = required(
       root.querySelector<HTMLFieldSetElement>('#gallery-interactive-fieldset'),
     );
+    const seat = required(root.querySelector<HTMLInputElement>('input[name="gallery-seat"]'));
     const shippingToggle = required(
       root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
     );
@@ -736,9 +737,13 @@ describe('compiled interactive gallery demos in the browser', () => {
       'gallery-interactive-fieldset-description',
     );
     expect(fieldset.form).toBe(form);
+    expect(fieldset.name).toBe('gallery-shipping');
     expect(fieldset.disabled).toBe(false);
+    expect(seat.form).toBe(form);
+    expect(seat.value).toBe('window');
     expect(new FormData(form).get('gallery-email')).toBe('ada@example');
     expect(new FormData(form).get('gallery-plan')).toBe('team');
+    expect(new FormData(form).get('gallery-seat')).toBe('window');
 
     email.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -806,6 +811,30 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentFieldset.disabled).toBe(true);
       expect(currentFieldset.getAttribute('data-disabled')).toBe('');
       expect(currentToggle.checked).toBe(true);
+      expect(new FormData(form).get('gallery-seat')).toBeNull();
+      expect(new FormData(form).get('gallery-shipping-disabled')).toBe('on');
+    });
+
+    required(
+      root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
+    ).click();
+
+    await vi.waitFor(() => {
+      const currentFieldset = required(
+        root.querySelector<HTMLFieldSetElement>('#gallery-interactive-fieldset'),
+      );
+      const currentToggle = required(
+        root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":false}',
+      );
+      expect(currentFieldset.disabled).toBe(false);
+      expect(currentFieldset.hasAttribute('data-disabled')).toBe(false);
+      expect(currentToggle.checked).toBe(false);
+      expect(new FormData(form).get('gallery-seat')).toBe('window');
+      expect(new FormData(form).get('gallery-shipping-disabled')).toBeNull();
     });
   });
 

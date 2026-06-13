@@ -186,6 +186,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             descriptionId: 'gallery-interactive-fieldset-description',
             form: 'gallery-interactive-field-form',
             id: 'gallery-interactive-fieldset',
+            name: 'gallery-shipping',
           })}
         >
           <legend
@@ -195,40 +196,49 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
           >
             Shipping options
+            <label>
+              <input
+                name="gallery-shipping-disabled"
+                type="checkbox"
+                checked={state.shippingDisabled}
+                onClick={() => {
+                  state.shippingDisabled = !state.shippingDisabled;
+                  const doc = Reflect['get'](globalThis, 'document');
+                  const fieldset = doc
+                    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-fieldset')
+                    : undefined;
+                  const checkbox = doc
+                    ? Object(doc)['querySelector']?.call(
+                        doc,
+                        'input[name="gallery-shipping-disabled"]',
+                      )
+                    : undefined;
+
+                  if (fieldset) {
+                    fieldset['disabled'] = state.shippingDisabled;
+                    if (state.shippingDisabled) {
+                      Object(fieldset)['setAttribute']?.call(fieldset, 'data-disabled', '');
+                    } else {
+                      Object(fieldset)['removeAttribute']?.call(fieldset, 'data-disabled');
+                    }
+                  }
+                  if (checkbox) checkbox['checked'] = state.shippingDisabled;
+                }}
+              />
+              Disable shipping group
+            </label>
           </legend>
           <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}>
             Grouped controls inherit native fieldset disabled behavior.
           </p>
           <label>
             <input
-              name="gallery-shipping-disabled"
-              type="checkbox"
-              checked={state.shippingDisabled}
-              onClick={() => {
-                state.shippingDisabled = !state.shippingDisabled;
-                const doc = Reflect['get'](globalThis, 'document');
-                const fieldset = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-fieldset')
-                  : undefined;
-                const checkbox = doc
-                  ? Object(doc)['querySelector']?.call(
-                      doc,
-                      'input[name="gallery-shipping-disabled"]',
-                    )
-                  : undefined;
-
-                if (fieldset) {
-                  fieldset['disabled'] = state.shippingDisabled;
-                  if (state.shippingDisabled) {
-                    Object(fieldset)['setAttribute']?.call(fieldset, 'data-disabled', '');
-                  } else {
-                    Object(fieldset)['removeAttribute']?.call(fieldset, 'data-disabled');
-                  }
-                }
-                if (checkbox) checkbox['checked'] = state.shippingDisabled;
-              }}
+              form="gallery-interactive-field-form"
+              name="gallery-seat"
+              type="text"
+              value="window"
             />
-            Disable shipping group
+            Seat preference
           </label>
         </fieldset>
       </form>

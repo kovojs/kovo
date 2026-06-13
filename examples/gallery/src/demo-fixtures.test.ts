@@ -338,6 +338,7 @@ describe('gallery demo fixtures', () => {
     expect(field.html).toContain(
       'disabled form="gallery-field-external-form" id="gallery-fieldset"',
     );
+    expect(field.html).toContain('name="seat-options"');
     expect(field.html).toContain('for="gallery-fieldset-seat"');
     expect(field.html).toContain('id="gallery-fieldset-seat" name="seat"');
     expect(field.html).toContain('value="window"');

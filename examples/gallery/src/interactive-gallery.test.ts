@@ -342,6 +342,8 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(field).toContain('fieldControlAttributes({');
     expect(field).toContain('fieldsetRootAttributes({');
+    expect(field).toContain("name: 'gallery-shipping'");
+    expect(field).toContain('name="gallery-seat"');
     expect(field).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryFieldDemo\$input_input"/,
     );
@@ -978,6 +980,17 @@ describe('compiled interactive gallery demos', () => {
       invalid: false,
       plan: 'enterprise',
       shippingDisabled: true,
+    });
+    clientHandler(field, 'GalleryFieldDemo$input_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: fieldState,
+    });
+    expect(fieldState).toEqual({
+      email: 'ada@jiso.dev',
+      invalid: false,
+      plan: 'enterprise',
+      shippingDisabled: false,
     });
 
     const otpFieldState = { activeSlot: 2, value: '12' };
