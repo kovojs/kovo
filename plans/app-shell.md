@@ -171,6 +171,17 @@ Implemented areas:
   headers, keeping local static-host adoption aligned with SPEC §9.5 exported client-module
   artifacts.
 
+Round376 static-export client-module href boundary evidence:
+
+- `packages/server/src/static-export-output-targets.ts` now rejects externally hosted or malformed
+  client-module artifact hrefs before SPEC §9.5 static-host output planning, keeping public
+  artifacts on same-origin immutable `/c/` URLs.
+- `packages/server/src/static-export-output-targets.test.ts` covers external absolute hrefs and
+  invalid href syntax at the output target boundary.
+- `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 Round373 starter static-preview immutable module evidence:
 
 - `packages/create-jiso/templates/scripts/preview-static.mjs` adds

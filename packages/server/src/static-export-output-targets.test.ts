@@ -124,6 +124,42 @@ describe('server static export output target boundary', () => {
       staticExportOutputTargets(
         {
           ...base,
+          clientModules: [
+            {
+              body: 'export {};',
+              headers: {},
+              href: 'https://cdn.example.test/c/app.js?v=bad',
+              path: '/c/app.js',
+              status: 200,
+            },
+          ],
+        },
+        root,
+      ),
+    ).toThrow(/same-origin immutable versioned \/c\/ module URLs/);
+
+    expect(() =>
+      staticExportOutputTargets(
+        {
+          ...base,
+          clientModules: [
+            {
+              body: 'export {};',
+              headers: {},
+              href: 'https://[invalid.test/c/app.js?v=bad',
+              path: '/c/app.js',
+              status: 200,
+            },
+          ],
+        },
+        root,
+      ),
+    ).toThrow(/invalid href/);
+
+    expect(() =>
+      staticExportOutputTargets(
+        {
+          ...base,
           assets: [{ headers: {}, path: '/', source: '/workspace/public/app.css', status: 200 }],
         },
         root,

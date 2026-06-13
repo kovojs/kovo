@@ -191,6 +191,9 @@ Latest evidence:
 - [x] App-shell node helper pruning removed public helper forwards while preserving `toNodeHandler()`.
       Verified with focused server/app-shell/starter tests, `tsc`, exact `vp check`, and
       `git diff --check`.
+- [x] Static-export output planning rejects external or malformed client-module artifact hrefs before
+      static-host writes. Verified with focused output-target/output/static-export/API tests and
+      `tsc`.
 
 ## Phase 6 - Verification Harness And Commerce
 
