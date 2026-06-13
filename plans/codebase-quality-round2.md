@@ -34,6 +34,12 @@ with same-session file/test evidence.
       exact facts, while fake carrier destructuring remains invisible. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Round101 Drizzle evidence 2026-06-13: detached receiver methods assigned after declaration
+      now degrade visible source/project touch and project query-loader surfaces to FW406 by
+      symbol identity, including computed `db[method]` and destructuring assignments, while
+      fake/lookalike assigned methods stay invisible. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
       Round100 evidence 2026-06-13: `packages/runtime/src/query-events.ts` deleted the legacy

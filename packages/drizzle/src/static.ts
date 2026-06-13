@@ -4893,42 +4893,115 @@ function receiverMethodAliasesForBody(
   const names = new Map<string, string>();
   const symbols = new Map<string, string>();
 
-  for (const declaration of touchBodyVariableDeclarations(body)) {
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
+  let changed = true;
+  while (changed) {
+    const before = receiverMethodAliasSize({ names, symbols });
 
-    const binding = declaration.getNameNode();
-    if (Node.isObjectBindingPattern(binding) && isReceiverIdentifier(initializer)) {
-      for (const element of binding.getElements()) {
-        const alias = element.getNameNode();
-        if (!Node.isIdentifier(alias)) continue;
+    for (const declaration of touchBodyVariableDeclarations(body)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
 
-        const method = propertyNameText(element.getPropertyNameNode() ?? alias);
-        if (!method) continue;
-        appendReceiverMethodAlias(names, symbols, alias, method);
+      const binding = declaration.getNameNode();
+      if (Node.isObjectBindingPattern(binding) && isReceiverIdentifier(initializer)) {
+        appendReceiverMethodAliasesFromObjectPattern(binding, names, symbols);
+        continue;
       }
-      continue;
+
+      if (!Node.isIdentifier(binding)) continue;
+      const method = receiverMethodAliasExpressionName(initializer, isReceiverIdentifier, {
+        names,
+        symbols,
+      });
+      if (!method) continue;
+      appendReceiverMethodAlias(names, symbols, binding, method);
     }
 
-    if (!Node.isIdentifier(binding)) continue;
-    const method = receiverMethodAccessName(initializer, isReceiverIdentifier);
-    if (!method) continue;
-    appendReceiverMethodAlias(names, symbols, binding, method);
+    for (const expression of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      if (!isTouchBodyNode(expression, body)) continue;
+      if (expression.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+
+      const left = unwrappedStaticExpressionNode(expression.getLeft());
+      const right = unwrappedStaticExpressionNode(expression.getRight());
+      if (Node.isObjectLiteralExpression(left) && isReceiverIdentifier(right)) {
+        appendReceiverMethodAliasesFromObjectAssignment(left, names, symbols);
+        continue;
+      }
+
+      if (!Node.isIdentifier(left)) continue;
+      const method = receiverMethodAliasExpressionName(right, isReceiverIdentifier, {
+        names,
+        symbols,
+      });
+      if (!method) continue;
+      appendReceiverMethodAlias(names, symbols, left, method);
+    }
+
+    changed = receiverMethodAliasSize({ names, symbols }) !== before;
   }
 
   return { names, symbols };
 }
 
-function receiverMethodAccessName(
+function appendReceiverMethodAliasesFromObjectPattern(
+  binding: Node,
+  names: Map<string, string>,
+  symbols: Map<string, string>,
+): void {
+  if (!Node.isObjectBindingPattern(binding)) return;
+
+  for (const element of binding.getElements()) {
+    const alias = element.getNameNode();
+    if (!Node.isIdentifier(alias)) continue;
+
+    const method = propertyNameText(element.getPropertyNameNode() ?? alias);
+    if (!method) continue;
+    appendReceiverMethodAlias(names, symbols, alias, method);
+  }
+}
+
+function appendReceiverMethodAliasesFromObjectAssignment(
+  assignment: Node,
+  names: Map<string, string>,
+  symbols: Map<string, string>,
+): void {
+  if (!Node.isObjectLiteralExpression(assignment)) return;
+
+  for (const property of assignment.getProperties()) {
+    if (Node.isShorthandPropertyAssignment(property)) {
+      const alias = property.getNameNode();
+      appendReceiverMethodAlias(names, symbols, alias, alias.getText());
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    const initializer = property.getInitializer();
+    if (!initializer) continue;
+
+    const alias = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isIdentifier(alias)) continue;
+
+    const method = propertyNameText(property.getNameNode());
+    if (!method) continue;
+    appendReceiverMethodAlias(names, symbols, alias, method);
+  }
+}
+
+function receiverMethodAliasExpressionName(
   node: Node,
   isReceiverIdentifier: (node: Node) => boolean,
+  aliases: ReceiverMethodAliases,
 ): string | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const boundMethod = boundReceiverMethodAccessName(expression, isReceiverIdentifier);
   if (boundMethod) return boundMethod;
 
+  if (Node.isIdentifier(expression)) return receiverMethodAliasName(expression, aliases);
+
   const receiver = staticAccessExpression(expression);
   if (!receiver || !isReceiverIdentifier(receiver)) return undefined;
+  if (Node.isElementAccessExpression(expression)) {
+    return staticAccessName(expression) ?? COMPUTED_DRIZZLE_RECEIVER_METHOD;
+  }
   return staticAccessName(expression);
 }
 
@@ -4962,6 +5035,10 @@ function appendReceiverMethodAlias(
   names.set(alias.getText(), method);
   const symbolKey = resolvedSymbolKey(alias.getSymbol());
   if (symbolKey) symbols.set(symbolKey, method);
+}
+
+function receiverMethodAliasSize(aliases: ReceiverMethodAliases): number {
+  return aliases.names.size + aliases.symbols.size;
 }
 
 function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {
