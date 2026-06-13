@@ -1240,6 +1240,49 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins source body-local receiver aliases as FW406 under real Drizzle imports', () => {
+    expect(sql`select 1`).toBeDefined();
+
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+        source: [
+          "import { sql } from 'drizzle-orm';",
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', { id: text('id').primaryKey() }, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const writer = db;',
+          '  const context = { writer, fake };',
+          '  await writer.execute(sql`select 1`);',
+          "  await context.writer.update(users).set({ id: 'u1' });",
+          "  await context.fake.update(users).set({ id: 'fake' });",
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:10',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins source transaction aliases without leaking same-name callback receivers', () => {
     const graph = extractTouchGraphFromSource([
       {

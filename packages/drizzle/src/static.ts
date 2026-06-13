@@ -1897,6 +1897,9 @@ function extractQueryDefinitionsFromSourceFile(
       ...((options.receiverMode ?? 'source') === 'source'
         ? ambientSourceQueryReceiverDiagnostics(bodyArgument, localFunctionKeys)
         : []),
+      ...((options.receiverMode ?? 'source') === 'source'
+        ? sourceQueryReceiverAliasDiagnostics(bodyArgument, receiverReferences, localFunctionKeys)
+        : []),
       ...sourceDestructuredQueryReceiverDiagnostics(
         bodyArgument,
         localFunctionKeys,
@@ -2304,6 +2307,23 @@ function ambientSourceQueryReceiverDiagnostics(
     extractAmbientSourceReceiverCallsFromBody(callbackBody, localFunctionKeys).map((call) => ({
       code: 'FW406' as const,
       message: `${diagnosticDefinitions.FW406.message} Query uses source-mode ambient Drizzle receiver surface ${call.name}() without a declared loader receiver.`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    })),
+  );
+}
+
+function sourceQueryReceiverAliasDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  localFunctionKeys: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  return queryCallbackBodies(body).flatMap((callbackBody) =>
+    extractSourceReceiverAliasSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
+      isQueryReceiverIdentifier(node, receiverReferences),
+    ).map((call) => ({
+      code: 'FW406' as const,
+      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode Drizzle receiver alias surface ${call.name}() without project type proof.`,
       severity: diagnosticDefinitions.FW406.severity,
       site: '',
     })),
@@ -4008,6 +4028,9 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
           ),
           ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
           ...extractAmbientSourceReceiverCallsFromBody(bodyNode, localFunctionKeys),
+          ...extractSourceReceiverAliasSurfaceCallsFromBody(bodyNode, localFunctionKeys, (node) =>
+            isSourceDrizzleReceiverIdentifier(node, receiverNames),
+          ),
           ...extractSourceReceiverSurfaceCallsFromBody(bodyNode, localFunctionKeys, (node) =>
             isSourceDestructuredReceiverIdentifier(node, ambiguousReceiverReferences),
           ),
@@ -4424,11 +4447,41 @@ function extractAmbientSourceReceiverCallsFromBody(
   );
 }
 
+function extractSourceReceiverAliasSurfaceCallsFromBody(
+  body: Node,
+  localFunctionKeys: ReadonlySet<string>,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  // SPEC §11.1: source-mode body-local aliases of db/tx are visible surfaces, but they are not
+  // enough proof to derive exact read/write facts. Degrade those alias/carrying-member calls to
+  // FW406 until project types prove the receiver.
+  const references = sourceReceiverAliasReferencesForBody(body, isBaseReceiverIdentifier);
+  if (
+    references.names.size === 0 &&
+    references.symbolKeys.size === 0 &&
+    references.carrierProperties.size === 0
+  ) {
+    return [];
+  }
+
+  return extractSourceReceiverSurfaceCallsFromBody(
+    body,
+    localFunctionKeys,
+    (node) =>
+      isSourceReceiverAliasIdentifier(node, references) ||
+      isSourceReceiverCarrierMemberExpression(node, references),
+    bodyOffset,
+    false,
+  );
+}
+
 function extractSourceReceiverSurfaceCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
   isReceiverIdentifier: (node: Node | undefined) => boolean,
   bodyOffset = bodySourceStart(body),
+  includeHelperCalls = true,
 ): ExternalDbArgumentCall[] {
   const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, isReceiverIdentifier);
   const aliases = receiverMethodAliasesForBody(body, isReceiverIdentifier);
@@ -4442,6 +4495,7 @@ function extractSourceReceiverSurfaceCallsFromBody(
     const aliasIndex = call.getStart() - bodyOffset;
     if (alias && aliasIndex >= 0) calls.push({ index: aliasIndex, name: alias });
 
+    if (!includeHelperCalls) continue;
     const helper = sourceReceiverHelperCallSurface(
       call,
       localFunctionKeys,
@@ -4539,6 +4593,176 @@ function dedupeExternalDbArgumentCalls(
   }
 
   return deduped;
+}
+
+interface SourceReceiverAliasReferences extends QueryReceiverReferences {
+  carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+function sourceReceiverAliasReferencesForBody(
+  body: Node,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): SourceReceiverAliasReferences {
+  const names = new Set<string>();
+  const symbolKeys = new Set<string>();
+  const carrierProperties = new Map<string, Set<string>>();
+  let changed = true;
+
+  while (changed) {
+    const before = sourceReceiverReferenceSize(names, symbolKeys, carrierProperties);
+
+    for (const declaration of touchBodyVariableDeclarations(body)) {
+      const binding = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!initializer || !Node.isIdentifier(binding)) continue;
+
+      const references = { carrierProperties, names, symbolKeys };
+      if (isSourceReceiverAliasExpression(initializer, isBaseReceiverIdentifier, references)) {
+        appendSourceDestructuredReceiverIdentifier(binding, names, symbolKeys);
+      }
+
+      appendSourceReceiverCarrierProperties(
+        binding,
+        initializer,
+        references,
+        isBaseReceiverIdentifier,
+      );
+    }
+
+    for (const expression of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      if (!isTouchBodyNode(expression, body)) continue;
+      if (expression.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+
+      const left = unwrappedStaticExpressionNode(expression.getLeft());
+      if (!Node.isIdentifier(left)) continue;
+
+      const references = { carrierProperties, names, symbolKeys };
+      const right = expression.getRight();
+      if (isSourceReceiverAliasExpression(right, isBaseReceiverIdentifier, references)) {
+        appendSourceDestructuredReceiverIdentifier(left, names, symbolKeys);
+      }
+
+      appendSourceReceiverCarrierProperties(left, right, references, isBaseReceiverIdentifier);
+    }
+
+    changed = sourceReceiverReferenceSize(names, symbolKeys, carrierProperties) !== before;
+  }
+
+  return { carrierProperties, names, symbolKeys };
+}
+
+function sourceReceiverReferenceSize(
+  names: ReadonlySet<string>,
+  symbolKeys: ReadonlySet<string>,
+  carrierProperties: ReadonlyMap<string, ReadonlySet<string>>,
+): number {
+  return (
+    names.size +
+    symbolKeys.size +
+    [...carrierProperties.values()].reduce((sum, properties) => sum + properties.size, 0)
+  );
+}
+
+function isSourceReceiverAliasExpression(
+  node: Node,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+  references: QueryReceiverReferences,
+): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  return (
+    isBaseReceiverIdentifier(expression) || isSourceReceiverAliasIdentifier(expression, references)
+  );
+}
+
+function appendSourceReceiverCarrierProperties(
+  binding: Node,
+  initializer: Node,
+  references: SourceReceiverAliasReferences,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): void {
+  if (!Node.isIdentifier(binding)) return;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isObjectLiteralExpression(expression)) return;
+
+  const bindingSymbolKey = resolvedSymbolKey(binding.getSymbol());
+  if (!bindingSymbolKey) return;
+
+  for (const property of expression.getProperties()) {
+    const propertyName = receiverCarrierPropertyName(
+      property,
+      references,
+      isBaseReceiverIdentifier,
+    );
+    if (!propertyName) continue;
+
+    const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
+    properties.add(propertyName);
+  }
+}
+
+function receiverCarrierPropertyName(
+  property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
+  references: QueryReceiverReferences,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): string | undefined {
+  if (Node.isShorthandPropertyAssignment(property)) {
+    const name = property.getNameNode();
+    return isBaseReceiverIdentifier(name) || isSourceReceiverAliasIdentifier(name, references)
+      ? name.getText()
+      : undefined;
+  }
+
+  if (!Node.isPropertyAssignment(property)) return undefined;
+
+  const initializer = property.getInitializer();
+  if (!initializer) return undefined;
+
+  return isSourceReceiverAliasExpression(initializer, isBaseReceiverIdentifier, references)
+    ? propertyNameText(property.getNameNode())
+    : undefined;
+}
+
+function carrierPropertiesForSymbol(
+  carrierProperties: ReadonlyMap<string, ReadonlySet<string>>,
+  symbolKey: string,
+): Set<string> {
+  const mutable = carrierProperties as Map<string, Set<string>>;
+  const properties = mutable.get(symbolKey);
+  if (properties) return properties;
+
+  const next = new Set<string>();
+  mutable.set(symbolKey, next);
+  return next;
+}
+
+function isSourceReceiverAliasIdentifier(
+  node: Node | undefined,
+  references: QueryReceiverReferences,
+): boolean {
+  if (!node || !Node.isIdentifier(node)) return false;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
+  if (symbolKey) return references.symbolKeys.has(symbolKey);
+  return references.names.has(node.getText());
+}
+
+function isSourceReceiverCarrierMemberExpression(
+  node: Node | undefined,
+  references: SourceReceiverAliasReferences,
+): boolean {
+  if (!node || (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node))) {
+    return false;
+  }
+
+  const property = staticAccessName(node);
+  if (!property) return false;
+
+  const receiver = node.getExpression();
+  if (!Node.isIdentifier(receiver)) return false;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(receiver));
+  return symbolKey ? references.carrierProperties.get(symbolKey)?.has(property) === true : false;
 }
 
 interface DirectDrizzleReceiverCallSurface {

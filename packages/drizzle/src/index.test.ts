@@ -6045,6 +6045,115 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks source body-local receiver aliases as FW406 instead of extracting table facts', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const writer = db;',
+          '  let executor;',
+          '  executor = writer;',
+          '  const context = { writer, reader: db, fake };',
+          '  await writer.update(users).set({});',
+          '  await executor.execute("select 1");',
+          '  await context.reader.select().from(users);',
+          '  await context.fake.update(users).set({});',
+          '  await sendAudit(writer);',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:12',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:8',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks source query-loader receiver aliases as FW406 instead of deriving reads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/source-alias", {',
+          '  load(_input, db, fake) {',
+          '    const reader = db;',
+          '    let executor;',
+          '    executor = reader;',
+          '    const context = { reader, runner: db, fake };',
+          '    reader.select({ id: users.id }).from(users);',
+          '    executor.execute("select 1");',
+          '    context.runner.select().from(users);',
+          '    fake.select({ id: users.id }).from(users);',
+          '    return [];',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/source-alias',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
+  });
+
   it('marks external helpers receiving a Drizzle receiver as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
