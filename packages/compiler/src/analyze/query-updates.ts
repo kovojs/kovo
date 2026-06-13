@@ -244,8 +244,10 @@ function dataDeriveStamps(
       (attribute) => attribute.name === 'data-derive-attr' && attribute.value,
     )?.value;
 
-    const [input, name] = deriveAttribute.value.split('.');
-    if (!input || !name) continue;
+    const [inputSegment, nameSegment, ...extraSegments] = parseBindingPath(deriveAttribute.value);
+    if (!inputSegment || !nameSegment || extraSegments.length > 0) continue;
+    const input = inputSegment.name;
+    const name = nameSegment.name;
 
     const derive = derives.get(name);
     if (!derive || derive.input !== input) continue;
