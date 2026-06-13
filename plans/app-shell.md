@@ -660,3 +660,15 @@ Round185 commerce app-shell subpath adoption evidence:
   diagnostic helpers from `@jiso/server/app-shell/static-export` for SPEC §9.5 replay/export.
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|delegates Vite dev middleware|wires .* public commerce shell static output"`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts -t "server app-shell public API barrels"`
+
+Round190 commerce app-shell source subpath evidence:
+
+- Commerce app-shell source now imports request-shell primitives from
+  `@jiso/server/app-shell/client-modules`, `@jiso/server/app-shell/core`, and
+  `@jiso/server/app-shell/node`; the root package remains only for data/routing helpers not owned
+  by the app-shell subpaths.
+- The commerce app-shell command matrix test pins those source imports and loads
+  `exportStaticApp` from `@jiso/server/app-shell/static-export`, keeping SPEC §9.5 static export
+  adoption on public app-shell boundaries.
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|static export"`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts -t "server app-shell public API barrels"`

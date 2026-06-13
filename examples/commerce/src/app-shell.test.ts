@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
-import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
+import { csrfToken, runMutation } from '@jiso/server';
+import { exportStaticApp } from '@jiso/server/app-shell/static-export';
 import { cookiePair, firstSetCookiePair } from '@jiso/test/headers';
 import {
   fwFragmentFacts,
@@ -87,6 +88,17 @@ describe('commerce app shell HTTP entry', () => {
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/vite')");
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/static-export')");
     expect(exportScriptSource).not.toContain("ssrLoadModule('@jiso/server')");
+
+    const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.ts'), 'utf8');
+    expect(appShellSource).toContain("from '@jiso/server/app-shell/client-modules'");
+    expect(appShellSource).toContain("from '@jiso/server/app-shell/core'");
+    expect(appShellSource).toContain("from '@jiso/server/app-shell/node'");
+    const rootImport = appShellSource.match(
+      /import \{(?<imports>[\s\S]*?)\} from '@jiso\/server';/,
+    );
+    expect(rootImport?.groups?.imports).not.toMatch(
+      /\b(createApp|createRequestHandler|createMemoryVersionedClientModuleRegistry|toNodeHandler)\b/,
+    );
   });
 
   it('delegates Vite dev middleware to the shared app-shell plugin through public config seams', async () => {

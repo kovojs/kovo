@@ -1,14 +1,12 @@
 import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
   errorBoundary,
   route,
-  toNodeHandler,
   type CsrfValidationOptions,
-  type RequestHandler,
   type ServerErrorHandler,
 } from '@jiso/server';
+import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
+import { createApp, createRequestHandler, type RequestHandler } from '@jiso/server/app-shell/core';
+import { toNodeHandler } from '@jiso/server/app-shell/node';
 
 import {
   addToCart,

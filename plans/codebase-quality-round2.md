@@ -277,6 +277,9 @@ the preview serves exported files for `GET`/`HEAD` only and rejects unsupported 
 dynamic app route fallback.
 Commerce Vite dev/export adoption now uses the public `@jiso/server/app-shell/vite` and
 `@jiso/server/app-shell/static-export` subpaths instead of the root package app-shell aliases.
+Commerce app-shell source also imports client-module registry, core request-shell, node adapter,
+and static export helpers from those public app-shell subpaths, leaving root imports for
+non-app-shell data/routing helpers.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
@@ -323,6 +326,8 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|delegates Vite dev middleware|wires .* public commerce shell static output"`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts -t "server app-shell public API barrels"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|static export"`
+- `pnpm exec vp check examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 
 ## Phase 6 - Verification Harness And Commerce
 
