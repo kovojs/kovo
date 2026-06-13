@@ -8953,6 +8953,99 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins real Drizzle query/domain factories returning local static aliases', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+        source: [
+          "import { eq } from 'drizzle-orm';",
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', {",
+          "  id: text('id').primaryKey(),",
+          "  name: text('name').notNull(),",
+          "}, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'function loadUsers(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: users.id, name: users.name }).from(users);',
+          '}',
+          '',
+          'function addUser(db: PgDatabase<any, any, any>, userId: string) {',
+          '  return db.update(users).set({ name: userId }).where(eq(users.id, userId));',
+          '}',
+          '',
+          'function makeOptions() {',
+          '  const base = { load: loadUsers };',
+          '  const options = { ...base };',
+          '  return options;',
+          '}',
+          '',
+          'function makeActions() {',
+          '  const base = { add: write(addUser) };',
+          '  const actions = { ...base };',
+          '  return actions;',
+          '}',
+          '',
+          'export const userDomain = domain(makeActions());',
+          '',
+          "export const userQuery = query('user/local-factory-return-loader', makeOptions());",
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'userDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'user',
+            keys: 'arg:userId',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:15',
+            via: 'users',
+          },
+        ],
+        unresolved: [],
+      },
+      addUser: {
+        reads: [],
+        touches: [
+          {
+            domain: 'user',
+            keys: 'arg:userId',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:15',
+            via: 'users',
+          },
+        ],
+        unresolved: [],
+      },
+      loadUsers: {
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/users.domain.ts:11',
+            source: 'select',
+            via: 'users',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'user/local-factory-return-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/users.domain.ts:32',
+      },
+    ]);
+  });
+
   it('pins table annotations as the domain registry source', () => {
     const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
     const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));

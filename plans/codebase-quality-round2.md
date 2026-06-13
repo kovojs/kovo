@@ -1727,6 +1727,16 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       package and real `drizzle-orm` behavior. Verified by
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
       and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Evidence 2026-06-13 round343: project query/domain no-arg factories with static local
+      alias setup statements before the final return now resolve through ts-morph returned-symbol
+      facts instead of degrading as invisible factory bodies; non-variable factory control flow
+      remains opaque per SPEC §10.2/§11.1. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin `makeOptions()`/`makeActions()` returning
+      local spread aliases under package and real `drizzle-orm` Postgres receiver types. Verified
+      by `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`,
+      `pnpm exec tsc --noEmit --pretty false`, and exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

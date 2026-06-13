@@ -3960,7 +3960,7 @@ function staticObjectFactoryReturnExpression(node: Node, seen: Set<string>): Nod
     const callback = callbackFunctionFromDeclaration(declaration, seen);
     if (!callback || !factoryHasNoParameters(callback)) continue;
 
-    const returned = functionLikeSingleReturnExpression(callback);
+    const returned = functionLikeStaticReturnExpression(callback);
     if (returned) return returned;
   }
 
@@ -3980,11 +3980,11 @@ function factoryHasNoParameters(callback: Node): boolean {
   return callback.getParameters().length === 0;
 }
 
-function functionLikeSingleReturnExpression(callback: Node): Node | undefined {
+function functionLikeStaticReturnExpression(callback: Node): Node | undefined {
   if (Node.isArrowFunction(callback)) {
     if (callback.getParameters().length > 0) return undefined;
     const body = callback.getBody();
-    return Node.isBlock(body) ? singleStatementReturnExpression(body) : body;
+    return Node.isBlock(body) ? staticFactoryBlockReturnExpression(body) : body;
   }
 
   if (
@@ -3997,16 +3997,20 @@ function functionLikeSingleReturnExpression(callback: Node): Node | undefined {
   if (callback.getParameters().length > 0) return undefined;
 
   const body = callback.getBody();
-  return body && Node.isBlock(body) ? singleStatementReturnExpression(body) : undefined;
+  return body && Node.isBlock(body) ? staticFactoryBlockReturnExpression(body) : undefined;
 }
 
-function singleStatementReturnExpression(body: Node): Node | undefined {
+function staticFactoryBlockReturnExpression(body: Node): Node | undefined {
   if (!Node.isBlock(body)) return undefined;
 
   const statements = body.getStatements();
-  if (statements.length !== 1) return undefined;
+  if (statements.length === 0) return undefined;
 
-  const statement = statements[0];
+  for (const statement of statements.slice(0, -1)) {
+    if (!Node.isVariableStatement(statement)) return undefined;
+  }
+
+  const statement = statements[statements.length - 1];
   if (!statement || !Node.isReturnStatement(statement)) return undefined;
 
   return statement.getExpression();
