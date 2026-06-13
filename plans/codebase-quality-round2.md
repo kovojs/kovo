@@ -1368,6 +1368,15 @@ Latest evidence:
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
   exact `pnpm exec vp check packages/server/src/index.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Round265 app-shell final cleanup:
+  `site/scripts/app-shell.mjs` deleted the stale built aggregate
+  `dist/server/src/api/app-shell/index.mjs` fallback/sentinel, and
+  `packages/server/src/api/app.test.ts` now asserts the app-shell package export map is exactly
+  the focused public subpaths rather than a match-object that could miss aggregate drift.
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;
+  exact `pnpm exec vp check packages/server/src/api/app.test.ts site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

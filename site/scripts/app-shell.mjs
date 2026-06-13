@@ -8,10 +8,6 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
 const defaultServerModulePath = path.join(repoRoot, 'dist/server/src/index.mjs');
-const defaultServerAppShellModulePath = path.join(
-  repoRoot,
-  'dist/server/src/api/app-shell/index.mjs',
-);
 const defaultServerAppShellClientModulesPath = path.join(
   repoRoot,
   'dist/server/src/api/app-shell/client-modules.mjs',
@@ -52,10 +48,6 @@ async function loadDefaultServerApi() {
 async function loadAppShellSubpath(builtModulePath, packageSubpath) {
   if (existsSync(builtModulePath)) {
     return await import(pathToFileURL(builtModulePath).href);
-  }
-
-  if (existsSync(defaultServerAppShellModulePath)) {
-    throw new Error(`site app shell: missing built server subpath ${builtModulePath}`);
   }
 
   return await import(packageSubpath);

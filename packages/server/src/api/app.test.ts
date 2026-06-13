@@ -30,12 +30,12 @@ function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): str
 describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on app-shell subpaths while root preserves CLI static export', () => {
     const publicValues = publicApi as Record<string, unknown>;
-    const rootAppShellCompatibility = new Set([
+    const rootAppShellEntrypoints = new Set([
       'createApp',
       'createRequestHandler',
       'exportStaticApp',
     ]);
-    const rootAppShellCompatibilityValues = {
+    const rootAppShellEntrypointValues = {
       createApp: coreApi.createApp,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportApi.exportStaticApp,
@@ -57,9 +57,9 @@ describe('server app-shell public API barrels', () => {
       viteApi,
     );
     for (const key of splitAppShellValues) {
-      if (rootAppShellCompatibility.has(key)) {
+      if (rootAppShellEntrypoints.has(key)) {
         expect(publicValues[key]).toBe(
-          rootAppShellCompatibilityValues[key as keyof typeof rootAppShellCompatibilityValues],
+          rootAppShellEntrypointValues[key as keyof typeof rootAppShellEntrypointValues],
         );
       } else {
         expect(publicValues).not.toHaveProperty(key);
@@ -144,7 +144,12 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefsFromFile');
 
-    expect(serverPackage.exports as Record<string, string>).toMatchObject({
+    const appShellPackageExports = Object.fromEntries(
+      Object.entries(serverPackage.exports as Record<string, string>).filter(([subpath]) =>
+        subpath.startsWith('./app-shell'),
+      ),
+    );
+    expect(appShellPackageExports).toEqual({
       './app-shell/client-modules': './src/api/app-shell/client-modules.ts',
       './app-shell/core': './src/api/app-shell/core.ts',
       './app-shell/node': './src/api/app-shell/node.ts',

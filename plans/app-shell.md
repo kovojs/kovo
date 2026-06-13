@@ -1066,3 +1066,16 @@ Round264 app-shell public boundary cleanup evidence:
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
 - `pnpm exec vp check packages/server/src/index.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round265 app-shell final cleanup evidence:
+
+- `site/scripts/app-shell.mjs` no longer checks the deleted built aggregate
+  `dist/server/src/api/app-shell/index.mjs` before falling back to focused public app-shell
+  package subpaths, so docs-site SPEC §9.5 export adoption cannot depend on a removed
+  compatibility artifact.
+- `packages/server/src/api/app.test.ts` now pins the package export map to exactly the focused
+  app-shell subpaths and removes stale compatibility naming from the root app-shell boundary test.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm exec vp check packages/server/src/api/app.test.ts site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

@@ -244,6 +244,9 @@ describe('site app-shell export adoption', () => {
     expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
     expect(exportScript).not.toContain('function isStaticExportDiagnostic');
     expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
+    await expect(
+      readFile(path.join(siteRoot, 'scripts/app-shell.mjs'), 'utf8'),
+    ).resolves.not.toContain('api/app-shell/index.mjs');
     expect(loadedModuleIds).toEqual([
       '/scripts/app-shell.mjs',
       '@jiso/server',
