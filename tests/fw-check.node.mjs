@@ -33,7 +33,7 @@ import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
   applyMutationResponseToDom,
   applyCompiledQueryUpdatePlan,
-  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
   createQueryStore,
   derive,
   installPagehideOptimismCleanup,
@@ -236,7 +236,7 @@ const canonicalDocRuleTitle = (title) =>
 
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
-  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToDom: applyDeferredStreamResponseToRuntime,
   createQueryStore,
   derive,
   handler: (callback) => (event, ctx) => callback(event, ctx),
@@ -5704,7 +5704,7 @@ export const CartBadge = component('cart-badge', {
   serverRoot.targets.set('reviews', new GeneratedFixtureMorphTarget('<article>Initial</article>'));
   serverRoot.targets.set('summary', new GeneratedFixtureMorphTarget('<section>Old</section>'));
   const serverStore = createQueryStore();
-  const serverApplied = applyDeferredStreamResponseToDom({
+  const serverApplied = applyDeferredStreamResponseToRuntime({
     body: serverStream.body,
     boundary: 'gate-boundary',
     root: serverRoot,
@@ -5737,7 +5737,7 @@ export const CartBadge = component('cart-badge', {
   fixtureRoot.targets.set('reviews:p1', new GeneratedFixtureMorphTarget());
   fixtureRoot.targets.set('recommendations:p1', new GeneratedFixtureMorphTarget());
   const fixtureStore = createQueryStore();
-  const fixtureApplied = applyDeferredStreamResponseToDom({
+  const fixtureApplied = applyDeferredStreamResponseToRuntime({
     body: fixtureBody,
     queryPlans: {
       reviews(root, value) {
