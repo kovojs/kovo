@@ -8,12 +8,13 @@ import {
   componentStateReturnObjectModel,
   firstComponentModel,
   type ComponentModuleModel,
-  type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import {
   applySourceReplacements,
   escapeAttribute,
+  insertOpeningTagAttribute,
+  replaceOpeningTagAttribute,
   splitDepValue,
   type SourceReplacement,
 } from '../shared.js';
@@ -217,35 +218,6 @@ function stampOpeningTagDeps(
   }
 
   return insertOpeningTagAttribute(tagSource, hostElement, 'fw-deps', depValue);
-}
-
-function replaceOpeningTagAttribute(
-  tagSource: string,
-  hostElement: JsxElementModel,
-  attribute: JsxAttributeModel,
-  name: string,
-  value: string,
-): string {
-  const start = attribute.start - hostElement.start;
-  const end = attribute.end - hostElement.start;
-  return applySourceReplacements(tagSource, [
-    { end, replacement: `${name}="${escapeAttribute(value)}"`, start },
-  ]);
-}
-
-function insertOpeningTagAttribute(
-  tagSource: string,
-  hostElement: JsxElementModel | null,
-  name: string,
-  value: string,
-): string {
-  const escaped = escapeAttribute(value);
-  if (!hostElement) return `${tagSource.slice(0, -1).trimEnd()} ${name}="${escaped}">`;
-  if (hostElement.selfClosing) {
-    return `${tagSource.slice(0, -2).trimEnd()} ${name}="${escaped}" />`;
-  }
-
-  return `${tagSource.slice(0, -1).trimEnd()} ${name}="${escaped}">`;
 }
 
 function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {

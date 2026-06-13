@@ -573,6 +573,9 @@ Closed evidence so far:
   normalizer.
 - Server emit host attribute replacement now routes through `applySourceReplacements`, removing
   another hand-sliced source patch from the compiler emit path.
+- Opening-tag attribute replacement/insertion now lives in `shared.ts`; server emit and
+  view-transition lowering consume the parser-span helper instead of carrying local tag-slicing
+  variants.
 
 Open:
 
@@ -604,6 +607,9 @@ Recent gates:
 - `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/navigation-lowering.test.ts`
 - `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/query-coverage.test.ts`
+- `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/stamps.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts`
+- `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/emit/server.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/shared.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/stamps.test.ts`
+- `git diff --check`
 
 ## Phase 3 - Drizzle Extraction
 

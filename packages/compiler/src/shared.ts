@@ -56,6 +56,16 @@ export interface SourcePatchResult {
   sourceOffsetMap: SourceOffsetMap;
 }
 
+export interface OpeningTagSource {
+  selfClosing?: boolean;
+  start: number;
+}
+
+export interface OpeningTagAttributeSource {
+  end: number;
+  start: number;
+}
+
 export function identitySourceOffsetMap(length: number): SourceOffsetMap {
   return {
     generatedLength: length,
@@ -262,6 +272,51 @@ export function removeJsxAttributes(
   return [...ranges]
     .sort((left, right) => right.start - left.start)
     .reduce((next, range) => removeJsxAttribute(next, range.start, range.end), attributes);
+}
+
+export function openingTagAttributeRange(
+  tagSource: string,
+  hostElement: OpeningTagSource,
+  attribute: OpeningTagAttributeSource,
+  options: { includeLeadingWhitespace?: boolean } = {},
+): { end: number; start: number } {
+  let start = attribute.start - hostElement.start;
+  const end = attribute.end - hostElement.start;
+  if (options.includeLeadingWhitespace) {
+    while (start > 0 && /\s/.test(tagSource[start - 1] ?? '')) start -= 1;
+  }
+
+  return { end, start };
+}
+
+export function replaceOpeningTagAttribute(
+  tagSource: string,
+  hostElement: OpeningTagSource,
+  attribute: OpeningTagAttributeSource,
+  name: string,
+  value: string,
+): string {
+  return applySourceReplacements(tagSource, [
+    {
+      ...openingTagAttributeRange(tagSource, hostElement, attribute),
+      replacement: `${name}="${escapeAttribute(value)}"`,
+    },
+  ]);
+}
+
+export function insertOpeningTagAttribute(
+  tagSource: string,
+  hostElement: Pick<OpeningTagSource, 'selfClosing'> | null,
+  name: string,
+  value: string,
+): string {
+  const escaped = escapeAttribute(value);
+  if (!hostElement) return `${tagSource.slice(0, -1).trimEnd()} ${name}="${escaped}">`;
+  if (hostElement.selfClosing) {
+    return `${tagSource.slice(0, -2).trimEnd()} ${name}="${escaped}" />`;
+  }
+
+  return `${tagSource.slice(0, -1).trimEnd()} ${name}="${escaped}">`;
 }
 
 export function splitDepValue(value: string): string[] {
