@@ -15,6 +15,7 @@ import {
 
 export interface SelectStateProps {
   disabled?: boolean;
+  form?: string;
   invalid?: boolean;
   items?: readonly HeadlessSelectItem[];
   name?: string;
@@ -127,6 +128,7 @@ export const SelectTrigger = component('select-trigger', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
@@ -151,6 +153,7 @@ export const SelectTrigger = component('select-trigger', {
         data-required={attrs['data-required']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         name={attrs.name}
         required={attrs.required}

@@ -1210,6 +1210,7 @@ describe('@jiso/ui styled package foundation', () => {
     const state = {
       descriptionId: 'plan-help',
       errorId: 'plan-error',
+      form: 'checkout-form',
       invalid: true,
       items,
       name: 'plan',
@@ -1246,7 +1247,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(trigger).toContain('aria-describedby="plan-help plan-error"');
     expect(trigger).toContain('aria-expanded="false"');
     expect(trigger).toContain('aria-invalid="true"');
-    expect(trigger).toContain('id="plan" name="plan" required');
+    expect(trigger).toContain('form="checkout-form" id="plan" name="plan" required');
     expect(trigger).toContain('<optgroup');
     expect(trigger).toContain('label="Plans"');
     expect(trigger).toContain('data-state="checked" label="Growth" selected value="growth"');

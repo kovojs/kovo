@@ -341,6 +341,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   it('updates native select value and display text through a generated change handler', async () => {
     const root = mountInteractiveDemo(GallerySelectDemo);
     const select = required(root.querySelector<HTMLSelectElement>('#gallery-select-control'));
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-select-form'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
     );
@@ -350,7 +351,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const { imports } = installGeneratedGalleryLoader(root, { events: ['change'] });
 
     expect(root.getAttribute('fw-state')).toBe('{"value":"standard"}');
+    expect(form.dataset.galleryForm).toBe('select');
     expect(select.name).toBe('gallery-shipping-speed');
+    expect(select.form).toBe(form);
     expect(select.required).toBe(true);
     expect(select.disabled).toBe(false);
     expect(select.hasAttribute('disabled')).toBe(false);
@@ -362,6 +365,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(express.hasAttribute('selected')).toBe(false);
     expect(disabled.disabled).toBe(true);
     expect(output.textContent).toBe('Standard');
+    expect(new FormData(form).get('gallery-shipping-speed')).toBe('standard');
 
     select.value = 'express';
     select.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
@@ -379,6 +383,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       ]);
       expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
       expect(currentSelect.value).toBe('express');
+      expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
       expect(currentOutput.textContent).toBe('Express');
     });
 
@@ -400,6 +405,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(disabledChange.defaultPrevented).toBe(true);
       expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
       expect(restoredSelect.value).toBe('express');
+      expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
       expect(currentOutput.textContent).toBe('Express');
     });
   });

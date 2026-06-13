@@ -519,6 +519,8 @@ describe('gallery demo fixtures', () => {
     expect(select.html).toContain('<select');
     expect(select.html).toContain('id="gallery-select"');
     expect(select.html).toContain('data-ui-demo="select"');
+    expect(select.html).toContain('id="gallery-select-form"');
+    expect(select.html).toContain('form="gallery-select-form"');
     expect(select.html).toContain('name="gallery-plan"');
     expect(select.html).toContain('required');
     expect(select.html).toContain('aria-labelledby="gallery-select-label"');

@@ -26,6 +26,7 @@ export const GallerySelectDemo = component('gallery-select-demo', {
   state: () => ({ value: 'standard' }),
   render: (_queries: Record<string, never>, state: GallerySelectDemoState) => {
     const selectState = {
+      form: 'gallery-select-form',
       items: shippingOptions,
       name: 'gallery-shipping-speed',
       open: false,
@@ -41,6 +42,7 @@ export const GallerySelectDemo = component('gallery-select-demo', {
         fw-c="gallery-select-demo"
         fw-state='{"value":"standard"}'
       >
+        <form id="gallery-select-form" data-gallery-form="select" />
         <label id="gallery-select-label" for="gallery-select-control">
           Shipping speed
         </label>

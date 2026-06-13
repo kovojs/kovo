@@ -17,6 +17,7 @@ export interface SelectItem {
 
 export interface SelectState {
   disabled?: boolean;
+  form?: string;
   invalid?: boolean;
   items?: readonly SelectItem[];
   name?: string;
@@ -104,6 +105,7 @@ export function selectTriggerAttributes(
     ...selectDataAttributes(options),
     'aria-expanded': String(options.open === true),
     ...(options.disabled === true ? { disabled: true } : {}),
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),

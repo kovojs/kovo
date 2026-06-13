@@ -53,6 +53,7 @@ describe('headless-ui select primitive', () => {
       selectTriggerAttributes({
         descriptionId: 'color-help',
         errorId: 'color-error',
+        form: 'checkout',
         id: 'color',
         invalid: true,
         labelledBy: 'color-label',
@@ -68,6 +69,7 @@ describe('headless-ui select primitive', () => {
       'data-invalid': '',
       'data-required': '',
       'data-state': 'closed',
+      form: 'checkout',
       id: 'color',
       name: 'color',
       required: true,

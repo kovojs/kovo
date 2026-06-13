@@ -474,6 +474,8 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(select).toContain('data-gallery-interactive="select"');
+    expect(select).toContain('id="gallery-select-form" data-gallery-form="select"');
+    expect(select).toContain("form: 'gallery-select-form'");
     expect(select).toContain('fw-state=\'{"value":"standard"}\'');
     expect(select).toContain('selectTriggerAttributes({');
     expect(select).toContain('selectItemAttributes({');

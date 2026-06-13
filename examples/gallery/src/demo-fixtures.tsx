@@ -2152,6 +2152,7 @@ export function SelectDemo(): string {
     { disabled: true, label: 'Enterprise', value: 'enterprise' },
   ];
   const state = {
+    form: 'gallery-select-form',
     items,
     name: 'gallery-plan',
     required: true,
@@ -2163,6 +2164,7 @@ export function SelectDemo(): string {
       <p data-demo-summary="no-js">
         Select keeps a real select control and option list for no-JS form submission.
       </p>
+      <form id="gallery-select-form" method="post" action="/gallery/select" />
       <label id="gallery-select-label" for="gallery-select">
         Plan
       </label>

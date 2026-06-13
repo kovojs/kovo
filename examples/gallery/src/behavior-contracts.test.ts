@@ -499,6 +499,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/select': [
     '<select',
     'aria-labelledby="gallery-select-label"',
+    'form="gallery-select-form"',
     '<optgroup',
     'selected',
     'disabled',
