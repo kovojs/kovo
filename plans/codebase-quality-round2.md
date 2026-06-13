@@ -1003,6 +1003,10 @@ Closed evidence so far:
 - `packages/test/src/starter-template-fixtures.ts` now owns reusable create-jiso starter package,
   CI, Vite, CSS, index HTML, graph, and browser client-template fixtures; focused package tests,
   package export tests, and the targeted starter `fw-check` node test pin the seam.
+- D7 UI field integration evidence: `packages/ui/src/index.test.tsx` now pins the styled
+  field input, textarea, select, and fieldset wrappers over native IDREF control wiring; the
+  `/components/field` gallery fixture and behavior-contract tests prove input, textarea, select,
+  alert error, and fieldset markup.
 
 Open:
 

@@ -74,6 +74,8 @@ import {
   FieldDescription,
   FieldError,
   FieldLabel,
+  FieldSelect,
+  FieldTextarea,
   Fieldset,
   FieldsetLegend,
   HoverCard,
@@ -203,6 +205,8 @@ import {
   fieldDescriptionClasses,
   fieldErrorClasses,
   fieldLabelClasses,
+  fieldSelectClasses,
+  fieldTextareaClasses,
   fieldsetClasses,
   fieldsetLegendClasses,
   hoverCardClasses,
@@ -1048,7 +1052,25 @@ describe('@jiso/ui styled package foundation', () => {
       errorId: 'email-error',
       id: 'email',
       name: 'email',
+      placeholder: 'ada@example.com',
       type: 'email',
+      value: 'ada@example.com',
+    });
+    const textarea = FieldTextarea.definition.render({
+      descriptionId: 'bio-description',
+      id: 'bio',
+      name: 'bio',
+      placeholder: 'Short bio',
+      rows: 4,
+    });
+    const select = FieldSelect.definition.render({
+      children:
+        '<option value="starter">Starter</option><option value="team" selected>Team</option>',
+      descriptionId: 'plan-description',
+      id: 'plan',
+      name: 'plan',
+      required: true,
+      value: 'team',
     });
     const description = FieldDescription.definition.render({
       children: 'Used for notifications.',
@@ -1064,6 +1086,8 @@ describe('@jiso/ui styled package foundation', () => {
 
     expect(FieldLabel.name).toBe('field-label');
     expect(FieldControl.name).toBe('field-control');
+    expect(FieldTextarea.name).toBe('field-textarea');
+    expect(FieldSelect.name).toBe('field-select');
     expect(FieldDescription.name).toBe('field-description');
     expect(FieldError.name).toBe('field-error');
     expect(Fieldset.name).toBe('fieldset');
@@ -1072,7 +1096,15 @@ describe('@jiso/ui styled package foundation', () => {
     expect(label).toContain('for="email" id="email-label"');
     expect(control).toContain('aria-describedby="email-description email-error"');
     expect(control).toContain('aria-invalid="true"');
-    expect(control).toContain('id="email" name="email" required type="email"');
+    expect(control).toContain('placeholder="ada@example.com"');
+    expect(control).toContain('id="email" name="email"');
+    expect(control).toContain('required type="email"');
+    expect(control).toContain('value="ada@example.com"');
+    expect(textarea).toContain('<textarea aria-describedby="bio-description"');
+    expect(textarea).toContain('id="bio" name="bio" placeholder="Short bio" rows="4"');
+    expect(select).toContain('<select aria-describedby="plan-description"');
+    expect(select).toContain('id="plan" name="plan" required value="team"');
+    expect(select).toContain('<option value="team" selected>Team</option>');
     expect(description).toContain('id="email-description"');
     expect(error).toContain('role="alert"');
     expect(fieldset).toContain('aria-describedby="plan-description"');
@@ -1081,6 +1113,8 @@ describe('@jiso/ui styled package foundation', () => {
     expect(fieldset).toContain('id="plan-legend"');
     expect(fieldLabelClasses.join(' ')).toContain('text-sm font-medium');
     expect(fieldControlClasses.join(' ')).toContain('aria-[invalid=true]:border-red-500');
+    expect(fieldTextareaClasses.join(' ')).toContain('min-h-24');
+    expect(fieldSelectClasses.join(' ')).toContain('h-9 w-full');
     expect(fieldDescriptionClasses.join(' ')).toContain('text-neutral-500');
     expect(fieldErrorClasses.join(' ')).toContain('text-red-600');
     expect(fieldsetClasses.join(' ')).toContain('rounded-md border border-neutral-200');

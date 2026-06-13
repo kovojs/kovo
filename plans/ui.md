@@ -70,6 +70,9 @@ Implemented areas:
   `packages/ui/src/tooltip.tsx` export vendorable TSX wrappers. The static gallery now includes
   `/components/collapsible`, `/components/disclosure`, `/components/hover-card`, and
   `/components/popover` route/behavior-contract coverage for the remaining H1 static gaps.
+- Field/fieldset integration now includes styled input, textarea, and select controls over the
+  shared native field IDREF contract, with `/components/field` static gallery coverage proving
+  label, description, error, option, and fieldset wiring.
 
 Recent gates:
 
@@ -123,6 +126,11 @@ Recent gates:
 - `pnpm --filter @jiso/example-gallery test`
 - `pnpm --filter @jiso/example-gallery run test:browser`
 - `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/scroll-area-demo.tsx examples/gallery/src/generated/interactive/scroll-area-demo.tsx examples/gallery/src/generated/interactive/scroll-area-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/vite.config.ts plans/ui.md IMPLEMENT_v1.md`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm exec vitest --run packages/cli/src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
+- `pnpm exec vp check packages/ui/src/field.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`
 
 ## Open Work
 
@@ -138,7 +146,9 @@ H2:
   broader H2 remains open until all primitive and conformance evidence is rechecked together.
 - Toolbar now has a styled vendorable wrapper, static gallery route, behavior-contract snippets,
   and catalog sync; broader H2 remains open for other H2 families.
-- Keep field/fieldset tied to `form()` integration rather than a standalone styled-only surface.
+- Field/fieldset now covers styled native input, textarea, and select controls plus fieldset
+  grouping; keep future work tied to `form()` integration rather than a standalone styled-only
+  surface.
 
 H3:
 

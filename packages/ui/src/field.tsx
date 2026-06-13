@@ -38,7 +38,30 @@ export interface FieldControlProps extends FieldStateProps {
   errorId?: string;
   id?: string;
   name?: string;
+  placeholder?: string;
   type?: string;
+  value?: string;
+}
+
+export interface FieldTextareaProps extends FieldStateProps {
+  children?: string;
+  class?: ClassValue;
+  descriptionId?: string;
+  errorId?: string;
+  id?: string;
+  name?: string;
+  placeholder?: string;
+  rows?: number;
+}
+
+export interface FieldSelectProps extends FieldStateProps {
+  children?: string;
+  class?: ClassValue;
+  descriptionId?: string;
+  errorId?: string;
+  id?: string;
+  name?: string;
+  value?: string;
 }
 
 export interface FieldMessageProps extends FieldStateProps {
@@ -77,6 +100,16 @@ export const fieldControlClassNames = defineVariants({
   variants: {},
 });
 
+export const fieldTextareaClassNames = defineVariants({
+  base: 'min-h-24 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500',
+  variants: {},
+});
+
+export const fieldSelectClassNames = defineVariants({
+  base: 'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500',
+  variants: {},
+});
+
 export const fieldDescriptionClassNames = defineVariants({
   base: 'text-sm text-neutral-500',
   variants: {},
@@ -100,6 +133,8 @@ export const fieldsetLegendClassNames = defineVariants({
 export const fieldClasses = fieldClassNames.classes;
 export const fieldLabelClasses = fieldLabelClassNames.classes;
 export const fieldControlClasses = fieldControlClassNames.classes;
+export const fieldTextareaClasses = fieldTextareaClassNames.classes;
+export const fieldSelectClasses = fieldSelectClassNames.classes;
 export const fieldDescriptionClasses = fieldDescriptionClassNames.classes;
 export const fieldErrorClasses = fieldErrorClassNames.classes;
 export const fieldsetClasses = fieldsetClassNames.classes;
@@ -176,9 +211,76 @@ export const FieldControl = component('field-control', {
         disabled={attrs.disabled}
         id={attrs.id}
         name={attrs.name}
+        placeholder={props.placeholder}
         required={attrs.required}
         type={props.type ?? 'text'}
+        value={props.value}
       />
+    );
+  },
+});
+
+export const FieldTextarea = component('field-textarea', {
+  render(props: FieldTextareaProps) {
+    const attrs = fieldControlAttributes({
+      ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.id === undefined ? {} : { id: props.id }),
+      ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.name === undefined ? {} : { name: props.name }),
+      ...(props.required === undefined ? {} : { required: props.required }),
+    });
+
+    return (
+      <textarea
+        aria-describedby={attrs['aria-describedby']}
+        aria-invalid={attrs['aria-invalid']}
+        class={cn(fieldTextareaClassNames(), props.class)}
+        data-disabled={attrs['data-disabled']}
+        data-invalid={attrs['data-invalid']}
+        data-required={attrs['data-required']}
+        disabled={attrs.disabled}
+        id={attrs.id}
+        name={attrs.name}
+        placeholder={props.placeholder}
+        required={attrs.required}
+        rows={props.rows}
+      >
+        {props.children}
+      </textarea>
+    );
+  },
+});
+
+export const FieldSelect = component('field-select', {
+  render(props: FieldSelectProps) {
+    const attrs = fieldControlAttributes({
+      ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.id === undefined ? {} : { id: props.id }),
+      ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.name === undefined ? {} : { name: props.name }),
+      ...(props.required === undefined ? {} : { required: props.required }),
+    });
+
+    return (
+      <select
+        aria-describedby={attrs['aria-describedby']}
+        aria-invalid={attrs['aria-invalid']}
+        class={cn(fieldSelectClassNames(), props.class)}
+        data-disabled={attrs['data-disabled']}
+        data-invalid={attrs['data-invalid']}
+        data-required={attrs['data-required']}
+        disabled={attrs.disabled}
+        id={attrs.id}
+        name={attrs.name}
+        required={attrs.required}
+        value={props.value}
+      >
+        {props.children}
+      </select>
     );
   },
 });

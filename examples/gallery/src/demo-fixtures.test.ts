@@ -310,11 +310,19 @@ describe('gallery demo fixtures', () => {
 
     expect(field.html).toContain('for="gallery-field-email"');
     expect(field.html).toContain('name="email"');
+    expect(field.html).toContain('placeholder="ada@example.com"');
     expect(field.html).toContain(
       'aria-describedby="gallery-field-description gallery-field-error"',
     );
     expect(field.html).toContain('aria-invalid="true"');
     expect(field.html).toContain('role="alert"');
+    expect(field.html).toContain('for="gallery-field-bio"');
+    expect(field.html).toContain('<textarea aria-describedby="gallery-field-bio-description"');
+    expect(field.html).toContain('id="gallery-field-bio" name="bio" rows="3"');
+    expect(field.html).toContain('for="gallery-field-plan"');
+    expect(field.html).toContain('<select aria-describedby="gallery-field-plan-description"');
+    expect(field.html).toContain('id="gallery-field-plan" name="plan" required value="team"');
+    expect(field.html).toContain('<option value="team" selected>Team</option>');
     expect(field.html).toContain('aria-describedby="gallery-fieldset-description"');
     expect(field.html).toContain('id="gallery-fieldset"');
   });

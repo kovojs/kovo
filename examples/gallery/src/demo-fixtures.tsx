@@ -78,6 +78,8 @@ import {
   FieldDescription,
   FieldError,
   FieldLabel,
+  FieldSelect,
+  FieldTextarea,
   Fieldset,
   FieldsetLegend,
   HoverCard,
@@ -1364,6 +1366,7 @@ export function FieldDemo(): string {
                 errorId: 'gallery-field-error',
                 id: 'gallery-field-email',
                 name: 'email',
+                placeholder: 'ada@example.com',
                 type: 'email',
               })}
               {FieldDescription.definition.render({
@@ -1377,6 +1380,56 @@ export function FieldDemo(): string {
             </>
           ),
           id: 'gallery-field',
+        })}
+        {Field.definition.render({
+          children: (
+            <>
+              {FieldLabel.definition.render({
+                children: 'Profile note',
+                controlId: 'gallery-field-bio',
+                id: 'gallery-field-bio-label',
+              })}
+              {FieldTextarea.definition.render({
+                children: 'Prefers changelog emails and release candidate previews.',
+                descriptionId: 'gallery-field-bio-description',
+                id: 'gallery-field-bio',
+                name: 'bio',
+                rows: 3,
+              })}
+              {FieldDescription.definition.render({
+                children: 'Textarea keeps the same description IDREF contract as inputs.',
+                id: 'gallery-field-bio-description',
+              })}
+            </>
+          ),
+          id: 'gallery-field-bio-row',
+        })}
+        {Field.definition.render({
+          children: (
+            <>
+              {FieldLabel.definition.render({
+                children: 'Workspace plan',
+                controlId: 'gallery-field-plan',
+                id: 'gallery-field-plan-label',
+                required: true,
+              })}
+              {FieldSelect.definition.render({
+                children:
+                  '<option value="starter">Starter</option><option value="team" selected>Team</option>',
+                descriptionId: 'gallery-field-plan-description',
+                id: 'gallery-field-plan',
+                name: 'plan',
+                required: true,
+                value: 'team',
+              })}
+              {FieldDescription.definition.render({
+                children: 'Select controls preserve native option submission.',
+                id: 'gallery-field-plan-description',
+              })}
+            </>
+          ),
+          id: 'gallery-field-plan-row',
+          required: true,
         })}
         {Fieldset.definition.render({
           children: (
