@@ -405,6 +405,15 @@ conformance/drizzle-pin/src/index.test.ts`, exact
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Evidence 2026-06-13 round254: query option spreads such as
+      `query('product', { ...spreadConfig })` now resolve a statically proven `load` callback
+      through ts-morph member facts, while later unknown/`any` config spreads that could obscure
+      the loader degrade to FW406 instead of dropping the query-loader surface.
+      `packages/drizzle/src/index.test.ts` covers source and project config-spread loaders plus
+      obscuring spreads; `conformance/drizzle-pin/src/index.test.ts` pins the same behavior against
+      real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
       Evidence 2026-06-13: detached Drizzle receiver method aliases now resolve only by
       ts-morph symbol keys; `packages/drizzle/src/static.ts` deleted the receiver-method alias
       source-name map/fallback, while `packages/drizzle/src/index.test.ts` and

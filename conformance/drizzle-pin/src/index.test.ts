@@ -2518,6 +2518,68 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins query-loader config spreads under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  stock: integer('stock').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const dynamicConfig: any;',
+            'const base = { load: loadProducts };',
+            'const spread = { ...base };',
+            '',
+            "export const spreadQuery = query('product/config-spread-loader', {",
+            '  ...spread,',
+            '});',
+            '',
+            "export const obscuredQuery = query('product/config-obscured-loader', {",
+            '  load: loadProducts,',
+            '  ...dynamicConfig,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:20',
+          },
+        ],
+        query: 'product/config-obscured-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:20',
+      },
+      {
+        query: 'product/config-spread-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+      },
+    ]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',

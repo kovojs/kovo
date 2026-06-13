@@ -2334,10 +2334,7 @@ function queryCallbackReceiverReferences(
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
 
-  for (const property of body.getProperties()) {
-    const callback = queryCallbackFunction(property);
-    if (!callback) continue;
-
+  for (const callback of queryLoadCallbackFunctions(body)) {
     const receiverParameter = queryCallbackParameterNodes(callback)[1];
     const receiver = receiverParameter?.getNameNode();
     if (!receiverParameter || !receiver) continue;
@@ -2691,14 +2688,7 @@ function queryExecutableCallExpressions(body: ObjectLiteralExpression): CallExpr
 }
 
 function queryCallbackBodies(body: ObjectLiteralExpression): Node[] {
-  const bodies: Node[] = [];
-
-  for (const property of body.getProperties()) {
-    const callback = queryCallbackFunction(property);
-    if (callback) bodies.push(functionBody(callback));
-  }
-
-  return bodies;
+  return queryLoadCallbackFunctions(body).map(functionBody);
 }
 
 function queryCallbackFunction(node: Node): Node | undefined {
@@ -2719,6 +2709,78 @@ function queryCallbackFunction(node: Node): Node | undefined {
   return referencedQueryCallbackFunction(expression);
 }
 
+function queryLoadCallbackFunctions(body: ObjectLiteralExpression): Node[] {
+  return queryLoadCallbackResolution(body).callbacks;
+}
+
+interface QueryLoadCallbackResolution {
+  callbacks: Node[];
+  unresolvedNodes: Node[];
+}
+
+type QueryLoadSpreadResolution =
+  | { kind: 'found'; callback: Node }
+  | { kind: 'none' }
+  | { kind: 'unresolved' };
+
+function queryLoadCallbackResolution(body: ObjectLiteralExpression): QueryLoadCallbackResolution {
+  let callback: Node | undefined;
+  let unresolvedNode: Node | undefined;
+
+  for (const property of body.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      const resolution = queryLoadCallbackFromSpread(property);
+      if (resolution.kind === 'found') {
+        callback = resolution.callback;
+        unresolvedNode = undefined;
+      } else if (resolution.kind === 'unresolved') {
+        callback = undefined;
+        unresolvedNode = property;
+      }
+      continue;
+    }
+
+    if (!queryCallbackPropertyIsLoad(property)) continue;
+    const propertyCallback = queryCallbackFunction(property);
+    if (propertyCallback) {
+      callback = propertyCallback;
+      unresolvedNode = undefined;
+    } else {
+      callback = undefined;
+      unresolvedNode = property;
+    }
+  }
+
+  return {
+    callbacks: callback ? [callback] : [],
+    unresolvedNodes: unresolvedNode ? [unresolvedNode] : [],
+  };
+}
+
+function queryLoadCallbackFromSpread(property: Node): QueryLoadSpreadResolution {
+  if (!Node.isSpreadAssignment(property)) return { kind: 'none' };
+
+  const expression = unwrappedStaticExpressionNode(property.getExpression());
+  if (Node.isObjectLiteralExpression(expression)) {
+    const resolution = queryLoadCallbackResolution(expression);
+    if (resolution.callbacks[0]) return { kind: 'found', callback: resolution.callbacks[0] };
+    return resolution.unresolvedNodes.length > 0 ? { kind: 'unresolved' } : { kind: 'none' };
+  }
+
+  const loadSymbol = symbolForStaticTypePath(expression, ['load'], property);
+  if (!loadSymbol) {
+    const type = expression.getType();
+    return type.isAny() || type.isUnknown() ? { kind: 'unresolved' } : { kind: 'none' };
+  }
+
+  for (const declaration of loadSymbol.getDeclarations()) {
+    const callback = callbackFunctionFromDeclaration(declaration);
+    if (callback) return { kind: 'found', callback };
+  }
+
+  return { kind: 'unresolved' };
+}
+
 function queryCallbackPropertyIsLoad(node: Node): boolean {
   if (
     !Node.isMethodDeclaration(node) &&
@@ -2732,11 +2794,9 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
 
 function unresolvedQueryCallbackDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
+  const unresolvedNodes = queryLoadCallbackResolution(body).unresolvedNodes;
 
-  for (const property of body.getProperties()) {
-    if (!queryCallbackPropertyIsLoad(property)) continue;
-    if (queryCallbackFunction(property)) continue;
-
+  for (let index = 0; index < unresolvedNodes.length; index++) {
     diagnostics.push({
       code: 'FW406',
       message: `${diagnosticDefinitions.FW406.message} Query load callback could not be statically resolved.`,
@@ -2998,10 +3058,7 @@ function sourceQueryDestructuredReceiverNames(
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
 
-  for (const property of body.getProperties()) {
-    const callback = queryCallbackFunction(property);
-    if (!callback) continue;
-
+  for (const callback of queryLoadCallbackFunctions(body)) {
     const receiverParameter = queryCallbackParameterNodes(callback)[1];
     const receiver = receiverParameter?.getNameNode();
     if (receiver) appendSourceDestructuredReceiverBinding(receiver, names, symbolKeys);

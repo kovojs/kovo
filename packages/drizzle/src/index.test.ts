@@ -2610,6 +2610,69 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts project query loaders from static config spreads and degrades obscuring spreads', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const dynamicConfig: any;',
+            'const base = { load: loadProducts };',
+            'const spread = { ...base };',
+            '',
+            'export const spreadQuery = query("product/project-config-spread-loader", {',
+            '  ...spread,',
+            '});',
+            '',
+            'export const obscuredQuery = query("product/project-config-obscured-loader", {',
+            '  load: loadProducts,',
+            '  ...dynamicConfig,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.queries.ts:20',
+          },
+        ],
+        query: 'product/project-config-obscured-loader',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:20',
+      },
+      {
+        query: 'product/project-config-spread-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:16',
+      },
+    ]);
+  });
+
   it('extracts project query-loader callbacks through nested static object aliases', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -9481,6 +9544,60 @@ export interface CommerceInvalidationSets {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('extracts source query loaders from static config spreads and degrades obscuring spreads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function loadUsers(_input, db) {',
+          '  return db.select({ id: users.id }).from(users);',
+          '}',
+          '',
+          'declare const dynamicConfig: any;',
+          'const base = { load: loadUsers };',
+          'const spread = { ...base };',
+          '',
+          'export const spreadQuery = query("users/source-config-spread-loader", {',
+          '  ...spread,',
+          '});',
+          '',
+          'export const obscuredQuery = query("users/source-config-obscured-loader", {',
+          '  load: loadUsers,',
+          '  ...dynamicConfig,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'user.queries.ts:15',
+          },
+        ],
+        query: 'users/source-config-obscured-loader',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:15',
+      },
+      {
+        query: 'users/source-config-spread-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+        },
+        site: 'user.queries.ts:11',
+      },
+    ]);
   });
 
   it('marks unresolved source query-loader callback references as FW406', () => {
