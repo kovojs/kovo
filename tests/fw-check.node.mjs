@@ -100,7 +100,7 @@ import {
 import {
   graphComponentTargetFacts,
   graphFixtureFile,
-  generatedGraphArtifactHonestyFact,
+  generatedGraphArtifactHonestySummaryFact,
   graphMutationFact,
   graphOptimisticFacts,
   graphMutationUpdateConsumers,
@@ -4881,7 +4881,7 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   );
   const provenance = await touchGraphProvenanceFact(projectRootPath, commerceGraph.touchGraph);
   assert.deepEqual(
-    generatedGraphArtifactHonestyFact({
+    generatedGraphArtifactHonestySummaryFact({
       emitCheck: {
         stderr: emitGraphCheck.stderr,
         stdout: emitGraphCheck.stdout,
@@ -4892,8 +4892,6 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     {
       emitCheck: {
         clean: true,
-        stderr: '',
-        stdout: '',
       },
       invalidations: {
         'cart/add': ['cart', 'orderHistory', 'productGrid'],
@@ -4901,19 +4899,17 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
       touchGraph: {
         entries: {
           'cart.addItem': {
-            reads: [],
+            reads: 0,
             touches: [
               {
                 domain: 'cart',
                 keys: null,
-                predicate: undefined,
                 sitePath: 'examples/commerce/src/app.ts',
                 via: 'cart_items',
               },
               {
                 domain: 'order',
                 keys: null,
-                predicate: undefined,
                 sitePath: 'examples/commerce/src/app.ts',
                 via: 'orders',
               },
@@ -4925,10 +4921,10 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
                 via: 'products',
               },
             ],
-            unresolved: [],
+            unresolved: 0,
           },
           'payment.webhook': {
-            reads: [],
+            reads: 0,
             touches: [
               {
                 domain: 'order',
@@ -4938,10 +4934,10 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
                 via: 'orders',
               },
             ],
-            unresolved: [],
+            unresolved: 0,
           },
           'order.receipt': {
-            reads: [],
+            reads: 0,
             touches: [
               {
                 domain: 'attachment',
@@ -4951,7 +4947,7 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
                 via: 'attachments',
               },
             ],
-            unresolved: [],
+            unresolved: 0,
           },
         },
         honesty: {

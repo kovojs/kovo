@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   generatedGraphArtifactHonestyFact,
+  generatedGraphArtifactHonestySummaryFact,
   graphFixtureFile,
   graphComponentTargetFacts,
   graphDomainFacts,
@@ -132,34 +133,36 @@ describe('@jiso/test graph fixture seam', () => {
   });
 
   it('projects generated graph artifact honesty from emit checks and provenance', () => {
+    const provenance = {
+      entries: {
+        'cart.addItem': {
+          reads: [],
+          touches: [
+            {
+              domain: 'cart',
+              keys: null,
+              predicate: undefined,
+              sitePath: 'src/app.ts',
+              via: 'cart_items',
+            },
+          ],
+          unresolved: [],
+        },
+      },
+      siteSummary: {
+        count: 1,
+        linesArePositive: true,
+        paths: ['src/app.ts'],
+      },
+      sourceLineMismatches: [],
+      unresolvedMutations: [],
+    };
+
     expect(
       generatedGraphArtifactHonestyFact({
         emitCheck: { stderr: '', stdout: '' },
         graph,
-        provenance: {
-          entries: {
-            'cart.addItem': {
-              reads: [],
-              touches: [
-                {
-                  domain: 'cart',
-                  keys: null,
-                  predicate: undefined,
-                  sitePath: 'src/app.ts',
-                  via: 'cart_items',
-                },
-              ],
-              unresolved: [],
-            },
-          },
-          siteSummary: {
-            count: 1,
-            linesArePositive: true,
-            paths: ['src/app.ts'],
-          },
-          sourceLineMismatches: [],
-          unresolvedMutations: [],
-        },
+        provenance,
       }),
     ).toEqual({
       emitCheck: {
@@ -184,6 +187,49 @@ describe('@jiso/test graph fixture seam', () => {
               },
             ],
             unresolved: [],
+          },
+        },
+        honesty: {
+          entryKeys: ['cart.addItem'],
+          sourceLineMismatches: [],
+          sourceSites: {
+            count: 1,
+            linesArePositive: true,
+            paths: ['src/app.ts'],
+          },
+          touchCountsByMutation: {
+            'cart.addItem': 1,
+          },
+          unresolvedMutations: [],
+        },
+      },
+    });
+    expect(
+      generatedGraphArtifactHonestySummaryFact({
+        emitCheck: { stderr: '', stdout: '' },
+        graph,
+        provenance,
+      }),
+    ).toEqual({
+      emitCheck: {
+        clean: true,
+      },
+      invalidations: {
+        'cart/add': ['cart', 'productGrid'],
+      },
+      touchGraph: {
+        entries: {
+          'cart.addItem': {
+            reads: 0,
+            touches: [
+              {
+                domain: 'cart',
+                keys: null,
+                sitePath: 'src/app.ts',
+                via: 'cart_items',
+              },
+            ],
+            unresolved: 0,
           },
         },
         honesty: {

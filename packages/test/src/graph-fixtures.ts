@@ -87,6 +87,29 @@ export interface GeneratedGraphArtifactHonestyFact {
   };
 }
 
+export interface GeneratedGraphTouchEntrySummaryFact {
+  reads: number;
+  touches: {
+    domain: string;
+    keys?: string | null;
+    predicate?: string;
+    sitePath: string;
+    via: string;
+  }[];
+  unresolved: number;
+}
+
+export interface GeneratedGraphArtifactHonestySummaryFact {
+  emitCheck: {
+    clean: boolean;
+  };
+  invalidations: Record<string, string[]>;
+  touchGraph: {
+    entries: Record<string, GeneratedGraphTouchEntrySummaryFact>;
+    honesty: TouchGraphProvenanceHonestyFact;
+  };
+}
+
 export function graphPageFact(graph: JisoGraphFixture, route: string): JisoGraphPageFact {
   const page = graph.pages?.find((item) => item.route === route);
   if (!page) throw new Error(`Graph includes page route ${route}`);
@@ -271,6 +294,44 @@ export function generatedGraphArtifactHonestyFact(options: {
     invalidations: graphInvalidationFacts(options.graph),
     touchGraph: {
       entries: options.provenance.entries,
+      honesty: touchGraphProvenanceHonestyFact(options.provenance),
+    },
+  };
+}
+
+export function generatedGraphArtifactHonestySummaryFact(options: {
+  emitCheck: GeneratedGraphEmitCheckResult;
+  graph: JisoGraphFixture;
+  provenance: TouchGraphProvenanceFact;
+}): GeneratedGraphArtifactHonestySummaryFact {
+  const summarizedEntries: Record<string, GeneratedGraphTouchEntrySummaryFact> = Object.fromEntries(
+    Object.entries(options.provenance.entries).map(([key, entry]) => {
+      const touches = entry.touches.map((touch) => ({
+        domain: touch.domain,
+        ...(touch.keys !== undefined ? { keys: touch.keys } : {}),
+        ...(touch.predicate !== undefined ? { predicate: touch.predicate } : {}),
+        sitePath: touch.sitePath,
+        via: touch.via,
+      }));
+
+      return [
+        key,
+        {
+          reads: entry.reads.length,
+          touches,
+          unresolved: entry.unresolved.length,
+        },
+      ];
+    }),
+  );
+
+  return {
+    emitCheck: {
+      clean: options.emitCheck.stderr === '' && options.emitCheck.stdout === '',
+    },
+    invalidations: graphInvalidationFacts(options.graph),
+    touchGraph: {
+      entries: summarizedEntries,
       honesty: touchGraphProvenanceHonestyFact(options.provenance),
     },
   };
