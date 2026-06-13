@@ -55,11 +55,11 @@ Current state:
 Open:
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
-  projections in `tests/fw-check.node.mjs`.
+      projections in `tests/fw-check.node.mjs`.
 - [ ] Replace each with public behavior or structured `@jiso/test` fixture assertions.
 - [ ] Keep intentional byte-for-byte wire pins.
 - [ ] Keep create-jiso scaffold checks executable against real generated files, Vite+ tasks, graph
-  assertions, and typechecking.
+      assertions, and typechecking.
 
 Latest focused evidence:
 
@@ -95,9 +95,9 @@ Open:
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
-  parser/scanner internals and diagnostics, retire source-string lowerers/validators.
+      parser/scanner internals and diagnostics, retire source-string lowerers/validators.
 - [ ] Keep Phase 2 open until source-returning lowering is gone from the compile path or each
-  remaining case is explicitly justified.
+      remaining case is explicitly justified.
 
 Latest focused evidence:
 
@@ -158,7 +158,7 @@ Current state:
 Open:
 
 - [ ] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
-  deletion.
+      deletion.
 - [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
 - [ ] Re-run browser runtime tests after each apply/loader surface change.
@@ -194,9 +194,9 @@ Current state:
 Open:
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
-  replay, document, and app boundaries are small and obvious.
+      replay, document, and app boundaries are small and obvious.
 - [ ] Finish R5/R6/R7 closure: Vite build/static export/adoption should be proven through server,
-  commerce, and starter surfaces.
+      commerce, and starter surfaces.
 - [ ] Keep one wire-html emitter and one compile/static-export diagnostic seam.
 - [ ] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
 
@@ -227,7 +227,7 @@ Open:
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
 - [ ] Keep commerce generated artifacts honest: checked in, freshness-gated, and tied to source
-  provenance rather than synthetic projections.
+      provenance rather than synthetic projections.
 
 Latest focused evidence:
 
