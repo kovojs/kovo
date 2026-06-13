@@ -15,6 +15,22 @@ import {
   type PropertyTestResult,
 } from '@jiso/test/assertions';
 import {
+  commandSequence,
+  nodeTaskCommand,
+  pnpmFilterTestCommands,
+  pnpmRunScriptNames,
+  requiredVpRunTaskName,
+  runCommandSequenceSync,
+  vitestTaskCommand,
+  vpRunTaskName,
+  workflowStepCommands,
+  type CommandInvocation,
+  type NodeTaskCommand,
+  type PnpmFilterTestCommand,
+  type VitestTaskCommand,
+  type WorkflowStepCommand,
+} from '@jiso/test/command-fixtures';
+import {
   createJisoTestHarness,
   type JisoTestContext,
   type JisoTestExecOptions,
@@ -159,6 +175,34 @@ describe('@jiso/test package subpath exports', () => {
         table: 'cart_items',
       },
     ]);
+    expect(commandSequence('vp run fw-check')).toMatchObject([
+      { args: ['run', 'fw-check'], executable: 'vp' },
+    ]);
+    expect(pnpmRunScriptNames('pnpm run build && pnpm run test:browser')).toEqual([
+      'build',
+      'test:browser',
+    ]);
+    expect(requiredVpRunTaskName('check:fw', { scripts: { 'check:fw': 'vp run fw-check' } })).toBe(
+      'fw-check',
+    );
+    expect(vpRunTaskName('vp run build')).toBe('build');
+    expect(vitestTaskCommand('vitest --run --config vitest.browser.config.ts')).toEqual({
+      configPath: 'vitest.browser.config.ts',
+    });
+    expect(nodeTaskCommand('node scripts/perf.mjs')).toEqual({ modulePath: 'scripts/perf.mjs' });
+    expect(pnpmFilterTestCommands('pnpm --filter @jiso/conformance-auth-spike test')).toEqual([
+      {
+        argv: ['pnpm', '--filter', '@jiso/conformance-auth-spike', 'test'],
+        packageName: '@jiso/conformance-auth-spike',
+        script: 'test',
+      },
+    ]);
+    expect(
+      workflowStepCommands(
+        ['steps:', '  - uses: actions/checkout@v4', '  - run: vp check'].join('\n'),
+      ),
+    ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
+    expect(runCommandSequenceSync).toBeTypeOf('function');
   });
 
   it('keeps harness exec options on the operation module surface', () => {
@@ -173,6 +217,11 @@ type _PublicSubpathTypes = [
   MutationErrorExpectation<Record<'invalid', { parse(value: unknown): unknown }>, 'invalid'>,
   PropertyTestOptions<{ count: number }, { by: number }>,
   PropertyTestResult,
+  CommandInvocation,
+  NodeTaskCommand,
+  PnpmFilterTestCommand,
+  VitestTaskCommand,
+  WorkflowStepCommand,
   JisoTestContext<{ cart: string[] }>,
   JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>,
   JisoTestHarnessOptions<{ cart: string[] }>,

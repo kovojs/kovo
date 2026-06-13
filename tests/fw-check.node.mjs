@@ -49,6 +49,16 @@ import {
   submitOptimisticEnhancedMutation,
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
+import {
+  nodeTaskCommand,
+  pnpmFilterTestCommands,
+  pnpmRunScriptNames,
+  requiredVpRunTaskName,
+  runCommandSequenceSync,
+  vitestTaskCommand,
+  vpRunTaskName,
+  workflowStepCommands,
+} from '../packages/test/src/command-fixtures.ts';
 import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
   createApp,
@@ -299,95 +309,6 @@ const collectForbiddenBrowserArchitecture = (ts, fileName, source) => {
   visit(sourceFile);
   return violations;
 };
-
-const parseWorkflowSteps = (source) => {
-  const steps = [];
-
-  for (const line of source.split('\n')) {
-    const match = /^\s*-\s+(run|uses):\s*(.+?)\s*$/.exec(line);
-    if (match) {
-      steps.push({ [match[1]]: match[2] });
-    }
-  }
-
-  return steps;
-};
-
-const parsePnpmRunScript = (command) => {
-  const match = /^pnpm run ([\w:-]+)$/.exec(command);
-  return match?.[1];
-};
-
-const parsePnpmRunScripts = (command) => {
-  assert.equal(typeof command, 'string', 'pnpm run script list is present');
-  return command.split(' && ').map((entry) => {
-    const scriptName = parsePnpmRunScript(entry);
-    assert.ok(scriptName, `pnpm run script entry is structured: ${entry}`);
-    return scriptName;
-  });
-};
-
-const parseVpRunCommand = (command) => {
-  const match = /^vp run ([\w-]+)$/.exec(command);
-  return match?.[1];
-};
-
-const parseRequiredVpTask = (scriptName, packageJson) => {
-  const command = packageJson.scripts?.[scriptName];
-  assert.equal(typeof command, 'string', `${scriptName} script exists`);
-  const taskName = parseVpRunCommand(command);
-  assert.ok(taskName, `${scriptName} delegates to a Vite+ task`);
-  return taskName;
-};
-
-const parseVitestTaskCommand = (command) => {
-  assert.equal(typeof command, 'string', 'Vitest task command is present');
-  const parts = command.split(/\s+/);
-  assert.equal(parts[0], 'vitest');
-  assert.equal(parts.includes('--run'), true);
-  const configIndex = parts.indexOf('--config');
-  assert.notEqual(configIndex, -1);
-  assert.ok(parts[configIndex + 1], 'Vitest task names a config file');
-  return { configPath: parts[configIndex + 1] };
-};
-
-const parseNodeTaskCommand = (command) => {
-  assert.equal(typeof command, 'string', 'Node task command is present');
-  const match = /^node ([^\s]+)$/.exec(command);
-  assert.ok(match, 'Node task runs a single module entrypoint');
-  return { modulePath: match[1] };
-};
-
-const parsePnpmFilterTestCommands = (command) => {
-  assert.equal(typeof command, 'string', 'pnpm filter task command is present');
-  return parseCommandSequence(command).map(({ args, executable, raw }) => {
-    assert.equal(executable, 'pnpm');
-    assert.equal(args.length, 3, `pnpm filter test command has three args: ${raw}`);
-    assert.equal(args[0], '--filter');
-    assert.equal(args[2], 'test');
-    assert.notEqual(args[1].length, 0);
-    return { argv: [executable, ...args], packageName: args[1], script: 'test' };
-  });
-};
-
-const parseCommandSequence = (command) => {
-  assert.equal(typeof command, 'string', 'task command is present');
-  return command.split(' && ').map((raw) => {
-    const parts = raw.split(/\s+/).filter(Boolean);
-    assert.notEqual(parts.length, 0, `task command entry is not empty: ${raw}`);
-    assert.equal(
-      parts.every((part) => /^[./:@\w-]+$/.test(part)),
-      true,
-      `task command avoids shell syntax: ${raw}`,
-    );
-    return { args: parts.slice(1), executable: parts[0], raw };
-  });
-};
-
-const runCommandSequenceSync = (command, options) =>
-  parseCommandSequence(command)
-    .map(({ args, executable }) => execFileSync(executable, args, options))
-    .join('');
 
 const isLowerHex = (value) =>
   value.length > 0 && [...value].every((char) => '0123456789abcdef'.includes(char));
@@ -4114,7 +4035,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
   const packageJson = JSON.parse(packageJsonSource);
   const viteTasks = (await loadVitePlusConfig('packages/create-jiso/templates/vite.config.ts')).run
     .tasks;
-  const ciSteps = parseWorkflowSteps(ciWorkflow);
+  const ciSteps = workflowStepCommands(ciWorkflow);
   const starterGraph = JSON.parse(starterGraphSource);
   const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
   const cartAddExplain = fwExplain(starterGraph, {
@@ -6228,17 +6149,17 @@ void test('Conformance suites are an explicit gate', async () => {
   }
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteTasks = (await loadVitePlusConfig()).run.tasks;
-  const conformanceTaskName = parseRequiredVpTask('test:conformance', packageJson);
+  const conformanceTaskName = requiredVpRunTaskName('test:conformance', packageJson);
   const conformanceTask = viteTasks[conformanceTaskName];
   assert.ok(conformanceTask, `${conformanceTaskName} task is defined`);
-  const conformanceTaskCommands = parsePnpmFilterTestCommands(conformanceTask.command);
+  const conformanceTaskCommands = pnpmFilterTestCommands(conformanceTask.command);
   assert.equal(
     conformanceTaskCommands.every((entry) => entry.script === 'test'),
     true,
     'conformance task runs package tests through pnpm filters',
   );
   assert.equal(
-    parsePnpmRunScripts(packageJson.scripts.acceptance).includes('test:conformance'),
+    pnpmRunScriptNames(packageJson.scripts.acceptance).includes('test:conformance'),
     true,
   );
   assert.deepEqual(
@@ -6844,15 +6765,15 @@ export const CartTotal = component('cart-total', {
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceScripts = parsePnpmRunScripts(packageJson.scripts.acceptance);
-  const ciTaskNames = parseWorkflowSteps(ciWorkflow)
-    .map((step) => parseVpRunCommand(step.run ?? ''))
+  const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts.acceptance);
+  const ciTaskNames = workflowStepCommands(ciWorkflow)
+    .map((step) => vpRunTaskName(step.run ?? ''))
     .filter(Boolean);
   const tasks = (await loadVitePlusConfig()).run.tasks;
-  const browserTaskName = parseRequiredVpTask('test:browser', packageJson);
+  const browserTaskName = requiredVpRunTaskName('test:browser', packageJson);
   const browserTask = tasks[browserTaskName];
   assert.ok(browserTask, `${browserTaskName} task is defined`);
-  const { configPath } = parseVitestTaskCommand(browserTask.command);
+  const { configPath } = vitestTaskCommand(browserTask.command);
   const browserAcceptanceInput = browserTask.input.find((entry) =>
     entry.pattern?.endsWith('/browser-acceptance.mjs'),
   );
@@ -6880,15 +6801,15 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceScripts = parsePnpmRunScripts(packageJson.scripts.acceptance);
-  const ciTaskNames = parseWorkflowSteps(ciWorkflow)
-    .map((step) => parseVpRunCommand(step.run ?? ''))
+  const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts.acceptance);
+  const ciTaskNames = workflowStepCommands(ciWorkflow)
+    .map((step) => vpRunTaskName(step.run ?? ''))
     .filter(Boolean);
   const tasks = (await loadVitePlusConfig()).run.tasks;
-  const perfTaskName = parseRequiredVpTask('test:p10-perf', packageJson);
+  const perfTaskName = requiredVpRunTaskName('test:p10-perf', packageJson);
   const perfTask = tasks[perfTaskName];
   assert.ok(perfTask, `${perfTaskName} task is defined`);
-  const { modulePath } = parseNodeTaskCommand(perfTask.command);
+  const { modulePath } = nodeTaskCommand(perfTask.command);
   const { p10PerfAcceptance, runP10PerfAcceptance } = await import(
     new URL(`../${modulePath}`, import.meta.url).href
   );

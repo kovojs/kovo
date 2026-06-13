@@ -83,6 +83,10 @@ Closed evidence so far:
   the P4 gate; the test delegates freshness to `examples/commerce/scripts/emit-graph.mjs --check`
   and then proves the committed graph through `fw-check`, `fw explain query cart`, and registry
   invalidation facts.
+- `tests/fw-check.node.mjs` no longer owns local package-script, Vite task, workflow step, or
+  command-sequence parsers for the starter/conformance/browser/perf gates; those checks consume
+  `@jiso/test/command-fixtures` argv/task/workflow facts, with command execution preserved through
+  `execFileSync` argv calls.
 
 Open:
 
@@ -109,6 +113,11 @@ Recent gates:
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/test-fixtures.ts packages/test/src/harness-operations.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate|framework-owned browser suite is wired into acceptance|P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -618,6 +627,10 @@ Closed evidence so far:
 - `packages/test/src/test-fixtures.ts` also owns the recording operation verifier used by
   `harness-operations.test.ts`, replacing that file's local recorder and adding request/context
   seam assertions for mutation and query operation helpers.
+- `packages/test/src/command-fixtures.ts` now owns reusable command/workflow fixture facts for
+  package scripts, Vite+ task commands, pnpm filter test commands, and shell-free command
+  sequences; `packages/test/src/command-fixtures.test.ts` and `package-exports.test.ts` pin the
+  public subpath seam consumed by `fw-check`.
 
 Open:
 
