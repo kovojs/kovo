@@ -75,12 +75,17 @@ describe('server static export document boundary', () => {
           '<button on:click="/c/cart.client.js?v=1#Cart$add https://cdn.example.test/c/remote.js?v=1#Remote$open">',
           'Add locally',
           '</button>',
+          '<a data-docs="https://shop.example.test/c/example-only.client.js?v=docs">Docs</a>',
+          '<link rel="stylesheet" href="/c/not-a-module.css?v=style">',
+          '<link rel="preload" as="script" href="/c/not-modulepreload.client.js?v=preload">',
           '<script type="module" src="https://shop.example.test/c/menu.client.js?v=2"></script>',
           '</main>',
         ].join(''),
         headers: {
           link: [
             '</c/header.client.js?v=3>; rel=modulepreload',
+            '</c/not-a-client-style.css?v=5>; rel=preload; as=style',
+            '</c/not-a-client-script.js?v=6>; rel=preload; as=script',
             '<https://cdn.example.test/c/external.client.js?v=4>; rel=modulepreload',
           ].join(', '),
         },
@@ -157,8 +162,43 @@ describe('server static export document boundary', () => {
       collectStaticExportServerEndpointRefs(routeArtifacts[0]?.body ?? '', exportOrigin),
     ).toEqual([]);
     expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
-      '/c/config.client.js?v=1',
       '/c/real.client.js?v=2#Real$open',
+    ]);
+  });
+
+  it('discovers only declared module surfaces for static-host client module replay', () => {
+    const exportOrigin = 'https://shop.example.test';
+    const routeArtifacts = [
+      {
+        body: [
+          '<main>',
+          '<button on:idle="/c/idle.client.js?v=1#Idle$run /c/load.client.js?v=1#Load$run">Run</button>',
+          '<script src="/c/plain-script.client.js?v=ignored"></script>',
+          '<script type="application/json" src="/c/config.client.js?v=ignored"></script>',
+          '<script type="module" src="/c/bootstrap.client.js?v=1"></script>',
+          '<link rel="modulepreload alternate" href="/c/head.client.js?v=1">',
+          '<link rel="stylesheet" href="/c/theme.css?v=ignored">',
+          '<span data-example="/c/example-only.client.js?v=ignored"></span>',
+          '</main>',
+        ].join(''),
+        headers: {
+          link: [
+            '</c/header.client.js?v=1>; rel="modulepreload"; title="a, b"',
+            '</c/style.css?v=ignored>; rel=preload; as=style',
+            '</c/script.client.js?v=ignored>; rel=preload; as=script',
+          ].join(', '),
+        },
+        path: '/cart/index.html',
+        status: 200,
+      },
+    ];
+
+    expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
+      '/c/bootstrap.client.js?v=1',
+      '/c/head.client.js?v=1',
+      '/c/header.client.js?v=1',
+      '/c/idle.client.js?v=1#Idle$run',
+      '/c/load.client.js?v=1#Load$run',
     ]);
   });
 });

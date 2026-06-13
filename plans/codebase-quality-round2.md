@@ -173,6 +173,15 @@ offset fields in the monolith.
 
 Latest evidence:
 
+- Phase 5 static export client-module discovery boundary slice:
+  `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`.
+  Evidence: `packages/server/src/static-export-document-refs.ts` now limits SPEC §9.5 static
+  export `/c/` client-module replay discovery to declared module surfaces: `on:*` handler refs,
+  module scripts, modulepreload links, and modulepreload `Link` header entries. Focused tests prove
+  unrelated `data-*`, stylesheet, JSON script, plain script, and non-modulepreload `/c/` refs do
+  not trigger copied static-host client-module artifacts.
 - Phase 5 static export route-document target safety slice:
   `pnpm exec vitest --run packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

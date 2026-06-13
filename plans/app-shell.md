@@ -153,6 +153,21 @@ Round290 static export route-document target safety evidence:
 - `pnpm exec vp check packages/server/src/static-export-route-plan.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round292 static export client-module discovery boundary evidence:
+
+- `packages/server/src/static-export-document-refs.ts` now discovers `/c/` client modules only from
+  declared SPEC §4.3/SPEC §9.5 module surfaces: `on:*` handler refs, module scripts,
+  modulepreload links, and `Link` header entries whose `rel` includes `modulepreload`. Unrelated
+  `data-*`, stylesheet, JSON script, plain script, and non-modulepreload `/c/` refs no longer
+  trigger client-module replay or copied static-host files.
+- `packages/server/src/static-export-document.test.ts` and
+  `packages/server/src/static-export-document-client-modules.test.ts` prove the collector and
+  replay boundary ignore non-module `/c/` references while still copying same-origin handler,
+  module-script, and modulepreload refs.
+- `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

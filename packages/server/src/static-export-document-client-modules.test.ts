@@ -149,6 +149,64 @@ describe('server static export client module replay boundary', () => {
     expect(seen).toEqual(['/c/cart.client.js?v=cart-1#Cart$add', '/c/menu.client.js?v=menu-1']);
   });
 
+  it('ignores non-module /c/ references while replaying declared client modules', async () => {
+    const seen: string[] = [];
+    const handler: RequestHandler = async (request) => {
+      const url = new URL(request.url);
+      seen.push(`${url.pathname}${url.search}${url.hash}`);
+      return new Response(`export const modulePath = ${JSON.stringify(url.pathname)};`, {
+        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+        status: 200,
+      });
+    };
+    const context = { handler, origin: 'https://shop.example.test' };
+
+    await expect(
+      replayStaticExportClientModuleArtifacts({
+        context,
+        routeArtifacts: [
+          {
+            body: [
+              '<main>',
+              '<button on:click="/c/cart.client.js?v=cart-1#Cart$add">Add</button>',
+              '<a data-docs="/c/example-only.client.js?v=docs">Docs</a>',
+              '<script src="/c/plain.client.js?v=plain"></script>',
+              '<script type="application/json" src="/c/config.client.js?v=config"></script>',
+              '<link rel="stylesheet" href="/c/theme.css?v=theme">',
+              '<link rel="preload" as="script" href="/c/preload.client.js?v=preload">',
+              '</main>',
+            ].join(''),
+            headers: {
+              link: [
+                '</c/menu.client.js?v=menu-1>; rel=modulepreload',
+                '</c/ignored-style.css?v=style>; rel=preload; as=style',
+                '</c/ignored-script.client.js?v=script>; rel=preload; as=script',
+              ].join(', '),
+            },
+            path: '/cart/index.html',
+            status: 200,
+          },
+        ],
+      }),
+    ).resolves.toEqual([
+      {
+        body: 'export const modulePath = "/c/cart.client.js";',
+        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        href: '/c/cart.client.js?v=cart-1#Cart$add',
+        path: '/c/cart.client.js',
+        status: 200,
+      },
+      {
+        body: 'export const modulePath = "/c/menu.client.js";',
+        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        href: '/c/menu.client.js?v=menu-1',
+        path: '/c/menu.client.js',
+        status: 200,
+      },
+    ]);
+    expect(seen).toEqual(['/c/cart.client.js?v=cart-1#Cart$add', '/c/menu.client.js?v=menu-1']);
+  });
+
   it('raises FW229 when a referenced client module replays to non-JavaScript', async () => {
     const handler: RequestHandler = async () =>
       new Response('<!doctype html><h1>Not found</h1>', {

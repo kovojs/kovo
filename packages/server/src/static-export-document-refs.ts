@@ -17,12 +17,7 @@ export function collectStaticExportClientModuleHrefs(
   const hrefs = new Set<string>();
 
   for (const artifact of routeArtifacts) {
-    for (const ref of collectStaticExportHtmlAttributeRefs(artifact.body)) {
-      for (const token of ref.value.split(/\s+/)) {
-        const href = staticExportClientModuleHref(token, origin);
-        if (href !== undefined) hrefs.add(href);
-      }
-    }
+    collectStaticExportClientModuleHrefsFromHtml(artifact.body, origin, hrefs);
 
     const linkHeader = artifact.headers.link;
     if (linkHeader) collectClientModuleHrefsFromLinkHeader(linkHeader, origin, hrefs);
@@ -42,23 +37,52 @@ export function collectStaticExportServerEndpointRefs(
   const refs: StaticExportServerEndpointRef[] = [];
   const exportOrigin = new URL(origin).origin;
 
-  for (const ref of collectStaticExportHtmlAttributeRefs(html)) {
-    if (!STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES.has(ref.name)) continue;
+  for (const tag of collectStaticExportOpeningTags(html)) {
+    for (const ref of readStaticExportHtmlAttributeRefs(tag.attributes)) {
+      if (!STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES.has(ref.name)) continue;
 
-    const url = staticExportUrlFromAttributeValue(ref.value, origin);
-    if (url === undefined || url.origin !== exportOrigin) continue;
+      const url = staticExportUrlFromAttributeValue(ref.value, origin);
+      if (url === undefined || url.origin !== exportOrigin) continue;
 
-    const phase = staticExportServerEndpointPhase(url.pathname);
-    if (phase === undefined) continue;
+      const phase = staticExportServerEndpointPhase(url.pathname);
+      if (phase === undefined) continue;
 
-    refs.push({ ...ref, path: url.pathname, phase });
+      refs.push({ ...ref, path: url.pathname, phase });
+    }
   }
 
   return refs;
 }
 
-function collectStaticExportHtmlAttributeRefs(html: string): StaticExportHtmlAttributeRef[] {
-  const refs: StaticExportHtmlAttributeRef[] = [];
+function collectStaticExportClientModuleHrefsFromHtml(
+  html: string,
+  origin: string,
+  hrefs: Set<string>,
+): void {
+  for (const tag of collectStaticExportOpeningTags(html)) {
+    const refs = readStaticExportHtmlAttributeRefs(tag.attributes);
+    const attrs = staticExportAttributeMap(refs);
+
+    for (const ref of refs) {
+      if (ref.name.startsWith('on:')) {
+        collectStaticExportClientModuleHrefTokens(ref.value, origin, hrefs);
+      }
+    }
+
+    if (tag.name === 'script' && isStaticExportModuleScript(attrs)) {
+      const src = attrs.get('src');
+      if (src !== undefined) collectStaticExportClientModuleHrefTokens(src, origin, hrefs);
+    }
+
+    if (tag.name === 'link' && staticExportRelTokens(attrs.get('rel')).includes('modulepreload')) {
+      const href = attrs.get('href');
+      if (href !== undefined) collectStaticExportClientModuleHrefTokens(href, origin, hrefs);
+    }
+  }
+}
+
+function collectStaticExportOpeningTags(html: string): StaticExportOpeningTag[] {
+  const tags: StaticExportOpeningTag[] = [];
   let offset = 0;
 
   while (offset < html.length) {
@@ -77,11 +101,11 @@ function collectStaticExportHtmlAttributeRefs(html: string): StaticExportHtmlAtt
       continue;
     }
 
-    refs.push(...readStaticExportHtmlAttributeRefs(tag.attributes));
+    tags.push(tag);
     offset = readStaticExportRawTextElementEnd(html, tag) ?? tag.end;
   }
 
-  return refs;
+  return tags;
 }
 
 interface StaticExportOpeningTag {
@@ -277,13 +301,76 @@ function collectClientModuleHrefsFromLinkHeader(
   origin: string,
   hrefs: Set<string>,
 ): void {
-  const linkPattern = /<(?<href>[^>\s]+)>/g;
-  let linkMatch: RegExpExecArray | null;
+  for (const entry of splitStaticExportLinkHeaderEntries(header)) {
+    const linkMatch = /<(?<href>[^>\s]+)>/.exec(entry);
+    if (linkMatch === null) continue;
+    if (!staticExportLinkHeaderRelTokens(entry).includes('modulepreload')) continue;
 
-  while ((linkMatch = linkPattern.exec(header)) !== null) {
     const href = staticExportClientModuleHref(linkMatch.groups?.href ?? '', origin);
     if (href !== undefined) hrefs.add(href);
   }
+}
+
+function collectStaticExportClientModuleHrefTokens(
+  value: string,
+  origin: string,
+  hrefs: Set<string>,
+): void {
+  for (const token of value.split(/\s+/)) {
+    const href = staticExportClientModuleHref(token, origin);
+    if (href !== undefined) hrefs.add(href);
+  }
+}
+
+function staticExportAttributeMap(
+  refs: readonly StaticExportHtmlAttributeRef[],
+): Map<string, string> {
+  const attrs = new Map<string, string>();
+  for (const ref of refs) {
+    if (!attrs.has(ref.name)) attrs.set(ref.name, ref.value);
+  }
+  return attrs;
+}
+
+function isStaticExportModuleScript(attrs: ReadonlyMap<string, string>): boolean {
+  return attrs.get('type')?.trim().toLowerCase() === 'module';
+}
+
+function staticExportRelTokens(value: string | undefined): string[] {
+  return (value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+function splitStaticExportLinkHeaderEntries(header: string): string[] {
+  const entries: string[] = [];
+  let entryStart = 0;
+  let quote: '"' | undefined;
+
+  for (let offset = 0; offset < header.length; offset += 1) {
+    const char = header[offset];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+    } else if (char === '"') {
+      quote = char;
+    } else if (char === ',') {
+      entries.push(header.slice(entryStart, offset).trim());
+      entryStart = offset + 1;
+    }
+  }
+
+  entries.push(header.slice(entryStart).trim());
+  return entries.filter(Boolean);
+}
+
+function staticExportLinkHeaderRelTokens(entry: string): string[] {
+  const tokens: string[] = [];
+  const relPattern = /(?:^|;)\s*rel\s*=\s*(?:"(?<quoted>[^"]*)"|(?<bare>[^;,]*))/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = relPattern.exec(entry)) !== null) {
+    tokens.push(...staticExportRelTokens(match.groups?.quoted ?? match.groups?.bare ?? ''));
+  }
+
+  return tokens;
 }
 
 function staticExportClientModuleHref(value: string, origin: string): string | undefined {
