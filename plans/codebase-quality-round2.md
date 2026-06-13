@@ -501,6 +501,10 @@ decoded body readers remain the shared parser surface used by modular apply and 
 inline-loader parser closure. Delegated handler reference parsing is now private inside
 `handlers.ts`; dispatch behavior remains covered through focused handler tests instead of root
 barrel exports.
+Query script hydration helpers now remain internal to the loader/visible-return modules instead of
+root `@jiso/runtime` exports; `query-apply.test.ts` covers decoded chunk application while
+`query-script-hydration.test.ts` owns script parsing, ledger replay, retry, and hydration/apply
+parity.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -569,6 +573,22 @@ packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-js-minifier.test.ts`.
+      Evidence 2026-06-13 round256: query script hydration coverage moved from
+      `packages/runtime/src/query-apply.test.ts` into
+      `packages/runtime/src/query-script-hydration.test.ts`, leaving `query-apply.test.ts` focused
+      on decoded `applyQueryChunksToRuntime` behavior. `packages/runtime/src/index.ts` no longer
+      root-exports `hydrateQueryScripts`, `createQueryScriptHydrationLedger`, or their loader-only
+      types; `packages/runtime/src/index-exports.test.ts` pins the narrowed public surface.
+      Verified by `pnpm exec vitest --run packages/runtime/src/query-apply.test.ts
+packages/runtime/src/query-script-hydration.test.ts packages/runtime/src/index-exports.test.ts
+packages/runtime/src/loader-query-hydration.test.ts packages/runtime/src/query-visible-return.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`, full `pnpm exec vitest --run
+packages/runtime/src`, browser `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/query-hydration.browser.test.ts packages/runtime/src/index.browser.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec tsc --noEmit`, targeted
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts
+packages/runtime/src/query-apply.test.ts packages/runtime/src/query-script-hydration.test.ts
+plans/codebase-quality-round2.md`, and `git diff --check`.
       Evidence 2026-06-13: query binding/update-plan helper coverage moved from
       `packages/runtime/src/query-runtime-integration.test.ts` into
       `packages/runtime/src/query-bindings.test.ts`, leaving the integration file focused on

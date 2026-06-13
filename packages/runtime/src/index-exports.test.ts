@@ -52,11 +52,7 @@ import {
   applyQueryBindings,
   supportsQueryBindings,
 } from './query-bindings.js';
-import {
-  applyQueryChunksToRuntime,
-  createQueryScriptHydrationLedger,
-  hydrateQueryScripts,
-} from './query-apply.js';
+import { applyQueryChunksToRuntime } from './query-apply.js';
 import {
   applyInlineQueryEventToRuntime,
   installInlineQueryEventHydration,
@@ -134,8 +130,6 @@ describe('runtime root exports', () => {
     expect(runtime.applyQueryBindings).toBe(applyQueryBindings);
     expect(runtime.supportsQueryBindings).toBe(supportsQueryBindings);
     expect(runtime.applyQueryChunksToRuntime).toBe(applyQueryChunksToRuntime);
-    expect(runtime.createQueryScriptHydrationLedger).toBe(createQueryScriptHydrationLedger);
-    expect(runtime.hydrateQueryScripts).toBe(hydrateQueryScripts);
     expect(runtime.applyInlineQueryEventToRuntime).toBe(applyInlineQueryEventToRuntime);
     expect(runtime.installInlineQueryEventHydration).toBe(installInlineQueryEventHydration);
     expect(runtime.refetchQueries).toBe(refetchQueries);
@@ -143,6 +137,8 @@ describe('runtime root exports', () => {
     expect(runtime.derive).toBe(derive);
     expect(Object.hasOwn(runtime, 'applyQueryChunkToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyQueryChunksToStore')).toBe(false);
+    expect(Object.hasOwn(runtime, 'createQueryScriptHydrationLedger')).toBe(false);
+    expect(Object.hasOwn(runtime, 'hydrateQueryScripts')).toBe(false);
     expect(Object.hasOwn(runtime, 'queryScriptsFromRoot')).toBe(false);
   });
 });

@@ -133,17 +133,8 @@ export type {
   TemplateStampHost,
   TemplateStampItem,
 } from './query-bindings.js';
-export {
-  applyQueryChunksToRuntime,
-  createQueryScriptHydrationLedger,
-  hydrateQueryScripts,
-} from './query-apply.js';
-export type {
-  ApplyQueryChunksToRuntimeOptions,
-  QueryScriptHydrationLedger,
-  QueryScriptHydrationOptions,
-  QueryScriptLike,
-} from './query-apply.js';
+export { applyQueryChunksToRuntime } from './query-apply.js';
+export type { ApplyQueryChunksToRuntimeOptions } from './query-apply.js';
 export {
   applyInlineQueryEventToRuntime,
   installInlineQueryEventHydration,
