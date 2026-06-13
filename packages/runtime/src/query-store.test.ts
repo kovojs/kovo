@@ -7,6 +7,7 @@ import {
   createQueryScriptHydrationLedger,
   createQueryStore,
   hydrateQueryScripts,
+  queryScriptsFromRoot,
 } from './query-store.js';
 
 class FakeRoot {
@@ -210,6 +211,51 @@ describe('query store hydration and refetch', () => {
     expect(cartPlan).toHaveBeenNthCalledWith(1, { count: 1 });
     expect(cartPlan).toHaveBeenNthCalledWith(2, { count: 2 });
     expect(cartPlan).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries malformed query scripts until a hydration pass successfully applies them', () => {
+    const store = createQueryStore();
+    const ledger = createQueryScriptHydrationLedger(store);
+    const onError = vi.fn();
+    const cartPlan = vi.fn();
+    const script = {
+      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{',
+    };
+
+    store.subscribe('cart', cartPlan);
+
+    expect(ledger.hydrate([script], { onError })).toEqual([]);
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    script.textContent = '{"count":2}';
+    expect(ledger.hydrate([script], { onError })).toEqual(['cart']);
+    script.textContent = '{"count":99}';
+    expect(ledger.hydrate([script], { onError })).toEqual([]);
+
+    // SPEC.md §9.4: hydrated script data shares the same runtime query apply
+    // path; failed transient JSON must not permanently remove a query from
+    // later visible-return hydration.
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(cartPlan).toHaveBeenCalledTimes(1);
+    expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('discovers hydrated query scripts through the shared root selector helper', () => {
+    const root = new FakeRoot();
+    const script = {
+      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{"count":1}',
+    };
+
+    root.scripts = [script];
+
+    // SPEC.md §9.4: loader hydration and later visible-return scans must use
+    // the same fw-query script discovery contract.
+    expect([...queryScriptsFromRoot(root)]).toEqual([script]);
+    expect([...queryScriptsFromRoot({})]).toEqual([]);
   });
 
   it('applies query chunks in one canonical batch with interposed values', () => {

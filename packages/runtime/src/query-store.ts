@@ -1,3 +1,4 @@
+import type { OptionalQuerySelectorAllRootLike } from './dom-like.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { readQueryScriptChunks } from './wire-parser.js';
 import type { QueryChunk, QueryScriptChunkLike } from './wire-parser.js';
@@ -17,6 +18,8 @@ export interface QueryStore {
 export type QuerySnapshot = Map<string, unknown>;
 
 export interface QueryScriptLike extends QueryScriptChunkLike {}
+
+export type QueryScriptRootLike = OptionalQuerySelectorAllRootLike<unknown>;
 
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
@@ -140,6 +143,10 @@ export function hydrateQueryScripts(
   return applyQueryChunksToStore(store, readQueryScriptChunks(scripts, options.onError));
 }
 
+export function queryScriptsFromRoot(root: QueryScriptRootLike): Iterable<QueryScriptLike> {
+  return (root.querySelectorAll?.('script[fw-query]') ?? []) as Iterable<QueryScriptLike>;
+}
+
 export function createQueryScriptHydrationLedger(store: QueryStore): QueryScriptHydrationLedger {
   const seen = new Set<QueryScriptLike>();
 
@@ -148,19 +155,23 @@ export function createQueryScriptHydrationLedger(store: QueryStore): QueryScript
       scripts: Iterable<QueryScriptLike>,
       options: { onError?: RuntimeErrorReporter } = {},
     ): readonly string[] {
-      const pending: QueryScriptLike[] = [];
+      const hydrated: string[] = [];
 
       for (const script of scripts) {
         if (seen.has(script)) continue;
 
+        const applied = hydrateQueryScripts(store, [script], options);
+        if (applied.length === 0) continue;
+
         seen.add(script);
-        pending.push(script);
+        hydrated.push(...applied);
       }
 
       // SPEC.md §9.1/§9.4: browser hydration, mutation responses, and typed
       // refetches must converge on the same query-store apply path without
-      // replaying already observed server-provided scripts.
-      return hydrateQueryScripts(store, pending, options);
+      // replaying already applied server-provided scripts. Malformed transient
+      // script data is intentionally left observable for a later hydration pass.
+      return hydrated;
     },
   };
 }

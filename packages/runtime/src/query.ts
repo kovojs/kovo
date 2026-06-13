@@ -19,10 +19,12 @@ export {
   createQueryScriptHydrationLedger,
   createQueryStore,
   hydrateQueryScripts,
+  queryScriptsFromRoot,
 } from './query-store.js';
 export type {
   QueryScriptHydrationLedger,
   QueryScriptLike,
+  QueryScriptRootLike,
   QuerySnapshot,
   QueryStore,
   QueryUpdatePlan,

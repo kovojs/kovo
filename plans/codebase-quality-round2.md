@@ -204,6 +204,9 @@ Closed evidence so far:
 - Hydrated query script replay tracking now lives in `query-store.ts` as a reusable hydration
   ledger; visible-return refetch uses that shared helper, with node and browser tests proving new
   scripts are discovered without replaying already observed server script nodes.
+- Hydrated query script discovery now uses the shared `queryScriptsFromRoot` runtime helper, and
+  the hydration ledger only suppresses successfully applied script nodes so transient malformed
+  script JSON can recover on later visible-return scans.
 
 Open:
 
@@ -213,16 +216,11 @@ Open:
 
 Recent gates:
 
-- `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
-- `pnpm --filter @jiso/runtime run check:inline-loader`
-- `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`
-- `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
-- `pnpm exec vitest --run packages/runtime/src`
-- `pnpm --filter @jiso/runtime run check:inline-loader`
-- `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-store.ts packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`
-- `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts packages/runtime/src/query-refetch.test.ts`
+- `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/loader.ts packages/runtime/src/query.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts packages/runtime/src/index.browser.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
+- `git diff --check`
 
 ## Phase 5 - Server
 

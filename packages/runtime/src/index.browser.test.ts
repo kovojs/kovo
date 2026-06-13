@@ -252,6 +252,45 @@ describe('runtime browser suite', () => {
     loader.dispose();
   });
 
+  it('recovers malformed hydrated query scripts on a later visible return', async () => {
+    document.body.innerHTML = '<script fw-query="cart" type="application/json">{</script>';
+    const store = createQueryStore();
+    const cartPlan = vi.fn();
+    const onError = vi.fn();
+    const refetchOnFocus = vi.fn();
+    const script = document.querySelector('script[fw-query="cart"]');
+    if (!script) throw new Error('missing cart query script');
+
+    store.subscribe('cart', cartPlan);
+
+    const loader = installJisoLoader({
+      importModule: vi.fn(),
+      onError,
+      queryStore: store,
+      refetchOnFocus,
+      root: document,
+    });
+
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
+
+    script.textContent = '{"count":2}';
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await vi.waitFor(() => {
+      expect(store.get('cart')).toEqual({ count: 2 });
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    });
+
+    // SPEC.md §9.4: hydrated script data, mutation chunks, and typed reads all
+    // converge on one query-store apply path; transient malformed DOM script
+    // JSON must remain discoverable for a later browser pass.
+    expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    loader.dispose();
+  });
+
   it('preserves L0 light-DOM IDREF and form behavior without handler imports', async () => {
     const root = document.createElement('main');
     root.innerHTML = [

@@ -855,6 +855,46 @@ describe('runtime loader', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
   });
 
+  it('retries malformed initial fw-query scripts before visible-return refetch', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const refetchOnFocus = vi.fn();
+    const cartPlan = vi.fn();
+    const script = {
+      getAttribute: (name: string) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{',
+    };
+
+    root.scripts = [script];
+    store.subscribe('cart', cartPlan);
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      onError,
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
+
+    script.textContent = '{"count":2}';
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({
+      target: null,
+      type: 'visibilitychange',
+    });
+
+    // SPEC.md §4.4/§9.4: visible-return hydration retries transiently
+    // malformed server query data through the same query-store apply path.
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
   it('intercepts enhanced form submits through the loader bridge', async () => {
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();

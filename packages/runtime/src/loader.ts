@@ -19,7 +19,8 @@ import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
 import { installQueryVisibleReturnRefetch } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
-import type { QueryScriptLike, QueryStore } from './query-store.js';
+import { queryScriptsFromRoot } from './query-store.js';
+import type { QueryStore } from './query-store.js';
 
 export interface JisoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
@@ -55,7 +56,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     ...definedProps({
       queryRefetch: options.queryRefetch,
       queryScripts: options.root.querySelectorAll
-        ? () => options.root.querySelectorAll?.('script[fw-query]') as Iterable<QueryScriptLike>
+        ? () => queryScriptsFromRoot(options.root)
         : undefined,
       queryStore: options.queryStore,
       refetchOnFocus: options.refetchOnFocus,
