@@ -20,7 +20,7 @@ export interface PlatformBehaviorLowering {
 
 export function platformBehaviorLowering(model: ComponentModuleModel): PlatformBehaviorLowering {
   const matches = jsxElements(model).flatMap((element) => {
-    const onClick = element.attributes.find((attribute) => attribute.name === 'onClick');
+    const onClick = element.attributes.find((attribute) => attribute.domEventName === 'click');
     const action = onClick?.zeroArgArrow?.documentElementAction;
     const substitution = action
       ? platformSubstitutionFromDocumentAction(element.tag, action)
