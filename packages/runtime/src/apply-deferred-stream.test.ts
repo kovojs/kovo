@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromDeferredModule } from './apply-deferred-stream.js';
-import {
-  applyDeferredStreamResponseToDom,
-  applyDeferredStreamResponseToRuntime,
-  createQueryStore,
-} from './index.js';
+import { applyDeferredStreamResponseToRuntime, createQueryStore } from './index.js';
 
 class FakeMorphTarget {
   html: string;
@@ -74,7 +70,7 @@ describe('deferred stream response apply', () => {
 
     // SPEC.md §9.1: deferred stream responses reuse the mutation query/fragment
     // wire vocabulary, so stream aggregation belongs on the shared apply path.
-    const applied = applyDeferredStreamResponseToDom({
+    const applied = applyDeferredStreamResponseToRuntime({
       body: [
         '--jiso-boundary',
         '<fw-query name="reviews">{"items":[{"id":"r1"}]}</fw-query>',
@@ -111,7 +107,7 @@ describe('deferred stream response apply', () => {
 
     // SPEC.md §9.1: deferred stream query chunks use the same mutation response
     // vocabulary, so interposed store truth and compiled bindings stay shared.
-    const applied = applyDeferredStreamResponseToDom({
+    const applied = applyDeferredStreamResponseToRuntime({
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };

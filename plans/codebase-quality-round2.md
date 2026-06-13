@@ -189,6 +189,24 @@ conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality
       pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/query-refetch.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
       git diff --check
       ```
+      Round109 evidence 2026-06-13: the runtime root barrel no longer exports the
+      compatibility `applyDeferredStreamResponseToDom` or
+      `applyEnhancedMutationResponseBodyToDom` wrappers, and fetched enhanced
+      mutation/deferred-stream callers now use the canonical
+      `applyMutationResponseToDom` and `applyDeferredStreamResponseToRuntime`
+      apply paths directly. The deferred stream module also dropped the
+      store-only compatibility type aliases while preserving rootless runtime
+      overloads. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/index-exports.test.ts
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      pnpm exec tsc --noEmit --pretty false
+      pnpm exec vp check packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
+      git diff --check
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

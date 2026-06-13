@@ -1,13 +1,8 @@
 export type { DiagnosticCode } from '@jiso/core';
-export {
-  applyDeferredStreamResponseToDom,
-  applyDeferredStreamResponseToRuntime,
-} from './apply-deferred-stream.js';
+export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 export type {
-  AppliedDeferredStreamResponse,
   AppliedDeferredStreamResponseToDom,
   AppliedDeferredStreamResponseToRuntime,
-  ApplyDeferredStreamResponseToDomOptions,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
 export {
@@ -76,10 +71,7 @@ export type {
   InstallMutationBroadcastOptions,
   MutationBroadcast,
 } from './broadcast.js';
-export {
-  applyEnhancedMutationResponseBodyToDom,
-  applyFetchedEnhancedMutationResponseToDom,
-} from './mutation-apply.js';
+export { applyFetchedEnhancedMutationResponseToDom } from './mutation-apply.js';
 export type {
   EnhancedMutationAppliedResult,
   EnhancedMutationDomApplyOptions,

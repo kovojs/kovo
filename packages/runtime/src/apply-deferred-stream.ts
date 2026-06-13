@@ -12,15 +12,9 @@ export type AppliedDeferredStreamResponseToDom = AppliedMutationResponseToDom & 
   chunks: AppliedMutationResponseToDom[];
 };
 
-export type AppliedDeferredStreamResponseToRuntimeStore = AppliedMutationResponse & {
-  chunks: AppliedMutationResponse[];
-};
-
 export type AppliedDeferredStreamResponseToRuntime =
-  | AppliedDeferredStreamResponseToRuntimeStore
+  | (AppliedMutationResponse & { chunks: AppliedMutationResponse[] })
   | AppliedDeferredStreamResponseToDom;
-
-export type AppliedDeferredStreamResponse = AppliedDeferredStreamResponseToDom;
 
 interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
   ApplyMutationResponseToRuntimeOptions,
@@ -30,26 +24,17 @@ interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
   boundary?: string;
 }
 
-export type ApplyDeferredStreamResponseToRuntimeStoreOptions =
-  ApplyDeferredStreamResponseToRuntimeBaseOptions & {
-    root?: undefined;
-  };
-
 export type ApplyDeferredStreamResponseToRuntimeOptions =
   ApplyDeferredStreamResponseToRuntimeBaseOptions & {
     root?: MorphRoot | undefined;
   };
-
-export interface ApplyDeferredStreamResponseToDomOptions extends ApplyDeferredStreamResponseToRuntimeBaseOptions {
-  root: MorphRoot;
-}
 
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions & { root: MorphRoot },
 ): AppliedDeferredStreamResponseToDom;
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions & { root?: undefined },
-): AppliedDeferredStreamResponseToRuntimeStore;
+): AppliedMutationResponse & { chunks: AppliedMutationResponse[] };
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions,
 ): AppliedDeferredStreamResponseToRuntime;
@@ -87,10 +72,4 @@ export function applyDeferredStreamResponseToRuntime(
       'appliedFragments' in chunk ? chunk.appliedFragments : [],
     ),
   };
-}
-
-export function applyDeferredStreamResponseToDom(
-  options: ApplyDeferredStreamResponseToDomOptions,
-): AppliedDeferredStreamResponseToDom {
-  return applyDeferredStreamResponseToRuntime(options);
 }

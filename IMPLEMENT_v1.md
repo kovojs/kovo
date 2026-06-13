@@ -68,6 +68,22 @@ packages/runtime/src/index.browser.test.ts`.
       `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, and
       `pnpm --filter @jiso/runtime run check:inline-loader`.
+      Additional evidence 2026-06-13: the public runtime barrel now omits the
+      compatibility `applyDeferredStreamResponseToDom` and
+      `applyEnhancedMutationResponseBodyToDom` wrappers; enhanced mutation apply
+      routes directly through `applyMutationResponseToDom`, and deferred streams
+      use `applyDeferredStreamResponseToRuntime` for both rootless and DOM apply
+      overloads while dropping store-only compatibility type aliases. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, and
+      `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
+      `pnpm exec vp check packages/runtime/src/apply-deferred-stream.ts
+packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-apply.ts
+packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts
+packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+      and `git diff --check`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
       Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in

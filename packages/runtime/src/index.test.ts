@@ -3,7 +3,7 @@ import { runInThisContext } from 'node:vm';
 import { form, type Route } from '@jiso/core';
 
 import {
-  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
   applyFragments,
   applyCompiledQueryUpdatePlan,
   applyOptimisticTransforms,
@@ -2306,7 +2306,7 @@ describe('query store', () => {
       observed.push(`recommendations-plan:${JSON.stringify(value)}`);
     });
 
-    const result = applyDeferredStreamResponseToDom({
+    const result = applyDeferredStreamResponseToRuntime({
       body: [
         '<!doctype html><html><body><fw-defer target="reviews:p1"></fw-defer>',
         '--jiso-boundary',

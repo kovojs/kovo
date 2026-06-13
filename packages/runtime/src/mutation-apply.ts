@@ -1,7 +1,6 @@
 import {
   applyMutationResponseToDom,
   type AppliedMutationResponse,
-  type AppliedMutationResponseToDom,
   type ApplyMutationResponseToDomOptions,
 } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
@@ -35,13 +34,15 @@ export type MutationDomApplyHooks = Pick<
   'applyQuery' | 'beforeApplyQueries'
 >;
 
-export function applyEnhancedMutationResponseBodyToDom(
+export function applyFetchedEnhancedMutationResponseToDom(
   options: EnhancedMutationDomApplyOptions,
-  body: string,
+  fetched: FetchedEnhancedMutation,
   hooks: MutationDomApplyHooks = {},
-): AppliedMutationResponseToDom {
-  return applyMutationResponseToDom({
-    body,
+): EnhancedMutationAppliedResult {
+  // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
+  // same-user broadcast all share the mutation response body application path.
+  const applied = applyMutationResponseToDom({
+    body: fetched.body,
     ...definedProps({
       applyQuery: hooks.applyQuery,
       beforeApplyQueries: hooks.beforeApplyQueries,
@@ -53,16 +54,6 @@ export function applyEnhancedMutationResponseBodyToDom(
     root: options.root,
     store: options.store,
   });
-}
-
-export function applyFetchedEnhancedMutationResponseToDom(
-  options: EnhancedMutationDomApplyOptions,
-  fetched: FetchedEnhancedMutation,
-  hooks: MutationDomApplyHooks = {},
-): EnhancedMutationAppliedResult {
-  // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
-  // same-user broadcast all share the mutation response body application path.
-  const applied = applyEnhancedMutationResponseBodyToDom(options, fetched.body, hooks);
   publishSuccessfulMutation(options, fetched);
 
   return {
