@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
 import { csrfToken, runMutation } from '@jiso/server';
+import { isJisoApp } from '@jiso/server/app-shell/core';
 import { exportStaticApp } from '@jiso/server/app-shell/static-export';
 import { cookiePair, firstSetCookiePair } from '@jiso/test/headers';
 import {
@@ -573,6 +574,15 @@ describe('commerce app shell HTTP entry', () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-commerce-export-'));
     try {
       const shell = createCommerceStaticExportShell();
+      expect(isJisoApp(shell.app)).toBe(true);
+      expect(
+        isJisoApp({
+          ...shell.app,
+          clientModules: {
+            resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
+          },
+        }),
+      ).toBe(false);
       const result = await exportStaticApp(shell.app, { outDir });
 
       expect(result.diagnostics).toEqual([]);

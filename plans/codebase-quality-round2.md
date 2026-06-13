@@ -157,6 +157,17 @@ so the monolith no longer assembles those document-region/query-script projectio
 
 Latest evidence:
 
+- Phase 5 app aggregate client-module guard slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell while the dynamic session shell stays non-exportable"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs -t "serves generated docs HTML through the app shell before static export copies modules"`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/app-guards.ts` now rejects dynamically loaded app aggregates whose
+  client-module registry lacks `put()` or `resolve()`, and server/starter/commerce/docs adoption
+  tests pin that shared SPEC §9.5 public-boundary guard before Vite/static export replay.
 - Phase 5 docs-site app-shell server API guard slice:
   `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
   `pnpm exec tsc --noEmit --pretty false`;

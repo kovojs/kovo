@@ -10,12 +10,25 @@ import {
   exportStaticApp,
   staticExportManifest,
 } from '@jiso/server/app-shell/static-export';
+import { isJisoApp } from '@jiso/server/app-shell/core';
 import { createServer as createViteServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import app, { starterClientModuleHref, starterRequestHandler } from './app-shell.js';
 
 describe('starter app shell', () => {
+  it('exports a closed app aggregate for dynamic export tasks', () => {
+    expect(isJisoApp(app)).toBe(true);
+    expect(
+      isJisoApp({
+        ...app,
+        clientModules: {
+          resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('serves the home route and versioned client module through the request shell', async () => {
     // SPEC.md section 9.5 keeps route dispatch, document assembly, and /c/ modules
     // on the same app-shell request handler.

@@ -69,6 +69,15 @@ describe('site app-shell export adoption', () => {
       '/',
     ]);
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
+    expect(serverAppShellCore.isJisoApp(app)).toBe(true);
+    expect(
+      serverAppShellCore.isJisoApp({
+        ...app,
+        clientModules: {
+          resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
+        },
+      }),
+    ).toBe(false);
     const handler = serverApi.createRequestHandler(app);
     const shellResponse = await handler(new Request('https://jiso.test/'));
     const shellHtml = await shellResponse.text();

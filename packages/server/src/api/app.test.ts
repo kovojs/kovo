@@ -224,5 +224,19 @@ describe('server app-shell public API barrels', () => {
     expect(packageCoreApi.isJisoApp({ ...app, document: undefined })).toBe(false);
     expect(packageCoreApi.isJisoApp({ ...app, errorShells: undefined })).toBe(false);
     expect(packageCoreApi.isJisoApp({ ...app, clientModules: {} })).toBe(false);
+    expect(
+      packageCoreApi.isJisoApp({
+        ...app,
+        clientModules: {
+          resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
+        },
+      }),
+    ).toBe(false);
+    expect(
+      packageCoreApi.isJisoApp({
+        ...app,
+        clientModules: { put: () => '/c/cart.client.js?v=test' },
+      }),
+    ).toBe(false);
   });
 });

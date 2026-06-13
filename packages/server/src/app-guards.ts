@@ -12,6 +12,7 @@ export function isJisoApp(value: unknown): value is JisoApp {
     isRecord(value.document) &&
     isRecord(value.errorShells) &&
     isRecord(value.clientModules) &&
+    typeof value.clientModules.put === 'function' &&
     typeof value.clientModules.resolve === 'function'
   );
 }

@@ -133,6 +133,22 @@ Round285 docs-site app-shell server API guard evidence:
 - `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round286 app aggregate client-module guard evidence:
+
+- `packages/server/src/app-guards.ts` now requires dynamically loaded SPEC §9.5 app aggregates to
+  expose the complete public client-module registry (`put()` and `resolve()`), so Vite/static
+  export adoption paths fail the shared `isJisoApp()` boundary before replay if they cannot
+  register immutable `/c/` modules.
+- Server, generated starter, commerce, and docs adoption tests pin the guard through public
+  app-shell subpaths and reject resolve-only registry compatibility shapes:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell while the dynamic session shell stays non-exportable"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs -t "serves generated docs HTML through the app shell before static export copies modules"`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+
 Round278 docs-site app-shell boundary evidence:
 
 - `packages/server/src/api/app-shell/core.ts` forwards `route()` and `respond` for app

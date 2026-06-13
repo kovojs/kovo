@@ -201,6 +201,8 @@ describe('create-jiso starter', () => {
       expect(appShellSource).not.toContain('writeWebResponseToNode');
       const appShellTestSource = readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8');
       expect(appShellTestSource).toContain('SPEC.md section 9.5');
+      expect(appShellTestSource).toContain("from '@jiso/server/app-shell/core'");
+      expect(appShellTestSource).toContain('isJisoApp(app)');
       expect(appShellTestSource).toContain("from '@jiso/server/app-shell/static-export'");
       expect(appShellTestSource).toContain('assertStaticExportManifestUsesDirectoryIndexDocuments');
       const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
