@@ -12,6 +12,7 @@ import * as coreApi from './app-shell/core.js';
 import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
+import type * as vt from './app-shell/vite.js';
 import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
@@ -65,6 +66,16 @@ type FocusedVersionedClientModuleRegistry =
 type FocusedNodeHandlerOptions = import('./app-shell/node.js').NodeHandlerOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type FocusedNodeRequestHandler = import('./app-shell/node.js').NodeRequestHandler;
+
+// @ts-expect-error SPEC.md §9.5: plugin build-output client-module planning stays internal to the
+// Vite output writer, not a public app-shell/Vite consumer alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteClientModuleOutputPlanItem = vt.JisoAppShellViteClientModuleOutputPlanItem;
+
+// @ts-expect-error SPEC.md §9.5: plugin/build-output static-export option projection is an
+// internal Vite write boundary, not an outside static-export task alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteBuildOutputStaticExportOptions = vt.JisoAppShellViteBuildOutputStaticExportOptions;
 
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();

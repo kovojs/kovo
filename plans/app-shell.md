@@ -157,6 +157,18 @@ Round336 root app-shell type alias removal evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round337 Vite build-output type alias removal evidence:
+
+- `packages/server/src/api/app-shell/vite.ts` no longer re-exports plugin build-output
+  client-module planning or build-output static-export option aliases from the focused public Vite
+  subpath.
+- `packages/server/src/api/app.test.ts` pins both removed names as compile-time failures while
+  preserving the public Vite value export assertions.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round331 Vite manifest-file URL boundary evidence:
 
 - `packages/server/src/vite-manifest.ts` validates explicit manifest file URLs before filesystem

@@ -65,7 +65,6 @@ export type {
   JisoAppShellViteManifestFileBuildOptions,
   JisoAppShellVitePluginBuildOptions,
 } from '../../vite-build.js';
-export type { JisoAppShellViteClientModuleOutputPlanItem } from '../../vite-client-module-output.js';
 export type {
   JisoAppShellViteBuildOutput,
   JisoAppShellViteBuildOutputOptions,
@@ -84,7 +83,6 @@ export type {
   JisoAppShellViteManifestFileBuildStaticExportOptions,
 } from '../../vite-static-export-options.js';
 export type { JisoAppShellViteStaticExportWithManifestResult } from '../../vite-static-export-result.js';
-export type { JisoAppShellViteBuildOutputStaticExportOptions } from '../../vite-static-export-options.js';
 export type {
   JisoAppShellDevDiagnosticLedger,
   JisoAppShellDevDiagnosticRecord,
