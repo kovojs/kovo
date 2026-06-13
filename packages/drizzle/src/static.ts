@@ -2738,6 +2738,8 @@ function callbackFunctionFromDeclaration(
   if (Node.isMethodDeclaration(declaration)) return declaration;
   if (Node.isVariableDeclaration(declaration))
     return callbackFunctionFromVariable(declaration, seen);
+  if (Node.isBindingElement(declaration))
+    return callbackFunctionFromBindingElement(declaration, seen);
   if (Node.isPropertyAssignment(declaration))
     return callbackFunctionFromProperty(declaration, seen);
   if (Node.isShorthandPropertyAssignment(declaration)) {
@@ -2772,6 +2774,73 @@ function callbackFunctionFromVariable(
   const expression = unwrappedStaticExpressionNode(initializer);
   if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
   return callbackFunctionFromReference(expression, seen);
+}
+
+function callbackFunctionFromBindingElement(
+  declaration: BindingElement,
+  seen: Set<string>,
+): Node | undefined {
+  const initializer = declaration
+    .getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
+    ?.getInitializer();
+  if (!initializer) return undefined;
+
+  const path = bindingElementStaticObjectPath(declaration);
+  if (path.length === 0) return undefined;
+
+  const symbol = symbolForStaticTypePath(
+    unwrappedStaticExpressionNode(initializer),
+    path,
+    declaration,
+  );
+  for (const referencedDeclaration of symbol?.getDeclarations() ?? []) {
+    const callback = callbackFunctionFromDeclaration(referencedDeclaration, seen);
+    if (callback) return callback;
+  }
+
+  return undefined;
+}
+
+function bindingElementStaticObjectPath(declaration: BindingElement): string[] {
+  const path: string[] = [];
+  let current: Node | undefined = declaration;
+
+  while (current && Node.isBindingElement(current)) {
+    const parent = current.getParent();
+    if (!Node.isObjectBindingPattern(parent)) return [];
+
+    const property = current.getPropertyNameNode();
+    const name = current.getNameNode();
+    const segment = property
+      ? propertyNameText(property)
+      : Node.isIdentifier(name)
+        ? name.getText()
+        : undefined;
+    if (!segment) return [];
+
+    path.unshift(segment);
+    const owner = parent.getParent();
+    current = Node.isBindingElement(owner) ? owner : undefined;
+  }
+
+  return path;
+}
+
+function symbolForStaticTypePath(
+  root: Node,
+  path: readonly string[],
+  location: Node,
+): MorphSymbol | undefined {
+  let type = root.getType();
+  let symbol: MorphSymbol | undefined;
+
+  for (const member of path) {
+    symbol = type.getProperty(member);
+    if (!symbol) return undefined;
+    type = symbol.getTypeAtLocation(location);
+  }
+
+  return aliasedSymbol(symbol);
 }
 
 function callbackFunctionFromProperty(declaration: Node, seen: Set<string>): Node | undefined {
@@ -5007,6 +5076,10 @@ function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
       const callback = callbackFunctionFromProperty(parent, new Set());
       return callback ? localFunctionKeyForCallback(callback) : undefined;
     }
+  }
+  if (Node.isBindingElement(declaration)) {
+    const callback = callbackFunctionFromBindingElement(declaration, new Set());
+    return callback ? localFunctionKeyForCallback(callback) : undefined;
   }
 
   return undefined;

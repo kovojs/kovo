@@ -2674,6 +2674,94 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts project callbacks through destructured static callback containers', () => {
+    const files = [
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '}',
+          '',
+          'const callbacks = { addItem };',
+          'const loaders = { nested: { loadProducts } };',
+          'const { addItem: addFromContainer } = callbacks;',
+          'const { nested: { loadProducts: loadFromContainer } } = loaders;',
+          '',
+          'export const productDomain = domain({',
+          '  add: write(addFromContainer),',
+          '});',
+          '',
+          'export const productQuery = query("product/destructured-callback-container", {',
+          '  load: loadFromContainer,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:13',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/destructured-callback-container',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:25',
+      },
+    ]);
+  });
+
   it('extracts imported project query-loader callbacks through ts-morph aliases', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -3629,6 +3717,89 @@ export interface CommerceInvalidationSets {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('folds destructured local helper members into query and touch summaries', () => {
+    const files = [
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function loadProducts(db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id }).from(products);',
+          '}',
+          'function touchProduct(db: PgDatabase<any, any, any>) {',
+          '  return db.update(products).set({ id: "p1" });',
+          '}',
+          '',
+          'const helpers = { nested: { loadProducts, touchProduct } };',
+          'const { nested: { loadProducts: loadFromHelper, touchProduct: touchFromHelper } } = helpers;',
+          '',
+          'export const productQuery = query("product/destructured-local-helper", {',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return loadFromHelper(db);',
+          '  },',
+          '});',
+          '',
+          'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+          '  await touchFromHelper(db);',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/destructured-local-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'product.domain.ts:17',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:8',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      touchProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
   });
 
   it('marks local query-loader helper writes as FW406', () => {

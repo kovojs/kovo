@@ -372,6 +372,12 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `conformance/drizzle-pin/src/index.test.ts` pin the package and real `drizzle-orm`
       Postgres receiver surfaces. Verified by `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round251: destructured static callback and local-helper container
+      members now resolve through ts-morph binding-element/member symbols, so
+      `write(addFromContainer)`, `load: loadFromContainer`, and `loadFromHelper(db)`/`touchFromHelper(db)`
+      fold exact Postgres read/touch summaries instead of disappearing or degrading as opaque helper
+      handoffs. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` surfaces.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -381,7 +387,7 @@ Latest evidence:
 
 - `pnpm exec vitest --run packages/drizzle/src`
 - `pnpm exec vitest --run conformance/drizzle-pin`
-- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
 ## Phase 4 - Runtime
