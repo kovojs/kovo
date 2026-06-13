@@ -337,6 +337,15 @@ packages/runtime/src/index.test.ts packages/runtime/src/mutation-response.test.t
 vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
   `pnpm exec vp check packages/runtime/src/mutation-fetch.ts
 packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-submit.ts`.
+- Mutation response parsing now has one decoded body seam in `wire-parser.ts`:
+  `readMutationResponseBodyChunks` owns the `fw-query` plus `fw-fragment` response shape, while
+  `apply-mutation-response.ts` consumes decoded chunks for store-only, DOM, and deferred-stream
+  runtime paths (SPEC.md §9.1). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts`,
+  `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp
+check packages/runtime/src/wire-parser.ts packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/wire-parser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
@@ -369,6 +378,10 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-response.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/mutation-fetch.ts packages/runtime/src/mutation-fetch.test.ts packages/runtime/src/mutation-submit.ts`
+- `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/wire-parser.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server

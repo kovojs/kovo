@@ -4,6 +4,7 @@ import {
   readAttribute,
   readElementChunks,
   readFragmentChunks,
+  readMutationResponseBodyChunks,
   readQueryChunks,
   readQueryScriptChunks,
   unescapeHtml,
@@ -120,6 +121,31 @@ describe('wire parser HTML entity handling', () => {
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
       'Malformed fw-query chunk: missing closing tag',
     );
+  });
+
+  it('decodes mutation response bodies into one query and fragment shape', () => {
+    const onError = vi.fn();
+
+    // SPEC.md §9.1: enhanced mutation responses use fw-query plus fw-fragment
+    // wire chunks, and all runtime apply paths consume the same decoded body.
+    expect(
+      readMutationResponseBodyChunks(
+        [
+          '<fw-query name="cart">{</fw-query>',
+          '<fw-query name="inventory" key="inventory:p1">{"available":true}</fw-query>',
+          '<fw-fragment target="inventory" mode="append"><li>p1</li></fw-fragment>',
+          '<fw-fragment target="stale"><li>stale</li>',
+        ].join('\n'),
+        onError,
+      ),
+    ).toEqual({
+      fragments: [{ html: '<li>p1</li>', mode: 'append', target: 'inventory' }],
+      queries: [{ key: 'inventory:p1', name: 'inventory', value: { available: true } }],
+    });
+    expect(onError.mock.calls.map(([error]) => String(error.message))).toEqual([
+      expect.stringContaining('Malformed JSON in fw-query cart'),
+      expect.stringContaining('Malformed fw-fragment chunk: missing closing tag'),
+    ]);
   });
 
   it('reports malformed fw-fragment markup instead of silently truncating', () => {

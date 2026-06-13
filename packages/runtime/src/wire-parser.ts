@@ -14,6 +14,11 @@ export interface QueryChunk {
   value: unknown;
 }
 
+export interface MutationResponseBodyChunks {
+  fragments: FragmentChunk[];
+  queries: QueryChunk[];
+}
+
 export interface QueryScriptChunkLike {
   getAttribute(name: string): string | null;
   textContent: string | null;
@@ -111,6 +116,18 @@ export function readQueryScriptChunks(
   }
 
   return queries;
+}
+
+export function readMutationResponseBodyChunks(
+  body: string,
+  onError?: RuntimeErrorReporter,
+): MutationResponseBodyChunks {
+  // SPEC.md §9.1: mutation responses carry fw-query truth and fw-fragment DOM
+  // patches in one wire body, so runtime apply paths consume one decoded shape.
+  return {
+    queries: readQueryChunks(body, onError),
+    fragments: readFragmentChunks(body, onError),
+  };
 }
 
 function malformedQueryError(reason: string): Error {

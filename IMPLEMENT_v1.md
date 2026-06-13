@@ -118,6 +118,18 @@ packages/runtime/src/mutation-response.test.ts`, `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp
 check packages/runtime/src/mutation-fetch.ts packages/runtime/src/mutation-fetch.test.ts
 packages/runtime/src/mutation-submit.ts`.
+      Evidence 2026-06-13: mutation response body parsing now has a canonical
+      decoded wire seam in `packages/runtime/src/wire-parser.ts` via
+      `readMutationResponseBodyChunks`, leaving `packages/runtime/src/apply-mutation-response.ts`
+      to apply already-decoded `fw-query` and `fw-fragment` chunks for store-only,
+      DOM, and deferred-stream runtime paths (SPEC §9.1). Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/mutation-response.test.ts`, `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/wire-parser.ts packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/wire-parser.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
 - [x] FW227 nullable binding paths (SPEC §4.8, §6.2): optional-segment (`?.`) path grammar lowered by the compiler (P1), shared empty-rendering semantics in server renderer and loader/stamps (P2/P5), null-aware path typing against inferred query shapes with the leftJoin-nullability proof under `vp check` (P5), and a golden teaching error.
       Evidence 2026-06-11: `packages/compiler/src/query-bindings.test.ts` covers optional

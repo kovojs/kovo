@@ -14,7 +14,7 @@ import type {
   QueryBindingIndex,
   QueryBindingRoot,
 } from './query-bindings.js';
-import { readFragmentChunks, readQueryChunks } from './wire-parser.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 import type { FragmentChunk, QueryChunk } from './wire-parser.js';
 import type { IslandSignalScope } from './handlers.js';
 
@@ -37,12 +37,12 @@ export function applyFragmentQueryBody(
   onError?: (error: unknown) => void,
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void,
 ): AppliedMutationResponse {
-  const queryChunks = readQueryChunks(body, onError);
-  beforeApplyQueries?.(queryChunks);
+  const chunks = readMutationResponseBodyChunks(body, onError);
+  beforeApplyQueries?.(chunks.queries);
 
   return {
-    fragments: readFragmentChunks(body, onError),
-    queries: [...applyQueries(queryChunks)],
+    fragments: chunks.fragments,
+    queries: [...applyQueries(chunks.queries)],
   };
 }
 
