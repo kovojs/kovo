@@ -430,7 +430,7 @@ describe('fw export', () => {
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('fw-export/v1\nERROR FW229 route=/products/:id');
-      expect(output).toContain('static-path metadata');
+      expect(output).toContain('staticPaths metadata');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
