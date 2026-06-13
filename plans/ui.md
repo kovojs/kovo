@@ -1,13 +1,12 @@
-# UI Libraries - `@jiso/headless-ui`, Vendored `@jiso/ui`, And Gallery
+# UI Libraries - `@jiso/headless-ui`, `@jiso/ui`, And Gallery
 
-Status: active. Last compacted on 2026-06-12.
+Status: active. Last compacted on 2026-06-13.
 
-Scope: `packages/headless-ui`, `packages/ui`, `examples/gallery`, and the framework seams needed
-for package prefixes, behavior attributes, primitive authoring lint, vendoring, and gallery
-conformance.
+Scope: `packages/headless-ui`, `packages/ui`, `examples/gallery`, and framework seams for package
+prefixes, behavior attributes, primitive authoring lint, vendoring, and gallery conformance.
 
 Keep this ledger compact. Track current state, open work, latest proving commands, and integration
-risks. Do not append long historical command lists.
+risks. Use `- [ ]` for open actionable items and `- [x]` only for fully verified items.
 
 ## Checklist
 
@@ -42,40 +41,20 @@ risks. Do not append long historical command lists.
 
 ## Current State
 
-- Headless UI exports shared H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
-- `@jiso/ui` ships vendorable styled TSX wrappers for pure-markup components, H1 primitives, and
-  current H2/H3 wrapper surfaces.
+- Headless UI exports H0 helpers and H1/H2/H3 primitive helpers through package subpaths.
+- `@jiso/ui` ships vendorable styled TSX wrappers for pure-markup components and current primitive
+  wrapper surfaces.
 - `fw add` vendors package-synchronized TSX source and rejects unknown names with the generated
   catalog list.
 - Gallery tests cover static fixtures, behavior contracts, merge fixtures, compiled interactive
-  demos, generated-client DOM ref/export contracts, and static docs export wiring.
+  demos, generated-client DOM/ref/export contracts, and static docs export wiring.
 - G5 exported primitive attrs inventory is closed for all exported primitive `*Attributes`
-  builders, with author stress attrs, rendered merge goldens, and SPEC §4.6 diagnostic checks.
-- U3/U4/U5 styled wrappers are broadly present for current H1/H2/H3 exports; future wrapper work
-  should be tied to new primitive exports or behavior parity fixes.
-- Field/fieldset includes styled input, textarea, select, and fieldset grouping over the shared
-  native field IDREF contract, plus compiled interactive gallery coverage for validity and native
-  group state.
-- H3 menu/navigation typeahead supports repeated printable-key cycling and skips disabled items
-  for dropdown-menu, context-menu, menubar, and navigation-menu.
-- H3 autocomplete/combobox movement covers open-then-move Arrow key handlers and disabled-option
-  skipping.
-- H3 command preserves stable option ids across filtering so `aria-activedescendant` remains
-  aligned with rendered option ids.
-- Native value-backed primitive handlers for select, number-field, slider, toolbar, tabs,
-  radio-group, toggle-group, toast, autocomplete, combobox, command, and otp-field have focused
-  interactive or unit coverage for recent state synchronization fixes.
-- Number-field step buttons now align off-step values to an explicit native `min`/`step` grid
-  before clamping, preserving the real `type="number"` control contract from SPEC §6.3.
-- Checkbox-group item clicks restore the live native checkbox `checked` property when SPEC §4.6
-  cancelable/blocked changes leave the primitive value unchanged, and the G5 merge golden now
-  preserves checkbox-group `role="group"` semantics.
-- OTP field delete and paste handlers now restore the live slot input value when SPEC §4.6
-  cancelable changes are rejected, and the aggregate named input exposes native length
-  constraints for SPEC §6.3 form-control semantics.
-- Scroll-area now derives native viewport edge/visibility facts from real scroll metrics and
-  exposes `data-scroll-x`, `data-scroll-y`, and `data-scroll-position` attrs through headless and
-  styled wrappers while keeping scrolling native per SPEC §4.6.
+  builders, including author stress attrs, rendered merge goldens, and SPEC §4.6 diagnostics.
+- Field/fieldset includes styled input, textarea, select, and grouping over the shared native
+  field IDREF contract, plus compiled interactive gallery coverage for validity and group state.
+- Recent native-state work covers number-field off-grid stepping, checkbox-group canceled-change
+  restoration, OTP delete/paste restoration and native constraints, scroll-area viewport state,
+  H3 typeahead/movement/disabled-option handling, and stable command option ids.
 
 ## Open Work
 
@@ -84,27 +63,15 @@ H2:
 - [ ] Re-audit the full H2 primitive list against package exports, tests, styled wrappers, gallery
       routes, behavior contracts, merge fixtures, and compiled interactive coverage before
       checking H2 complete.
-- [x] Close the remaining scroll-area native scroll-state gap with focused primitive tests.
-      Evidence 2026-06-13: `packages/headless-ui/src/primitives/scroll-area.ts` exports
-      `scrollAreaViewportState` and SPEC §4.6-safe `scrollAreaViewportScroll`, styled wrappers
-      forward the computed scroll-position attrs, and `/components/scroll-area` renders the static
-      attrs. Same-session proof: `pnpm exec vitest --run
-packages/headless-ui/src/primitives/scroll-area.test.ts`, `pnpm --filter @jiso/headless-ui
-exec vitest --run`, `pnpm --filter @jiso/headless-ui run lint:primitives`, `pnpm --filter
-@jiso/ui exec vitest --run`, and `pnpm exec vitest --run
-examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts
-examples/gallery/src/merge-fixtures.test.tsx`.
-- [ ] Close any remaining field/fieldset behavior gaps with focused primitive tests rather than
+- [x] Close the scroll-area native scroll-state gap with focused primitive tests.
+      Evidence: `scrollAreaViewportState`, `scrollAreaViewportScroll`, styled attr forwarding, and
+      `/components/scroll-area` static attrs are covered by headless/UI/gallery tests.
+- [ ] Close remaining field/fieldset behavior gaps with focused primitive tests rather than
       styled-only evidence.
-      Evidence 2026-06-13: field control and fieldset helpers now omit inactive native
-      `disabled` booleans while preserving active disabled state, and `/components/field`
-      renders a disabled native fieldset containing a named control. Same-session proof:
-      `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`,
-      `pnpm exec vitest --run packages/ui/src/index.test.tsx`,
-      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
-      plus the full headless/UI and exact
-      `vp check` commands listed under the latest slice.
-- [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
+      Current evidence: field control and fieldset helpers omit inactive native `disabled`
+      booleans while preserving active disabled state, and `/components/field` renders a disabled
+      native fieldset containing a named control.
+- [ ] Keep future field/fieldset work tied to `form()` integration and native validity semantics.
 
 H3:
 
@@ -122,7 +89,7 @@ Styled UI:
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports.
-- [ ] Resolve any remaining CLI catalog fixture drift when new UI subpaths are exported.
+- [ ] Resolve CLI catalog fixture drift when new UI subpaths are exported.
 
 Gallery:
 
@@ -138,14 +105,13 @@ Gallery:
 
 Latest integrated UI slice:
 
-- `pnpm install --frozen-lockfile`
 - `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`
 - `pnpm exec vitest --run packages/ui/src/index.test.tsx`
 - `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
+- exact `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Latest broad gate:
@@ -159,8 +125,7 @@ Latest broad gate:
   semantics are insufficient.
 - Primitive handlers must respect `event.defaultPrevented` and leave DOM/native state coherent
   after canceled changes.
-- Behavior attributes belong to package prefixes such as `jiso-*`; framework `fw-*` stays
-  reserved.
+- Behavior attributes belong to package prefixes such as `jiso-*`; framework `fw-*` stays reserved.
 - `@jiso/ui` components are vendored TSX source, not runtime imports from the package.
 - Gallery evidence should prove authored TSX, rendered markup, generated clients, and browser
   behavior where each surface is relevant.
