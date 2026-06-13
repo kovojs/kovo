@@ -11,7 +11,7 @@ import type {
   QueryUpdatePlanFact,
 } from '../types.js';
 
-export interface HandlerExpressionLowering {
+interface HandlerExpressionLowering {
   replacements: SourceReplacement[];
 }
 
