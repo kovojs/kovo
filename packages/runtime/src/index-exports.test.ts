@@ -74,6 +74,16 @@ type RemovedMutationResponseToDom = typeof import('./index.js').applyMutationRes
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedInlineImportHandlerModule = import('./index.js').InlineImportHandlerModule;
 
+// @ts-expect-error SPEC.md §4.4/§9.1: wire chunk shapes belong to their parser/scanner modules,
+// not the root runtime barrel.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootFragmentChunk = import('./index.js').FragmentChunk;
+
+// @ts-expect-error SPEC.md §4.4/§9.1: decoded query wire chunks are parser-owned,
+// not a duplicated root runtime compatibility type.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootQueryChunk = import('./index.js').QueryChunk;
+
 describe('runtime root exports', () => {
   it('exports loader and handler modules directly from their canonical implementations', () => {
     // SPEC.md §4.4/§4.7: the public runtime loader surface composes the same

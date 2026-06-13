@@ -197,6 +197,15 @@ Latest evidence:
   unversioned `/c/` fallthrough guard before caller-provided Vite dev ownership predicates, and
   `packages/server/src/vite-dev.test.ts` proves a custom `shouldHandleRequest()` cannot claim
   unversioned client-module URLs away from Vite's fallback/static asset stack.
+- Phase 4 runtime root wire chunk type export removal slice:
+  `pnpm exec vitest --run packages/runtime/src/index-exports.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/wire-response-scanner.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/mutation-response-apply.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/runtime/src/index.ts` no longer re-exports
+  parser/scanner-owned `QueryChunk` or `FragmentChunk` types from the root runtime barrel, while
+  `packages/runtime/src/index-exports.test.ts` type-pins both removed compatibility aliases under
+  SPEC.md §4.4/§9.1 so decoded wire chunk ownership stays with `wire-parser.ts` and
+  `wire-response-scanner.ts`.
 - Phase 5 Vite dev request predicate alias removal slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
