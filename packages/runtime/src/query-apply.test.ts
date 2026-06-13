@@ -6,6 +6,7 @@ import {
   hydrateQueryScripts,
 } from './query-apply.js';
 import { createQueryStore } from './query-store.js';
+import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
 
 interface QueryScript {
   getAttribute(name: string): string | null;
@@ -148,6 +149,60 @@ describe('query runtime apply and hydration', () => {
     expect(cartPlan).toHaveBeenCalledTimes(1);
     expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('hydrates newly discovered query scripts as one decoded runtime batch', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const cartLabel = new FakeQueryBindingElement({
+      'aria-label': 'old cart',
+      'data-bind:aria-label': 'cart.label',
+    });
+    const productLabel = new FakeQueryBindingElement({
+      'aria-label': 'old product',
+      'data-bind:aria-label': 'product.label',
+    });
+    const malformedScript: QueryScript = {
+      getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+      textContent: '{',
+    };
+    const cartScript: QueryScript = {
+      getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+      textContent: '{"label":"Cart ready"}',
+    };
+    const productScript: QueryScript = {
+      getAttribute: (name) => (name === 'fw-query' ? 'product' : null),
+      textContent: '{"label":"Product ready"}',
+    };
+    const onError = vi.fn();
+    root.bindings.push(cartLabel, productLabel);
+
+    const ledger = createQueryScriptHydrationLedger(store, {
+      queryPlans: {
+        cart: { bindings: true },
+        product: { bindings: true },
+      },
+      root,
+    });
+
+    expect(ledger.hydrate([malformedScript, cartScript, productScript], { onError })).toEqual([
+      'cart',
+      'product',
+    ]);
+
+    // SPEC.md §9.1/§9.4: visible-return script hydration enters the same
+    // batched query apply path as mutation responses and typed-read chunks.
+    expect(root.wildcardSelectorCalls).toBe(1);
+    expect(cartLabel.getAttribute('aria-label')).toBe('Cart ready');
+    expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
+    expect(store.get('inventory')).toBeUndefined();
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    malformedScript.textContent = '{"label":"Inventory ready"}';
+    expect(ledger.hydrate([malformedScript, cartScript, productScript], { onError })).toEqual([
+      'inventory',
+    ]);
+    expect(store.get('inventory')).toEqual({ label: 'Inventory ready' });
   });
 
   it('applies query chunks through one canonical runtime batch with interposed values', () => {

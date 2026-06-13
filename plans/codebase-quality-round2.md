@@ -277,6 +277,10 @@ decoded query/fragment apply primitive; the internal `applyMutationResponseBodyT
 body/apply wrapper has been deleted. Browser query hydration coverage now lives in
 `packages/runtime/src/query-hydration.browser.test.ts`, including inserted hydrated scripts updating
 DOM bindings through `queryPlans` on the shared runtime apply path.
+Hydrated query script ledgers now decode all unseen successful scripts first and enter
+`applyQueryChunksToRuntime` once per hydration pass, so visible-return hydration shares the same
+batched binding-index/update-plan path as mutation and typed-read query chunks while malformed
+scripts remain retryable.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -390,6 +394,12 @@ packages/runtime/src/delegated-runtime-integration.test.ts` and `pnpm exec vp ch
 packages/runtime/src/runtime-test-fakes.ts packages/runtime/src/loader.test.ts
 packages/runtime/src/loader-lifecycle.test.ts packages/runtime/src/mutation-form.test.ts
 plans/codebase-quality-round2.md`.
+      Evidence 2026-06-13: `packages/runtime/src/query-apply.ts` now applies unseen hydrated query
+      scripts as one decoded runtime batch after `packages/runtime/src/wire-parser.ts` extracts the
+      single-script parser helper; `packages/runtime/src/query-apply.test.ts` pins one binding-index
+      scan for multi-script hydration plus malformed-script retry. Verified by `pnpm exec vitest
+--run packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.test.ts` and
+      `pnpm exec vitest --run packages/runtime/src`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -407,6 +417,10 @@ packages/runtime/src/query-hydration.browser.test.ts`.
       Evidence 2026-06-13: browser runtime checks passed after the inline enhanced-submit test
       split. Command: `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after hydrated query script ledgers moved
+      to one decoded runtime batch per hydration pass. Command: `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts
+packages/runtime/src/index.browser.test.ts`.
 
 Latest evidence:
 
@@ -427,6 +441,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/query-runtime-integration.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
+- `git diff --check`
+- `pnpm exec vitest --run packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- exact `pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell

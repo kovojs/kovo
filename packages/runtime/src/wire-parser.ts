@@ -103,22 +103,29 @@ export function readQueryScriptChunks(
   const queries: QueryChunk[] = [];
 
   for (const script of scripts) {
-    const name = script.getAttribute('fw-query');
-    if (!name) continue;
-
-    const query = readQueryChunkPayload(
-      {
-        content: script.textContent ?? 'null',
-        decodeHtmlEntities: false,
-        key: script.getAttribute('key'),
-        name,
-      },
-      onError,
-    );
+    const query = readQueryScriptChunk(script, onError);
     if (query) queries.push(query);
   }
 
   return queries;
+}
+
+export function readQueryScriptChunk(
+  script: QueryScriptChunkLike,
+  onError?: RuntimeErrorReporter,
+): QueryChunk | undefined {
+  const name = script.getAttribute('fw-query');
+  if (!name) return undefined;
+
+  return readQueryChunkPayload(
+    {
+      content: script.textContent ?? 'null',
+      decodeHtmlEntities: false,
+      key: script.getAttribute('key'),
+      name,
+    },
+    onError,
+  );
 }
 
 interface QueryChunkPayload {

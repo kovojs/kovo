@@ -13,7 +13,7 @@ import type {
 } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 import { queryWireKey } from './query-store.js';
-import { readQueryScriptChunks } from './wire-parser.js';
+import { readQueryScriptChunk, readQueryScriptChunks } from './wire-parser.js';
 import type { QueryChunk, QueryScriptChunkLike } from './wire-parser.js';
 
 export interface QueryScriptLike extends QueryScriptChunkLike {}
@@ -119,36 +119,51 @@ export function createQueryScriptHydrationLedger(
       scripts: Iterable<QueryScriptLike>,
       hydrationOptions: QueryScriptHydrationOptions = {},
     ): readonly string[] {
-      const hydrated: string[] = [];
+      const mergedOptions = {
+        ...definedProps({
+          afterApplyQuery: options.afterApplyQuery,
+          applyQuery: options.applyQuery,
+          queryPlans: options.queryPlans,
+          root: options.root,
+        }),
+        ...definedProps({
+          afterApplyQuery: hydrationOptions.afterApplyQuery,
+          applyQuery: hydrationOptions.applyQuery,
+          onError: hydrationOptions.onError,
+          queryPlans: hydrationOptions.queryPlans,
+          root: hydrationOptions.root,
+        }),
+      };
+      const records: Array<{ query: QueryChunk; script: QueryScriptLike }> = [];
 
       for (const script of scripts) {
         if (seen.has(script)) continue;
 
-        const applied = hydrateQueryScripts(store, [script], {
-          ...definedProps({
-            afterApplyQuery: options.afterApplyQuery,
-            applyQuery: options.applyQuery,
-            queryPlans: options.queryPlans,
-            root: options.root,
-          }),
-          ...definedProps({
-            afterApplyQuery: hydrationOptions.afterApplyQuery,
-            applyQuery: hydrationOptions.applyQuery,
-            onError: hydrationOptions.onError,
-            queryPlans: hydrationOptions.queryPlans,
-            root: hydrationOptions.root,
-          }),
-        });
-        if (applied.length === 0) continue;
+        const query = readQueryScriptChunk(script, mergedOptions.onError);
+        if (!query) continue;
 
-        seen.add(script);
-        hydrated.push(...applied);
+        records.push({ query, script });
       }
 
       // SPEC.md §9.1/§9.4: browser hydration, mutation responses, and typed
       // refetches must converge on the same query-store apply path without
       // replaying already applied server-provided scripts. Malformed transient
       // script data is intentionally left observable for a later hydration pass.
+      const hydrated = applyQueryChunksToRuntime(
+        store,
+        records.map((record) => record.query),
+        {
+          ...definedProps({
+            afterApplyQuery: mergedOptions.afterApplyQuery,
+            applyQuery: mergedOptions.applyQuery,
+            queryPlans: mergedOptions.queryPlans,
+            root: mergedOptions.root,
+          }),
+        },
+      );
+      for (const record of records) {
+        seen.add(record.script);
+      }
       return hydrated;
     },
   };
