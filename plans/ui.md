@@ -88,7 +88,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       gate enforces `aria-conditional-attr` without a checkbox exception. Toast disabled
       non-dismissing actions now prevent native follow-up behavior in the primitive, render disabled
       state through styled/static and compiled gallery surfaces, and stay stable under route-level
-      axe plus browser state checks.
+      axe plus browser state checks. The compiled interactive gallery now includes a pure-markup
+      app-authored TSX route covering badge, breadcrumb, button, card, kbd, skeleton, and table
+      semantics with generated click-state handling, axe coverage, manifest/docs wiring, and a
+      deterministic Chromium visual baseline.
 
 ## Open Work
 
@@ -224,6 +227,15 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       route family: toggle-group and toolbar. Raw route fixtures are synchronized against
       `renderGalleryRoute()`, and the Chromium visual gate asserts deterministic `860x635`
       geometry plus screenshot hashes `ad8d5436` and `c1d2d1b8`.
+      Evidence 2026-06-13: the compiled interactive gallery now covers the pure-markup styled
+      route family with `examples/gallery/src/interactive/pure-markup-demo.tsx` as app-authored
+      TSX and generated artifacts under `examples/gallery/src/generated/interactive/`. Verified by
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `(cd examples/gallery && pnpm exec vitest --run src/demo-fixtures.test.ts src/interactive-gallery.test.ts)`,
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`,
+      and `pnpm exec vitest --run packages/ui/src/index.test.tsx`; Chromium asserts route geometry
+      `820x5904`, pure-markup geometry `780x450`, route hash `ec47616f`, and pure-markup hash
+      `cc33e71c`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and

@@ -45,6 +45,7 @@ const demos = [
   'otp-field-demo',
   'popover-demo',
   'progress-demo',
+  'pure-markup-demo',
   'radio-group-demo',
   'scroll-area-demo',
   'select-demo',

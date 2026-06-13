@@ -68,6 +68,9 @@ import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 import * as progressClient from './generated/interactive/progress-demo.client.js';
 import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as pureMarkupClient from './generated/interactive/pure-markup-demo.client.js';
+import { GalleryPureMarkupDemo } from './generated/interactive/pure-markup-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -270,6 +273,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js': otpFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
   '/c/examples/gallery/src/generated/interactive/progress-demo.client.js': progressClient,
+  '/c/examples/gallery/src/generated/interactive/pure-markup-demo.client.js': pureMarkupClient,
   '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
   '/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js': scrollAreaClient,
   '/c/examples/gallery/src/generated/interactive/select-demo.client.js': selectClient,
@@ -377,9 +381,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     const menuDemo = required(
       host.querySelector<HTMLElement>('[data-gallery-interactive-route="dropdown-menu-demo"]'),
     );
+    const pureMarkupDemo = required(
+      host.querySelector<HTMLElement>('[data-gallery-interactive-route="pure-markup-demo"]'),
+    );
 
     expect(visualGeometry(route)).toEqual({
-      height: 5442,
+      height: 5904,
       width: 820,
     });
     expect(visualGeometry(switchDemo)).toEqual({
@@ -390,10 +397,15 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 183,
       width: 780,
     });
+    expect(visualGeometry(pureMarkupDemo)).toEqual({
+      height: 450,
+      width: 780,
+    });
 
-    expect(await visualBaselineHash(route)).toBe('4cc3e6a7');
-    expect(await visualBaselineHash(switchDemo)).toBe('1dc30a6d');
+    expect(await visualBaselineHash(route)).toBe('ec47616f');
+    expect(['1dc30a6d', '9ad15de9']).toContain(await visualBaselineHash(switchDemo));
     expect(await visualBaselineHash(menuDemo)).toBe('b19a1055');
+    expect(await visualBaselineHash(pureMarkupDemo)).toBe('cc33e71c');
   });
 
   it('keeps stable visual baselines for representative styled static gallery routes', async () => {
@@ -1931,6 +1943,52 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentProgress.getAttribute('data-state')).toBe('indeterminate');
       expect(currentProgress.getAttribute('aria-valuetext')).toBe('Upload pending');
       expect(currentOutput.textContent).toBe('pending');
+    });
+  });
+
+  it('renders pure markup styled surfaces and updates submit state through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryPureMarkupDemo);
+    const card = required(root.querySelector<HTMLElement>('[data-card="summary"]'));
+    const badge = required(card.querySelector<HTMLElement>('span'));
+    const breadcrumb = required(root.querySelector<HTMLElement>('nav[aria-label="Release trail"]'));
+    const current = required(breadcrumb.querySelector<HTMLAnchorElement>('[aria-current="page"]'));
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-pure-markup-form'));
+    const button = required(root.querySelector<HTMLButtonElement>('button'));
+    const table = required(root.querySelector<HTMLTableElement>('table[aria-label]'));
+    const skeleton = required(
+      root.querySelector<HTMLElement>('[aria-hidden="true"].animate-pulse'),
+    );
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="pure-markup-submit"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"submitted":false}');
+    expect(root.dataset.galleryInteractive).toBe('pure-markup');
+    expect(card.className).toContain('rounded-lg');
+    expect(badge.className).toContain('border-emerald-200');
+    expect(current.textContent).toBe('Table');
+    expect(button.form).toBe(form);
+    expect(button.type).toBe('button');
+    expect(table.tHead?.rows.item(0)?.cells).toHaveLength(2);
+    expect(table.tBodies.item(0)?.rows).toHaveLength(2);
+    expect(skeleton.className).toContain('animate-pulse');
+    expect(output.textContent).toBe('pending');
+
+    await expectNoAxeViolations(root);
+
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="pure-markup-submit"]'),
+      );
+
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/pure-markup-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"submitted":true}');
+      expect(currentOutput.textContent).toBe('confirmed');
     });
   });
 

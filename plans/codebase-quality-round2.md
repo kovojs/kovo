@@ -224,6 +224,14 @@ Latest evidence:
   commerce graph, meta/i18n, guard/session, file upload, progress, and fragment error-boundary
   behavior, and `tests/fw-check.node.mjs` now asserts that structured fact instead of local DOM,
   storage, session, and mutation mechanics.
+- UI/gallery pure-markup compiled route closure slice:
+  `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`;
+  `(cd examples/gallery && pnpm exec vitest --run src/demo-fixtures.test.ts src/interactive-gallery.test.ts)`;
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`.
+  Evidence: `examples/gallery/src/interactive/pure-markup-demo.tsx` stays app-authored TSX per
+  SPEC §5.2 while checked-in generated artifacts, manifest/docs wiring, browser axe/state checks,
+  and visual hashes cover the badge/breadcrumb/button/card/kbd/skeleton/table pure-markup family.
 - Phase 5 Vite manifest-file URL boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;

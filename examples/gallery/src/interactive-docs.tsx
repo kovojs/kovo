@@ -20,6 +20,7 @@ import { GalleryNumberFieldDemo } from './generated/interactive/number-field-dem
 import { GalleryOtpFieldDemo } from './generated/interactive/otp-field-demo.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
+import { GalleryPureMarkupDemo } from './generated/interactive/pure-markup-demo.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
 import { GalleryScrollAreaDemo } from './generated/interactive/scroll-area-demo.js';
 import { GallerySelectDemo } from './generated/interactive/select-demo.js';
@@ -143,6 +144,11 @@ export const interactiveGalleryDemos = Object.freeze([
     name: 'progress-demo',
     render: renderInteractiveDemo(GalleryProgressDemo),
     title: 'Progress',
+  },
+  {
+    name: 'pure-markup-demo',
+    render: renderInteractiveDemo(GalleryPureMarkupDemo),
+    title: 'Pure Markup',
   },
   {
     name: 'radio-group-demo',
