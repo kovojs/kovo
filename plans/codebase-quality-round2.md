@@ -814,6 +814,6 @@ Open:
 Latest known broad results from 2026-06-12:
 
 - `pnpm run check` passed after the integrated app-shell/UI/Drizzle/runtime/harness wave.
-- `pnpm run test` passed: 186 files, 1906 tests.
+- `pnpm run test` passed on rerun from the current file tree: 189 files, 1916 tests.
 - `pnpm run test:browser` passed: Chromium runtime browser suite, 11 tests.
-- `pnpm run test:conformance` passed, including Drizzle pinned conformance at 65 tests.
+- `pnpm run test:conformance` passed, including Drizzle pinned conformance at 66 tests.
