@@ -17,6 +17,13 @@ import {
   parseFwExplainOutput,
 } from '@jiso/test/fw-explain-fixtures';
 import {
+  graphFragmentTargetForQuery,
+  graphInvalidatedByQueries,
+  graphMutationUpdateConsumers,
+  graphOptimisticStatusMatrix,
+  graphPageFact,
+} from '@jiso/test/graph-fixtures';
+import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlDocumentFacts,
@@ -52,33 +59,6 @@ function commerceFile(name: string, type: string, size: number) {
   };
 }
 
-function fragmentTargetForQuery(query: string) {
-  const component = commerceGraph.components.find((item) => item.queries.includes(query));
-  const fragment = component?.fragments[0];
-
-  if (!fragment) {
-    throw new Error(`Missing commerce fragment target for query ${query}`);
-  }
-
-  return fragment;
-}
-
-function invalidatedByQueries() {
-  return new Map(
-    commerceGraph.queries.map((query) => {
-      const explanation = fwExplain(commerceGraph, { kind: 'query', target: query.query });
-
-      return [query.query, fwExplainListField(explanation.output, 'invalidated-by')];
-    }),
-  );
-}
-
-function cartPageGraph(graph: { pages?: { route?: string; meta?: unknown }[] }) {
-  const page = graph.pages?.find((item) => item.route === '/cart');
-  if (!page) throw new Error('Missing /cart page graph fact');
-  return page;
-}
-
 const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
 
 describe('commerce source-truth graph acceptance', () => {
@@ -95,8 +75,8 @@ describe('commerce source-truth graph acceptance', () => {
 
     expect(graphArtifact).toEqual(commerceGraph);
     expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
-    expect(cartPageGraph(graphArtifact).meta).toEqual(cartMeta);
-    expect(cartPageGraph(commerceGraph).meta).toEqual(cartMeta);
+    expect(graphPageFact(graphArtifact, '/cart').meta).toEqual(cartMeta);
+    expect(graphPageFact(commerceGraph, '/cart').meta).toEqual(cartMeta);
     expect(pageHints.title).toBe(cartMeta.title);
     expect(pageHints.metas).toEqual(
       expect.arrayContaining([
@@ -212,11 +192,9 @@ describe('commerce source-truth graph acceptance', () => {
       'order',
     ]);
     expect(fwExplainListField(cartAddExplain.output, 'manual-invalidates')).toEqual([]);
-    expect(fwExplainUpdateConsumers(cartAddExplain.output)).toEqual([
-      { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
-      { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
-      { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
-    ]);
+    expect(fwExplainUpdateConsumers(cartAddExplain.output)).toEqual(
+      graphMutationUpdateConsumers(commerceGraph, 'cart/add'),
+    );
     expect(fwExplainOptimisticStatuses(cartAddExplain.output)).toEqual({
       cart: 'hand-written',
       orderHistory: 'await-fragment',
@@ -426,7 +404,7 @@ describe('commerce source-truth graph acceptance', () => {
   });
 
   it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {
-    const invalidatedBy = invalidatedByQueries();
+    const invalidatedBy = graphInvalidatedByQueries(commerceGraph);
     const matrix: Record<string, Record<string, string>> = {};
 
     for (const mutation of commerceGraph.mutations) {
@@ -476,6 +454,7 @@ describe('commerce source-truth graph acceptance', () => {
         productGrid: 'no-invalidation',
       },
     });
+    expect(matrix).toEqual(graphOptimisticStatusMatrix(commerceGraph));
   });
 
   it('accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire', async () => {
@@ -583,7 +562,9 @@ describe('commerce source-truth graph acceptance', () => {
       { db: verifiedDb, session: { id: 's-commerce-acceptance-2', user: { id: 'u1' } } },
       {
         'FW-Fragment': 'true',
-        'FW-Targets': affectedQueries.map(fragmentTargetForQuery).join(','),
+        'FW-Targets': affectedQueries
+          .map((query) => graphFragmentTargetForQuery(commerceGraph, query))
+          .join(','),
       },
     );
 
@@ -602,7 +583,11 @@ describe('commerce source-truth graph acceptance', () => {
       fwFragmentFacts(response.body)
         .map((fragment) => fragment.target)
         .sort((a, b) => a.localeCompare(b)),
-    ).toEqual(affectedQueries.map(fragmentTargetForQuery).sort((a, b) => a.localeCompare(b)));
+    ).toEqual(
+      affectedQueries
+        .map((query) => graphFragmentTargetForQuery(commerceGraph, query))
+        .sort((a, b) => a.localeCompare(b)),
+    );
     expect(htmlKeyFacts(response.body).map((key) => key.key)).toContain('order-2');
   });
 });

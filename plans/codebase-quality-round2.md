@@ -51,6 +51,9 @@ Current state:
   facts instead of raw sentinel/string snapshots.
 - Integration fix: `fw-check` now uses the canonical
   `applyDeferredStreamResponseToRuntime` API after runtime compatibility export deletion.
+- Shared `@jiso/test/graph-fixtures` now derive graph page, fragment target, invalidation,
+  query-consumer, and optimistic-status facts; commerce and `fw-check` compare CLI output against
+  those structured graph facts instead of local graph parsers or handpicked update strings.
 
 Open:
 
@@ -64,9 +67,12 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -216,9 +222,12 @@ Current state:
 - Commerce source-truth tests use shared structured facts for graph, HTML/query/fragment/key
   output, source-site provenance, and app-shell command/export behavior.
 - `@jiso/test` includes reusable fixture seams for generated modules, fw-explain, TypeScript,
-  source/project facts, commands, starter templates, wire, static export, and touch graphs.
+  source/project facts, commands, starter templates, wire, static export, touch graphs, and graph
+  invalidation/consumer facts.
 - Commerce source-truth no longer owns local `fw-explain` parsing helpers for the currently
   covered graph/update/scope facts.
+- Commerce source-truth no longer owns local graph page/fragment/invalidation helpers for the
+  currently covered commerce graph acceptance checks.
 - Verifier proxy SQL coverage handles string SQL and structured `{ text }`/`{ sql }` statement
   objects for current gates.
 

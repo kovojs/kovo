@@ -84,6 +84,10 @@ import {
   GeneratedFixtureTemplateStampHost,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
+  graphMutationUpdateConsumers,
+  graphOptimisticStatusMatrix,
+} from '../packages/test/src/graph-fixtures.ts';
+import {
   fwQueryFacts,
   htmlDocumentRegions,
   htmlElementFacts,
@@ -484,11 +488,27 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
     },
   );
   assert.deepEqual(fwExplainListField(cartAddExplain, 'manual-invalidates'), []);
-  assert.deepEqual(fwExplainUpdateConsumers(cartAddExplain), [
-    { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
-    { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
-    { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
-  ]);
+  assert.deepEqual(
+    fwExplainUpdateConsumers(cartAddExplain),
+    graphMutationUpdateConsumers(commerceGraph, 'cart/add'),
+  );
+  assert.deepEqual(graphOptimisticStatusMatrix(commerceGraph), {
+    'auth/sign-out': {
+      cart: 'no-invalidation',
+      orderHistory: 'no-invalidation',
+      productGrid: 'no-invalidation',
+    },
+    'cart/add': {
+      cart: 'hand-written',
+      orderHistory: 'await-fragment',
+      productGrid: 'await-fragment',
+    },
+    'order/receipt': {
+      cart: 'no-invalidation',
+      orderHistory: 'no-invalidation',
+      productGrid: 'no-invalidation',
+    },
+  });
 });
 
 void test('P10 normative docs cover the constitution and compiler hard rules', async () => {

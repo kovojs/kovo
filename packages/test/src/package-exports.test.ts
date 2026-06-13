@@ -83,6 +83,18 @@ import {
   type GeneratedHandlerReferenceFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
+  graphFragmentTargetForQuery,
+  graphInvalidatedByQueries,
+  graphInvalidatedQueries,
+  graphMutationFact,
+  graphMutationUpdateConsumers,
+  graphOptimisticStatusMatrix,
+  graphPageFact,
+  graphQueryConsumers,
+  type GraphInvalidationMatrix,
+  type GraphQueryConsumerFact,
+} from '@jiso/test/graph-fixtures';
+import {
   createJisoTestHarness,
   type JisoTestContext,
   type JisoTestExecOptions,
@@ -459,6 +471,27 @@ describe('@jiso/test package subpath exports', () => {
         targetKind: 'QUERY',
       },
     ]);
+    const graph = {
+      components: [{ fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] }],
+      mutations: [{ invalidates: ['cart'], key: 'cart/add' }],
+      optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
+      pages: [{ queries: ['cart'], route: '/cart' }],
+      queries: [{ domains: ['cart'], query: 'cart' }],
+    };
+    expect(graphPageFact(graph, '/cart')).toMatchObject({ route: '/cart' });
+    expect(graphMutationFact(graph, 'cart/add')).toMatchObject({ key: 'cart/add' });
+    expect(graphFragmentTargetForQuery(graph, 'cart')).toBe('cart-badge');
+    expect(graphInvalidatedQueries(graph, 'cart/add')).toEqual(['cart']);
+    expect(Object.fromEntries(graphInvalidatedByQueries(graph))).toEqual({ cart: ['cart/add'] });
+    expect(graphQueryConsumers(graph)).toEqual([
+      { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+    ]);
+    expect(graphMutationUpdateConsumers(graph, 'cart/add')).toEqual([
+      { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+    ]);
+    expect(graphOptimisticStatusMatrix(graph)).toEqual({
+      'cart/add': { cart: 'hand-written' },
+    });
     expect(assertTypeScriptProgramHasNoDiagnostics).toBeTypeOf('function');
     expect(typeScriptInterfaceMemberTypes).toBeTypeOf('function');
     expect(
@@ -543,6 +576,8 @@ type _PublicSubpathTypes = [
   FwExportHtmlArtifact,
   FwExportOutput,
   FwExportSummary,
+  GraphInvalidationMatrix,
+  GraphQueryConsumerFact,
   ForbiddenBrowserArchitectureFact,
   ProjectFileSourceFact,
   ProjectFileTreeOptions,
