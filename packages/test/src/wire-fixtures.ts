@@ -30,6 +30,44 @@ export interface WireFixture {
   title: string;
 }
 
+export interface WireFixtureSource {
+  name: string;
+  source: string;
+}
+
+export interface WireFixturePresenceFact {
+  name: string;
+  requestStartLine: string;
+  responseStartLine: string;
+  title: string;
+}
+
+export interface WireFragmentModeFact {
+  accept: string | undefined;
+  fragment: string | undefined;
+  name: string;
+}
+
+export interface WireResponseMetadataFact {
+  headers: Record<string, string>;
+  name: string;
+  responseIndex: number;
+  statusLine: string;
+}
+
+export interface WireResponseBodyPinFact {
+  actualBody: string;
+  expectedBody: string;
+  matches: boolean;
+  name: string;
+  responseIndex: number;
+}
+
+export interface WireFixtureContentTypesFact {
+  contentTypes: Array<string | null>;
+  name: string;
+}
+
 const requestMarker = '>>> REQUEST';
 const responseMarker = '<<< RESPONSE';
 
@@ -51,6 +89,103 @@ export function parseWireFixture(source: string): WireFixture {
 
 export function parseWireResponses(source: string): WireTranscriptResponse[] {
   return parseWireTranscript(source).map((exchange) => exchange.response);
+}
+
+export function wireFixturePresenceFacts(
+  sources: readonly WireFixtureSource[],
+): WireFixturePresenceFact[] {
+  return sources.map(({ name, source }) => {
+    const fixture = parseWireFixture(source);
+    return {
+      name,
+      requestStartLine: fixture.request.startLine,
+      responseStartLine: fixture.response.startLine,
+      title: fixture.title,
+    };
+  });
+}
+
+export function wireFragmentModeFacts(
+  sources: readonly WireFixtureSource[],
+  names: readonly string[],
+): WireFragmentModeFact[] {
+  const sourceByName = new Map(sources.map((source) => [source.name, source.source]));
+  return names.map((name) => {
+    const source = sourceByName.get(name);
+    if (source === undefined) {
+      throw new Error(`Wire fixture is present: ${name}`);
+    }
+
+    const fixture = parseWireFixture(source);
+    return {
+      accept: fixture.request.headers.Accept,
+      fragment: fixture.request.headers['FW-Fragment'],
+      name,
+    };
+  });
+}
+
+export function wireResponseBodyPinFacts(
+  sources: readonly WireFixtureSource[],
+  expectedBodiesByName: Record<string, readonly string[]>,
+): WireResponseBodyPinFact[] {
+  return Object.entries(expectedBodiesByName).flatMap(([name, expectedBodies]) => {
+    const source = sources.find((candidate) => candidate.name === name)?.source;
+    if (source === undefined) {
+      throw new Error(`Wire fixture is present: ${name}`);
+    }
+
+    const responses = parseWireResponses(source);
+    if (responses.length !== expectedBodies.length) {
+      throw new Error(
+        `Expected ${name} to have ${expectedBodies.length} response(s), found ${responses.length}`,
+      );
+    }
+
+    return expectedBodies.map((expectedBody, index) => {
+      const actualBody = responses[index]?.body ?? '';
+      return {
+        actualBody,
+        expectedBody,
+        matches: actualBody === expectedBody,
+        name,
+        responseIndex: index + 1,
+      };
+    });
+  });
+}
+
+export function wireResponseMetadataFacts(
+  sources: readonly WireFixtureSource[],
+): WireResponseMetadataFact[] {
+  return sources.flatMap(({ name, source }) =>
+    parseWireResponses(source).map((response, index) => ({
+      headers: response.headersByName,
+      name,
+      responseIndex: index + 1,
+      statusLine: response.statusLine,
+    })),
+  );
+}
+
+export function wireFixtureContentTypesFacts(
+  sources: readonly WireFixtureSource[],
+): WireFixtureContentTypesFact[] {
+  return sources.map(({ name, source }) => ({
+    contentTypes: parseWireResponses(source).map(
+      (response) => response.headersByName['content-type'] ?? null,
+    ),
+    name,
+  }));
+}
+
+export function wireFixturesWithContentType(
+  sources: readonly WireFixtureSource[],
+  contentType: string,
+): string[] {
+  return wireFixtureContentTypesFacts(sources).flatMap(({ contentTypes, name }) =>
+    contentTypes.includes(contentType) ? [name] : [],
+  );
 }
 
 export function parseWireTranscript(source: string): WireTranscriptExchange[] {

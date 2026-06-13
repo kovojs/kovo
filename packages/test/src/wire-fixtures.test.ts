@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseWireFixture, parseWireResponses, parseWireTranscript } from './wire-fixtures.js';
+import {
+  parseWireFixture,
+  parseWireResponses,
+  parseWireTranscript,
+  wireFixtureContentTypesFacts,
+  wireFixturePresenceFacts,
+  wireFixturesWithContentType,
+  wireFragmentModeFacts,
+  wireResponseBodyPinFacts,
+  wireResponseMetadataFacts,
+} from './wire-fixtures.js';
 
 const fixture = [
   '### Enhanced mutation',
@@ -25,6 +35,25 @@ const fixture = [
   '',
   '',
 ].join('\n');
+
+const redirectFixture = [
+  '### Cart redirect',
+  '>>> REQUEST',
+  'POST /cart HTTP/1.1',
+  'Accept: text/html',
+  '',
+  'productId=p1',
+  '<<< RESPONSE',
+  'HTTP/1.1 303 See Other',
+  'Location: /cart',
+  '',
+  '',
+].join('\n');
+
+const sources = [
+  { name: 'enhanced-mutation.http', source: fixture },
+  { name: 'cart-redirect.http', source: redirectFixture },
+];
 
 describe('@jiso/test wire fixture seam', () => {
   it('turns titled HTTP wire fixtures into structured exchange facts', () => {
@@ -87,6 +116,95 @@ describe('@jiso/test wire fixture seam', () => {
       '<fw-fragment target="cart"></fw-fragment>',
       '',
     ]);
+  });
+
+  it('projects fixture presence and fragment request contracts into facts', () => {
+    expect(wireFixturePresenceFacts(sources)).toEqual([
+      {
+        name: 'enhanced-mutation.http',
+        requestStartLine: 'POST /_m/cart/add HTTP/1.1',
+        responseStartLine: 'HTTP/1.1 200 OK',
+        title: 'Enhanced mutation',
+      },
+      {
+        name: 'cart-redirect.http',
+        requestStartLine: 'POST /cart HTTP/1.1',
+        responseStartLine: 'HTTP/1.1 303 See Other',
+        title: 'Cart redirect',
+      },
+    ]);
+    expect(wireFragmentModeFacts(sources, ['enhanced-mutation.http'])).toEqual([
+      {
+        accept: 'text/vnd.jiso.fragment+html',
+        fragment: 'true',
+        name: 'enhanced-mutation.http',
+      },
+    ]);
+  });
+
+  it('projects explicit response body pins and protocol metadata', () => {
+    expect(
+      wireResponseBodyPinFacts(sources, {
+        'cart-redirect.http': [''],
+        'enhanced-mutation.http': ['<fw-fragment target="cart"></fw-fragment>', ''],
+      }),
+    ).toEqual([
+      {
+        actualBody: '',
+        expectedBody: '',
+        matches: true,
+        name: 'cart-redirect.http',
+        responseIndex: 1,
+      },
+      {
+        actualBody: '<fw-fragment target="cart"></fw-fragment>',
+        expectedBody: '<fw-fragment target="cart"></fw-fragment>',
+        matches: true,
+        name: 'enhanced-mutation.http',
+        responseIndex: 1,
+      },
+      {
+        actualBody: '',
+        expectedBody: '',
+        matches: true,
+        name: 'enhanced-mutation.http',
+        responseIndex: 2,
+      },
+    ]);
+    expect(wireResponseMetadataFacts(sources)).toEqual([
+      {
+        headers: {
+          'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'fw-idem': 'idem_01HX',
+        },
+        name: 'enhanced-mutation.http',
+        responseIndex: 1,
+        statusLine: 'HTTP/1.1 200 OK',
+      },
+      {
+        headers: { location: '/cart' },
+        name: 'enhanced-mutation.http',
+        responseIndex: 2,
+        statusLine: 'HTTP/1.1 303 See Other',
+      },
+      {
+        headers: { location: '/cart' },
+        name: 'cart-redirect.http',
+        responseIndex: 1,
+        statusLine: 'HTTP/1.1 303 See Other',
+      },
+    ]);
+  });
+
+  it('summarizes content types without local transcript loops', () => {
+    expect(wireFixtureContentTypesFacts(sources)).toEqual([
+      {
+        contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8', null],
+        name: 'enhanced-mutation.http',
+      },
+      { contentTypes: [null], name: 'cart-redirect.http' },
+    ]);
+    expect(wireFixturesWithContentType(sources, 'text/event-stream')).toEqual([]);
   });
 
   it('rejects malformed wire transcripts at the fixture seam', () => {

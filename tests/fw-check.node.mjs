@@ -158,7 +158,15 @@ import {
   viteRedGreenBuildFixtureFact,
   viteTransformElementFact,
 } from '../packages/test/src/vite-fixtures.ts';
-import { parseWireFixture, parseWireResponses } from '../packages/test/src/wire-fixtures.ts';
+import {
+  parseWireResponses,
+  wireFixtureContentTypesFacts,
+  wireFixturePresenceFacts,
+  wireFixturesWithContentType,
+  wireFragmentModeFacts,
+  wireResponseBodyPinFacts,
+  wireResponseMetadataFacts,
+} from '../packages/test/src/wire-fixtures.ts';
 import { verificationLayerBehaviorFact } from '../packages/test/src/verification-fixtures.ts';
 import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
@@ -229,6 +237,19 @@ const generatedWireBodies = {
 
 const readWireFixture = async (name) =>
   readFile(new URL(`../fixtures/wire/${name}`, import.meta.url), 'utf8');
+
+const loadWireFixtureSources = async () => {
+  const fixtureNames = (await readdir(new URL('../fixtures/wire/', import.meta.url)))
+    .filter((name) => name.endsWith('.http'))
+    .sort();
+
+  return Promise.all(
+    fixtureNames.map(async (name) => ({
+      name,
+      source: await readWireFixture(name),
+    })),
+  );
+};
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const execFileAsync = promisify(execFile);
@@ -309,162 +330,158 @@ void test('fw-check wrapper explains the production build prerequisite', () => {
 });
 
 void test('Phase 0 wire fixtures are present and explicit', async () => {
-  const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
-
-  assert.deepEqual(fixtureNames.filter((name) => name.endsWith('.http')).sort(), [
-    'defer-stream.http',
-    'enhanced-mutation.http',
-    'no-js-post-redirect-get.http',
-    'typed-read.http',
-    'validation-422-fragment.http',
-  ]);
-
-  for (const name of fixtureNames.filter((entry) => entry.endsWith('.http'))) {
-    const transcript = parseWireFixture(await readWireFixture(name));
-    assert.notEqual(transcript.title, '', `${name} names the scenario`);
-    assert.notEqual(transcript.request.startLine, '', `${name} includes a request transcript`);
-    assert.notEqual(transcript.response.startLine, '', `${name} includes a response transcript`);
-  }
-
-  for (const name of ['enhanced-mutation.http', 'validation-422-fragment.http']) {
-    const transcript = parseWireFixture(await readWireFixture(name));
-    assert.equal(
-      transcript.request.headers['FW-Fragment'],
-      'true',
-      `${name} declares enhanced fragment mode`,
-    );
-    assert.equal(
-      transcript.request.headers.Accept,
-      'text/vnd.jiso.fragment+html',
-      `${name} requests fragment HTML`,
-    );
-  }
-});
-
-void test('Phase 0 wire fixture response bodies match generated contracts byte-for-byte', async () => {
-  for (const [name, expectedBodies] of Object.entries(generatedWireBodies)) {
-    const responses = parseWireResponses(await readWireFixture(name));
-
-    assert.equal(responses.length, expectedBodies.length, `${name} response count`);
-
-    for (const [index, expectedBody] of expectedBodies.entries()) {
-      assert.equal(responses[index].body, expectedBody, `${name} response ${index + 1} body`);
-    }
-  }
-});
-
-void test('Phase 0 wire fixture responses keep stable protocol metadata', async () => {
-  const fixtures = {
-    'defer-stream.http': [
-      {
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-        },
-        statusLine: 'HTTP/1.1 200 OK',
-      },
-    ],
-    'enhanced-mutation.http': [
-      {
-        headers: {
-          'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'fw-changes': '[{"domain":"cart"}]',
-          'fw-idem': 'idem_01HX',
-        },
-        statusLine: 'HTTP/1.1 200 OK',
-      },
-    ],
-    'no-js-post-redirect-get.http': [
-      {
-        headers: {
-          'cache-control': 'no-store',
-          location: '/cart',
-        },
-        statusLine: 'HTTP/1.1 303 See Other',
-      },
-      {
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-        },
-        statusLine: 'HTTP/1.1 200 OK',
-      },
-    ],
-    'typed-read.http': [
-      {
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-        },
-        statusLine: 'HTTP/1.1 200 OK',
-      },
-    ],
-    'validation-422-fragment.http': [
-      {
-        headers: {
-          'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'fw-idem': 'idem_01HY',
-        },
-        statusLine: 'HTTP/1.1 422 Unprocessable Content',
-      },
-    ],
-  };
-
-  for (const [name, expectedResponses] of Object.entries(fixtures)) {
-    const responses = parseWireResponses(await readWireFixture(name));
-
-    assert.equal(responses.length, expectedResponses.length, `${name} response count`);
-
-    for (const [index, expected] of expectedResponses.entries()) {
-      assert.equal(
-        responses[index].statusLine,
-        expected.statusLine,
-        `${name} response ${index + 1} status`,
-      );
-      assert.deepEqual(
-        responses[index].headersByName,
-        expected.headers,
-        `${name} response ${index + 1} headers`,
-      );
-    }
-  }
-});
-
-void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
-  const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
-  const wireResponses = await Promise.all(
-    fixtureNames
-      .filter((name) => name.endsWith('.http'))
-      .map(async (name) => ({
-        name,
-        responses: parseWireResponses(await readWireFixture(name)),
-      })),
-  );
+  const fixtureSources = await loadWireFixtureSources();
 
   assert.deepEqual(
-    wireResponses.map(({ name, responses }) => ({
-      contentTypes: responses.map((response) => response.headersByName['content-type'] ?? null),
-      name,
+    fixtureSources.map(({ name }) => name),
+    [
+      'defer-stream.http',
+      'enhanced-mutation.http',
+      'no-js-post-redirect-get.http',
+      'typed-read.http',
+      'validation-422-fragment.http',
+    ],
+  );
+  assert.deepEqual(
+    wireFixturePresenceFacts(fixtureSources).map((fact) => ({
+      hasRequest: fact.requestStartLine.length > 0,
+      hasResponse: fact.responseStartLine.length > 0,
+      hasTitle: fact.title.length > 0,
+      name: fact.name,
     })),
     [
-      { contentTypes: ['text/html; charset=utf-8'], name: 'defer-stream.http' },
+      { hasRequest: true, hasResponse: true, hasTitle: true, name: 'defer-stream.http' },
+      { hasRequest: true, hasResponse: true, hasTitle: true, name: 'enhanced-mutation.http' },
       {
-        contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8'],
-        name: 'enhanced-mutation.http',
+        hasRequest: true,
+        hasResponse: true,
+        hasTitle: true,
+        name: 'no-js-post-redirect-get.http',
       },
-      { contentTypes: [null, 'text/html; charset=utf-8'], name: 'no-js-post-redirect-get.http' },
-      { contentTypes: ['text/html; charset=utf-8'], name: 'typed-read.http' },
+      { hasRequest: true, hasResponse: true, hasTitle: true, name: 'typed-read.http' },
       {
-        contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8'],
+        hasRequest: true,
+        hasResponse: true,
+        hasTitle: true,
         name: 'validation-422-fragment.http',
       },
     ],
   );
   assert.deepEqual(
-    wireResponses.flatMap(({ name, responses }) =>
-      responses
-        .filter((response) => response.headersByName['content-type'] === 'text/event-stream')
-        .map(() => name),
-    ),
-    [],
+    wireFragmentModeFacts(fixtureSources, [
+      'enhanced-mutation.http',
+      'validation-422-fragment.http',
+    ]),
+    [
+      {
+        accept: 'text/vnd.jiso.fragment+html',
+        fragment: 'true',
+        name: 'enhanced-mutation.http',
+      },
+      {
+        accept: 'text/vnd.jiso.fragment+html',
+        fragment: 'true',
+        name: 'validation-422-fragment.http',
+      },
+    ],
   );
+});
+
+void test('Phase 0 wire fixture response bodies match generated contracts byte-for-byte', async () => {
+  const fixtureSources = await loadWireFixtureSources();
+  assert.deepEqual(
+    wireResponseBodyPinFacts(fixtureSources, generatedWireBodies).map(
+      ({ matches, name, responseIndex }) => ({
+        matches,
+        name,
+        responseIndex,
+      }),
+    ),
+    [
+      { matches: true, name: 'defer-stream.http', responseIndex: 1 },
+      { matches: true, name: 'enhanced-mutation.http', responseIndex: 1 },
+      { matches: true, name: 'no-js-post-redirect-get.http', responseIndex: 1 },
+      { matches: true, name: 'no-js-post-redirect-get.http', responseIndex: 2 },
+      { matches: true, name: 'typed-read.http', responseIndex: 1 },
+      { matches: true, name: 'validation-422-fragment.http', responseIndex: 1 },
+    ],
+  );
+});
+
+void test('Phase 0 wire fixture responses keep stable protocol metadata', async () => {
+  assert.deepEqual(wireResponseMetadataFacts(await loadWireFixtureSources()), [
+    {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+      },
+      name: 'defer-stream.http',
+      responseIndex: 1,
+      statusLine: 'HTTP/1.1 200 OK',
+    },
+    {
+      headers: {
+        'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'fw-changes': '[{"domain":"cart"}]',
+        'fw-idem': 'idem_01HX',
+      },
+      name: 'enhanced-mutation.http',
+      responseIndex: 1,
+      statusLine: 'HTTP/1.1 200 OK',
+    },
+    {
+      headers: {
+        'cache-control': 'no-store',
+        location: '/cart',
+      },
+      name: 'no-js-post-redirect-get.http',
+      responseIndex: 1,
+      statusLine: 'HTTP/1.1 303 See Other',
+    },
+    {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+      },
+      name: 'no-js-post-redirect-get.http',
+      responseIndex: 2,
+      statusLine: 'HTTP/1.1 200 OK',
+    },
+    {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+      },
+      name: 'typed-read.http',
+      responseIndex: 1,
+      statusLine: 'HTTP/1.1 200 OK',
+    },
+    {
+      headers: {
+        'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'fw-idem': 'idem_01HY',
+      },
+      name: 'validation-422-fragment.http',
+      responseIndex: 1,
+      statusLine: 'HTTP/1.1 422 Unprocessable Content',
+    },
+  ]);
+});
+
+void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
+  const fixtureSources = await loadWireFixtureSources();
+
+  assert.deepEqual(wireFixtureContentTypesFacts(fixtureSources), [
+    { contentTypes: ['text/html; charset=utf-8'], name: 'defer-stream.http' },
+    {
+      contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8'],
+      name: 'enhanced-mutation.http',
+    },
+    { contentTypes: [null, 'text/html; charset=utf-8'], name: 'no-js-post-redirect-get.http' },
+    { contentTypes: ['text/html; charset=utf-8'], name: 'typed-read.http' },
+    {
+      contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8'],
+      name: 'validation-422-fragment.http',
+    },
+  ]);
+  assert.deepEqual(wireFixturesWithContentType(fixtureSources, 'text/event-stream'), []);
 });
 
 void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {

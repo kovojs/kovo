@@ -376,7 +376,19 @@ import {
 import {
   parseWireFixture,
   parseWireResponses,
+  wireFixtureContentTypesFacts,
+  wireFixturePresenceFacts,
+  wireFixturesWithContentType,
+  wireFragmentModeFacts,
+  wireResponseBodyPinFacts,
+  wireResponseMetadataFacts,
   type WireFixture,
+  type WireFixtureContentTypesFact,
+  type WireFixturePresenceFact,
+  type WireFixtureSource,
+  type WireFragmentModeFact,
+  type WireResponseBodyPinFact,
+  type WireResponseMetadataFact,
   type WireTranscriptExchange,
   type WireTranscriptResponse,
 } from '@jiso/test/wire-fixtures';
@@ -1194,6 +1206,19 @@ describe('@jiso/test package subpath exports', () => {
       title: 'Cart read',
     });
     expect(parseWireResponses(wireFixture)).toMatchObject([{ status: 200 }]);
+    const wireSources = [{ name: 'cart-read.http', source: wireFixture }];
+    expect(wireFixturePresenceFacts(wireSources)).toMatchObject([{ name: 'cart-read.http' }]);
+    expect(wireFragmentModeFacts).toBeTypeOf('function');
+    expect(
+      wireResponseBodyPinFacts(wireSources, { 'cart-read.http': ['<main>Cart</main>'] }),
+    ).toHaveProperty('0.matches', true);
+    expect(wireResponseMetadataFacts(wireSources)).toMatchObject([
+      { headers: { 'content-type': 'text/html; charset=utf-8' } },
+    ]);
+    expect(wireFixtureContentTypesFacts(wireSources)).toEqual([
+      { contentTypes: ['text/html; charset=utf-8'], name: 'cart-read.http' },
+    ]);
+    expect(wireFixturesWithContentType(wireSources, 'text/event-stream')).toEqual([]);
     expect(runCommandSequenceSync).toBeTypeOf('function');
   });
 
@@ -1289,7 +1314,13 @@ type _PublicSubpathTypes = [
   StarterTemplateIndexHtmlFacts,
   StarterTemplatePackageFacts,
   StarterTemplateSources,
+  WireFixtureContentTypesFact,
   WireFixture,
+  WireFixturePresenceFact,
+  WireFixtureSource,
+  WireFragmentModeFact,
+  WireResponseBodyPinFact,
+  WireResponseMetadataFact,
   WireTranscriptExchange,
   WireTranscriptResponse,
   ParsedSqlOperation,
