@@ -1215,6 +1215,10 @@ Inline enhanced-response apply now parses response bodies in the generated insta
 extracted helper at `applyInlineMutationResponseChunks`, deleting the inline-only
 `applyInlineMutationResponseBody` parser/apply wrapper while preserving readable/minified artifact
 parity.
+Inline enhanced-response query event projection now also lives inside the extracted
+`packages/runtime/src/inline-response-apply.ts` helper, so the generated bootstrap only constructs
+the browser `CustomEvent` while the runtime-owned helper strips scanner offsets and owns the
+batched `jiso:query` detail shape consumed by `packages/runtime/src/query-events.ts`.
 Browser runtime coverage now follows the same Phase 4 seam split: the old broad
 `packages/runtime/src/index.browser.test.ts` has been deleted, loader/L0 behavior lives in
 `packages/runtime/src/loader.browser.test.ts`, visible-return typed-read refetch lives in
@@ -1372,6 +1376,20 @@ packages/runtime/src/inline-js-minifier.test.ts` and
       packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`,
       TypeScript `pnpm exec tsc --noEmit --pretty false`, `git diff --check`, and inline
       generation `pnpm --filter @jiso/runtime run check:inline-loader`.
+      Evidence 2026-06-13 round287b runtime closure:
+      `packages/runtime/src/inline-response-apply.ts` now owns the batched inline `jiso:query`
+      event detail projection via `dispatchInlineMutationQueries`, including dropping scanner-only
+      `start`/`end` offsets before dispatch. `packages/runtime/src/inline-loader-build.ts` now
+      passes only a `dispatchQueryEvent` CustomEvent seam into the extracted helper, and
+      regenerated `packages/runtime/src/inline-loader.ts` pins that readable/minified production
+      artifact. Verified by focused runtime tests `pnpm exec vitest --run
+      packages/runtime/src/inline-loader-response-apply.test.ts
+      packages/runtime/src/inline-loader-artifact-minifier.test.ts
+      packages/runtime/src/query-events.test.ts
+      packages/runtime/src/response-fragment-apply.test.ts`; inline generation
+      `pnpm run check:inline-loader`; browser runtime `pnpm exec vitest --config
+      vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts
+      packages/runtime/src/loader.browser.test.ts`.
       Evidence 2026-06-13 round270: inline enhanced-response application now extracts both sides of
       the inline parser/apply boundary from runtime-owned source. `packages/runtime/src/wire-response-scanner.ts`
       owns `readInlineMutationResponseBodyChunks`, while

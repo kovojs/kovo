@@ -20,7 +20,7 @@ describe('inline loader response apply source', () => {
     // extraction remains owned by the parser parity suite.
     const alternateReadableApply = [
       'function applyInlineMutationResponseChunks(chunks, options) {',
-      '  options.dispatchQueries(chunks.queries);',
+      '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
       '}',
       'function applyInlineFragment(fragment, findFragmentTarget) {',
@@ -44,6 +44,7 @@ describe('inline loader response apply source', () => {
     );
     expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragment(');
     expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragments(');
+    expect(inlineResponseApplyReadableSource).toContain('function dispatchInlineMutationQueries(');
     expect(inlineResponseApplyReadableSource).toContain('function appendInlineFragment(');
     expect(inlineResponseApplyReadableSource).toContain('function replaceInlineFragment(');
     expect(inlineResponseApplyReadableSource).toContain(
@@ -63,11 +64,18 @@ describe('inline loader response apply source', () => {
     // second hand-written apply function inside the generated bootstrap.
     const canonicalApply = [
       'export function applyInlineMutationResponseChunks(chunks, options) {',
-      '  options.dispatchQueries(chunks.queries);',
+      '  dispatchInlineMutationQueries(chunks.queries, options);',
       '  return applyResponseFragments(chunks.fragments, {',
       '    appendFragment: appendInlineFragment,',
       '    findFragmentTarget: (target) => options.findFragmentTarget(target),',
       '    replaceFragment: replaceInlineFragment,',
+      '  });',
+      '}',
+      'function dispatchInlineMutationQueries(queries, options) {',
+      '  options.dispatchQueryEvent("jiso:query", {',
+      '    detail: {',
+      '      queries: queries.map((query) => ({ attrs: query.attrs, content: query.content })),',
+      '    },',
       '  });',
       '}',
       'function applyResponseFragments(fragments, options) {',
@@ -102,8 +110,10 @@ describe('inline loader response apply source', () => {
     const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
 
     expect(canonicalReadable).toMatch(
-      /^function applyResponseFragment\(fragment, options\).*function applyInlineMutationResponseChunks\(chunks, options\)/s,
+      /^function dispatchInlineMutationQueries\(queries, options\).*function applyInlineMutationResponseChunks\(chunks, options\)/s,
     );
+    expect(canonicalReadable).toContain('function dispatchInlineMutationQueries(queries, options)');
+    expect(canonicalReadable).toContain('options.dispatchQueryEvent("jiso:query", {');
     expect(canonicalReadable).toContain('return applyResponseFragments(chunks.fragments, {');
     expect(() =>
       assertInlineJisoLoaderInstallerResponseApplyParity(readableInstaller, canonicalApply),
@@ -182,11 +192,11 @@ describe('inline loader response apply source', () => {
           { html: '<li>new</li>', mode: 'append', target: 'append-target' },
           { html: '<p>ignored</p>', target: 'missing-target' },
         ],
-        queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 0, start: 0 }],
+        queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
       },
       {
-        dispatchQueries(queries) {
-          dispatched.push([...queries]);
+        dispatchQueryEvent(type, init) {
+          dispatched.push({ type, ...init });
         },
         findFragmentTarget(target) {
           return targets.get(target) ?? null;
@@ -195,7 +205,12 @@ describe('inline loader response apply source', () => {
     );
 
     expect(dispatched).toEqual([
-      [{ attrs: ' name="cart"', content: 'decoded query', end: 0, start: 0 }],
+      {
+        detail: {
+          queries: [{ attrs: ' name="cart"', content: 'decoded query' }],
+        },
+        type: 'jiso:query',
+      },
     ]);
     expect(appliedFragments).toEqual(['replace-target', 'append-target']);
     expect(targets.get('replace-target')?.innerHTML).toBe('<p>replace</p>');
@@ -209,7 +224,7 @@ describe('inline loader response apply source', () => {
     const topLevelHelperSource = [
       'const applyTarget = (target, html) => { target.innerHTML = html; };',
       'export function applyInlineMutationResponseChunks(chunks, options) {',
-      '  options.dispatchQueries(chunks.queries);',
+      '  options.dispatchQueryEvent("jiso:query", { detail: { queries: chunks.queries } });',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
       '}',
       'function applyInlineFragment(fragment, findFragmentTarget) {',

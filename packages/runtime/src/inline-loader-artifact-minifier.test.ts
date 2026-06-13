@@ -56,13 +56,14 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragments(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function dispatchInlineMutationQueries(');
     expect(inlineJisoLoaderInstallerSource).toContain('function appendInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain('function replaceInlineFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'const dispatchQueries=(queries)=>{dispatchEvent(new CustomEvent',
+      'const dispatchQueryEvent=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueries,findFragmentTarget,});',
+      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueryEvent,findFragmentTarget,});',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function applyResponseFragments(fragments,options){const applied=[];for(const fragment of fragments)',
@@ -72,7 +73,7 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'detail:{queries:queries.map((query)=>({attrs:query.attrs,content:query.content}))}',
+      'detail:{queries:queries.map((query)=>({attrs:query.attrs,content:query.content})),}',
     );
   });
 });
