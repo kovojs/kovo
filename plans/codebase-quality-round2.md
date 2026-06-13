@@ -193,6 +193,12 @@ commerce source-truth matrix test consume the public fixture.
 
 Latest evidence:
 
+- Phase 5 root app-shell type alias removal slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence: `packages/server/src/index.ts` no longer
+  re-exports app-shell-only raw handler, versioned client-module registry, or Node adapter handler
+  types from the root `@jiso/server` barrel, while `packages/server/src/api/app.test.ts` pins those
+  root aliases absent and proves the focused SPEC §9.5 app-shell subpaths still own the types.
 - Phase 5 Vite manifest-file URL boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;

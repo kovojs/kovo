@@ -142,6 +142,20 @@ Implemented areas:
   export still copies the referenced immutable modules.
 - Vite manifest-file app-shell helpers now reject non-`file:` `manifestFile` URLs with FW229
   before manifest reads, route-hint wiring, static-export replay, or Vite build output planning.
+- The root `@jiso/server` type surface no longer forwards app-shell-only `RequestHandler`,
+  versioned client-module registry, or Node adapter handler option aliases; those types remain
+  available from the focused SPEC §9.5 app-shell subpaths while root keeps the built acceptance
+  harness value entries and CLI-used app/export diagnostic types.
+
+Round336 root app-shell type alias removal evidence:
+
+- `packages/server/src/index.ts` removes unused root type forwards for raw web handlers, versioned
+  client-module registries, and Node adapter handler options.
+- `packages/server/src/api/app.test.ts` pins the removed root aliases as compile-time failures and
+  proves the focused `app-shell/core`, `app-shell/client-modules`, and `app-shell/node` subpaths
+  still own those public types.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
 
 Round331 Vite manifest-file URL boundary evidence:
 

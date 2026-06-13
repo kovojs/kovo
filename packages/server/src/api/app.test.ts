@@ -27,6 +27,45 @@ import * as viteStaticExportBuildApi from '../vite-static-export-build.js';
 import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
 import * as wireHtmlApi from '../wire-html.js';
 
+// @ts-expect-error SPEC.md §9.5: raw web request handlers are app-shell/core boundary types,
+// not root @jiso/server compatibility aliases.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootRequestHandler = import('../index.js').RequestHandler;
+
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMemoryRegistryOptions =
+  // @ts-expect-error SPEC.md §9.5: memory registry options belong to app-shell/client-modules.
+  import('../index.js').MemoryVersionedClientModuleRegistryOptions;
+
+// @ts-expect-error SPEC.md §9.5: versioned client-module registry contracts belong to the focused
+// app-shell/client-modules subpath, not the root @jiso/server barrel.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootVersionedClientModuleRegistry = import('../index.js').VersionedClientModuleRegistry;
+
+// @ts-expect-error SPEC.md §9.5: Node adapter options belong to the focused app-shell/node
+// subpath, not the root @jiso/server barrel.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootNodeHandlerOptions = import('../index.js').NodeHandlerOptions;
+
+// @ts-expect-error SPEC.md §9.5: Node request handlers belong to the focused app-shell/node
+// subpath, not the root @jiso/server barrel.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootNodeRequestHandler = import('../index.js').NodeRequestHandler;
+
+// Focused app-shell subpaths remain the public type homes for the removed root aliases.
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type FocusedRequestHandler = import('./app-shell/core.js').RequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type FocusedMemoryRegistryOptions =
+  import('./app-shell/client-modules.js').MemoryVersionedClientModuleRegistryOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type FocusedVersionedClientModuleRegistry =
+  import('./app-shell/client-modules.js').VersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type FocusedNodeHandlerOptions = import('./app-shell/node.js').NodeHandlerOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type FocusedNodeRequestHandler = import('./app-shell/node.js').NodeRequestHandler;
+
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
 }
