@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./assertions": "./src/assertions.ts",
+    "./compiler-fixtures": "./src/compiler-fixtures.ts",
     "./command-fixtures": "./src/command-fixtures.ts",
     "./diagnostic-output-fixtures": "./src/diagnostic-output-fixtures.ts",
     "./fw-check-fixtures": "./src/fw-check-fixtures.ts",

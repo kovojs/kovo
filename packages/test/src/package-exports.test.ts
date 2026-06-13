@@ -45,6 +45,12 @@ import {
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
 import {
+  compilerDiagnosticFacts,
+  compilerUpdateCoverageFacts,
+  type CompilerDiagnosticFact,
+  type CompilerUpdateCoverageFact,
+} from '@jiso/test/compiler-fixtures';
+import {
   viteLoweredEventDiagnosticFact,
   viteDiagnosticMessageFacts,
   viteDiagnosticMessageFactsFromOutput,
@@ -554,6 +560,16 @@ describe('@jiso/test package subpath exports', () => {
     expect(commandSequence('vp run fw-check')).toMatchObject([
       { args: ['run', 'fw-check'], executable: 'vp' },
     ]);
+    expect(
+      compilerDiagnosticFacts([{ code: 'FW311', message: 'coverage', severity: 'warn' }]),
+    ).toEqual([{ code: 'FW311', message: 'coverage', severity: 'warn' }]);
+    expect(
+      compilerUpdateCoverageFacts([
+        { componentName: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' },
+      ]),
+    ).toEqual([{ component: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' }]);
+    expectTypeOf<CompilerDiagnosticFact>().toHaveProperty('code').toEqualTypeOf<string>();
+    expectTypeOf<CompilerUpdateCoverageFact>().toHaveProperty('component').toEqualTypeOf<string>();
     expect(commandOutputLines('one\r\ntwo\n')).toEqual(['one', 'two']);
     expect(commandSequenceWithoutLast('vp run build && vp run fw-check')).toBe('vp run build');
     expect(pnpmRunScriptNames('pnpm run build && pnpm run test:browser')).toEqual([

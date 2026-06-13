@@ -59,6 +59,10 @@ import {
   vitePlusTaskInputPatternEndingWith,
   vitestTaskCommand,
 } from '../packages/test/src/command-fixtures.ts';
+import {
+  compilerDiagnosticFacts,
+  compilerUpdateCoverageFacts,
+} from '../packages/test/src/compiler-fixtures.ts';
 import { viteLoweredEventDiagnosticFact } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
   fwExplainListField,
@@ -1279,9 +1283,10 @@ export const CartSearch = component('cart-search', {
     [],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-search.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-search.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartSearch = component('cart-search', {
@@ -1295,31 +1300,27 @@ export const CartSearch = component('cart-search', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW221'],
+    ),
     [
       {
         code: 'FW221',
         fileName: 'components/cart/cart-search.tsx',
-        length: 19,
         message: `${diagnosticDefinitions.FW221.message} missing-label`,
         severity: 'error',
-        start: { column: 14, line: 7 },
       },
       {
         code: 'FW221',
         fileName: 'components/cart/cart-search.tsx',
-        length: 41,
         message: `${diagnosticDefinitions.FW221.message} missing-help`,
         severity: 'error',
-        start: { column: 30, line: 8 },
       },
       {
         code: 'FW221',
         fileName: 'components/cart/cart-search.tsx',
-        length: 31,
         message: `${diagnosticDefinitions.FW221.message} missing-popover`,
         severity: 'error',
-        start: { column: 15, line: 10 },
       },
     ],
   );
@@ -1331,9 +1332,10 @@ void test('P1 compiler validates static id uniqueness', async () => {
     'Static id appears in a repeatable component or duplicate page composition.',
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-shell.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-shell.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartShell = component('cart-shell', {
@@ -1345,22 +1347,23 @@ export const CartShell = component('cart-shell', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW224'],
+    ),
     [
       {
         code: 'FW224',
         fileName: 'components/cart/cart-shell.tsx',
-        length: 15,
         message: `${diagnosticDefinitions.FW224.message} duplicate id="cart-title"`,
         severity: 'error',
-        start: { column: 15, line: 8 },
       },
     ],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-list.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-list.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartList = component('cart-list', {
@@ -1373,15 +1376,15 @@ export const CartList = component('cart-list', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW224'],
+    ),
     [
       {
         code: 'FW224',
         fileName: 'components/cart/cart-list.tsx',
-        length: 13,
         message: `${diagnosticDefinitions.FW224.message} repeatable id="cart-row"`,
         severity: 'error',
-        start: { column: 13, line: 8 },
       },
     ],
   );
@@ -1414,9 +1417,10 @@ export const CartTable = component('cart-table', {
     [],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-shell.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-shell.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartShell = component('cart-shell', {
@@ -1433,23 +1437,21 @@ export const CartShell = component('cart-shell', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW225'],
+    ),
     [
       {
         code: 'FW225',
         fileName: 'components/cart/cart-shell.tsx',
-        length: 5,
         message: `${diagnosticDefinitions.FW225.message} <div> cannot appear inside <p>`,
         severity: 'error',
-        start: { column: 9, line: 9 },
       },
       {
         code: 'FW225',
         fileName: 'components/cart/cart-shell.tsx',
-        length: 4,
         message: `${diagnosticDefinitions.FW225.message} <tr> must be inside a table section or table`,
         severity: 'error',
-        start: { column: 7, line: 11 },
       },
     ],
   );
@@ -1486,9 +1488,10 @@ export const ExecutionTriggers = component('execution-triggers', {
     [],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/execution-triggers.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/execution-triggers.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const ExecutionTriggers = component('execution-triggers', {
@@ -1500,23 +1503,21 @@ export const ExecutionTriggers = component('execution-triggers', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW211', 'FW212'],
+    ),
     [
       {
         code: 'FW211',
         fileName: 'components/execution-triggers.tsx',
-        length: 7,
         message: `${diagnosticDefinitions.FW211.message} on:load`,
         severity: 'lint',
-        start: { column: 21, line: 7 },
       },
       {
         code: 'FW212',
         fileName: 'components/execution-triggers.tsx',
-        length: 8,
         message: `${diagnosticDefinitions.FW212.message} on:media`,
         severity: 'lint',
-        start: { column: 21, line: 8 },
       },
     ],
   );
@@ -1544,9 +1545,10 @@ export const Recommendations = component('recommendations', {
     [],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/recommendations.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/recommendations.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const Recommendations = component('recommendations', {
@@ -1556,23 +1558,21 @@ export const Recommendations = component('recommendations', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW226'],
+    ),
     [
       {
         code: 'FW226',
         fileName: 'components/recommendations.tsx',
-        length: 24,
         message: `${diagnosticDefinitions.FW226.message} fw-c="unknown-component"`,
         severity: 'error',
-        start: { column: 14, line: 9 },
       },
       {
         code: 'FW226',
         fileName: 'components/recommendations.tsx',
-        length: 30,
         message: `${diagnosticDefinitions.FW226.message} fw-deps="missingQuery:p1"`,
         severity: 'error',
-        start: { column: 39, line: 9 },
       },
     ],
   );
@@ -1603,66 +1603,57 @@ export const CartBadge = component('cart-badge', {
 `,
   });
 
-  assert.deepEqual(result.updateCoverage, [
+  assert.deepEqual(compilerUpdateCoverageFacts(result.updateCoverage), [
     {
-      componentName: 'CartBadge',
+      component: 'CartBadge',
       detail: 'data-bind',
       position: 'binding',
       query: 'cart.count',
       status: 'plan',
     },
     {
-      componentName: 'CartBadge',
+      component: 'CartBadge',
       detail: 'data-bind:hidden',
       position: 'attribute',
       query: 'cart.empty',
       status: 'plan',
     },
     {
-      componentName: 'CartBadge',
+      component: 'CartBadge',
       detail: 'declared renderOnce',
       position: 'expression',
       query: 'cart.currency',
       status: 'renderOnce',
     },
     {
-      componentName: 'CartBadge',
+      component: 'CartBadge',
       detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
       position: 'expression',
       query: 'cart.discount',
-      sourceSpan: { length: 13, start: 355 },
       status: 'UNHANDLED',
     },
     {
-      componentName: 'CartBadge',
+      component: 'CartBadge',
       detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
       position: 'expression',
       query: 'product.name',
-      sourceSpan: { length: 12, start: 409 },
       status: 'UNHANDLED',
     },
   ]);
-  assert.deepEqual(
-    result.diagnostics.filter((diagnostic) => diagnostic.code === 'FW311'),
-    [
-      {
-        code: 'FW311',
-        fileName: 'components/cart/cart-badge.tsx',
-        length: 13,
-        message: `${diagnosticDefinitions.FW311.message} CartBadge cart.discount expression`,
-        severity: 'warn',
-        start: { column: 26, line: 11 },
-      },
-      {
-        code: 'FW311',
-        fileName: 'components/cart/cart-badge.tsx',
-        length: 12,
-        message: `${diagnosticDefinitions.FW311.message} CartBadge product.name expression`,
-        severity: 'warn',
-        start: { column: 22, line: 12 },
-      },
-    ],
-  );
+  assert.deepEqual(compilerDiagnosticFacts(result.diagnostics, ['FW311']), [
+    {
+      code: 'FW311',
+      fileName: 'components/cart/cart-badge.tsx',
+      message: `${diagnosticDefinitions.FW311.message} CartBadge cart.discount expression`,
+      severity: 'warn',
+    },
+    {
+      code: 'FW311',
+      fileName: 'components/cart/cart-badge.tsx',
+      message: `${diagnosticDefinitions.FW311.message} CartBadge product.name expression`,
+      severity: 'warn',
+    },
+  ]);
   assert.deepEqual(
     fwCheckAssertionFact(
       fwCheck({
@@ -1725,9 +1716,10 @@ void test('P1 compiler validates binding stamp expression drift', async () => {
     'Redundant hand-written binding stamp in sugar; the compiler derives it.',
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-badge.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-badge.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartBadge = component('cart-badge', {
@@ -1735,22 +1727,23 @@ export const CartBadge = component('cart-badge', {
   render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW223'],
+    ),
     [
       {
         code: 'FW223',
         fileName: 'components/cart/cart-badge.tsx',
-        length: 22,
         message: `${diagnosticDefinitions.FW223.message} data-bind="cart.count" wraps {cart.count}`,
         severity: 'lint',
-        start: { column: 31, line: 6 },
       },
     ],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-badge.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-badge.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartBadge = component('cart-badge', {
@@ -1758,15 +1751,15 @@ export const CartBadge = component('cart-badge', {
   render: ({ cart }) => <span data-bind="cart.count">{cart.total}</span>,
 });
 `,
-    }).diagnostics.filter((diagnostic) => diagnostic.code === 'FW222'),
+      }).diagnostics,
+      ['FW222'],
+    ),
     [
       {
         code: 'FW222',
         fileName: 'components/cart/cart-badge.tsx',
-        length: 22,
         message: `${diagnosticDefinitions.FW222.message} data-bind="cart.count" wraps {cart.total}`,
         severity: 'error',
-        start: { column: 31, line: 6 },
       },
     ],
   );
@@ -1783,9 +1776,10 @@ void test('P1 compiler validates primitive composition attribute merges', async 
   );
   assert.equal(diagnosticDefinitions.FW233.message, 'Two writers target the same binding slot.');
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/primitive-merge.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/primitive-merge.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const PrimitiveMerge = component('primitive-merge', {
@@ -1800,71 +1794,57 @@ export const PrimitiveMerge = component('primitive-merge', {
   ),
 });
 `,
-    }).diagnostics.filter((diagnostic) => ['FW231', 'FW232', 'FW233'].includes(diagnostic.code)),
+      }).diagnostics,
+      ['FW231', 'FW232', 'FW233'],
+    ),
     [
       {
         code: 'FW231',
         fileName: 'components/primitive-merge.tsx',
-        length: 19,
         message: `${diagnosticDefinitions.FW231.message} commandfor`,
         severity: 'error',
-        start: { column: 15, line: 9 },
       },
       {
         code: 'FW231',
         fileName: 'components/primitive-merge.tsx',
-        length: 15,
         message: `${diagnosticDefinitions.FW231.message} data-p-id`,
         severity: 'error',
-        start: { column: 56, line: 9 },
       },
       {
         code: 'FW231',
         fileName: 'components/primitive-merge.tsx',
-        length: 22,
         message: `${diagnosticDefinitions.FW231.message} fw-c`,
         severity: 'error',
-        start: { column: 88, line: 9 },
       },
       {
         code: 'FW232',
         fileName: 'components/primitive-merge.tsx',
-        length: 21,
         message: `${diagnosticDefinitions.FW232.message} aria-expanded`,
         severity: 'lint',
-        start: { column: 15, line: 10 },
       },
       {
         code: 'FW232',
         fileName: 'components/primitive-merge.tsx',
-        length: 13,
         message: `${diagnosticDefinitions.FW232.message} role`,
         severity: 'lint',
-        start: { column: 58, line: 10 },
       },
       {
         code: 'FW232',
         fileName: 'components/primitive-merge.tsx',
-        length: 19,
         message: `${diagnosticDefinitions.FW232.message} data-state`,
         severity: 'lint',
-        start: { column: 84, line: 10 },
       },
       {
         code: 'FW233',
         fileName: 'components/primitive-merge.tsx',
-        length: 22,
         message: `${diagnosticDefinitions.FW233.message} data-bind`,
         severity: 'error',
-        start: { column: 13, line: 11 },
       },
       {
         code: 'FW233',
         fileName: 'components/primitive-merge.tsx',
-        length: 29,
         message: `${diagnosticDefinitions.FW233.message} data-bind:hidden`,
         severity: 'error',
-        start: { column: 59, line: 11 },
       },
     ],
   );
@@ -1901,9 +1881,10 @@ export const CartTable = component('cart-table', {
     [],
   );
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-row.tsx',
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/cart/cart-row.tsx',
+        source: `
 import { component } from '@jiso/core';
 
 export const CartRow = component('cart-row', {
@@ -1922,7 +1903,9 @@ export const CartTable = component('cart-table', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW230'],
+    ),
     [
       {
         code: 'FW230',
@@ -1932,10 +1915,8 @@ export const CartTable = component('cart-table', {
           'Blocked children: <span>{window.location.href}</span>',
           'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
         ].join('\n'),
-        length: 35,
         message: `${diagnosticDefinitions.FW230.message} CartRow`,
         severity: 'error',
-        start: { column: 9, line: 14 },
       },
     ],
   );
@@ -2023,12 +2004,13 @@ href('/checkout', {});
   });
 
   assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/product-links.tsx',
-      registryFacts: {
-        routes: ['/cart', '/products/:id'],
-      },
-      source: `
+    compilerDiagnosticFacts(
+      compileComponentModule({
+        fileName: 'components/product-links.tsx',
+        registryFacts: {
+          routes: ['/cart', '/products/:id'],
+        },
+        source: `
 import { component } from '@jiso/core';
 
 export const ProductLinks = component('product-links', {
@@ -2040,23 +2022,21 @@ export const ProductLinks = component('product-links', {
   ),
 });
 `,
-    }).diagnostics,
+      }).diagnostics,
+      ['FW220'],
+    ),
     [
       {
         code: 'FW220',
         fileName: 'components/product-links.tsx',
-        length: 18,
         message: `${diagnosticDefinitions.FW220.message} /product/p1`,
         severity: 'error',
-        start: { column: 10, line: 7 },
       },
       {
         code: 'FW220',
         fileName: 'components/product-links.tsx',
-        length: 18,
         message: `${diagnosticDefinitions.FW220.message} /checkout`,
         severity: 'error',
-        start: { column: 26, line: 8 },
       },
     ],
   );

@@ -51,6 +51,9 @@ fixtures and query/diagnostic/touch behavior projections used by the fw-check Dr
 `fw-export` fixtures now own static export CLI stream, artifact byte, and summary projections for
 the D10 fw-check gate. Shared diagnostic-output fixtures now own the lowered Vite event-diagnostic
 projection used by the D10 fw-check gate, including lowered handler reference shape.
+Shared compiler fixtures now own diagnostic and update-coverage projections for the P1/P3
+fw-check compiler harness cases, so those assertions no longer compare source offsets, lengths, or
+`sourceSpan` fields in the monolith.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -108,6 +111,16 @@ Latest evidence:
   `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Compiler fixture diagnostic/update-coverage projection slice:
+  `pnpm exec vitest --run packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  exact `pnpm exec vp check --fix tests/fw-check.node.mjs packages/test/src/compiler-fixtures.ts packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json`;
+  exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/compiler-fixtures.ts packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Targeted `node --test --test-name-pattern "P1 compiler validates component-scoped IDREFs|P1 compiler validates static id uniqueness|P1 compiler validates HTML content-model parser stability|P1 compiler validates declared execution trigger names|P1 compiler validates residual fw-c and fw-deps stamps|P1 compiler emits FW311 update coverage facts|P1 compiler validates binding stamp expression drift|P1 compiler validates primitive composition attribute merges|P1 compiler validates fragment-target child hoisting failures|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`
+  could not load after a clean `pnpm run check:build` because current `dist/server/src/index.mjs`
+  does not export `createApp`, matching `packages/server/src/index.ts`; this is outside this
+  harness slice ownership and leaves the Phase 1 node-harness rerun as an integration gap.
 
 ## Phase 2 - Compiler IR
 
