@@ -59,8 +59,24 @@ import {
   htmlLinkHrefs,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
+import {
+  markdownFields,
+  markdownLeadingTitle,
+  markdownNumberedListItems,
+  markdownNumberedListTitles,
+  markdownSection,
+  markdownTableRows,
+  normalizeMarkdownCell,
+  type MarkdownFields,
+  type MarkdownTableRow,
+} from '@jiso/test/markdown-fixtures';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
+import {
+  cssSourceDirectives,
+  projectSourceSiteFact,
+  type ProjectSourceSiteFact,
+} from '@jiso/test/source-fixtures';
 import {
   observeSqlStatementArgument,
   observeSqlStatementIfString,
@@ -159,6 +175,20 @@ describe('@jiso/test package subpath exports', () => {
       { key: 'order-1', text: 'Order' },
     ]);
     expect(htmlTextContent('<p>Cart &amp; checkout</p>')).toBe('Cart & checkout');
+    expect(markdownSection('# Docs\n\n## Gates\nReady\n## Next', 'Gates')).toBe('Ready');
+    expect(markdownTableRows('| A | B |\n| --- | --- |\n| `one` | **two** |')).toEqual([
+      { A: 'one', B: 'two' },
+    ]);
+    expect(Object.fromEntries(markdownFields('Status: ready'))).toEqual({ Status: 'ready' });
+    expect(markdownNumberedListItems('1. **One.** Details')).toEqual(['One. Details']);
+    expect(markdownNumberedListTitles('1. **One.** Details')).toEqual(['One']);
+    expect(markdownLeadingTitle('**One.** Details')).toBe('One');
+    expect(normalizeMarkdownCell('`one` **two**')).toBe('one two');
+    expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
+    expect(projectSourceSiteFact('examples/commerce/src/app.ts:7')).toEqual({
+      line: 7,
+      path: 'examples/commerce/src/app.ts',
+    });
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');
@@ -232,6 +262,9 @@ type _PublicSubpathTypes = [
   JisoTestRunner,
   HarnessMutationOptions<JisoTestRequest<{ cart: string[] }>>,
   HarnessOperationVerifier,
+  MarkdownFields,
+  MarkdownTableRow,
+  ProjectSourceSiteFact,
   ParsedSqlOperation,
   DbObservationOptions,
   DbVerificationConfig,

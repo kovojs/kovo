@@ -61,6 +61,18 @@ import {
 } from '../packages/test/src/command-fixtures.ts';
 import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
+  markdownFields,
+  markdownLeadingTitle,
+  markdownNumberedListItems,
+  markdownNumberedListTitles,
+  markdownSection,
+  markdownTableRows,
+} from '../packages/test/src/markdown-fixtures.ts';
+import {
+  cssSourceDirectives,
+  projectSourceSiteFact,
+} from '../packages/test/src/source-fixtures.ts';
+import {
   createApp,
   csrfField,
   csrfToken,
@@ -370,13 +382,6 @@ const assertOrderedIncludes = (items, before, after) => {
   assert.ok(beforeIndex < afterIndex, `${before} precedes ${after}`);
 };
 
-const parseCssSourceDirectives = (source) =>
-  source
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('@source '))
-    .map((line) => line.slice('@source '.length).replace(/;$/, ''));
-
 const assertHtmlMainMarker = (source, marker, message) => {
   assert.equal(
     htmlElementFacts(source).find((element) => element.tag === 'main')?.attrs[
@@ -387,110 +392,11 @@ const assertHtmlMainMarker = (source, marker, message) => {
   );
 };
 
-const parseProjectSite = (site) => {
-  const separator = site.lastIndexOf(':');
-  assert.notEqual(separator, -1, `site includes a line number: ${site}`);
-  const line = Number(site.slice(separator + 1));
-  assert.equal(Number.isInteger(line) && line > 0, true, `site line is positive: ${site}`);
-  return { line, path: site.slice(0, separator) };
-};
-
-const normalizeMarkdownCell = (value) =>
-  value
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const markdownSection = (source, heading) => {
-  const lines = source.split('\n');
-  const headingLineIndex = lines.findIndex((line) => {
-    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
-    return match && normalizeMarkdownCell(match[2]) === heading;
-  });
-  assert.notEqual(headingLineIndex, -1, `markdown contains heading ${heading}`);
-  const level = /^(#{1,6})/.exec(lines[headingLineIndex])[1].length;
-  const endIndex = lines.findIndex((line, index) => {
-    if (index <= headingLineIndex) return false;
-    const match = /^(#{1,6})\s+/.exec(line);
-    return match && match[1].length <= level;
-  });
-
-  return lines.slice(headingLineIndex + 1, endIndex === -1 ? undefined : endIndex).join('\n');
-};
-
-const parseMarkdownNumberedList = (source) =>
-  source
-    .split('\n')
-    .map((line) => /^\s*\d+\.\s+(.+)$/.exec(line))
-    .filter(Boolean)
-    .map((match) => normalizeMarkdownCell(match[1]));
-
-const numberedListTitles = (source) =>
-  parseMarkdownNumberedList(source).map((item) => normalizeMarkdownCell(item.split('.')[0]));
-
-const markdownLeadingTitle = (value) =>
-  normalizeMarkdownCell(value.replaceAll('**', '').split('.')[0]);
-
 const canonicalDocRuleTitle = (title) =>
   title
     .replace('Local code must not require global knowledge', 'No global knowledge at local sites')
     .replace('One-to-one file mapping', '1:1 file mapping')
     .replace('Platform behavior emission', 'Platform-behavior emission');
-
-const parseMarkdownFields = (source) => {
-  const fields = new Map();
-  let currentField;
-
-  for (const line of source.split('\n')) {
-    const trimmed = line.trim();
-    const match = /^([A-Z][A-Za-z ]+):\s+(.+)$/.exec(trimmed);
-    if (match) {
-      currentField = match[1];
-      fields.set(currentField, normalizeMarkdownCell(match[2]));
-      continue;
-    }
-
-    if (
-      currentField &&
-      trimmed &&
-      !trimmed.startsWith('#') &&
-      !trimmed.startsWith('|') &&
-      !trimmed.startsWith('-') &&
-      !trimmed.startsWith('```')
-    ) {
-      fields.set(currentField, normalizeMarkdownCell(`${fields.get(currentField)} ${trimmed}`));
-      continue;
-    }
-
-    currentField = undefined;
-  }
-
-  return fields;
-};
-
-const parseMarkdownTable = (source) => {
-  const lines = source
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('|') && line.endsWith('|'));
-  assert.ok(lines.length >= 2, 'markdown section contains a table');
-  const header = lines[0]
-    .slice(1, -1)
-    .split('|')
-    .map((cell) => normalizeMarkdownCell(cell));
-  const rows = [];
-
-  for (const line of lines.slice(2)) {
-    const values = line
-      .slice(1, -1)
-      .split('|')
-      .map((cell) => normalizeMarkdownCell(cell));
-    rows.push(Object.fromEntries(header.map((name, index) => [name, values[index] ?? ''])));
-  }
-
-  return rows;
-};
 
 class GateMorphTarget {
   constructor(html = '') {
@@ -1307,14 +1213,14 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   const constitution = await readProjectFile('docs/constitution.md');
   const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
   const spec = await readProjectFile('SPEC.md');
-  const constitutionRows = parseMarkdownTable(
+  const constitutionRows = markdownTableRows(
     markdownSection(spec, '2. The Constitution (Design Tests)'),
   );
-  const specHardRuleTitles = numberedListTitles(
+  const specHardRuleTitles = markdownNumberedListTitles(
     markdownSection(spec, '5.2 Hard rules (normative)'),
   ).map(canonicalDocRuleTitle);
-  const compilerRuleTitles = numberedListTitles(compilerRules).map(canonicalDocRuleTitle);
-  const compilerRuleItems = parseMarkdownNumberedList(compilerRules);
+  const compilerRuleTitles = markdownNumberedListTitles(compilerRules).map(canonicalDocRuleTitle);
+  const compilerRuleItems = markdownNumberedListItems(compilerRules);
   const cssContractHeadings = markdownSection(spec, '13. Open Design Areas (named, not hand-waved)')
     .split('\n')
     .map((line) => /^\*\*(\d+\.\d+) (.+?)[.:]\*\*/.exec(line))
@@ -1339,7 +1245,7 @@ export const DocCard = component('doc-card', {
   const cssSource = behaviorFixture.files.find((file) => file.kind === 'css')?.source ?? '';
   const cssManifest = collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
 
-  assert.deepEqual(numberedListTitles(constitution), [
+  assert.deepEqual(markdownNumberedListTitles(constitution), [
     'Legibility is load-bearing',
     'Local code must not require global knowledge',
     'Sugar must lower to authorable IR',
@@ -1352,7 +1258,7 @@ export const DocCard = component('doc-card', {
   );
   assert.deepEqual(
     constitutionRows.map((row) => markdownLeadingTitle(row.Test)),
-    numberedListTitles(constitution).map(canonicalDocRuleTitle),
+    markdownNumberedListTitles(constitution).map(canonicalDocRuleTitle),
   );
   assert.deepEqual(compilerRuleTitles, [
     'Source-derived names',
@@ -1393,12 +1299,12 @@ export const DocCard = component('doc-card', {
 
 void test('P10 legibility study packet is ready but not claimed complete', async () => {
   const study = await readProjectFile('docs/legibility-study.md');
-  const fields = parseMarkdownFields(study);
-  const tasks = parseMarkdownTable(markdownSection(study, 'Tasks'));
-  const results = parseMarkdownTable(markdownSection(study, 'Results Ledger'));
-  const readinessRows = parseMarkdownTable(markdownSection(study, 'Dated Study Readiness Ledger'));
-  const localSessionChecks = parseMarkdownTable(markdownSection(study, 'Local Session Checklist'));
-  const issues = parseMarkdownTable(markdownSection(study, 'Issues Ledger'));
+  const fields = markdownFields(study);
+  const tasks = markdownTableRows(markdownSection(study, 'Tasks'));
+  const results = markdownTableRows(markdownSection(study, 'Results Ledger'));
+  const readinessRows = markdownTableRows(markdownSection(study, 'Dated Study Readiness Ledger'));
+  const localSessionChecks = markdownTableRows(markdownSection(study, 'Local Session Checklist'));
+  const issues = markdownTableRows(markdownSection(study, 'Issues Ledger'));
 
   assert.equal(fields.get('Status'), 'protocol ready; recruitment, sessions, and results pending');
   assert.equal(
@@ -1443,14 +1349,14 @@ void test('P10 legibility study packet is ready but not claimed complete', async
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
   const ledger = await readProjectFile('docs/v1-acceptance.md');
   const spec = await readProjectFile('SPEC.md');
-  const specCriteria = parseMarkdownNumberedList(
+  const specCriteria = markdownNumberedListItems(
     markdownSection(spec, '16. Success Criteria (v1)'),
   ).map((item) => item.split(':')[0]);
-  const gateRows = parseMarkdownTable(markdownSection(ledger, 'Required Gates'));
+  const gateRows = markdownTableRows(markdownSection(ledger, 'Required Gates'));
   const gatesByCriterion = new Map(gateRows.map((row) => [row['SPEC §16 criterion'], row]));
-  const auditRows = parseMarkdownTable(markdownSection(ledger, 'Dated Ledger Audit'));
-  const acceptanceRunRows = parseMarkdownTable(markdownSection(ledger, 'Acceptance Command Set'));
-  const cleanCheckoutRows = parseMarkdownTable(
+  const auditRows = markdownTableRows(markdownSection(ledger, 'Dated Ledger Audit'));
+  const acceptanceRunRows = markdownTableRows(markdownSection(ledger, 'Acceptance Command Set'));
+  const cleanCheckoutRows = markdownTableRows(
     markdownSection(ledger, 'Final Clean-Checkout Checklist'),
   );
   const auditStatuses = Object.fromEntries(auditRows.map((row) => [row.Area, row.Status]));
@@ -1536,16 +1442,16 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
 
 void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
-  const requiredChecks = parseMarkdownTable(markdownSection(checklist, 'Required Checks'));
-  const auditRows = parseMarkdownTable(markdownSection(checklist, 'Dated Audit Ledger'));
-  const runnableChecks = parseMarkdownTable(markdownSection(checklist, 'Runnable Local Checklist'));
+  const requiredChecks = markdownTableRows(markdownSection(checklist, 'Required Checks'));
+  const auditRows = markdownTableRows(markdownSection(checklist, 'Dated Audit Ledger'));
+  const runnableChecks = markdownTableRows(markdownSection(checklist, 'Runnable Local Checklist'));
   const evidenceLedgers = {
-    Domain: parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
-    'Linguistic screen': parseMarkdownTable(
+    Domain: markdownTableRows(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
+    'Linguistic screen': markdownTableRows(
       markdownSection(checklist, 'Linguistic Evidence Ledger'),
     )[0],
-    'npm scope': parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
-    'Trademark screen': parseMarkdownTable(
+    'npm scope': markdownTableRows(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
+    'Trademark screen': markdownTableRows(
       markdownSection(checklist, 'Trademark Evidence Ledger'),
     )[0],
   };
@@ -4265,7 +4171,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.equal(deferredApplication.root, loaderOptions.enhancedMutations.root);
   assert.equal(deferredApplication.store, starterClient.queryStore);
 
-  assert.deepEqual(parseCssSourceDirectives(stylesSource), [
+  assert.deepEqual(cssSourceDirectives(stylesSource), [
     '"../index.html"',
     '"./**/*.{ts,tsx,html}"',
     'inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200")',
@@ -6091,7 +5997,7 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     .flatMap((entry) => entry.touches)
     .map((touch) => touch.site);
   assert.equal(generatedSites.length, 5);
-  const generatedSiteFacts = generatedSites.map(parseProjectSite);
+  const generatedSiteFacts = generatedSites.map(projectSourceSiteFact);
   assert.deepEqual(
     [...new Set(generatedSiteFacts.map((site) => site.path))],
     ['examples/commerce/src/app.ts'],

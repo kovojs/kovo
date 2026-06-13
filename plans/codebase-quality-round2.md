@@ -87,6 +87,9 @@ Closed evidence so far:
   command-sequence parsers for the starter/conformance/browser/perf gates; those checks consume
   `@jiso/test/command-fixtures` argv/task/workflow facts, with command execution preserved through
   `execFileSync` argv calls.
+- `tests/fw-check.node.mjs` no longer owns local markdown table/section/field/list, Tailwind
+  `@source`, or generated source-site parsers; docs/readiness, starter template, and commerce graph
+  checks consume `@jiso/test/markdown-fixtures` and `@jiso/test/source-fixtures` seams.
 
 Open:
 
@@ -119,6 +122,9 @@ Recent gates:
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate|framework-owned browser suite is wired into acceptance|P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules|P10 legibility study packet is ready but not claimed complete|P10 v1 acceptance ledger tracks every freeze criterion|pre-launch checklist is tracked explicitly|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 
 ## Phase 2 - Compiler IR
 
@@ -589,6 +595,9 @@ Closed evidence so far:
 - The commerce P4 fw-check gate now treats `emit-graph.mjs --check` as the generated-artifact
   freshness proof and verifies the resulting graph behavior with `fw-check`, `fw explain`, and
   registry facts instead of executing generated TS source.
+- `@jiso/test/source-fixtures` exposes structured Tailwind `@source` directive and generated
+  source-site facts; package export tests pin the subpath seam, `fw-check` uses it for starter CSS
+  and commerce graph line facts, and the P4 graph gate still proves SPEC.md §11.1 graph behavior.
 
 Open:
 
@@ -630,6 +639,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/test-fixtures.ts packages/test/src/harness-operations.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules|P10 legibility study packet is ready but not claimed complete|P10 v1 acceptance ledger tracks every freeze criterion|pre-launch checklist is tracked explicitly|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 
 ## Phase 7 - Test Restructuring
 
@@ -663,6 +675,9 @@ Closed evidence so far:
   package scripts, Vite+ task commands, pnpm filter test commands, and shell-free command
   sequences; `packages/test/src/command-fixtures.test.ts` and `package-exports.test.ts` pin the
   public subpath seam consumed by `fw-check`.
+- `packages/test/src/markdown-fixtures.ts` and `packages/test/src/source-fixtures.ts` now own
+  reusable markdown ledger, Tailwind `@source`, and generated source-site fixture facts; focused
+  package tests and package export tests pin the seams consumed by `fw-check`.
 
 Open:
 
