@@ -841,6 +841,11 @@ Inline and modular fragment response apply now share `applyResponseFragment` fro
 `packages/runtime/src/inline-response-apply.ts`: the extracted inline helper supplies tiny DOM
 append/replace adapters, while `packages/runtime/src/morph.ts` supplies the modular morph and
 island-signal cleanup adapters around the same target/mode decision.
+Browser runtime coverage now follows the same Phase 4 seam split: the old broad
+`packages/runtime/src/index.browser.test.ts` has been deleted, loader/L0 behavior lives in
+`packages/runtime/src/loader.browser.test.ts`, visible-return typed-read refetch lives in
+`packages/runtime/src/query-visible-return.browser.test.ts`, and real DOM mutation-response apply
+lives in `packages/runtime/src/mutation-response-dom.browser.test.ts`.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -938,6 +943,28 @@ packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-
       full runtime `pnpm exec vitest --run packages/runtime/src`, and `pnpm --filter
       @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+      Evidence 2026-06-13 round275: broad browser runtime coverage was split along loader, query,
+      and DOM response-apply seams. `packages/runtime/src/index.browser.test.ts` was deleted;
+      `packages/runtime/src/loader.browser.test.ts` owns P2 first-paint loader, delegated idle, and
+      L0 IDREF/popover behavior; `packages/runtime/src/query-visible-return.browser.test.ts` owns
+      visible-return typed-read refetch; and
+      `packages/runtime/src/mutation-response-dom.browser.test.ts` owns real DOM fragment apply,
+      keyed morph preservation, append, and target resolution. Verified by browser runtime
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+      packages/runtime/src/loader.browser.test.ts
+      packages/runtime/src/query-visible-return.browser.test.ts
+      packages/runtime/src/mutation-response-dom.browser.test.ts`; focused apply/query/inline
+      boundary tests `pnpm exec vitest --run packages/runtime/src/mutation-response-apply.test.ts
+      packages/runtime/src/mutation-response-wire-apply.test.ts packages/runtime/src/query-apply.test.ts
+      packages/runtime/src/inline-loader-response-apply.test.ts
+      packages/runtime/src/inline-loader-parser-parity.test.ts
+      packages/runtime/src/inline-js-minifier.test.ts`; inline generation `pnpm --filter
+      @jiso/runtime run check:inline-loader`; exact `pnpm exec vp check
+      packages/runtime/src/loader.browser.test.ts
+      packages/runtime/src/query-visible-return.browser.test.ts
+      packages/runtime/src/mutation-response-dom.browser.test.ts
+      packages/runtime/src/index.browser.test.ts plans/codebase-quality-round2.md`; and
+      `git diff --check`.
       Evidence 2026-06-13: `packages/runtime/src/index.test.ts` now owns only public barrel
       loader smoke. `packages/runtime/src/loader-query-hydration.test.ts`,
       `packages/runtime/src/loader-enhanced-mutation.test.ts`, and
