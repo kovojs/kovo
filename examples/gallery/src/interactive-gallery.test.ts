@@ -165,6 +165,7 @@ describe('compiled interactive gallery demos', () => {
     const menubar = readGenerated('menubar-demo.tsx');
     const meter = readGenerated('meter-demo.tsx');
     const navigationMenu = readGenerated('navigation-menu-demo.tsx');
+    const navigationMenuClient = readGenerated('navigation-menu-demo.client.js');
     const numberField = readGenerated('number-field-demo.tsx');
     const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
@@ -394,6 +395,7 @@ describe('compiled interactive gallery demos', () => {
     expect(navigationMenu).toContain(
       'fw-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
     );
+    expect(navigationMenuClient).toContain("key === 'Escape'");
     expect(navigationMenu).toContain('navigationMenuTriggerAttributes({');
     expect(navigationMenu).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$section_keydown"/,
@@ -930,7 +932,7 @@ describe('compiled interactive gallery demos', () => {
 
     const navigationMenuState = { activeValue: 'products', openValue: '', value: 'none' };
     clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
-      new Event('keydown'),
+      keyEvent('ArrowRight'),
       {
         params: {},
         signal,
@@ -938,6 +940,44 @@ describe('compiled interactive gallery demos', () => {
       },
     );
     expect(navigationMenuState).toEqual({ activeValue: 'docs', openValue: '', value: 'none' });
+    const navigationKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'Enter',
+    });
+    navigationMenuState.activeValue = 'products';
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+      navigationKeyboardEvent,
+      {
+        params: {},
+        signal,
+        state: navigationMenuState,
+      },
+    );
+    expect(navigationKeyboardEvent.defaultPrevented).toBe(true);
+    expect(navigationMenuState).toEqual({
+      activeValue: 'products',
+      openValue: 'products',
+      value: 'none',
+    });
+    const navigationEscapeEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'Escape',
+    });
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+      navigationEscapeEvent,
+      {
+        params: {},
+        signal,
+        state: navigationMenuState,
+      },
+    );
+    expect(navigationEscapeEvent.defaultPrevented).toBe(true);
+    expect(navigationMenuState).toEqual({
+      activeValue: 'products',
+      openValue: 'products',
+      value: 'escape-canceled',
+    });
+    navigationMenuState.activeValue = 'docs';
+    navigationMenuState.openValue = '';
+    navigationMenuState.value = 'none';
     clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_click')(new Event('click'), {
       params: {},
       signal,
@@ -1388,7 +1428,7 @@ describe('compiled interactive gallery demos', () => {
       const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js', { document });
       const navigationState = { activeValue: 'products', openValue: '', value: 'none' };
       clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
-        new Event('keydown'),
+        keyEvent('ArrowRight'),
         { params: {}, signal, state: navigationState },
       );
       expect(element(document, 'gallery-navigation-products-trigger').tabIndex).toBe(-1);
@@ -1405,6 +1445,25 @@ describe('compiled interactive gallery demos', () => {
       expect(element(document, 'gallery-navigation-viewport').hidden).toBe(false);
       expect(selector(document, '[data-demo-state="navigation-open"]').textContent).toBe(
         'products',
+      );
+      const navEscape = Object.assign(new Event('keydown', { cancelable: true }), {
+        key: 'Escape',
+      });
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(navEscape, {
+        params: {},
+        signal,
+        state: navigationState,
+      });
+      expect(navEscape.defaultPrevented).toBe(true);
+      expect(element(document, 'gallery-navigation-products-trigger').attrs['aria-expanded']).toBe(
+        'true',
+      );
+      expect(element(document, 'gallery-navigation-products-content').hidden).toBe(false);
+      expect(selector(document, '[data-demo-state="navigation-open"]').textContent).toBe(
+        'products',
+      );
+      expect(selector(document, '[data-demo-state="navigation-value"]').textContent).toBe(
+        'escape-canceled',
       );
       const navClick = new Event('click', { cancelable: true });
       clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$a_click')(navClick, {

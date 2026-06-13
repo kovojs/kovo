@@ -143,6 +143,7 @@ export const NavigationMenu = component('navigation-menu', {
         class={cn(navigationMenuClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
+        data-state={attrs['data-state']}
         id={attrs.id}
         role={attrs.role}
       >
@@ -165,6 +166,7 @@ export const NavigationMenuList = component('navigation-menu-list', {
         class={cn(navigationMenuListClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
+        data-state={attrs['data-state']}
         id={attrs.id}
         role={attrs.role}
       >

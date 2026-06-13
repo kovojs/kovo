@@ -511,7 +511,7 @@ export function navigationMenuKeyDown(
       'trigger-keyboard',
       options,
     );
-    if (result.changed) event.preventDefault();
+    if (!navigationMenuItemDisabled(state, state.activeValue)) event.preventDefault();
     return result;
   }
 

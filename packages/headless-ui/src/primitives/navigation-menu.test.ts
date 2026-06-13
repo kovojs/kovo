@@ -553,6 +553,43 @@ describe('headless-ui navigation-menu primitive', () => {
     expect(disabledEvent.defaultPrevented).toBe(false);
   });
 
+  it('prevents native trigger activation when keyboard open is unchanged or canceled', () => {
+    const unchangedEvent = keydownEvent('Enter');
+    expect(
+      navigationMenuKeyDown(unchangedEvent, {
+        activeValue: 'products',
+        items: navigationItems,
+        openValue: 'products',
+      }),
+    ).toEqual({ changed: false, openValue: 'products' });
+    expect(unchangedEvent.defaultPrevented).toBe(true);
+
+    const canceledEvent = keydownEvent(' ');
+    expect(
+      navigationMenuKeyDown(
+        canceledEvent,
+        {
+          activeValue: 'products',
+          items: navigationItems,
+        },
+        {
+          onOpenChange(detail) {
+            detail.preventDefault();
+          },
+        },
+      ),
+    ).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({
+        defaultPrevented: true,
+        reason: 'trigger-keyboard',
+        value: 'products',
+      }),
+      openValue: undefined,
+    });
+    expect(canceledEvent.defaultPrevented).toBe(true);
+  });
+
   it('exports navigation-menu helpers from package and primitives barrels', () => {
     expect(exportedNavigationMenuContentAttributes).toBe(navigationMenuContentAttributes);
     expect(exportedNavigationMenuIndicatorAttributes).toBe(navigationMenuIndicatorAttributes);

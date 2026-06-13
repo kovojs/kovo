@@ -40,7 +40,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
         class="grid gap-2"
         data-gallery-interactive="navigation-menu"
         onKeyDown={() => {
-          state.activeValue = 'docs';
+          const key = String(Object(event)['key'] ?? '');
           const doc = Reflect['get'](globalThis, 'document');
           const products = doc
             ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-products-trigger')
@@ -48,8 +48,52 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           const docs = doc
             ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-docs-link')
             : undefined;
-          if (products) products['tabIndex'] = -1;
-          if (docs) docs['tabIndex'] = 0;
+          const content = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-products-content')
+            : undefined;
+          const viewport = doc
+            ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-viewport')
+            : undefined;
+          const openOutput = doc
+            ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="navigation-open"]')
+            : undefined;
+          const valueOutput = doc
+            ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="navigation-value"]')
+            : undefined;
+
+          if (key === 'ArrowRight') {
+            state.activeValue = 'docs';
+            if (products) products['tabIndex'] = -1;
+            if (docs) docs['tabIndex'] = 0;
+            return;
+          }
+
+          if (
+            (key === 'Enter' || key === ' ' || key === 'Spacebar' || key === 'ArrowDown') &&
+            state.activeValue === 'products'
+          ) {
+            Object(event)['preventDefault']?.call(event);
+            state.openValue = 'products';
+          } else if (key === 'Escape' && state.openValue === 'products') {
+            Object(event)['preventDefault']?.call(event);
+            state.value = 'escape-canceled';
+          } else {
+            return;
+          }
+
+          {
+            if (products) {
+              Object(products)['setAttribute']?.call(
+                products,
+                'aria-expanded',
+                String(state.openValue === 'products'),
+              );
+            }
+            if (content) content['hidden'] = state.openValue !== 'products';
+            if (viewport) viewport['hidden'] = state.openValue === '';
+            if (openOutput) openOutput['textContent'] = state.openValue || 'none';
+            if (valueOutput) valueOutput['textContent'] = state.value;
+          }
         }}
       >
         <div {...navigationMenuListAttributes(rootState)}>

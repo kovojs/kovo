@@ -1805,25 +1805,38 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(productsContent.hidden).toBe(true);
     expect(viewport.hidden).toBe(true);
 
-    navRoot.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    products.focus();
+    await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {
       expect(navRoot.getAttribute('fw-state')).toBe(
-        '{"activeValue":"docs","openValue":"","value":"none"}',
-      );
-      expect(products.tabIndex).toBe(-1);
-      expect(docs.tabIndex).toBe(0);
-    });
-
-    products.click();
-
-    await vi.waitFor(() => {
-      expect(navRoot.getAttribute('fw-state')).toBe(
-        '{"activeValue":"docs","openValue":"products","value":"none"}',
+        '{"activeValue":"products","openValue":"products","value":"none"}',
       );
       expect(products.getAttribute('aria-expanded')).toBe('true');
       expect(productsContent.hidden).toBe(false);
       expect(viewport.hidden).toBe(false);
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    await vi.waitFor(() => {
+      expect(navRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"products","openValue":"products","value":"escape-canceled"}',
+      );
+      expect(products.getAttribute('aria-expanded')).toBe('true');
+      expect(productsContent.hidden).toBe(false);
+      expect(viewport.hidden).toBe(false);
+      expect(navValue.textContent).toBe('escape-canceled');
+    });
+
+    navRoot.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      expect(navRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"docs","openValue":"products","value":"escape-canceled"}',
+      );
+      expect(products.tabIndex).toBe(-1);
+      expect(docs.tabIndex).toBe(0);
     });
 
     docs.removeAttribute('href');

@@ -40,7 +40,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
         {...navigationMenuRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="navigation-menu"
-        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=36d82bd2#GalleryNavigationMenuDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e1ea7a14#GalleryNavigationMenuDemo$section_keydown"
         fw-c="gallery-navigation-menu-demo"
         fw-state='{"activeValue":"products","openValue":"","value":"none"}'
       >
@@ -54,7 +54,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemLabel: 'Products',
                 itemValue: 'products',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=36d82bd2#GalleryNavigationMenuDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e1ea7a14#GalleryNavigationMenuDemo$button_click"
             >
               Products
             </button>
@@ -68,7 +68,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemLabel: 'Docs',
                 itemValue: 'docs',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=36d82bd2#GalleryNavigationMenuDemo$a_click"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e1ea7a14#GalleryNavigationMenuDemo$a_click"
             >
               Docs
             </a>

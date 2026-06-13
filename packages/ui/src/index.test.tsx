@@ -1674,8 +1674,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(NavigationMenuContent.name).toBe('navigation-menu-content');
     expect(NavigationMenuLink.name).toBe('navigation-menu-link');
     expect(navigation).toContain('aria-label="Primary"');
+    expect(navigation).toContain('data-state="open"');
     expect(navigation).toContain('role="navigation"');
-    expect(navigation).toContain('role="list"');
+    expect(navigation).toContain('data-state="open" role="list"');
     expect(navigation).toContain('role="listitem"');
     expect(navigation).toContain('aria-controls="products-panel"');
     expect(navigation).toContain('aria-expanded="true"');

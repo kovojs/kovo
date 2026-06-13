@@ -177,6 +177,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       non-dismissing action marker; static fixtures, refreshed generated artifacts, generated-client
       tests, and a browser-backed compiled gallery test prove the canceled toast action prevents
       default, leaves `fw-state`/DOM visibility open, and a following dismiss closes the toast.
+      Evidence 2026-06-13: `navigationMenuKeyDown()` now prevents native follow-up activation for
+      enabled content triggers when keyboard open is unchanged or canceled, styled
+      `NavigationMenu`/`NavigationMenuList` render primitive `data-state`, and the compiled
+      navigation-menu gallery proves Enter keyboard open, canceled Escape restoration, roving
+      focus, and link selection through refreshed generated artifacts plus a browser-backed check.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -203,6 +208,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t toast)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/toast.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/toast.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Navigation-menu keyboard restoration and styled state slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/navigation-menu.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t navigation-menu`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "updates generated menubar and navigation-menu roving/open state")`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/navigation-menu.ts packages/headless-ui/src/primitives/navigation-menu.test.ts packages/ui/src/navigation-menu.tsx packages/ui/src/index.test.tsx examples/gallery/src/interactive/navigation-menu-demo.tsx examples/gallery/src/generated/interactive/navigation-menu-demo.tsx examples/gallery/src/generated/interactive/navigation-menu-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
       `git diff --check`.
 - [x] Checkbox-group form ownership and keyboard/focus closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox-group.test.ts`;
