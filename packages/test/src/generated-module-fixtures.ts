@@ -271,6 +271,49 @@ export interface GeneratedWireDeferredBehaviorFact {
   stylesheetHrefsByTarget: Record<string, string[]>;
 }
 
+export interface GeneratedMinifierNamePreservationBehaviorFact {
+  callResults: {
+    add: unknown;
+    remove: unknown;
+    subtract: unknown;
+  };
+  exportTypes: Record<string, string>;
+  forwardedCalls: Array<{
+    ctx: unknown;
+    event: unknown;
+  }>;
+  handlerExports: string[];
+  reservedNames: string[];
+  stateCountAfterAdd: unknown;
+  stateCountAfterSubtract: unknown;
+}
+
+export interface GeneratedTypedDataParamCoercionBehaviorFact {
+  buttonAttributes: Array<Record<string, string>>;
+  handlerResults: {
+    add: unknown;
+    deselect: unknown;
+    select: unknown;
+  };
+  parsedParams: {
+    add: Record<string, unknown>;
+    deselect: Record<string, unknown>;
+    select: Record<string, unknown>;
+    standalone: Record<string, unknown>;
+  };
+  stateCountAfterAdd: unknown;
+}
+
+export interface GeneratedRenderEquivalenceBehaviorFact {
+  actualMatchesExpected: boolean;
+  artifact: string | undefined;
+  boundSpanAttrs: Record<string, string> | undefined;
+  cartTotalAttrs: Record<string, string> | undefined;
+  checkCount: number;
+  mismatchRejected: boolean;
+  ok: boolean | undefined;
+}
+
 export interface InlineEnhancedFormLoaderFact {
   appendCalls: Array<[string, string]>;
   dispatchedQueries: Array<{
@@ -341,6 +384,40 @@ export interface GeneratedRenderedElementFact {
 export interface GeneratedRegistryConsumerTypeOptions extends AssertTypeScriptProgramOptions {
   consumerFileName?: string;
   registryFileName?: string;
+}
+
+export interface GeneratedMinifierNamePreservationOptions {
+  cartBadge: {
+    files: readonly GeneratedArtifactFile[];
+    handlerExports: readonly string[];
+  };
+  cartDrawer: unknown;
+  collectMinifierReservedNames(results: readonly unknown[]): string[];
+  executeClientArtifact: typeof executeGeneratedClientArtifact;
+  runtime: GeneratedRuntimeModule;
+}
+
+export interface GeneratedTypedDataParamCoercionOptions {
+  executeClientArtifact: typeof executeGeneratedClientArtifact;
+  files: readonly GeneratedArtifactFile[];
+  readElementParams(element: {
+    attributes: Array<{ name: string; value: string }>;
+    getAttribute(name: string): string | null | undefined;
+  }): Record<string, unknown>;
+  runtime: GeneratedRuntimeModule;
+}
+
+export interface GeneratedRenderEquivalenceOptions {
+  assertRenderEquivalence(result: unknown): void;
+  result: {
+    files: readonly GeneratedArtifactFile[];
+    renderEquivalenceChecks: Array<{
+      actual: string;
+      artifact: string;
+      expected: string;
+      ok: boolean;
+    }>;
+  };
 }
 
 const isLowerHex = (value: string): boolean => /^[0-9a-f]+$/.test(value);
@@ -453,6 +530,147 @@ export function generatedClientExportTypeFacts(
   names: readonly string[],
 ): Record<string, string> {
   return Object.fromEntries(names.map((name) => [name, typeof exports[name]]));
+}
+
+export function generatedMinifierNamePreservationBehaviorFact(
+  options: GeneratedMinifierNamePreservationOptions,
+): GeneratedMinifierNamePreservationBehaviorFact {
+  const forwardedCalls: GeneratedMinifierNamePreservationBehaviorFact['forwardedCalls'] = [];
+  const client = options.executeClientArtifact(options.cartBadge.files, {
+    context: {
+      removeItem(event: unknown, ctx: unknown) {
+        forwardedCalls.push({ ctx, event });
+        return 'removed';
+      },
+    },
+    runtime: options.runtime,
+  });
+  const remove = callableGeneratedExport(client, 'CartBadge$removeItem');
+  const add = callableGeneratedExport(client, 'CartBadge$button_click');
+  const subtract = callableGeneratedExport(client, 'CartBadge$button_click_2');
+  const clickContext = { params: { quantity: 2 }, state: { count: 5 } };
+  const removeResult = remove('click', clickContext);
+  const addResult = add('click', clickContext);
+  const stateCountAfterAdd = clickContext.state.count;
+  const subtractResult = subtract('click', clickContext);
+
+  return {
+    callResults: {
+      add: addResult,
+      remove: removeResult,
+      subtract: subtractResult,
+    },
+    exportTypes: generatedClientExportTypeFacts(client, options.cartBadge.handlerExports),
+    forwardedCalls,
+    handlerExports: [...options.cartBadge.handlerExports],
+    reservedNames: options.collectMinifierReservedNames([
+      options.cartDrawer,
+      options.cartBadge,
+      options.cartBadge,
+    ]),
+    stateCountAfterAdd,
+    stateCountAfterSubtract: clickContext.state.count,
+  };
+}
+
+export function generatedTypedDataParamCoercionBehaviorFact(
+  options: GeneratedTypedDataParamCoercionOptions,
+): GeneratedTypedDataParamCoercionBehaviorFact {
+  const buttons = generatedRenderedElementFactsFromArtifact(options.files, { tag: 'button' });
+  const client = options.executeClientArtifact(options.files, {
+    context: {
+      deselect: (id: unknown) => `deselect:${String(id)}`,
+      select: (id: unknown) => `select:${String(id)}`,
+    },
+    runtime: options.runtime,
+  });
+  const add = callableGeneratedExport(client, 'CartActions$button_click');
+  const select = callableGeneratedExport(client, 'CartActions$button_click_2');
+  const addParams = options.readElementParams({
+    attributes: [{ name: 'data-p-quantity', value: '2' }],
+    getAttribute: (name) =>
+      name === 'fw-param-types' ? buttons[0]?.attrs['fw-param-types'] : null,
+  });
+  const selectParams = options.readElementParams({
+    attributes: [
+      { name: 'data-p-selected', value: 'true' },
+      { name: 'data-p-id', value: 'p1' },
+    ],
+    getAttribute: (name) =>
+      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
+  });
+  const deselectParams = options.readElementParams({
+    attributes: [
+      { name: 'data-p-selected', value: 'false' },
+      { name: 'data-p-id', value: 'p2' },
+    ],
+    getAttribute: (name) =>
+      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
+  });
+  const standaloneParams = options.readElementParams({
+    attributes: [
+      { name: 'data-p-product-id', value: 'p1' },
+      { name: 'data-p-quantity', value: '2' },
+      { name: 'data-p-featured', value: 'false' },
+    ],
+    getAttribute: (name) => (name === 'fw-param-types' ? 'quantity:number featured:boolean' : null),
+  });
+  const cartState = { count: 1 };
+
+  return {
+    buttonAttributes: buttons.map((button) => typedDataParamAttributes(button.attrs)),
+    handlerResults: {
+      add: add('click', { params: addParams, state: cartState }),
+      deselect: select('click', { params: deselectParams, state: cartState }),
+      select: select('click', { params: selectParams, state: cartState }),
+    },
+    parsedParams: {
+      add: addParams,
+      deselect: deselectParams,
+      select: selectParams,
+      standalone: standaloneParams,
+    },
+    stateCountAfterAdd: cartState.count,
+  };
+}
+
+export function generatedRenderEquivalenceBehaviorFact(
+  options: GeneratedRenderEquivalenceOptions,
+): GeneratedRenderEquivalenceBehaviorFact {
+  const renderedElements = generatedRenderedElementFactsFromArtifact(options.result.files);
+  const cartTotal = renderedElements.find((element) => element.tag === 'cart-total');
+  const boundSpan = renderedElements.find((element) => element.tag === 'span');
+  const [check] = options.result.renderEquivalenceChecks;
+  options.assertRenderEquivalence(options.result);
+
+  let mismatchRejected = false;
+  if (check) {
+    try {
+      options.assertRenderEquivalence({
+        ...options.result,
+        renderEquivalenceChecks: [
+          {
+            ...check,
+            actual: '<cart-total>0</cart-total>',
+            expected: '<cart-total>1</cart-total>',
+            ok: false,
+          },
+        ],
+      });
+    } catch {
+      mismatchRejected = true;
+    }
+  }
+
+  return {
+    actualMatchesExpected: check?.actual === check?.expected,
+    artifact: check?.artifact,
+    boundSpanAttrs: boundSpan?.attrs,
+    cartTotalAttrs: cartTotal?.attrs,
+    checkCount: options.result.renderEquivalenceChecks.length,
+    mismatchRejected,
+    ok: check?.ok,
+  };
 }
 
 export function generatedQueryUpdatePlanBehaviorFact(
@@ -797,6 +1015,25 @@ function renderedElementFacts(
     innerHtml,
     tag,
   }));
+}
+
+function callableGeneratedExport(
+  exports: Record<string, unknown>,
+  name: string,
+): (event: unknown, ctx: unknown) => unknown {
+  const handler = exports[name];
+  if (typeof handler !== 'function') {
+    throw new Error(`Generated client export is callable: ${name}`);
+  }
+  return handler as (event: unknown, ctx: unknown) => unknown;
+}
+
+function typedDataParamAttributes(attrs: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(attrs).filter(
+      ([name]) => name === 'fw-param-types' || name.startsWith('data-p-'),
+    ),
+  );
 }
 
 export function executeGeneratedBootstrapModule(

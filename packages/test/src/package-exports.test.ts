@@ -130,14 +130,20 @@ import {
   generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
+  generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
+  generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
+  generatedTypedDataParamCoercionBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
   generatedRenderedElementFactsFromSource,
   type GeneratedComponentSourceFacts,
+  type GeneratedMinifierNamePreservationBehaviorFact,
+  type GeneratedRenderEquivalenceBehaviorFact,
   type GeneratedRegistryConsumerTypeOptions,
+  type GeneratedTypedDataParamCoercionBehaviorFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -493,9 +499,12 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(mcpJsonRpcResponseFacts).toBeTypeOf('function');
+    expect(generatedMinifierNamePreservationBehaviorFact).toBeTypeOf('function');
     expect(generatedQueryUpdatePlanBehaviorFact).toBeTypeOf('function');
+    expect(generatedRenderEquivalenceBehaviorFact).toBeTypeOf('function');
     expect(generatedBootstrapDeferredBehaviorFact).toBeTypeOf('function');
     expect(generatedServerDeferredBehaviorFact).toBeTypeOf('function');
+    expect(generatedTypedDataParamCoercionBehaviorFact).toBeTypeOf('function');
     expect(generatedWireDeferredBehaviorFact).toBeTypeOf('function');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
     expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
@@ -960,6 +969,15 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<InlineEnhancedFormLoaderFact>().toMatchTypeOf<{
       listenerEvents: string[];
     }>();
+    expectTypeOf<GeneratedMinifierNamePreservationBehaviorFact>()
+      .toHaveProperty('reservedNames')
+      .toEqualTypeOf<string[]>();
+    expectTypeOf<GeneratedRenderEquivalenceBehaviorFact>()
+      .toHaveProperty('mismatchRejected')
+      .toEqualTypeOf<boolean>();
+    expectTypeOf<GeneratedTypedDataParamCoercionBehaviorFact>()
+      .toHaveProperty('buttonAttributes')
+      .toEqualTypeOf<Array<Record<string, string>>>();
     expect(new GeneratedFixtureMorphRoot().querySelectorAll('*')).toEqual([]);
     expect(new GeneratedFixtureMorphTarget('ready').readHtml()).toBe('ready');
     expect(

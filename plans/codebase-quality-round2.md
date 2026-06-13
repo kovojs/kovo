@@ -73,7 +73,9 @@ fw-check registry gates, so those cases no longer read registry artifact source 
 TypeScript program files in the monolith. Shared generated-module fixtures now also own generated
 query update-plan application, bootstrap deferred-stream application, server deferred-stream
 application, and wire deferred-stream projection facts for the D3 fw-check gate, so the monolith no
-longer builds those reusable fake DOM/runtime mechanics inline.
+longer builds those reusable fake DOM/runtime mechanics inline. Shared generated-module fixtures
+now also own minifier handler export invocation, typed data-param coercion, and render-equivalence
+behavior projections used by the P1 fw-check generated-module gates.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -87,6 +89,9 @@ Latest evidence:
 
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm run check:build`
+- `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `node --test --test-name-pattern "P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`
 - `pnpm run check:build`
 - targeted `node --test --test-name-pattern ... tests/fw-check.node.mjs`
 - exact `pnpm exec vp check ... tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
@@ -1115,6 +1120,7 @@ Latest evidence:
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts -t "session|sign|cookie|auth|commerce app shell HTTP entry|renders SPEC 6.3 no-JS add-to-cart forms|renders a multipart receipt upload form"`
 - exact `pnpm exec vp check packages/test/package.json packages/test/src/headers.ts packages/test/src/headers.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`
 - exact `pnpm exec vp check examples/commerce/src/app.test.ts packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
@@ -1170,7 +1176,9 @@ query/diagnostic/touch behavior projections. The D10 static export CLI assertion
 shared `@jiso/test/fw-export-fixtures` result facts instead of local stream, byte, and summary
 checks. The D10 Vite diagnostic lowered-event assertion now consumes
 `@jiso/test/diagnostic-output-fixtures` instead of parsing help text and generated handler hrefs
-inside `tests/fw-check.node.mjs`.
+inside `tests/fw-check.node.mjs`. The P1 generated-module minifier, typed-param, and
+render-equivalence assertions now consume shared `@jiso/test/generated-module-fixtures` behavior
+facts instead of local fake-client invocation and render-projection mechanics.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -1193,6 +1201,9 @@ Latest evidence:
 - `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`
 
 ## Current Gates
 

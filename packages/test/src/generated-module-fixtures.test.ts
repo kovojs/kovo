@@ -11,8 +11,11 @@ import {
   assertGeneratedRegistryConsumerTypes,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
+  generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
+  generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
+  generatedTypedDataParamCoercionBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedArtifactFile,
   generatedArtifactSource,
@@ -127,6 +130,180 @@ export const Cart$click = handler((_event, ctx) => ctx.value);
         value: 7,
       }),
     ).toBe(7);
+  });
+
+  it('projects generated minifier handler names into behavior facts', () => {
+    const cartBadge = {
+      files: [
+        {
+          kind: 'client',
+          source: `
+export const CartBadge$removeItem = (event, ctx) => removeItem(event, ctx);
+export const CartBadge$button_click = (_event, ctx) => ctx.state.count += ctx.params.quantity;
+export const CartBadge$button_click_2 = (_event, ctx) => ctx.state.count = ctx.state.count - ctx.params.quantity;
+`,
+        },
+      ],
+      handlerExports: [
+        'CartBadge$removeItem',
+        'CartBadge$button_click',
+        'CartBadge$button_click_2',
+      ],
+    };
+    const cartDrawer = { handlerExports: ['CartDrawer$removeItem'] };
+
+    expect(
+      generatedMinifierNamePreservationBehaviorFact({
+        cartBadge,
+        cartDrawer,
+        collectMinifierReservedNames(results) {
+          return Array.from(
+            new Set(
+              results.flatMap((result) =>
+                Array.isArray((result as { handlerExports?: unknown }).handlerExports)
+                  ? (result as { handlerExports: string[] }).handlerExports
+                  : [],
+              ),
+            ),
+          ).sort();
+        },
+        executeClientArtifact: executeGeneratedClientArtifact,
+        runtime: {},
+      }),
+    ).toMatchObject({
+      callResults: { add: 7, remove: 'removed', subtract: 5 },
+      exportTypes: {
+        CartBadge$button_click: 'function',
+        CartBadge$button_click_2: 'function',
+        CartBadge$removeItem: 'function',
+      },
+      handlerExports: [
+        'CartBadge$removeItem',
+        'CartBadge$button_click',
+        'CartBadge$button_click_2',
+      ],
+      reservedNames: [
+        'CartBadge$button_click',
+        'CartBadge$button_click_2',
+        'CartBadge$removeItem',
+        'CartDrawer$removeItem',
+      ],
+      stateCountAfterAdd: 7,
+      stateCountAfterSubtract: 5,
+    });
+  });
+
+  it('projects generated typed data param coercion into behavior facts', () => {
+    const files = [
+      {
+        kind: 'server',
+        source: `
+export function renderSource() {
+  return '<button fw-param-types="quantity:number" data-p-quantity="{item.quantity}">Add</button><button fw-param-types="selected:boolean" data-p-selected="{item.selected}" data-p-id="{item.id}">Select</button>';
+}
+`,
+      },
+      {
+        kind: 'client',
+        source: `
+export const CartActions$button_click = (_event, ctx) => ctx.state.count += ctx.params.quantity;
+export const CartActions$button_click_2 = (_event, ctx) => ctx.params.selected ? select(ctx.params.id) : deselect(ctx.params.id);
+`,
+      },
+    ];
+
+    expect(
+      generatedTypedDataParamCoercionBehaviorFact({
+        executeClientArtifact: executeGeneratedClientArtifact,
+        files,
+        readElementParams(element) {
+          const types = Object.fromEntries(
+            (element.getAttribute('fw-param-types') ?? '')
+              .split(/\s+/)
+              .filter(Boolean)
+              .map((entry) => entry.split(':') as [string, string]),
+          );
+          return Object.fromEntries(
+            element.attributes
+              .filter((attribute) => attribute.name.startsWith('data-p-'))
+              .map((attribute) => {
+                const name = attribute.name
+                  .slice('data-p-'.length)
+                  .replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+                const type = types[name];
+                const value =
+                  type === 'number'
+                    ? Number(attribute.value)
+                    : type === 'boolean'
+                      ? attribute.value === 'true'
+                      : attribute.value;
+                return [name, value];
+              }),
+          );
+        },
+        runtime: {},
+      }),
+    ).toEqual({
+      buttonAttributes: [
+        { 'data-p-quantity': '{item.quantity}', 'fw-param-types': 'quantity:number' },
+        {
+          'data-p-id': '{item.id}',
+          'data-p-selected': '{item.selected}',
+          'fw-param-types': 'selected:boolean',
+        },
+      ],
+      handlerResults: { add: 3, deselect: 'deselect:p2', select: 'select:p1' },
+      parsedParams: {
+        add: { quantity: 2 },
+        deselect: { id: 'p2', selected: false },
+        select: { id: 'p1', selected: true },
+        standalone: { featured: false, productId: 'p1', quantity: 2 },
+      },
+      stateCountAfterAdd: 3,
+    });
+  });
+
+  it('projects generated render-equivalence checks into behavior facts', () => {
+    const result = {
+      files: [
+        {
+          kind: 'server',
+          source: `
+export function renderSource() {
+  return '<cart-total><span data-bind="cart.total">12</span></cart-total>';
+}
+`,
+        },
+      ],
+      renderEquivalenceChecks: [
+        {
+          actual: '<cart-total><span data-bind="cart.total">12</span></cart-total>',
+          artifact: 'components/cart/cart-total.server.js',
+          expected: '<cart-total><span data-bind="cart.total">12</span></cart-total>',
+          ok: true,
+        },
+      ],
+    };
+
+    expect(
+      generatedRenderEquivalenceBehaviorFact({
+        assertRenderEquivalence(candidate) {
+          const [check] = (candidate as typeof result).renderEquivalenceChecks;
+          if (!check?.ok || check.actual !== check.expected) {
+            throw new Error('render mismatch');
+          }
+        },
+        result,
+      }),
+    ).toEqual({
+      actualMatchesExpected: true,
+      artifact: 'components/cart/cart-total.server.js',
+      boundSpanAttrs: { 'data-bind': 'cart.total' },
+      cartTotalAttrs: {},
+      checkCount: 1,
+      mismatchRejected: true,
+      ok: true,
+    });
   });
 
   it('executes generated server render modules without app-authored lowered source parsing in tests', () => {

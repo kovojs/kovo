@@ -87,9 +87,11 @@ import {
   executeInlineEnhancedFormLoaderFixture,
   assertGeneratedRegistryConsumerTypes,
   generatedBootstrapDeferredBehaviorFact,
-  generatedClientExportTypeFacts,
+  generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
+  generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
+  generatedTypedDataParamCoercionBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedArtifactSource,
   generatedRegistryInterfaceMemberTypes,
@@ -5386,39 +5388,46 @@ export const CartDrawer = component('cart-drawer', {
 });
 `,
   });
-  assert.deepEqual(cartBadge.handlerExports, [
-    'CartBadge$removeItem',
-    'CartBadge$button_click',
-    'CartBadge$button_click_2',
-  ]);
-  const removeItemCalls = [];
-  const cartBadgeClient = executeGeneratedClientArtifact(cartBadge.files, {
-    context: {
-      removeItem(event, ctx) {
-        removeItemCalls.push({ ctx, event });
-        return 'removed';
+  assert.deepEqual(
+    generatedMinifierNamePreservationBehaviorFact({
+      cartBadge,
+      cartDrawer,
+      collectMinifierReservedNames,
+      executeClientArtifact: executeGeneratedClientArtifact,
+      runtime: generatedModuleRuntime,
+    }),
+    {
+      callResults: {
+        add: 7,
+        remove: 'removed',
+        subtract: 5,
       },
+      exportTypes: {
+        CartBadge$button_click: 'function',
+        CartBadge$button_click_2: 'function',
+        CartBadge$removeItem: 'function',
+      },
+      forwardedCalls: [
+        {
+          ctx: { params: { quantity: 2 }, state: { count: 5 } },
+          event: 'click',
+        },
+      ],
+      handlerExports: [
+        'CartBadge$removeItem',
+        'CartBadge$button_click',
+        'CartBadge$button_click_2',
+      ],
+      reservedNames: [
+        'CartBadge$button_click',
+        'CartBadge$button_click_2',
+        'CartBadge$removeItem',
+        'CartDrawer$removeItem',
+      ],
+      stateCountAfterAdd: 7,
+      stateCountAfterSubtract: 5,
     },
-    runtime: generatedModuleRuntime,
-  });
-  assert.deepEqual(generatedClientExportTypeFacts(cartBadgeClient, cartBadge.handlerExports), {
-    CartBadge$button_click: 'function',
-    CartBadge$button_click_2: 'function',
-    CartBadge$removeItem: 'function',
-  });
-  const clickContext = { params: { quantity: 2 }, state: { count: 5 } };
-  assert.equal(cartBadgeClient.CartBadge$removeItem('click', clickContext), 'removed');
-  assert.deepEqual(removeItemCalls, [{ ctx: clickContext, event: 'click' }]);
-  assert.equal(cartBadgeClient.CartBadge$button_click('click', clickContext), 7);
-  assert.equal(clickContext.state.count, 7);
-  assert.equal(cartBadgeClient.CartBadge$button_click_2('click', clickContext), 5);
-  assert.equal(clickContext.state.count, 5);
-  assert.deepEqual(collectMinifierReservedNames([cartDrawer, cartBadge, cartBadge]), [
-    'CartBadge$button_click',
-    'CartBadge$button_click_2',
-    'CartBadge$removeItem',
-    'CartDrawer$removeItem',
-  ]);
+  );
 });
 
 void test('P1 typed data param coercion remains represented', async () => {
@@ -5437,70 +5446,41 @@ export const CartActions = component('cart-actions', {
 });
 `,
   });
-  const buttons = generatedRenderedElementFactsFromArtifact(result.files, { tag: 'button' });
-  assert.equal(buttons.length, 2);
-  assert.equal(buttons[0]?.attrs['fw-param-types'], 'quantity:number');
-  assert.equal(buttons[0]?.attrs['data-p-quantity'], '{item.quantity}');
-  assert.equal(buttons[1]?.attrs['fw-param-types'], 'selected:boolean');
-  assert.equal(buttons[1]?.attrs['data-p-selected'], '{item.selected}');
-  assert.equal(buttons[1]?.attrs['data-p-id'], '{item.id}');
-
-  const cartActions = executeGeneratedClientArtifact(result.files, {
-    context: {
-      deselect: (id) => `deselect:${id}`,
-      select: (id) => `select:${id}`,
-    },
-    runtime: generatedModuleRuntime,
-  });
-  const addParams = readElementParams({
-    attributes: [{ name: 'data-p-quantity', value: '2' }],
-    getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[0]?.attrs['fw-param-types'] : null,
-  });
-  const selectParams = readElementParams({
-    attributes: [
-      { name: 'data-p-selected', value: 'true' },
-      { name: 'data-p-id', value: 'p1' },
-    ],
-    getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
-  });
-  const deselectParams = readElementParams({
-    attributes: [
-      { name: 'data-p-selected', value: 'false' },
-      { name: 'data-p-id', value: 'p2' },
-    ],
-    getAttribute: (name) =>
-      name === 'fw-param-types' ? buttons[1]?.attrs['fw-param-types'] : null,
-  });
-  const cartState = { count: 1 };
-  assert.equal(
-    cartActions.CartActions$button_click('click', { params: addParams, state: cartState }),
-    3,
-  );
-  assert.equal(cartState.count, 3);
-  assert.equal(
-    cartActions.CartActions$button_click_2('click', { params: selectParams, state: cartState }),
-    'select:p1',
-  );
-  assert.equal(
-    cartActions.CartActions$button_click_2('click', { params: deselectParams, state: cartState }),
-    'deselect:p2',
-  );
   assert.deepEqual(
-    readElementParams({
-      attributes: [
-        { name: 'data-p-product-id', value: 'p1' },
-        { name: 'data-p-quantity', value: '2' },
-        { name: 'data-p-featured', value: 'false' },
-      ],
-      getAttribute: (name) =>
-        name === 'fw-param-types' ? 'quantity:number featured:boolean' : null,
+    generatedTypedDataParamCoercionBehaviorFact({
+      executeClientArtifact: executeGeneratedClientArtifact,
+      files: result.files,
+      readElementParams,
+      runtime: generatedModuleRuntime,
     }),
     {
-      featured: false,
-      productId: 'p1',
-      quantity: 2,
+      buttonAttributes: [
+        {
+          'data-p-quantity': '{item.quantity}',
+          'fw-param-types': 'quantity:number',
+        },
+        {
+          'data-p-id': '{item.id}',
+          'data-p-selected': '{item.selected}',
+          'fw-param-types': 'selected:boolean',
+        },
+      ],
+      handlerResults: {
+        add: 3,
+        deselect: 'deselect:p2',
+        select: 'select:p1',
+      },
+      parsedParams: {
+        add: { quantity: 2 },
+        deselect: { id: 'p2', selected: false },
+        select: { id: 'p1', selected: true },
+        standalone: {
+          featured: false,
+          productId: 'p1',
+          quantity: 2,
+        },
+      },
+      stateCountAfterAdd: 3,
     },
   );
 });
@@ -5516,34 +5496,20 @@ export const CartTotal = component('cart-total', {
 });
 `,
   });
-  const renderedElements = generatedRenderedElementFactsFromArtifact(result.files);
-  const cartTotal = renderedElements.find((element) => element.tag === 'cart-total');
-  const boundSpan = renderedElements.find((element) => element.tag === 'span');
-
-  assert.equal(result.renderEquivalenceChecks.length, 1);
-  assert.equal(result.renderEquivalenceChecks[0]?.artifact, 'components/cart/cart-total.server.js');
-  assert.equal(result.renderEquivalenceChecks[0]?.ok, true);
-  assert.deepEqual(cartTotal?.attrs, {});
-  assert.deepEqual(boundSpan?.attrs, { 'data-bind': 'cart.total' });
-  assert.equal(
-    result.renderEquivalenceChecks[0]?.actual,
-    result.renderEquivalenceChecks[0]?.expected,
-  );
-  assert.doesNotThrow(() => assertRenderEquivalence(result));
-  assert.throws(
-    () =>
-      assertRenderEquivalence({
-        ...result,
-        renderEquivalenceChecks: [
-          {
-            actual: '<cart-total>0</cart-total>',
-            artifact: 'components/cart/cart-total.server.js',
-            expected: '<cart-total>1</cart-total>',
-            ok: false,
-          },
-        ],
-      }),
-    /Render equivalence failed for components\/cart\/cart-total\.server\.js/,
+  assert.deepEqual(
+    generatedRenderEquivalenceBehaviorFact({
+      assertRenderEquivalence,
+      result,
+    }),
+    {
+      actualMatchesExpected: true,
+      artifact: 'components/cart/cart-total.server.js',
+      boundSpanAttrs: { 'data-bind': 'cart.total' },
+      cartTotalAttrs: {},
+      checkCount: 1,
+      mismatchRejected: true,
+      ok: true,
+    },
   );
   assert.deepEqual(
     fwCheckAssertionFact(
