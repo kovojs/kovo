@@ -521,6 +521,14 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       extraction and project query-loader diagnostics. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-13: local referenced domain write callbacks such as
+      `write(addItem)` and `write({ touches }, addItem)` now resolve through ts-morph symbols, so
+      the mutation touch-graph key receives the same proven source/project callback facts while
+      untyped project `db` names remain invisible instead of fabricating facts (SPEC §10-§11).
+      Package and real `drizzle-orm` conformance tests pin source callbacks, typed project
+      callbacks, and fake/untyped non-fabrication. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
       Additional evidence 2026-06-13: helper handoffs through assigned receiver carrier variables
       such as `let context; context = { db }` now degrade to FW406 in source/project touch
       extraction and query-loader diagnostics, while assigned fake/lookalike carriers remain

@@ -2653,30 +2653,29 @@ function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
 
   const symbol = symbolForIdentifierReference(identifier);
   for (const declaration of symbol?.getDeclarations() ?? []) {
-    const callback = queryCallbackFunctionFromDeclaration(declaration);
+    const callback = callbackFunctionFromDeclaration(declaration);
     if (callback) return callback;
   }
 
   return undefined;
 }
 
-function queryCallbackFunctionFromDeclaration(declaration: Node): Node | undefined {
+function callbackFunctionFromDeclaration(declaration: Node): Node | undefined {
   if (Node.isFunctionDeclaration(declaration) && declaration.getNameNode()) return declaration;
-  if (Node.isVariableDeclaration(declaration))
-    return queryCallbackFunctionFromVariable(declaration);
+  if (Node.isVariableDeclaration(declaration)) return callbackFunctionFromVariable(declaration);
 
   if (!Node.isIdentifier(declaration)) return undefined;
 
   const parent = declaration.getParent();
   if (Node.isFunctionDeclaration(parent) && parent.getNameNode() === declaration) return parent;
   if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
-    return queryCallbackFunctionFromVariable(parent);
+    return callbackFunctionFromVariable(parent);
   }
 
   return undefined;
 }
 
-function queryCallbackFunctionFromVariable(
+function callbackFunctionFromVariable(
   declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
 ): Node | undefined {
   const initializer = declaration.getInitializer();
@@ -4464,13 +4463,35 @@ function writeCallbackFunction(
   const expression = initializer.getExpression();
   if (!Node.isIdentifier(expression) || expression.getText() !== 'write') return null;
 
-  return (
-    initializer
-      .getArguments()
-      .findLast(
-        (argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument),
-      ) ?? null
-  );
+  for (const argument of initializer.getArguments().toReversed()) {
+    const callback = writeCallbackArgumentFunction(argument);
+    if (callback) return callback;
+  }
+
+  return null;
+}
+
+function writeCallbackArgumentFunction(argument: Node): Node | null {
+  const expression = unwrappedStaticExpressionNode(argument);
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  if (Node.isIdentifier(expression)) return referencedWriteCallbackFunction(expression) ?? null;
+  return null;
+}
+
+function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+
+  const symbol = symbolForIdentifierReference(identifier);
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
+    // module references require their own file-scoped table/site context instead of source fallback.
+    if (declaration.getSourceFile() !== identifier.getSourceFile()) continue;
+
+    const callback = callbackFunctionFromDeclaration(declaration);
+    if (callback) return callback;
+  }
+
+  return undefined;
 }
 
 function extractedFunctionFromCallback(

@@ -5148,6 +5148,52 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts referenced source write callbacks from domain authoring surfaces', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'async function addItem(db, productId) {',
+          '  await db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'export const cart = domain({',
+          '  addItem: write(addItem),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts configured write callbacks and folds local helper summaries', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -6299,6 +6345,87 @@ export interface CommerceInvalidationSets {
         unresolved: [],
       },
     });
+  });
+
+  it('extracts referenced project write callbacks from typed receiver symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export const cart = domain({',
+            '  addItem: write({ touches: [cartItems] }, addItem),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('does not fabricate referenced project write callbacks from untyped receiver names', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(db, productId) {',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(addItem),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({});
   });
 
   it('uses project typed destructured receiver bindings without fake context fabrication', () => {

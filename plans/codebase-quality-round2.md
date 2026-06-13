@@ -111,6 +111,11 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       referenced function symbols; `packages/drizzle/src/index.test.ts` covers source shorthand,
       typed project shorthand, and untyped project shorthand; `conformance/drizzle-pin/src/index.test.ts`
       pins real `drizzle-orm` typed shorthand loaders.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` now resolves local referenced
+      `write(..., handler)` domain callbacks through ts-morph symbols; `packages/drizzle/src/index.test.ts`
+      covers source referenced write callbacks, typed project callbacks, and untyped project
+      non-fabrication; `conformance/drizzle-pin/src/index.test.ts` pins real `drizzle-orm`
+      referenced domain write callbacks.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

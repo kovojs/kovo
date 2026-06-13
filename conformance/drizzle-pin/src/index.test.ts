@@ -2813,6 +2813,62 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins referenced domain write callbacks with real Drizzle receiver types', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(addItem),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins real Drizzle receiver types with static element-access write methods', () => {
     const graph = extractTouchGraphFromProject({
       files: [
