@@ -7,7 +7,6 @@ export interface ComponentOptionEntry {
   objectEntries?: readonly ObjectLiteralEntry[];
   staticValue?: StaticLiteralValue;
   staticTemplateValue?: string;
-  value: string;
 }
 
 export interface ObjectLiteralEntry {
@@ -828,10 +827,6 @@ function componentOptions(
           : {}),
         ...componentOptionStaticValueEntry(property.initializer),
         ...componentOptionStaticTemplateValueEntry(sourceFile, source, property.initializer),
-        value: source.slice(
-          property.initializer.getStart(sourceFile),
-          property.initializer.getEnd(),
-        ),
       },
     ];
   });

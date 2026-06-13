@@ -80,6 +80,9 @@ remaining source-returning lowerers are retired or justified.
 
 Latest evidence:
 
+- [x] Component option entries no longer store unused raw initializer source after parser facts
+      replaced known production consumers. Verified with parser/CSS/fragment/query/compile tests,
+      `tsc`, exact `vp check`, and `git diff --check`.
 - [x] Parser facts now drive fragment target prop types: `ObjectLiteralEntry.staticConstructorType`
       covers `String`/`Number`/`Boolean`, and `graph.ts` no longer trims raw prop initializer source.
       Verified with parser, fragment-target, compile-component, registry tests, `tsc`, exact
