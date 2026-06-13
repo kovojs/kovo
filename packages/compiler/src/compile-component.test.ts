@@ -138,11 +138,11 @@ export const CartBadge = component('cart-badge', {
     );
   });
 
-  it('executes emitted renderSource for render-equivalence checks', () => {
+  it('executes generated renderSource for render-equivalence checks', () => {
     const expected = '<cart-badge>u0032</cart-badge>';
-    const serverSource = [
+    const executableSource = [
       '// @jiso-ir',
-      'export   /* generated */ function renderSource() {',
+      'function renderSource() {',
       '  return `<cart-badge>\\u0032</cart-badge>`;',
       '}',
       '',
@@ -151,7 +151,7 @@ export const CartBadge = component('cart-badge', {
     const check = renderEquivalenceCheck(
       'components/cart/cart-badge.server.js',
       expected,
-      serverSource,
+      executableSource,
     );
 
     expect(check).toEqual({

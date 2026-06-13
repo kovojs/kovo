@@ -131,7 +131,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     serverRender.replacements,
   );
   const serverRenderedSource = serverRenderPatch.source;
-  const serverSource = emitServerModule(serverRenderedSource);
+  const serverModule = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
     clientFileName: fileNames.client,
     cssAssets,
@@ -153,7 +153,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...validationDiagnostics,
     ],
     files: [
-      { fileName: fileNames.server, kind: 'server', source: serverSource },
+      { fileName: fileNames.server, kind: 'server', source: serverModule.source },
       { fileName: fileNames.client, kind: 'client', source: clientSource },
       ...(cssSource ? [{ fileName: fileNames.css, kind: 'css' as const, source: cssSource }] : []),
       { fileName: fileNames.registry, kind: 'registry', source: registrySource },
@@ -163,7 +163,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
     renderEquivalenceChecks: [
-      renderEquivalenceCheck(fileNames.server, serverRenderedSource, serverSource),
+      renderEquivalenceCheck(fileNames.server, serverRenderedSource, serverModule.executableSource),
     ],
     updateCoverage,
     viewTransitions: viewTransitions.stamps,

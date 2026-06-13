@@ -1,5 +1,4 @@
 import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
 
 import { compilerIrHeader } from '../ir.js';
 import {
@@ -11,12 +10,7 @@ import {
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import {
-  applySourceReplacements,
-  escapeAttribute,
-  splitDepValue,
-  type SourceReplacement,
-} from '../shared.js';
+import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
   emitElementParamTypes,
   type HandlerLowering,
@@ -27,12 +21,16 @@ export interface ServerRenderLowering {
   replacements: SourceReplacement[];
 }
 
-export function emitServerModule(renderedSource: string): string {
-  return `${compilerIrHeader}
-export function renderSource() {
-  return ${templateLiteral(renderedSource)};
+export interface EmittedServerModule {
+  executableSource: string;
+  source: string;
 }
-`;
+
+export function emitServerModule(renderedSource: string): EmittedServerModule {
+  return {
+    executableSource: renderSourceModule(renderedSource, ''),
+    source: renderSourceModule(renderedSource, 'export '),
+  };
 }
 
 export function serverRenderLowering(
@@ -45,9 +43,9 @@ export function serverRenderLowering(
 export function renderEquivalenceCheck(
   artifact: string,
   expected: string,
-  serverSource: string,
+  executableSource: string,
 ): RenderEquivalenceCheck {
-  const actual = emittedServerRenderSource(serverSource);
+  const actual = emittedServerRenderSource(executableSource);
 
   return {
     actual,
@@ -58,46 +56,12 @@ export function renderEquivalenceCheck(
 }
 
 function emittedServerRenderSource(serverSource: string): string {
-  const executable = executableRenderSource(serverSource);
-  if (!executable) return '';
-
   try {
-    const actual = runInNewContext(executable, {}, { timeout: 1000 });
+    const actual = runInNewContext(`${serverSource}\n;renderSource();`, {}, { timeout: 1000 });
     return typeof actual === 'string' ? actual : '';
   } catch {
     return '';
   }
-}
-
-function executableRenderSource(serverSource: string): string | null {
-  const sourceFile = ts.createSourceFile('render.server.ts', serverSource, ts.ScriptTarget.Latest);
-  const declaration = sourceFile.statements.find(
-    (statement): statement is ts.FunctionDeclaration =>
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text === 'renderSource' &&
-      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ===
-        true,
-  );
-  if (!declaration) return null;
-
-  const exportModifier = declaration.modifiers?.find(
-    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-  );
-  if (!exportModifier) return null;
-
-  const prelude = serverSource.slice(0, exportModifier.getStart(sourceFile)).trim();
-  if (prelude !== compilerIrHeader) return null;
-
-  // SPEC 5.2.3 requires render(src) to equal render(compile(src)); execute the emitted
-  // renderSource body instead of re-reading its template literal as inert text.
-  return `${applySourceReplacements(serverSource, [
-    {
-      end: exportModifier.getEnd(),
-      replacement: '',
-      start: exportModifier.getStart(sourceFile),
-    },
-  ])}
-;renderSource();`;
 }
 
 function serverRenderPatches(
@@ -250,4 +214,15 @@ function openingTagAttributeInsertion(
 
 function templateLiteral(value: string): string {
   return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
+}
+
+function renderSourceModule(renderedSource: string, exportPrefix: '' | 'export '): string {
+  // SPEC 5.2.3 requires render(src) to equal render(compile(src)); execute the
+  // generated renderSource function body, but build the executable variant from
+  // the same source facts instead of reparsing the emitted artifact.
+  return `${compilerIrHeader}
+${exportPrefix}function renderSource() {
+  return ${templateLiteral(renderedSource)};
+}
+`;
 }

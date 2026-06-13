@@ -203,8 +203,9 @@ replacement/insertion patches for handlers, `fw-c`, `fw-deps`, and `fw-state`. M
 consume parser/model facts instead of regex or source-string facts. Inline text binding and
 data-bind drift validation now consume parser-provided sole JSX child facts instead of re-reading
 trimmed child source. Self-closing opening-tag insertions now consume parser-provided slash spacing
-facts instead of re-inspecting opening-tag source. Render-equivalence execution now finds exported
-`renderSource` with the TypeScript AST instead of searching for one exact export string.
+facts instead of re-inspecting opening-tag source. Render-equivalence execution now uses an
+executable module variant emitted from the same render facts as the public server module, without
+reparsing the generated artifact.
 JSX child-body offsets/source are now stored as parser model facts, and consumers read that model
 field through the helper instead of recomputing child trimming at each validation/analysis site.
 Handler element params now carry their parsed source expression through the lowering model, so
@@ -236,6 +237,11 @@ analysis plus data-bind validation.
 
 Latest evidence:
 
+- Render-equivalence executable module emission: `pnpm exec vitest --run
+packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts
+packages/compiler/src/stamps.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec
+vp check packages/compiler/src/emit/server.ts packages/compiler/src/compile.ts
+packages/compiler/src/compile-component.test.ts`; `git diff --check`.
 - Structured template-stamp read segments: `pnpm exec vitest --run
 packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
 packages/test/src/compiler-fixtures.test.ts packages/test/src/generated-module-fixtures.test.ts`;
