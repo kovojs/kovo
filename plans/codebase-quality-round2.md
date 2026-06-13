@@ -428,6 +428,12 @@ Closed evidence so far:
 - Node adapter Early Hints control is now a server-owned option shared by `toNodeHandler()` and
   SSR Vite dev middleware, so create-jiso dev/serve no longer needs a starter-specific Node
   handler to adapt the SPEC §9.5 request shell.
+- Static replay now treats same-origin full-URL `/c/` refs in route HTML attributes and `Link`
+  headers as the same app-shell client module files as root-relative refs, preserving
+  SPEC §4.3 full module URL output while keeping external `/c/` URLs outside static export.
+  Evidence: `packages/server/src/static-replay.ts`, `packages/server/src/static-replay.test.ts`,
+  `packages/server/src/static-export.test.ts`, and
+  `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`.
 
 Open:
 

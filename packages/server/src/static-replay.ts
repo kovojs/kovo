@@ -60,7 +60,7 @@ export async function replayStaticExportClientModuleArtifacts({
   const artifacts: StaticExportClientModuleArtifact[] = [];
   const bodyByTargetPath = new Map<string, string>();
 
-  for (const href of collectClientModuleHrefs(routeArtifacts)) {
+  for (const href of collectClientModuleHrefs(routeArtifacts, origin)) {
     const artifact = await replayStaticExportClientModuleArtifact(handler, href, origin);
     const existingBody = bodyByTargetPath.get(artifact.path);
     if (existingBody !== undefined && existingBody !== artifact.body) {
@@ -116,18 +116,20 @@ function isJavaScriptClientModuleContentType(contentType: string | null): boolea
 
 function collectClientModuleHrefs(
   routeArtifacts: readonly StaticExportArtifact[],
+  origin: string,
 ): readonly string[] {
   const hrefs = new Set<string>();
 
   for (const artifact of routeArtifacts) {
     for (const ref of collectStaticExportHtmlAttributeRefs(artifact.body)) {
       for (const token of ref.value.split(/\s+/)) {
-        if (token.startsWith('/c/')) hrefs.add(token);
+        const href = staticExportClientModuleHref(token, origin);
+        if (href !== undefined) hrefs.add(href);
       }
     }
 
     const linkHeader = artifact.headers.link;
-    if (linkHeader) collectClientModuleHrefsFromLinkHeader(linkHeader, hrefs);
+    if (linkHeader) collectClientModuleHrefsFromLinkHeader(linkHeader, origin, hrefs);
   }
 
   return [...hrefs].sort();
@@ -221,14 +223,37 @@ function staticExportServerEndpointPhase(pathname: string): 'mutation' | 'query'
   return undefined;
 }
 
-function collectClientModuleHrefsFromLinkHeader(header: string, hrefs: Set<string>): void {
-  const linkPattern = /<(?<href>\/c\/[^>\s]+)>/g;
+function collectClientModuleHrefsFromLinkHeader(
+  header: string,
+  origin: string,
+  hrefs: Set<string>,
+): void {
+  const linkPattern = /<(?<href>[^>\s]+)>/g;
   let linkMatch: RegExpExecArray | null;
 
   while ((linkMatch = linkPattern.exec(header)) !== null) {
-    const href = linkMatch.groups?.href;
-    if (href) hrefs.add(href);
+    const href = staticExportClientModuleHref(linkMatch.groups?.href ?? '', origin);
+    if (href !== undefined) hrefs.add(href);
   }
+}
+
+function staticExportClientModuleHref(value: string, origin: string): string | undefined {
+  if (value.trim() === '') return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(value, origin);
+  } catch {
+    return undefined;
+  }
+
+  if (url.origin !== new URL(origin).origin || !url.pathname.startsWith('/c/')) {
+    return undefined;
+  }
+
+  // SPEC §4.3 permits full module URLs. Static export must still publish the
+  // same-origin /c/ file that a static host serves by path.
+  return value.startsWith('/c/') ? value : `${url.pathname}${url.search}${url.hash}`;
 }
 
 function decodeHtmlAttributeText(value: string): string {

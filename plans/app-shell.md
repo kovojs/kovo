@@ -43,7 +43,9 @@ Implemented areas:
   `staticPaths` concrete URL enumeration.
 - `static-replay.ts` rejects exported route documents that still reference same-origin `/_m/` or
   `/_q/` server endpoints, so SPEC §9.5 L0/L1-only constraints are enforced on the synthetic
-  replayed no-JS artifact before client modules or files are written.
+  replayed no-JS artifact before client modules or files are written. It also discovers
+  same-origin full-URL `/c/` module refs from route HTML and `Link` headers, preserving
+  SPEC §4.3's full module URL contract while publishing static-host `/c/` files.
 - `static-export-types.ts` now owns stable export-task diagnostic type guards/formatting and a
   public export manifest for directory-index documents, copied assets, and `/c/` modules. The
   create-jiso starter and commerce export tasks load the diagnostic helpers from `@jiso/server`
@@ -152,6 +154,13 @@ Round86d app-shell dev/serve boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check IMPLEMENT_v1.md packages/create-jiso/src/index.test.ts packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/vite.config.ts packages/server/src/api/app-shell/node.ts packages/server/src/api/app.test.ts packages/server/src/node.test.ts packages/server/src/node.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-dev.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round87 app-shell static replay evidence:
+
+- Static replay now normalizes same-origin absolute `/c/` module refs discovered in route HTML
+  attributes or `Link` headers, ignores external `/c/` refs, and copies the normalized client
+  module files through the same `Request -> Response` handler used for root-relative refs.
+- `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`
 
 ## Open Work
 

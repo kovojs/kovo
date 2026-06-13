@@ -929,6 +929,52 @@ describe('server static export', () => {
     }
   });
 
+  it('copies same-origin absolute client module refs from exported documents and Link headers', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const registry = createMemoryVersionedClientModuleRegistry();
+      const cartHref = registry.put({
+        path: '/c/cart.client.js',
+        source: 'export const cart = "absolute-build";',
+        version: 'cart-absolute',
+      });
+      const menuHref = registry.put({
+        path: '/c/menu.client.js',
+        source: 'export const menu = "absolute-build";',
+        version: 'menu-absolute',
+      });
+      const cartUrl = new URL(cartHref, 'https://shop.example.test').href;
+      const menuUrl = new URL(menuHref, 'https://shop.example.test').href;
+      const app = createApp({
+        clientModules: registry,
+        routes: [
+          route('/cart', {
+            modulepreloads: [cartUrl],
+            page: () => `<main><button on:click="${menuUrl}#Menu$open">Open menu</button></main>`,
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, {
+        origin: 'https://shop.example.test',
+        outDir,
+      });
+
+      expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
+        '/c/cart.client.js?v=cart-absolute',
+        '/c/menu.client.js?v=menu-absolute#Menu$open',
+      ]);
+      await expect(readFile(path.join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cart = "absolute-build";',
+      );
+      await expect(readFile(path.join(outDir, 'c/menu.client.js'), 'utf8')).resolves.toBe(
+        'export const menu = "absolute-build";',
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('rejects referenced client modules that replay to non-JavaScript before writing files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     try {

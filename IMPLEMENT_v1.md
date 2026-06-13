@@ -439,6 +439,12 @@ plans/codebase-quality-round2.md`.
       are JavaScript before writing output, so a referenced HTML/error response fails through
       FW229 and leaves `outDir` unwritten. Focused verification:
       `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`.
+      Evidence 2026-06-12: static export replay now discovers same-origin full-URL `/c/`
+      client module refs from route HTML attributes and `Link` headers, normalizes them to
+      static-host `/c/` files, ignores external `/c/` refs, and copies those modules through the
+      same app-shell request handler as root-relative refs (SPEC §4.3, §9.5). Focused
+      verification:
+      `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`.
       Evidence 2026-06-12: `@jiso/server` now owns the starter/docs export-task contract for
       resolving exactly one built stylesheet from a validated Vite manifest through
       `jisoAppShellViteManifestStylesheetHref()` and

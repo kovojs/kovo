@@ -102,6 +102,59 @@ describe('server static export replay', () => {
     expect(seen).toEqual(['/c/cart.js?v=one#Cart$add', '/c/cart.js?v=two#Cart$add']);
   });
 
+  it('replays same-origin absolute client module refs from HTML attributes and Link headers', async () => {
+    const seen: string[] = [];
+    const handler: RequestHandler = async (request) => {
+      const url = new URL(request.url);
+      seen.push(`${url.pathname}${url.search}${url.hash}`);
+      return new Response(`export const modulePath = ${JSON.stringify(url.pathname)};`, {
+        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+        status: 200,
+      });
+    };
+
+    await expect(
+      replayStaticExportClientModuleArtifacts({
+        handler,
+        origin: 'https://shop.example.test',
+        routeArtifacts: [
+          {
+            body: [
+              '<button',
+              ' on:click="https://shop.example.test/c/cart.client.js?v=cart-1#Cart$add"',
+              ' data-docs="https://cdn.example.test/c/external.client.js?v=1#External$show"',
+              '>Add</button>',
+            ].join(''),
+            headers: {
+              link: [
+                '<https://shop.example.test/c/menu.client.js?v=menu-1>; rel=modulepreload',
+                '<https://cdn.example.test/c/remote.client.js?v=remote-1>; rel=modulepreload',
+              ].join(', '),
+            },
+            path: '/cart/index.html',
+            status: 200,
+          },
+        ],
+      }),
+    ).resolves.toEqual([
+      {
+        body: 'export const modulePath = "/c/cart.client.js";',
+        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        href: '/c/cart.client.js?v=cart-1#Cart$add',
+        path: '/c/cart.client.js',
+        status: 200,
+      },
+      {
+        body: 'export const modulePath = "/c/menu.client.js";',
+        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        href: '/c/menu.client.js?v=menu-1',
+        path: '/c/menu.client.js',
+        status: 200,
+      },
+    ]);
+    expect(seen).toEqual(['/c/cart.client.js?v=cart-1#Cart$add', '/c/menu.client.js?v=menu-1']);
+  });
+
   it('raises FW229 when a referenced client module replays to non-JavaScript', async () => {
     const handler: RequestHandler = async () =>
       new Response('<!doctype html><h1>Not found</h1>', {
