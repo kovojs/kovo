@@ -24,6 +24,7 @@ import {
   createCommerceAppShell,
   createCommerceStaticExportShell,
 } from './app-shell.js';
+import { commerceSharedAppShellDevPlugin, commerceViteConfig } from '../vite.config.ts';
 
 let server: Server | undefined;
 
@@ -39,19 +40,21 @@ describe('commerce app shell HTTP entry', () => {
   it('documents the commerce app-shell dev, serve, and export command matrix', async () => {
     const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
     const packageJson = JSON.parse(await readFile(path.join(commerceRoot, 'package.json'), 'utf8'));
+    const viteConfig = commerceViteConfig as {
+      plugins?: Array<{ name?: string }>;
+      run?: { tasks?: Record<string, { command?: string }> };
+    };
 
     expect(packageJson.scripts).toMatchObject({
       dev: 'vp dev',
       start: 'node scripts/serve.mjs',
       static: 'vp run export',
     });
-    const viteConfig = await readFile(path.join(commerceRoot, 'vite.config.ts'), 'utf8');
-    expect(viteConfig).toContain('commerceSharedAppShellDevPlugin()');
-    expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server')");
-    expect(viteConfig).toContain('jisoAppShellViteSsrDevPlugin');
-    expect(viteConfig).toContain("name: 'jiso-commerce-app-shell-dev'");
-    expect(viteConfig).toContain("nodeHandlerExportName: 'commerceNodeHandler'");
-    expect(viteConfig).toContain("order: 'post'");
+    expect(
+      viteConfig.plugins?.some((plugin) => plugin.name === 'jiso-commerce-app-shell-dev-loader'),
+    ).toBe(true);
+    expect(viteConfig.run?.tasks?.serve?.command).toBe('node scripts/serve.mjs');
+    expect(viteConfig.run?.tasks?.export?.command).toBe('node scripts/export-static.mjs');
     expect(commerceServeCommands().map((command) => command.label)).toEqual([
       'node scripts/serve.mjs',
       'vp run serve',
@@ -61,6 +64,52 @@ describe('commerce app shell HTTP entry', () => {
       'vp run export',
       'npm run static',
     ]);
+  });
+
+  it('delegates Vite dev middleware to the shared app-shell plugin through public config seams', async () => {
+    const delegatedOptions: unknown[] = [];
+    const configuredServers: unknown[] = [];
+    let postHookCalled = false;
+    const plugin = commerceSharedAppShellDevPlugin();
+    const postHook = await plugin.configureServer({
+      middlewares: {
+        use() {
+          throw new Error('shared plugin factory should own middleware registration');
+        },
+      },
+      async ssrLoadModule(id) {
+        expect(id).toBe('@jiso/server');
+        return {
+          jisoAppShellViteSsrDevPlugin(options: unknown) {
+            delegatedOptions.push(options);
+            return {
+              configureServer(server: unknown) {
+                configuredServers.push(server);
+                return () => {
+                  postHookCalled = true;
+                };
+              },
+            };
+          },
+        };
+      },
+    });
+
+    expect(plugin.name).toBe('jiso-commerce-app-shell-dev-loader');
+    expect(delegatedOptions).toEqual([
+      {
+        name: 'jiso-commerce-app-shell-dev',
+        nodeHandlerExportName: 'commerceNodeHandler',
+        order: 'post',
+      },
+    ]);
+    expect(configuredServers).toHaveLength(1);
+    expect(postHook).toBeTypeOf('function');
+    if (typeof postHook !== 'function') {
+      throw new Error('commerce app-shell dev plugin did not return the shared post hook');
+    }
+    await postHook();
+    expect(postHookCalled).toBe(true);
   });
 
   it('serves shell routes, modules, queries, and mutations through the commerce Vite dev middleware', async () => {

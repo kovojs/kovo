@@ -66,6 +66,8 @@ Closed evidence so far:
 - Commerce source-truth graph tests no longer inspect `emit-graph.mjs` or `app.ts` text for
   membership; `examples/commerce/src/source-truth.test.ts` verifies generated graph behavior,
   inferred touch facts, and structured line-numbered sites.
+- Commerce app-shell config and i18n catalog checks now use exported config/catalog seams plus
+  `@jiso/test/html-fragment` element facts instead of parsing `vite.config.ts`/`app.ts` source.
 
 Open:
 
@@ -80,6 +82,7 @@ Recent gates:
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -266,6 +269,10 @@ Closed evidence so far:
 - `examples/commerce/scripts/emit-graph.mjs` derives commerce memory-DB write sites from
   TypeScript call-expression structure instead of raw source substring membership, preserving
   committed generated touch-graph artifacts from SPEC.md §11.1.
+- `@jiso/test/html-fragment` exposes structured `htmlElementFacts` so commerce tests can assert
+  rendered page/link/script/body facts through a shared harness seam.
+- Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
+  fake server module, keeping the local app-shell workflow out of source-text assertions.
 
 Open:
 
@@ -277,16 +284,24 @@ Recent gates:
 
 - `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
 - `node examples/commerce/scripts/emit-graph.mjs --check`
+- `node examples/commerce/scripts/emit-components.mjs --check`
 - `pnpm exec vp run build`
-- `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`
+- `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 
 ## Phase 7 - Test Restructuring
 
 Goal: test files should follow module seams, share fixtures deliberately, and assert diagnostics
 by code/definition rather than brittle prose.
+
+Closed evidence so far:
+
+- Shared `htmlElementFacts` coverage in `packages/test/src/html-fragment.test.ts` replaces local
+  commerce HTML/source probes for i18n script, stylesheet link, body class, and app-shell config
+  behavior.
 
 Open:
 

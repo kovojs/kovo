@@ -6,6 +6,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { storageBodyToBytes } from '@jiso/core';
 import { propertyTest } from '@jiso/test/assertions';
 import { createJisoTestHarness } from '@jiso/test/harness';
+import { htmlElementFacts } from '@jiso/test/html-fragment';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
 import { csrfToken, runMutation } from '@jiso/server';
@@ -18,6 +19,7 @@ import {
   commerceCsrf,
   commerceCsrfInput,
   commerceAuthCsrf,
+  commerceMessageCatalog,
   commercePageHints,
   commerceSessionProvider,
   commerceSignIn,
@@ -1065,24 +1067,42 @@ describe('commerce example', () => {
   });
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
-    const commerceSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
-    const catalogSource =
-      /export const commerceMessages = i18n\('en-US', \{(?<body>[\s\S]*?)\}\);/.exec(commerceSource)
-        ?.groups?.body;
+    const cartPage = renderCartPage();
 
-    expect(catalogSource?.match(/\bcartLabel:/g) ?? []).toHaveLength(1);
+    expect(commerceMessageCatalog).toEqual({
+      cartLabel: 'Cart',
+      productStock: '{count} in stock',
+    });
     expect(commercePageHints).toEqual({
       earlyHints: {
         Link: '</assets/tailwind.css>; rel=preload; as=style',
       },
       html: '<title>Jiso Commerce (0)</title><meta name="description" content="Browse products and checkout with 0 verifiable cart item."><meta property="og:description" content="Browse products and checkout with 0 verifiable cart item."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
     });
-
-    expect(renderCartPage()).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
-    expect(renderCartPage()).toContain('<title>Jiso Commerce (0)</title>');
-    expect(renderCartPage()).toContain('fw-i18n locale="en-US"');
-    expect(renderCartPage()).toContain('class="min-h-dvh bg-slate-50 p-6"');
-    expect(renderCartPage()).toContain('class="rounded bg-teal-600 px-2 py-0.5 text-white"');
+    expect(htmlElementFacts(commercePageHints.html, { tag: 'title' })[0]?.innerHtml).toBe(
+      'Jiso Commerce (0)',
+    );
+    expect(
+      htmlElementFacts(commercePageHints.html, {
+        attrs: { 'fw-i18n': true, locale: 'en-US', type: 'application/json' },
+        tag: 'script',
+      }).map((script) => JSON.parse(script.innerHtml)),
+    ).toEqual([commerceMessageCatalog]);
+    expect(
+      htmlElementFacts(cartPage, {
+        attrs: { href: '/assets/tailwind.css', rel: 'stylesheet' },
+        tag: 'link',
+      }),
+    ).toHaveLength(1);
+    expect(htmlElementFacts(cartPage, { tag: 'body' })[0]?.attrs.class).toBe(
+      'min-h-dvh bg-slate-50 p-6',
+    );
+    expect(
+      htmlElementFacts(cartPage, {
+        attrs: { class: 'rounded bg-teal-600 px-2 py-0.5 text-white' },
+        tag: 'span',
+      }),
+    ).toHaveLength(1);
   });
 
   it('resolves commerce route meta from loaded cart query data', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fragmentHtml } from '@jiso/test/html-fragment';
+import { fragmentHtml, htmlElementFacts } from '@jiso/test/html-fragment';
 
 describe('@jiso/test html fragment seam', () => {
   it('extracts explicit fragments without constructing a harness page assertion', () => {
@@ -80,5 +80,49 @@ describe('@jiso/test html fragment seam', () => {
     ],
   ])('extracts fragment targets when %s', (_name, html) => {
     expect(fragmentHtml(html, 'cart-badge')).toBe(html);
+  });
+
+  it('returns structured element facts with normalized attributes and inner HTML', () => {
+    expect(
+      htmlElementFacts(
+        [
+          '<main data-shell="cart">',
+          '<a HREF="/cart" data-active>Cart</a>',
+          '<a href="/products">Products</a>',
+          '<link rel="stylesheet" href="/assets/tailwind.css">',
+          '</main>',
+        ].join(''),
+        { tag: 'a', attrs: { href: '/cart', 'data-active': true } },
+      ),
+    ).toEqual([
+      {
+        attrs: {
+          'data-active': '',
+          href: '/cart',
+        },
+        html: '<a HREF="/cart" data-active>Cart</a>',
+        innerHtml: 'Cart',
+        tag: 'a',
+      },
+    ]);
+  });
+
+  it('represents void elements as complete facts', () => {
+    expect(
+      htmlElementFacts(
+        '<head><link rel="stylesheet" href="/assets/tailwind.css"><meta name="description" content="Cart"></head>',
+        { attrs: { href: '/assets/tailwind.css' }, tag: 'link' },
+      ),
+    ).toEqual([
+      {
+        attrs: {
+          href: '/assets/tailwind.css',
+          rel: 'stylesheet',
+        },
+        html: '<link rel="stylesheet" href="/assets/tailwind.css">',
+        innerHtml: '',
+        tag: 'link',
+      },
+    ]);
   });
 });

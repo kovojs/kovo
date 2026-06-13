@@ -28,7 +28,7 @@ import {
   type HarnessMutationOptions,
   type HarnessOperationVerifier,
 } from '@jiso/test/harness-operations';
-import { fragmentHtml } from '@jiso/test/html-fragment';
+import { fragmentHtml, htmlElementFacts } from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
@@ -71,6 +71,9 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       fragmentHtml('<fw-fragment target="cart"><cart-badge>1</cart-badge></fw-fragment>', 'cart'),
     ).toBe('<cart-badge>1</cart-badge>');
+    expect(
+      htmlElementFacts('<a href="/cart">Cart</a>', { attrs: { href: '/cart' }, tag: 'a' }),
+    ).toMatchObject([{ innerHtml: 'Cart', tag: 'a' }]);
     expect(diagnosticMessage('FW403', 'cart_items')).toContain('cart_items');
     expect(diagnosticsForObservations([], {})).toEqual([]);
     expect(executeHarnessMutation).toBeTypeOf('function');

@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
-export default defineConfig({
+export const commerceViteConfig = defineConfig({
   build: {
     manifest: true,
     rollupOptions: {
@@ -41,6 +41,8 @@ export default defineConfig({
   },
 });
 
+export default commerceViteConfig;
+
 type DevMiddleware = (
   request: IncomingMessage,
   response: ServerResponse,
@@ -61,7 +63,7 @@ interface CommerceDevPlugin {
   name: string;
 }
 
-function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
+export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
   return {
     async configureServer(server) {
       const serverModule = await server.ssrLoadModule('@jiso/server');

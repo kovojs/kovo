@@ -11,6 +11,61 @@ export function fragmentHtml(html: string, target: string): string {
   return html.slice(stampedElement.index, end);
 }
 
+export interface HtmlElementFact {
+  attrs: Record<string, string>;
+  html: string;
+  innerHtml: string;
+  tag: string;
+}
+
+export interface HtmlElementSelector {
+  attrs?: Record<string, string | true>;
+  tag?: string;
+}
+
+export function htmlElementFacts(
+  html: string,
+  selector: HtmlElementSelector = {},
+): HtmlElementFact[] {
+  const facts: HtmlElementFact[] = [];
+  const tag = selector.tag?.toLowerCase();
+  let offset = 0;
+
+  while (offset < html.length) {
+    const start = html.indexOf('<', offset);
+    if (start === -1) return facts;
+
+    const element = readOpeningElement(html, start);
+    if (!element) {
+      offset = start + 1;
+      continue;
+    }
+
+    const end = elementFactEnd(html, element);
+    if (end === undefined) {
+      offset = element.end;
+      continue;
+    }
+
+    const attrs = readHtmlAttributes(element.attrs);
+    if (
+      (tag === undefined || element.tag === tag) &&
+      selectorAttributesMatch(attrs, selector.attrs)
+    ) {
+      facts.push({
+        attrs,
+        html: html.slice(element.index, end),
+        innerHtml: html.slice(element.end, end - closingTagLength(element)),
+        tag: element.tag,
+      });
+    }
+
+    offset = element.end;
+  }
+
+  return facts;
+}
+
 function explicitFragmentHtml(html: string, target: string): string | undefined {
   const fragmentStart = findOpeningElement(
     html,
@@ -103,7 +158,7 @@ function tagClose(html: string, start: number): number | undefined {
 }
 
 function matchingElementEnd(html: string, element: OpeningElement): number | undefined {
-  if (/\/\s*$/.test(element.attrs)) return element.end;
+  if (/\/\s*$/.test(element.attrs) || isVoidElement(element.tag)) return element.end;
 
   let offset = element.end;
   let depth = 1;
@@ -137,6 +192,12 @@ function matchingElementEnd(html: string, element: OpeningElement): number | und
   return undefined;
 }
 
+function elementFactEnd(html: string, element: OpeningElement): number | undefined {
+  return /\/\s*$/.test(element.attrs) || isVoidElement(element.tag)
+    ? element.end
+    : matchingElementEnd(html, element);
+}
+
 function readClosingElement(html: string, start: number): { end: number; tag: string } | undefined {
   const head = /^<\/(?<tag>[a-z][a-z0-9-]*)\b/i.exec(html.slice(start));
   if (!head?.groups?.tag) return undefined;
@@ -159,6 +220,55 @@ function readHtmlAttribute(attrs: string, name: string): string | null {
   if (!match) return null;
 
   return match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '';
+}
+
+function readHtmlAttributes(attrs: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const pattern =
+    /(?:^|\s)(?<name>[^\s"'=<>`/]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?(?=\s|$|\/)/gi;
+
+  for (const match of attrs.matchAll(pattern)) {
+    const name = match.groups?.name?.toLowerCase();
+    if (!name) continue;
+    result[name] = match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '';
+  }
+
+  return result;
+}
+
+function selectorAttributesMatch(
+  attrs: Record<string, string>,
+  selectorAttrs: Record<string, string | true> | undefined,
+): boolean {
+  if (!selectorAttrs) return true;
+
+  return Object.entries(selectorAttrs).every(([name, value]) => {
+    const actual = attrs[name.toLowerCase()];
+    if (actual === undefined) return false;
+    return value === true || actual === value;
+  });
+}
+
+function closingTagLength(element: OpeningElement): number {
+  return /\/\s*$/.test(element.attrs) || isVoidElement(element.tag) ? 0 : element.tag.length + 3;
+}
+
+function isVoidElement(tag: string): boolean {
+  return [
+    'area',
+    'base',
+    'br',
+    'col',
+    'embed',
+    'hr',
+    'img',
+    'input',
+    'link',
+    'meta',
+    'source',
+    'track',
+    'wbr',
+  ].includes(tag);
 }
 
 function escapeRegExp(value: string): string {

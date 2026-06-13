@@ -600,10 +600,12 @@ export function renderCommerceAdminRoute(request: CommerceAuthRequest) {
   );
 }
 
-export const commerceMessages = i18n('en-US', {
+export const commerceMessageCatalog = {
   cartLabel: 'Cart',
   productStock: '{count} in stock',
-});
+} as const;
+
+export const commerceMessages = i18n('en-US', commerceMessageCatalog);
 
 export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 
