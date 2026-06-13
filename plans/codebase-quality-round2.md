@@ -430,6 +430,12 @@ Closed evidence so far:
   `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
   `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Bound detached receiver methods such as `db.execute.bind(db)` and `db[method].bind(db)` now
+  form FW406 receiver-method aliases without counting the `.bind(db)` initializer as an opaque
+  helper handoff, while fake/lookalike bound methods stay invisible. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

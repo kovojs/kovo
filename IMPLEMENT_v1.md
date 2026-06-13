@@ -206,6 +206,13 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       invisible. Package and real `drizzle-orm` conformance tests pin write and query-loader
       behavior. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-13: bound detached receiver methods such as
+      `db.execute.bind(db)` and `db[method].bind(db)` now form FW406 receiver-method aliases
+      instead of being misclassified as helper handoffs, while fake/lookalike bound methods stay
+      invisible. Package and real `drizzle-orm` conformance tests pin source/project touch
+      extraction and project query-loader diagnostics. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query

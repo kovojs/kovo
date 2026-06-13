@@ -2658,6 +2658,63 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins bound real Drizzle query receiver methods as explicit FW406 surfaces', () => {
+    expect(sql`select * from users`).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+            }
+
+            export const usersQuery = query('users/bound-raw', {
+              load(_input, db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+                const execute = db.execute.bind(db);
+                const computed = db[method].bind(db);
+                const fakeExecute = fake.execute.bind(fake);
+                execute(sql\`select * from users\`);
+                computed(sql\`select * from users\`);
+                fakeExecute(sql\`select * from users\`);
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:9',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:9',
+          },
+        ],
+        query: 'users/bound-raw',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:9',
+      },
+    ]);
+  });
+
   it('pins non-load query callbacks as non-loader surfaces', () => {
     expect(sql`select * from audit_log`).toBeDefined();
 
@@ -3094,6 +3151,64 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/users.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
+  it('pins bound real Drizzle receiver methods as explicit FW406 surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import { pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const users = pgTable('users', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+              update(table: unknown): { set(value: unknown): Promise<void> };
+            }
+
+            export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+              const execute = db.execute.bind(db);
+              const write = db.update.bind(db);
+              const computed = db[method].bind(db);
+              const fakeExecute = fake.execute.bind(fake);
+              await execute('select 1');
+              await write(users).set({});
+              await computed('select 1');
+              await fakeExecute('select 1');
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      configureUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:19',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:20',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:21',
           },
         ],
       },

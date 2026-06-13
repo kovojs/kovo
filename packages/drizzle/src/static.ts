@@ -889,6 +889,14 @@ function extractProjectExternalDbArgumentCalls(
   const bodyStart = bodySourceStart(body);
 
   for (const call of touchBodyCallExpressions(body)) {
+    if (
+      boundReceiverMethodAccessName(call, (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      )
+    ) {
+      continue;
+    }
+
     const surface = externalHelperCallSurface(call);
     if (!surface) continue;
 
@@ -2163,6 +2171,14 @@ function externalQueryHelperDiagnostics(
   // boundary until their read/write summaries are proven interprocedurally.
   const carrierSymbolKeys = queryReceiverCarrierSymbolKeys(body, receiverReferences);
   return queryExecutableCallExpressions(body).flatMap((call) => {
+    if (
+      boundReceiverMethodAccessName(call, (node) =>
+        isQueryReceiverIdentifier(node, receiverReferences),
+      )
+    ) {
+      return [];
+    }
+
     const surface = externalHelperCallSurface(call);
     if (!surface) return [];
 
@@ -4247,6 +4263,14 @@ function extractExternalDbArgumentCallsFromBody(
   const calls: ExternalDbArgumentCall[] = [];
 
   for (const call of touchBodyCallExpressions(body)) {
+    if (
+      boundReceiverMethodAccessName(call, (node) =>
+        isSourceDrizzleReceiverIdentifier(node, receiverNames),
+      )
+    ) {
+      continue;
+    }
+
     const surface = externalHelperCallSurface(call);
     if (!surface) continue;
 
@@ -4478,6 +4502,7 @@ function sourceReceiverHelperCallSurface(
 ): ExternalDbArgumentCall | null {
   const surface = externalHelperCallSurface(call);
   if (!surface) return null;
+  if (boundReceiverMethodAccessName(call, isReceiverIdentifier)) return null;
 
   const { name } = surface;
   if (IGNORED_LOCAL_CALL_NAMES.has(name)) return null;
@@ -4639,9 +4664,32 @@ function receiverMethodAccessName(
   isReceiverIdentifier: (node: Node) => boolean,
 ): string | undefined {
   const expression = unwrappedStaticExpressionNode(node);
+  const boundMethod = boundReceiverMethodAccessName(expression, isReceiverIdentifier);
+  if (boundMethod) return boundMethod;
+
   const receiver = staticAccessExpression(expression);
   if (!receiver || !isReceiverIdentifier(receiver)) return undefined;
   return staticAccessName(expression);
+}
+
+function boundReceiverMethodAccessName(
+  node: Node,
+  isReceiverIdentifier: (node: Node) => boolean,
+): string | undefined {
+  if (!Node.isCallExpression(node)) return undefined;
+
+  const bindAccess = unwrappedStaticExpressionNode(node.getExpression());
+  if (staticAccessName(bindAccess) !== 'bind') return undefined;
+
+  const methodAccess = staticAccessExpression(bindAccess);
+  if (!methodAccess) return undefined;
+
+  const receiver = staticAccessExpression(methodAccess);
+  if (!receiver || !isReceiverIdentifier(receiver)) return undefined;
+
+  // SPEC §10-§11: bound detached receiver methods can hide raw SQL or writes just like
+  // destructured receiver methods, so they degrade through the same FW406 alias path.
+  return staticAccessName(methodAccess) ?? COMPUTED_DRIZZLE_RECEIVER_METHOD;
 }
 
 function appendReceiverMethodAlias(
