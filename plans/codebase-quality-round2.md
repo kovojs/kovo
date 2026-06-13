@@ -175,6 +175,8 @@ Closed evidence so far:
 - Inline enhanced-form response application now uses a quote-aware inline scanner instead of
   `DOMParser`; parity tests cover escaped query JSON/keys and nested fragments across readable,
   freshly minified, generated, and extracted installer sources.
+- Hydrated `script[fw-query]` parsing now shares `wire-parser.ts` query chunk construction, and the
+  runtime barrel exports the canonical apply path directly after deleting the `apply.ts` shim.
 
 Open:
 
@@ -187,6 +189,10 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
+- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
+- `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-store.ts packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`
 
 ## Phase 5 - Server
 

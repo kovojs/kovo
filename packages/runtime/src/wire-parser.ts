@@ -14,6 +14,11 @@ export interface QueryChunk {
   value: unknown;
 }
 
+export interface QueryScriptChunkLike {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
+}
+
 export interface ElementChunk {
   attrs: string;
   content: string;
@@ -66,6 +71,33 @@ export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): Q
 
     const key = readAttribute(chunk.attrs, 'key') ?? undefined;
     const parsed = parseJsonValue(unescapeHtml(chunk.content));
+    if (!parsed.ok) {
+      reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
+      continue;
+    }
+
+    queries.push({
+      ...(key === undefined ? {} : { key }),
+      name,
+      value: parsed.value,
+    });
+  }
+
+  return queries;
+}
+
+export function readQueryScriptChunks(
+  scripts: Iterable<QueryScriptChunkLike>,
+  onError?: RuntimeErrorReporter,
+): QueryChunk[] {
+  const queries: QueryChunk[] = [];
+
+  for (const script of scripts) {
+    const name = script.getAttribute('fw-query');
+    if (!name) continue;
+
+    const key = script.getAttribute('key') ?? undefined;
+    const parsed = parseJsonValue(script.textContent ?? 'null');
     if (!parsed.ok) {
       reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
       continue;

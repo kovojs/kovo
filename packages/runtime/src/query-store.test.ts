@@ -251,6 +251,9 @@ describe('query store hydration and refetch', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(store.get('inventory')).toBeUndefined();
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in fw-query inventory',
+    );
   });
 
   it('runs update plans whenever a query value changes', () => {

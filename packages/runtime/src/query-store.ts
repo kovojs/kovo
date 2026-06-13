@@ -1,8 +1,6 @@
-import { reportMalformedJson } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
-import { parseJsonValue } from './json.js';
-import type { TextContentElementLike } from './dom-like.js';
-import type { QueryChunk } from './wire-parser.js';
+import { readQueryScriptChunks } from './wire-parser.js';
+import type { QueryChunk, QueryScriptChunkLike } from './wire-parser.js';
 
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
@@ -18,7 +16,7 @@ export interface QueryStore {
 
 export type QuerySnapshot = Map<string, unknown>;
 
-export interface QueryScriptLike extends TextContentElementLike {}
+export interface QueryScriptLike extends QueryScriptChunkLike {}
 
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
@@ -130,24 +128,7 @@ export function hydrateQueryScripts(
   scripts: Iterable<QueryScriptLike>,
   options: { onError?: RuntimeErrorReporter } = {},
 ): readonly string[] {
-  const queries: QueryChunk[] = [];
-
-  for (const script of scripts) {
-    const name = script.getAttribute('fw-query');
-    if (name) {
-      const key = script.getAttribute('key') ?? undefined;
-      const parsed = parseJsonValue(script.textContent ?? 'null');
-      if (parsed.ok) {
-        const query: QueryChunk =
-          key === undefined ? { name, value: parsed.value } : { key, name, value: parsed.value };
-        queries.push(query);
-      } else {
-        reportMalformedJson(options.onError, 'fw-query hydration', parsed.error);
-      }
-    }
-  }
-
   // SPEC.md §9.1/§9.4: initial hydration uses the same batched query chunk
   // application path as mutation responses, deferred streams, and typed reads.
-  return applyQueryChunksToStore(store, queries);
+  return applyQueryChunksToStore(store, readQueryScriptChunks(scripts, options.onError));
 }

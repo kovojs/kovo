@@ -5,6 +5,7 @@ import {
   readElementChunks,
   readFragmentChunks,
   readQueryChunks,
+  readQueryScriptChunks,
   unescapeHtml,
 } from './wire-parser.js';
 
@@ -61,6 +62,49 @@ describe('wire parser HTML entity handling', () => {
     expect(
       readQueryChunks(
         '<fw-query name="cart">{&quot;label&quot;:&#39;bad&#39;}</fw-query>',
+        onError,
+      ),
+    ).toEqual([]);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+  });
+
+  it('reads hydrated query scripts into the shared query chunk shape', () => {
+    // SPEC.md §9.4: hydrated script data, mutation chunks, and typed-read
+    // refetches share query names and keys as the store currency.
+    expect(
+      readQueryScriptChunks([
+        {
+          getAttribute: (name) =>
+            name === 'fw-query' ? 'product' : name === 'key' ? 'product>p1' : null,
+          textContent: '{"stock":7}',
+        },
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          textContent: '{"count":2}',
+        },
+        {
+          getAttribute: () => null,
+          textContent: '{"ignored":true}',
+        },
+      ]),
+    ).toEqual([
+      { key: 'product>p1', name: 'product', value: { stock: 7 } },
+      { name: 'cart', value: { count: 2 } },
+    ]);
+  });
+
+  it('reports hydrated query script JSON with the same fw-query label as wire chunks', () => {
+    const onError = vi.fn();
+
+    expect(
+      readQueryScriptChunks(
+        [
+          {
+            getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+            textContent: '{',
+          },
+        ],
         onError,
       ),
     ).toEqual([]);
