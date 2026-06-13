@@ -2714,9 +2714,13 @@ function localObjectMemberCallbackFunction(
 ): Node | undefined {
   const member = staticAccessName(node);
   const receiver = staticAccessExpression(node);
-  if (!member || !receiver || !Node.isIdentifier(receiver)) return undefined;
+  if (!member || !receiver) return undefined;
 
-  return localObjectMemberCallbackForReceiver(receiver, member, seen);
+  if (Node.isIdentifier(receiver)) {
+    return localObjectMemberCallbackForReceiver(receiver, member, seen);
+  }
+
+  return localObjectMemberCallbackForExpression(receiver, member, seen);
 }
 
 function localObjectMemberCallbackForReceiver(
@@ -2747,6 +2751,177 @@ function localObjectMemberCallbackForReceiver(
   return undefined;
 }
 
+function localObjectMemberCallbackForExpression(
+  receiver: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(receiver);
+  if (Node.isIdentifier(expression)) {
+    return localObjectMemberCallbackForReceiver(expression, member, seen);
+  }
+
+  const receiverMember = staticAccessName(expression);
+  const parentReceiver = staticAccessExpression(expression);
+  if (!receiverMember || !parentReceiver) return undefined;
+
+  const receiverValue = localObjectMemberValue(parentReceiver, receiverMember, seen);
+  return receiverValue
+    ? localObjectMemberCallbackFromValue(receiverValue, member, seen)
+    : undefined;
+}
+
+function localObjectMemberValue(
+  receiver: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(receiver);
+  if (Node.isIdentifier(expression)) {
+    return localObjectMemberValueForReceiver(expression, member, seen);
+  }
+
+  const receiverMember = staticAccessName(expression);
+  const parentReceiver = staticAccessExpression(expression);
+  if (!receiverMember || !parentReceiver) return undefined;
+
+  const receiverValue = localObjectMemberValue(parentReceiver, receiverMember, seen);
+  return receiverValue ? localObjectMemberValueFromValue(receiverValue, member, seen) : undefined;
+}
+
+function localObjectMemberValueForReceiver(
+  receiver: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  if (!Node.isIdentifier(receiver)) return undefined;
+
+  const receiverKey = resolvedSymbolKey(symbolForIdentifierReference(receiver));
+  const key = receiverKey
+    ? `${receiverKey}:${member}:value`
+    : `${receiver.getText()}:${member}:value`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  const symbol = symbolForIdentifierReference(receiver);
+  const declarations = symbol?.getDeclarations() ?? [];
+
+  for (const declaration of declarations) {
+    const variable = Node.isIdentifier(declaration)
+      ? declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
+      : Node.isVariableDeclaration(declaration)
+        ? declaration
+        : undefined;
+    const value = localObjectMemberValueFromVariable(variable, member, seen);
+    if (value) return value;
+  }
+
+  return undefined;
+}
+
+function localObjectMemberValueFromVariable(
+  variable: ReturnType<SourceFile['getVariableDeclarations']>[number] | undefined,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  const initializer = variable?.getInitializer();
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isIdentifier(expression)) {
+    return localObjectMemberValueForReceiver(expression, member, seen);
+  }
+  if (!Node.isObjectLiteralExpression(expression)) return undefined;
+
+  return localObjectMemberValueFromObjectLiteral(expression, member, seen);
+}
+
+function localObjectMemberValueFromValue(
+  value: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  if (Node.isMethodDeclaration(value) || Node.isShorthandPropertyAssignment(value))
+    return undefined;
+
+  if (Node.isPropertyAssignment(value)) {
+    const initializer = value.getInitializer();
+    if (!initializer) return undefined;
+
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (Node.isIdentifier(expression)) {
+      return localObjectMemberValueForReceiver(expression, member, seen);
+    }
+    if (Node.isObjectLiteralExpression(expression)) {
+      return localObjectMemberValueFromObjectLiteral(expression, member, seen);
+    }
+  }
+
+  return undefined;
+}
+
+function localObjectMemberValueFromObjectLiteral(
+  object: ObjectLiteralExpression,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  // SPEC §10.2/§11.1: nested static callback containers keep spread/override order exact; an
+  // override that is not itself a static object stops resolution instead of fabricating facts.
+  for (const property of object.getProperties().toReversed()) {
+    if (Node.isSpreadAssignment(property)) {
+      const value = localObjectMemberValueFromSpread(property, member, seen);
+      if (value) return value;
+      continue;
+    }
+
+    if (
+      !Node.isMethodDeclaration(property) &&
+      !Node.isPropertyAssignment(property) &&
+      !Node.isShorthandPropertyAssignment(property)
+    ) {
+      continue;
+    }
+    if (propertyNameText(property.getNameNode()) !== member) continue;
+    return property;
+  }
+
+  return undefined;
+}
+
+function localObjectMemberValueFromSpread(
+  property: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  if (!Node.isSpreadAssignment(property)) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(property.getExpression());
+  if (!Node.isIdentifier(expression)) return undefined;
+
+  return localObjectMemberValueForReceiver(expression, member, seen);
+}
+
+function localObjectMemberCallbackFromValue(
+  value: Node,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  if (Node.isPropertyAssignment(value)) {
+    const initializer = value.getInitializer();
+    if (initializer) {
+      const expression = unwrappedStaticExpressionNode(initializer);
+      if (Node.isIdentifier(expression)) {
+        return localObjectMemberCallbackForReceiver(expression, member, seen);
+      }
+      if (Node.isObjectLiteralExpression(expression)) {
+        return localObjectMemberCallbackFromObjectLiteral(expression, member, seen);
+      }
+    }
+  }
+
+  return undefined;
+}
+
 function localObjectMemberCallbackFromVariable(
   variable: ReturnType<SourceFile['getVariableDeclarations']>[number] | undefined,
   member: string,
@@ -2764,7 +2939,15 @@ function localObjectMemberCallbackFromVariable(
 
   // SPEC §10.2/§11.1: static local callback containers may be resolved only when the exact member
   // remains executable after object-spread order and later overrides are applied.
-  for (const property of expression.getProperties().toReversed()) {
+  return localObjectMemberCallbackFromObjectLiteral(expression, member, seen);
+}
+
+function localObjectMemberCallbackFromObjectLiteral(
+  object: ObjectLiteralExpression,
+  member: string,
+  seen: Set<string>,
+): Node | undefined {
+  for (const property of object.getProperties().toReversed()) {
     if (Node.isSpreadAssignment(property)) {
       const callback = localObjectMemberCallbackFromSpread(property, member, seen);
       if (callback) return callback;

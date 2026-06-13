@@ -2610,6 +2610,70 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts project query-loader callbacks through nested static object aliases', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            'function emptyLoad() {',
+            '  return [];',
+            '}',
+            '',
+            'const base = { nested: { loadProducts } };',
+            'const alias = base;',
+            'const spread = { ...base };',
+            'const overridden = { ...base, nested: { loadProducts: emptyLoad } };',
+            '',
+            'export const aliasedQuery = query("product/project-nested-object-alias-loader", {',
+            '  load: alias.nested.loadProducts,',
+            '});',
+            '',
+            'export const spreadQuery = query("product/project-nested-object-spread-loader", {',
+            '  load: spread["nested"]["loadProducts"],',
+            '});',
+            '',
+            'export const overriddenQuery = query("product/project-overridden-nested-object-loader", {',
+            '  load: overridden.nested.loadProducts,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/project-nested-object-alias-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:20',
+      },
+      {
+        query: 'product/project-nested-object-spread-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:24',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -6728,7 +6792,7 @@ export interface CommerceInvalidationSets {
     });
 
     expect(graph).toEqual({
-      'cart.addItem': {
+      addItem: {
         reads: [],
         touches: [
           {
@@ -6740,7 +6804,7 @@ export interface CommerceInvalidationSets {
         ],
         unresolved: [],
       },
-      addItem: {
+      'cart.addItem': {
         reads: [],
         touches: [
           {
@@ -6887,6 +6951,74 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source write callbacks through nested static object aliases', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          'function noop() {',
+          '  return undefined;',
+          '}',
+          '',
+          'const base = { nested: { addItem } };',
+          'const alias = base;',
+          'const spread = { ...base };',
+          'const overridden = { ...base, nested: { addItem: noop } };',
+          '',
+          'export const cart = domain({',
+          '  addAliased: write(alias.nested.addItem),',
+          '  addSpread: write(spread["nested"]["addItem"]),',
+          '  addOverridden: write(overridden.nested.addItem),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addSpread': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts member-referenced project write callbacks from typed receiver symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -6966,6 +7098,84 @@ export interface CommerceInvalidationSets {
             '  addAliased: write(alias.addItem),',
             '  addSpread: write(spread["addItem"]),',
             '  addOverridden: write(overridden.addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addAliased': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addSpread': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts project write callbacks through nested static object aliases', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            '  writer.insert(cartItems).values({ productId });',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            'function fakeAdd(db: FakeDb, productId: string) {',
+            '  db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'const base = { nested: { addItem } };',
+            'const alias = base;',
+            'const spread = { ...base };',
+            'const overridden = { ...base, nested: { addItem: fakeAdd } };',
+            '',
+            'export const cart = domain({',
+            '  addAliased: write(alias.nested.addItem),',
+            '  addSpread: write(spread["nested"]["addItem"]),',
+            '  addOverridden: write(overridden.nested.addItem),',
             '});',
           ].join('\n'),
         },
@@ -8538,6 +8748,63 @@ export interface CommerceInvalidationSets {
         reads: ['user'],
         shape: {
           id: 'string',
+        },
+        site: 'user.queries.ts:19',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('extracts source query-loader callbacks through nested static object aliases', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey(), stock: integer("stock").notNull() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function loadUsers(_input, db) {',
+          '  return db.select({ id: users.id, stock: users.stock }).from(users);',
+          '}',
+          'function emptyLoad() {',
+          '  return [];',
+          '}',
+          '',
+          'const base = { nested: { loadUsers } };',
+          'const alias = base;',
+          'const spread = { ...base };',
+          'const overridden = { ...base, nested: { loadUsers: emptyLoad } };',
+          '',
+          'export const aliasedQuery = query("users/source-nested-object-alias-loader", {',
+          '  load: alias.nested.loadUsers,',
+          '});',
+          '',
+          'export const spreadQuery = query("users/source-nested-object-spread-loader", {',
+          '  load: spread["nested"]["loadUsers"],',
+          '});',
+          '',
+          'export const overriddenQuery = query("users/source-overridden-nested-object-loader", {',
+          '  load: overridden.nested.loadUsers,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'users/source-nested-object-alias-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'user.queries.ts:15',
+      },
+      {
+        query: 'users/source-nested-object-spread-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+          stock: 'number',
         },
         site: 'user.queries.ts:19',
       },

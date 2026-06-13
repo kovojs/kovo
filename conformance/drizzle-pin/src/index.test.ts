@@ -836,6 +836,111 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins nested static callback containers under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '}',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {',
+          '  db.insert(products).values({ id: productId });',
+          '  fake.insert(products).values({ id: productId });',
+          '}',
+          'function fakeAdd(fake: FakeDb, productId: string) {',
+          '  fake.insert(products).values({ id: productId });',
+          '}',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '}',
+          'function emptyLoad() {',
+          '  return [];',
+          '}',
+          '',
+          'const domainBase = { nested: { addItem } };',
+          'const domainSpread = { ...domainBase };',
+          'const domainOverridden = { ...domainBase, nested: { addItem: fakeAdd } };',
+          'const queryBase = { nested: { loadProducts } };',
+          'const querySpread = { ...queryBase };',
+          'const queryOverridden = { ...queryBase, nested: { loadProducts: emptyLoad } };',
+          '',
+          'export const productDomain = domain({',
+          '  addSpread: write(domainSpread["nested"]["addItem"]),',
+          '  addOverridden: write(domainOverridden.nested.addItem),',
+          '});',
+          '',
+          "export const productQuery = query('product/nested-callback-container', {",
+          '  load: querySpread["nested"]["loadProducts"],',
+          '});',
+          "export const emptyQuery = query('product/overridden-nested-callback-container', {",
+          '  load: queryOverridden.nested.loadProducts,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:21',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      'productDomain.addSpread': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/nested-callback-container',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:39',
+      },
+    ]);
+  });
+
   it('pins nested destructuring assignment receiver aliases under real Drizzle imports', () => {
     const files = [
       {

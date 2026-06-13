@@ -231,6 +231,15 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` now follows nested static callback
+      container members through local object aliases and spreads with override/cycle protection,
+      so `load: spread["nested"]["loadProducts"]` and `write(spread["nested"]["addItem"])`
+      resolve to executable callback bodies while overridden nested fake callbacks remain
+      non-facts; `packages/drizzle/src/index.test.ts` covers source/project query-loader and
+      domain write callbacks, and `conformance/drizzle-pin/src/index.test.ts` pins the same
+      project surfaces against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
