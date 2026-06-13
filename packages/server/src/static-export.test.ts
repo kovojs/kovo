@@ -184,6 +184,37 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects duplicate concrete route targets before static replay', async () => {
+    let replayed = false;
+    const app = createApp({
+      routes: [
+        route('/docs/intro', {
+          page: () => {
+            replayed = true;
+            return '<main>Intro</main>';
+          },
+        }),
+        route('/docs/intro/', {
+          page: () => '<main>Duplicate intro</main>',
+        }),
+      ],
+    });
+
+    await expect(exportStaticApp(app)).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining(
+            "cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'",
+          ),
+          routePath: '/docs/intro/',
+        },
+      ],
+    });
+    expect(replayed).toBe(false);
+  });
+
   it('copies configured static assets with exact bytes and represented headers', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));

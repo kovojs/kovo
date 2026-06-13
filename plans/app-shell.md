@@ -1117,3 +1117,19 @@ Round268 docs-site optional client-module directory cleanup evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round270 static route-target plan closure evidence:
+
+- `packages/server/src/static-export-route-plan.ts` now rejects duplicate concrete route-document
+  targets before SPEC §9.5 synthetic replay, covering normalized static routes, duplicate
+  `staticPaths`, and collisions between explicit param route `staticPaths` and static routes.
+- `packages/server/src/static-export.test.ts` proves duplicate route targets fail with FW229 before
+  page replay, so Vite/starter/commerce/docs export adoption does not rely on later output-write
+  conflict detection for route-document uniqueness.
+- `pnpm exec vitest --run packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-route-plan.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

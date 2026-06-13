@@ -18,6 +18,7 @@ export interface StaticExportRoutePlan {
 export function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
   const diagnostics: StaticExportDiagnostic[] = [];
   const targets: StaticExportRouteTarget[] = [];
+  const targetPaths = new Map<string, StaticExportRouteTarget>();
 
   for (const route of app.routes) {
     if (app.sessionProvider) {
@@ -41,19 +42,25 @@ export function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
     }
 
     if (routeHasParams(route.path)) {
-      const planned = staticExportParamRouteTargets(route);
+      const planned = staticExportParamRouteTargets(route, targetPaths);
       diagnostics.push(...planned.diagnostics);
       targets.push(...planned.targets);
       continue;
     }
 
-    targets.push({ path: normalizePathname(route.path).pathname, routePath: route.path });
+    addStaticExportRouteTarget(targets, targetPaths, diagnostics, {
+      path: normalizePathname(route.path).pathname,
+      routePath: route.path,
+    });
   }
 
   return { diagnostics, targets };
 }
 
-function staticExportParamRouteTargets(route: JisoApp['routes'][number]): StaticExportRoutePlan {
+function staticExportParamRouteTargets(
+  route: JisoApp['routes'][number],
+  targetPaths: Map<string, StaticExportRouteTarget>,
+): StaticExportRoutePlan {
   const staticPaths = route.staticPaths;
   if (!staticPaths) {
     return {
@@ -81,7 +88,6 @@ function staticExportParamRouteTargets(route: JisoApp['routes'][number]): Static
 
   const diagnostics: StaticExportDiagnostic[] = [];
   const targets: StaticExportRouteTarget[] = [];
-
   for (const staticPath of staticPaths) {
     const normalized = normalizePathname(staticPath);
     if (!staticPath.startsWith('/') || staticPath.includes('?') || staticPath.includes('#')) {
@@ -114,10 +120,36 @@ function staticExportParamRouteTargets(route: JisoApp['routes'][number]): Static
       continue;
     }
 
-    targets.push({ path: normalized.pathname, routePath: route.path });
+    addStaticExportRouteTarget(targets, targetPaths, diagnostics, {
+      path: normalized.pathname,
+      routePath: route.path,
+    });
   }
 
   return { diagnostics, targets };
+}
+
+function addStaticExportRouteTarget(
+  targets: StaticExportRouteTarget[],
+  targetPaths: Map<string, StaticExportRouteTarget>,
+  diagnostics: StaticExportDiagnostic[],
+  target: StaticExportRouteTarget,
+): void {
+  const existing = targetPaths.get(target.path);
+  if (existing) {
+    // SPEC §9.5 static export replays a synthetic GET per concrete route document;
+    // duplicate concrete URLs are non-exportable because they would race for one HTML artifact.
+    diagnostics.push(
+      staticExportDiagnostic(
+        target.routePath,
+        `FW229 static export cannot export '${target.path}' for route '${target.routePath}' because it duplicates the concrete route target from '${existing.routePath}'.`,
+      ),
+    );
+    return;
+  }
+
+  targetPaths.set(target.path, target);
+  targets.push(target);
 }
 
 function routeHasParams(path: string): boolean {

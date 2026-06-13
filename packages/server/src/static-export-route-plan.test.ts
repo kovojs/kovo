@@ -75,4 +75,54 @@ describe('server static export route plan', () => {
       },
     ]);
   });
+
+  it('rejects duplicate concrete export targets before synthetic replay', () => {
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          routes: [
+            route('/docs/intro', {
+              page: () => '<main>Intro</main>',
+            }),
+            route('/docs/intro/', {
+              page: () => '<main>Duplicate intro</main>',
+            }),
+            route('/products/:id', {
+              page: () => '<main>Product</main>',
+              staticPaths: ['/products/p1', '/products/p1/'],
+            }),
+            route('/docs/:slug', {
+              page: () => '<main>Docs</main>',
+              staticPaths: ['/docs/intro'],
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [
+        {
+          code: 'FW229',
+          message:
+            "FW229 static export cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'.",
+          routePath: '/docs/intro/',
+        },
+        {
+          code: 'FW229',
+          message:
+            "FW229 static export cannot export '/products/p1' for route '/products/:id' because it duplicates the concrete route target from '/products/:id'.",
+          routePath: '/products/:id',
+        },
+        {
+          code: 'FW229',
+          message:
+            "FW229 static export cannot export '/docs/intro' for route '/docs/:slug' because it duplicates the concrete route target from '/docs/intro'.",
+          routePath: '/docs/:slug',
+        },
+      ],
+      targets: [
+        { path: '/docs/intro', routePath: '/docs/intro' },
+        { path: '/products/p1', routePath: '/products/:id' },
+      ],
+    });
+  });
 });
