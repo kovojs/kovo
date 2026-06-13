@@ -77,7 +77,9 @@ export interface CheckboxGroupMoveResult {
 export type CheckboxGroupPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
-export type CheckboxGroupItemEvent = Event;
+export type CheckboxGroupItemEvent = Event & {
+  readonly currentTarget: (EventTarget & { checked?: boolean }) | null;
+};
 export type CheckboxGroupKeyboardEvent = Event & { readonly key: string };
 
 export function checkboxGroupItemChecked(options: CheckboxGroupItemAttributeOptions): boolean {
@@ -242,6 +244,9 @@ export function checkboxGroupItemClick(
 
   const result = toggleCheckboxGroupItem(state, 'item-click', options);
   if (!result.changed) {
+    if (event.currentTarget !== null) {
+      event.currentTarget.checked = checkboxGroupItemChecked(state);
+    }
     event.preventDefault();
   }
 

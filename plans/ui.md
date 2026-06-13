@@ -67,6 +67,9 @@ risks. Do not append long historical command lists.
   interactive or unit coverage for recent state synchronization fixes.
 - Number-field step buttons now align off-step values to an explicit native `min`/`step` grid
   before clamping, preserving the real `type="number"` control contract from SPEC §6.3.
+- Checkbox-group item clicks restore the live native checkbox `checked` property when SPEC §4.6
+  cancelable/blocked changes leave the primitive value unchanged, and the G5 merge golden now
+  preserves checkbox-group `role="group"` semantics.
 
 ## Open Work
 
@@ -75,8 +78,8 @@ H2:
 - [ ] Re-audit the full H2 primitive list against package exports, tests, styled wrappers, gallery
       routes, behavior contracts, merge fixtures, and compiled interactive coverage before
       checking H2 complete.
-- [ ] Close any remaining checkbox-group, number-field, otp-field, scroll-area, and field/fieldset
-      behavior gaps with focused primitive tests rather than styled-only evidence.
+- [ ] Close any remaining number-field, otp-field, scroll-area, and field/fieldset behavior gaps
+      with focused primitive tests rather than styled-only evidence.
 - [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
 
 H3:
@@ -111,10 +114,11 @@ Gallery:
 
 Latest integrated UI slice:
 
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/number-field.test.ts`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox-group.test.ts`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm exec vp check packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts IMPLEMENT_v1.md plans/ui.md`
+- `pnpm exec vitest --run examples/gallery/src/merge-fixtures.test.tsx`
+- `pnpm exec vp check packages/headless-ui/src/primitives/checkbox-group.ts packages/headless-ui/src/primitives/checkbox-group.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`
 - `git diff --check`
 
 Latest broad gate:

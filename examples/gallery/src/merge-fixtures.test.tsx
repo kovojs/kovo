@@ -2681,7 +2681,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       {
         'aria-describedby': 'author-notifications-help',
         class: 'checkbox-group gap-2',
-        role: 'radiogroup',
+        role: 'group',
       },
     );
     const item = mergePrimitiveAttrs(
@@ -2728,11 +2728,6 @@ describe('gallery G5 primitive merge fixtures', () => {
 
     expect(root.diagnostics).toEqual([
       {
-        attr: 'role',
-        code: 'FW232',
-        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
-      },
-      {
         attr: 'aria-describedby',
         code: 'FW231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
@@ -2763,7 +2758,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </fieldset>,
     ).toBe(
-      '<fieldset data-gallery-merge="checkbox-group"><div data-orientation="vertical" data-invalid="" data-required="" role="radiogroup" id="gallery-notifications" aria-labelledby="gallery-notifications-label" aria-describedby="author-notifications-help" aria-invalid="true" aria-required="true" class="checkbox-group gap-2"><div data-state="checked" id="author-notifications-email-item" class="checkbox-group-item flex"><input data-state="checked" aria-checked="false" checked disabled tabIndex="0" type="checkbox" value="email" id="author-notifications-email" name="notifications" required class="checkbox-group-control"><label data-state="checked" for="author-notifications-email" id="gallery-notifications-email-label" class="checkbox-group-label">Email</label></div></div></fieldset>',
+      '<fieldset data-gallery-merge="checkbox-group"><div data-orientation="vertical" data-invalid="" data-required="" role="group" id="gallery-notifications" aria-labelledby="gallery-notifications-label" aria-describedby="author-notifications-help" aria-invalid="true" aria-required="true" class="checkbox-group gap-2"><div data-state="checked" id="author-notifications-email-item" class="checkbox-group-item flex"><input data-state="checked" aria-checked="false" checked disabled tabIndex="0" type="checkbox" value="email" id="author-notifications-email" name="notifications" required class="checkbox-group-control"><label data-state="checked" for="author-notifications-email" id="gallery-notifications-email-label" class="checkbox-group-label">Email</label></div></div></fieldset>',
     );
   });
 

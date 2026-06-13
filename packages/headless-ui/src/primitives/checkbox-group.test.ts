@@ -299,6 +299,34 @@ describe('headless-ui checkbox-group primitive', () => {
     expect(canceledEvent.defaultPrevented).toBe(true);
   });
 
+  it('restores the native checked state when an item click is rejected', () => {
+    const canceledEvent = checkboxGroupClickEvent(false);
+    const canceledResult = checkboxGroupItemClick(
+      canceledEvent,
+      { itemValue: 'email', value: ['email'] },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(canceledResult).toMatchObject({ changed: false, value: ['email'] });
+    expect(canceledEvent.currentTarget.checked).toBe(true);
+    expect(canceledEvent.defaultPrevented).toBe(true);
+
+    const disabledEvent = checkboxGroupClickEvent(true);
+    const disabledResult = checkboxGroupItemClick(disabledEvent, {
+      itemDisabled: true,
+      itemValue: 'sms',
+      value: [],
+    });
+
+    expect(disabledResult).toEqual({ changed: false, value: [] });
+    expect(disabledEvent.currentTarget.checked).toBe(false);
+    expect(disabledEvent.defaultPrevented).toBe(true);
+  });
+
   it('prevents default for handled keyboard navigation', () => {
     const event = checkboxGroupKeyboardEvent('ArrowRight');
     const result = checkboxGroupKeyDown(event, {
@@ -334,5 +362,16 @@ describe('headless-ui checkbox-group primitive', () => {
 function checkboxGroupKeyboardEvent(key: string): Event & { readonly key: string } {
   const event = new Event('keydown', { cancelable: true }) as Event & { key: string };
   Object.defineProperty(event, 'key', { value: key });
+  return event;
+}
+
+function checkboxGroupClickEvent(
+  checked: boolean,
+): Event & { readonly currentTarget: { checked: boolean } } {
+  const target = { checked };
+  const event = new Event('click', { cancelable: true }) as Event & {
+    currentTarget: { checked: boolean };
+  };
+  Object.defineProperty(event, 'currentTarget', { value: target });
   return event;
 }
