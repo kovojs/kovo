@@ -1040,6 +1040,14 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       real `drizzle-orm` Postgres imports. Verified by
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
       and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Evidence 2026-06-13 round286: rest destructuring no longer promotes rest containers such as
+      `[...writerRest]` or `{ ...objectRest }` to direct Drizzle receiver aliases; exact
+      project-mode facts still come from typed member/element access like `writerRest[0]`, and
+      source-mode rest carrier member access degrades to FW406 instead of disappearing.
+      `packages/drizzle/src/index.test.ts` and `conformance/drizzle-pin/src/index.test.ts` pin
+      package and real `drizzle-orm` behavior. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
+      and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

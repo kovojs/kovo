@@ -9752,6 +9752,77 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not promote project rest destructuring containers to receiver aliases', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface DrizzleContext { receivers: [FakeDb, PgDatabase]; writerRest: PgDatabase }',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProduct(context: DrizzleContext, productId: string) {',
+          '  const [, ...writerRest] = context.receivers;',
+          '  const { ...objectRest } = context;',
+          '  await writerRest.update(products).set({ stock: 0 });',
+          '  await objectRest.update(products).set({ stock: 0 });',
+          '  await writerRest[0].update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'export const productQuery = query("product/rest-receiver", {',
+          '  load(_input, context: DrizzleContext) {',
+          '    const [, ...readerRest] = context.receivers;',
+          '    const { ...objectRest } = context;',
+          '    readerRest.select({ id: products.id }).from(products);',
+          '    objectRest.select({ id: products.id }).from(products);',
+          '    return readerRest[0].select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:19',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/rest-receiver',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:22',
+      },
+    ]);
+  });
+
   it('uses project object-contained tuple assignment receiver aliases from typed contexts', () => {
     const files = [
       pgDatabaseTypes([
@@ -10620,6 +10691,72 @@ export interface CommerceInvalidationSets {
         ],
       },
     });
+  });
+
+  it('marks source array rest carrier member aliases as FW406 without direct receiver fabrication', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = [fake, db];',
+          '  const [, ...writerRest] = carrier;',
+          '  await writerRest.update(users).set({});',
+          '  await writerRest[0].update(users).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'users.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/source-rest-carrier", {',
+          '  load(_input, db, fake) {',
+          '    const carrier = [fake, db];',
+          '    const [, ...readerRest] = carrier;',
+          '    readerRest.select({ id: users.id }).from(users);',
+          '    return readerRest[0].select({ id: users.id }).from(users);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'users.queries.ts:3',
+          },
+        ],
+        query: 'users/source-rest-carrier',
+        reads: [],
+        shape: {},
+        site: 'users.queries.ts:3',
+      },
+    ]);
   });
 
   it('marks source spread-copied receiver carriers as FW406 without overridden fake facts', () => {

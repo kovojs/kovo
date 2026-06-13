@@ -798,6 +798,7 @@ function appendProjectDrizzleReceiverBinding(
   if (Node.isArrayBindingPattern(name)) {
     for (const element of name.getElements()) {
       if (!Node.isBindingElement(element)) continue;
+      if (isRestBindingElement(element)) continue;
       appendProjectDrizzleReceiverBinding(element.getNameNode(), names, symbolKeys);
     }
     return;
@@ -805,6 +806,7 @@ function appendProjectDrizzleReceiverBinding(
   if (!Node.isObjectBindingPattern(name)) return;
 
   for (const element of name.getElements()) {
+    if (isRestBindingElement(element)) continue;
     appendProjectDrizzleReceiverBinding(element.getNameNode(), names, symbolKeys);
   }
 }
@@ -915,6 +917,7 @@ function appendProjectDrizzleReceiverArrayBindingAliasesForType(
 
   binding.getElements().forEach((element, index) => {
     if (!Node.isBindingElement(element)) return;
+    if (isRestBindingElement(element)) return;
 
     const elementType = projectArrayElementType(sourceType, index);
     if (!elementType) return;
@@ -937,6 +940,7 @@ function appendProjectDrizzleReceiverObjectBindingAliasesForType(
   if (!Node.isObjectBindingPattern(binding)) return;
 
   for (const element of binding.getElements()) {
+    if (isRestBindingElement(element)) continue;
     const propertyName = objectBindingElementPropertyName(element);
     if (!propertyName) continue;
 
@@ -1110,6 +1114,12 @@ function projectArrayElementType(sourceType: MorphType, index: number): MorphTyp
 
 function objectBindingElementPropertyName(element: BindingElement): string | undefined {
   return propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
+}
+
+function isRestBindingElement(element: BindingElement): boolean {
+  // SPEC §11.1: a rest binding is a receiver container, not the receiver itself. Project-mode
+  // exact facts must come from typed member/element access off that container.
+  return element.compilerNode.dotDotDotToken !== undefined;
 }
 
 function appendProjectDrizzleReceiverAliasIdentifier(
@@ -3411,6 +3421,8 @@ function callbackFunctionFromBindingElement(
   declaration: BindingElement,
   seen: Set<string>,
 ): Node | undefined {
+  if (isRestBindingElement(declaration)) return undefined;
+
   const initializer = declaration
     .getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
     ?.getInitializer();
@@ -3449,6 +3461,8 @@ function bindingElementStaticPath(declaration: BindingElement): string[] {
   let current: Node | undefined = declaration;
 
   while (current && Node.isBindingElement(current)) {
+    if (isRestBindingElement(current)) return [];
+
     const parent = current.getParent();
     if (Node.isObjectBindingPattern(parent)) {
       const property = current.getPropertyNameNode();
@@ -6788,6 +6802,7 @@ function appendSourceReceiverAliasesFromCarrierBinding(
   if (!Node.isObjectBindingPattern(binding)) return;
 
   for (const element of binding.getElements()) {
+    if (isRestBindingElement(element)) continue;
     const propertyName = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
     if (!propertyName) continue;
 
@@ -6823,6 +6838,15 @@ function appendSourceReceiverAliasesFromArrayCarrierBinding(
 
   binding.getElements().forEach((element, index) => {
     if (!Node.isBindingElement(element)) return;
+    if (isRestBindingElement(element)) {
+      appendSourceReceiverCarrierPropertiesForRestTarget(
+        element.getNameNode(),
+        carrierProperties,
+        index,
+        references,
+      );
+      return;
+    }
 
     const propertyName = String(index);
     const name = element.getNameNode();
@@ -6844,6 +6868,43 @@ function appendSourceReceiverAliasesFromArrayCarrierBinding(
   });
 }
 
+function appendSourceReceiverCarrierPropertiesForRestTarget(
+  target: Node,
+  carrierProperties: ReadonlySet<string>,
+  startIndex: number,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+  },
+): void {
+  if (!Node.isIdentifier(target)) return;
+
+  const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
+  if (!targetSymbolKey) return;
+
+  const remappedProperties = restCarrierProperties(carrierProperties, startIndex);
+  if (remappedProperties.size === 0) return;
+
+  const properties = carrierPropertiesForSymbol(references.carrierProperties, targetSymbolKey);
+  for (const property of remappedProperties) properties.add(property);
+}
+
+function restCarrierProperties(
+  carrierProperties: ReadonlySet<string>,
+  startIndex: number,
+): ReadonlySet<string> {
+  const remapped = new Set<string>();
+
+  for (const property of carrierProperties) {
+    const [head, ...tail] = property.split('.');
+    const index = Number(head);
+    if (!Number.isInteger(index) || index < startIndex) continue;
+
+    remapped.add([String(index - startIndex), ...tail].join('.'));
+  }
+
+  return remapped;
+}
+
 function appendSourceReceiverAliasesFromNestedCarrierBinding(
   binding: Node,
   carrierProperties: ReadonlySet<string>,
@@ -6860,6 +6921,7 @@ function appendSourceReceiverAliasesFromNestedCarrierBinding(
   if (!Node.isObjectBindingPattern(binding)) return;
 
   for (const element of binding.getElements()) {
+    if (isRestBindingElement(element)) continue;
     const propertyName = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
     if (!propertyName) continue;
 
@@ -7443,6 +7505,7 @@ function appendReceiverMethodAliasesFromObjectPattern(
   if (!Node.isObjectBindingPattern(binding)) return;
 
   for (const element of binding.getElements()) {
+    if (isRestBindingElement(element)) continue;
     const alias = element.getNameNode();
     if (!Node.isIdentifier(alias)) continue;
 
@@ -7467,6 +7530,7 @@ function appendReceiverMethodAliasesFromArrayPattern(
   const values = expression.getElements();
   binding.getElements().forEach((element, index) => {
     if (!Node.isBindingElement(element)) return;
+    if (isRestBindingElement(element)) return;
 
     const alias = element.getNameNode();
     if (!Node.isIdentifier(alias)) return;
@@ -8026,6 +8090,7 @@ function isSourceReceiverBindingDeclaration(declaration: Node): boolean {
     if (Node.isBindingElement(parent)) binding = parent;
   }
   if (!binding) return false;
+  if (isRestBindingElement(binding)) return false;
 
   const bindingName = binding.getNameNode();
   const propertyNameNode = binding.getPropertyNameNode();
@@ -8123,6 +8188,7 @@ function appendSourceDestructuredReceiverBinding(
   if (!Node.isObjectBindingPattern(name)) return;
 
   for (const element of name.getElements()) {
+    if (isRestBindingElement(element)) continue;
     const binding = element.getNameNode();
     const propertyName = propertyNameText(element.getPropertyNameNode() ?? binding);
 

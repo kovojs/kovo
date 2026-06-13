@@ -2810,6 +2810,80 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(3);
   });
 
+  it('pins source rest carrier member aliases as FW406 without fabricated direct receivers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = [fake, db];',
+          '  const [, ...writerRest] = carrier;',
+          '  await writerRest.update(users).set({});',
+          '  await writerRest[0].update(users).set({});',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          "export const usersQuery = query('users/source-rest-carrier', {",
+          '  load(_input, db, fake) {',
+          '    const carrier = [fake, db];',
+          '    const [, ...readerRest] = carrier;',
+          '    readerRest.select({ id: users.id }).from(users);',
+          '    return readerRest[0].select({ id: users.id }).from(users);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:11',
+          },
+        ],
+      },
+    });
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+        ],
+        query: 'users/source-rest-carrier',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('pins spread-copied typed receiver carrier members under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -4210,6 +4284,72 @@ describe('Drizzle pinned subset conformance', () => {
           stock: 'number',
         },
         site: 'conformance/drizzle-pin/src/product.domain.ts:25',
+      },
+    ]);
+  });
+
+  it('pins rest destructuring containers without promoting them to real Drizzle receivers', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface DrizzleContext { receivers: [FakeDb, PgDatabase<any, any, any>]; writerRest: PgDatabase<any, any, any> }',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'export async function restock(context: DrizzleContext, productId: string) {',
+          '  const [, ...writerRest] = context.receivers;',
+          '  const { ...objectRest } = context;',
+          '  await writerRest.update(products).set({ stock: 0 });',
+          '  await objectRest.update(products).set({ stock: 0 });',
+          '  await writerRest[0].update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '}',
+          '',
+          "export const productQuery = query('product/rest-receiver', {",
+          '  load(_input, context: DrizzleContext) {',
+          '    const [, ...readerRest] = context.receivers;',
+          '    const { ...objectRest } = context;',
+          '    readerRest.select({ id: products.id }).from(products);',
+          '    objectRest.select({ id: products.id }).from(products);',
+          '    return readerRest[0].select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:19',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/rest-receiver',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:22',
       },
     ]);
   });
