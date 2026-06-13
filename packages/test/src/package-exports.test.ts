@@ -45,10 +45,12 @@ import {
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
 import {
+  viteLoweredEventDiagnosticFact,
   viteDiagnosticMessageFacts,
   viteDiagnosticMessageFactsFromOutput,
   type DiagnosticHelpFact,
   type DiagnosticOutputFact,
+  type ViteLoweredEventDiagnosticFact,
   type ViteDiagnosticMessageFacts,
 } from '@jiso/test/diagnostic-output-fixtures';
 import {
@@ -512,6 +514,21 @@ describe('@jiso/test package subpath exports', () => {
         'prefix\nJiso Vite transform failed with 1 error diagnostic.\n\nFW201 x.ts:1:1 message.',
       ).summary,
     ).toBe('Jiso Vite transform failed with 1 error diagnostic.');
+    expect(
+      viteLoweredEventDiagnosticFact(
+        [
+          'Jiso Vite transform failed with 1 error diagnostic.',
+          '',
+          'FW201 routes/card.tsx:1:1 message.',
+          '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$click"',
+          '  help: Element params: -',
+        ].join('\n'),
+      ).loweredHandler,
+    ).toEqual({
+      handlerName: 'Card$click',
+      modulePath: '/c/routes/card.client.js',
+      versionShape: 'lower-hex-8',
+    });
     expect(starterTemplateFacts).toBeTypeOf('function');
     expect(executeStarterClientTemplate).toBeTypeOf('function');
     expect(runStarterTemplateEmitGraph).toBeTypeOf('function');
@@ -875,6 +892,7 @@ type _PublicSubpathTypes = [
   WorkflowStepCommand,
   DiagnosticHelpFact,
   DiagnosticOutputFact,
+  ViteLoweredEventDiagnosticFact,
   ViteDiagnosticMessageFacts,
   FwExplainEndpointFact,
   FwExplainMutationAssertionFact,

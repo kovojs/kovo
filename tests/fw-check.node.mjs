@@ -59,7 +59,7 @@ import {
   vitePlusTaskInputPatternEndingWith,
   vitestTaskCommand,
 } from '../packages/test/src/command-fixtures.ts';
-import { viteDiagnosticMessageFactsFromOutput } from '../packages/test/src/diagnostic-output-fixtures.ts';
+import { viteLoweredEventDiagnosticFact } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
   fwExplainListField,
   fwExplainMutationAssertionFact,
@@ -4760,40 +4760,26 @@ export const DiagnosticCard = component('diagnostic-card', {
 });
 `;
   const assertRedTransformMessage = (message) => {
-    const diagnosticMessage = viteDiagnosticMessageFactsFromOutput(message);
-    const redDiagnostic = diagnosticMessage.diagnostics[0];
-    const loweringHelp = redDiagnostic?.help.find((entry) => entry.label === 'Would lower to');
-    const loweredAttrs = htmlElementFacts(`<button ${loweringHelp?.text ?? ''}></button>`, {
-      tag: 'button',
-    })[0]?.attrs;
-    const loweredHref = loweredAttrs?.['on:click'] ?? '';
-    const loweredHandlerReference = generatedHandlerReferenceFact(loweredHref);
+    const diagnosticFact = viteLoweredEventDiagnosticFact(message);
 
-    assert.equal(diagnosticMessage.summary, 'Jiso Vite transform failed with 1 error diagnostic.');
+    assert.equal(diagnosticFact.summary, 'Jiso Vite transform failed with 1 error diagnostic.');
+    assert.deepEqual(diagnosticFact.diagnostic, {
+      code: 'FW201',
+      location: `${fileName}:5:25`,
+      message: diagnosticDefinitions.FW201.message,
+    });
+    assert.deepEqual(diagnosticFact.loweredHandler, {
+      handlerName: 'DiagnosticCard$button_click',
+      modulePath: '/c/routes/diagnostic-card.client.js',
+      versionShape: 'lower-hex-8',
+    });
     assert.deepEqual(
-      redDiagnostic && {
-        code: redDiagnostic.code,
-        location: redDiagnostic.location,
-        message: redDiagnostic.message,
-      },
-      { code: 'FW201', location: `${fileName}:5:25`, message: diagnosticDefinitions.FW201.message },
+      diagnosticFact.help.map(({ label }) => label),
+      ['Would lower to', 'Blocked expression', 'Element params', 'Fixes', 'help'],
     );
-    assert.deepEqual(
-      {
-        handlerName: loweredHandlerReference.handlerName,
-        modulePath: loweredHandlerReference.modulePath,
-        versionShape: loweredHandlerReference.versionShape,
-      },
-      {
-        handlerName: 'DiagnosticCard$button_click',
-        modulePath: '/c/routes/diagnostic-card.client.js',
-        versionShape: 'lower-hex-8',
-      },
-    );
-    assert.deepEqual(redDiagnostic?.help, [
-      { label: 'Would lower to', text: loweringHelp?.text },
-      { label: 'Blocked expression', text: "() => window.alert('x')" },
-      { label: 'Element params', text: '-' },
+    assert.equal(diagnosticFact.sourceExpression, "() => window.alert('x')");
+    assert.equal(diagnosticFact.elementParams, '-');
+    assert.deepEqual(diagnosticFact.help.slice(3), [
       {
         label: 'Fixes',
         text: diagnosticDefinitions.FW201.help.split('\n')[0]?.replace(/^Fixes:\s+/, ''),

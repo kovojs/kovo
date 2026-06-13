@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  viteLoweredEventDiagnosticFact,
   viteDiagnosticMessageFacts,
   viteDiagnosticMessageFactsFromOutput,
 } from './diagnostic-output-fixtures.js';
@@ -79,5 +80,55 @@ describe('@jiso/test diagnostic output fixtures', () => {
     expect(() => viteDiagnosticMessageFactsFromOutput('no diagnostics')).toThrow(
       'Vite diagnostic output includes Jiso transform summary',
     );
+  });
+
+  it('projects lowered event diagnostics without local help-text parsing', () => {
+    expect(
+      viteLoweredEventDiagnosticFact(
+        [
+          'Command failed: vp build',
+          'Jiso Vite transform failed with 1 error diagnostic.',
+          '',
+          'FW201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
+          '  help: Would lower to: on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
+          '  help: Blocked expression: () => window.alert("x")',
+          '  help: Element params: -',
+          '  help: Fixes: Use a top-level function.',
+        ].join('\n'),
+      ),
+    ).toEqual({
+      diagnostic: {
+        code: 'FW201',
+        location: 'routes/card.tsx:5:25',
+        message: 'Event handler expression is not lowerable.',
+      },
+      elementParams: '-',
+      help: [
+        {
+          label: 'Would lower to',
+          text: 'on:click="/c/routes/card.client.js?v=1234abcd#Card$button_click"',
+        },
+        { label: 'Blocked expression', text: '() => window.alert("x")' },
+        { label: 'Element params', text: '-' },
+        { label: 'Fixes', text: 'Use a top-level function.' },
+      ],
+      loweredHandler: {
+        handlerName: 'Card$button_click',
+        modulePath: '/c/routes/card.client.js',
+        versionShape: 'lower-hex-8',
+      },
+      sourceExpression: '() => window.alert("x")',
+      summary: 'Jiso Vite transform failed with 1 error diagnostic.',
+    });
+    expect(() =>
+      viteLoweredEventDiagnosticFact(
+        [
+          'Jiso Vite transform failed with 1 error diagnostic.',
+          '',
+          'FW201 routes/card.tsx:5:25 Event handler expression is not lowerable.',
+          '  help: Element params: -',
+        ].join('\n'),
+      ),
+    ).toThrow('Vite diagnostic output includes lowered handler help');
   });
 });

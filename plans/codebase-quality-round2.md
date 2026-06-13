@@ -49,7 +49,8 @@ Shared source/command fixtures now own conformance package manifest and Vite+ ga
 the conformance fw-check case. Shared source fixtures also own the Drizzle query/touch source
 fixtures and query/diagnostic/touch behavior projections used by the fw-check Drizzle gate. Shared
 `fw-export` fixtures now own static export CLI stream, artifact byte, and summary projections for
-the D10 fw-check gate.
+the D10 fw-check gate. Shared diagnostic-output fixtures now own the lowered Vite event-diagnostic
+projection used by the D10 fw-check gate, including lowered handler reference shape.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -101,6 +102,12 @@ Latest evidence:
 - `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/fw-export-fixtures.ts packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- Diagnostic-output lowered event projection slice:
+  `pnpm exec vitest --run packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vp run build`;
+  `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 2 - Compiler IR
 
@@ -632,7 +639,9 @@ fixtures for package manifest, acceptance script, Vite+ task, and pnpm-filter co
 fw-check Drizzle gate now consumes shared source fixtures for query source bodies and structured
 query/diagnostic/touch behavior projections. The D10 static export CLI assertions now consume
 shared `@jiso/test/fw-export-fixtures` result facts instead of local stream, byte, and summary
-checks.
+checks. The D10 Vite diagnostic lowered-event assertion now consumes
+`@jiso/test/diagnostic-output-fixtures` instead of parsing help text and generated handler hrefs
+inside `tests/fw-check.node.mjs`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -732,6 +741,12 @@ Focused gates since that broad run:
   `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|Conformance suites are an explicit gate" tests/fw-check.node.mjs`;
   `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "compiles TSX-authored components to committed IR through the fixpoint gate"`;
   exact `pnpm exec vp check tests/fw-check.node.mjs examples/commerce/src/app.test.ts packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Diagnostic-output lowered event projection slice:
+  `pnpm exec vitest --run packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vp run build`;
+  `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 Stale but useful broad references:

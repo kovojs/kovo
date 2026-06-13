@@ -1,3 +1,8 @@
+import { generatedHandlerReferenceFact } from './generated-module-fixtures.ts';
+import { htmlElementFacts } from './html-fragment.ts';
+
+import type { GeneratedHandlerReferenceFact } from './generated-module-fixtures.ts';
+
 export interface DiagnosticHelpFact {
   label: string;
   text: string;
@@ -12,6 +17,18 @@ export interface DiagnosticOutputFact {
 
 export interface ViteDiagnosticMessageFacts {
   diagnostics: DiagnosticOutputFact[];
+  summary: string;
+}
+
+export interface ViteLoweredEventDiagnosticFact {
+  diagnostic: Pick<DiagnosticOutputFact, 'code' | 'location' | 'message'>;
+  elementParams: string;
+  help: DiagnosticHelpFact[];
+  loweredHandler: Pick<
+    GeneratedHandlerReferenceFact,
+    'handlerName' | 'modulePath' | 'versionShape'
+  >;
+  sourceExpression: string;
   summary: string;
 }
 
@@ -49,6 +66,45 @@ export function viteDiagnosticMessageFacts(message: string): ViteDiagnosticMessa
   }
 
   return { diagnostics, summary };
+}
+
+export function viteLoweredEventDiagnosticFact(output: string): ViteLoweredEventDiagnosticFact {
+  const { diagnostics, summary } = viteDiagnosticMessageFactsFromOutput(output);
+  const diagnostic = diagnostics[0];
+  if (!diagnostic) {
+    throw new Error('Vite diagnostic output includes a diagnostic');
+  }
+
+  const loweredHelp = diagnostic.help.find((entry) => entry.label === 'Would lower to');
+  if (!loweredHelp) {
+    throw new Error('Vite diagnostic output includes lowered handler help');
+  }
+
+  const loweredAttrs = htmlElementFacts(`<button ${loweredHelp.text}></button>`, {
+    tag: 'button',
+  })[0]?.attrs;
+  const loweredHandler = generatedHandlerReferenceFact(loweredAttrs?.['on:click'] ?? '');
+  const sourceExpression =
+    diagnostic.help.find((entry) => entry.label === 'Blocked expression')?.text ?? '';
+  const elementParams =
+    diagnostic.help.find((entry) => entry.label === 'Element params')?.text ?? '';
+
+  return {
+    diagnostic: {
+      code: diagnostic.code,
+      location: diagnostic.location,
+      message: diagnostic.message,
+    },
+    elementParams,
+    help: diagnostic.help,
+    loweredHandler: {
+      handlerName: loweredHandler.handlerName,
+      modulePath: loweredHandler.modulePath,
+      versionShape: loweredHandler.versionShape,
+    },
+    sourceExpression,
+    summary,
+  };
 }
 
 function diagnosticHelpFacts(lines: string[]): DiagnosticHelpFact[] {
