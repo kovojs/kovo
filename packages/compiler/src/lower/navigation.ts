@@ -5,7 +5,13 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
-import { escapeAttribute, removeJsxAttributes, type SourceReplacement } from '../shared.js';
+import {
+  applySourceReplacements,
+  escapeAttribute,
+  insertOpeningTagAttribute,
+  openingTagAttributeRange,
+  type SourceReplacement,
+} from '../shared.js';
 
 export interface NavigationLowering {
   replacements: SourceReplacement[];
@@ -24,29 +30,33 @@ export function navigationLinkLowering(model: ComponentModuleModel): NavigationL
     const search = navigationObjectAttributeValue(link, 'search');
     if (params === null || search === null) continue;
 
-    const opening = link.openingSource;
-    const tagPrefix = '<Link';
-    const attributes = opening.slice(tagPrefix.length, -1);
-    const anchorAttributes = removeJsxAttributes(
-      attributes,
-      link.attributes
-        .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))
-        .map((attribute) => ({
-          end: attribute.end - link.start - tagPrefix.length,
-          start: attribute.start - link.start - tagPrefix.length,
-        })),
-    );
-    const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
     const href = buildStaticHref(target, params ?? {}, search ?? {});
+    const anchorOpening = lowerLinkOpeningTag(link, href);
 
     replacements.push({
       end: link.end,
-      replacement: `<a${spacing} href="${escapeAttribute(href)}">${link.childSource}</a>`,
+      replacement: `${anchorOpening}${link.childSource}</a>`,
       start: link.start,
     });
   }
 
   return { replacements };
+}
+
+function lowerLinkOpeningTag(link: JsxElementModel, href: string): string {
+  const opening = applySourceReplacements(
+    link.openingSource,
+    link.attributes
+      .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))
+      .map((attribute) => ({
+        ...openingTagAttributeRange(link.openingSource, link, attribute, {
+          includeLeadingWhitespace: true,
+        }),
+        replacement: '',
+      })),
+  ).replace(/^<Link\b/, '<a');
+
+  return insertOpeningTagAttribute(opening, link, 'href', href);
 }
 
 export function navigationHrefLowering(model: ComponentModuleModel): NavigationLowering {
