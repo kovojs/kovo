@@ -20,7 +20,7 @@ export interface RefetchQueryLedger {
 export interface QueryVisibleReturnRefetchRoot
   extends
     ListenerTargetLike<unknown>,
-    OptionalQuerySelectorAllRootLike<QueryScriptLike>,
+    OptionalQuerySelectorAllRootLike<unknown>,
     VisibilityStateLike {}
 
 export interface QueryVisibleReturnRefetchOptions {
