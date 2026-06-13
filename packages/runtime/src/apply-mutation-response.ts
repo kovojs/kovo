@@ -12,10 +12,8 @@ export interface AppliedMutationResponse {
   queries: string[];
 }
 
-export type ApplyQueryInterposition = QueryApplyInterposition;
-
 export interface ApplyMutationResponseChunksToRuntimeOptions {
-  applyQuery?: ApplyQueryInterposition;
+  applyQuery?: QueryApplyInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;

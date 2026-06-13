@@ -5,7 +5,6 @@ export type {
   AppliedDeferredStreamResponseToRuntime,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
-export type { ApplyQueryInterposition } from './apply-mutation-response.js';
 export { applyMutationResponseToDom } from './mutation-response-dom.js';
 export type {
   AppliedMutationResponseToDom,

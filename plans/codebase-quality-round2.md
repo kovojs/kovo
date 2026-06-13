@@ -457,6 +457,10 @@ scripts remain retryable.
 DOM mutation response body parsing now lives in `packages/runtime/src/mutation-response-dom.ts`,
 leaving `packages/runtime/src/apply-mutation-response.ts` as the decoded chunk/query/fragment apply
 primitive used by enhanced submit, broadcast, deferred streams, typed-read refetch, and tests.
+The old broad `packages/runtime/src/mutation-response.test.ts` has been split by ownership:
+parsed wire-body store apply lives in `packages/runtime/src/mutation-response-wire-apply.test.ts`,
+DOM body apply lives in `packages/runtime/src/mutation-response-dom.test.ts`, and decoded chunk
+apply remains in `packages/runtime/src/mutation-response-apply.test.ts`.
 Deferred stream part detection now uses the canonical mutation response element scanner instead of
 a regex-only `fw-query`/`fw-fragment` filter, and the remaining broad
 `packages/runtime/src/query-runtime-integration.test.ts` assertions have moved to derive,
@@ -735,6 +739,27 @@ packages/runtime/src/handlers.test.ts packages/runtime/src/index.ts
 packages/runtime/src/index-exports.test.ts
 packages/runtime/src/delegated-runtime-integration.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Evidence 2026-06-13 round255: `packages/runtime/src/mutation-response.test.ts` was deleted
+      after parsed wire-body store apply coverage moved to
+      `packages/runtime/src/mutation-response-wire-apply.test.ts` and DOM response body apply
+      coverage moved to `packages/runtime/src/mutation-response-dom.test.ts`; decoded pre-parsed
+      chunk apply remains in `packages/runtime/src/mutation-response-apply.test.ts`. The root
+      runtime barrel also stopped re-exporting the compatibility-only `ApplyQueryInterposition`
+      type alias, and `packages/runtime/src/apply-mutation-response.ts` now refers directly to the
+      canonical query apply interposition type. Verified by `pnpm exec vitest --run
+packages/runtime/src/mutation-response-wire-apply.test.ts
+packages/runtime/src/mutation-response-dom.test.ts
+packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/index-exports.test.ts`
+      and `pnpm exec vitest --run packages/runtime/src`; `pnpm --filter @jiso/runtime run
+check:inline-loader`; browser runtime tests `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`; `pnpm exec tsc --noEmit --pretty false`;
+      exact `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts
+packages/runtime/src/mutation-response-wire-apply.test.ts
+packages/runtime/src/mutation-response-dom.test.ts
+packages/runtime/src/mutation-response-apply.test.ts plans/codebase-quality-round2.md`; and
+      `git diff --check`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -788,6 +813,10 @@ packages/runtime/src/query-hydration.browser.test.ts`.
       Evidence 2026-06-13: browser runtime checks passed after deferred stream part detection moved
       to `readMutationResponseElementChunks` and `query-runtime-integration.test.ts` was split into
       owner suites. Command: `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round255: browser runtime checks passed after mutation response apply
+      coverage split into wire-body and DOM owner suites and the root runtime type alias surface was
+      narrowed. Command: `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
