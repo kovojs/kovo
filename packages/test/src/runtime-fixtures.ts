@@ -14,6 +14,30 @@ export interface LoaderSmokeRuntime {
   refetchQueries: (options: unknown) => Promise<unknown>;
 }
 
+export interface OptimismCleanupRuntime {
+  OptimisticRebaser: new (store: unknown) => {
+    discardPendingOptimism: () => unknown;
+    pendingCount: (query: string, key?: string) => number;
+  };
+  createQueryStore: () => {
+    get(name: string, key?: string): unknown;
+    set(name: string, value: unknown, key?: string): void;
+  };
+  installPagehideOptimismCleanup: (options: {
+    discardPendingOptimism: () => unknown;
+    root: unknown;
+  }) => { dispose: () => void } | (() => void);
+  stampPendingQueries: (root: unknown, queries: unknown, pending: boolean) => void;
+  submitOptimisticEnhancedMutation: (options: unknown) => Promise<{
+    appliedFragments: unknown[];
+    changes: unknown[];
+    fragments: unknown[];
+    idem?: string;
+    queries: string[];
+    targets: unknown[];
+  }>;
+}
+
 export interface LoaderSmokeBehaviorFact {
   appliedTemplateStamps: string[];
   calls: Array<[string, boolean]>;
@@ -35,6 +59,48 @@ export interface LoaderSmokeBehaviorFact {
 interface ListenerFact {
   listener: (event: unknown) => unknown;
   options?: { capture?: boolean };
+}
+
+export interface OptimismCleanupBehaviorFact {
+  disposedLifecycleListeners: string[];
+  fetchOptions: {
+    bodyIsFormData: boolean;
+    formDataQuantity: FormDataEntryValue | null;
+    headers: unknown;
+    keepalive: unknown;
+    method: unknown;
+  };
+  listenerStates: {
+    afterInstall: {
+      pagehide: boolean;
+      unload: boolean;
+    };
+    afterDispose: {
+      pagehide: boolean;
+    };
+  };
+  pendingAttributes: {
+    afterSubmit: Record<string, string>;
+    afterPagehide: Record<string, string>;
+  };
+  pendingCounts: {
+    afterSubmit: number;
+    afterPagehide: number;
+    afterResponse: number;
+  };
+  result: {
+    appliedFragments: unknown[];
+    changes: unknown[];
+    fragments: unknown[];
+    idem?: string;
+    queries: string[];
+    targets: unknown[];
+  };
+  storeValues: {
+    afterSubmit: unknown;
+    afterPagehide: unknown;
+    afterResponse: unknown;
+  };
 }
 
 export async function loaderSmokeBehaviorFact(
@@ -195,6 +261,133 @@ export async function loaderSmokeBehaviorFact(
   };
 }
 
+export async function optimismCleanupBehaviorFact(
+  runtime: OptimismCleanupRuntime,
+): Promise<OptimismCleanupBehaviorFact> {
+  // SPEC.md §4.8/§9.3: navigation lifecycle cleanup must discard pending
+  // optimistic query state and remove pending stamps without waiting on fetch.
+  const listeners = new Map<string, (event: unknown) => void>();
+  const lifecycleRoot = {
+    addEventListener(type: string, listener: (event: unknown) => void) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type: string, listener: (event: unknown) => void) {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+  };
+  const pendingElement = new GeneratedFixtureElement({ 'fw-deps': 'cart' });
+  const pendingRoot = {
+    querySelectorAll(selector: string) {
+      return selector === '[fw-deps]' ? [pendingElement] : [];
+    },
+  };
+  const store = runtime.createQueryStore();
+  const rebaser = new runtime.OptimisticRebaser(store);
+  store.set('cart', { count: 1 });
+
+  const dispose = runtime.installPagehideOptimismCleanup({
+    discardPendingOptimism() {
+      const discarded = rebaser.discardPendingOptimism();
+      runtime.stampPendingQueries(pendingRoot, discarded, false);
+      return discarded;
+    },
+    root: lifecycleRoot,
+  });
+  const listenerStates = {
+    afterInstall: {
+      pagehide: listeners.has('pagehide'),
+      unload: listeners.has('unload'),
+    },
+    afterDispose: {
+      pagehide: false,
+    },
+  };
+
+  let fetchOptions: unknown;
+  let releaseFetch: (() => void) | undefined;
+  const formData = new FormData();
+  formData.set('quantity', '2');
+  const submit = runtime.submitOptimisticEnhancedMutation({
+    fetch(_url: string, options: unknown) {
+      fetchOptions = options;
+      return new Promise((resolve) => {
+        releaseFetch = () => {
+          resolve({
+            headers: { get: () => null },
+            async text() {
+              return '<fw-query name="cart">{"count":2}</fw-query>';
+            },
+          });
+        };
+      });
+    },
+    form: { action: '/_m/cart/add', method: 'post' },
+    formData,
+    idem: 'idem_bfcache',
+    input: { quantity: 2 },
+    optimistic: {
+      transforms: {
+        cart(current: { count: number }, input: { quantity: number }) {
+          return { count: current.count + input.quantity };
+        },
+      },
+    },
+    pendingRoot,
+    rebaser,
+    root: {
+      findFragmentTarget() {
+        return null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+    },
+    store,
+  });
+
+  const storeAfterSubmit = store.get('cart');
+  const pendingCountAfterSubmit = rebaser.pendingCount('cart');
+  const pendingAttributesAfterSubmit = elementAttributes(pendingElement);
+
+  listeners.get('pagehide')?.({ target: null, type: 'pagehide' });
+  const storeAfterPagehide = store.get('cart');
+  const pendingCountAfterPagehide = rebaser.pendingCount('cart');
+  const pendingAttributesAfterPagehide = elementAttributes(pendingElement);
+
+  releaseFetch?.();
+  const result = await submit;
+  const storeAfterResponse = store.get('cart');
+  const pendingCountAfterResponse = rebaser.pendingCount('cart');
+
+  if (typeof dispose === 'function') {
+    dispose();
+  } else {
+    dispose.dispose();
+  }
+  listenerStates.afterDispose.pagehide = listeners.has('pagehide');
+
+  return {
+    disposedLifecycleListeners: [...listeners.keys()],
+    fetchOptions: optimismFetchOptionsFact(fetchOptions),
+    listenerStates,
+    pendingAttributes: {
+      afterSubmit: pendingAttributesAfterSubmit,
+      afterPagehide: pendingAttributesAfterPagehide,
+    },
+    pendingCounts: {
+      afterSubmit: pendingCountAfterSubmit,
+      afterPagehide: pendingCountAfterPagehide,
+      afterResponse: pendingCountAfterResponse,
+    },
+    result,
+    storeValues: {
+      afterSubmit: storeAfterSubmit,
+      afterPagehide: storeAfterPagehide,
+      afterResponse: storeAfterResponse,
+    },
+  };
+}
+
 function assertRefetchOptions(options: unknown): void {
   const expected = {
     headers: {
@@ -207,4 +400,25 @@ function assertRefetchOptions(options: unknown): void {
   if (JSON.stringify(options) !== JSON.stringify(expected)) {
     throw new Error(`Unexpected cart refetch options: ${JSON.stringify(options)}`);
   }
+}
+
+function elementAttributes(element: GeneratedFixtureElement): Record<string, string> {
+  return Object.fromEntries(element.attributes.map(({ name, value }) => [name, value]));
+}
+
+function optimismFetchOptionsFact(options: unknown): OptimismCleanupBehaviorFact['fetchOptions'] {
+  const fetchOptions = options as {
+    body?: unknown;
+    headers?: unknown;
+    keepalive?: unknown;
+    method?: unknown;
+  };
+  return {
+    bodyIsFormData: fetchOptions.body instanceof FormData,
+    formDataQuantity:
+      fetchOptions.body instanceof FormData ? fetchOptions.body.get('quantity') : null,
+    headers: fetchOptions.headers,
+    keepalive: fetchOptions.keepalive,
+    method: fetchOptions.method,
+  };
 }

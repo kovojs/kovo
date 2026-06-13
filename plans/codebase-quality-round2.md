@@ -82,6 +82,9 @@ fake document/runtime mechanics inline.
 Shared generated-module fixtures now own generated CSS artifact scope-rule projection for the P10
 normative-docs fw-check gate, so the monolith no longer extracts generated CSS source and parses
 scope rules locally.
+Shared runtime fixtures now also own pagehide optimism cleanup lifecycle, pending-stamp, fetch,
+and rebase behavior projections for the P6 fw-check gate, so the monolith no longer rebuilds that
+fake lifecycle root locally.
 Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
 component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
 output comparison against SPEC.md section 5.2 provenance.
@@ -220,6 +223,10 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
   `git diff --check`.
+- Runtime pagehide optimism cleanup fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P6 navigation bfcache optimism cleanup acceptance is represented" tests/fw-check.node.mjs`.
 
 ## Phase 2 - Compiler IR
 
@@ -1425,6 +1432,9 @@ commerce authored/generated component source-pair loading and projection for the
 freshness gate, including exact compiler-output comparison and SPEC.md section 5.2 provenance, so
 commerce app tests no longer reimplement generated artifact file-pair reads or settle for marker
 presence.
+Shared runtime fixtures now own pagehide optimism cleanup lifecycle and pending-stamp behavior
+facts used by `tests/fw-check.node.mjs`, keeping that verification harness reusable without
+changing commerce generated artifacts.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -1496,6 +1506,11 @@ Latest evidence:
   exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
   exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Runtime pagehide optimism cleanup fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P6 navigation bfcache optimism cleanup acceptance is represented" tests/fw-check.node.mjs`.
 
 ## Phase 7 - Test Restructuring
 
@@ -1524,6 +1539,8 @@ facts instead of local fake-client invocation and render-projection mechanics. C
 freshness tests now consume `@jiso/test/generated-module-fixtures` file-pair facts instead of
 local generated/authored source reads, and the fixture now compares committed IR to caller-provided
 compiler output while asserting fixpoint/render-equivalence hooks.
+The P6 pagehide optimism cleanup gate now consumes `@jiso/test/runtime-fixtures` lifecycle and
+pending-stamp behavior facts instead of local fake root and delayed fetch mechanics.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -1556,6 +1573,12 @@ Latest evidence:
   targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
   exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Runtime pagehide optimism cleanup fixture slice:
+  `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P6 navigation bfcache optimism cleanup acceptance is represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Current Gates

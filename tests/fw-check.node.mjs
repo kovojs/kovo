@@ -148,7 +148,10 @@ import {
   starterClientTemplateBehaviorFact,
   starterTemplateDevDependencyCoverage,
 } from '../packages/test/src/starter-template-fixtures.ts';
-import { loaderSmokeBehaviorFact } from '../packages/test/src/runtime-fixtures.ts';
+import {
+  loaderSmokeBehaviorFact,
+  optimismCleanupBehaviorFact,
+} from '../packages/test/src/runtime-fixtures.ts';
 import {
   viteGeneratedHandlerMiddlewareFact,
   viteHandlerTransformFact,
@@ -2271,127 +2274,60 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
 });
 
 void test('P6 navigation bfcache optimism cleanup acceptance is represented', async () => {
-  const listeners = new Map();
-  const lifecycleRoot = {
-    addEventListener(type, listener) {
-      listeners.set(type, listener);
-    },
-    removeEventListener(type, listener) {
-      if (listeners.get(type) === listener) listeners.delete(type);
-    },
-  };
-  const pendingElement = {
-    attributes: { 'fw-deps': 'cart' },
-    getAttribute(name) {
-      return this.attributes[name] ?? null;
-    },
-    removeAttribute(name) {
-      delete this.attributes[name];
-    },
-    setAttribute(name, value) {
-      this.attributes[name] = value;
-    },
-  };
-  const pendingRoot = {
-    querySelectorAll(selector) {
-      return selector === '[fw-deps]' ? [pendingElement] : [];
-    },
-  };
-  const store = createQueryStore();
-  const rebaser = new OptimisticRebaser(store);
-  store.set('cart', { count: 1 });
-
-  const dispose = installPagehideOptimismCleanup({
-    discardPendingOptimism() {
-      const discarded = rebaser.discardPendingOptimism();
-      stampPendingQueries(pendingRoot, discarded, false);
-      return discarded;
-    },
-    root: lifecycleRoot,
-  });
-  assert.equal(listeners.has('pagehide'), true);
-  assert.equal(listeners.has('unload'), false);
-
-  let fetchOptions;
-  let releaseFetch;
-  const formData = new FormData();
-  formData.set('quantity', '2');
-  const submit = submitOptimisticEnhancedMutation({
-    fetch(_url, options) {
-      fetchOptions = options;
-      return new Promise((resolve) => {
-        releaseFetch = () => {
-          resolve({
-            headers: { get: () => null },
-            async text() {
-              return '<fw-query name="cart">{"count":2}</fw-query>';
-            },
-          });
-        };
-      });
-    },
-    form: { action: '/_m/cart/add', method: 'post' },
-    formData,
-    idem: 'idem_bfcache',
-    input: { quantity: 2 },
-    optimistic: {
-      transforms: {
-        cart(current, input) {
-          return { count: current.count + input.quantity };
+  assert.deepEqual(
+    await optimismCleanupBehaviorFact({
+      OptimisticRebaser,
+      createQueryStore,
+      installPagehideOptimismCleanup,
+      stampPendingQueries,
+      submitOptimisticEnhancedMutation,
+    }),
+    {
+      disposedLifecycleListeners: [],
+      fetchOptions: {
+        bodyIsFormData: true,
+        formDataQuantity: '2',
+        headers: {
+          Accept: 'text/vnd.jiso.fragment+html',
+          'FW-Fragment': 'true',
+          'FW-Idem': 'idem_bfcache',
+          'FW-Targets': '',
+        },
+        keepalive: true,
+        method: 'POST',
+      },
+      listenerStates: {
+        afterDispose: { pagehide: false },
+        afterInstall: { pagehide: true, unload: false },
+      },
+      pendingAttributes: {
+        afterPagehide: { 'fw-deps': 'cart' },
+        afterSubmit: {
+          'aria-busy': 'true',
+          'fw-deps': 'cart',
+          'fw-pending': '',
         },
       },
-    },
-    pendingRoot,
-    rebaser,
-    root: {
-      findFragmentTarget() {
-        return null;
+      pendingCounts: {
+        afterPagehide: 0,
+        afterResponse: 0,
+        afterSubmit: 1,
       },
-      querySelectorAll() {
-        return [];
+      result: {
+        appliedFragments: [],
+        changes: [],
+        fragments: [],
+        idem: 'idem_bfcache',
+        queries: ['cart'],
+        targets: [],
+      },
+      storeValues: {
+        afterPagehide: { count: 1 },
+        afterResponse: { count: 2 },
+        afterSubmit: { count: 3 },
       },
     },
-    store,
-  });
-
-  assert.deepEqual(store.get('cart'), { count: 3 });
-  assert.equal(rebaser.pendingCount('cart'), 1);
-  assert.deepEqual(fetchOptions, {
-    body: formData,
-    headers: {
-      Accept: 'text/vnd.jiso.fragment+html',
-      'FW-Fragment': 'true',
-      'FW-Idem': 'idem_bfcache',
-      'FW-Targets': '',
-    },
-    keepalive: true,
-    method: 'POST',
-  });
-  assert.deepEqual(pendingElement.attributes, {
-    'aria-busy': 'true',
-    'fw-deps': 'cart',
-    'fw-pending': '',
-  });
-
-  listeners.get('pagehide')?.({ target: null, type: 'pagehide' });
-  assert.deepEqual(store.get('cart'), { count: 1 });
-  assert.equal(rebaser.pendingCount('cart'), 0);
-  assert.deepEqual(pendingElement.attributes, { 'fw-deps': 'cart' });
-
-  releaseFetch();
-  assert.deepEqual(await submit, {
-    appliedFragments: [],
-    changes: [],
-    fragments: [],
-    idem: 'idem_bfcache',
-    queries: ['cart'],
-    targets: [],
-  });
-  assert.deepEqual(store.get('cart'), { count: 2 });
-  assert.equal(rebaser.pendingCount('cart'), 0);
-
-  dispose();
-  assert.equal(listeners.has('pagehide'), false);
+  );
 });
 
 void test('P3 commerce mutation runs through the transaction lifecycle', async () => {

@@ -248,8 +248,11 @@ import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
   loaderSmokeBehaviorFact,
+  optimismCleanupBehaviorFact,
   type LoaderSmokeBehaviorFact,
   type LoaderSmokeRuntime,
+  type OptimismCleanupBehaviorFact,
+  type OptimismCleanupRuntime,
 } from '@jiso/test/runtime-fixtures';
 import {
   cssScopeRules,
@@ -364,6 +367,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(jisoTest).toBe(rootJisoTest);
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
+    expect(optimismCleanupBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
     ]);
@@ -375,6 +379,12 @@ describe('@jiso/test package subpath exports', () => {
       calls: Array<[string, boolean]>;
     }>();
     expectTypeOf<LoaderSmokeRuntime>().toMatchTypeOf<{
+      createQueryStore: () => unknown;
+    }>();
+    expectTypeOf<OptimismCleanupBehaviorFact>().toMatchTypeOf<{
+      pendingCounts: { afterPagehide: number; afterResponse: number; afterSubmit: number };
+    }>();
+    expectTypeOf<OptimismCleanupRuntime>().toMatchTypeOf<{
       createQueryStore: () => unknown;
     }>();
   });
