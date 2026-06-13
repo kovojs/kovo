@@ -1174,6 +1174,13 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Server-fact validator model-key cleanup: `pnpm exec vitest --run
+packages/compiler/src/state-events.test.ts packages/compiler/src/query-coverage.test.ts
+packages/compiler/src/compile-component.test.ts packages/compiler/src/id-content-model.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/validate/component-contracts.ts`; `git diff --check`. Evidence:
+  `validateServerFactsInLocalState()` now consumes parsed component option object keys instead of
+  reading component option source text just to prove `queries` existence.
 - Lowerer result-wrapper surface cleanup: `pnpm exec vitest --run
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts

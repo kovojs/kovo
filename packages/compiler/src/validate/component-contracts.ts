@@ -7,7 +7,6 @@ import {
   callExpressions,
   componentFragmentTargetNames,
   componentOptionObjectKeys,
-  componentOptionSource,
   componentRenderInputModels,
   componentStateReturnObjectModel,
   componentStateReturnObjectKeys,
@@ -39,13 +38,10 @@ export function validateServerFactsInLocalState(
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
-  const queryObject = componentOptionSource(model, 'queries');
   const stateObject = componentStateReturnObjectModel(model);
-  if (!queryObject || !stateObject) return [];
-
   const queryNames = componentOptionObjectKeys(model, 'queries');
   const stateKeys = componentStateReturnObjectKeys(model);
-  if (queryNames.length === 0 || stateKeys.length === 0) return [];
+  if (queryNames.length === 0 || !stateObject || stateKeys.length === 0) return [];
 
   const storesServerFact = stateKeys.some((stateKey) =>
     queryNames.some((queryName) => stateKeyHasQueryPrefix(stateKey, queryName)),
