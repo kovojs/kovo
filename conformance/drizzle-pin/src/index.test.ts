@@ -1532,6 +1532,72 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins static class helper members under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import { eq } from 'drizzle-orm';",
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'class ProductHelpers {',
+          '  static loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  }',
+          '',
+          '  static touchProduct = (db: PgDatabase<any, any, any>, productId: string) => {',
+          '    return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '  };',
+          '}',
+          '',
+          "export const productQuery = query('product/static-class-helper-loader', {",
+          '  load(input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return ProductHelpers.loadProducts(input, db);',
+          '  },',
+          '});',
+          '',
+          'export const productDomain = domain({',
+          '  add: write((db: PgDatabase<any, any, any>, productId: string) => {',
+          '    return ProductHelpers.touchProduct(db, productId);',
+          '  }),',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const facts = extractQueryFactsFromProject({ files });
+    const graph = extractTouchGraphFromProject({ files });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/static-class-helper-loader',
+        reads: ['product'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.domain.ts:18',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(graph).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
   it('pins static accessor callback containers under real Drizzle Postgres receiver types', () => {
     const files = [
       {

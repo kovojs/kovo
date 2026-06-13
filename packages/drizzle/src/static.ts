@@ -374,6 +374,7 @@ function projectFunctionExtractionsByFileName(
       extraction.tableNamesBySymbol,
     );
     const objectCallbacks = projectObjectLiteralCallbacks(sourceFile);
+    const classMemberCallbacks = projectClassStaticMemberCallbacks(sourceFile);
 
     for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
       const name = fn.getName();
@@ -450,7 +451,7 @@ function projectFunctionExtractionsByFileName(
       });
     }
 
-    for (const callback of objectCallbacks) {
+    for (const callback of [...objectCallbacks, ...classMemberCallbacks]) {
       const receivers = projectDrizzleReceivers(callback.fn);
       extractionsByFunction.set(callback.key, {
         bodyStart: bodySourceStart(callback.body),
@@ -722,6 +723,51 @@ function projectObjectLiteralCallbacks(
         body: functionBody(expression),
         fn: expression,
         key: extractedFunctionKey(name, expression, property.getNameNode()),
+        name,
+      });
+    }
+  }
+
+  return callbacks;
+}
+
+function projectClassStaticMemberCallbacks(
+  sourceFile: SourceFile,
+): { body: Node; fn: Node; key: string; name: string }[] {
+  // SPEC §10.2/§11.1: class static helper members are executable surfaces only when ts-morph
+  // can resolve their symbol. They are summary-only facts for loader/action helper propagation,
+  // not public mutation graph entries.
+  const callbacks: { body: Node; fn: Node; key: string; name: string }[] = [];
+  const classes = [
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.ClassDeclaration),
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.ClassExpression),
+  ];
+
+  for (const classNode of classes) {
+    for (const member of classNode.getMembers()) {
+      if (Node.isMethodDeclaration(member)) {
+        if (!member.isStatic()) continue;
+        const name = propertyNameText(member.getNameNode());
+        if (!name) continue;
+
+        callbacks.push({
+          body: functionBody(member),
+          fn: member,
+          key: extractedFunctionKey(name, member, member.getNameNode()),
+          name,
+        });
+        continue;
+      }
+
+      if (!Node.isPropertyDeclaration(member) || !member.isStatic()) continue;
+      const name = propertyNameText(member.getNameNode());
+      const callback = callbackFunctionFromPropertyDeclaration(member, new Set());
+      if (!name || !callback) continue;
+
+      callbacks.push({
+        body: functionBody(callback),
+        fn: callback,
+        key: extractedFunctionKey(name, callback, member.getNameNode()),
         name,
       });
     }
@@ -2441,7 +2487,7 @@ function extractQueryDefinitionsFromSourceFile(
   options: QueryDefinitionOptions = {},
 ): ExtractedQueryDefinition[] {
   const definitions: ExtractedQueryDefinition[] = [];
-  const localFunctionKeys = localFunctionKeysFromSourceFile(sourceFile);
+  const sourceLocalFunctionKeys = localFunctionKeysFromSourceFile(sourceFile);
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const statement = declaration.getVariableStatement();
@@ -2491,6 +2537,10 @@ function extractQueryDefinitionsFromSourceFile(
     const localFunctionsByKey =
       options.localFunctionReceiverParameters ??
       localFunctionReceiverParametersFromSourceFile(sourceFile);
+    const localFunctionKeys =
+      options.receiverMode === 'project' && options.localFunctionReceiverParameters
+        ? new Set(options.localFunctionReceiverParameters.keys())
+        : sourceLocalFunctionKeys;
     const selection = selectShapeFromQueryBody(
       bodyObject,
       receiverReferences,
@@ -6578,6 +6628,10 @@ function localFunctionKeyForCallback(callback: Node): string | undefined {
         : undefined;
     }
     if (Node.isPropertyAssignment(parent)) {
+      const name = propertyNameText(parent.getNameNode());
+      return name ? extractedFunctionKey(name, callback, parent.getNameNode()) : undefined;
+    }
+    if (Node.isPropertyDeclaration(parent)) {
       const name = propertyNameText(parent.getNameNode());
       return name ? extractedFunctionKey(name, callback, parent.getNameNode()) : undefined;
     }

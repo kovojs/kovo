@@ -12986,6 +12986,73 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('folds project query and mutation helper summaries from static class members', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'class ProductHelpers {',
+          '  static loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  }',
+          '',
+          '  static touchProduct = (db: PgDatabase<any, any, any>, productId: string) => {',
+          '    return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '  };',
+          '}',
+          '',
+          'export const productQuery = query("product/static-class-helper-loader", {',
+          '  load(input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return ProductHelpers.loadProducts(input, db);',
+          '  },',
+          '});',
+          '',
+          'export const productDomain = domain({',
+          '  add: write((db: PgDatabase<any, any, any>, productId: string) => {',
+          '    return ProductHelpers.touchProduct(db, productId);',
+          '  }),',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/static-class-helper-loader',
+        reads: ['product'],
+        shape: {},
+        site: 'product.domain.ts:18',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(extractQueryFactsFromProject({ files }))).toEqual([]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:14',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(extractTouchGraphFromProject({ files }))).toEqual([]);
+  });
+
   it('extracts project domain action shorthand aliases through destructured static containers', () => {
     const files = [
       pgDatabaseTypes([

@@ -1341,6 +1341,16 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       real `drizzle-orm` Postgres imports. Verified by
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
       and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Evidence 2026-06-13 round299: project query-helper diagnostics now consume the same
+      ts-morph project helper summary keys used for exact read/touch folding, and static class
+      helper methods/properties are registered as summary-only project facts rather than source
+      compatibility names. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin query-loader reads and domain-write touches
+      through `ProductHelpers.loadProducts(...)`/`ProductHelpers.touchProduct(...)` against real
+      `drizzle-orm` Postgres receiver types. Verified by `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`, `pnpm exec tsc --noEmit --pretty false`,
+      exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Evidence 2026-06-13 round286: rest destructuring no longer promotes rest containers such as
       `[...writerRest]` or `{ ...objectRest }` to direct Drizzle receiver aliases; exact
       project-mode facts still come from typed member/element access like `writerRest[0]`, and
@@ -1356,6 +1366,12 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 
 Latest evidence:
 
+- round299 static class helper summary closure:
+  `pnpm exec vitest --run packages/drizzle/src`;
+  `pnpm --filter @jiso/conformance-drizzle-pin test`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - round285 wrapped query projection extraction slice:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
   `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
