@@ -150,11 +150,12 @@ Latest evidence:
 Current state: store-only mutation/query/deferred compatibility exports have been removed or
 narrowed. Visible-return hydration, typed-read refetch, mutation responses, deferred streams, inline
 query events, enhanced submit, broadcast, and hydrated query scripts increasingly share canonical
-parser/apply helpers. Runtime test coverage has started moving out of `index.test.ts` into focused
+parser/apply helpers. Runtime test coverage has moved out of `index.test.ts` into focused
 query/apply/loader/optimism/morph/delegated-handler integration tests; the broad barrel test is now
-focused on loader installation, query hydration, enhanced mutation bridge, and disposal smoke
-coverage. Inline readable/minified/generated/extracted loader parity coverage now owns inline
-enhanced-form, delegated handler, and handler-error behavior in `inline-loader.test.ts`.
+focused on public loader installation smoke only, while loader query hydration, enhanced mutations,
+and disposal live in dedicated runtime tests. Inline readable/minified/generated/extracted loader
+parity coverage now owns inline enhanced-form, delegated handler, and handler-error behavior in
+`inline-loader.test.ts`.
 Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
 transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
 decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
@@ -166,12 +167,25 @@ DOM bindings through `queryPlans` on the shared runtime apply path.
       deletion.
 - [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
+      Evidence 2026-06-13: `packages/runtime/src/index.test.ts` now owns only public barrel
+      loader smoke. `packages/runtime/src/loader-query-hydration.test.ts`,
+      `packages/runtime/src/loader-enhanced-mutation.test.ts`, and
+      `packages/runtime/src/loader-disposal.test.ts` own the moved query hydration,
+      enhanced mutation/broadcast, and disposal cases. Verified by focused runtime tests:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts
+packages/runtime/src/loader-query-hydration.test.ts
+packages/runtime/src/loader-enhanced-mutation.test.ts
+packages/runtime/src/loader-disposal.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
       hydrated scripts, malformed script recovery, inline `jiso:query` events, store writes,
       visible-return refetch keys, and DOM binding updates.
 - [ ] Re-run browser runtime tests after each apply/loader surface change.
+      Evidence 2026-06-13: browser runtime checks passed after the loader test split. Command:
+      `pnpm exec vitest --config vitest.browser.config.ts --run`; files:
+      `packages/runtime/src/index.browser.test.ts` and
+      `packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 
