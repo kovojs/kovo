@@ -36,9 +36,10 @@ Implemented areas:
 - `api/app-shell/vite.ts` is the public app-shell Vite subpath over the split Vite owners.
   `vite-plugin.ts` owns R5 dev middleware and plugin `writeBundle` build/export bridging, while
   the manifest, build, output, static-export, and dev modules own their extracted surfaces.
-  `vite-dev.ts` now defaults SSR dev middleware to the loaded app's SPEC §9.5
+  `vite-dev.ts` now defaults Vite dev middleware to the loaded app's SPEC §9.5
   `Request -> Response` handler while keeping explicit node-handler exports available for apps
-  that add request context at the adapter edge.
+  that add request context at the adapter edge; the stale SSR-named public dev plugin alias is
+  removed from the focused Vite subpath.
 - The aggregate `@jiso/server/app-shell` compatibility subpath is removed; R5/R6/R7 consumers use
   the focused `client-modules`, `core`, `node`, `static-export`, and `vite` app-shell subpaths.
 - `static-export.ts` performs static export with output target validation for write and dry-run
@@ -149,6 +150,20 @@ Round325 docs-site client-module rewrite boundary evidence:
 - `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
+Round329 Vite dev public alias removal evidence:
+
+- `packages/server/src/vite-dev.ts` now exposes the canonical
+  `jisoAppShellViteDevPlugin()`/`JisoAppShellViteDev*` public names, and
+  `packages/server/src/api/app-shell/vite.ts` no longer exports the stale SSR-named plugin/type
+  aliases.
+- The create-jiso starter and commerce Vite loaders resolve `jisoAppShellViteDevPlugin` through
+  `@jiso/server/app-shell/vite`, keeping outside adoption on the focused SPEC §9.5 app-shell Vite
+  boundary.
+- `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/src/index.test.ts examples/commerce/vite.config.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Round322 Vite dev client-module predicate boundary evidence:
@@ -684,7 +699,7 @@ Round86d app-shell dev/serve boundary evidence:
 
 - `@jiso/server` node/http adapters now expose an Early Hints suppression option that preserves
   final `Link` headers for middleware stacks that cannot safely relay 103 responses, and
-  `jisoAppShellViteSsrDevPlugin()` threads that option through the default loaded-app
+  `jisoAppShellViteDevPlugin()` threads that option through the default loaded-app
   `Request -> Response` adapter.
 - The create-jiso starter no longer exports a starter-specific Node handler for dev/serve.
   Generated `vp dev`, `vp run serve`, `npm run serve`, and `npm start` load the default exported

@@ -8,7 +8,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
   createJisoAppShellDevDiagnosticLedger,
-  jisoAppShellViteSsrDevPlugin,
+  jisoAppShellViteDevPlugin,
   renderJisoAppShellViteDevDiagnosticResponse,
   type JisoAppShellViteMiddleware,
   shouldHandleJisoAppShellViteRequest,
@@ -128,7 +128,7 @@ describe('server app shell Vite dev seam', () => {
       ],
     });
     let middleware: JisoAppShellViteMiddleware | undefined;
-    const plugin = jisoAppShellViteSsrDevPlugin({ moduleId: '/src/app-shell.ts' });
+    const plugin = jisoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 
     plugin.configureServer({
       middlewares: {
@@ -207,7 +207,7 @@ describe('server app shell Vite dev seam', () => {
     const app = createApp({ routes: [route('/cart', {})] });
     let middleware: JisoAppShellViteMiddleware | undefined;
     let customPredicateCalls = 0;
-    const plugin = jisoAppShellViteSsrDevPlugin({
+    const plugin = jisoAppShellViteDevPlugin({
       moduleId: '/src/app-shell.ts',
       shouldHandleRequest() {
         customPredicateCalls += 1;
@@ -241,7 +241,7 @@ describe('server app shell Vite dev seam', () => {
   it('rejects Request -> Response exports at the explicit node handler boundary', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
     let middleware: JisoAppShellViteMiddleware | undefined;
-    const plugin = jisoAppShellViteSsrDevPlugin({
+    const plugin = jisoAppShellViteDevPlugin({
       moduleId: '/src/app-shell.ts',
       nodeHandlerExportName: 'handler',
     });

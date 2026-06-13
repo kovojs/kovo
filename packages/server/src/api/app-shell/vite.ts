@@ -1,6 +1,6 @@
 export {
   createJisoAppShellDevDiagnosticLedger,
-  jisoAppShellViteSsrDevPlugin,
+  jisoAppShellViteDevPlugin,
   renderJisoAppShellViteDevDiagnosticResponse,
   shouldHandleJisoAppShellViteRequest,
 } from '../../vite-dev.js';
@@ -90,10 +90,10 @@ export type {
   JisoAppShellDevDiagnosticRecord,
   JisoAppShellDevModuleDiagnostics,
   JisoAppShellViteDevServer,
+  JisoAppShellViteDevModuleServer,
+  JisoAppShellViteDevPlugin,
+  JisoAppShellViteDevPluginOptions,
   JisoAppShellViteMiddleware,
-  JisoAppShellViteSsrDevPlugin,
-  JisoAppShellViteSsrDevPluginOptions,
-  JisoAppShellViteSsrDevServer,
 } from '../../vite-dev.js';
 export type { JisoAppShellVitePlugin, JisoAppShellVitePluginOptions } from '../../vite-plugin.js';
 export type {

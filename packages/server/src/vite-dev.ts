@@ -18,7 +18,7 @@ export interface JisoAppShellViteDevServer {
   };
 }
 
-export interface JisoAppShellViteSsrDevServer extends JisoAppShellViteDevServer {
+export interface JisoAppShellViteDevModuleServer extends JisoAppShellViteDevServer {
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
 }
 
@@ -28,12 +28,12 @@ export type JisoAppShellViteMiddleware = (
   next: (error?: unknown) => void,
 ) => void;
 
-export interface JisoAppShellViteSsrDevPlugin {
-  configureServer(server: JisoAppShellViteSsrDevServer): void | (() => void);
+export interface JisoAppShellViteDevPlugin {
+  configureServer(server: JisoAppShellViteDevModuleServer): void | (() => void);
   name: string;
 }
 
-export interface JisoAppShellViteSsrDevPluginOptions {
+export interface JisoAppShellViteDevPluginOptions {
   appExportName?: string;
   /**
    * Defaults to true. Set to false when a dev middleware stack cannot safely
@@ -100,17 +100,17 @@ export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnost
   };
 }
 
-export function jisoAppShellViteSsrDevPlugin(
-  options: JisoAppShellViteSsrDevPluginOptions = {},
-): JisoAppShellViteSsrDevPlugin {
+export function jisoAppShellViteDevPlugin(
+  options: JisoAppShellViteDevPluginOptions = {},
+): JisoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   const appExportName = options.appExportName ?? 'default';
 
-  const install = (server: JisoAppShellViteSsrDevServer) => {
+  const install = (server: JisoAppShellViteDevModuleServer) => {
     server.middlewares.use((request, response, next) => {
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
-          const app = readJisoAppShellViteSsrApp(module, appExportName, moduleId);
+          const app = readJisoAppShellViteDevApp(module, appExportName, moduleId);
           const shouldHandle = shouldHandleJisoAppShellViteDevRequest(
             request,
             app,
@@ -121,7 +121,7 @@ export function jisoAppShellViteSsrDevPlugin(
             return;
           }
 
-          return readJisoAppShellViteSsrNodeHandler(
+          return readJisoAppShellViteDevNodeHandler(
             module,
             app,
             options,
@@ -138,7 +138,7 @@ export function jisoAppShellViteSsrDevPlugin(
       if (options.order === 'post') return () => install(server);
       install(server);
     },
-    name: options.name ?? 'jiso-app-shell-ssr-dev',
+    name: options.name ?? 'jiso-app-shell-dev',
   };
 }
 
@@ -167,7 +167,7 @@ export function shouldHandleJisoAppShellViteRequest(
 function shouldHandleJisoAppShellViteDevRequest(
   request: IncomingMessage,
   app: JisoApp,
-  shouldHandleRequest: JisoAppShellViteSsrDevPluginOptions['shouldHandleRequest'],
+  shouldHandleRequest: JisoAppShellViteDevPluginOptions['shouldHandleRequest'],
 ): boolean {
   if (!request.url) return false;
 
@@ -288,7 +288,7 @@ function isErrorDiagnostic(diagnostic: DiagnosticDocumentDiagnostic): boolean {
   return diagnosticDefinitions[diagnostic.code].severity === 'error';
 }
 
-function readJisoAppShellViteSsrApp(
+function readJisoAppShellViteDevApp(
   module: Record<string, unknown>,
   exportName: string,
   moduleId: string,
@@ -299,16 +299,16 @@ function readJisoAppShellViteSsrApp(
   throw new Error(`${moduleId} must export ${exportName} as a Jiso app for Vite dev.`);
 }
 
-function readJisoAppShellViteSsrNodeHandler(
+function readJisoAppShellViteDevNodeHandler(
   module: Record<string, unknown>,
   app: JisoApp,
-  options: JisoAppShellViteSsrDevPluginOptions,
+  options: JisoAppShellViteDevPluginOptions,
   exportName: string | undefined,
   moduleId: string,
 ): JisoAppShellViteMiddleware {
   if (exportName !== undefined) {
     const handler = module[exportName];
-    if (isJisoAppShellViteSsrNodeHandler(handler)) {
+    if (isJisoAppShellViteDevNodeHandler(handler)) {
       return (request, response, next) => {
         Promise.resolve(handler(request, response)).catch(next);
       };
@@ -325,7 +325,7 @@ function readJisoAppShellViteSsrNodeHandler(
   return (request, response) => nodeHandler(request, response);
 }
 
-function isJisoAppShellViteSsrNodeHandler(value: unknown): value is NodeRequestHandler {
+function isJisoAppShellViteDevNodeHandler(value: unknown): value is NodeRequestHandler {
   // SPEC §9.5 keeps the public handler currency as Request -> Response; this
   // optional dev hook is only for the adapter edge and must be a Node handler.
   return typeof value === 'function' && value.length >= 2;

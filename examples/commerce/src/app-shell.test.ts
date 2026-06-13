@@ -126,7 +126,7 @@ describe('commerce app shell HTTP entry', () => {
       async ssrLoadModule(id) {
         expect(id).toBe('@jiso/server/app-shell/vite');
         return {
-          jisoAppShellViteSsrDevPlugin(options: unknown) {
+          jisoAppShellViteDevPlugin(options: unknown) {
             delegatedOptions.push(options);
             return {
               configureServer(server: unknown) {

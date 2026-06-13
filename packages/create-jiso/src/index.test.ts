@@ -231,7 +231,8 @@ describe('create-jiso starter', () => {
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
       expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server/app-shell/vite')");
-      expect(viteConfig).toContain('jisoAppShellViteSsrDevPlugin');
+      expect(viteConfig).toContain('jisoAppShellViteDevPlugin');
+      expect(viteConfig).not.toContain('jisoAppShellViteSsrDevPlugin');
       expect(viteConfig).toContain('earlyHints: false');
       expect(viteConfig).toContain("name: 'jiso-starter-app-shell-dev'");
       expect(viteConfig).not.toContain('nodeHandlerExportName');

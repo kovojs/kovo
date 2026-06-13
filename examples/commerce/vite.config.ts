@@ -67,9 +67,9 @@ export function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
   return {
     async configureServer(server) {
       const serverModule = await server.ssrLoadModule('@jiso/server/app-shell/vite');
-      const sharedPluginFactory = serverModule.jisoAppShellViteSsrDevPlugin;
+      const sharedPluginFactory = serverModule.jisoAppShellViteDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@jiso/server/app-shell/vite must export jisoAppShellViteSsrDevPlugin.');
+        throw new Error('@jiso/server/app-shell/vite must export jisoAppShellViteDevPlugin.');
       }
 
       const sharedPlugin = sharedPluginFactory({

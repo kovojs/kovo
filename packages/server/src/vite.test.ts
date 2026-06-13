@@ -23,9 +23,9 @@ import {
   jisoAppShellViteManifestHints,
   jisoAppShellViteManifestStylesheetHref,
   jisoAppShellViteManifestStylesheetHrefFromFile,
+  jisoAppShellViteDevPlugin,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
-  jisoAppShellViteSsrDevPlugin,
   jisoAppShellViteStaticExportAssets,
   type JisoAppShellBuild,
   type JisoAppShellViteBuildOutput,
@@ -1198,14 +1198,14 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
-  it('registers SSR dev middleware that loads the routed app shell through Vite', async () => {
+  it('registers dev middleware that loads the routed app shell through Vite', async () => {
     const productRoute = route('/products/:id', {
       page({ params }) {
         return `<main>${params.id}</main>`;
       },
     });
     const app = createApp({ routes: [productRoute] });
-    const plugin = jisoAppShellViteSsrDevPlugin({
+    const plugin = jisoAppShellViteDevPlugin({
       nodeHandlerExportName: 'commerceNodeHandler',
     });
     const middlewares: JisoAppShellViteMiddleware[] = [];
@@ -1224,7 +1224,7 @@ describe('server app shell Vite plugin', () => {
         return {
           commerceNodeHandler(_request: unknown, response: { end(body: string): void }) {
             handled += 1;
-            response.end('handled by SSR app shell');
+            response.end('handled by dev app shell');
           },
           default: app,
         };
@@ -1252,7 +1252,7 @@ describe('server app shell Vite plugin', () => {
         status: 418,
       });
       await expect(nodeFetch(`${origin}/products/p1`)).resolves.toMatchObject({
-        body: 'handled by SSR app shell',
+        body: 'handled by dev app shell',
         status: 200,
       });
       expect(moduleLoads).toBe(2);
@@ -1264,7 +1264,7 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
-  it('registers SSR dev middleware that derives the node handler from the loaded app shell', async () => {
+  it('registers dev middleware that derives the node handler from the loaded app shell', async () => {
     const registry = createMemoryVersionedClientModuleRegistry();
     const clientHref = registry.put({
       path: '/c/product.client.js',
@@ -1278,7 +1278,7 @@ describe('server app shell Vite plugin', () => {
       },
     });
     const app = createApp({ clientModules: registry, routes: [productRoute] });
-    const plugin = jisoAppShellViteSsrDevPlugin();
+    const plugin = jisoAppShellViteDevPlugin();
     const middlewares: JisoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;
 
@@ -1337,9 +1337,9 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
-  it('keeps explicit SSR dev node handler exports strict', async () => {
+  it('keeps explicit dev node handler exports strict', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
-    const plugin = jisoAppShellViteSsrDevPlugin({
+    const plugin = jisoAppShellViteDevPlugin({
       nodeHandlerExportName: 'commerceNodeHandler',
     });
     const middlewares: JisoAppShellViteMiddleware[] = [];

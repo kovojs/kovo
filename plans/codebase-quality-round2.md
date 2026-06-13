@@ -189,6 +189,14 @@ store mechanics inline.
 
 Latest evidence:
 
+- Phase 5 Vite dev public alias removal slice:
+  `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/src/index.test.ts examples/commerce/vite.config.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/vite-dev.ts` and the focused
+  `@jiso/server/app-shell/vite` subpath now expose canonical `jisoAppShellViteDevPlugin`
+  naming while keeping the stale SSR-named plugin alias absent, and starter/commerce Vite loaders
+  prove outside adoption through that public SPEC §9.5 boundary.
 - Phase 5 docs-site client-module rewrite boundary slice:
   `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
   `pnpm exec tsc --noEmit --pretty false`;

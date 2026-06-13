@@ -155,6 +155,7 @@ describe('server app-shell public API barrels', () => {
       'exportJisoAppShellViteBuildWithManifest',
       'exportJisoAppShellViteBuildWithManifestFromManifestFile',
       'jisoAppShellViteBuildStaticExportAssets',
+      'jisoAppShellViteDevPlugin',
       'jisoAppShellViteManifestAssets',
       'jisoAppShellViteManifestAssetsFromFile',
       'jisoAppShellViteManifestFile',
@@ -166,7 +167,6 @@ describe('server app-shell public API barrels', () => {
       'jisoAppShellViteOutputDir',
       'jisoAppShellVitePlugin',
       'jisoAppShellViteRouteEntries',
-      'jisoAppShellViteSsrDevPlugin',
       'jisoAppShellViteStaticExportAssets',
       'jisoAppShellViteStaticExportAssetsFromManifestFile',
       'renderJisoAppShellViteDevDiagnosticResponse',
@@ -273,6 +273,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefs');
     expect(packageViteApi).not.toHaveProperty('jisoAppShellViteManifestStylesheetHrefsFromFile');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteSsrDevPlugin');
     expect(packageViteApi).not.toHaveProperty('shouldHandleJisoAppShellViteSsrRequest');
 
     const appShellPackageExports = Object.fromEntries(
