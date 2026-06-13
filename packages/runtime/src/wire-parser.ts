@@ -24,6 +24,16 @@ export interface MutationResponseBodyChunks {
   queries: QueryChunk[];
 }
 
+export interface MutationResponseElementChunks {
+  fragments: ElementChunk[];
+  queries: ElementChunk[];
+}
+
+export interface ReadMutationResponseElementChunksOptions {
+  onMalformedFragment?: (reason: string) => void;
+  onMalformedQuery?: (reason: string) => void;
+}
+
 export interface QueryScriptChunkLike {
   getAttribute(name: string): string | null;
   textContent: string | null;
@@ -162,9 +172,55 @@ export function readMutationResponseBodyChunks(
 ): MutationResponseBodyChunks {
   // SPEC.md §9.1: mutation responses carry fw-query truth and fw-fragment DOM
   // patches in one wire body, so runtime apply paths consume one decoded shape.
+  const malformedFragments: string[] = [];
+  const chunks = readMutationResponseElementChunks(body, {
+    onMalformedFragment(reason) {
+      malformedFragments.push(reason);
+    },
+    onMalformedQuery(reason) {
+      reportRuntimeError(onError, malformedQueryError(reason));
+    },
+  });
+  const queries: QueryChunk[] = [];
+  const fragments: FragmentChunk[] = [];
+
+  for (const chunk of chunks.queries) {
+    const query = readQueryElementChunk(chunk, onError);
+    if (query) queries.push(query);
+  }
+  for (const reason of malformedFragments) {
+    reportRuntimeError(onError, malformedFragmentError(reason));
+  }
+  for (const chunk of chunks.fragments) {
+    const target = readAttribute(chunk.attrs, 'target');
+    if (!target) continue;
+
+    fragments.push({
+      html: chunk.content,
+      ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
+      target,
+    });
+  }
+
+  return { fragments, queries };
+}
+
+export function readMutationResponseElementChunks(
+  body: string,
+  options: ReadMutationResponseElementChunksOptions = {},
+): MutationResponseElementChunks {
+  // SPEC.md §4.4/§9.1: inline and modular enhanced responses share the same
+  // transport element scanner before their separate tiny/runtime apply steps.
+  const queryOptions: ReadElementChunksOptions = options.onMalformedQuery
+    ? { onMalformed: options.onMalformedQuery }
+    : {};
+  const fragmentOptions: ReadElementChunksOptions = options.onMalformedFragment
+    ? { nested: true, onMalformed: options.onMalformedFragment }
+    : { nested: true };
+
   return {
-    queries: readQueryChunks(body, onError),
-    fragments: readFragmentChunks(body, onError),
+    queries: readElementChunks(body, 'fw-query', queryOptions),
+    fragments: readElementChunks(body, 'fw-fragment', fragmentOptions),
   };
 }
 

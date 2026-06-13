@@ -5,6 +5,7 @@ import {
   readElementChunks,
   readFragmentChunks,
   readMutationResponseBodyChunks,
+  readMutationResponseElementChunks,
   readQueryChunks,
   readQueryElementChunk,
   readQueryScriptChunks,
@@ -176,6 +177,47 @@ describe('wire parser HTML entity handling', () => {
       expect.stringContaining('Malformed JSON in fw-query cart'),
       expect.stringContaining('Malformed fw-fragment chunk: missing closing tag'),
     ]);
+  });
+
+  it('shares mutation response element scanning with the inline loader parser root', () => {
+    const malformedQuery = vi.fn();
+    const malformedFragment = vi.fn();
+
+    // SPEC.md §4.4/§9.1: the generated inline bootstrap extracts this scanner
+    // root from the modular runtime instead of carrying a duplicate response parser.
+    expect(
+      readMutationResponseElementChunks(
+        [
+          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-query name="stale">{"count":2}',
+          '<fw-fragment target="cart"><cart-badge>1</cart-badge></fw-fragment>',
+          '<fw-fragment target="stale"><span>stale</span>',
+        ].join(''),
+        {
+          onMalformedFragment: malformedFragment,
+          onMalformedQuery: malformedQuery,
+        },
+      ),
+    ).toEqual({
+      fragments: [
+        {
+          attrs: ' target="cart"',
+          content: '<cart-badge>1</cart-badge>',
+          end: expect.any(Number),
+          start: expect.any(Number),
+        },
+      ],
+      queries: [
+        {
+          attrs: ' name="cart"',
+          content: '{"count":1}',
+          end: expect.any(Number),
+          start: expect.any(Number),
+        },
+      ],
+    });
+    expect(malformedQuery).toHaveBeenCalledWith('missing closing tag');
+    expect(malformedFragment).toHaveBeenCalledWith('missing closing tag');
   });
 
   it('reports malformed fw-fragment markup instead of silently truncating', () => {

@@ -22,6 +22,9 @@ describe('inline loader parser parity', () => {
       'function readElementChunks(body) {',
       '  return [{ attrs: readAttribute(body, "target"), content: body }];',
       '}',
+      'function readMutationResponseElementChunks(body) {',
+      '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
+      '}',
     ].join('\n');
 
     const defaultReadable = buildInlineJisoLoaderInstallerReadableSource();
@@ -30,10 +33,11 @@ describe('inline loader parser parity', () => {
     expect(defaultReadable).toBe(inlineJisoLoaderInstallerReadableSource);
     expect(defaultReadable).toContain(inlineWireParserReadableSource);
     expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
+    expect(inlineWireParserReadableSource).toContain('function readMutationResponseElementChunks(');
     expect(inlineWireParserReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableParser);
     expect(alternateReadable).not.toContain(inlineWireParserReadableSource);
-    expect(alternateReadable).toContain('readElementChunks(body,');
+    expect(alternateReadable).toContain('readMutationResponseElementChunks(body)');
   });
 
   it('extracts the inline wire parser dependency closure from the modular parser', () => {
@@ -55,6 +59,9 @@ describe('inline loader parser parity', () => {
       'export function readAttribute(attrs, name) {',
       '  return unescapeHtml(attrs + name);',
       '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
+      '}',
       'function unescapeHtml(value) {',
       '  return value.replaceAll("&amp;", "&");',
       '}',
@@ -66,7 +73,7 @@ describe('inline loader parser parity', () => {
     const extracted = extractInlineWireParserReadableSource(source);
 
     expect(extracted).toMatch(
-      /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\)/s,
+      /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\).*function readMutationResponseElementChunks\(body\)/s,
     );
     expect(extracted).not.toContain('unusedHelper');
     expect(extracted).not.toContain('export function');
@@ -81,6 +88,9 @@ describe('inline loader parser parity', () => {
       '}',
       'export function readAttribute(attrs, name) {',
       '  return attrs + name;',
+      '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
       '}',
     ].join('\n');
     const canonicalReadable = extractInlineWireParserReadableSource(canonicalParser);
@@ -118,6 +128,9 @@ describe('inline loader parser parity', () => {
       'export function readAttribute(attrs) {',
       '  return attrs;',
       '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return readElementChunks(body);',
+      '}',
     ].join('\n');
     const importedHelperSource = [
       'import { parseJsonValue } from "./json.js";',
@@ -127,6 +140,9 @@ describe('inline loader parser parity', () => {
       'export function readAttribute(attrs) {',
       '  return parseJsonValue(attrs).value;',
       '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return readElementChunks(body);',
+      '}',
     ].join('\n');
     const topLevelValueSource = [
       'const attributePattern = /target/;',
@@ -135,6 +151,9 @@ describe('inline loader parser parity', () => {
       '}',
       'export function readAttribute(attrs) {',
       '  return attributePattern.test(attrs) ? attrs : null;',
+      '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return readElementChunks(body);',
       '}',
     ].join('\n');
 

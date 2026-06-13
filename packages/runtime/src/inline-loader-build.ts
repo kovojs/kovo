@@ -8,7 +8,10 @@ import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
-const inlineWireParserRootFunctionNames = ['readElementChunks', 'readAttribute'] as const;
+const inlineWireParserRootFunctionNames = [
+  'readMutationResponseElementChunks',
+  'readAttribute',
+] as const;
 
 export const inlineJisoLoaderGzipByteBudget = 4096;
 
@@ -67,7 +70,8 @@ function installInlineJisoLoader(importModule) {
     }
   };
   const applyResponseBody = (body) => {
-    readElementChunks(body, 'fw-query').forEach((query) => {
+    const chunks = readMutationResponseElementChunks(body);
+    chunks.queries.forEach((query) => {
       dispatchEvent(
         new CustomEvent('jiso:query', {
           detail: {
@@ -77,7 +81,7 @@ function installInlineJisoLoader(importModule) {
         }),
       );
     });
-    readElementChunks(body, 'fw-fragment', { nested: true }).forEach(applyFragment);
+    chunks.fragments.forEach(applyFragment);
   };
   const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {

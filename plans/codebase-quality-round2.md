@@ -409,6 +409,29 @@ plans/codebase-quality-round2.md`.
       scan for multi-script hydration plus malformed-script retry. Verified by `pnpm exec vitest
 --run packages/runtime/src/query-apply.test.ts packages/runtime/src/wire-parser.test.ts` and
       `pnpm exec vitest --run packages/runtime/src`.
+      Evidence 2026-06-13: `packages/runtime/src/wire-parser.ts` now owns
+      `readMutationResponseElementChunks` as the shared response element scanner used by
+      `readMutationResponseBodyChunks`, while `packages/runtime/src/inline-loader-build.ts`
+      extracts that helper as the generated inline-loader parser root instead of spelling out a
+      separate query/fragment response scan. `packages/runtime/src/wire-parser.test.ts`,
+      `packages/runtime/src/inline-loader-parser-parity.test.ts`,
+      `packages/runtime/src/inline-loader-build.test.ts`, and the regenerated
+      `packages/runtime/src/inline-loader.ts` pin readable/minified helper parity and response
+      behavior. Verified by `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-js-minifier.test.ts`, `pnpm --filter @jiso/runtime run
+check:inline-loader`, and browser runtime tests `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`. Broader/runtime gates:
+      `pnpm exec vitest --run packages/runtime/src`; exact `pnpm exec vp check
+packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader.ts
+plans/codebase-quality-round2.md`; `git diff --check`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -430,6 +453,10 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       to one decoded runtime batch per hydration pass. Command: `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts
 packages/runtime/src/index.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after the inline response scanner moved
+      to the shared `readMutationResponseElementChunks` helper. Command: `pnpm exec vitest
+--config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 

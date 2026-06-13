@@ -156,7 +156,10 @@ describe('inline loader build source', () => {
     expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
     expect(inlineJisoLoaderInstallerSource).toContain('function tagClose(');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      "readElementChunks(body,'fw-fragment',{nested:true})",
+      'function readMutationResponseElementChunks(',
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'const chunks=readMutationResponseElementChunks(body)',
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
