@@ -12705,6 +12705,94 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts wrapped variable-assigned local helpers from query loaders and domain callbacks', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'const readProducts = ((db: PgDatabase<any, any, any>) => {',
+          '  return db.select({ id: products.id }).from(products);',
+          '}) satisfies unknown;',
+          '',
+          'const touchProduct = (async (db: PgDatabase<any, any, any>, productId: string) => {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}) as unknown;',
+          '',
+          'export const productQuery = query("product/wrapped-helper", {',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return readProducts(db);',
+          '  },',
+          '});',
+          '',
+          'export const productDomain = domain({',
+          '  add: write((db: PgDatabase<any, any, any>, productId: string) => {',
+          '    return touchProduct(db, productId);',
+          '  }),',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/wrapped-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'product.domain.ts:16',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      readProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      touchProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts project query loaders and domain actions through static computed keys', () => {
     const files = [
       pgDatabaseTypes([

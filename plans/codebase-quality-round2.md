@@ -1123,6 +1123,18 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round294: wrapped variable-assigned local helpers such as
+      `const read = ((db) => ...) satisfies unknown` and `const touch = (async (...) => ...) as
+      unknown` are now registered in source/project function inventories after static TS wrapper
+      unwrapping, so query loaders and domain action callbacks that call them retain exact
+      read/touch facts. `packages/drizzle/src/index.test.ts` covers the package fixture, and
+      `conformance/drizzle-pin/src/index.test.ts` pins the same path against real `drizzle-orm`
+      Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`,
+      `pnpm exec tsc --noEmit`, exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Evidence 2026-06-13 round260: external domain action objects such as
       `domain(actionsAlias)` now resolve static object aliases through ts-morph symbols for source
       and project mutation extraction, while opaque action aliases such as

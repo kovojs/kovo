@@ -20,6 +20,8 @@ import {
   type BindingElement,
   type CallExpression,
   type CompilerOptions,
+  type ArrowFunction,
+  type FunctionExpression,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
   type SourceFile,
@@ -413,12 +415,13 @@ function projectFunctionExtractionsByFileName(
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
       if (!Node.isIdentifier(name) || !initializer) continue;
-      if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
+      const callback = unwrappedFunctionExpression(initializer);
+      if (!callback) continue;
 
-      const body = initializer.getBody();
-      const receivers = projectDrizzleReceivers(initializer);
+      const body = callback.getBody();
+      const receivers = projectDrizzleReceivers(callback);
       const functionName = name.getText();
-      const key = extractedFunctionKey(functionName, initializer, name);
+      const key = extractedFunctionKey(functionName, callback, name);
       extractionsByFunction.set(key, {
         bodyStart: bodySourceStart(body),
         key,
@@ -436,7 +439,7 @@ function projectFunctionExtractionsByFileName(
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
-        receiverParameters: projectReceiverParameterRequirements(initializer),
+        receiverParameters: projectReceiverParameterRequirements(callback),
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
           file,
@@ -551,17 +554,18 @@ function projectFunctionExtractionsByFileName(
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
       if (!Node.isIdentifier(name) || !initializer) continue;
-      if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
+      const callback = unwrappedFunctionExpression(initializer);
+      if (!callback) continue;
       const extraction = extractionsByFunction.get(
-        extractedFunctionKey(name.getText(), initializer, name),
+        extractedFunctionKey(name.getText(), callback, name),
       );
       if (!extraction) continue;
-      const receivers = projectDrizzleReceivers(initializer);
-      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(initializer.getBody(), (node) =>
+      const receivers = projectDrizzleReceivers(callback);
+      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(callback.getBody(), (node) =>
         isProjectDrizzleReceiverIdentifier(node, receivers),
       );
       extraction.localCalls = extractLocalFunctionCallsFromBody(
-        initializer.getBody(),
+        callback.getBody(),
         localFunctionNames,
         extractionsByFunction,
         (argument) =>
@@ -569,7 +573,7 @@ function projectFunctionExtractionsByFileName(
             undefined || isDrizzleReceiver(argument),
       );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
-        initializer.getBody(),
+        callback.getBody(),
         receivers,
         localFunctionNames,
         extractionsByFunction,
@@ -4421,6 +4425,13 @@ function unwrappedStaticExpressionNode(node: Node): Node {
   return current;
 }
 
+function unwrappedFunctionExpression(node: Node): ArrowFunction | FunctionExpression | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
+    ? expression
+    : undefined;
+}
+
 function queryInstanceKey(
   comparisons: readonly QueryInstanceKeyComparison[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -5529,9 +5540,10 @@ function extractVariableAssignedFunctions(sourceFile: SourceFile): ParsedExtract
 
     const initializer = declaration.getInitializer();
     if (!initializer) continue;
-    if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
+    const callback = unwrappedFunctionExpression(initializer);
+    if (!callback) continue;
 
-    functions.push(extractedFunctionFromCallback(name.getText(), initializer, name));
+    functions.push(extractedFunctionFromCallback(name.getText(), callback, name));
   }
 
   return functions;
