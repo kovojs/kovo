@@ -1305,6 +1305,9 @@ stylesheet evidence.
 The runtime `isJisoApp()` guard for dynamically loaded app-shell modules now lives in the server
 app-shell core boundary and is reused by Vite dev plus starter/commerce static export tasks, so
 those consumers no longer carry local app-shape compatibility helpers.
+The shared guard now also rejects dynamic app exports that are missing the closed `createApp()`
+aggregate's document/error-shell owners, and starter/commerce export tasks require their explicit
+public app exports instead of falling back to stale named-app or shell-object compatibility aliases.
 
 - [x] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1366,6 +1369,11 @@ Latest evidence:
   `pnpm exec tsc --noEmit --pretty false`;
   `pnpm run check:build`;
   exact `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round267 app-shell dynamic export cleanup:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|documents the commerce app-shell dev, serve, and export command matrix|scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
 - Round259 Vite stylesheet helper contraction:
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;

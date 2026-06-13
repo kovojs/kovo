@@ -75,8 +75,7 @@ export async function exportCommerceStaticApp({
       isStaticExportDiagnosticError,
     };
 
-    const app =
-      appShellModule.commerceStaticExportApp ?? appShellModule.commerceStaticExportShell?.app;
+    const app = appShellModule.commerceStaticExportApp;
 
     if (!isJisoApp(app)) {
       throw new Error('src/app-shell.ts must export commerceStaticExportApp for public export.');

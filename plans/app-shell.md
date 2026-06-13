@@ -68,6 +68,16 @@ Implemented areas:
 - `vite-static-export-options.ts` owns the Vite export write-vs-inventory option boundary:
   inventory/manifest dry runs reject `outDir` with FW229 instead of silently discarding a write
   target, while write exports keep the manifest-backed asset copy plan.
+- `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
+  `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
+  longer fall back to stale named-app or shell-object compatibility aliases.
+
+Round267 app-shell dynamic export cleanup evidence:
+
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|documents the commerce app-shell dev, serve, and export command matrix|scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Recent gates:
 

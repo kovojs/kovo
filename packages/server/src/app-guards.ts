@@ -9,6 +9,8 @@ export function isJisoApp(value: unknown): value is JisoApp {
     Array.isArray(value.mutations) &&
     Array.isArray(value.queries) &&
     Array.isArray(value.routes) &&
+    isRecord(value.document) &&
+    isRecord(value.errorShells) &&
     isRecord(value.clientModules) &&
     typeof value.clientModules.resolve === 'function'
   );

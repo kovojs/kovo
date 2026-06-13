@@ -76,10 +76,10 @@ try {
     await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
   const appModule = await server.ssrLoadModule('/src/app-shell.ts');
-  const app = appModule.default ?? appModule.app;
+  const app = appModule.default;
 
   if (!isJisoApp(app)) {
-    throw new Error('src/app-shell.ts must export a Jiso app as default or named app.');
+    throw new Error('src/app-shell.ts must export a Jiso app as default.');
   }
 
   // SPEC.md section 9.5 static export replays the app shell and copies the Vite

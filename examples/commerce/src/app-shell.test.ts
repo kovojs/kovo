@@ -95,6 +95,7 @@ describe('commerce app shell HTTP entry', () => {
     expect(exportScriptSource).toContain("ssrLoadModule('@jiso/server/app-shell/static-export')");
     expect(exportScriptSource).toContain('isJisoApp');
     expect(exportScriptSource).not.toContain('function isJisoApp');
+    expect(exportScriptSource).not.toContain('commerceStaticExportShell?.app');
     expect(exportScriptSource).not.toContain("ssrLoadModule('@jiso/server')");
 
     const appShellSource = await readFile(path.join(commerceRoot, 'src/app-shell.ts'), 'utf8');

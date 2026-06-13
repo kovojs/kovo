@@ -158,4 +158,13 @@ describe('server app-shell public API barrels', () => {
       './app-shell/vite': './src/api/app-shell/vite.ts',
     });
   });
+
+  it('validates dynamically loaded app-shell aggregates through the shared core guard', () => {
+    const app = coreApi.createApp();
+
+    expect(packageCoreApi.isJisoApp(app)).toBe(true);
+    expect(packageCoreApi.isJisoApp({ ...app, document: undefined })).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, errorShells: undefined })).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, clientModules: {} })).toBe(false);
+  });
 });

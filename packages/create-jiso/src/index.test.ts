@@ -255,11 +255,13 @@ describe('create-jiso starter', () => {
       );
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isJisoApp');
+      expect(exportStaticScript).toContain('const app = appModule.default;');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
       expect(exportStaticScript).not.toContain('function formatStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('function isJisoApp');
       expect(exportStaticScript).not.toContain('function isStaticExportDiagnostic');
+      expect(exportStaticScript).not.toContain('appModule.default ?? appModule.app');
       expect(exportStaticScript).not.toContain('htmlPathStyle');
       const previewStaticScript = readFileSync(join(root, 'scripts/preview-static.mjs'), 'utf8');
       expect(previewStaticScript).toContain('createStarterStaticPreviewServer');
