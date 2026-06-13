@@ -215,6 +215,9 @@ Current state:
 - Inline parser extraction now fails closed when extracted wire-parser helpers reference imports or
   top-level runtime bindings outside the self-contained function closure, and build-only loader
   checks live in `inline-loader-build.test.ts` instead of the runtime behavior test.
+- Core optimism/rebase behavior now lives in `optimism.test.ts`, and fragment/structural morph
+  behavior now lives in `morph.test.ts`; the broad runtime barrel test dropped those duplicated
+  module-owner assertions while preserving SPEC §4.8/§9.1/§10.4 coverage.
 
 Open:
 
@@ -228,11 +231,13 @@ Latest focused evidence:
 
 - `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/index-exports.test.ts`
 - `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/optimism.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec tsc --noEmit --pretty false`
 - `rg -n "applyMutationResponseToRuntime|ApplyMutationResponseToRuntime|AppliedMutationResponseToRuntime" packages/runtime/src --glob '!*.test.ts'`
+- `pnpm exec vp check packages/runtime/src/optimism.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
