@@ -117,14 +117,20 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
+  generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
+  generatedHandlerReferenceSummaryFact,
+  generatedRenderedElementFactsFromArtifact,
+  generatedRenderedElementFactsFromSource,
   type GeneratedComponentSourceFacts,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
   GeneratedFixtureTemplateStampHost,
   type GeneratedHandlerReferenceFact,
+  type GeneratedHandlerReferenceSummaryFact,
+  type GeneratedRenderedElementFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
   graphFixtureFile,
@@ -857,6 +863,31 @@ describe('@jiso/test package subpath exports', () => {
       modulePath: '/c/cart.client.js',
       versionShape: 'lower-hex-8',
     });
+    expect(generatedHandlerReferenceSummaryFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toEqual(
+      {
+        handlerName: 'Cart$click',
+        modulePath: '/c/cart.client.js',
+        versionShape: 'lower-hex-8',
+      } satisfies GeneratedHandlerReferenceSummaryFact,
+    );
+    expect(
+      generatedRenderedElementFactsFromSource(
+        "export function renderSource() { return '<button>Add</button>'; }",
+        { tag: 'button' },
+      ),
+    ).toEqual([
+      { attrs: {}, innerHtml: 'Add', tag: 'button' } satisfies GeneratedRenderedElementFact,
+    ]);
+    expect(
+      generatedRenderedElementFactsFromArtifact([
+        { kind: 'server', source: "export function renderSource() { return '<main></main>'; }" },
+      ]),
+    ).toEqual([{ attrs: {}, innerHtml: '', tag: 'main' }]);
+    expect(generatedClientExportTypeFacts({ Cart$click: () => undefined }, ['Cart$click'])).toEqual(
+      {
+        Cart$click: 'function',
+      },
+    );
     expect(new GeneratedFixtureMorphRoot().querySelectorAll('*')).toEqual([]);
     expect(new GeneratedFixtureMorphTarget('ready').readHtml()).toBe('ready');
     expect(

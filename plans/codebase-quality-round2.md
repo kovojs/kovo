@@ -54,6 +54,9 @@ projection used by the D10 fw-check gate, including lowered handler reference sh
 Shared compiler fixtures now own diagnostic and update-coverage projections for the P1/P3
 fw-check compiler harness cases, so those assertions no longer compare source offsets, lengths, or
 `sourceSpan` fields in the monolith.
+Shared generated-module fixtures now own generated server render element facts, compact handler
+reference summaries, and generated client export type summaries used by the fw-check generated
+artifact harness cases, reducing repeated local render/HTML parsing/export-shape mechanics.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -121,6 +124,12 @@ Latest evidence:
   could not load after a clean `pnpm run check:build` because current `dist/server/src/index.mjs`
   does not export `createApp`, matching `packages/server/src/index.ts`; this is outside this
   harness slice ownership and leaves the Phase 1 node-harness rerun as an integration gap.
+- Generated artifact fixture projection slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P2 compiler merges view transition stamps into existing styles|P3 typed routes validate navigation targets|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 2 - Compiler IR
 

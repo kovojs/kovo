@@ -6,10 +6,14 @@ import {
   executeGeneratedClientModule,
   executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
+  generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedArtifactFile,
   generatedArtifactSource,
   generatedHandlerReferenceFact,
+  generatedHandlerReferenceSummaryFact,
+  generatedRenderedElementFactsFromArtifact,
+  generatedRenderedElementFactsFromSource,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -159,6 +163,18 @@ export function renderSource() {
     });
   });
 
+  it('summarizes generated handler hrefs for compact behavior assertions', () => {
+    expect(
+      generatedHandlerReferenceSummaryFact(
+        '/c/routes/products/product-card.client.js?v=0a1b2c3d#ProductCard$button_click',
+      ),
+    ).toEqual({
+      handlerName: 'ProductCard$button_click',
+      modulePath: '/c/routes/products/product-card.client.js',
+      versionShape: 'lower-hex-8',
+    });
+  });
+
   it('marks malformed generated handler href versions without hiding the parsed target', () => {
     expect(
       generatedHandlerReferenceFact(
@@ -169,6 +185,51 @@ export function renderSource() {
       modulePath: '/c/routes/products/product-card.client.js',
       version: 'zzzzzzzz',
       versionShape: 'invalid',
+    });
+  });
+
+  it('summarizes rendered generated elements without repeated monolith parsing', () => {
+    const source = `
+export function renderSource() {
+  return '<cart-badge><button on:click="/c/cart.client.js#Cart$click">Add</button></cart-badge>';
+}
+`;
+
+    expect(generatedRenderedElementFactsFromSource(source, { tag: 'button' })).toEqual([
+      {
+        attrs: { 'on:click': '/c/cart.client.js#Cart$click' },
+        innerHtml: 'Add',
+        tag: 'button',
+      },
+    ]);
+    expect(
+      generatedRenderedElementFactsFromArtifact(
+        [
+          { kind: 'server', source },
+          { kind: 'client', source: 'export const Cart$click = true;' },
+        ],
+        { tag: 'cart-badge' },
+      ),
+    ).toEqual([
+      {
+        attrs: {},
+        innerHtml: '<button on:click="/c/cart.client.js#Cart$click">Add</button>',
+        tag: 'cart-badge',
+      },
+    ]);
+  });
+
+  it('summarizes generated client export runtime types', () => {
+    expect(
+      generatedClientExportTypeFacts({ Cart$click: () => undefined, Cart$value: 1 }, [
+        'Cart$click',
+        'Cart$value',
+        'Cart$missing',
+      ]),
+    ).toEqual({
+      Cart$click: 'function',
+      Cart$missing: 'undefined',
+      Cart$value: 'number',
     });
   });
 

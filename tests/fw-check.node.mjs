@@ -82,10 +82,12 @@ import {
   executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
-  executeGeneratedServerRenderArtifact,
-  executeGeneratedServerRenderSource,
+  generatedClientExportTypeFacts,
   generatedArtifactSource,
   generatedHandlerReferenceFact,
+  generatedHandlerReferenceSummaryFact,
+  generatedRenderedElementFactsFromArtifact,
+  generatedRenderedElementFactsFromSource,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -1236,7 +1238,7 @@ export const ProductCard = component('product-card', {
 
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
   // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
-  const renderedElements = htmlElementFacts(executeGeneratedServerRenderArtifact(result.files));
+  const renderedElements = generatedRenderedElementFactsFromArtifact(result.files);
   const renderedImage = renderedElements.find((element) => element.tag === 'img');
   assert.deepEqual(renderedImage?.attrs, {
     'fw-c': 'product-card',
@@ -1961,9 +1963,7 @@ export const ProductLinks = component('product-links', {
   });
   const registrySource = generatedArtifactSource(lowered.files, 'registry');
   assert.deepEqual(lowered.diagnostics, []);
-  const renderedLinks = htmlElementFacts(
-    executeGeneratedServerRenderArtifact(lowered.files),
-  ).filter((element) => element.tag === 'a');
+  const renderedLinks = generatedRenderedElementFactsFromArtifact(lowered.files, { tag: 'a' });
   assert.deepEqual(
     renderedLinks.map((element) => element.attrs.href),
     ['/products/p%201?max=500', '/cart'],
@@ -4653,25 +4653,16 @@ export const ProductCard = component('product-card', {
   assert.ok(transformed);
   assert.equal(transformed.map, null);
 
-  const buttons = htmlElementFacts(executeGeneratedServerRenderSource(transformed.code)).filter(
-    (element) => element.tag === 'button',
-  );
+  const buttons = generatedRenderedElementFactsFromSource(transformed.code, { tag: 'button' });
   assert.equal(buttons.length, 1);
   assert.equal(buttons[0]?.attrs['data-p-id'], '{product.id}');
   const handlerRef = buttons[0]?.attrs['on:click'] ?? '';
   const handlerReference = generatedHandlerReferenceFact(handlerRef);
-  assert.deepEqual(
-    {
-      handlerName: handlerReference.handlerName,
-      modulePath: handlerReference.modulePath,
-      versionShape: handlerReference.versionShape,
-    },
-    {
-      handlerName: 'ProductCard$button_click',
-      modulePath: '/c/routes/products/product-card.client.js',
-      versionShape: 'lower-hex-8',
-    },
-  );
+  assert.deepEqual(generatedHandlerReferenceSummaryFact(handlerRef), {
+    handlerName: 'ProductCard$button_click',
+    modulePath: '/c/routes/products/product-card.client.js',
+    versionShape: 'lower-hex-8',
+  });
   const headers = new Map();
   let body = '';
   let nextCalls = 0;
@@ -4776,9 +4767,9 @@ export const DiagnosticCard = component('diagnostic-card', {
   const plugin = jisoVitePlugin();
   const greenTransform = plugin.transform(greenSource, componentId);
   assert.ok(greenTransform);
-  const greenButtons = htmlElementFacts(executeGeneratedServerRenderSource(greenTransform.code))
-    .filter((element) => element.tag === 'button')
-    .map((element) => element.attrs);
+  const greenButtons = generatedRenderedElementFactsFromSource(greenTransform.code, {
+    tag: 'button',
+  }).map((element) => element.attrs);
   assert.deepEqual(greenButtons, [{ 'fw-c': 'diagnostic-card' }]);
 
   assert.throws(
@@ -4795,25 +4786,17 @@ export const DiagnosticCard = component('diagnostic-card', {
   });
   const lintTransform = lintPlugin.transform(lintSource, componentId);
   assert.ok(lintTransform);
-  const lintButtons = htmlElementFacts(executeGeneratedServerRenderSource(lintTransform.code))
-    .filter((element) => element.tag === 'button')
-    .map((element) => element.attrs);
+  const lintButtons = generatedRenderedElementFactsFromSource(lintTransform.code, {
+    tag: 'button',
+  }).map((element) => element.attrs);
   assert.equal(lintButtons.length, 1);
   assert.equal(lintButtons[0]?.['fw-c'], 'diagnostic-card');
   assert.equal(lintButtons[0]?.['data-p-ok'], '{response.ok}');
-  const lintHandlerReference = generatedHandlerReferenceFact(lintButtons[0]?.['on:click'] ?? '');
-  assert.deepEqual(
-    {
-      handlerName: lintHandlerReference.handlerName,
-      modulePath: lintHandlerReference.modulePath,
-      versionShape: lintHandlerReference.versionShape,
-    },
-    {
-      handlerName: 'DiagnosticCard$button_click',
-      modulePath: '/c/routes/diagnostic-card.client.js',
-      versionShape: 'lower-hex-8',
-    },
-  );
+  assert.deepEqual(generatedHandlerReferenceSummaryFact(lintButtons[0]?.['on:click'] ?? ''), {
+    handlerName: 'DiagnosticCard$button_click',
+    modulePath: '/c/routes/diagnostic-card.client.js',
+    versionShape: 'lower-hex-8',
+  });
   assert.deepEqual(
     lintDiagnostics.map((diagnostic) => ({
       code: diagnostic.code,
@@ -5936,9 +5919,11 @@ export const CartDrawer = component('cart-drawer', {
     },
     runtime: generatedModuleRuntime,
   });
-  assert.equal(typeof cartBadgeClient.CartBadge$removeItem, 'function');
-  assert.equal(typeof cartBadgeClient.CartBadge$button_click, 'function');
-  assert.equal(typeof cartBadgeClient.CartBadge$button_click_2, 'function');
+  assert.deepEqual(generatedClientExportTypeFacts(cartBadgeClient, cartBadge.handlerExports), {
+    CartBadge$button_click: 'function',
+    CartBadge$button_click_2: 'function',
+    CartBadge$removeItem: 'function',
+  });
   const clickContext = { params: { quantity: 2 }, state: { count: 5 } };
   assert.equal(cartBadgeClient.CartBadge$removeItem('click', clickContext), 'removed');
   assert.deepEqual(removeItemCalls, [{ ctx: clickContext, event: 'click' }]);
@@ -5970,9 +5955,7 @@ export const CartActions = component('cart-actions', {
 });
 `,
   });
-  const buttons = htmlElementFacts(executeGeneratedServerRenderArtifact(result.files)).filter(
-    (element) => element.tag === 'button',
-  );
+  const buttons = generatedRenderedElementFactsFromArtifact(result.files, { tag: 'button' });
   assert.equal(buttons.length, 2);
   assert.equal(buttons[0]?.attrs['fw-param-types'], 'quantity:number');
   assert.equal(buttons[0]?.attrs['data-p-quantity'], '{item.quantity}');
@@ -6051,7 +6034,7 @@ export const CartTotal = component('cart-total', {
 });
 `,
   });
-  const renderedElements = htmlElementFacts(executeGeneratedServerRenderArtifact(result.files));
+  const renderedElements = generatedRenderedElementFactsFromArtifact(result.files);
   const cartTotal = renderedElements.find((element) => element.tag === 'cart-total');
   const boundSpan = renderedElements.find((element) => element.tag === 'span');
 

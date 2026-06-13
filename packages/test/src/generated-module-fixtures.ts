@@ -1,5 +1,7 @@
 import { runInNewContext } from 'node:vm';
 
+import { htmlElementFacts, type HtmlElementSelector } from './html-fragment.ts';
+
 export interface GeneratedArtifactFile {
   fileName?: string;
   kind: string;
@@ -179,6 +181,17 @@ export interface GeneratedHandlerReferenceFact {
   versionShape: GeneratedHandlerReferenceVersionShape;
 }
 
+export type GeneratedHandlerReferenceSummaryFact = Pick<
+  GeneratedHandlerReferenceFact,
+  'handlerName' | 'modulePath' | 'versionShape'
+>;
+
+export interface GeneratedRenderedElementFact {
+  attrs: Record<string, string>;
+  innerHtml: string;
+  tag: string;
+}
+
 const isLowerHex = (value: string): boolean => /^[0-9a-f]+$/.test(value);
 
 export function generatedHandlerReferenceFact(
@@ -194,6 +207,19 @@ export function generatedHandlerReferenceFact(
     staleVersionRequestPath: `${url.pathname}?v=00000000`,
     version,
     versionShape: version.length === 8 && isLowerHex(version) ? 'lower-hex-8' : 'invalid',
+  };
+}
+
+export function generatedHandlerReferenceSummaryFact(
+  href: string,
+  baseUrl = 'http://jiso.test',
+): GeneratedHandlerReferenceSummaryFact {
+  const fact = generatedHandlerReferenceFact(href, baseUrl);
+
+  return {
+    handlerName: fact.handlerName,
+    modulePath: fact.modulePath,
+    versionShape: fact.versionShape,
   };
 }
 
@@ -255,6 +281,38 @@ export function executeGeneratedServerRenderArtifact(
   files: readonly GeneratedArtifactFile[],
 ): string {
   return executeGeneratedServerRenderSource(generatedArtifactSource(files, 'server'));
+}
+
+export function generatedRenderedElementFactsFromSource(
+  source: string,
+  selector: HtmlElementSelector = {},
+): GeneratedRenderedElementFact[] {
+  return renderedElementFacts(executeGeneratedServerRenderSource(source), selector);
+}
+
+export function generatedRenderedElementFactsFromArtifact(
+  files: readonly GeneratedArtifactFile[],
+  selector: HtmlElementSelector = {},
+): GeneratedRenderedElementFact[] {
+  return renderedElementFacts(executeGeneratedServerRenderArtifact(files), selector);
+}
+
+export function generatedClientExportTypeFacts(
+  exports: Record<string, unknown>,
+  names: readonly string[],
+): Record<string, string> {
+  return Object.fromEntries(names.map((name) => [name, typeof exports[name]]));
+}
+
+function renderedElementFacts(
+  html: string,
+  selector: HtmlElementSelector,
+): GeneratedRenderedElementFact[] {
+  return htmlElementFacts(html, selector).map(({ attrs, innerHtml, tag }) => ({
+    attrs,
+    innerHtml,
+    tag,
+  }));
 }
 
 export function executeGeneratedBootstrapModule(
