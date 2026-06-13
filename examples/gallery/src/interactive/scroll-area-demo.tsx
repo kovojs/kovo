@@ -20,6 +20,7 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
     const rootState = { scrollbars: 'vertical' as const };
     const viewportId = 'gallery-scroll-area-viewport';
     const atEnd = state.position === 'end';
+    const scrollY = state.position === 'top' ? 'start' : 'end';
 
     return (
       <section
@@ -32,8 +33,8 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: viewportId,
             label: 'Release notes',
+            scrollY,
           })}
-          data-scroll-position={state.position}
           style="max-height: 72px; overflow: auto;"
         >
           <div style="min-height: 260px;">
@@ -56,9 +57,9 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
               ...rootState,
               id: 'gallery-scroll-area-thumb',
               orientation: 'vertical',
+              scrollPosition: scrollY,
               visible: true,
             })}
-            data-scroll-position={state.position}
           />
         </div>
         <div
@@ -94,12 +95,16 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
               viewport['scrollTop'] = scrollTop;
               Object(viewport)['setAttribute']?.call(
                 viewport,
-                'data-scroll-position',
-                state.position,
+                'data-scroll-y',
+                state.position === 'top' ? 'start' : 'end',
               );
             }
             if (thumb) {
-              Object(thumb)['setAttribute']?.call(thumb, 'data-scroll-position', state.position);
+              Object(thumb)['setAttribute']?.call(
+                thumb,
+                'data-scroll-position',
+                state.position === 'top' ? 'start' : 'end',
+              );
             }
             if (button) {
               Object(button)['setAttribute']?.call(button, 'aria-pressed', String(nextAtEnd));

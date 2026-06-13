@@ -237,6 +237,10 @@ Latest evidence:
       manifest/docs wiring, browser `commandfor`/`request-close` coverage, and visual baseline
       update. Verified with gallery emit check, UI/gallery tests, full gallery browser test, gallery
       `tsc`, exact `vp check`, and `git diff --check`.
+- [x] UI scroll-area G3/G6 slice refreshed compiled gallery artifacts with headless scroll state
+      attrs, added post-transition axe coverage, and tightened the styled thumb prop surface.
+      Verified with gallery emit, UI/gallery tests, UI/gallery `tsc`, exact `vp check`, and
+      `git diff --check`.
 - [ ] After the next mini-wave, run at least `pnpm run check`; add `pnpm run test`,
       `pnpm run test:browser`, `pnpm run test:conformance`, and `pnpm run check:build` when touched
       surfaces justify broader gates.

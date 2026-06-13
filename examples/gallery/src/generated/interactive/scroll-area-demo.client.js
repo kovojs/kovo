@@ -21,10 +21,18 @@ export const GalleryScrollAreaDemo$button_click = handler((event, ctx) => {
 
   if (viewport) {
     viewport['scrollTop'] = scrollTop;
-    Object(viewport)['setAttribute']?.call(viewport, 'data-scroll-position', ctx.state.position);
+    Object(viewport)['setAttribute']?.call(
+      viewport,
+      'data-scroll-y',
+      ctx.state.position === 'top' ? 'start' : 'end',
+    );
   }
   if (thumb) {
-    Object(thumb)['setAttribute']?.call(thumb, 'data-scroll-position', ctx.state.position);
+    Object(thumb)['setAttribute']?.call(
+      thumb,
+      'data-scroll-position',
+      ctx.state.position === 'top' ? 'start' : 'end',
+    );
   }
   if (button) {
     Object(button)['setAttribute']?.call(button, 'aria-pressed', String(nextAtEnd));

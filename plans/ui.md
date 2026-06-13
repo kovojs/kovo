@@ -75,6 +75,10 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
 
 ## Current Evidence
 
+- [x] Scroll-area G3/G6 state coverage now uses headless `data-scroll-y`/thumb position attrs in the
+      compiled demo, keeps generated artifacts fresh per SPEC §5.2, and runs axe after the generated
+      end-state transition. Verified with gallery emit, UI wrapper test, gallery node/browser tests,
+      UI/gallery `tsc`, exact `vp check`, and `git diff --check`.
 - [x] G6 compiled sheet and drawer demos are app-authored TSX, generated into checked server/client
       artifacts, wired into gallery docs/manifest/export registry, and browser-tested for native
       dialog `commandfor` open plus `request-close` close behavior. Verified with gallery emit

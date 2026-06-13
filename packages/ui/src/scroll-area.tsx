@@ -48,6 +48,8 @@ export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
   visible?: boolean;
 }
 
+export interface ScrollAreaThumbProps extends ScrollAreaScrollbarProps {}
+
 export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   class?: ClassValue;
   forceMount?: boolean;
@@ -176,7 +178,7 @@ export const ScrollAreaScrollbar = component('scroll-area-scrollbar', {
 });
 
 export const ScrollAreaThumb = component('scroll-area-thumb', {
-  render(props: ScrollAreaScrollbarProps) {
+  render(props: ScrollAreaThumbProps) {
     const attrs = scrollAreaThumbAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

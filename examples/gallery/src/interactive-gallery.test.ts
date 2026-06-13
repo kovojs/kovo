@@ -1573,9 +1573,7 @@ describe('compiled interactive gallery demos', () => {
       expect(element(document, 'gallery-scroll-area-viewport')).toMatchObject({
         scrollTop: 160,
       });
-      expect(element(document, 'gallery-scroll-area-viewport').attrs['data-scroll-position']).toBe(
-        'end',
-      );
+      expect(element(document, 'gallery-scroll-area-viewport').attrs['data-scroll-y']).toBe('end');
       expect(element(document, 'gallery-scroll-area-thumb').attrs['data-scroll-position']).toBe(
         'end',
       );

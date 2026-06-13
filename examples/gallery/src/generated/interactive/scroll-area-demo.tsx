@@ -21,6 +21,7 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
     const rootState = { scrollbars: 'vertical' as const };
     const viewportId = 'gallery-scroll-area-viewport';
     const atEnd = state.position === 'end';
+    const scrollY = state.position === 'top' ? 'start' : 'end';
 
     return (
       <section
@@ -35,8 +36,8 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: viewportId,
             label: 'Release notes',
+            scrollY,
           })}
-          data-scroll-position={state.position}
           style="max-height: 72px; overflow: auto;"
         >
           <div style="min-height: 260px;">
@@ -59,9 +60,9 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
               ...rootState,
               id: 'gallery-scroll-area-thumb',
               orientation: 'vertical',
+              scrollPosition: scrollY,
               visible: true,
             })}
-            data-scroll-position={state.position}
           />
         </div>
         <div
@@ -75,7 +76,7 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
           aria-controls={viewportId}
           aria-pressed={String(atEnd)}
           id="gallery-scroll-area-toggle"
-          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=fa9b2d93#GalleryScrollAreaDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=f3ce9203#GalleryScrollAreaDemo$button_click"
         >
           {atEnd ? 'Back to top' : 'Jump to end'}
         </button>

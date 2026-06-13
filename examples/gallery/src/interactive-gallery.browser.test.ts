@@ -1969,11 +1969,11 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(viewport.getAttribute('aria-label')).toBe('Release notes');
     expect(viewport.tabIndex).toBe(0);
     expect(viewport.scrollTop).toBe(0);
-    expect(viewport.getAttribute('data-scroll-position')).toBe('top');
+    expect(viewport.getAttribute('data-scroll-y')).toBe('start');
     expect(scrollbar.getAttribute('aria-hidden')).toBe('true');
     expect(scrollbar.getAttribute('data-orientation')).toBe('vertical');
     expect(scrollbar.getAttribute('data-state')).toBe('visible');
-    expect(thumb.getAttribute('data-scroll-position')).toBe('top');
+    expect(thumb.getAttribute('data-scroll-position')).toBe('start');
     expect(corner.hidden).toBe(true);
     expect(button.getAttribute('aria-controls')).toBe('gallery-scroll-area-viewport');
     expect(button.getAttribute('aria-pressed')).toBe('false');
@@ -1998,12 +1998,14 @@ describe('compiled interactive gallery demos in the browser', () => {
       ]);
       expect(root.getAttribute('fw-state')).toBe('{"position":"end"}');
       expect(currentViewport.scrollTop).toBe(160);
-      expect(currentViewport.getAttribute('data-scroll-position')).toBe('end');
+      expect(currentViewport.getAttribute('data-scroll-y')).toBe('end');
       expect(currentThumb.getAttribute('data-scroll-position')).toBe('end');
       expect(currentButton.getAttribute('aria-pressed')).toBe('true');
       expect(currentButton.textContent).toBe('Back to top');
       expect(currentOutput.textContent).toBe('end');
     });
+
+    await expectNoAxeViolations(root);
   });
 
   it('updates progress native value and indeterminate state through generated handlers', async () => {
