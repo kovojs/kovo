@@ -4076,7 +4076,10 @@ function staticAccessName(node: Node): string | undefined {
   if (!Node.isElementAccessExpression(node)) return undefined;
 
   const argument = node.getArgumentExpression();
-  return Node.isStringLiteral(argument) ? argument.getLiteralText() : undefined;
+  if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) {
+    return argument.getLiteralText();
+  }
+  return undefined;
 }
 
 function staticAccessExpression(node: Node): Node | undefined {

@@ -168,6 +168,12 @@ Closed evidence so far:
   `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
   `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Static no-substitution-template element access now uses the same project/source access helper as
+  string-literal element access, so template-form execute degrades to FW406 and template-form
+  relational `findFirst` remains a relational read/FW406 query surface. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

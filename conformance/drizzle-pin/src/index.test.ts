@@ -1960,6 +1960,43 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins template-literal element-access relational reads as explicit FW406 facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users/template-access', {
+              load(_input, db) {
+                return db.query[\`users\`][\`findFirst\`]({ where: eq(users.active, true) });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:4',
+          },
+        ],
+        query: 'users/template-access',
+        reads: ['user'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:4',
+      },
+    ]);
+  });
+
   it('pins unresolved project relational read sources as explicit FW406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

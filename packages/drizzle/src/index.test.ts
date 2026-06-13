@@ -5209,6 +5209,44 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks template-literal element-access raw and relational receiver calls as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export async function loadUsers(db) {
+            await db[\`execute\`](sql\`update users set active = true\`);
+            return db.query[\`users\`][\`findFirst\`]({ where: eq(users.active, true) });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      loadUsers: {
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('extracts standalone direct select chains as touch-graph reads', () => {
     const graph = extractTouchGraphFromSource([
       {
