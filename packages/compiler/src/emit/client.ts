@@ -100,6 +100,18 @@ function handlerArrowBodyLowering(
   }
 
   for (const reference of body.references ?? []) {
+    const param = paramReplacements.find(
+      (entry) => entry.sourceExpression === reference.name,
+    )?.param;
+    if (param) {
+      replacements.push({
+        end: reference.end,
+        replacement: `ctx.params.${elementParamNameFromAttribute(param.attributeName)}`,
+        start: reference.start,
+      });
+      continue;
+    }
+
     if (reference.name !== 'state') continue;
     if (
       replacements.some(

@@ -393,12 +393,33 @@ export const CartActions = component('cart-actions', {
   });
 
   it('uses parser reference facts for standalone call argument param names', () => {
-    const source = `
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
 import { component } from '@jiso/core';
 
 export const CartActions = component('cart-actions', {
   render: ({ quantity }) => (
     <button onClick={() => track(quantity)}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-quantity="{quantity}"');
+    expect(clientSource).toContain('return track(ctx.params.quantity);');
+  });
+
+  it('does not fabricate params for unmodeled call argument expressions', () => {
+    const source = `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => track(getQuantity())}>Add</button>
   ),
 });
 `;
@@ -408,14 +429,7 @@ export const CartActions = component('cart-actions', {
       parseComponentModule('components/cart/cart-actions.tsx', source),
     );
 
-    expect(handler?.params).toEqual([
-      {
-        attributeName: 'data-p-quantity',
-        expression: 'quantity',
-        type: 'string',
-        value: '{quantity}',
-      },
-    ]);
+    expect(handler?.params).toEqual([]);
   });
 
   it('emits typed zero-argument arrow handlers from the TypeScript AST', () => {

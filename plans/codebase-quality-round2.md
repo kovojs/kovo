@@ -261,6 +261,9 @@ property names for captured member expressions when emitting `data-p-*` names, i
 rediscovering the final segment from expression text.
 Zero-argument handler call arguments now carry parser-provided reference facts, and standalone
 identifier params use those facts for `data-p-*` names before falling back to expression text.
+Handler call-argument extraction no longer fabricates params for unmodeled expression text:
+standalone references are lowered through parser reference spans, property accesses through parser
+access spans, and other call arguments remain diagnostic/client code instead of server-only params.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -271,6 +274,9 @@ identifier params use those facts for `data-p-*` names before falling back to ex
 Latest evidence:
 
 - Handler call-argument reference facts: `pnpm exec vitest --run
+packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
+tsc --noEmit --pretty false`.
+- Handler call-argument fallback removal: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
 tsc --noEmit --pretty false`.
 - Handler param terminal-name facts: `pnpm exec vitest --run

@@ -266,9 +266,8 @@ function extractElementParams(
             arg,
             zeroArgArrow?.callArgumentReferences?.[index] ?? [],
           );
-          return members.length > 0
-            ? members
-            : [{ expression: arg, ...(simpleReference ? { terminalName: simpleReference } : {}) }];
+          if (members.length > 0) return members;
+          return simpleReference ? [{ expression: arg, terminalName: simpleReference }] : [];
         })
     : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
