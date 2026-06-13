@@ -1,8 +1,9 @@
 # Jiso v1 Remaining Work
 
 `SPEC.md` is the behavior source of truth. This file is the top-level v1 closeout checklist; keep
-implementation evidence in `plans/codebase-quality-round2.md`, `plans/ui.md`, `plans/app-shell.md`,
-and `plans/better-docs.md`.
+implementation evidence in `plans/codebase-quality-round2.md`, `plans/ui.md`, and `plans/app-shell.md`.
+Deferred/post-freeze workstreams (`plans/better-docs.md`, `plans/react-interop.md`) are tracked
+separately and do not gate the v1 framework freeze.
 
 ## Fixed Scope
 
@@ -33,14 +34,21 @@ and `plans/better-docs.md`.
       docs. (Starter/commerce/docs export adoption tests green within `pnpm run test` 2508 + `check:build`.)
 - [ ] UI: finish remaining primitive exports, behavior contracts, wrappers, gallery routes, compiled
       demos, state/focus/form/validity behavior, canceled-change restoration, axe checks, and visual
-      baselines.
-- [ ] Docs: rewrite the docs site for approachability and dual human/agent consumption — "Why Jiso?"
-      positioning, voice cleanup, real API references from source JSDoc, and an agent layer. See
-      `plans/better-docs.md`.
+      baselines. (H1/H2 complete; H3 built and under audit/gap-fill — see `plans/ui.md`.)
+
+## Deferred (post-freeze workstreams, not v1-blocking)
+
+- [ ] Docs: rewrite the docs site for approachability and dual human/agent consumption. Owner
+      deferred this to "analysis only" on 2026-06-13 — content/positioning is a separate workstream
+      from the framework freeze. See `plans/better-docs.md`.
+- [ ] React interop (`@jiso/react`): tentative, design agreed but unapproved; `SPEC.md` intentionally
+      untouched. Post-v1. See `plans/react-interop.md`.
 
 ## Final Acceptance
 
-- [ ] Active plan ledgers have no open v1-blocking items.
+- [ ] Active implementation ledgers (`codebase-quality-round2`, `ui`, `app-shell`) have no open
+      v1-blocking items. (Operating-rule checkboxes, `better-docs`, and `react-interop` are excluded
+      per the Deferred section above.)
 - [ ] Clean checkout passes `pnpm run check`.
 - [ ] Clean checkout passes `pnpm run test`.
 - [ ] Clean checkout passes `pnpm run test:browser`.
