@@ -189,6 +189,52 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins real Drizzle Postgres factory re-export barrels in project extraction', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/pg-barrel.ts',
+          source: `
+            export { pgTable as table, text as pgText, integer as pgInteger } from 'drizzle-orm/pg-core';
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import { table, pgText, pgInteger } from './pg-barrel';
+
+            export const products = table('products', {
+              id: pgText('id').primaryKey(),
+              stock: pgInteger('stock').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/barrel-factories', {
+              load(_input, db: PgDatabase<any, any, any>) {
+                return db.select({
+                  id: products.id,
+                  stock: products.stock,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/barrel-factories',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:10',
+      },
+    ]);
+  });
+
   it('pins project extraction for real Postgres namespace table factories', () => {
     const products = pg.pgTable('products', {
       id: pg.text('id').primaryKey(),

@@ -2527,20 +2527,32 @@ function projectPgCoreIdentifierExportName(identifier: Node): string | undefined
   const declarations = symbol?.getDeclarations() ?? [];
   if (declarations.length === 0) return identifier.getText();
 
-  for (const declaration of declarations) {
-    const importName = pgCoreImportSpecifierExportName(declaration);
-    if (importName) return importName;
-  }
+  const directName = pgCoreExportNameFromDeclarations(declarations);
+  if (directName) return directName;
 
   const aliased = symbol?.getAliasedSymbol();
-  if (
-    aliased
-      ?.getDeclarations()
-      .some((declaration) =>
-        declaration.getSourceFile().getFilePath().includes('drizzle-orm/pg-core'),
-      )
-  ) {
-    return aliased.getName();
+  const aliasName = pgCoreExportNameFromDeclarations(aliased?.getDeclarations() ?? []);
+  if (aliasName) return aliasName;
+
+  return undefined;
+}
+
+function pgCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
+  for (const declaration of declarations) {
+    const name = pgCoreImportSpecifierExportName(declaration);
+    if (name) return name;
+  }
+  for (const declaration of declarations) {
+    const name = pgCoreExportSpecifierExportName(declaration);
+    if (name) return name;
+  }
+  for (const declaration of declarations) {
+    if (declaration.getSourceFile().getFilePath().includes('drizzle-orm/pg-core')) {
+      const name = Node.isIdentifier(declaration)
+        ? declaration.getText()
+        : declaration.getSymbol()?.getName();
+      if (name) return name;
+    }
   }
 
   return undefined;
@@ -2548,9 +2560,16 @@ function projectPgCoreIdentifierExportName(identifier: Node): string | undefined
 
 function pgCoreImportSpecifierExportName(declaration: Node): string | undefined {
   if (!Node.isImportSpecifier(declaration)) return undefined;
-
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
   if (importDeclaration?.getModuleSpecifierValue() !== 'drizzle-orm/pg-core') return undefined;
+
+  return declaration.getNameNode().getText();
+}
+
+function pgCoreExportSpecifierExportName(declaration: Node): string | undefined {
+  if (!Node.isExportSpecifier(declaration)) return undefined;
+  const exportDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ExportDeclaration);
+  if (exportDeclaration?.getModuleSpecifierValue() !== 'drizzle-orm/pg-core') return undefined;
 
   return declaration.getNameNode().getText();
 }

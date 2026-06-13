@@ -1380,7 +1380,9 @@ such as `pg.text()` now resolve only when ts-morph proves a `drizzle-orm/pg-core
 source mode keeps that surface opaque and degrades writes to FW406.
 Project Postgres table and column factory identifiers now accept aliased real
 `drizzle-orm/pg-core` named imports through ts-morph import facts, while locally declared
-lookalike factories no longer fabricate project table or query-read facts.
+lookalike factories no longer fabricate project table or query-read facts. Re-exported local
+barrels for Postgres table and column factories now resolve through ts-morph alias/export facts
+instead of falling back to source-name compatibility.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
       Evidence 2026-06-13 round327: `packages/drizzle/src/static.ts` separates project table
@@ -1402,6 +1404,17 @@ lookalike factories no longer fabricate project table or query-read facts.
       imports extract table reads/shapes and local lookalike factories degrade to FW406;
       `conformance/drizzle-pin/src/index.test.ts` pins the aliased import surface against real
       Drizzle. Verified by `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `pnpm exec tsc --noEmit --pretty false`;
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      `git diff --check`.
+      Evidence 2026-06-13 round352: `packages/drizzle/src/static.ts` follows
+      `drizzle-orm/pg-core` export specifier alias chains for Postgres table and column factory
+      identifiers, covering local barrel imports without accepting sibling local fake factories.
+      `packages/drizzle/src/index.test.ts` proves exact query read/shape extraction through a real
+      package-local factory barrel and FW406 degradation for a fake barrel; `conformance/drizzle-pin/src/index.test.ts`
+      pins the same accepted barrel surface against real Drizzle Postgres exports. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
       `pnpm exec tsc --noEmit --pretty false`;
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;

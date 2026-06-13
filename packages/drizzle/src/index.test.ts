@@ -12716,6 +12716,90 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project tables and column shapes from Postgres factory re-export barrels', () => {
+    const files = [
+      {
+        fileName: 'packages/drizzle/src/pg-barrel.fixture.ts',
+        source: [
+          'export { pgTable as table, text as pgText, integer as pgInteger } from "drizzle-orm/pg-core";',
+          '',
+        ].join('\n'),
+      },
+      {
+        fileName: 'packages/drizzle/src/fake-barrel.fixture.ts',
+        source: [
+          'export function table(_name: string, _columns: unknown, _extra: unknown) { return {}; }',
+          'export function pgText(_name: string) { return { primaryKey() { return this; } }; }',
+          '',
+        ].join('\n'),
+      },
+      {
+        fileName: 'packages/drizzle/src/catalog.domain.fixture.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import { table, pgText, pgInteger } from "./pg-barrel.fixture";',
+          'import { table as fakeTable, pgText as fakeText } from "./fake-barrel.fixture";',
+          '',
+          'export const products = table("products", {',
+          '  id: pgText("id").primaryKey(),',
+          '  stock: pgInteger("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export const fakeProducts = fakeTable("fake_products", {',
+          '  id: fakeText("id").primaryKey(),',
+          '}, jiso({ domain: "fake", key: "id" }));',
+          '',
+          'export const productQuery = query("product/barrel-factories", {',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+          '',
+          'export const fakeQuery = query("product/fake-barrel-factories", {',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: fakeProducts.id }).from(fakeProducts);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/barrel-factories',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'packages/drizzle/src/catalog.domain.fixture.ts:14',
+      },
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product/fake-barrel-factories.id could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'packages/drizzle/src/catalog.domain.fixture.ts:20',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'packages/drizzle/src/catalog.domain.fixture.ts:20',
+          },
+        ],
+        query: 'product/fake-barrel-factories',
+        reads: [],
+        shape: {},
+        site: 'packages/drizzle/src/catalog.domain.fixture.ts:20',
+      },
+    ]);
+  });
+
   it('does not fabricate project table facts from local Postgres factory lookalikes', () => {
     const files = [
       pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<void> };']),
