@@ -2112,7 +2112,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </div>,
     ).toBe(
-      '<div data-gallery-merge="otp-field"><div data-invalid="" data-required="" role="application" id="gallery-otp-field" aria-labelledby="gallery-otp-label" aria-describedby="author-otp-description" aria-invalid="true" aria-required="true" class="otp-root gap-2"><input data-required="" aria-hidden="false" data-slot="hidden-input" autoComplete="one-time-code" disabled inputMode="numeric" readOnly tabIndex="-1" type="text" value="1234" name="author-otp-code" pattern="[0-9]*" required class="otp-hidden sr-only"><input data-required="" data-filled="" aria-label="Author digit label" data-slot="0" autoComplete="one-time-code" inputMode="numeric" maxLength="2" type="text" value="9" required class="otp-slot text-center"></div></div>',
+      '<div data-gallery-merge="otp-field"><div data-invalid="" data-required="" role="application" id="gallery-otp-field" aria-labelledby="gallery-otp-label" aria-describedby="author-otp-description" aria-invalid="true" aria-required="true" class="otp-root gap-2"><input data-required="" aria-hidden="false" data-slot="hidden-input" autoComplete="one-time-code" disabled inputMode="numeric" maxLength="6" minLength="6" tabIndex="-1" type="text" value="1234" name="author-otp-code" pattern="[0-9]*" required class="otp-hidden sr-only"><input data-required="" data-filled="" aria-label="Author digit label" data-slot="0" autoComplete="one-time-code" inputMode="numeric" maxLength="2" type="text" value="9" required class="otp-slot text-center"></div></div>',
     );
   });
 
@@ -4015,7 +4015,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="otpFieldHiddenInputAttributes" data-invalid="author-otpFieldHiddenInputAttributes" data-required="author-otpFieldHiddenInputAttributes" aria-hidden="false" data-slot="author-otpFieldHiddenInputAttributes" autoComplete="author-otpFieldHiddenInputAttributes" disabled inputMode="author-otpFieldHiddenInputAttributes" readOnly tabIndex="0" type="author-otpFieldHiddenInputAttributes" value="author-otpFieldHiddenInputAttributes" id="author-otpFieldHiddenInputAttributes" name="author-otpFieldHiddenInputAttributes" required class="primitive-otpFieldHiddenInputAttributes author-otpFieldHiddenInputAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="otpFieldHiddenInputAttributes" data-invalid="author-otpFieldHiddenInputAttributes" data-required="author-otpFieldHiddenInputAttributes" aria-hidden="false" data-slot="author-otpFieldHiddenInputAttributes" autoComplete="author-otpFieldHiddenInputAttributes" disabled inputMode="author-otpFieldHiddenInputAttributes" maxLength="7" minLength="7" tabIndex="0" type="author-otpFieldHiddenInputAttributes" value="author-otpFieldHiddenInputAttributes" id="author-otpFieldHiddenInputAttributes" name="author-otpFieldHiddenInputAttributes" required class="primitive-otpFieldHiddenInputAttributes author-otpFieldHiddenInputAttributes">merged</div>",
           "name": "otpFieldHiddenInputAttributes",
         },
         {

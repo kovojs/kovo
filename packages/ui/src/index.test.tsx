@@ -955,8 +955,10 @@ describe('@jiso/ui styled package foundation', () => {
     expect(hidden).toContain('aria-hidden="true"');
     expect(hidden).toContain('data-slot="hidden-input"');
     expect(hidden).toContain('autoComplete="one-time-code"');
+    expect(hidden).toContain('maxLength="6"');
+    expect(hidden).toContain('minLength="6"');
     expect(hidden).toContain('name="otp-code"');
-    expect(hidden).toContain('readOnly required tabIndex="-1" type="text" value="1234"');
+    expect(hidden).toContain('required tabIndex="-1" type="text" value="1234"');
     expect(firstSlot).toContain('aria-label="One-time code digit 1"');
     expect(firstSlot).toContain('data-filled=""');
     expect(firstSlot).toContain('data-slot="0"');

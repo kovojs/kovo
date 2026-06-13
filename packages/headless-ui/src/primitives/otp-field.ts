@@ -68,12 +68,19 @@ export interface OtpFieldMoveResult {
 export type OtpFieldPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
+type OtpFieldInputTarget = { value: string } | null;
+type OtpFieldRestorableTarget = { value?: string } | null;
+
 export type OtpFieldInputEvent = Event & {
-  readonly currentTarget: { value: string } | null;
+  readonly currentTarget: OtpFieldInputTarget;
 };
-export type OtpFieldKeyboardEvent = Event & { readonly key: string };
+export type OtpFieldKeyboardEvent = Event & {
+  readonly currentTarget?: OtpFieldRestorableTarget;
+  readonly key: string;
+};
 export type OtpFieldPasteEvent = Event & {
   readonly clipboardData: { getData(format: string): string } | null;
+  readonly currentTarget?: OtpFieldRestorableTarget;
 };
 
 export function otpFieldComplete(state: OtpFieldState): boolean {
@@ -117,7 +124,8 @@ export function otpFieldHiddenInputAttributes(
     autoComplete: 'one-time-code',
     disabled: options.disabled === true,
     inputMode: otpFieldInputMode(options.inputMode),
-    readOnly: true,
+    maxLength: otpFieldLength(options.length),
+    minLength: otpFieldLength(options.length),
     tabIndex: -1,
     type: 'text',
     value,
@@ -233,10 +241,7 @@ export function otpFieldInput(
     options,
   );
   if (!result.changed) {
-    event.currentTarget.value = otpFieldSlotValue(
-      { ...state, value: result.value },
-      state.slotIndex,
-    );
+    restoreOtpFieldSlotTargetValue(event.currentTarget, state, result.value);
     event.preventDefault();
   }
 
@@ -258,6 +263,9 @@ export function otpFieldKeyDown(
 
   if (event.key === 'Backspace' || event.key === 'Delete') {
     const result = setOtpFieldSlotValue(state, state.slotIndex, '', 'delete', options);
+    if (!result.changed) {
+      restoreOtpFieldSlotTargetValue(event.currentTarget ?? null, state, result.value);
+    }
     event.preventDefault();
     return result;
   }
@@ -286,9 +294,22 @@ export function otpFieldPaste(
   if (text === '') return;
 
   const result = setOtpFieldSlotValue(state, state.slotIndex, text, 'paste', options);
+  if (!result.changed) {
+    restoreOtpFieldSlotTargetValue(event.currentTarget ?? null, state, result.value);
+  }
   event.preventDefault();
 
   return result;
+}
+
+function restoreOtpFieldSlotTargetValue(
+  target: OtpFieldRestorableTarget,
+  state: OtpFieldState & { slotIndex: number },
+  value: string,
+): void {
+  if (target === null || typeof target.value !== 'string') return;
+
+  target.value = otpFieldSlotValue({ ...state, value }, state.slotIndex);
 }
 
 function otpFieldDataAttributes(state: OtpFieldState): PrimitiveDataAttributes {

@@ -70,6 +70,9 @@ risks. Do not append long historical command lists.
 - Checkbox-group item clicks restore the live native checkbox `checked` property when SPEC §4.6
   cancelable/blocked changes leave the primitive value unchanged, and the G5 merge golden now
   preserves checkbox-group `role="group"` semantics.
+- OTP field delete and paste handlers now restore the live slot input value when SPEC §4.6
+  cancelable changes are rejected, and the aggregate named input exposes native length
+  constraints for SPEC §6.3 form-control semantics.
 
 ## Open Work
 
@@ -78,8 +81,8 @@ H2:
 - [ ] Re-audit the full H2 primitive list against package exports, tests, styled wrappers, gallery
       routes, behavior contracts, merge fixtures, and compiled interactive coverage before
       checking H2 complete.
-- [ ] Close any remaining number-field, otp-field, scroll-area, and field/fieldset behavior gaps
-      with focused primitive tests rather than styled-only evidence.
+- [ ] Close any remaining scroll-area and field/fieldset behavior gaps with focused primitive
+      tests rather than styled-only evidence.
 - [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
 
 H3:
@@ -114,11 +117,14 @@ Gallery:
 
 Latest integrated UI slice:
 
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox-group.test.ts`
+- `pnpm install --frozen-lockfile`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/otp-field.test.ts`
+- `pnpm exec vitest --run packages/ui/src/index.test.tsx`
+- `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm exec vitest --run examples/gallery/src/merge-fixtures.test.tsx`
-- `pnpm exec vp check packages/headless-ui/src/primitives/checkbox-group.ts packages/headless-ui/src/primitives/checkbox-group.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm exec vp check packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/otp-field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`
 - `git diff --check`
 
 Latest broad gate:

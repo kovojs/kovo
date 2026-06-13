@@ -94,9 +94,10 @@ describe('headless-ui otp-field primitive', () => {
       disabled: false,
       id: 'otp',
       inputMode: 'numeric',
+      maxLength: 4,
+      minLength: 4,
       name: 'otp',
       pattern: '[0-9]*',
-      readOnly: true,
       required: true,
       tabIndex: -1,
       type: 'text',
@@ -343,6 +344,46 @@ describe('headless-ui otp-field primitive', () => {
     expect(reasons).toEqual(['input', 'delete', 'paste']);
   });
 
+  it('restores the live slot value when delete and paste changes are rejected', () => {
+    const canceledDeleteEvent = otpKeyboardEvent('Backspace', '2');
+    const canceledDeleteResult = otpFieldKeyDown(
+      canceledDeleteEvent,
+      { length: 4, slotIndex: 1, value: '1234' },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    const canceledPasteEvent = otpPasteEvent('9876', '2');
+    const canceledPasteResult = otpFieldPaste(
+      canceledPasteEvent,
+      { length: 4, slotIndex: 1, value: '1234' },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(canceledDeleteResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true }),
+      focusIndex: 1,
+      value: '1234',
+    });
+    expect(canceledDeleteEvent.currentTarget?.value).toBe('2');
+    expect(canceledDeleteEvent.defaultPrevented).toBe(true);
+    expect(canceledPasteResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true }),
+      focusIndex: 3,
+      value: '1234',
+    });
+    expect(canceledPasteEvent.currentTarget?.value).toBe('2');
+    expect(canceledPasteEvent.defaultPrevented).toBe(true);
+  });
+
   it('returns frozen attribute records', () => {
     expect(Object.isFrozen(otpFieldRootAttributes())).toBe(true);
     expect(Object.isFrozen(otpFieldHiddenInputAttributes())).toBe(true);
@@ -388,17 +429,31 @@ function otpInputEvent(value: string): Event & {
   return event;
 }
 
-function otpKeyboardEvent(key: string): Event & { readonly key: string } {
-  const event = new Event('keydown', { cancelable: true }) as Event & { key: string };
+function otpKeyboardEvent(
+  key: string,
+  currentValue?: string,
+): Event & { readonly currentTarget?: { value: string } | null; readonly key: string } {
+  const event = new Event('keydown', { cancelable: true }) as Event & {
+    currentTarget?: { value: string } | null;
+    key: string;
+  };
   Object.defineProperty(event, 'key', { value: key });
+  if (currentValue !== undefined) {
+    Object.defineProperty(event, 'currentTarget', { value: { value: currentValue } });
+  }
   return event;
 }
 
-function otpPasteEvent(text: string): Event & {
+function otpPasteEvent(
+  text: string,
+  currentValue?: string,
+): Event & {
   readonly clipboardData: { getData(format: string): string } | null;
+  readonly currentTarget?: { value: string } | null;
 } {
   const event = new Event('paste', { cancelable: true }) as Event & {
     clipboardData: { getData(format: string): string } | null;
+    currentTarget?: { value: string } | null;
   };
   Object.defineProperty(event, 'clipboardData', {
     value: {
@@ -407,5 +462,8 @@ function otpPasteEvent(text: string): Event & {
       },
     },
   });
+  if (currentValue !== undefined) {
+    Object.defineProperty(event, 'currentTarget', { value: { value: currentValue } });
+  }
   return event;
 }

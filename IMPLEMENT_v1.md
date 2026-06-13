@@ -797,6 +797,20 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
       `pnpm --filter fw exec vitest --run src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`,
       and `pnpm exec vp check packages/ui/src/field.tsx packages/ui/src/number-field.tsx packages/ui/src/otp-field.tsx packages/ui/src/scroll-area.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx packages/ui/package.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts packages/cli/src/index.test.ts`.
+      Additional evidence 2026-06-13: H2 otp-field delete and paste handlers now restore the
+      live slot input after canceled value changes per SPEC §4.6, and the aggregate named input
+      exposes native `minLength`/`maxLength` constraints for SPEC §6.3 form-control semantics
+      through the headless primitive, vendorable `@jiso/ui` wrapper, and gallery merge/behavior
+      evidence. Same-session evidence: `pnpm exec vitest --run
+packages/headless-ui/src/primitives/otp-field.test.ts`, `pnpm --filter @jiso/headless-ui
+exec vitest --run`, `pnpm --filter @jiso/headless-ui run lint:primitives`, `pnpm --filter
+@jiso/ui exec vitest --run`, `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts
+examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx`,
+      and `pnpm exec vp check packages/headless-ui/src/primitives/otp-field.ts
+packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/otp-field.tsx
+packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts
+examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx
+IMPLEMENT_v1.md plans/ui.md`.
       Evidence 2026-06-12: `examples/gallery/src/interactive/` adds app-authored
       switch, collapsible, and popover demos; `examples/gallery/scripts/emit-interactive-gallery.mjs`
       compiles all six interactive demos through `@jiso/compiler`; generated artifacts under

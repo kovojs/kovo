@@ -378,7 +378,8 @@ describe('gallery demo fixtures', () => {
     expect(otpField.html).toContain('data-slot="hidden-input"');
     expect(otpField.html).toContain('autoComplete="one-time-code"');
     expect(otpField.html).toContain('name="gallery-otp-code"');
-    expect(otpField.html).toContain('readOnly');
+    expect(otpField.html).toContain('maxLength="6"');
+    expect(otpField.html).toContain('minLength="6"');
     expect(otpField.html).toContain('tabIndex="-1"');
     expect(otpField.html).toContain('value="1234"');
     expect(otpField.html).toContain('data-slot="0"');
