@@ -14,7 +14,7 @@ queue. Do not restore long historical transcripts; preserve durable evidence as 
       `AGENTS.md`; round-1 open work merged here.
 - [ ] Phase 1 gate de-tautologization: `tests/fw-check.node.mjs` verifies behavior and structured
       artifacts, not source text or its own test names.
-- [ ] Phase 2 compiler IR: one parsed model, explicit source patches and offset maps, validators
+- [x] Phase 2 compiler IR: one parsed model, explicit source patches and offset maps, validators
       consume model facts, no compatibility reparses where parser facts are sufficient.
 - [ ] Phase 3 Drizzle extraction: ts-morph/project facts end-to-end; bespoke lexers deleted;
       impossible or indirect surfaces degrade to FW406 instead of fabricated facts.
@@ -74,19 +74,25 @@ Latest evidence:
 
 ## Phase 2 - Compiler IR
 
-Current state: parser-owned model facts now cover component option static values, prop constructor
-types, fragment target booleans, server-state query keys, and static CSS template literals. Lowering
-uses explicit source patches and offset maps for several high-risk paths. Phase 2 remains open until
-remaining source-returning lowerers are retired or justified.
+Current state: checked complete. Parser-owned model facts cover component option static values, prop
+constructor types, fragment target booleans, server-state query keys, and static CSS template
+literals. Lowering uses explicit source patches and offset maps, validators consume model facts, and
+source-text parsing/slicing is contained to parser/scanner/diagnostic boundaries.
 
-- [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
-- [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
+- [x] Remove remaining compatibility fallback reparses where parser facts are sufficient.
+- [x] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
       parser/scanner internals and diagnostics, retire source-string lowerers/validators.
-- [ ] Keep Phase 2 open until source-returning lowering is gone from the compile path or each
+- [x] Keep Phase 2 open until source-returning lowering is gone from the compile path or each
       remaining case is explicitly justified.
 
 Latest evidence:
 
+- [x] Final Phase 2 audit found no `source.slice`, `getText`, `createSourceFile`,
+      `componentOptionSource`, or `componentStateReturnObject()` consumers in
+      lower/analyze/validate/emit/graph/css compile paths; remaining raw source operations are
+      parser/scanner/diagnostic boundaries or non-source formatting regexes. Verified with
+      repository search plus shared/model-pipeline/source-patch tests, focused compiler tests, `tsc`,
+      exact `vp check`, and `git diff --check`.
 - [x] Dead state-return raw source storage and the source-returning
       `componentStateReturnObject()` compatibility helper were removed; validation/emit use spans,
       keys, and static model values. Verified with parser/state/compile/id-content tests, `tsc`,

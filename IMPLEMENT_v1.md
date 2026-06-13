@@ -13,7 +13,7 @@ implementation evidence in `plans/codebase-quality-round2.md`, `plans/ui.md`, an
 
 ## Open Blockers
 
-- [ ] Compiler: close Phase 2 by removing compatibility reparses, retiring unjustified
+- [x] Compiler: close Phase 2 by removing compatibility reparses, retiring unjustified
       source-string lowerers/validators, and proving source patches plus offset maps as the lowering
       contract.
 - [ ] Harness/tests: replace fragile generated-source assertions with behavior checks or structured
