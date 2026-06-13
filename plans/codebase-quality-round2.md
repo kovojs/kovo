@@ -135,6 +135,20 @@ with same-session file/test evidence.
       pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md
       git diff --check
       ```
+      Round107 evidence 2026-06-13: the runtime root barrel no longer wildcard-exports
+      `packages/runtime/src/apply-mutation-response.ts`, so the internal `applyFragmentQueryBody`
+      response parser/apply helper is no longer part of the public `@jiso/runtime` surface while
+      the canonical mutation response entrypoints and public result/option types remain exported
+      directly (SPEC §9.1). Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src/index-exports.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/query-refetch.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
+      git diff --check
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

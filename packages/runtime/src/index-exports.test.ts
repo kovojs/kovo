@@ -125,6 +125,7 @@ describe('runtime root exports', () => {
     expect(runtime.OptimisticRebaser).toBe(OptimisticRebaser);
     expect(runtime.stampPendingQueries).toBe(stampPendingQueries);
     expect(runtime.createSubmitContext).toBe(createSubmitContext);
+    expect(Object.hasOwn(runtime, 'applyFragmentQueryBody')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToStore')).toBe(false);
   });
 

@@ -1,6 +1,20 @@
 export type { DiagnosticCode } from '@jiso/core';
 export * from './apply-deferred-stream.js';
-export * from './apply-mutation-response.js';
+export {
+  applyMutationResponse,
+  applyMutationResponseToDom,
+  applyMutationResponseToRuntime,
+} from './apply-mutation-response.js';
+export type {
+  AppliedMutationResponse,
+  AppliedMutationResponseToDom,
+  AppliedMutationResponseToRuntime,
+  ApplyMutationResponseOptions,
+  ApplyMutationResponseToDomOptions,
+  ApplyMutationResponseToRuntimeOptions,
+  ApplyMutationResponseToRuntimeStoreOptions,
+  ApplyQueryInterposition,
+} from './apply-mutation-response.js';
 export * from './events.js';
 export {
   abortRemovedIslandSignals,
