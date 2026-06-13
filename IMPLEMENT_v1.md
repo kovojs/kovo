@@ -315,6 +315,16 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       target `api/app-shell/vite.ts`, `document-core.ts`, and `document-diagnostics.ts` directly
       while preserving root and subpath exports for SPEC §9.5 consumers. Same-session evidence:
       `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`.
+      Additional evidence 2026-06-13: the root server barrel now delegates app-shell exports
+      through `packages/server/src/api/app-shell/index.ts`, and the create-jiso starter consumes
+      SPEC §9.5 R5/R6/R7 dev/export/static-export helpers through
+      `@jiso/server/app-shell/*` subpaths instead of the root aggregate while keeping JSX/routing
+      on the root package. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through the vp dev task|runs .* with the built stylesheet href|formats generated export task diagnostics"`,
+      `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`,
+      `pnpm exec vitest --run packages/server/src`,
+      `pnpm exec tsc --noEmit --pretty false`, `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/export-static.mjs IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-13: static export compile-diagnostic blocking now lives in
       `packages/server/src/static-export-diagnostics.ts`, leaving `static-export.ts` to
       orchestrate SPEC §9.5 replay/output while the boundary rejects error diagnostics before

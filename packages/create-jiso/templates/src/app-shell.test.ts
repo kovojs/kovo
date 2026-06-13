@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { exportStaticApp } from '@jiso/server';
+import { exportStaticApp } from '@jiso/server/app-shell/static-export';
 import { createServer as createViteServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 

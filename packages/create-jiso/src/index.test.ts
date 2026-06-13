@@ -187,6 +187,8 @@ describe('create-jiso starter', () => {
       expect(appSource).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
+      expect(appShellSource).toContain("from '@jiso/server/app-shell/client-modules'");
+      expect(appShellSource).toContain("from '@jiso/server/app-shell/core'");
       expect(appShellSource).toContain("route('/',");
       expect(appShellSource).toContain('createRequestHandler(app)');
       expect(appShellSource).toContain("path: '/c/starter.client.js'");
@@ -194,9 +196,9 @@ describe('create-jiso starter', () => {
       expect(appShellSource).not.toContain('starterNodeHandler');
       expect(appShellSource).not.toContain('nodeRequestToWebRequest');
       expect(appShellSource).not.toContain('writeWebResponseToNode');
-      expect(readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8')).toContain(
-        'SPEC.md section 9.5',
-      );
+      const appShellTestSource = readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8');
+      expect(appShellTestSource).toContain('SPEC.md section 9.5');
+      expect(appShellTestSource).toContain("from '@jiso/server/app-shell/static-export'");
       const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
       expect(authSource).toContain("from '@jiso/better-auth'");
       expect(authSource).toContain('betterAuthSession');
@@ -222,7 +224,7 @@ describe('create-jiso starter', () => {
       expect(indexSource).not.toContain('Hello from Jiso');
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
-      expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server')");
+      expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server/app-shell/vite')");
       expect(viteConfig).toContain('jisoAppShellViteSsrDevPlugin');
       expect(viteConfig).toContain('earlyHints: false');
       expect(viteConfig).toContain("name: 'jiso-starter-app-shell-dev'");
@@ -233,6 +235,10 @@ describe('create-jiso starter', () => {
       expect(viteConfig).not.toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
+      expect(exportStaticScript).toContain("server.ssrLoadModule('@jiso/server/app-shell/vite')");
+      expect(exportStaticScript).toContain(
+        "server.ssrLoadModule('@jiso/server/app-shell/static-export')",
+      );
       expect(exportStaticScript).toContain(
         'jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile)',
       );

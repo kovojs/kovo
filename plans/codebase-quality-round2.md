@@ -216,10 +216,12 @@ Current state:
   focused on URL normalization and outer error fallback.
 - Vite app-shell plugin code lives in `vite-plugin.ts`; the obsolete internal `vite.ts` and
   `document.ts` aggregates were deleted after public barrels and tests moved to split owners.
-- Root exports now point at the app-shell owner directly instead of an internal compatibility
-  barrel.
+- Root exports now delegate through the app-shell owner instead of duplicating the split app-shell
+  root surface.
 - App-shell Vite subpath exports now route directly to split owner modules instead of through
   aggregate `vite.ts`.
+- The create-jiso starter imports app-shell dev/export/static-export helpers from
+  `@jiso/server/app-shell/*` subpaths instead of relying on the root aggregate for R5/R6/R7 tasks.
 
 Open:
 
@@ -232,6 +234,12 @@ Open:
 
 Latest focused evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through the vp dev task|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/export-static.mjs IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`

@@ -27,17 +27,18 @@ Implemented areas:
 
 - `packages/server/src/match.ts` and `shell.ts` own static-first matching, trailing-slash 308
   metadata, ambiguity detection, and printable dispatch order.
-- `document.ts` assembles route documents, query hydration, loader placement, deferred stream
-  shells, templates, and stable error documents.
+- `document-core.ts` assembles route documents, query hydration, loader placement, deferred stream
+  shells, templates, and stable error documents; `app-document.ts` owns app-configured route and
+  error-shell response assembly.
 - `app.ts` provides the closed app aggregate and web-standard handler for routes, endpoints,
   queries, mutations, static modules, and error responses.
 - `node.ts` adapts web requests/responses to `node:http` and emits Early Hints from `Link`.
-- `vite.ts` is the public app-shell Vite aggregate over the split Vite owners. `vite-plugin.ts`
-  owns R5 dev middleware and plugin `writeBundle` build/export bridging, while the manifest,
-  build, output, static-export, and dev modules own their extracted surfaces. `vite-dev.ts` now
-  defaults SSR dev middleware to the loaded app's SPEC §9.5 `Request -> Response` handler while
-  keeping explicit node-handler exports available for apps that add request context at the
-  adapter edge.
+- `api/app-shell/vite.ts` is the public app-shell Vite subpath over the split Vite owners.
+  `vite-plugin.ts` owns R5 dev middleware and plugin `writeBundle` build/export bridging, while
+  the manifest, build, output, static-export, and dev modules own their extracted surfaces.
+  `vite-dev.ts` now defaults SSR dev middleware to the loaded app's SPEC §9.5
+  `Request -> Response` handler while keeping explicit node-handler exports available for apps
+  that add request context at the adapter edge.
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
@@ -510,4 +511,20 @@ Round128 app-shell aggregate deletion evidence:
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/api/rendering.ts packages/server/src/app.ts packages/server/src/app-document.ts packages/server/src/vite-dev.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
+Round131 starter app-shell subpath adoption evidence:
+
+- `packages/server/src/index.ts` now delegates the root package app-shell surface through
+  `api/app-shell/index.ts`, and `packages/server/src/api/app.test.ts` pins the Vite dev/export
+  helpers used by R5/R6/R7 consumers through root, `@jiso/server/app-shell`, and
+  `@jiso/server/app-shell/vite`.
+- The create-jiso starter now imports app-shell core/client/static-export helpers and loads Vite
+  dev/export helpers from `@jiso/server/app-shell/*` subpaths, leaving the root package for
+  JSX/routing APIs.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through the vp dev task|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/export-static.mjs IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`

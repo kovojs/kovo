@@ -1,9 +1,6 @@
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
-  route,
-} from '@jiso/server';
+import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
+import { createApp, createRequestHandler } from '@jiso/server/app-shell/core';
+import { route } from '@jiso/server';
 import { App } from './app.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();

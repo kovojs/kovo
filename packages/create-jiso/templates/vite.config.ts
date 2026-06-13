@@ -84,10 +84,10 @@ interface StarterDevPlugin {
 function starterSharedAppShellDevPlugin(): StarterDevPlugin {
   return {
     async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@jiso/server');
+      const serverModule = await server.ssrLoadModule('@jiso/server/app-shell/vite');
       const sharedPluginFactory = serverModule.jisoAppShellViteSsrDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@jiso/server must export jisoAppShellViteSsrDevPlugin.');
+        throw new Error('@jiso/server/app-shell/vite must export jisoAppShellViteSsrDevPlugin.');
       }
 
       const sharedPlugin = sharedPluginFactory({
