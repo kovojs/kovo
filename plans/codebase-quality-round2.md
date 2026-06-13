@@ -164,6 +164,9 @@ projection, so those fw-check cases no longer keep reusable TSX source assembly 
 offset fields in the monolith. Shared compiler fixtures now also own the P1 validation fixture
 assembly for IDREF, static-id, content-model, execution-trigger, and residual `fw-c`/`fw-deps`
 checks, so the monolith asserts public diagnostic facts without rebuilding those TSX sources inline.
+Shared generated-module fixtures now own the P3 typed-route navigation fixture, including SPEC
+§6.4 core route helper outputs, generated anchor href projection, RouteRegistry consumer type
+assertions, and FW220 residual href/action diagnostics.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -193,6 +196,16 @@ Latest evidence:
   route-document inventory entries as part of the SPEC §9.5 directory-index document contract, and
   `packages/server/src/vite-static-export-result.test.ts` proves a stale flat inventory route
   document is rejected before export-task manifest evidence is accepted.
+- Phase 1/6/7 P3 typed-route fixture closure:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P3 typed routes validate navigation targets" tests/fw-check.node.mjs`;
+  `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs`;
+  `pnpm run check:fw`. Evidence: `packages/test/src/generated-module-fixtures.ts` now exposes
+  `generatedTypedRouteNavigationBehaviorFact()` for SPEC §6.4 typed navigation helper behavior,
+  generated anchor hrefs, generated RouteRegistry consumer type assertions, and FW220 diagnostic
+  projection; `tests/fw-check.node.mjs` asserts that public fixture fact instead of assembling
+  TSX source, generated artifact parsing, and registry consumer source inline.
 - Phase 5 static export asset source boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

@@ -56,6 +56,47 @@ export interface GeneratedViewTransitionStampBehaviorFact {
   viewTransitionNames: string[];
 }
 
+export interface GeneratedTypedRouteDiagnosticLike {
+  code: string;
+  fileName?: string;
+  help?: string;
+  message: string;
+  severity: string;
+  [field: string]: unknown;
+}
+
+export interface GeneratedTypedRouteDiagnosticFact {
+  code: string;
+  fileName?: string;
+  help?: string;
+  message: string;
+  severity: string;
+}
+
+export interface GeneratedTypedRouteCompileResult {
+  diagnostics: readonly GeneratedTypedRouteDiagnosticLike[];
+  files: readonly GeneratedArtifactFile[];
+}
+
+export interface GeneratedTypedRouteNavigationBehaviorFact {
+  core: {
+    href: string;
+    link: { href?: string };
+    redirect: { location?: string; status?: number };
+    route: { path?: string };
+    serverRoute: { loadType: string; path?: string };
+  };
+  generated: {
+    diagnostics: GeneratedTypedRouteDiagnosticFact[];
+    registryConsumerTypesAsserted: boolean;
+    renderedHrefs: string[];
+  };
+  invalidDiagnostics: GeneratedTypedRouteDiagnosticFact[];
+  provenance: {
+    spec: 'SPEC.md section 6.4';
+  };
+}
+
 const loweredStampAttributePattern = /\b((?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+))=/g;
 
 export function generatedComponentSourceFacts(options: {
@@ -673,6 +714,127 @@ export async function generatedViewTransitionStampBehaviorFact(options: {
       .length,
     style: renderedImage?.attrs.style,
     viewTransitionNames: options.viewTransitions.map((transition) => transition.name),
+  };
+}
+
+const generatedTypedRouteDiagnosticFacts = (
+  diagnostics: readonly GeneratedTypedRouteDiagnosticLike[],
+  codes?: readonly string[],
+): GeneratedTypedRouteDiagnosticFact[] => {
+  const codeSet = codes ? new Set(codes) : undefined;
+  return diagnostics
+    .filter((diagnostic) => codeSet === undefined || codeSet.has(diagnostic.code))
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      ...(diagnostic.fileName === undefined ? {} : { fileName: diagnostic.fileName }),
+      ...(diagnostic.help === undefined ? {} : { help: diagnostic.help }),
+      message: diagnostic.message,
+      severity: diagnostic.severity,
+    }));
+};
+
+const typedRouteValidSource = `
+import { component, href, Link } from '@jiso/core';
+
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <Link to="/products/:id" params={{ id: 'p 1' }} search={{ max: 500 }}>Product</Link>
+      <a href={href('/cart')}>Cart</a>
+    </nav>
+  ),
+});
+`;
+
+const typedRouteInvalidSource = `
+import { component } from '@jiso/core';
+
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href="/product/p1">Bad</a>
+      <form method="get" action="/checkout"></form>
+    </nav>
+  ),
+});
+`;
+
+const typedRouteRegistryConsumerSource = `
+import { href, Link, redirect, route } from '@jiso/core';
+
+href('/cart', {});
+href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
+redirect('/products/:id', { params: { id: 'p1' } });
+route('/products/:id');
+Link('/cart', {});
+Link('/products/:id', { params: { id: 'p1' } });
+
+// @ts-expect-error generated RouteRegistry requires params for dynamic routes.
+href('/products/:id', {});
+
+// @ts-expect-error generated RouteRegistry keeps id params typed as string.
+href('/products/:id', { params: { id: 1 } });
+
+// @ts-expect-error generated RouteRegistry rejects undeclared routes.
+href('/checkout', {});
+`;
+
+export async function generatedTypedRouteNavigationBehaviorFact(options: {
+  assertRegistryConsumerTypes(
+    files: readonly GeneratedArtifactFile[],
+    consumerSource: string,
+  ): Promise<void>;
+  compileComponentModule(input: {
+    fileName: string;
+    registryFacts: { routes: readonly string[] };
+    source: string;
+  }): GeneratedTypedRouteCompileResult;
+  href(path: string, options?: unknown): string;
+  Link(path: string, options?: unknown): { href?: string };
+  redirect(path: string, options?: unknown): { location?: string; status?: number };
+  route(path: string): { path?: string };
+  serverRoute(path: string, options: { load(): unknown }): { load?: unknown; path?: string };
+}): Promise<GeneratedTypedRouteNavigationBehaviorFact> {
+  const fileName = 'components/product-links.tsx';
+  const registryFacts = { routes: ['/cart', '/products/:id'] };
+  const declaredRoute = options.serverRoute('/products/:id', { load: () => 'ok' });
+  const valid = options.compileComponentModule({
+    fileName,
+    registryFacts,
+    source: typedRouteValidSource,
+  });
+
+  // SPEC §6.4: typed navigation lowers to plain anchors while residual hrefs validate via FW220.
+  await options.assertRegistryConsumerTypes(valid.files, typedRouteRegistryConsumerSource);
+
+  const invalid = options.compileComponentModule({
+    fileName,
+    registryFacts,
+    source: typedRouteInvalidSource,
+  });
+
+  return {
+    core: {
+      href: options.href('/products/:id', { params: { id: 'p 1' }, search: { max: 10 } }),
+      link: options.Link('/products/:id', { params: { id: 'p1' } }),
+      redirect: options.redirect('/products/:id', { params: { id: 'p1' } }),
+      route: options.route('/products/:id'),
+      serverRoute: {
+        loadType: typeof declaredRoute.load,
+        ...(declaredRoute.path === undefined ? {} : { path: declaredRoute.path }),
+      },
+    },
+    generated: {
+      diagnostics: generatedTypedRouteDiagnosticFacts(valid.diagnostics),
+      registryConsumerTypesAsserted: true,
+      renderedHrefs: generatedRenderedElementFactsFromArtifact(valid.files, { tag: 'a' }).map(
+        (element) => element.attrs.href ?? '',
+      ),
+    },
+    invalidDiagnostics: generatedTypedRouteDiagnosticFacts(invalid.diagnostics, ['FW220']),
+    provenance: {
+      spec: 'SPEC.md section 6.4',
+    },
   };
 }
 

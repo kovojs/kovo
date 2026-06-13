@@ -171,6 +171,7 @@ import {
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
+  generatedTypedRouteNavigationBehaviorFact,
   generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
@@ -183,6 +184,7 @@ import {
   type GeneratedRenderEquivalenceBehaviorFact,
   type GeneratedRegistryConsumerTypeOptions,
   type GeneratedTypedDataParamCoercionBehaviorFact,
+  type GeneratedTypedRouteNavigationBehaviorFact,
   type GeneratedViewTransitionStampBehaviorFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
@@ -676,6 +678,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(generatedBootstrapDeferredBehaviorFact).toBeTypeOf('function');
     expect(generatedServerDeferredBehaviorFact).toBeTypeOf('function');
     expect(generatedTypedDataParamCoercionBehaviorFact).toBeTypeOf('function');
+    expect(generatedTypedRouteNavigationBehaviorFact).toBeTypeOf('function');
     expect(generatedViewTransitionStampBehaviorFact).toBeTypeOf('function');
     expect(generatedWireDeferredBehaviorFact).toBeTypeOf('function');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
@@ -1426,6 +1429,9 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<GeneratedTypedDataParamCoercionBehaviorFact>()
       .toHaveProperty('buttonAttributes')
       .toEqualTypeOf<Array<Record<string, string>>>();
+    expectTypeOf<GeneratedTypedRouteNavigationBehaviorFact>()
+      .toHaveProperty('provenance')
+      .toEqualTypeOf<{ spec: 'SPEC.md section 6.4' }>();
     expect(new GeneratedFixtureMorphRoot().querySelectorAll('*')).toEqual([]);
     expect(new GeneratedFixtureMorphTarget('ready').readHtml()).toBe('ready');
     expect(

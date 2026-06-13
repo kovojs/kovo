@@ -24,6 +24,7 @@ import {
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
+  generatedTypedRouteNavigationBehaviorFact,
   generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedArtifactFile,
@@ -573,6 +574,91 @@ export function renderSource() {
       cart: '{ count: number; }',
       'product-image': 'unknown',
     });
+  });
+
+  it('projects typed-route navigation behavior from generated anchors and registry consumers', async () => {
+    const registryConsumerAssertions: string[] = [];
+
+    await expect(
+      generatedTypedRouteNavigationBehaviorFact({
+        async assertRegistryConsumerTypes(files, consumerSource) {
+          registryConsumerAssertions.push(
+            `${files.map((file) => file.kind).join(',')}:${consumerSource.includes("href('/checkout', {})")}`,
+          );
+        },
+        compileComponentModule({ source }) {
+          if (source.includes('/product/p1')) {
+            return {
+              diagnostics: [
+                {
+                  code: 'FW220',
+                  fileName: 'components/product-links.tsx',
+                  message: 'Literal href or form action matches no declared route. /product/p1',
+                  severity: 'error',
+                },
+                {
+                  code: 'FW220',
+                  fileName: 'components/product-links.tsx',
+                  message: 'Literal href or form action matches no declared route. /checkout',
+                  severity: 'error',
+                },
+              ],
+              files: [],
+            };
+          }
+
+          return {
+            diagnostics: [],
+            files: [
+              {
+                kind: 'server',
+                source: `
+export function renderSource() {
+  return '<nav><a href="/products/p%201?max=500">Product</a><a href="/cart">Cart</a></nav>';
+}
+`,
+              },
+            ],
+          };
+        },
+        href: () => '/products/p%201?max=10',
+        Link: () => ({ href: '/products/p1' }),
+        redirect: () => ({ location: '/products/p1', status: 303 }),
+        route: (path) => ({ path }),
+        serverRoute: (path, routeOptions) => ({ load: () => routeOptions.load(), path }),
+      }),
+    ).resolves.toEqual({
+      core: {
+        href: '/products/p%201?max=10',
+        link: { href: '/products/p1' },
+        redirect: { location: '/products/p1', status: 303 },
+        route: { path: '/products/:id' },
+        serverRoute: { loadType: 'function', path: '/products/:id' },
+      },
+      generated: {
+        diagnostics: [],
+        registryConsumerTypesAsserted: true,
+        renderedHrefs: ['/products/p%201?max=500', '/cart'],
+      },
+      invalidDiagnostics: [
+        {
+          code: 'FW220',
+          fileName: 'components/product-links.tsx',
+          message: 'Literal href or form action matches no declared route. /product/p1',
+          severity: 'error',
+        },
+        {
+          code: 'FW220',
+          fileName: 'components/product-links.tsx',
+          message: 'Literal href or form action matches no declared route. /checkout',
+          severity: 'error',
+        },
+      ],
+      provenance: {
+        spec: 'SPEC.md section 6.4',
+      },
+    });
+    expect(registryConsumerAssertions).toEqual(['server:true']);
   });
 
   it('projects generated query-plan application behavior into structured facts', () => {

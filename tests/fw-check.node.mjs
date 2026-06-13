@@ -90,10 +90,10 @@ import {
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
+  generatedTypedRouteNavigationBehaviorFact,
   generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
-  generatedRenderedElementFactsFromArtifact,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
   graphComponentTargetFacts,
@@ -1290,104 +1290,47 @@ void test('P3 typed routes validate navigation targets', async () => {
     diagnosticDefinitions.FW220.message,
     'Literal href or form action matches no declared route.',
   );
-  assert.equal(
-    href('/products/:id', { params: { id: 'p 1' }, search: { max: 10 } }),
-    '/products/p%201?max=10',
-  );
-  assert.deepEqual(redirect('/products/:id', { params: { id: 'p1' } }), {
-    location: '/products/p1',
-    status: 303,
-  });
-  assert.deepEqual(route('/products/:id'), { path: '/products/:id' });
-  assert.deepEqual(Link('/products/:id', { params: { id: 'p1' } }), { href: '/products/p1' });
-  const declaredRoute = serverRoute('/products/:id', { load: () => 'ok' });
-  assert.equal(declaredRoute.path, '/products/:id');
-  assert.equal(typeof declaredRoute.load, 'function');
-
-  const lowered = compileComponentModule({
-    fileName: 'components/product-links.tsx',
-    registryFacts: {
-      routes: ['/cart', '/products/:id'],
-    },
-    source: `
-import { component, href, Link } from '@jiso/core';
-
-export const ProductLinks = component('product-links', {
-  render: () => (
-    <nav>
-      <Link to="/products/:id" params={{ id: 'p 1' }} search={{ max: 500 }}>Product</Link>
-      <a href={href('/cart')}>Cart</a>
-    </nav>
-  ),
-});
-`,
-  });
-  assert.deepEqual(lowered.diagnostics, []);
-  const renderedLinks = generatedRenderedElementFactsFromArtifact(lowered.files, { tag: 'a' });
   assert.deepEqual(
-    renderedLinks.map((element) => element.attrs.href),
-    ['/products/p%201?max=500', '/cart'],
-  );
-
-  await assertGeneratedRegistryConsumerTypes(
-    lowered.files,
-    `
-import { href, Link, redirect, route } from '@jiso/core';
-
-href('/cart', {});
-href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
-redirect('/products/:id', { params: { id: 'p1' } });
-route('/products/:id');
-Link('/cart', {});
-Link('/products/:id', { params: { id: 'p1' } });
-
-// @ts-expect-error generated RouteRegistry requires params for dynamic routes.
-href('/products/:id', {});
-
-// @ts-expect-error generated RouteRegistry keeps id params typed as string.
-href('/products/:id', { params: { id: 1 } });
-
-// @ts-expect-error generated RouteRegistry rejects undeclared routes.
-href('/checkout', {});
-`,
-  );
-
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/product-links.tsx',
-        registryFacts: {
-          routes: ['/cart', '/products/:id'],
+    await generatedTypedRouteNavigationBehaviorFact({
+      assertRegistryConsumerTypes: assertGeneratedRegistryConsumerTypes,
+      compileComponentModule,
+      href,
+      Link,
+      redirect,
+      route,
+      serverRoute,
+    }),
+    {
+      core: {
+        href: '/products/p%201?max=10',
+        link: { href: '/products/p1' },
+        redirect: { location: '/products/p1', status: 303 },
+        route: { path: '/products/:id' },
+        serverRoute: { loadType: 'function', path: '/products/:id' },
+      },
+      generated: {
+        diagnostics: [],
+        registryConsumerTypesAsserted: true,
+        renderedHrefs: ['/products/p%201?max=500', '/cart'],
+      },
+      invalidDiagnostics: [
+        {
+          code: 'FW220',
+          fileName: 'components/product-links.tsx',
+          message: `${diagnosticDefinitions.FW220.message} /product/p1`,
+          severity: 'error',
         },
-        source: `
-import { component } from '@jiso/core';
-
-export const ProductLinks = component('product-links', {
-  render: () => (
-    <nav>
-      <a href="/product/p1">Bad</a>
-      <form method="get" action="/checkout"></form>
-    </nav>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW220'],
-    ),
-    [
-      {
-        code: 'FW220',
-        fileName: 'components/product-links.tsx',
-        message: `${diagnosticDefinitions.FW220.message} /product/p1`,
-        severity: 'error',
+        {
+          code: 'FW220',
+          fileName: 'components/product-links.tsx',
+          message: `${diagnosticDefinitions.FW220.message} /checkout`,
+          severity: 'error',
+        },
+      ],
+      provenance: {
+        spec: 'SPEC.md section 6.4',
       },
-      {
-        code: 'FW220',
-        fileName: 'components/product-links.tsx',
-        message: `${diagnosticDefinitions.FW220.message} /checkout`,
-        severity: 'error',
-      },
-    ],
+    },
   );
 });
 
