@@ -1,7 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  applyMutationResponseChunksToRuntime,
+  type ApplyMutationResponseChunksToRuntimeOptions,
+} from './apply-mutation-response.js';
 import { createQueryStore, DomMorphRoot, keyedDomMorph } from './index.js';
-import { applyMutationResponseToDom } from './mutation-response-dom.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
+
+function applyDecodedMutationResponseBody(
+  options: ApplyMutationResponseChunksToRuntimeOptions & { body: string; root: DomMorphRoot },
+) {
+  const { body, onError, ...applyOptions } = options;
+
+  // SPEC.md §9.1: browser DOM apply parses response bodies once, then enters
+  // the same decoded runtime apply primitive as non-browser mutation transports.
+  const chunks = readMutationResponseBodyChunks(body, onError);
+  if (onError) {
+    return applyMutationResponseChunksToRuntime(chunks, { ...applyOptions, onError });
+  }
+  return applyMutationResponseChunksToRuntime(chunks, applyOptions);
+}
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -27,7 +45,7 @@ describe('browser mutation response DOM apply', () => {
     textarea.setSelectionRange(1, 3, 'forward');
     panel.scrollTop = 4;
 
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       body: [
         '<fw-fragment target="cart-form">',
         '<form fw-c="cart-form">',
@@ -72,7 +90,7 @@ describe('browser mutation response DOM apply', () => {
 
     input.focus();
 
-    const appendResult = applyMutationResponseToDom({
+    const appendResult = applyDecodedMutationResponseBody({
       body: [
         '<fw-fragment target="product-grid" mode="append">',
         '<article fw-key="p3">Third</article>',
@@ -96,7 +114,7 @@ describe('browser mutation response DOM apply', () => {
       'p4',
     ]);
 
-    applyMutationResponseToDom({
+    applyDecodedMutationResponseBody({
       body: [
         '<fw-fragment target="product-grid">',
         '<section fw-c="product-grid">',
@@ -132,7 +150,7 @@ describe('browser mutation response DOM apply', () => {
     ].join('');
     document.body.append(root);
 
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       body: [
         '<fw-fragment target="cart-badge"><section fw-c="cart-badge">fresh badge</section></fw-fragment>',
         '<fw-fragment target="reviews:p1"><section id="reviews:p1">fresh reviews</section></fw-fragment>',
@@ -161,7 +179,7 @@ describe('browser mutation response DOM apply', () => {
     const onError = vi.fn();
     const hookError = new Error('browser query hook failed');
 
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       applyQuery(query) {
         if ((query.value as { count: number }).count === 1) throw hookError;
       },

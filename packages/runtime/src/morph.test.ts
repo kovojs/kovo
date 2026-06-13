@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyMutationResponseToDom } from './mutation-response-dom.js';
+import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 import { applyFragments, morphStructuralTree, type StructuralMorphNode } from './morph.js';
 import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
@@ -33,11 +34,15 @@ describe('fragment morph runtime', () => {
     root.targets.set('product-grid', new FakeMorphTarget('<article fw-key="p1"></article>'));
     const store = createQueryStore();
 
-    const result = applyMutationResponseToDom({
-      body: '<fw-fragment target="product-grid" mode="append"><article fw-key="p2"></article></fw-fragment>',
-      root,
-      store,
-    });
+    const result = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(
+        '<fw-fragment target="product-grid" mode="append"><article fw-key="p2"></article></fw-fragment>',
+      ),
+      {
+        root,
+        store,
+      },
+    );
 
     expect(result.fragments).toEqual([
       {

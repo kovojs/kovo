@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
+import {
+  applyMutationResponseChunksToRuntime,
+  type ApplyMutationResponseChunksToRuntimeOptions,
+} from './apply-mutation-response.js';
 import { createQueryStore } from './index.js';
-import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import {
   FakeMorphRoot,
   FakeMorphTarget,
@@ -11,10 +13,20 @@ import {
 } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
-// @ts-expect-error SPEC.md §9.1: mutation response DOM parsing returns the
-// root-aware decoded runtime result type instead of the old compatibility name.
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedMutationDomResult = import('./mutation-response-dom.js').AppliedMutationResponseToDom;
+function applyDecodedMutationResponseBody(
+  options: ApplyMutationResponseChunksToRuntimeOptions & { body: string; root: FakeMorphRoot },
+) {
+  const { body, onError, ...applyOptions } = options;
+
+  // SPEC.md §9.1: DOM response tests parse transport bodies at the boundary,
+  // then enter the same decoded query/fragment runtime apply primitive as
+  // enhanced submit, broadcast replay, and deferred stream chunks.
+  const chunks = readMutationResponseBodyChunks(body, onError);
+  if (onError) {
+    return applyMutationResponseChunksToRuntime(chunks, { ...applyOptions, onError });
+  }
+  return applyMutationResponseChunksToRuntime(chunks, applyOptions);
+}
 
 describe('mutation response DOM apply', () => {
   it('keeps store-only and DOM apply on the same keyed query path', () => {
@@ -31,7 +43,7 @@ describe('mutation response DOM apply', () => {
       readMutationResponseBodyChunks(body),
       { store: storeOnly },
     );
-    const domApplied = applyMutationResponseToDom({ body, root, store: domStore });
+    const domApplied = applyDecodedMutationResponseBody({ body, root, store: domStore });
 
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
     expect(domApplied.queries).toEqual(storeOnlyApplied.queries);
@@ -53,7 +65,7 @@ describe('mutation response DOM apply', () => {
 
     // SPEC.md §9.1 mutation bodies may carry multiple query chunks before any
     // fragment morphing; those chunks should share one §4.8 binding index.
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       body: [
         '<fw-query name="cart">{"label":"Cart ready"}</fw-query>',
         '<fw-query name="product">{"label":"Product ready"}</fw-query>',
@@ -76,7 +88,7 @@ describe('mutation response DOM apply', () => {
     const product = new FakeQueryBindingElement('product.name', { textContent: 'Coffee' });
     root.bindings.push(count, total, product);
 
-    const result = applyMutationResponseToDom({
+    const result = applyDecodedMutationResponseBody({
       body: '<fw-query name="cart">{"count":2,"total":2998}</fw-query>',
       root,
       store,
@@ -103,7 +115,7 @@ describe('mutation response DOM apply', () => {
     root.planElements.push(summary, host);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    applyMutationResponseToDom({
+    applyDecodedMutationResponseBody({
       body: [
         '<fw-query name="cart">{"count":5}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
@@ -144,7 +156,7 @@ describe('mutation response DOM apply', () => {
     const onError = vi.fn();
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       body: [
         '<fw-query name="cart">{</fw-query>',
         '<fw-query name="inventory">{"available":true}</fw-query>',
@@ -169,7 +181,7 @@ describe('mutation response DOM apply', () => {
     root.targets.set('cart-badge', new FakeMorphTarget());
 
     // SPEC section 9.1 defines fw-fragment as mutation response wire vocabulary.
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       body: [
         '<fw-query name="cart">{"count":3}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
@@ -200,7 +212,7 @@ describe('mutation response DOM apply', () => {
     root.bindings.push(count, summary);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    const applied = applyMutationResponseToDom({
+    const applied = applyDecodedMutationResponseBody({
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };

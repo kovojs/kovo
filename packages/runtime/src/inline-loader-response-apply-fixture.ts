@@ -1,7 +1,8 @@
+import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './index.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
-import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import { applyInlineQueryEventToRuntime, type InlineQueryEvent } from './query-events.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 interface InlineResponseApplyAssertions {
   expect: typeof import('vitest').expect;
@@ -59,8 +60,7 @@ export async function expectInlineResponseApplyParity(
     ],
   ]);
   const store = createQueryStore();
-  const modularResult = applyMutationResponseToDom({
-    body,
+  const modularResult = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
     root: {
       findFragmentTarget(target: string) {
         return modularTargets.get(target) ?? null;

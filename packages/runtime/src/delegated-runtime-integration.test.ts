@@ -6,8 +6,8 @@ import {
   dispatchDelegatedEvent,
   installJisoLoader,
 } from './index.js';
+import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
-import { applyMutationResponseToDom } from './mutation-response-dom.js';
 import {
   FakeElement,
   FakeFormElement,
@@ -15,6 +15,7 @@ import {
   FakeMorphTarget,
   FakeRoot,
 } from './runtime-test-fakes.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 describe('delegated runtime integration', () => {
   it('scopes ctx.signal to the island and aborts when fragment morph removes it', async () => {
@@ -249,11 +250,15 @@ describe('delegated runtime integration', () => {
     await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule);
     expect(signal?.aborted).toBe(false);
 
-    applyMutationResponseToDom({
-      body: '<fw-fragment target="cart-shell"><section></section></fw-fragment>',
-      root,
-      store: createQueryStore(),
-    });
+    applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(
+        '<fw-fragment target="cart-shell"><section></section></fw-fragment>',
+      ),
+      {
+        root,
+        store: createQueryStore(),
+      },
+    );
 
     expect(signal?.aborted).toBe(true);
   });
