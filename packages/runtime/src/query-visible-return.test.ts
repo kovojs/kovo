@@ -142,9 +142,9 @@ describe('query visible-return refetch', () => {
         url === '/_q/cart'
           ? [
               '<fw-query name="cart">{"count":2}</fw-query>',
-              '<fw-query name="recommendations">{"items":["p1"]}</fw-query>',
+              '<fw-query name="recommendations:user-1">{"items":["p1"]}</fw-query>',
             ].join('')
-          : '<fw-query name="recommendations">{"items":["p2"]}</fw-query>',
+          : '<fw-query name="recommendations:user-1">{"items":["p2"]}</fw-query>',
     }));
 
     root.scripts = [
@@ -169,22 +169,23 @@ describe('query visible-return refetch', () => {
       method: 'GET',
     });
     expect(store.get('cart')).toEqual({ count: 2 });
-    expect(store.get('recommendations')).toEqual({ items: ['p1'] });
+    expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p1'] });
 
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
     // SPEC.md §4.4: typed-read query chunks join the same visible-return
-    // ledger as server-rendered hydration and later mutation/deferred chunks.
-    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'recommendations']);
+    // ledger as server-rendered hydration and later mutation/deferred chunks,
+    // including canonical instance keys from SPEC.md §10.2.
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'recommendations:user-1']);
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
       headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
       method: 'GET',
     });
-    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations', {
+    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations%3Auser-1', {
       headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
       method: 'GET',
     });
-    expect(store.get('recommendations')).toEqual({ items: ['p2'] });
+    expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p2'] });
   });
 
   it('forwards visible-return typed read parse errors to the loader error seam', async () => {

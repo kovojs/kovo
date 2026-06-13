@@ -56,6 +56,34 @@ describe('query script hydration', () => {
     expect(p2Plan).toHaveBeenCalledWith({ stock: 9 });
   });
 
+  it('hydrates canonical script query keys into keyed store instances', () => {
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const p2Plan = vi.fn();
+
+    store.subscribe('product', p1Plan, 'p1');
+    store.subscribe('product', p2Plan, 'p2');
+    const hydrated = hydrateQueryScripts(store, [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product:p1' : null),
+        textContent: '{"stock":4}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product:p2' : null),
+        textContent: '{"stock":9}',
+      },
+    ]);
+
+    // SPEC.md §9.4/§10.2: server-authored hydration scripts may encode the
+    // canonical instance key directly in `fw-query`, matching typed-read URLs.
+    expect(hydrated).toEqual(['product:p1', 'product:p2']);
+    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
+    expect(store.get('product', 'p2')).toEqual({ stock: 9 });
+    expect(store.get('product')).toBeUndefined();
+    expect(p1Plan).toHaveBeenCalledWith({ stock: 4 });
+    expect(p2Plan).toHaveBeenCalledWith({ stock: 9 });
+  });
+
   it('keeps hydrated script values in parity with mutation query chunks', () => {
     const hydratedStore = createQueryStore();
     const appliedStore = createQueryStore();

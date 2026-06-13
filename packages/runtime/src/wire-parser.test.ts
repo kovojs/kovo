@@ -54,6 +54,28 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual({ key: 'product>p1', name: 'product', value: { stock: 7 } });
   });
 
+  it('normalizes canonical query instance names into the shared query chunk shape', () => {
+    // SPEC.md §9.4/§10.2: typed reads and hydration carry instance keys as
+    // `query:key`; runtime apply paths decode that once before hitting the store.
+    expect(readQueryChunks('<fw-query name="product:p1">{"stock":7}</fw-query>')).toEqual([
+      { key: 'p1', name: 'product', value: { stock: 7 } },
+    ]);
+    expect(
+      readQueryElementChunk({
+        attrs: ' name="product:p2"',
+        content: '{"stock":8}',
+      }),
+    ).toEqual({ key: 'p2', name: 'product', value: { stock: 8 } });
+    expect(
+      readQueryScriptChunks([
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'product:p3' : null),
+          textContent: '{"stock":9}',
+        },
+      ]),
+    ).toEqual([{ key: 'p3', name: 'product', value: { stock: 9 } }]);
+  });
+
   it('shares quoted tag-close scanning for mutation wire element chunks', () => {
     // SPEC.md §9.2: failure payload parsing and query/fragment parsing use the
     // same mutation-wire element scanner, including quoted > characters.
@@ -123,13 +145,12 @@ describe('wire parser HTML entity handling', () => {
   it('keeps hydrated script chunks and wire query chunks on one parsed query shape', () => {
     const hydrated = readQueryScriptChunks([
       {
-        getAttribute: (name) =>
-          name === 'fw-query' ? 'product' : name === 'key' ? 'product>p1' : null,
+        getAttribute: (name) => (name === 'fw-query' ? 'product:p1' : null),
         textContent: '{"label":"Alice\'s & Bob\'s"}',
       },
     ]);
     const wire = readQueryElementChunk({
-      attrs: ' name="product" key="product&gt;p1"',
+      attrs: ' name="product:p1"',
       content: '{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}',
     });
 

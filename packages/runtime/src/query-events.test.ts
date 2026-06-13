@@ -96,6 +96,31 @@ describe('inline query events', () => {
     );
   });
 
+  it('normalizes canonical inline query event instance keys before runtime apply', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    store.subscribe('product', plan, 'p1');
+
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            attrs: ' name="product:p1"',
+            content: '{"stock":7}',
+          },
+        },
+        { store },
+      ),
+    ).toEqual(['product:p1']);
+
+    // SPEC.md §4.4/§9.4: inline enhanced responses dispatch raw fw-query wire
+    // chunks, so canonical typed-read keys must normalize before store apply.
+    expect(store.get('product', 'p1')).toEqual({ stock: 7 });
+    expect(store.get('product')).toBeUndefined();
+    expect(plan).toHaveBeenCalledWith({ stock: 7 });
+  });
+
   it('ignores removed body/name inline query compatibility events', () => {
     const store = createQueryStore();
 

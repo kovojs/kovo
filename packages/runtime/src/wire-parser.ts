@@ -177,10 +177,26 @@ function readQueryChunkPayload(
     return undefined;
   }
 
+  const identity = readQueryChunkIdentity(payload.name, payload.key);
   return {
-    ...(payload.key == null ? {} : { key: payload.key }),
-    name: payload.name,
+    ...(identity.key === undefined ? {} : { key: identity.key }),
+    name: identity.name,
     value: parsed.value,
+  };
+}
+
+function readQueryChunkIdentity(name: string, key?: string | null): { key?: string; name: string } {
+  if (key != null) return { key, name };
+
+  const separator = name.indexOf(':');
+  if (separator <= 0 || separator === name.length - 1) return { name };
+
+  // SPEC.md §9.4/§10.2: typed reads and hydration may carry the canonical
+  // instance key directly as `name:key`, while the runtime store still applies
+  // decoded chunks as `{ name, key }`.
+  return {
+    key: name.slice(separator + 1),
+    name: name.slice(0, separator),
   };
 }
 

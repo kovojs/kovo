@@ -71,7 +71,7 @@ describe('query refetch', () => {
     const plan = vi.fn();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<fw-query name="product" key="p1">{"stock":6}</fw-query>',
+      text: async () => '<fw-query name="product:p1">{"stock":6}</fw-query>',
     }));
 
     store.subscribe('product', plan, 'p1');
@@ -84,8 +84,8 @@ describe('query refetch', () => {
       }),
     ).resolves.toEqual([{ fragments: [], queries: ['product:p1'] }]);
 
-    // SPEC.md §9.4: typed reads, wire chunks, and the runtime query store share
-    // one canonical query instance key.
+    // SPEC.md §9.4/§10.2: typed-read responses carry the canonical query
+    // instance key directly in the fw-query name and still hit the keyed store.
     expect(fetch).toHaveBeenCalledWith('/_q/product%3Ap1', {
       headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
       method: 'GET',

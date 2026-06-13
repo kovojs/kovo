@@ -20,7 +20,7 @@ describe('query hydration browser runtime', () => {
     if (!output) throw new Error('missing recommendations binding output');
 
     store.subscribe('cart', cartPlan);
-    store.subscribe('recommendations', recommendationsPlan);
+    store.subscribe('recommendations', recommendationsPlan, 'homepage');
 
     const loader = installJisoLoader({
       importModule: vi.fn(),
@@ -38,19 +38,20 @@ describe('query hydration browser runtime', () => {
     originalScript.textContent = '{"count":99}';
     const laterScript = document.createElement('script');
     laterScript.type = 'application/json';
-    laterScript.setAttribute('fw-query', 'recommendations');
+    laterScript.setAttribute('fw-query', 'recommendations:homepage');
     laterScript.textContent = '{"items":["p1"]}';
     document.body.append(laterScript);
 
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.waitFor(() => {
-      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations']);
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations:homepage']);
     });
 
     // SPEC.md §9.1/§9.4: browser-visible hydration discoveries use the shared
-    // query apply path without replaying already observed server script nodes.
+    // query apply path without replaying already observed server script nodes,
+    // including canonical instance keys from SPEC.md §10.2.
     expect(store.get('cart')).toEqual({ count: 1 });
-    expect(store.get('recommendations')).toEqual({ items: ['p1'] });
+    expect(store.get('recommendations', 'homepage')).toEqual({ items: ['p1'] });
     expect(output.textContent).toBe('["p1"]');
     expect(cartPlan).toHaveBeenCalledTimes(1);
     expect(recommendationsPlan).toHaveBeenCalledWith({ items: ['p1'] });

@@ -863,6 +863,15 @@ Browser runtime coverage now follows the same Phase 4 seam split: the old broad
 `packages/runtime/src/query-visible-return.browser.test.ts`, and real DOM mutation-response apply
 lives in `packages/runtime/src/mutation-response-dom.browser.test.ts`.
 
+- [x] Normalize canonical query instance wire identities at the shared runtime parser boundary.
+      Evidence 2026-06-13 round276: `packages/runtime/src/wire-parser.ts` now decodes
+      SPEC.md §9.4/§10.2 `query:key` names into the same `{ name, key }` query chunk shape used by
+      split `name`/`key` attributes, so hydration scripts, inline query events, typed-read refetch,
+      and visible-return ledgers converge before `applyQueryChunksToRuntime`. Verified by
+      `pnpm exec vitest --run packages/runtime/src`, browser hydration
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/query-hydration.browser.test.ts`, and
+      `pnpm --filter @jiso/runtime run check:inline-loader`.
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
       Evidence 2026-06-13 round259: `packages/runtime/src/wire-parser.ts` deleted the unused
