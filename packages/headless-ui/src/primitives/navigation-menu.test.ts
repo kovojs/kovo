@@ -494,6 +494,65 @@ describe('headless-ui navigation-menu primitive', () => {
     expect(navigationMenuKeyDown(keydownEvent('Enter'), { openValue: 'products' })).toBeUndefined();
   });
 
+  it('opens trigger content from Enter or Space keyboard activation only for content items', () => {
+    const enterEvent = keydownEvent('Enter');
+    expect(
+      navigationMenuKeyDown(enterEvent, {
+        activeValue: 'products',
+        items: navigationItems,
+      }),
+    ).toEqual({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'trigger-keyboard', value: 'products' }),
+      openValue: 'products',
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+
+    const spaceEvent = keydownEvent(' ');
+    expect(
+      navigationMenuKeyDown(spaceEvent, {
+        activeValue: 'products',
+        items: navigationItems,
+      }),
+    ).toEqual({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'trigger-keyboard', value: 'products' }),
+      openValue: 'products',
+    });
+    expect(spaceEvent.defaultPrevented).toBe(true);
+
+    const legacySpaceEvent = keydownEvent('Spacebar');
+    expect(
+      navigationMenuKeyDown(legacySpaceEvent, {
+        activeValue: 'products',
+        items: navigationItems,
+      }),
+    ).toEqual({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'trigger-keyboard', value: 'products' }),
+      openValue: 'products',
+    });
+    expect(legacySpaceEvent.defaultPrevented).toBe(true);
+
+    const linkEvent = keydownEvent('Enter');
+    expect(
+      navigationMenuKeyDown(linkEvent, {
+        activeValue: 'pricing',
+        items: navigationItems,
+      }),
+    ).toBeUndefined();
+    expect(linkEvent.defaultPrevented).toBe(false);
+
+    const disabledEvent = keydownEvent('Enter');
+    expect(
+      navigationMenuKeyDown(disabledEvent, {
+        activeValue: 'solutions',
+        items: navigationItems,
+      }),
+    ).toEqual({ changed: false, openValue: undefined });
+    expect(disabledEvent.defaultPrevented).toBe(false);
+  });
+
   it('exports navigation-menu helpers from package and primitives barrels', () => {
     expect(exportedNavigationMenuContentAttributes).toBe(navigationMenuContentAttributes);
     expect(exportedNavigationMenuIndicatorAttributes).toBe(navigationMenuIndicatorAttributes);

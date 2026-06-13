@@ -137,7 +137,7 @@ const expectedBehaviorContracts = {
     changeReasons:
       'trigger-click, trigger-focus, trigger-keyboard, trigger-pointer-enter, link-click, escape-key, programmatic',
     dataState: 'open, closed, highlighted, disabled, orientation',
-    keyboard: 'Arrow keys move across navigation items; Enter activates links or triggers',
+    keyboard: 'Arrow keys move across navigation items; Enter or Space opens trigger content',
   },
   '/components/number-field': {
     changeReasons: 'input, increment, decrement, programmatic',

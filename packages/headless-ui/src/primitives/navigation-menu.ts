@@ -502,7 +502,7 @@ export function navigationMenuKeyDown(
 
   if (
     state.activeValue !== undefined &&
-    (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+    navigationMenuKeyboardOpensContent(event.key) &&
     navigationMenuItemHasContent({ ...state, itemValue: state.activeValue })
   ) {
     const result = setNavigationMenuOpenValue(
@@ -516,6 +516,12 @@ export function navigationMenuKeyDown(
   }
 
   return undefined;
+}
+
+function navigationMenuKeyboardOpensContent(key: string): boolean {
+  return (
+    key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' || key === ' ' || key === 'Spacebar'
+  );
 }
 
 function navigationMenuDataAttributes(state: NavigationMenuState): PrimitiveDataAttributes {

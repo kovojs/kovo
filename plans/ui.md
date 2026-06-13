@@ -54,7 +54,8 @@ risks. Use `- [ ]` for open actionable items and `- [x]` only for fully verified
   field IDREF contract, plus compiled interactive gallery coverage for validity and group state.
 - Recent native-state work covers number-field off-grid stepping, checkbox-group canceled-change
   restoration, OTP delete/paste restoration and native constraints, scroll-area viewport state,
-  H3 typeahead/movement/disabled-option handling, and stable command option ids.
+  H3 typeahead/movement/disabled-option handling, stable command option ids, and
+  navigation-menu Enter/Space trigger keyboard activation.
 
 ## Open Work
 
@@ -82,6 +83,10 @@ H3:
 - [ ] Close remaining state/focus/menu edge cases for select, combobox, autocomplete,
       dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, and command with
       primitive tests plus gallery evidence where user-visible.
+      Evidence: navigation-menu trigger keyboard activation now opens content-owning active items
+      from Enter, Space, and legacy Spacebar with `trigger-keyboard` details, leaves native links
+      alone, and keeps disabled content items from opening; gallery behavior contracts document
+      the same Enter/Space trigger-content behavior.
 - [ ] Confirm input-like H3 primitives restore rejected native values for disabled/canceled
       cancelable changes across the full family.
 
@@ -107,13 +112,10 @@ Gallery:
 Latest integrated UI slice:
 
 - `pnpm install`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`
-- `pnpm exec vitest --run packages/ui/src/index.test.tsx -t field`
-- `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts -t field`
-- `pnpm --filter @jiso/headless-ui exec vitest --run`
-- `pnpm --filter @jiso/headless-ui run lint:primitives`
-- `pnpm --filter @jiso/ui exec vitest --run`
-- exact `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/navigation-menu.test.ts`
+- `pnpm exec vitest --run examples/gallery/src/behavior-contracts.test.ts`
+- `pnpm exec vitest --run packages/ui/src/index.test.tsx -t navigation-menu`
+- exact `pnpm exec vp check packages/headless-ui/src/primitives/navigation-menu.ts packages/headless-ui/src/primitives/navigation-menu.test.ts examples/gallery/src/demo-fixtures.tsx examples/gallery/src/behavior-contracts.test.ts plans/ui.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Latest broad gate:
