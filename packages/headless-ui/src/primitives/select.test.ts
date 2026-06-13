@@ -208,6 +208,7 @@ describe('headless-ui select primitive', () => {
     const disabledEvent = selectChangeEvent('blue');
     const disabledResult = selectTriggerChange(disabledEvent, { disabled: true, value: 'red' });
     expect(disabledResult).toEqual({ changed: false, value: 'red' });
+    expect(disabledEvent.currentTarget.value).toBe('red');
     expect(disabledEvent.defaultPrevented).toBe(true);
 
     const canceledEvent = selectChangeEvent('blue');
@@ -223,7 +224,17 @@ describe('headless-ui select primitive', () => {
 
     expect(canceledResult).toMatchObject({ changed: false, value: 'red' });
     expect(canceledResult?.detail?.defaultPrevented).toBe(true);
+    expect(canceledEvent.currentTarget.value).toBe('red');
     expect(canceledEvent.defaultPrevented).toBe(true);
+  });
+
+  it('restores the native select value when the selected item is disabled', () => {
+    const event = selectChangeEvent('green');
+    const result = selectTriggerChange(event, { items: colorItems, value: 'red' });
+
+    expect(result).toEqual({ changed: false, value: 'red' });
+    expect(event.currentTarget.value).toBe('red');
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it('returns frozen attribute records and exposes selection helpers', () => {

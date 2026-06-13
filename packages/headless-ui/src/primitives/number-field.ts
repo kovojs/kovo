@@ -59,7 +59,7 @@ export type NumberFieldPrimitiveAttributes = PrimitiveDataAttributes &
 
 export type NumberFieldButtonEvent = Event;
 export type NumberFieldInputEvent = Event & {
-  readonly currentTarget: { readonly value: string } | null;
+  readonly currentTarget: { value: string } | null;
 };
 
 export function numberFieldRootAttributes(
@@ -173,6 +173,7 @@ export function numberFieldInput(
     options,
   );
   if (!result.changed) {
+    event.currentTarget.value = numberFieldInputValue(result.value);
     event.preventDefault();
   }
 
@@ -296,6 +297,10 @@ function clampNumberFieldValue(value: number, state: NumberFieldState): number {
 
 function normalizeNumberFieldValue(value: NumberFieldValue): NumberFieldValue {
   return numberFieldFinite(value) ? value : undefined;
+}
+
+function numberFieldInputValue(value: NumberFieldValue): string {
+  return value === undefined ? '' : String(value);
 }
 
 function numberFieldStep(step: number | undefined): number {

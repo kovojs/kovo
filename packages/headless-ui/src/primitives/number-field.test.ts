@@ -273,6 +273,38 @@ describe('headless-ui number-field primitive', () => {
     expect(disabledEvent.defaultPrevented).toBe(true);
   });
 
+  it('restores the native input value when input changes are disabled or canceled', () => {
+    const disabledEvent = numberFieldInputEvent('9');
+    const disabledResult = numberFieldInput(disabledEvent, { disabled: true, value: 2 });
+
+    expect(disabledResult).toEqual({ changed: false, value: 2 });
+    expect(disabledEvent.currentTarget?.value).toBe('2');
+    expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledEvent = numberFieldInputEvent('9');
+    const canceledResult = numberFieldInput(
+      canceledEvent,
+      { value: 2 },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(canceledResult).toMatchObject({ changed: false, value: 2 });
+    expect(canceledResult?.detail?.defaultPrevented).toBe(true);
+    expect(canceledEvent.currentTarget?.value).toBe('2');
+    expect(canceledEvent.defaultPrevented).toBe(true);
+
+    const emptyEvent = numberFieldInputEvent('not-a-number');
+    const emptyResult = numberFieldInput(emptyEvent, { value: undefined });
+
+    expect(emptyResult).toEqual({ changed: false, value: undefined });
+    expect(emptyEvent.currentTarget?.value).toBe('');
+    expect(emptyEvent.defaultPrevented).toBe(true);
+  });
+
   it('returns frozen attribute records', () => {
     expect(Object.isFrozen(numberFieldRootAttributes())).toBe(true);
     expect(Object.isFrozen(numberFieldInputAttributes())).toBe(true);
@@ -307,7 +339,7 @@ describe('headless-ui number-field primitive', () => {
 });
 
 function numberFieldInputEvent(value: string): Event & {
-  readonly currentTarget: { readonly value: string } | null;
+  readonly currentTarget: { value: string } | null;
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: { value: string } | null;

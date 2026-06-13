@@ -70,7 +70,7 @@ export type SelectPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type SelectTriggerEvent = Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 };
 
 export function selectItemSelected(options: SelectItemAttributeOptions): boolean {
@@ -180,6 +180,7 @@ export function selectTriggerChange(
 
   const result = setSelectValue(state, event.currentTarget.value, 'trigger-change', options);
   if (!result.changed) {
+    event.currentTarget.value = state.value ?? '';
     event.preventDefault();
   }
 

@@ -65,7 +65,7 @@ export type SliderPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type SliderInputEvent = Event & {
-  readonly currentTarget: { readonly value: string } | null;
+  readonly currentTarget: { value: string } | null;
 };
 
 export function sliderValueState(options: SliderState = {}): SliderComputedState {
@@ -187,6 +187,7 @@ export function sliderInput(
     options,
   );
   if (!result.changed) {
+    event.currentTarget.value = String(result.value);
     event.preventDefault();
   }
 

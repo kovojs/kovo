@@ -237,7 +237,24 @@ describe('headless-ui slider primitive', () => {
     const disabledResult = sliderInput(disabledEvent, { disabled: true, value: 1 });
 
     expect(disabledResult).toEqual({ changed: false, value: 1 });
+    expect(disabledEvent.currentTarget?.value).toBe('1');
     expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledEvent = sliderInputEvent('7');
+    const canceledResult = sliderInput(
+      canceledEvent,
+      { value: 1 },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(canceledResult).toMatchObject({ changed: false, value: 1 });
+    expect(canceledResult?.detail?.defaultPrevented).toBe(true);
+    expect(canceledEvent.currentTarget?.value).toBe('1');
+    expect(canceledEvent.defaultPrevented).toBe(true);
   });
 
   it('returns frozen records', () => {
@@ -271,7 +288,7 @@ describe('headless-ui slider primitive', () => {
 });
 
 function sliderInputEvent(value: string): Event & {
-  readonly currentTarget: { readonly value: string } | null;
+  readonly currentTarget: { value: string } | null;
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: { value: string } | null;

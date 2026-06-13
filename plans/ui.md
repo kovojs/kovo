@@ -91,6 +91,9 @@ Implemented areas:
   `aria-activedescendant` aligned with the rendered option id instead of deriving from filtered
   indexes; the compiled interactive command gallery carries those ids through generated TSX and
   browser-backed state coverage.
+- Native value-backed primitive handlers for select, number-field, and slider now restore the
+  submitted control value when SPEC §4.6 cancelable/blocked changes keep primitive state unchanged,
+  preventing native DOM state from drifting past the rejected value.
 
 Recent gates:
 
@@ -180,6 +183,8 @@ Recent gates:
 - `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "updates command dialog"`
 - `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/select.test.ts packages/headless-ui/src/primitives/number-field.test.ts packages/headless-ui/src/primitives/slider.test.ts`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
 
 ## Open Work
 
