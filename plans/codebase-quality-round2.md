@@ -220,7 +220,7 @@ local helpers.
 
 Latest broad gate:
 
-- `pnpm run check` passed after the integration wave through `aa195e9`: inline loader check, 784
+- `pnpm run check` passed after checkpoint `7875edf`: inline loader check, 784
   formatted files, 684 lint/typechecked files, and 7 typechecked example/conformance projects.
 
 Focused gates since that broad run:
@@ -235,4 +235,5 @@ Stale but useful broad references:
 
 ## Integration Queue
 
-- [ ] Refill worker lanes when sub-agent usage capacity is available again.
+- [ ] Integrate active worker branches one at a time with focused gates before each checkpoint.
+- [ ] Refill toward five large-slice worker lanes when disjoint ownership and capacity allow.
