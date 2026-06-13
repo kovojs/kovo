@@ -9,6 +9,7 @@
 
 ## Progress Discipline
 
+- For GitHub Actions workflow edits, follow `rules/github-workflows.md`.
 - Make commits at meaningful checkpoints instead of accumulating a large uncommitted diff.
 - Default to a parallel fan-out when the open plans expose multiple independent, non-overlapping implementation, audit, or verification slices that can move `IMPLEMENT_v1.md` forward concurrently. Keep one immediate critical-path task in the main worktree, and delegate bounded sidecar slices to up to five sub-agents at a time unless the work is tightly coupled.
 - Prefer large, closure-oriented sub-agent slices that push an open plan item materially toward completion over tiny incremental edits. A delegated slice should usually own a coherent module, primitive family, runtime path, conformance gap, or plan phase and should include the production changes, tests, and evidence needed to integrate that slice.

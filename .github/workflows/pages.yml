@@ -26,7 +26,7 @@ jobs:
           node-version: 24
 
       - run: vp install
-      - run: pnpm --filter @jiso/example-gallery run emit:interactive-gallery
+      - run: vp exec pnpm --filter @jiso/example-gallery run emit:interactive-gallery
       - run: vp run export
         working-directory: site
       - run: vp run check-links
