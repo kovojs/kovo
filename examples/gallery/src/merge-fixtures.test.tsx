@@ -3279,7 +3279,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="select-family"><div data-state="closed" data-disabled="" data-placeholder="author-placeholder" data-invalid="" data-required="" id="author-select-root" class="select-root grid"><select data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" aria-expanded="false" disabled id="gallery-select-trigger" aria-labelledby="gallery-select-label" aria-describedby="author-select-description" aria-invalid="true" name="author-plan" required class="select-trigger w-44"><option data-state="unchecked" data-disabled="" disabled selected value="author-growth" label="Growth" class="select-option font-medium">Growth</option></select><span data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" id="gallery-select-content" aria-labelledby="author-select-label" class="select-content shadow"><span data-placeholder="author-placeholder" id="author-select-value" class="select-value text-muted">Choose a plan</span></span></div></section>',
+      '<section data-gallery-merge="select-family"><div data-state="closed" data-disabled="" data-placeholder="author-placeholder" data-invalid="" data-required="" id="author-select-root" class="select-root grid"><select data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" aria-expanded="false" disabled id="gallery-select-trigger" aria-labelledby="gallery-select-label" aria-describedby="author-select-description" aria-invalid="true" name="author-plan" required class="select-trigger w-44"><option data-state="unchecked" data-disabled="" disabled value="author-growth" label="Growth" class="select-option font-medium" selected>Growth</option></select><span data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" id="gallery-select-content" aria-labelledby="author-select-label" class="select-content shadow"><span data-placeholder="author-placeholder" id="author-select-value" class="select-value text-muted">Choose a plan</span></span></div></section>',
     );
   });
 
@@ -4100,7 +4100,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="selectItemAttributes" data-state="checked" disabled selected value="author-selectItemAttributes" label="author-selectItemAttributes" class="primitive-selectItemAttributes author-selectItemAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="selectItemAttributes" data-state="checked" selected value="author-selectItemAttributes" label="author-selectItemAttributes" class="primitive-selectItemAttributes author-selectItemAttributes">merged</div>",
           "name": "selectItemAttributes",
         },
         {
@@ -4110,7 +4110,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="false" disabled id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" name="author-selectTriggerAttributes" required class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="false" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" name="author-selectTriggerAttributes" required class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
           "name": "selectTriggerAttributes",
         },
         {
