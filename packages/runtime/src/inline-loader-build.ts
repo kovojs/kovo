@@ -10,6 +10,9 @@ const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', i
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
+const responseFragmentApplySourcePath = fileURLToPath(
+  new URL('./response-fragment-apply.ts', import.meta.url),
+);
 const wireResponseScannerSourcePath = fileURLToPath(
   new URL('./wire-response-scanner.ts', import.meta.url),
 );
@@ -22,6 +25,7 @@ const inlineHelperSpecs = {
     rootFunctionNames: ['applyInlineMutationResponseChunks'],
     sourceFileName: 'inline-response-apply.ts',
     sourcePath: inlineResponseApplySourcePath,
+    sourcePaths: [responseFragmentApplySourcePath, inlineResponseApplySourcePath],
   },
   wireParser: {
     label: 'wire parser',
@@ -30,6 +34,7 @@ const inlineHelperSpecs = {
     rootFunctionNames: ['readInlineMutationResponseBodyChunks'],
     sourceFileName: 'wire-response-scanner.ts',
     sourcePath: wireResponseScannerSourcePath,
+    sourcePaths: [wireResponseScannerSourcePath],
   },
 } as const;
 
@@ -310,7 +315,11 @@ interface ExtractInlineHelperReadableSourceOptions {
 }
 
 function readInlineHelperReadableSource(spec: InlineHelperSpec): string {
-  return extractInlineHelperReadableSourceForSpec(spec, readFileSync(spec.sourcePath, 'utf8'));
+  return extractInlineHelperReadableSourceForSpec(spec, readInlineHelperCanonicalSource(spec));
+}
+
+function readInlineHelperCanonicalSource(spec: InlineHelperSpec): string {
+  return spec.sourcePaths.map((sourcePath) => readFileSync(sourcePath, 'utf8')).join('\n');
 }
 
 function extractInlineHelperReadableSourceForSpec(
@@ -401,7 +410,7 @@ export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
 
 export function assertInlineJisoLoaderInstallerResponseApplyParity(
   installerSource: string,
-  responseApplySource: string = readFileSync(inlineResponseApplySourcePath, 'utf8'),
+  responseApplySource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.responseApply),
 ): void {
   assertInlineJisoLoaderInstallerHelperParity(
     inlineHelperSpecs.responseApply,
@@ -412,7 +421,7 @@ export function assertInlineJisoLoaderInstallerResponseApplyParity(
 
 export function assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(
   installerSource: string,
-  responseApplySource: string = readFileSync(inlineResponseApplySourcePath, 'utf8'),
+  responseApplySource: string = readInlineHelperCanonicalSource(inlineHelperSpecs.responseApply),
 ): void {
   assertMinifiedInlineJisoLoaderInstallerHelperParity(
     inlineHelperSpecs.responseApply,
@@ -468,7 +477,7 @@ function assertDefaultInlineJisoLoaderInstallerHelperParity(source: string): voi
     assertInlineJisoLoaderInstallerHelperParity(
       spec,
       source,
-      readFileSync(spec.sourcePath, 'utf8'),
+      readInlineHelperCanonicalSource(spec),
     );
   }
 }
@@ -482,7 +491,7 @@ function assertDefaultMinifiedInlineJisoLoaderInstallerHelperParity(
     assertMinifiedInlineJisoLoaderInstallerHelperParity(
       spec,
       installerSource,
-      readFileSync(spec.sourcePath, 'utf8'),
+      readInlineHelperCanonicalSource(spec),
     );
   }
 }
@@ -556,7 +565,7 @@ function collectInlineHelperFunctionDependencies(
     if (ts.isIdentifier(node)) {
       const name = node.text;
       if (name !== ownName && declarations.has(name)) dependencies.add(name);
-      if (unsupportedTopLevelBindings.has(name)) {
+      if (unsupportedTopLevelBindings.has(name) && !declarations.has(name)) {
         throw new Error(
           `Inline Jiso loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
         );

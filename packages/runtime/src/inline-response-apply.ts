@@ -1,8 +1,5 @@
-import type {
-  ElementChunk,
-  FragmentChunk,
-  InlineMutationResponseBodyChunks,
-} from './wire-response-scanner.js';
+import type { ElementChunk, InlineMutationResponseBodyChunks } from './wire-response-scanner.js';
+import { applyResponseFragment } from './response-fragment-apply.js';
 
 export interface InlineResponseApplyTarget {
   innerHTML: string;
@@ -12,12 +9,6 @@ export interface InlineResponseApplyTarget {
 export interface InlineMutationResponseApplyOptions {
   dispatchQueries(queries: readonly Pick<ElementChunk, 'attrs' | 'content'>[]): void;
   findFragmentTarget(target: string): InlineResponseApplyTarget | null | undefined;
-}
-
-export interface ResponseFragmentApplyOptions<Target> {
-  appendFragment(target: Target, html: string): void;
-  findFragmentTarget(target: string): Target | null | undefined;
-  replaceFragment(target: Target, html: string): void;
 }
 
 export function applyInlineMutationResponseChunks(
@@ -38,21 +29,6 @@ export function applyInlineMutationResponseChunks(
     if (wasApplied) appliedFragments.push(fragment.target);
   }
   return appliedFragments;
-}
-
-export function applyResponseFragment<Target>(
-  fragment: FragmentChunk,
-  options: ResponseFragmentApplyOptions<Target>,
-): boolean {
-  const element = options.findFragmentTarget(fragment.target);
-  if (!element) return false;
-
-  if (fragment.mode === 'append') {
-    options.appendFragment(element, fragment.html);
-  } else {
-    options.replaceFragment(element, fragment.html);
-  }
-  return true;
 }
 
 function appendInlineFragment(element: InlineResponseApplyTarget, html: string): void {

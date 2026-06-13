@@ -1735,6 +1735,16 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       embed parity share one owner. Verified by focused inline parser/apply/minifier/build tests,
       inline-loader generation check, browser runtime tests, exact `vp check`, and `git diff
       --check` commands listed in Latest evidence.
+      Evidence 2026-06-13 round285: the decoded fragment apply primitive moved to
+      `packages/runtime/src/response-fragment-apply.ts`, so modular morph no longer imports the
+      generic helper through the inline response-apply module. `packages/runtime/src/morph.ts` and
+      `packages/runtime/src/inline-response-apply.ts` now share that helper, while
+      `packages/runtime/src/inline-loader-build.ts` bundles the neutral helper source into the
+      self-contained inline response-apply closure before readable/minified parity checks.
+      `packages/runtime/src/response-fragment-apply.test.ts` pins replace, append, and missing
+      target behavior. Verified by focused response-apply/morph/runtime tests, full runtime tests,
+      inline-loader generation check, browser runtime tests, exact `vp check`, and `git diff
+      --check` commands listed in Latest evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1815,6 +1825,9 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
       Evidence 2026-06-13 round274: browser runtime checks passed after moving response-apply
       extractor/parity assertions into the response-apply owner suite. Command: `pnpm exec vitest
+      --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
+      Evidence 2026-06-13 round285: browser runtime checks passed after neutral fragment apply
+      helper extraction and inline response-apply closure bundling. Command: `pnpm exec vitest
       --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
 
 Latest evidence:
@@ -1907,6 +1920,13 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm --filter @jiso/runtime run check:inline-loader`;
   `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
   exact `pnpm exec vp check packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-response-apply.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round285 neutral response fragment apply helper:
+  `pnpm exec vitest --run packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/morph.test.ts packages/runtime/src/mutation-response-dom.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/response-fragment-apply.ts packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-response-apply.ts packages/runtime/src/morph.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader-response-apply.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 5 - Server And App Shell
