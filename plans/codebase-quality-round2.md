@@ -247,6 +247,15 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       project surfaces against real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13: project imported callback references now follow ts-morph alias symbols
+      for query loaders and domain writes, including imported callback containers such as
+      `loaders.loadProducts`; project-mode synthetic table facts are available across source-file
+      summaries so imported callback read/write bodies resolve to Postgres v1 table domains
+      without source-name fallback. `packages/drizzle/src/index.test.ts` covers imported project
+      query-loader and write callbacks, and `conformance/drizzle-pin/src/index.test.ts` pins the
+      same surfaces against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

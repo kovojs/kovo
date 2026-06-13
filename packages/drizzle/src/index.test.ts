@@ -2674,6 +2674,72 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts imported project query-loader callbacks through ts-morph aliases', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'schema.ts',
+          source: [
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  name: text("name").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+          ].join('\n'),
+        },
+        {
+          fileName: 'loaders.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { products } from "./schema";',
+            '',
+            'export function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, name: products.name }).from(products);',
+            '}',
+            '',
+            'export const loaders = { loadProducts };',
+          ].join('\n'),
+        },
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import { loadProducts, loaders } from "./loaders";',
+            '',
+            'export const productQuery = query("product/imported-loader", {',
+            '  load: loadProducts,',
+            '});',
+            '',
+            'export const memberQuery = query("product/imported-member-loader", {',
+            '  load: loaders.loadProducts,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/imported-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'product.queries.ts:3',
+      },
+      {
+        query: 'product/imported-member-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'product.queries.ts:7',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -7244,6 +7310,70 @@ export interface CommerceInvalidationSets {
     });
 
     expect(graph).toEqual({});
+  });
+
+  it('extracts imported project write callbacks through ts-morph aliases', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'schema.ts',
+          source: [
+            'export const cartItems = pgTable("cart_items", {',
+            '  productId: text("product_id").primaryKey(),',
+            '}, jiso({ domain: "cart", key: "productId" }));',
+          ].join('\n'),
+        },
+        {
+          fileName: 'callbacks.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { cartItems } from "./schema";',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db.insert(cartItems).values({ productId });',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import { addItem } from "./callbacks";',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(addItem),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'callbacks.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
   });
 
   it('uses project typed destructured receiver bindings without fake context fabrication', () => {

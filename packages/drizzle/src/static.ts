@@ -2702,10 +2702,16 @@ function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Nod
 }
 
 function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
-  if (Node.isIdentifier(node)) return symbolForIdentifierReference(node);
-  if (Node.isPropertyAccessExpression(node)) return node.getNameNode().getSymbol();
-  if (Node.isElementAccessExpression(node)) return node.getSymbol();
+  if (Node.isIdentifier(node)) return aliasedSymbol(symbolForIdentifierReference(node));
+  if (Node.isPropertyAccessExpression(node)) {
+    return aliasedSymbol(node.getNameNode().getSymbol());
+  }
+  if (Node.isElementAccessExpression(node)) return aliasedSymbol(node.getSymbol());
   return undefined;
+}
+
+function aliasedSymbol(symbol: MorphSymbol | undefined): MorphSymbol | undefined {
+  return symbol?.getAliasedSymbol() ?? symbol;
 }
 
 function localObjectMemberCallbackFunction(
@@ -4147,6 +4153,7 @@ function projectSourceModuleContext(extraction: ProjectExtraction): SourceModule
     const tables = new Map<string, ExtractedTable[]>();
     appendProjectDeclaredTables(tables, sourceFile, extraction, tablesBySyntheticName);
     appendProjectReferencedTables(tables, sourceFile, extraction, tablesBySyntheticName);
+    appendProjectGlobalSyntheticTables(tables, tablesBySyntheticName);
     tablesByFileName.set(file.fileName, tables);
   });
 
@@ -4231,6 +4238,17 @@ function appendProjectReferencedTables(
 
   for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
     appendProjectNamespaceTableAccess(tables, access, namespaceTableNames, tablesBySyntheticName);
+  }
+}
+
+function appendProjectGlobalSyntheticTables(
+  tables: Map<string, ExtractedTable[]>,
+  tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+): void {
+  // SPEC §10-§11: project-mode table expressions use ts-morph synthetic symbol names, which stay
+  // valid when an imported query/domain callback is summarized from the importing module.
+  for (const [syntheticName, table] of tablesBySyntheticName) {
+    appendTableEntries(tables, syntheticName, [table]);
   }
 }
 
@@ -4778,9 +4796,7 @@ function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
   const symbol = symbolForCallbackReference(identifier);
   for (const declaration of symbol?.getDeclarations() ?? []) {
     // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
-    // module references require their own file-scoped table/site context instead of source fallback.
-    if (declaration.getSourceFile() !== identifier.getSourceFile()) continue;
-
+    // module project references are followed through ts-morph aliases instead of by-name fallback.
     const callback = callbackFunctionFromDeclaration(declaration);
     if (callback) return callback;
   }
@@ -6652,11 +6668,11 @@ function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
   if (Node.isIdentifier(node)) {
     const parent = node.getParent();
     if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === node) {
-      return parent.getValueSymbol() ?? node.getSymbol();
+      return aliasedSymbol(parent.getValueSymbol() ?? node.getSymbol());
     }
   }
 
-  return node.getSymbol();
+  return aliasedSymbol(node.getSymbol());
 }
 
 function isSourceReceiverBindingDeclaration(declaration: Node): boolean {
