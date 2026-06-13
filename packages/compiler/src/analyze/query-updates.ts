@@ -22,6 +22,8 @@ import type {
 interface DataBindAttribute {
   name: string;
   path: string;
+  query: string | null;
+  relativeReadPath: string | null;
 }
 
 interface QueryPathExpressionFact {
@@ -39,9 +41,7 @@ export function collectQueryUpdatePlans(
   const stampsByQuery = new Map<string, QueryStampFact[]>();
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
-  for (const { path } of dataBindAttributes(model)) {
-    if (path.startsWith('.')) continue;
-    const [query] = path.split('.');
+  for (const { path, query } of dataBindAttributes(model)) {
     if (!query) continue;
 
     const paths = pathsByQuery.get(query) ?? new Set<string>();
@@ -119,9 +119,9 @@ export function collectQueryUpdateCoverage(
   const coveredPaths = new Set<string>();
   const knownQueries = knownQueryNames(model, options);
 
-  for (const binding of dataBindAttributes(model).filter((item) => !item.path.startsWith('.'))) {
+  for (const binding of dataBindAttributes(model).filter((item) => item.query !== null)) {
     const path = binding.path;
-    const query = queryNameFromPath(path);
+    const query = binding.query;
     if (!query) continue;
 
     facts.push({
@@ -314,10 +314,16 @@ function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
         attribute.value !== undefined &&
         attribute.value !== '',
     )
-    .map((attribute) => ({
-      name: attribute.name,
-      path: attribute.value ?? '',
-    }));
+    .map((attribute) => dataBindAttributeFact(attribute.name, attribute.value ?? ''));
+}
+
+function dataBindAttributeFact(name: string, path: string): DataBindAttribute {
+  return {
+    name,
+    path,
+    query: path.startsWith('.') ? null : queryNameFromPath(path),
+    relativeReadPath: path.startsWith('.') ? path.slice(1) : null,
+  };
 }
 
 export function collectDataBindListStamps(model: ComponentModuleModel): QueryTemplateStampFact[] {
@@ -364,13 +370,13 @@ function templateItemBindingPlaceholders(
             isBindingAttribute(attribute.name) &&
             attribute.value !== undefined &&
             attribute.value !== '' &&
-            attribute.value.startsWith('.'),
+            dataBindAttributeFact(attribute.name, attribute.value).relativeReadPath !== null,
         )
         .map((attribute) => {
-          const path = attribute.value ?? '';
+          const fact = dataBindAttributeFact(attribute.name, attribute.value ?? '');
           return {
-            path,
-            readPath: path.slice(1),
+            path: fact.path,
+            readPath: fact.relativeReadPath ?? '',
             value: jsxElementChildBody(candidate)?.source ?? '',
           };
         }),
