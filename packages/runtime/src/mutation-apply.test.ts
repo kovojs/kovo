@@ -6,64 +6,7 @@ import {
 } from './mutation-apply.js';
 import type { FetchedEnhancedMutation } from './mutation-fetch.js';
 import { createQueryStore } from './query-store.js';
-
-class FakeMorphTarget {
-  html = '';
-
-  replaceWithHtml(html: string): void {
-    this.html = html;
-  }
-
-  readHtml(): string {
-    return this.html;
-  }
-}
-
-class FakeQueryBindingElement {
-  attributes: { name: string; value: string }[];
-  textContent: string | null;
-
-  constructor(attributes: Record<string, string>, textContent = '') {
-    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
-    this.textContent = textContent;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
-  }
-
-  removeAttribute(name: string): void {
-    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
-  }
-
-  setAttribute(name: string, value: string): void {
-    const existing = this.attributes.find((attribute) => attribute.name === name);
-    if (existing) {
-      existing.value = value;
-      return;
-    }
-
-    this.attributes.push({ name, value });
-  }
-}
-
-class FakeMorphRoot {
-  bindings: FakeQueryBindingElement[] = [];
-  readonly targets = new Map<string, FakeMorphTarget>();
-
-  findFragmentTarget(target: string): FakeMorphTarget | null {
-    return this.targets.get(target) ?? null;
-  }
-
-  querySelectorAll(selector: string): Iterable<FakeQueryBindingElement> {
-    if (selector === '[data-bind]') {
-      return this.bindings.filter((element) => element.getAttribute('data-bind'));
-    }
-    if (selector === '*') return this.bindings;
-
-    return [];
-  }
-}
+import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
 
 function fetchedMutation(
   body: string,
@@ -156,7 +99,7 @@ describe('enhanced mutation response apply orchestration', () => {
   it('lets optimistic reconciliation interpose store truth before query plans and morphs run', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
-    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, { textContent: '0' });
     const observedDuringMorph: string[] = [];
     root.bindings.push(count);
     root.targets.set('cart-badge', new FakeMorphTarget());

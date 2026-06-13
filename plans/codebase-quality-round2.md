@@ -302,6 +302,16 @@ packages/runtime/src/query-runtime-integration.test.ts`.
 packages/runtime/src/mutation-response-metadata.test.ts packages/runtime/src/query-bindings.test.ts`
       and `pnpm exec vitest --run packages/runtime/src/query-runtime-integration.test.ts
 packages/runtime/src/morph.test.ts`.
+      Evidence 2026-06-13: duplicate local broadcast/morph/query/pending fake classes were deleted
+      from `packages/runtime/src/broadcast.test.ts`,
+      `packages/runtime/src/mutation-apply.test.ts`,
+      `packages/runtime/src/apply-deferred-stream.test.ts`,
+      `packages/runtime/src/query-bindings.test.ts`, and
+      `packages/runtime/src/mutation-optimistic.test.ts`; those apply/query/optimism suites now use
+      the shared `packages/runtime/src/runtime-test-fakes.ts` helpers. Verified by `pnpm exec
+vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/mutation-apply.test.ts
+packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/query-bindings.test.ts
+packages/runtime/src/mutation-optimistic.test.ts`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted

@@ -5,95 +5,17 @@ import {
   applyQueryBindings,
   createQueryBindingIndex,
   supportsQueryBindings,
-  type QueryBindingElement,
 } from './query-bindings.js';
-
-class FakeQueryRoot {
-  bindings: FakeQueryBindingElement[] = [];
-  elements: FakeQueryPlanElement[] = [];
-  wildcardSelectorCalls = 0;
-
-  querySelectorAll(selector: string): Iterable<QueryBindingElement> {
-    if (selector === '[data-bind]') return this.bindings;
-    if (selector === '*') {
-      this.wildcardSelectorCalls += 1;
-      return [...this.bindings, ...this.elements];
-    }
-    return this.elements.filter((element) => element.matches(selector));
-  }
-}
-
-class FakeQueryBindingElement {
-  textContent: string | null;
-  value?: string;
-
-  constructor(
-    private readonly path: string,
-    options: { textContent?: string | null; value?: string } = {},
-  ) {
-    this.textContent = options.textContent ?? null;
-    if (options.value !== undefined) {
-      this.value = options.value;
-    }
-  }
-
-  getAttribute(name: string): string | null {
-    return name === 'data-bind' ? this.path : null;
-  }
-}
-
-class FakeQueryPlanElement {
-  attributes: { name: string; value: string }[];
-  textContent: string | null;
-
-  constructor(attributes: Record<string, string>, options: { textContent?: string | null } = {}) {
-    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
-    this.textContent = options.textContent ?? null;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
-  }
-
-  matches(selector: string): boolean {
-    const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
-    if (exactAttribute) {
-      return this.getAttribute(exactAttribute[1] ?? '') === exactAttribute[2];
-    }
-
-    const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
-    return presentAttribute ? this.getAttribute(presentAttribute[1] ?? '') !== null : false;
-  }
-
-  removeAttribute(name: string): void {
-    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
-  }
-
-  setAttribute(name: string, value: string): void {
-    const existing = this.attributes.find((attribute) => attribute.name === name);
-    if (existing) {
-      existing.value = value;
-      return;
-    }
-
-    this.attributes.push({ name, value });
-  }
-}
-
-class FakeTemplateStampHost extends FakeQueryPlanElement {
-  items: Array<{ html: string; index: number; key: string; value: unknown }> = [];
-
-  reconcileTemplateStamp(
-    items: readonly { html: string; index: number; key: string; value: unknown }[],
-  ): void {
-    this.items = items.map((item) => ({ ...item }));
-    this.textContent = items.map((item) => item.html).join('');
-  }
-}
+import {
+  FakeMorphRoot,
+  FakeQueryBindingElement,
+  FakeQueryPlanElement,
+  FakeTemplateStampHost,
+} from './runtime-test-fakes.js';
 
 describe('query binding helpers', () => {
   it('applies DOM-shaped data-bind text, value, and attribute updates', () => {
-    const root = new FakeQueryRoot();
+    const root = new FakeMorphRoot();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
     const total = new FakeQueryBindingElement('cart.total', { value: '0' });
     const label = new FakeQueryPlanElement({
@@ -101,7 +23,7 @@ describe('query binding helpers', () => {
       'data-bind:aria-label': 'cart.label',
     });
     root.bindings.push(count, total);
-    root.elements.push(label);
+    root.planElements.push(label);
 
     expect(applyQueryBindings(root, 'cart', { count: 3, label: null, total: 1499 })).toEqual([
       'cart.count',
@@ -117,14 +39,14 @@ describe('query binding helpers', () => {
   });
 
   it('applies optional binding path segments and removes empty attribute bindings', () => {
-    const root = new FakeQueryRoot();
+    const root = new FakeMorphRoot();
     const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });
     const label = new FakeQueryPlanElement({
       'aria-label': 'Ada',
       'data-bind:aria-label': 'deal.contact?.name',
     });
     root.bindings.push(name);
-    root.elements.push(label);
+    root.planElements.push(label);
 
     expect(applyQueryBindings(root, 'deal', { contact: null })).toEqual([
       'deal.contact?.name',
@@ -139,7 +61,7 @@ describe('query binding helpers', () => {
   });
 
   it('reuses indexed attribute binding candidates across compiled query plans', () => {
-    const root = new FakeQueryRoot();
+    const root = new FakeMorphRoot();
     const cartLabel = new FakeQueryPlanElement({
       'aria-label': 'old cart',
       'data-bind:aria-label': 'cart.label',
@@ -148,7 +70,7 @@ describe('query binding helpers', () => {
       'aria-label': 'old product',
       'data-bind:aria-label': 'product.label',
     });
-    root.elements.push(cartLabel, productLabel);
+    root.planElements.push(cartLabel, productLabel);
 
     const bindingIndex = createQueryBindingIndex(root);
 
@@ -184,7 +106,7 @@ describe('query binding helpers', () => {
   });
 
   it('runs compiled query update plans in bindings, derives, stamps, then template-stamps order', () => {
-    const root = new FakeQueryRoot();
+    const root = new FakeMorphRoot();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
     const summary = new FakeQueryPlanElement(
       { 'data-derive': 'cart.summary' },
@@ -197,7 +119,7 @@ describe('query binding helpers', () => {
     });
     const observed: string[] = [];
     root.bindings.push(count);
-    root.elements.push(summary, host, list);
+    root.planElements.push(summary, host, list);
 
     const applied = applyCompiledQueryUpdatePlan(
       root,
@@ -260,9 +182,9 @@ describe('query binding helpers', () => {
   });
 
   it('removes compiled attribute stamps when the selected value is empty', () => {
-    const root = new FakeQueryRoot();
+    const root = new FakeMorphRoot();
     const host = new FakeQueryPlanElement({ 'aria-label': 'Ada', 'data-plan': 'deal-host' });
-    root.elements.push(host);
+    root.planElements.push(host);
 
     const applied = applyCompiledQueryUpdatePlan(
       root,
@@ -292,7 +214,7 @@ describe('query binding helpers', () => {
   });
 
   it('detects query binding roots by selector support', () => {
-    expect(supportsQueryBindings(new FakeQueryRoot())).toBe(true);
+    expect(supportsQueryBindings(new FakeMorphRoot())).toBe(true);
     expect(supportsQueryBindings({})).toBe(false);
   });
 });

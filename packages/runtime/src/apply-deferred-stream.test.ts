@@ -2,60 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromDeferredModule } from './apply-deferred-stream.js';
 import { applyDeferredStreamResponseToRuntime, createQueryStore } from './index.js';
-
-class FakeMorphTarget {
-  html: string;
-
-  constructor(html = '') {
-    this.html = html;
-  }
-
-  replaceWithHtml(html: string): void {
-    this.html = html;
-  }
-}
-
-class FakeQueryBindingElement {
-  attributes: { name: string; value: string }[];
-  textContent: string | null;
-
-  constructor(attrs: Record<string, string>, textContent = '') {
-    this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
-    this.textContent = textContent;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
-  }
-
-  setAttribute(name: string, value: string): void {
-    const existing = this.attributes.find((attribute) => attribute.name === name);
-    if (existing) {
-      existing.value = value;
-      return;
-    }
-
-    this.attributes.push({ name, value });
-  }
-}
-
-class FakeMorphRoot {
-  bindings: FakeQueryBindingElement[] = [];
-  targets = new Map<string, FakeMorphTarget>();
-
-  findFragmentTarget(target: string): FakeMorphTarget | null {
-    return this.targets.get(target) ?? null;
-  }
-
-  querySelectorAll(selector: string): FakeQueryBindingElement[] {
-    if (selector === '[data-bind]') {
-      return this.bindings.filter((element) => element.getAttribute('data-bind'));
-    }
-    if (selector === '*') return this.bindings;
-
-    return [];
-  }
-}
+import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
 
 describe('deferred stream response apply', () => {
   it('exports deferred stream response apply through the runtime barrel', () => {
@@ -98,7 +45,7 @@ describe('deferred stream response apply', () => {
   it('keeps deferred stream chunks on the hook-aware mutation response path', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
-    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, { textContent: '0' });
     const observed: string[] = [];
     const beforeApplyQueries = vi.fn();
     root.bindings.push(count);

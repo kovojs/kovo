@@ -2,40 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast, withDefaultMutationBroadcast } from './broadcast.js';
 import { createQueryStore } from './query-store.js';
-
-class FakeBroadcastChannel {
-  closed = false;
-  messages: unknown[] = [];
-  onmessage: ((event: { data: unknown }) => void) | null = null;
-
-  postMessage(message: unknown): void {
-    this.messages.push(message);
-  }
-
-  close(): void {
-    this.closed = true;
-  }
-}
-
-class FakeMorphTarget {
-  html = '';
-
-  replaceWithHtml(html: string): void {
-    this.html = html;
-  }
-
-  readHtml(): string {
-    return this.html;
-  }
-}
-
-class FakeMorphRoot {
-  readonly target = new FakeMorphTarget();
-
-  findFragmentTarget(target: string): FakeMorphTarget | null {
-    return target === 'cart-badge' ? this.target : null;
-  }
-}
+import { FakeBroadcastChannel, FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
 
 describe('mutation broadcast', () => {
   it('publishes sanitized change records and applies received mutation wire bodies', () => {
@@ -44,6 +11,7 @@ describe('mutation broadcast', () => {
     const root = new FakeMorphRoot();
     const onChanges = vi.fn();
     const onAppliedQueries = vi.fn();
+    root.targets.set('cart-badge', new FakeMorphTarget());
 
     const broadcast = installMutationBroadcast({
       channel,
@@ -80,7 +48,7 @@ describe('mutation broadcast', () => {
     // SPEC.md §9.2: broadcast replay consumes the same mutation wire body as
     // direct enhanced submits, updating query data before fragment morphing.
     expect(store.get('cart')).toEqual({ count: 2 });
-    expect(root.target.html).toBe('<cart-badge>2</cart-badge>');
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
     expect(onAppliedQueries).toHaveBeenCalledWith(['cart']);
     expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart:1'] }]);
   });
