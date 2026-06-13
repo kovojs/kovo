@@ -109,6 +109,9 @@ gate, so the monolith no longer keeps a local helper that parses exported HTML f
 Shared generated-module fixtures now own generated view-transition stamp behavior projections,
 including rendered host attributes, registry member types, and JSX prop elision for the P2
 fw-check gate.
+Shared verification fixtures now own the P9 CSRF, harness, DB verifier, structured SQL, and
+Pglite verification behavior fact, so `tests/fw-check.node.mjs` no longer defines that reusable
+fake DB and assertion harness locally.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -120,6 +123,12 @@ fw-check gate.
 
 Latest evidence:
 
+- Verification-layer fixture slice:
+  `pnpm exec vitest --run packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/verification-fixtures.ts packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Generated view-transition stamp fixture slice:
   `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
@@ -1770,6 +1779,10 @@ changing commerce generated artifacts.
 Shared graph fixtures now own generated graph artifact acceptance evidence consumed by both
 commerce source-truth tests and the P4 fw-check gate, including emitted graph cleanliness,
 source-derived touch provenance, and static graph behavior.
+Shared verification fixtures now own the P9 verification-layer behavior fact used by
+`tests/fw-check.node.mjs`, covering CSRF, harness mutation/query verification, DB verifier
+diagnostics, structured SQL observation, and Pglite wrapped mutations through a public
+`@jiso/test/verification-fixtures` seam.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -1778,6 +1791,12 @@ source-derived touch provenance, and static graph behavior.
 
 Latest evidence:
 
+- Verification-layer fixture slice:
+  `pnpm exec vitest --run packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/verification-fixtures.ts packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - Generated graph artifact acceptance evidence fixture slice:
   `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
@@ -1892,6 +1911,9 @@ The P4 generated graph artifact acceptance gate now consumes
 `@jiso/test/graph-fixtures` acceptance evidence facts in both `tests/fw-check.node.mjs` and
 commerce source-truth tests, replacing duplicated local emitted-graph summary assertions while
 keeping touch provenance and static graph behavior observable.
+The P9 verification-layer gate now consumes `@jiso/test/verification-fixtures` behavior facts
+instead of defining fake DB, verifier, assertion, SQL, and Pglite mechanics inside
+`tests/fw-check.node.mjs`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -1899,6 +1921,12 @@ keeping touch provenance and static graph behavior observable.
 
 Latest evidence:
 
+- Verification-layer fixture slice:
+  `pnpm exec vitest --run packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/verification-fixtures.ts packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`

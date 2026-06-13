@@ -160,6 +160,7 @@ import {
   viteTransformElementFact,
 } from '../packages/test/src/vite-fixtures.ts';
 import { parseWireFixture, parseWireResponses } from '../packages/test/src/wire-fixtures.ts';
+import { verificationLayerBehaviorFact } from '../packages/test/src/verification-fixtures.ts';
 import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
   csrfField,
@@ -3238,370 +3239,90 @@ void test('P10 starter wires graph assertions into CI', async () => {
 });
 
 void test('P9 verification layer evidence remains represented', async () => {
-  const createFakeDb = () => {
-    const tables = new Map();
-    return {
-      read(table, options) {
-        void options;
-        return tables.get(table) ?? [];
-      },
-      sql() {
-        return [];
-      },
-      write(table, value, options) {
-        void options;
-        tables.set(table, [...(tables.get(table) ?? []), value]);
-      },
-    };
-  };
-  const assertThrowsMessage = (callback, expected) => {
-    assert.throws(callback, (error) => error instanceof Error && error.message === expected);
-  };
-  const assertRejectsMessage = (promise, expected) =>
-    assert.rejects(promise, (error) => error instanceof Error && error.message === expected);
-
-  for (const code of ['FW402', 'FW404', 'FW407', 'FW408', 'FW410', 'FW411']) {
-    assert.equal(typeof diagnosticDefinitions[code].message, 'string');
-  }
-
-  const csrfRequest = { session: { id: 's1' } };
-  const csrf = {
-    field: 'csrf',
-    secret: 'test-secret',
-    sessionId(request) {
-      return request.session.id;
-    },
-  };
-  let csrfMutationExecutions = 0;
-  const csrfMutation = mutation('cart/add', {
-    csrf,
-    input: s.object({ csrf: s.string(), productId: s.string() }),
-    handler(input) {
-      csrfMutationExecutions += 1;
-      return input.productId;
-    },
-  });
-  const csrfHarness = createJisoTestHarness({
-    db: {},
-    request: csrfRequest,
-  });
-  const token = csrfToken(csrfRequest, csrf);
-  assert.equal(csrfField(csrfRequest, csrf), `<input type="hidden" name="csrf" value="${token}">`);
-  assert.deepEqual(await csrfHarness.exec(csrfMutation, { csrf: token, productId: 'p1' }), {
-    changes: [],
-    ok: true,
-    rerunQueries: [],
-    value: 'p1',
-  });
-  assert.equal(csrfMutationExecutions, 1);
-  assert.deepEqual(await csrfHarness.exec(csrfMutation, { csrf: 'wrong', productId: 'p2' }), {
-    error: { code: 'CSRF', payload: {} },
-    ok: false,
-    status: 422,
-  });
-  assert.equal(csrfMutationExecutions, 1);
-
-  const writeMutation = mutation('cart/add', {
-    csrf: false,
-    input: s.object({ productId: s.string() }),
-    handler(input, request) {
-      request.db.write('cart_items', input.productId);
-      return input.productId;
-    },
-  });
-  const writeHarness = createJisoTestHarness({
-    db: createFakeDb(),
-    touchGraph: {
-      'cart.add': {
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
-        unresolved: [],
-      },
-    },
-    verification: { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
-  });
   assert.deepEqual(
-    await writeHarness.exec(writeMutation, { productId: 'p1' }, { touchGraphKey: 'cart.add' }),
+    await verificationLayerBehaviorFact({
+      createDbVerifier,
+      createJisoTestHarness,
+      csrfField,
+      csrfToken,
+      diagnosticDefinitions,
+      domain,
+      mutation,
+      query,
+      s,
+    }),
     {
-      changes: [],
-      ok: true,
-      rerunQueries: [],
-      value: 'p1',
-    },
-  );
-
-  const writeOutsideGraph = mutation('cart/add', {
-    csrf: false,
-    input: s.object({ productId: s.string() }),
-    handler(input, request) {
-      request.db.write('audit_log', input.productId);
-      return input.productId;
-    },
-  });
-  await assertRejectsMessage(
-    writeHarness.exec(writeOutsideGraph, { productId: 'p1' }, { touchGraphKey: 'cart.add' }),
-    'FW402 Write touched an undeclared domain: audit',
-  );
-
-  const unmappedVerifier = createDbVerifier(
-    { write: { touches: [], unresolved: [] } },
-    { domainByTable: {} },
-  );
-  const unmappedDb = unmappedVerifier.wrap(createFakeDb());
-  unmappedDb.write('unknown_table', 'p1');
-  assertThrowsMessage(
-    () => unmappedVerifier.assertCovered('write'),
-    'FW404 Write to unmapped table: unknown_table',
-  );
-
-  const exemptWriteVerifier = createDbVerifier(
-    {},
-    { domainByTable: {}, exemptTables: ['audit_log'] },
-  );
-  const exemptWriteDb = exemptWriteVerifier.wrap(createFakeDb());
-  exemptWriteDb.write('audit_log', { event: 'restock' });
-  assert.doesNotThrow(() => exemptWriteVerifier.assertCovered());
-
-  const exemptReadVerifier = createDbVerifier(
-    {},
-    { domainByTable: { cart_items: 'cart' }, exemptTables: ['audit_log'] },
-  );
-  const exemptReadDb = exemptReadVerifier.wrap(createFakeDb());
-  exemptReadDb.read('audit_log');
-  assertThrowsMessage(
-    () => exemptReadVerifier.assertReadsCovered(['cart']),
-    'FW411 Query read set includes an exempt table: audit_log',
-  );
-
-  const cart = domain('cart');
-  const product = domain('product');
-  const queryHarness = createJisoTestHarness({
-    db: createFakeDb(),
-    touchGraph: {},
-    verification: {
-      domainByTable: { audit_log: 'audit', cart_items: 'cart', products: 'product' },
-    },
-  });
-  const undeclaredReadQuery = query('cart', {
-    load() {
-      queryHarness.db.read('products');
-      return queryHarness.db.read('cart_items');
-    },
-    reads: [cart],
-  });
-  await assertRejectsMessage(
-    queryHarness.query(undeclaredReadQuery),
-    'FW407 Query read from undeclared domain: product',
-  );
-  const validOutputQuery = query('cart/count', {
-    load() {
-      queryHarness.db.read('cart_items');
-      return { count: 2 };
-    },
-    output: s.object({ count: s.number().int().min(0) }),
-    reads: [cart],
-  });
-  assert.deepEqual(await queryHarness.query(validOutputQuery), { count: 2 });
-  const invalidOutputQuery = query('product/list', {
-    load() {
-      queryHarness.db.read('products');
-      return { items: [{ id: 7 }] };
-    },
-    output: s.object({ items: s.array(s.object({ id: s.string() })) }),
-    reads: [product],
-  });
-  await assertRejectsMessage(
-    queryHarness.query(invalidOutputQuery),
-    'FW410 Query result shape failed declared output schema: product/list Expected string',
-  );
-  const exemptRawSqlQuery = query('cart/audit', {
-    load() {
-      exemptRawSqlHarness.db.sql('select * from audit_log');
-      return [];
-    },
-    reads: [cart],
-  });
-  const exemptRawSqlHarness = createJisoTestHarness({
-    db: createFakeDb(),
-    touchGraph: {},
-    verification: { domainByTable: { cart_items: 'cart' }, exemptTables: ['audit_log'] },
-  });
-  await assertRejectsMessage(
-    exemptRawSqlHarness.query(exemptRawSqlQuery),
-    'FW411 Query read set includes an exempt table: audit_log',
-  );
-
-  const structuredSqlVerifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
-  const structuredStatementCalls = [];
-  const structuredSqlDb = structuredSqlVerifier.wrap({
-    exec(statement) {
-      structuredStatementCalls.push(statement);
-      return [];
-    },
-    query() {
-      return [];
-    },
-  });
-  const structuredStatement = { text: 'select * from cart_items', values: ['c1'] };
-  structuredSqlDb.exec(structuredStatement);
-  assert.deepEqual(structuredStatementCalls, [structuredStatement]);
-  assert.deepEqual(structuredSqlVerifier.observed, [
-    {
-      branch: undefined,
-      domain: 'cart',
-      kind: 'read',
-      mutationRead: undefined,
-      rowKey: undefined,
-      sql: 'select * from cart_items',
-      table: 'cart_items',
-    },
-  ]);
-
-  const nestedVerifier = createDbVerifier(
-    {
-      'product.syncPrice': {
-        reads: [
+      csrf: {
+        invalidResult: {
+          error: { code: 'CSRF', payload: {} },
+          ok: false,
+          status: 422,
+        },
+        mutationExecutions: 1,
+        tokenMatchesField: true,
+        validResult: {
+          changes: [],
+          ok: true,
+          rerunQueries: [],
+          value: 'p1',
+        },
+      },
+      diagnosticMessages: {
+        FW402: 'Write touched an undeclared domain.',
+        FW404: 'Write to unmapped table.',
+        FW407: 'Query read from undeclared domain.',
+        FW408: 'Declared row key differs from observed row predicate.',
+        FW410: 'Query result shape failed declared output schema.',
+        FW411: 'Query read set includes an exempt table.',
+      },
+      failures: {
+        exemptRawSql: 'FW411 Query read set includes an exempt table: audit_log',
+        exemptRead: 'FW411 Query read set includes an exempt table: audit_log',
+        invalidOutput:
+          'FW410 Query result shape failed declared output schema: product/list Expected string',
+        missingNestedRead: 'FW407 Query read from undeclared domain: price, price',
+        rowKey:
+          'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+        selectSubqueryMissingRead: 'FW407 Query read from undeclared domain: price',
+        undeclaredRead: 'FW407 Query read from undeclared domain: product',
+        unmappedWrite: 'FW404 Write to unmapped table: unknown_table',
+        writeOutsideGraph: 'FW402 Write touched an undeclared domain: audit',
+      },
+      harness: {
+        validOutputQuery: { count: 2 },
+        writeMutation: {
+          changes: [],
+          ok: true,
+          rerunQueries: [],
+          value: 'p1',
+        },
+      },
+      pglite: {
+        rawMutationFailure: 'FW402 Write touched an undeclared domain: audit',
+        transactionFailure: 'FW402 Write touched an undeclared domain: audit',
+      },
+      sql: {
+        compoundRowKeyCovered: true,
+        nestedUpdateCovered: true,
+        nestedUpdateReadsCovered: true,
+        selectSubqueryCoveredWithBothDomains: true,
+        structuredStatementForwarded: true,
+        structuredStatementObserved: [
           {
-            domain: 'price',
-            keys: null,
-            site: 'product.ts:2',
-            source: 'update-from',
-            via: 'prices',
+            branch: undefined,
+            domain: 'cart',
+            kind: 'read',
+            mutationRead: undefined,
+            rowKey: undefined,
+            sql: 'select * from cart_items',
+            table: 'cart_items',
           },
         ],
-        touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
-        unresolved: [],
+      },
+      verifier: {
+        exemptWriteCovered: true,
       },
     },
-    { domainByTable: { prices: 'price', products: 'product' } },
-  );
-  const nestedDb = nestedVerifier.wrap(createFakeDb());
-  nestedDb.sql(
-    'update products set price = prices.amount from prices where prices.product_id = products.id',
-  );
-  assert.doesNotThrow(() => nestedVerifier.assertCovered('product.syncPrice'));
-  assert.doesNotThrow(() => nestedVerifier.assertReadsCovered(['price']));
-
-  const missingNestedReadVerifier = createDbVerifier(
-    {
-      'product.syncPrice': {
-        touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
-        unresolved: [],
-      },
-    },
-    { domainByTable: { prices: 'price', products: 'product' } },
-  );
-  const missingNestedReadDb = missingNestedReadVerifier.wrap(createFakeDb());
-  missingNestedReadDb.sql(
-    [
-      'update products set unit_price = (select max(amount) from prices)',
-      'where id in (select product_id from prices)',
-    ].join(' '),
-  );
-  assertThrowsMessage(
-    () => missingNestedReadVerifier.assertCovered('product.syncPrice'),
-    'FW407 Query read from undeclared domain: price, price',
-  );
-
-  const selectSubqueryVerifier = createDbVerifier(
-    {},
-    { domainByTable: { prices: 'price', products: 'product' } },
-  );
-  const selectSubqueryDb = selectSubqueryVerifier.wrap(createFakeDb());
-  selectSubqueryDb.sql('select * from products where id in (select product_id from prices)');
-  assertThrowsMessage(
-    () => selectSubqueryVerifier.assertReadsCovered(['product']),
-    'FW407 Query read from undeclared domain: price',
-  );
-  assert.doesNotThrow(() => selectSubqueryVerifier.assertReadsCovered(['product', 'price']));
-
-  const rowKeyVerifier = createDbVerifier(
-    {
-      'product.reserve': {
-        touches: [
-          { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
-        ],
-        unresolved: [],
-      },
-    },
-    { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
-  );
-  const rowKeyDb = rowKeyVerifier.wrap(createFakeDb());
-  rowKeyDb.sql("update products set reserved = true where sku = 'sku-1'");
-  assertThrowsMessage(
-    () => rowKeyVerifier.assertCovered('product.reserve'),
-    'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
-  );
-
-  const compoundRowKeyVerifier = createDbVerifier(
-    {
-      'product.reserve': {
-        touches: [
-          { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
-        ],
-        unresolved: [],
-      },
-    },
-    { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
-  );
-  const compoundRowKeyDb = compoundRowKeyVerifier.wrap(createFakeDb());
-  compoundRowKeyDb.sql("update products set reserved = true where sku = 'sku-1' and id = 'p1'");
-  assert.doesNotThrow(() => compoundRowKeyVerifier.assertCovered('product.reserve'));
-
-  const pgliteHandle = {
-    exec() {
-      return [];
-    },
-    query() {
-      return [];
-    },
-    transaction(callback) {
-      return callback({
-        exec() {
-          return [];
-        },
-        query() {
-          return [];
-        },
-      });
-    },
-  };
-  const pgliteHarness = createJisoTestHarness({
-    db: { pglite: pgliteHandle },
-    touchGraph: {
-      'cart.add': {
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
-        unresolved: [],
-      },
-    },
-    verification: { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
-  });
-  const rawPgliteMutation = mutation('cart/add', {
-    csrf: false,
-    input: s.object({ productId: s.string() }),
-    async handler(input, request) {
-      await request.db.pglite.query('insert into audit_log (product_id) values ($1)', [
-        input.productId,
-      ]);
-      return input.productId;
-    },
-  });
-  await assertRejectsMessage(
-    pgliteHarness.exec(rawPgliteMutation, { productId: 'p1' }, { touchGraphKey: 'cart.add' }),
-    'FW402 Write touched an undeclared domain: audit',
-  );
-  const transactionMutation = mutation('cart/add-transaction', {
-    csrf: false,
-    input: s.object({ productId: s.string() }),
-    async handler(input, request) {
-      await request.db.pglite.transaction(async (tx) => {
-        await tx.query('insert into audit_log (product_id) values ($1)', [input.productId]);
-      });
-      return input.productId;
-    },
-  });
-  await assertRejectsMessage(
-    pgliteHarness.exec(transactionMutation, { productId: 'p2' }, { touchGraphKey: 'cart.add' }),
-    'FW402 Write touched an undeclared domain: audit',
   );
 
   assert.deepEqual(

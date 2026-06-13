@@ -29,6 +29,7 @@
     "./touch-graph-fixtures": "./src/touch-graph-fixtures.ts",
     "./typescript-fixtures": "./src/typescript-fixtures.ts",
     "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
+    "./verification-fixtures": "./src/verification-fixtures.ts",
     "./verifier-sql": "./src/verifier-sql.ts",
     "./verifier": "./src/verifier.ts",
     "./vite-fixtures": "./src/vite-fixtures.ts",

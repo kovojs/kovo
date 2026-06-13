@@ -342,6 +342,12 @@ import {
   type DiagnosticCode,
   type DbVerificationDiagnostic as DirectDbVerificationDiagnostic,
 } from '@jiso/test/verifier-diagnostics';
+import {
+  createVerificationFakeDb,
+  verificationLayerBehaviorFact,
+  type VerificationLayerBehaviorFact,
+  type VerificationLayerRuntime,
+} from '@jiso/test/verification-fixtures';
 import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
 import {
   viteGeneratedHandlerMiddlewareFact,
@@ -373,6 +379,8 @@ describe('@jiso/test package subpath exports', () => {
     expect(createPgliteTestDb).toBe(rootCreatePgliteTestDb);
     expect(jisoTest).toBe(rootJisoTest);
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
+    expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
+    expect(verificationLayerBehaviorFact).toBeTypeOf('function');
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
     expect(optimismCleanupBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
@@ -393,6 +401,12 @@ describe('@jiso/test package subpath exports', () => {
     }>();
     expectTypeOf<OptimismCleanupRuntime>().toMatchTypeOf<{
       createQueryStore: () => unknown;
+    }>();
+    expectTypeOf<VerificationLayerBehaviorFact>().toMatchTypeOf<{
+      failures: Record<string, string>;
+    }>();
+    expectTypeOf<VerificationLayerRuntime>().toMatchTypeOf<{
+      createDbVerifier: (...args: any[]) => unknown;
     }>();
   });
 
