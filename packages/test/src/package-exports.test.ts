@@ -134,6 +134,13 @@ import {
   type HarnessOperationVerifier,
 } from '@jiso/test/harness-operations';
 import {
+  cookiePair,
+  firstSetCookiePair,
+  headerValues,
+  setCookieValues,
+  type HeaderRecord,
+} from '@jiso/test/headers';
+import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
@@ -255,6 +262,13 @@ describe('@jiso/test package subpath exports', () => {
     expect(createPgliteTestDb).toBe(rootCreatePgliteTestDb);
     expect(jisoTest).toBe(rootJisoTest);
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
+    expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
+      'sid=1; Path=/',
+    ]);
+    expect(setCookieValues({ 'Set-Cookie': ['sid=1; Path=/'] })).toEqual(['sid=1; Path=/']);
+    expect(cookiePair('sid=1; Path=/')).toBe('sid=1');
+    expect(firstSetCookiePair({ 'Set-Cookie': 'sid=1; Path=/' })).toBe('sid=1');
+    expectTypeOf<HeaderRecord>().toEqualTypeOf<Record<string, string | string[] | undefined>>();
   });
 
   it('keeps subpath-only helpers available through their owning modules', () => {

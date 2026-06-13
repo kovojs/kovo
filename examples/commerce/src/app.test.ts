@@ -5,6 +5,7 @@ import { readFileSync, rmSync } from 'node:fs';
 
 import { storageBodyToBytes } from '@jiso/core';
 import { propertyTest } from '@jiso/test/assertions';
+import { cookiePair, headerValues, setCookieValues } from '@jiso/test/headers';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
   fwFragmentFacts,
@@ -176,24 +177,13 @@ function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {
 }
 
 function setCookieHeaders(response: { headers: Record<string, string | string[]> }): string[] {
-  return headerValues(response.headers, 'Set-Cookie');
+  return setCookieValues(response.headers);
 }
 
 function mutationSetCookieHeaders(result: {
   responseHeaders?: Record<string, string | string[]>;
 }): string[] {
-  return headerValues(result.responseHeaders ?? {}, 'Set-Cookie');
-}
-
-function headerValues(headers: Record<string, string | string[]>, name: string): string[] {
-  const cookies = headers[name];
-  if (!cookies) return [];
-
-  return Array.isArray(cookies) ? cookies : [cookies];
-}
-
-function cookiePair(setCookie: string): string {
-  return setCookie.split(';')[0] ?? setCookie;
+  return headerValues(result.responseHeaders, 'Set-Cookie');
 }
 
 function keyedListNode(

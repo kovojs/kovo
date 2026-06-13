@@ -12,6 +12,7 @@
     "./fw-export-fixtures": "./src/fw-export-fixtures.ts",
     "./graph-fixtures": "./src/graph-fixtures.ts",
     "./generated-module-fixtures": "./src/generated-module-fixtures.ts",
+    "./headers": "./src/headers.ts",
     "./harness-operations": "./src/harness-operations.ts",
     "./harness": "./src/harness.ts",
     "./html-fragment": "./src/html-fragment.ts",

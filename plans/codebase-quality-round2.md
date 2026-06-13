@@ -179,7 +179,8 @@ modules, fw-explain, TypeScript, fw-check output, source/project facts, commands
 wire, static export, touch graphs, graph invalidation/consumer facts, and reusable HTML fragment
 field/key projections. Commerce app/source-truth tests no longer own local form-field or
 keyed-element projection helpers for currently covered no-JS form, list identity, and enhanced
-fragment assertions.
+fragment assertions. Shared header fixtures now own response header value and Set-Cookie pair
+projection for commerce app/app-shell tests.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -196,6 +197,9 @@ Latest evidence:
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`
 - `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src/headers.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts -t "session|sign|cookie|auth|commerce app shell HTTP entry|renders SPEC 6.3 no-JS add-to-cart forms|renders a multipart receipt upload form"`
+- exact `pnpm exec vp check packages/test/package.json packages/test/src/headers.ts packages/test/src/headers.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `git diff --check`
 
 ## Phase 7 - Test Restructuring
@@ -205,7 +209,8 @@ fixture tests have been split out of monoliths along module seams. Runtime query
 enhanced-submit, and delegated handler integration coverage now lives in focused runtime tests.
 `tests/fw-check.node.mjs` is still large but increasingly delegates mechanics to package fixtures
 and structured facts. Commerce app tests now consume shared `@jiso/test/html-fragment` form and
-keyed-element projections instead of local helpers.
+keyed-element projections and shared `@jiso/test/headers` response/cookie projections instead of
+local helpers.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -230,6 +235,4 @@ Stale but useful broad references:
 
 ## Integration Queue
 
-- [ ] Integrate completed runtime Round150 branch and run focused runtime gates.
-- [ ] Integrate completed harness Round151 branch and run focused harness/commerce gates.
-- [ ] Keep five active worker lanes by refilling integrated lanes from the latest main `HEAD`.
+- [ ] Refill worker lanes when sub-agent usage capacity is available again.

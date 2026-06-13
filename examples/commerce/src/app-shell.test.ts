@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
 import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
+import { cookiePair, firstSetCookiePair } from '@jiso/test/headers';
 import {
   fwFragmentFacts,
   fwQueryFacts,
@@ -687,11 +688,10 @@ async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db'])
   );
   if (!result.ok) throw new Error(`commerce sign-in failed: ${result.error.code}`);
 
-  const setCookie = result.responseHeaders?.['Set-Cookie'];
-  const rawCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  if (!rawCookie) throw new Error('commerce sign-in did not set a cookie');
+  const sessionCookie = firstSetCookiePair(result.responseHeaders);
+  if (!sessionCookie) throw new Error('commerce sign-in did not set a cookie');
 
-  return rawCookie.split(';')[0] ?? rawCookie;
+  return sessionCookie;
 }
 
 function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db']) {
@@ -700,10 +700,6 @@ function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db
     db,
     headers: new Headers(),
   };
-}
-
-function cookiePair(setCookie: string): string {
-  return setCookie.split(';')[0] ?? setCookie;
 }
 
 function stripeHeader(body: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
