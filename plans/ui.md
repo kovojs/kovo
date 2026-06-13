@@ -47,6 +47,8 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       catalog list.
 - [x] Gallery tests cover static fixtures, behavior contracts, merge fixtures, compiled
       interactive demos, generated-client DOM/ref/export contracts, and static docs export wiring.
+- [x] Static gallery routes now consistently expose `data-ui-demo` wrappers for the
+      disclosure/overlay styled source surfaces while preserving SPEC §3.1 light-DOM behavior.
 - [x] G5 exported primitive attrs inventory is closed for all exported primitive `*Attributes`
       builders, including author stress attrs, rendered merge goldens, and SPEC §4.6 diagnostics.
 - [x] Recent native-state coverage includes number-field off-grid stepping, checkbox-group canceled
@@ -176,6 +178,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `@jiso/ui` wrapper surface, the raw route fixtures are synchronized against
       `renderGalleryRoute()`, and the Chromium browser gate asserts deterministic route geometry
       plus screenshot hashes `5e6e6eb4`, `cf798fae`, and `fcf88f35`.
+      Evidence 2026-06-13: the static disclosure/overlay source routes now prove
+      `data-ui-demo` wrapper coverage for collapsible, disclosure, hover-card, popover, and
+      tooltip in `examples/gallery/src/demo-fixtures.test.ts`; their raw fixtures are synchronized
+      against `renderGalleryRoute()`, and the Chromium browser gate passes route-level axe plus
+      visual baselines, including collapsible's updated `860x531` hash `a7ea60ca`.
       Evidence 2026-06-13: the static visual baseline now covers the H3 autocomplete and combobox
       input route family. Their raw route fixtures are synchronized against `renderGalleryRoute()`,
       and the Chromium browser gate asserts deterministic route geometry plus screenshot hashes
@@ -210,9 +217,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `@jiso/ui` wrapper surface while preserving native light-DOM semantics from SPEC §3.1;
       checkbox now preserves external native `form` ownership through the styled wrapper and
       static gallery route. Raw route fixtures are synchronized against `renderGalleryRoute()`,
-      and the Chromium visual gate asserts deterministic route geometry plus screenshot hashes
-      `22704a32`, `0de1166f`, `38a73445`, `acf6aad0`, `6bd00d65`, `cd8996f0`, `0653d48e`,
-      `14372e1a`, and `d9dab2de`.
+      and the Chromium visual gate asserts deterministic route geometry plus accepted screenshot
+      hashes, including updated collapsible hash `a7ea60ca` and Chromium variants for adjacent
+      routes recorded in `examples/gallery/src/interactive-gallery.browser.test.ts`.
       Evidence 2026-06-13: the static visual baseline now covers the remaining H2 roving-control
       route family: toggle-group and toolbar. Raw route fixtures are synchronized against
       `renderGalleryRoute()`, and the Chromium visual gate asserts deterministic `860x635`

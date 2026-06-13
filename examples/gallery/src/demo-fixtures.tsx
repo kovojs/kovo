@@ -1005,31 +1005,33 @@ export function CollapsibleDemo(): string {
         Collapsible uses native details disclosure while keeping primitive state attrs on each
         styled part.
       </p>
-      {Collapsible.definition.render({
-        children:
-          CollapsibleTrigger.definition.render({ ...state, children: 'Release notes' }) +
-          CollapsibleContent.definition.render({
-            ...state,
-            children: 'Includes dependency updates and migration notes.',
-          }),
-        id: 'gallery-collapsible',
-        open: state.open,
-      })}
-      {Collapsible.definition.render({
-        children:
-          CollapsibleTrigger.definition.render({
-            children: 'Archived notes',
-            contentId: 'gallery-collapsible-disabled-content',
-            disabled: true,
-          }) +
-          CollapsibleContent.definition.render({
-            children: 'Archived content remains present for no-JS readers.',
-            contentId: 'gallery-collapsible-disabled-content',
-          }),
-        disabled: true,
-        id: 'gallery-collapsible-disabled',
-        open: false,
-      })}
+      <div data-ui-demo="collapsible">
+        {Collapsible.definition.render({
+          children:
+            CollapsibleTrigger.definition.render({ ...state, children: 'Release notes' }) +
+            CollapsibleContent.definition.render({
+              ...state,
+              children: 'Includes dependency updates and migration notes.',
+            }),
+          id: 'gallery-collapsible',
+          open: state.open,
+        })}
+        {Collapsible.definition.render({
+          children:
+            CollapsibleTrigger.definition.render({
+              children: 'Archived notes',
+              contentId: 'gallery-collapsible-disabled-content',
+              disabled: true,
+            }) +
+            CollapsibleContent.definition.render({
+              children: 'Archived content remains present for no-JS readers.',
+              contentId: 'gallery-collapsible-disabled-content',
+            }),
+          disabled: true,
+          id: 'gallery-collapsible-disabled',
+          open: false,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
         dataState: 'open, closed, disabled',
@@ -1323,16 +1325,18 @@ export function DisclosureDemo(): string {
         Disclosure keeps an explicit button and hidden panel wiring for progressively enhanced
         state.
       </p>
-      {Disclosure.definition.render({
-        children:
-          DisclosureTrigger.definition.render({ ...state, children: 'Show audit details' }) +
-          DisclosureContent.definition.render({
-            ...state,
-            children: 'Two reviewers approved the release.',
-          }),
-        id: 'gallery-disclosure',
-        open: state.open,
-      })}
+      <div data-ui-demo="disclosure">
+        {Disclosure.definition.render({
+          children:
+            DisclosureTrigger.definition.render({ ...state, children: 'Show audit details' }) +
+            DisclosureContent.definition.render({
+              ...state,
+              children: 'Two reviewers approved the release.',
+            }),
+          id: 'gallery-disclosure',
+          open: state.open,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
         dataState: 'open, closed, disabled',
@@ -1567,20 +1571,22 @@ export function HoverCardDemo(): string {
         Hover card uses a package-prefixed behavior attribute on the trigger and keeps popover
         content in the document.
       </p>
-      {HoverCard.definition.render({
-        children:
-          HoverCardTrigger.definition.render({
-            ...state,
-            children: 'Ada Lovelace',
-            href: '/team/ada',
-          }) +
-          HoverCardContent.definition.render({
-            ...state,
-            children: '<strong>Compiler owner</strong><p>Maintains release quality gates.</p>',
-          }),
-        id: 'gallery-hover-card',
-        open: state.open,
-      })}
+      <div data-ui-demo="hover-card">
+        {HoverCard.definition.render({
+          children:
+            HoverCardTrigger.definition.render({
+              ...state,
+              children: 'Ada Lovelace',
+              href: '/team/ada',
+            }) +
+            HoverCardContent.definition.render({
+              ...state,
+              children: '<strong>Compiler owner</strong><p>Maintains release quality gates.</p>',
+            }),
+          id: 'gallery-hover-card',
+          open: state.open,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons:
           'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, content-pointer-enter, content-pointer-leave, content-focus, content-blur, escape-key, programmatic',
@@ -2670,16 +2676,18 @@ export function PopoverDemo(): string {
       <p data-demo-summary="no-js">
         Popover keeps native popover target wiring on the trigger and an auto popover content node.
       </p>
-      {Popover.definition.render({
-        children:
-          PopoverTrigger.definition.render({ ...state, children: 'Filters' }) +
-          PopoverContent.definition.render({
-            ...state,
-            children: 'Status, owner, and due-date filters are available.',
-          }),
-        id: 'gallery-popover',
-        open: state.open,
-      })}
+      <div data-ui-demo="popover">
+        {Popover.definition.render({
+          children:
+            PopoverTrigger.definition.render({ ...state, children: 'Filters' }) +
+            PopoverContent.definition.render({
+              ...state,
+              children: 'Status, owner, and due-date filters are available.',
+            }),
+          id: 'gallery-popover',
+          open: state.open,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, escape-key, native-beforetoggle, programmatic',
         dataState: 'open, closed, disabled',
@@ -2725,16 +2733,18 @@ export function TooltipDemo(): string {
       <p data-demo-summary="no-js">
         Tooltip uses package-prefixed behavior attributes and a manual popover content node.
       </p>
-      {Tooltip.definition.render({
-        children:
-          TooltipTrigger.definition.render({ ...state, children: 'Inspect status' }) +
-          TooltipContent.definition.render({
-            ...state,
-            children: 'Status updates every minute.',
-          }),
-        id: 'gallery-tooltip',
-        open: state.open,
-      })}
+      <div data-ui-demo="tooltip">
+        {Tooltip.definition.render({
+          children:
+            TooltipTrigger.definition.render({ ...state, children: 'Inspect status' }) +
+            TooltipContent.definition.render({
+              ...state,
+              children: 'Status updates every minute.',
+            }),
+          id: 'gallery-tooltip',
+          open: state.open,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons:
           'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, escape-key, programmatic',

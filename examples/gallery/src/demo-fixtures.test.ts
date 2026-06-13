@@ -754,20 +754,25 @@ describe('gallery demo fixtures', () => {
     const card = findFixture('/components/card');
     const autocomplete = findFixture('/components/autocomplete');
     const checkboxGroup = findFixture('/components/checkbox-group');
+    const collapsible = findFixture('/components/collapsible');
     const combobox = findFixture('/components/combobox');
     const command = findFixture('/components/command');
     const contextMenu = findFixture('/components/context-menu');
+    const disclosure = findFixture('/components/disclosure');
     const drawer = findFixture('/components/drawer');
     const dropdownMenu = findFixture('/components/dropdown-menu');
+    const hoverCard = findFixture('/components/hover-card');
     const kbd = findFixture('/components/kbd');
     const menubar = findFixture('/components/menubar');
     const navigationMenu = findFixture('/components/navigation-menu');
+    const popover = findFixture('/components/popover');
     const select = findFixture('/components/select');
     const sheet = findFixture('/components/sheet');
     const skeleton = findFixture('/components/skeleton');
     const slider = findFixture('/components/slider');
     const table = findFixture('/components/table');
     const tabs = findFixture('/components/tabs');
+    const tooltip = findFixture('/components/tooltip');
     const toast = findFixture('/components/toast');
     const toggleGroup = findFixture('/components/toggle-group');
     const toolbar = findFixture('/components/toolbar');
@@ -806,6 +811,11 @@ describe('gallery demo fixtures', () => {
     expect(checkboxGroup.html).toContain('accent-neutral-950');
     expect(checkboxGroup.html).toContain('gallery-checkbox-group-updates');
 
+    expect(collapsible.html).toContain('data-ui-demo="collapsible"');
+    expect(collapsible.html).toContain('rounded-md border border-neutral-200');
+    expect(collapsible.html).toContain('cursor-pointer px-3 py-2 font-medium');
+    expect(collapsible.html).toContain('data-[state=closed]:hidden');
+
     expect(autocomplete.html).toContain('data-ui-demo="autocomplete"');
     expect(autocomplete.html).toContain('rounded-md border border-neutral-300');
     expect(autocomplete.html).toContain('gallery-autocomplete-list');
@@ -824,6 +834,10 @@ describe('gallery demo fixtures', () => {
     expect(contextMenu.html).toContain('border-dashed border-neutral-300');
     expect(contextMenu.html).toContain('gallery-context-menu-inspect');
 
+    expect(disclosure.html).toContain('data-ui-demo="disclosure"');
+    expect(disclosure.html).toContain('rounded-md border border-neutral-200');
+    expect(disclosure.html).toContain('aria-controls="gallery-disclosure-content"');
+
     expect(drawer.html).toContain('data-ui-demo="drawer"');
     expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');
     expect(drawer.html).toContain('<dialog aria-describedby="gallery-drawer-description"');
@@ -834,6 +848,10 @@ describe('gallery demo fixtures', () => {
     expect(dropdownMenu.html).toContain('data-ui-demo="dropdown-menu"');
     expect(dropdownMenu.html).toContain('data-[state=open]:bg-neutral-100');
     expect(dropdownMenu.html).toContain('gallery-dropdown-menu-rename');
+
+    expect(hoverCard.html).toContain('data-ui-demo="hover-card"');
+    expect(hoverCard.html).toContain('jiso-hover-card="gallery-hover-card-content"');
+    expect(hoverCard.html).toContain('rounded-md border border-neutral-200 bg-white p-4');
 
     expect(kbd.html).toContain('data-ui-demo="kbd"');
     expect(kbd.html).toContain('<kbd class="inline-flex h-5 min-w-5');
@@ -846,6 +864,10 @@ describe('gallery demo fixtures', () => {
     expect(navigationMenu.html).toContain('data-ui-demo="navigation-menu"');
     expect(navigationMenu.html).toContain('data-[state=open]:bg-neutral-100');
     expect(navigationMenu.html).toContain('gallery-navigation-products-panel');
+
+    expect(popover.html).toContain('data-ui-demo="popover"');
+    expect(popover.html).toContain('popovertarget="gallery-popover-content"');
+    expect(popover.html).toContain('rounded-md border border-neutral-200 bg-white p-3');
 
     expect(select.html).toContain('data-ui-demo="select"');
     expect(select.html).toContain('rounded-md border border-neutral-300');
@@ -878,6 +900,10 @@ describe('gallery demo fixtures', () => {
     expect(tabs.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
     expect(tabs.html).toContain('data-[state=active]:bg-white');
     expect(tabs.html).toContain('overview content');
+
+    expect(tooltip.html).toContain('data-ui-demo="tooltip"');
+    expect(tooltip.html).toContain('jiso-tooltip="gallery-tooltip-content"');
+    expect(tooltip.html).toContain('rounded-md bg-neutral-950 px-2.5 py-1.5');
 
     expect(toast.html).toContain('data-ui-demo="toast"');
     expect(toast.html).toContain('data-[variant=success]:bg-emerald-50');

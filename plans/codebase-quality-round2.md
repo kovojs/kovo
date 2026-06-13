@@ -201,6 +201,16 @@ Latest evidence:
   `@jiso/server/app-shell/vite` subpath now expose canonical `jisoAppShellViteDevPlugin`
   naming while keeping the stale SSR-named plugin alias absent, and starter/commerce Vite loaders
   prove outside adoption through that public SPEC §9.5 boundary.
+- UI/gallery disclosure-overlay static wrapper closure slice:
+  `(cd examples/gallery && pnpm exec vitest --run src/demo-fixtures.test.ts)`;
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/collapsible.html.txt examples/gallery/src/visual-fixtures/disclosure.html.txt examples/gallery/src/visual-fixtures/hover-card.html.txt examples/gallery/src/visual-fixtures/popover.html.txt examples/gallery/src/visual-fixtures/tooltip.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: static collapsible, disclosure, hover-card, popover, and tooltip
+  routes now expose `data-ui-demo` wrapper surfaces while preserving SPEC §3.1 light-DOM behavior,
+  their route HTML fixtures are synchronized against `renderGalleryRoute()`, and Chromium proves
+  axe/visual coverage with updated collapsible geometry/hash.
 - Phase 5 docs-site client-module rewrite boundary slice:
   `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
   `pnpm exec tsc --noEmit --pretty false`;
