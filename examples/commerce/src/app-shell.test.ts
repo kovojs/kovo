@@ -14,7 +14,7 @@ import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
 import { cookiePair, firstSetCookiePair } from '@jiso/test/headers';
 import {
   fwFragmentFacts,
-  fwQueryFacts,
+  fwResponseBodyFact,
   htmlDocumentFacts,
   htmlElementFacts,
   htmlFormActions,
@@ -410,7 +410,7 @@ describe('commerce app shell HTTP entry', () => {
       '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
     );
     expectCartQueryPayload(enhancedBody, 2);
-    expect(fwFragmentFacts(enhancedBody).map((fragment) => fragment.target)).toEqual([
+    expect(fwResponseBodyFact(enhancedBody).fragmentTargets).toEqual([
       'cart-badge',
       'product-grid',
       'order-history',
@@ -679,7 +679,7 @@ function commerceShellCount(html: string): number {
 }
 
 function expectCartQueryPayload(html: string, count: number): void {
-  expect(fwQueryFacts(html, 'cart').map((query) => query.json)).toEqual([{ count }]);
+  expect(fwResponseBodyFact(html).queryJsonByName.cart).toEqual([{ count }]);
 }
 
 async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {

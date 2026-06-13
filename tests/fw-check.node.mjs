@@ -102,6 +102,7 @@ import {
 } from '../packages/test/src/graph-fixtures.ts';
 import {
   fwQueryFacts,
+  fwResponseBodyFact,
   htmlDocumentRegions,
   htmlElementFacts,
   htmlLinkHrefs,
@@ -5995,6 +5996,7 @@ export const CartBadge = component('cart-badge', {
   assert.equal(serverRoot.targets.get('summary').html, '<section>Replace</section>');
 
   const fixtureBody = parseWireResponses(await readWireFixture('defer-stream.http'))[0].body;
+  const fixtureResponse = fwResponseBodyFact(fixtureBody);
   const fixtureRoot = new GeneratedFixtureMorphRoot();
   fixtureRoot.targets.set('reviews:p1', new GeneratedFixtureMorphTarget());
   fixtureRoot.targets.set('recommendations:p1', new GeneratedFixtureMorphTarget());
@@ -6015,6 +6017,12 @@ export const CartBadge = component('cart-badge', {
   assert.equal(fixtureApplied.chunks.length, 1);
   const reviewsTargetBlocks = htmlElementFacts(fixtureRoot.targets.get('reviews:p1').html, {
     tag: 'article',
+  });
+  assert.deepEqual(fixtureResponse.queryNames, ['reviews', 'recommendations']);
+  assert.deepEqual(fixtureResponse.fragmentTargets, ['reviews:p1', 'recommendations:p1']);
+  assert.deepEqual(fixtureResponse.stylesheetHrefsByTarget, {
+    'recommendations:p1': [],
+    'reviews:p1': ['/assets/reviews.css'],
   });
   assert.deepEqual(
     fixtureApplied.chunks[0].fragments.map((fragment) => fragment.target),

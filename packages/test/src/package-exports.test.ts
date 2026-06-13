@@ -159,6 +159,7 @@ import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
+  fwResponseBodyFact,
   htmlDocumentFacts,
   htmlDocumentRegions,
   htmlElementFacts,
@@ -331,6 +332,16 @@ describe('@jiso/test package subpath exports', () => {
         'cart',
       ),
     ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'], target: 'cart' }]);
+    expect(
+      fwResponseBodyFact(
+        '<fw-query name="cart">{"count":1}</fw-query><fw-fragment target="cart"><article fw-key="order-1">Order</article></fw-fragment>',
+      ),
+    ).toMatchObject({
+      fragmentTargets: ['cart'],
+      keyValues: ['order-1'],
+      queryJsonByName: { cart: [{ count: 1 }] },
+      queryNames: ['cart'],
+    });
     expect(
       htmlFormFacts(
         '<form method="post" action="/_m/cart/add"><input name="productId" value="p1"></form>',

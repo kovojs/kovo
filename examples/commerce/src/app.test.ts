@@ -10,7 +10,7 @@ import { cookiePair, headerValues, setCookieValues } from '@jiso/test/headers';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
   fwFragmentFacts,
-  fwQueryFacts,
+  fwResponseBodyFact,
   htmlDocumentFacts,
   htmlElementFacts,
   htmlFormFieldsByName,
@@ -512,10 +512,11 @@ describe('commerce example', () => {
         tag: 'fw-defer',
       }),
     ).toHaveLength(1);
-    expect(fwQueryFacts(response.body).map((query) => query.name)).toEqual(['productGrid']);
-    expect(fwFragmentFacts(response.body, 'product-grid')).toMatchObject([
-      { stylesheetHrefs: ['/assets/tailwind.css'] },
-    ]);
+    const responseFact = fwResponseBodyFact(response.body);
+    expect(responseFact.queryNames).toEqual(['productGrid']);
+    expect(
+      responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
+    ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'] }]);
     expect(
       htmlElementFacts(response.body, {
         attrs: { class: 'rounded border border-slate-200 bg-white p-4' },
@@ -1027,23 +1028,15 @@ describe('commerce example', () => {
       },
     );
 
-    expect(fwQueryFacts(response.body).map((query) => query.name)).toEqual([
-      'cart',
-      'productGrid',
-      'orderHistory',
-    ]);
-    const fragments = fwFragmentFacts(response.body);
-    expect(fragments.map((fragment) => fragment.target)).toEqual([
-      'cart-badge',
-      'product-grid',
-      'order-history',
-    ]);
-    expect(fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([
+    const responseFact = fwResponseBodyFact(response.body);
+    expect(responseFact.queryNames).toEqual(['cart', 'productGrid', 'orderHistory']);
+    expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
+    expect(responseFact.fragments.flatMap((fragment) => fragment.stylesheetHrefs)).toEqual([
       '/assets/tailwind.css',
       '/assets/tailwind.css',
       '/assets/tailwind.css',
     ]);
-    expect(htmlKeyValues(response.body)).toContain('order-2');
+    expect(responseFact.keyValues).toContain('order-2');
     expect(transactions).toBe(2);
   });
 
@@ -1071,20 +1064,22 @@ describe('commerce example', () => {
       },
       status: 200,
     });
-    expect(fwFragmentFacts(response.body, 'product-grid')).toMatchObject([
+    const responseFact = fwResponseBodyFact(response.body);
+    expect(
+      responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
+    ).toMatchObject([
       {
         attrs: { 'error-boundary': 'product-grid', target: 'product-grid' },
         stylesheetHrefs: ['/assets/tailwind.css'],
       },
     ]);
     expect(
-      htmlTextContent(fwFragmentFacts(response.body, 'product-grid')[0]?.innerHtml ?? ''),
+      htmlTextContent(
+        responseFact.fragments.find((fragment) => fragment.target === 'product-grid')?.innerHtml ??
+          '',
+      ),
     ).toBe('Product grid failed: catalog unavailable');
-    expect(fwFragmentFacts(response.body).map((fragment) => fragment.target)).toEqual([
-      'cart-badge',
-      'product-grid',
-      'order-history',
-    ]);
+    expect(responseFact.fragmentTargets).toEqual(['cart-badge', 'product-grid', 'order-history']);
   });
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {

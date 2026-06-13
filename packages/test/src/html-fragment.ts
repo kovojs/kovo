@@ -62,6 +62,16 @@ export interface FwFragmentFact {
   target: string;
 }
 
+export interface FwResponseBodyFact {
+  fragmentTargets: string[];
+  fragments: FwFragmentFact[];
+  keyValues: string[];
+  queries: FwQueryFact[];
+  queryJsonByName: Record<string, unknown[]>;
+  queryNames: string[];
+  stylesheetHrefsByTarget: Record<string, string[]>;
+}
+
 export interface HtmlFormFieldFact {
   attrs: Record<string, string>;
   html: string;
@@ -218,6 +228,23 @@ export function fwFragmentFacts(html: string, target?: string): FwFragmentFact[]
     .filter((fact) => target === undefined || fact.target === target);
 }
 
+export function fwResponseBodyFact(html: string): FwResponseBodyFact {
+  const queries = fwQueryFacts(html);
+  const fragments = fwFragmentFacts(html);
+
+  return {
+    fragmentTargets: fragments.map((fragment) => fragment.target),
+    fragments,
+    keyValues: htmlKeyValues(html),
+    queries,
+    queryJsonByName: groupQueryJsonByName(queries),
+    queryNames: queries.map((query) => query.name),
+    stylesheetHrefsByTarget: Object.fromEntries(
+      fragments.map((fragment) => [fragment.target, fragment.stylesheetHrefs]),
+    ),
+  };
+}
+
 export function htmlFormFacts(html: string): HtmlFormFact[] {
   return htmlElementFacts(html, { tag: 'form' }).map((form) => ({
     action: form.attrs.action ?? '',
@@ -275,6 +302,17 @@ export function htmlKeyValues(html: string): string[] {
 
 export function htmlKeyTextMap(html: string): Record<string, string> {
   return Object.fromEntries(htmlKeyFacts(html).map((fact) => [fact.key, fact.text]));
+}
+
+function groupQueryJsonByName(queries: FwQueryFact[]): Record<string, unknown[]> {
+  const grouped: Record<string, unknown[]> = {};
+
+  for (const query of queries) {
+    grouped[query.name] ??= [];
+    grouped[query.name]!.push(query.json);
+  }
+
+  return grouped;
 }
 
 export function htmlTextContent(html: string): string {

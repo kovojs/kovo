@@ -28,12 +28,7 @@ import {
   graphPageFact,
   graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
-import {
-  fwFragmentFacts,
-  fwQueryFacts,
-  htmlDocumentFacts,
-  htmlKeyValues,
-} from '@jiso/test/html-fragment';
+import { fwResponseBodyFact, htmlDocumentFacts } from '@jiso/test/html-fragment';
 import { touchGraphProvenanceFact } from '@jiso/test/touch-graph-fixtures';
 import { fwCheck, fwExplain } from 'fw';
 
@@ -565,6 +560,7 @@ describe('commerce source-truth graph acceptance', () => {
           .join(','),
       },
     );
+    const responseFact = fwResponseBodyFact(response.body);
 
     expect(response).toMatchObject({
       headers: {
@@ -572,20 +568,14 @@ describe('commerce source-truth graph acceptance', () => {
       },
       status: 200,
     });
-    expect(
-      fwQueryFacts(response.body)
-        .map((query) => query.name)
-        .sort((a, b) => a.localeCompare(b)),
-    ).toEqual([...affectedQueries].sort((a, b) => a.localeCompare(b)));
-    expect(
-      fwFragmentFacts(response.body)
-        .map((fragment) => fragment.target)
-        .sort((a, b) => a.localeCompare(b)),
-    ).toEqual(
+    expect(responseFact.queryNames.sort((a, b) => a.localeCompare(b))).toEqual(
+      [...affectedQueries].sort((a, b) => a.localeCompare(b)),
+    );
+    expect(responseFact.fragmentTargets.sort((a, b) => a.localeCompare(b))).toEqual(
       affectedQueries
         .map((query) => graphFragmentTargetForQuery(commerceGraph, query))
         .sort((a, b) => a.localeCompare(b)),
     );
-    expect(htmlKeyValues(response.body)).toContain('order-2');
+    expect(responseFact.keyValues).toContain('order-2');
   });
 });

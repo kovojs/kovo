@@ -4,6 +4,7 @@ import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
+  fwResponseBodyFact,
   htmlDocumentFacts,
   htmlDocumentRegions,
   htmlElementFacts,
@@ -286,6 +287,32 @@ describe('@jiso/test html fragment seam', () => {
         target: 'product-grid',
       },
     ]);
+  });
+
+  it('summarizes framework response bodies without commerce-local fixture parsing', () => {
+    const html = [
+      '<fw-query name="cart">{"count":2}</fw-query>',
+      '<fw-query name="productGrid">{"items":[{"id":"p1"}]}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge><span>2</span></cart-badge></fw-fragment>',
+      '<fw-fragment target="product-grid">',
+      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<section><article fw-key="p1">Mug</article></section>',
+      '</fw-fragment>',
+    ].join('');
+
+    expect(fwResponseBodyFact(html)).toMatchObject({
+      fragmentTargets: ['cart-badge', 'product-grid'],
+      keyValues: ['p1'],
+      queryJsonByName: {
+        cart: [{ count: 2 }],
+        productGrid: [{ items: [{ id: 'p1' }] }],
+      },
+      queryNames: ['cart', 'productGrid'],
+      stylesheetHrefsByTarget: {
+        'cart-badge': [],
+        'product-grid': ['/assets/tailwind.css'],
+      },
+    });
   });
 
   it('returns structured form facts with named controls', () => {

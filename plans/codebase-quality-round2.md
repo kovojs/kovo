@@ -42,7 +42,8 @@ Current state: `tests/fw-check.node.mjs` now consumes shared `@jiso/test` fixtur
 fragments, generated modules/source facts, command output/Vite facts, markdown/source facts, MCP,
 static export, starter templates, `fw-explain`, TypeScript, wire, touch-graph provenance, graph
 facts, and structured `fw-check/v1` result facts. Shared `@jiso/test/html-fragment` now owns
-form-field maps and keyed-element projections for commerce app/source-truth tests.
+form-field maps, keyed-element projections, and response-body query/fragment/stylesheet/key
+summaries for commerce app/source-truth tests.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -68,6 +69,13 @@ Latest evidence:
 - `pnpm run check:build`
 - `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check tests/fw-check.node.mjs packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
