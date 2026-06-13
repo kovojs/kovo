@@ -256,24 +256,6 @@ export function applySourceReplacementsWithOffsetMap(
   };
 }
 
-export function removeJsxAttribute(attributes: string, start: number, end: number): string {
-  let removeStart = start;
-  while (removeStart > 0 && /\s/.test(attributes[removeStart - 1] ?? '')) {
-    removeStart -= 1;
-  }
-
-  return `${attributes.slice(0, removeStart)}${attributes.slice(end)}`;
-}
-
-export function removeJsxAttributes(
-  attributes: string,
-  ranges: readonly { end: number; start: number }[],
-): string {
-  return [...ranges]
-    .sort((left, right) => right.start - left.start)
-    .reduce((next, range) => removeJsxAttribute(next, range.start, range.end), attributes);
-}
-
 export function openingTagAttributeRange(
   tagSource: string,
   hostElement: OpeningTagSource,

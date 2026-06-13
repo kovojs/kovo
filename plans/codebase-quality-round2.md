@@ -605,6 +605,8 @@ Closed evidence so far:
 - Static `<Link>` navigation lowering now removes `to`/`params`/`search` and inserts `href`
   against the full parser-owned opening tag via shared span helpers instead of slicing an
   attribute substring with local offset math.
+- The obsolete `removeJsxAttribute(s)` compatibility helpers were deleted after the navigation
+  lowering moved to full-opening-tag span patches.
 
 Open:
 
@@ -641,6 +643,9 @@ Recent gates:
 - `git diff --check`
 - `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/shared.ts`
+- `git diff --check`
+- `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
+- `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/lower/view-transitions.ts`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction
