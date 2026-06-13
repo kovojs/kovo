@@ -130,6 +130,10 @@ P10 fw-check cases no longer rebuild that gate mechanic locally.
 Shared command fixtures now also own browser-suite project-root fixture assembly, including package
 manifest, CI workflow, Vite+ config, and acceptance module import, so the P10 browser acceptance
 fw-check case no longer reads those project files locally.
+Shared command fixtures now also own P10 perf acceptance project-root fixture assembly, including
+package manifest, CI workflow, Vite+ config, acceptance module import, ordering, and task input
+facts, so the P10 perf fw-check case no longer reads those project files or imports the acceptance
+module locally.
 Shared runtime fixtures now own the keyed morph and fragment-application behavior projection used by
 the P5 fw-check gate, so the monolith no longer builds that fake structural tree, fragment target,
 and query-store fixture inline.
@@ -203,6 +207,16 @@ Latest evidence:
   `examples/commerce/src/source-truth.test.ts` use that public fixture for graph artifact loading,
   emit-check freshness, touch provenance, `fw-check/v1` OK status, and acceptance checklist
   projection instead of locally composing the generated-artifact evidence.
+- P10 perf acceptance command fixture slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/command-fixtures.ts` exposes
+  `p10PerfAcceptanceProjectFact()` as a public fixture for package manifest, CI workflow, Vite+
+  config, P10 acceptance module import, ordering, and task input facts; `tests/fw-check.node.mjs`
+  consumes that fixture instead of locally reading project files and importing the acceptance
+  module.
 - Phase 5 manifest-file Vite replay cleanup slice:
   `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

@@ -19,6 +19,7 @@ import {
   pnpmRunScriptNames,
   p10PerfAcceptanceGateFact,
   p10PerfAcceptanceModulePath,
+  p10PerfAcceptanceProjectFact,
   requiredVpRunTaskName,
   vitePlusAcceptanceTaskFacts,
   vitePlusTaskInputFacts,
@@ -449,6 +450,98 @@ describe('@jiso/test command fixtures', () => {
         },
       }),
     ).toBe('scripts/p10-perf.mjs');
+  });
+
+  it('loads P10 perf acceptance wiring from a project root fixture', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'jiso-p10-perf-acceptance-'));
+
+    try {
+      await mkdir(join(rootPath, '.github/workflows'), { recursive: true });
+      await mkdir(join(rootPath, 'scripts'), { recursive: true });
+      await writeFile(
+        join(rootPath, 'package.json'),
+        JSON.stringify({
+          scripts: {
+            acceptance: 'pnpm run check:build && pnpm run test:p10-perf && pnpm run check:fw',
+            'test:p10-perf': 'vp run p10-perf',
+          },
+        }),
+      );
+      await writeFile(
+        join(rootPath, '.github/workflows/ci.yml'),
+        [
+          'steps:',
+          '  - run: vp run build',
+          '  - run: vp run p10-perf',
+          '  - run: vp run fw-check',
+        ].join('\n'),
+      );
+      await writeFile(
+        join(rootPath, 'vite.config.ts'),
+        [
+          "import { defineConfig } from 'vite-plus';",
+          'export default defineConfig({',
+          '  run: {',
+          '    tasks: {',
+          "      'p10-perf': {",
+          "        command: 'node scripts/p10-perf.mjs',",
+          '        input: [',
+          '          { auto: true },',
+          "          { base: 'workspace', pattern: 'scripts/p10-perf.mjs' },",
+          "          { base: 'workspace', pattern: 'dist/**' },",
+          '        ],',
+          '      },',
+          '    },',
+          '  },',
+          '});',
+        ].join('\n'),
+      );
+      await writeFile(
+        join(rootPath, 'scripts/p10-perf.mjs'),
+        [
+          'export const p10PerfAcceptance = {',
+          "  browser: 'chromium',",
+          "  cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],",
+          '  heapNoiseBudget: 65536,',
+          '  navigationCount: 100,',
+          "  paintEntry: 'first-contentful-paint',",
+          "  prerenderTimingField: 'activationStart',",
+          "  ttiMetric: 'ttiMinusFcpMs',",
+          '};',
+          'export function runP10PerfAcceptance() {}',
+        ].join('\n'),
+      );
+
+      await expect(p10PerfAcceptanceProjectFact({ rootPath })).resolves.toEqual({
+        acceptance: {
+          browser: 'chromium',
+          cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
+          heapNoiseBudget: 65536,
+          navigationCount: 100,
+          paintEntry: 'first-contentful-paint',
+          prerenderTimingField: 'activationStart',
+          ttiMetric: 'ttiMinusFcpMs',
+        },
+        inputFacts: [
+          { auto: true },
+          { base: 'workspace', pattern: 'scripts/p10-perf.mjs' },
+          { base: 'workspace', pattern: 'dist/**' },
+        ],
+        ordering: {
+          acceptanceAfterBuild: true,
+          acceptanceBeforeFwCheck: true,
+          ciAfterBuild: true,
+          ciBeforeFwCheck: true,
+        },
+        presentInAcceptance: true,
+        presentInCi: true,
+        runFunction: true,
+        scriptName: 'test:p10-perf',
+        taskName: 'p10-perf',
+      });
+    } finally {
+      await rm(rootPath, { force: true, recursive: true });
+    }
   });
 
   it('collects conformance gate facts without local fw-check package parsers', () => {

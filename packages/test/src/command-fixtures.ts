@@ -88,6 +88,8 @@ export interface BrowserSuiteAcceptanceProjectFactOptions {
   viteConfigPath?: string;
 }
 
+export type P10PerfAcceptanceProjectFactOptions = BrowserSuiteAcceptanceProjectFactOptions;
+
 export interface P10PerfAcceptanceShape {
   browser?: unknown;
   cdpMethods?: unknown;
@@ -297,17 +299,7 @@ export function browserSuiteAcceptanceModulePath(options: {
 export async function browserSuiteAcceptanceProjectFact(
   options: BrowserSuiteAcceptanceProjectFactOptions,
 ): Promise<BrowserSuiteAcceptanceGateFact> {
-  const packageJson = (await readProjectJson(
-    options.rootPath,
-    options.packageJsonPath ?? 'package.json',
-  )) as { scripts?: Record<string, unknown> };
-  const ciWorkflowSource = await readProjectText(
-    options.rootPath,
-    options.ciWorkflowPath ?? '.github/workflows/ci.yml',
-  );
-  const viteConfig = await loadVitePlusConfig(
-    await readProjectText(options.rootPath, options.viteConfigPath ?? 'vite.config.ts'),
-  );
+  const { ciWorkflowSource, packageJson, viteConfig } = await projectAcceptanceGateInputs(options);
   const modulePathOptions = {
     packageJson,
     viteConfig,
@@ -327,6 +319,28 @@ export async function browserSuiteAcceptanceProjectFact(
     viteConfig,
     ...(options.scriptName === undefined ? {} : { scriptName: options.scriptName }),
   });
+}
+
+async function projectAcceptanceGateInputs(
+  options: BrowserSuiteAcceptanceProjectFactOptions,
+): Promise<{
+  ciWorkflowSource: string;
+  packageJson: { scripts?: Record<string, unknown> };
+  viteConfig: VitePlusConfig;
+}> {
+  const packageJson = (await readProjectJson(
+    options.rootPath,
+    options.packageJsonPath ?? 'package.json',
+  )) as { scripts?: Record<string, unknown> };
+  const ciWorkflowSource = await readProjectText(
+    options.rootPath,
+    options.ciWorkflowPath ?? '.github/workflows/ci.yml',
+  );
+  const viteConfig = await loadVitePlusConfig(
+    await readProjectText(options.rootPath, options.viteConfigPath ?? 'vite.config.ts'),
+  );
+
+  return { ciWorkflowSource, packageJson, viteConfig };
 }
 
 export function p10PerfAcceptanceGateFact(options: {
@@ -385,6 +399,33 @@ export function p10PerfAcceptanceModulePath(options: {
   const task = options.viteConfig.run?.tasks?.[taskName];
   assert.ok(task, `${taskName} task is defined`);
   return nodeTaskCommand(task.command).modulePath;
+}
+
+export async function p10PerfAcceptanceProjectFact(
+  options: P10PerfAcceptanceProjectFactOptions,
+): Promise<P10PerfAcceptanceGateFact> {
+  const { ciWorkflowSource, packageJson, viteConfig } = await projectAcceptanceGateInputs(options);
+  const modulePathOptions = {
+    packageJson,
+    viteConfig,
+    ...(options.scriptName === undefined ? {} : { scriptName: options.scriptName }),
+  };
+  const modulePath = p10PerfAcceptanceModulePath(modulePathOptions);
+  const imported = (await import(pathToFileURL(join(options.rootPath, modulePath)).href)) as {
+    p10PerfAcceptance?: P10PerfAcceptanceShape;
+    runP10PerfAcceptance?: unknown;
+  };
+
+  assert.ok(imported.p10PerfAcceptance, `${modulePath} exports p10PerfAcceptance`);
+
+  return p10PerfAcceptanceGateFact({
+    acceptance: imported.p10PerfAcceptance,
+    ciWorkflowSource,
+    packageJson,
+    runFunction: imported.runP10PerfAcceptance,
+    viteConfig,
+    ...(options.scriptName === undefined ? {} : { scriptName: options.scriptName }),
+  });
 }
 
 export function conformanceGateFacts(options: {

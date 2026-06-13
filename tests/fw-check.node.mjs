@@ -52,8 +52,7 @@ import {
   commandSequenceWithoutLast,
   conformanceGateFacts,
   loadVitePlusConfig,
-  p10PerfAcceptanceGateFact,
-  p10PerfAcceptanceModulePath,
+  p10PerfAcceptanceProjectFact,
 } from '../packages/test/src/command-fixtures.ts';
 import {
   compilerDiagnosticFacts,
@@ -4970,48 +4969,31 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
-  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
-  const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const viteConfig = await loadProjectVitePlusConfig();
-  const modulePath = p10PerfAcceptanceModulePath({ packageJson, viteConfig });
-  const { p10PerfAcceptance, runP10PerfAcceptance } = await import(
-    new URL(`../${modulePath}`, import.meta.url).href
-  );
-
-  assert.deepEqual(
-    p10PerfAcceptanceGateFact({
-      acceptance: p10PerfAcceptance,
-      ciWorkflowSource: ciWorkflow,
-      packageJson,
-      runFunction: runP10PerfAcceptance,
-      viteConfig,
-    }),
-    {
-      acceptance: {
-        browser: 'chromium',
-        cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
-        heapNoiseBudget: 65536,
-        navigationCount: 100,
-        paintEntry: 'first-contentful-paint',
-        prerenderTimingField: 'activationStart',
-        ttiMetric: 'ttiMinusFcpMs',
-      },
-      inputFacts: [
-        { auto: true },
-        { base: 'workspace', pattern: modulePath },
-        { base: 'workspace', pattern: 'dist/**' },
-      ],
-      ordering: {
-        acceptanceAfterBuild: true,
-        acceptanceBeforeFwCheck: true,
-        ciAfterBuild: true,
-        ciBeforeFwCheck: true,
-      },
-      presentInAcceptance: true,
-      presentInCi: true,
-      runFunction: true,
-      scriptName: 'test:p10-perf',
-      taskName: 'p10-perf',
+  assert.deepEqual(await p10PerfAcceptanceProjectFact({ rootPath: projectRootPath }), {
+    acceptance: {
+      browser: 'chromium',
+      cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
+      heapNoiseBudget: 65536,
+      navigationCount: 100,
+      paintEntry: 'first-contentful-paint',
+      prerenderTimingField: 'activationStart',
+      ttiMetric: 'ttiMinusFcpMs',
     },
-  );
+    inputFacts: [
+      { auto: true },
+      { base: 'workspace', pattern: 'tests/p10-perf.node.mjs' },
+      { base: 'workspace', pattern: 'dist/**' },
+    ],
+    ordering: {
+      acceptanceAfterBuild: true,
+      acceptanceBeforeFwCheck: true,
+      ciAfterBuild: true,
+      ciBeforeFwCheck: true,
+    },
+    presentInAcceptance: true,
+    presentInCi: true,
+    runFunction: true,
+    scriptName: 'test:p10-perf',
+    taskName: 'p10-perf',
+  });
 });

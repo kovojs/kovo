@@ -29,6 +29,7 @@ import {
   pnpmRunScriptNames,
   p10PerfAcceptanceGateFact,
   p10PerfAcceptanceModulePath,
+  p10PerfAcceptanceProjectFact,
   requiredVpRunTaskName,
   runCommandSequenceSync,
   vitePlusAcceptanceTaskFacts,
@@ -44,6 +45,7 @@ import {
   type CommandInvocation,
   type NodeTaskCommand,
   type P10PerfAcceptanceGateFact,
+  type P10PerfAcceptanceProjectFactOptions,
   type P10PerfAcceptanceShape,
   type PnpmFilterTestCommand,
   type VitePlusAcceptanceTaskFacts,
@@ -1181,6 +1183,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(loadVitePlusConfig).toBeTypeOf('function');
     expect(p10PerfAcceptanceGateFact).toBeTypeOf('function');
     expect(p10PerfAcceptanceModulePath).toBeTypeOf('function');
+    expect(p10PerfAcceptanceProjectFact).toBeTypeOf('function');
     expect(vitePlusAcceptanceTaskFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputFacts).toBeTypeOf('function');
     expect(vitePlusTaskInputPatternEndingWith).toBeTypeOf('function');
@@ -1453,6 +1456,7 @@ type _PublicSubpathTypes = [
   CommandInvocation,
   NodeTaskCommand,
   P10PerfAcceptanceGateFact,
+  P10PerfAcceptanceProjectFactOptions,
   P10PerfAcceptanceShape,
   PnpmFilterTestCommand,
   VitePlusAcceptanceTaskFacts,
