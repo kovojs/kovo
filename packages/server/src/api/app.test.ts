@@ -137,6 +137,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
     expect(packageViteApi).not.toHaveProperty('createJisoAppShellBuild');
+    expect(packageViteApi).not.toHaveProperty('JisoAppShellViteInput');
     expect(packageViteApi.writeJisoAppShellVitePluginBuild).toBe(
       viteApi.writeJisoAppShellVitePluginBuild,
     );

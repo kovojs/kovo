@@ -37,6 +37,15 @@ import { jisoAppShellVitePlugin as splitJisoAppShellVitePlugin } from './vite-pl
 describe('server app shell Vite plugin', () => {
   it('exports the Vite plugin from the split plugin boundary', () => {
     expect(jisoAppShellVitePlugin).toBe(splitJisoAppShellVitePlugin);
+
+    function expectVitePluginAppOnly(app: ReturnType<typeof createApp>): void {
+      jisoAppShellVitePlugin(app);
+      // SPEC.md section 9.5: R5 plugin inputs stay tied to the closed app aggregate
+      // so request ownership, diagnostics, build, and export replay share one shell.
+      // @ts-expect-error raw request handlers are node-adapter boundaries, not Vite plugin apps.
+      jisoAppShellVitePlugin(createRequestHandler(app));
+    }
+    void expectVitePluginAppOnly;
   });
 
   it('extracts deterministic stylesheet and modulepreload hints from a Vite manifest', () => {

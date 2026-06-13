@@ -135,6 +135,11 @@ and query-store fixture inline.
 
 Latest evidence:
 
+- Phase 5 Vite plugin app-only boundary slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-plugin-build.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence: `packages/server/src/vite-plugin.ts`
+  deletes the raw `RequestHandler` input alias from `jisoAppShellVitePlugin()`, and
+  `packages/server/src/api/app-shell/vite.ts` stops re-exporting the stale type.
 - P8 fw-explain fixture assertion slice:
   `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

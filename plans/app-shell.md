@@ -83,6 +83,9 @@ Implemented areas:
 - `@jiso/server/app-shell/vite` now exposes the Vite-specific build constructors while keeping the
   lower-level `createJisoAppShellBuild()`/`routeEntries` contract internal to the server build
   owner; public tests prove route-entry-map hint wiring through `createJisoAppShellViteBuild()`.
+- `jisoAppShellVitePlugin()` now accepts only the closed `JisoApp` aggregate, deleting the raw
+  `RequestHandler` input compatibility alias so R5 dev middleware, diagnostics, build hooks, and
+  static export replay stay attached to the SPEC §9.5 app shell.
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
@@ -105,6 +108,15 @@ Round278 docs-site app-shell boundary evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs`
 - `pnpm exec tsc --noEmit --pretty false`
 - `git diff --check`
+
+Round280 Vite plugin app-only boundary evidence:
+
+- `packages/server/src/vite-plugin.ts` deletes the `JisoAppShellViteInput` raw-handler alias, and
+  `packages/server/src/api/app-shell/vite.ts` no longer re-exports that type. `packages/server/src/vite.test.ts`
+  pins the compile-time rejection for `createRequestHandler(app)` inputs while existing plugin
+  build/dev tests prove app-owned request filtering and writeBundle output remain wired.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
 
 Round276 built-root P10 boundary evidence:
 

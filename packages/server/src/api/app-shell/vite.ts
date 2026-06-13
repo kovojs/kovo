@@ -96,11 +96,7 @@ export type {
   JisoAppShellViteSsrDevPluginOptions,
   JisoAppShellViteSsrDevServer,
 } from '../../vite-dev.js';
-export type {
-  JisoAppShellViteInput,
-  JisoAppShellVitePlugin,
-  JisoAppShellVitePluginOptions,
-} from '../../vite-plugin.js';
+export type { JisoAppShellVitePlugin, JisoAppShellVitePluginOptions } from '../../vite-plugin.js';
 export type {
   JisoAppShellVitePluginBuildContext,
   JisoAppShellVitePluginBuildResult,

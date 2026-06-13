@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import { createRequestHandler } from './app.js';
-import type { JisoApp, RequestHandler } from './app-types.js';
+import type { JisoApp } from './app-types.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
 import { routeResponseToWebResponse } from './response.js';
 import {
@@ -23,8 +23,6 @@ export interface JisoAppShellVitePlugin {
   ): Promise<void>;
 }
 
-export type JisoAppShellViteInput = JisoApp | RequestHandler;
-
 export interface JisoAppShellVitePluginOptions {
   build?: JisoAppShellVitePluginBuildOptions;
   devDiagnostics?: JisoAppShellDevDiagnosticLedger;
@@ -32,29 +30,28 @@ export interface JisoAppShellVitePluginOptions {
 }
 
 export function jisoAppShellVitePlugin(
-  input: JisoAppShellViteInput,
+  app: JisoApp,
   options: JisoAppShellVitePluginOptions = {},
 ): JisoAppShellVitePlugin {
-  const requestHandler = typeof input === 'function' ? input : createRequestHandler(input);
+  const requestHandler = createRequestHandler(app);
   const nodeHandler = toNodeHandler(requestHandler);
-  const app = typeof input === 'function' ? undefined : input;
 
   return {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        if (app) {
-          const shouldHandle =
-            options.shouldHandleRequest?.(request, app) ??
-            shouldHandleJisoAppShellViteRequest(request, app);
-          if (!shouldHandle) {
-            next();
-            return;
-          }
+        const shouldHandle =
+          options.shouldHandleRequest?.(request, app) ??
+          shouldHandleJisoAppShellViteRequest(request, app);
+        if (!shouldHandle) {
+          next();
+          return;
         }
 
-        const diagnosticResponse = app
-          ? renderJisoAppShellViteDevDiagnosticResponse(app, request, options.devDiagnostics)
-          : undefined;
+        const diagnosticResponse = renderJisoAppShellViteDevDiagnosticResponse(
+          app,
+          request,
+          options.devDiagnostics,
+        );
         if (diagnosticResponse) {
           Promise.resolve(
             writeWebResponseToNode(
@@ -70,7 +67,7 @@ export function jisoAppShellVitePlugin(
       });
     },
     name: 'jiso-app-shell',
-    ...(app && options.build
+    ...(options.build
       ? {
           async writeBundle(outputOptions, bundle) {
             const buildOptions = options.build;
