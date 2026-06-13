@@ -987,12 +987,15 @@ describe('@jiso/ui styled package foundation', () => {
       descriptionId: 'activity-description',
       id: 'activity-viewport',
       labelledBy: 'activity-title',
+      scrollX: 'none',
+      scrollY: 'middle',
     });
     const verticalScrollbar = ScrollAreaScrollbar.definition.render({
       ...state,
       children: 'thumb',
       id: 'activity-scrollbar-y',
       orientation: 'vertical',
+      scrollPosition: 'middle',
       visible: true,
     });
     const hiddenThumb = ScrollAreaThumb.definition.render({
@@ -1000,6 +1003,7 @@ describe('@jiso/ui styled package foundation', () => {
       forceMount: true,
       id: 'activity-thumb-x',
       orientation: 'horizontal',
+      scrollPosition: 'none',
       visible: false,
     });
     const corner = ScrollAreaCorner.definition.render({ ...state, id: 'activity-corner' });
@@ -1016,11 +1020,15 @@ describe('@jiso/ui styled package foundation', () => {
     expect(root).toContain('data-scrollbars="both" dir="ltr" id="activity"');
     expect(viewport).toContain('aria-describedby="activity-description"');
     expect(viewport).toContain('aria-labelledby="activity-title"');
+    expect(viewport).toContain('data-scroll-x="none"');
+    expect(viewport).toContain('data-scroll-y="middle"');
     expect(viewport).toContain('role="region" tabIndex="0"');
     expect(verticalScrollbar).toContain('aria-hidden="true"');
     expect(verticalScrollbar).toContain('data-orientation="vertical"');
+    expect(verticalScrollbar).toContain('data-scroll-position="middle"');
     expect(verticalScrollbar).toContain('data-state="visible"');
     expect(hiddenThumb).toContain('data-orientation="horizontal"');
+    expect(hiddenThumb).toContain('data-scroll-position="none"');
     expect(hiddenThumb).toContain('data-state="hidden"');
     expect(corner).toContain('id="activity-corner"');
     expect(disabledViewport).toContain('aria-disabled="true"');

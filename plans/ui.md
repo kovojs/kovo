@@ -73,6 +73,9 @@ risks. Do not append long historical command lists.
 - OTP field delete and paste handlers now restore the live slot input value when SPEC §4.6
   cancelable changes are rejected, and the aggregate named input exposes native length
   constraints for SPEC §6.3 form-control semantics.
+- Scroll-area now derives native viewport edge/visibility facts from real scroll metrics and
+  exposes `data-scroll-x`, `data-scroll-y`, and `data-scroll-position` attrs through headless and
+  styled wrappers while keeping scrolling native per SPEC §4.6.
 
 ## Open Work
 
@@ -81,8 +84,18 @@ H2:
 - [ ] Re-audit the full H2 primitive list against package exports, tests, styled wrappers, gallery
       routes, behavior contracts, merge fixtures, and compiled interactive coverage before
       checking H2 complete.
-- [ ] Close any remaining scroll-area and field/fieldset behavior gaps with focused primitive
-      tests rather than styled-only evidence.
+- [x] Close the remaining scroll-area native scroll-state gap with focused primitive tests.
+      Evidence 2026-06-13: `packages/headless-ui/src/primitives/scroll-area.ts` exports
+      `scrollAreaViewportState` and SPEC §4.6-safe `scrollAreaViewportScroll`, styled wrappers
+      forward the computed scroll-position attrs, and `/components/scroll-area` renders the static
+      attrs. Same-session proof: `pnpm exec vitest --run
+packages/headless-ui/src/primitives/scroll-area.test.ts`, `pnpm --filter @jiso/headless-ui
+exec vitest --run`, `pnpm --filter @jiso/headless-ui run lint:primitives`, `pnpm --filter
+@jiso/ui exec vitest --run`, and `pnpm exec vitest --run
+examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts
+examples/gallery/src/merge-fixtures.test.tsx`.
+- [ ] Close any remaining field/fieldset behavior gaps with focused primitive tests rather than
+      styled-only evidence.
 - [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
 
 H3:
@@ -118,13 +131,13 @@ Gallery:
 Latest integrated UI slice:
 
 - `pnpm install --frozen-lockfile`
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/otp-field.test.ts`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/scroll-area.test.ts`
 - `pnpm exec vitest --run packages/ui/src/index.test.tsx`
 - `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm exec vp check packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/otp-field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`
+- `pnpm exec vp check packages/headless-ui/src/primitives/scroll-area.ts packages/headless-ui/src/primitives/scroll-area.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts packages/ui/src/scroll-area.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md`
 - `git diff --check`
 
 Latest broad gate:

@@ -10,6 +10,7 @@ import {
   scrollAreaViewportAttributes,
   type ClassValue,
   type ScrollAreaOrientation,
+  type ScrollAreaScrollPosition,
   type ScrollAreaScrollbars,
   type TextDirection,
 } from '@jiso/headless-ui';
@@ -33,6 +34,8 @@ export interface ScrollAreaViewportProps extends ScrollAreaStateProps {
   id?: string;
   label?: string;
   labelledBy?: string;
+  scrollX?: ScrollAreaScrollPosition;
+  scrollY?: ScrollAreaScrollPosition;
 }
 
 export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
@@ -41,6 +44,7 @@ export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
   forceMount?: boolean;
   id?: string;
   orientation?: ScrollAreaOrientation;
+  scrollPosition?: ScrollAreaScrollPosition;
   visible?: boolean;
 }
 
@@ -114,7 +118,9 @@ export const ScrollAreaViewport = component('scroll-area-viewport', {
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.label === undefined ? {} : { label: props.label }),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
+      ...(props.scrollX === undefined ? {} : { scrollX: props.scrollX }),
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
+      ...(props.scrollY === undefined ? {} : { scrollY: props.scrollY }),
     });
 
     return (
@@ -125,6 +131,8 @@ export const ScrollAreaViewport = component('scroll-area-viewport', {
         aria-labelledby={attrs['aria-labelledby']}
         class={cn(scrollAreaViewportClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
+        data-scroll-x={attrs['data-scroll-x']}
+        data-scroll-y={attrs['data-scroll-y']}
         data-scrollbars={attrs['data-scrollbars']}
         id={attrs.id}
         role={attrs.role}
@@ -144,6 +152,7 @@ export const ScrollAreaScrollbar = component('scroll-area-scrollbar', {
       ...(props.forceMount === undefined ? {} : { forceMount: props.forceMount }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
+      ...(props.scrollPosition === undefined ? {} : { scrollPosition: props.scrollPosition }),
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
@@ -154,6 +163,7 @@ export const ScrollAreaScrollbar = component('scroll-area-scrollbar', {
         class={cn(scrollAreaScrollbarClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
+        data-scroll-position={attrs['data-scroll-position']}
         data-scrollbars={attrs['data-scrollbars']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -173,6 +183,7 @@ export const ScrollAreaThumb = component('scroll-area-thumb', {
       ...(props.forceMount === undefined ? {} : { forceMount: props.forceMount }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
+      ...(props.scrollPosition === undefined ? {} : { scrollPosition: props.scrollPosition }),
       ...(props.scrollbars === undefined ? {} : { scrollbars: props.scrollbars }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
     });
@@ -183,6 +194,7 @@ export const ScrollAreaThumb = component('scroll-area-thumb', {
         class={cn(scrollAreaThumbClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
+        data-scroll-position={attrs['data-scroll-position']}
         data-scrollbars={attrs['data-scrollbars']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}

@@ -8,6 +8,8 @@ import {
   scrollAreaScrollbarState as exportedScrollAreaScrollbarState,
   scrollAreaThumbAttributes as exportedScrollAreaThumbAttributes,
   scrollAreaViewportAttributes as exportedScrollAreaViewportAttributes,
+  scrollAreaViewportScroll as exportedScrollAreaViewportScroll,
+  scrollAreaViewportState as exportedScrollAreaViewportState,
 } from '../index.js';
 import {
   scrollAreaCornerAttributes as primitiveScrollAreaCornerAttributes,
@@ -17,6 +19,8 @@ import {
   scrollAreaScrollbarState as primitiveScrollAreaScrollbarState,
   scrollAreaThumbAttributes as primitiveScrollAreaThumbAttributes,
   scrollAreaViewportAttributes as primitiveScrollAreaViewportAttributes,
+  scrollAreaViewportScroll as primitiveScrollAreaViewportScroll,
+  scrollAreaViewportState as primitiveScrollAreaViewportState,
 } from './index.js';
 import {
   scrollAreaCornerAttributes,
@@ -26,6 +30,8 @@ import {
   scrollAreaScrollbarState,
   scrollAreaThumbAttributes,
   scrollAreaViewportAttributes,
+  scrollAreaViewportScroll,
+  scrollAreaViewportState,
 } from './scroll-area.js';
 
 describe('headless-ui scroll-area primitive', () => {
@@ -43,11 +49,15 @@ describe('headless-ui scroll-area primitive', () => {
         descriptionId: 'messages-help',
         id: 'messages-viewport',
         label: 'Messages',
+        scrollX: 'none',
+        scrollY: 'start',
       }),
     ).toEqual({
       'aria-describedby': 'messages-help',
       'aria-label': 'Messages',
       'data-scrollbars': 'both',
+      'data-scroll-x': 'none',
+      'data-scroll-y': 'start',
       id: 'messages-viewport',
       role: 'region',
       tabIndex: 0,
@@ -84,6 +94,20 @@ describe('headless-ui scroll-area primitive', () => {
       'data-scrollbars': 'both',
       'data-state': 'hidden',
       hidden: true,
+    });
+
+    expect(
+      scrollAreaThumbAttributes({
+        orientation: 'vertical',
+        scrollPosition: 'middle',
+        visible: true,
+      }),
+    ).toEqual({
+      'aria-hidden': 'true',
+      'data-orientation': 'vertical',
+      'data-scroll-position': 'middle',
+      'data-scrollbars': 'both',
+      'data-state': 'visible',
     });
   });
 
@@ -139,12 +163,138 @@ describe('headless-ui scroll-area primitive', () => {
     expect(scrollAreaCornerState({ scrollbars: 'none' })).toBe('hidden');
   });
 
+  it('derives native viewport scroll edge and scrollbar visibility state', () => {
+    expect(
+      scrollAreaViewportState({
+        clientHeight: 100,
+        clientWidth: 200,
+        scrollHeight: 400,
+        scrollLeft: 0,
+        scrollTop: 150,
+        scrollWidth: 200,
+      }),
+    ).toEqual({
+      cornerVisible: false,
+      horizontalVisible: false,
+      maxScrollLeft: 0,
+      maxScrollTop: 300,
+      scrollLeft: 0,
+      scrollTop: 150,
+      scrollX: 'none',
+      scrollXRatio: 0,
+      scrollY: 'middle',
+      scrollYRatio: 0.5,
+      verticalVisible: true,
+    });
+
+    expect(
+      scrollAreaViewportState({
+        clientHeight: 100,
+        clientWidth: 200,
+        scrollHeight: 300,
+        scrollLeft: 200,
+        scrollTop: 200,
+        scrollWidth: 500,
+      }),
+    ).toMatchObject({
+      cornerVisible: true,
+      horizontalVisible: true,
+      scrollX: 'middle',
+      scrollY: 'end',
+      verticalVisible: true,
+    });
+
+    expect(
+      scrollAreaViewportState(
+        {
+          clientHeight: 100,
+          clientWidth: 200,
+          scrollHeight: 300,
+          scrollLeft: 200,
+          scrollTop: 50,
+          scrollWidth: 500,
+        },
+        { scrollbars: 'vertical' },
+      ),
+    ).toMatchObject({
+      cornerVisible: false,
+      horizontalVisible: false,
+      scrollX: 'none',
+      scrollY: 'middle',
+      verticalVisible: true,
+    });
+
+    expect(
+      scrollAreaViewportState(
+        {
+          clientHeight: 100,
+          clientWidth: 200,
+          scrollHeight: 300,
+          scrollLeft: 200,
+          scrollTop: 50,
+          scrollWidth: 500,
+        },
+        { disabled: true },
+      ),
+    ).toMatchObject({
+      cornerVisible: false,
+      horizontalVisible: false,
+      scrollX: 'none',
+      scrollY: 'none',
+      verticalVisible: false,
+    });
+  });
+
+  it('handles native viewport scroll events without blocking native scrolling', () => {
+    const result = scrollAreaViewportScroll(
+      scrollAreaScrollEvent({
+        clientHeight: 100,
+        clientWidth: 100,
+        scrollHeight: 300,
+        scrollLeft: 0,
+        scrollTop: 200,
+        scrollWidth: 100,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      scrollY: 'end',
+      verticalVisible: true,
+    });
+  });
+
+  it('guards the primitive scroll handler when author behavior prevented default', () => {
+    const event = scrollAreaScrollEvent({
+      clientHeight: 100,
+      clientWidth: 100,
+      scrollHeight: 300,
+      scrollLeft: 0,
+      scrollTop: 200,
+      scrollWidth: 100,
+    });
+    event.preventDefault();
+
+    expect(scrollAreaViewportScroll(event)).toBeUndefined();
+  });
+
   it('returns frozen attribute records', () => {
     expect(Object.isFrozen(scrollAreaRootAttributes())).toBe(true);
     expect(Object.isFrozen(scrollAreaViewportAttributes())).toBe(true);
     expect(Object.isFrozen(scrollAreaScrollbarAttributes())).toBe(true);
     expect(Object.isFrozen(scrollAreaThumbAttributes())).toBe(true);
     expect(Object.isFrozen(scrollAreaCornerAttributes())).toBe(true);
+    expect(
+      Object.isFrozen(
+        scrollAreaViewportState({
+          clientHeight: 100,
+          clientWidth: 100,
+          scrollHeight: 100,
+          scrollLeft: 0,
+          scrollTop: 0,
+          scrollWidth: 100,
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('is exported through the package root and primitives barrel', () => {
@@ -155,6 +305,8 @@ describe('headless-ui scroll-area primitive', () => {
     expect(exportedScrollAreaCornerAttributes).toBe(scrollAreaCornerAttributes);
     expect(exportedScrollAreaScrollbarState).toBe(scrollAreaScrollbarState);
     expect(exportedScrollAreaCornerState).toBe(scrollAreaCornerState);
+    expect(exportedScrollAreaViewportState).toBe(scrollAreaViewportState);
+    expect(exportedScrollAreaViewportScroll).toBe(scrollAreaViewportScroll);
 
     expect(primitiveScrollAreaRootAttributes).toBe(scrollAreaRootAttributes);
     expect(primitiveScrollAreaViewportAttributes).toBe(scrollAreaViewportAttributes);
@@ -163,5 +315,22 @@ describe('headless-ui scroll-area primitive', () => {
     expect(primitiveScrollAreaCornerAttributes).toBe(scrollAreaCornerAttributes);
     expect(primitiveScrollAreaScrollbarState).toBe(scrollAreaScrollbarState);
     expect(primitiveScrollAreaCornerState).toBe(scrollAreaCornerState);
+    expect(primitiveScrollAreaViewportState).toBe(scrollAreaViewportState);
+    expect(primitiveScrollAreaViewportScroll).toBe(scrollAreaViewportScroll);
   });
 });
+
+function scrollAreaScrollEvent(
+  currentTarget: Parameters<typeof scrollAreaViewportState>[0],
+): Event & {
+  readonly currentTarget: Parameters<typeof scrollAreaViewportState>[0];
+} {
+  const event = new Event('scroll', { cancelable: true });
+  Object.defineProperty(event, 'currentTarget', {
+    configurable: true,
+    value: currentTarget,
+  });
+  return event as Event & {
+    readonly currentTarget: Parameters<typeof scrollAreaViewportState>[0];
+  };
+}

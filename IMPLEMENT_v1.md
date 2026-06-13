@@ -827,6 +827,21 @@ packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/otp-field.
 packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts
 examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx
 IMPLEMENT_v1.md plans/ui.md`.
+      Additional evidence 2026-06-13: H2 scroll-area now derives native viewport scroll edge and
+      scrollbar/corner visibility facts from real viewport metrics, exposes `data-scroll-x`,
+      `data-scroll-y`, and `data-scroll-position` through headless attrs plus vendorable
+      `@jiso/ui` wrappers, and keeps the primitive scroll handler guarded per SPEC §4.6 without
+      blocking native scrolling. Same-session evidence: `pnpm exec vitest --run
+packages/headless-ui/src/primitives/scroll-area.test.ts`, `pnpm --filter @jiso/headless-ui exec
+vitest --run`, `pnpm --filter @jiso/headless-ui run lint:primitives`, `pnpm --filter @jiso/ui
+exec vitest --run`, `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts
+examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx`, and
+      `pnpm exec vp check packages/headless-ui/src/primitives/scroll-area.ts
+packages/headless-ui/src/primitives/scroll-area.test.ts packages/headless-ui/src/primitives/index.ts
+packages/headless-ui/src/index.ts packages/ui/src/scroll-area.tsx packages/ui/src/index.test.tsx
+examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts
+examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/merge-fixtures.test.tsx
+IMPLEMENT_v1.md plans/ui.md`.
       Evidence 2026-06-12: `examples/gallery/src/interactive/` adds app-authored
       switch, collapsible, and popover demos; `examples/gallery/scripts/emit-interactive-gallery.mjs`
       compiles all six interactive demos through `@jiso/compiler`; generated artifacts under

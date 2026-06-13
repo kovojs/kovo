@@ -721,17 +721,24 @@ export {
   scrollAreaScrollbarState,
   scrollAreaThumbAttributes,
   scrollAreaViewportAttributes,
+  scrollAreaViewportScroll,
+  scrollAreaViewportState,
 } from './scroll-area.js';
 export type {
   ScrollAreaCornerAttributeOptions,
   ScrollAreaOrientation,
   ScrollAreaPrimitiveAttributes,
   ScrollAreaRootAttributeOptions,
+  ScrollAreaScrollPosition,
   ScrollAreaScrollbarAttributeOptions,
   ScrollAreaScrollbars,
   ScrollAreaState,
   ScrollAreaThumbAttributeOptions,
+  ScrollAreaViewportComputedState,
   ScrollAreaViewportAttributeOptions,
+  ScrollAreaViewportScrollEvent,
+  ScrollAreaViewportScrollResult,
+  ScrollAreaViewportTarget,
   ScrollAreaVisibilityState,
 } from './scroll-area.js';
 

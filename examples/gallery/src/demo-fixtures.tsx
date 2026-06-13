@@ -2049,6 +2049,8 @@ export function ScrollAreaDemo(): string {
                 descriptionId: 'gallery-scroll-area-description',
                 id: 'gallery-scroll-area-viewport',
                 labelledBy: 'gallery-scroll-area-title',
+                scrollX: 'none',
+                scrollY: 'start',
               })}
               <p id="gallery-scroll-area-description">
                 The viewport remains tabbable without a client behavior island.
@@ -2059,6 +2061,7 @@ export function ScrollAreaDemo(): string {
                   ...state,
                   id: 'gallery-scroll-area-thumb-y',
                   orientation: 'vertical',
+                  scrollPosition: 'start',
                   visible: true,
                 }),
                 id: 'gallery-scroll-area-scrollbar-y',
@@ -2072,6 +2075,7 @@ export function ScrollAreaDemo(): string {
                   forceMount: true,
                   id: 'gallery-scroll-area-thumb-x',
                   orientation: 'horizontal',
+                  scrollPosition: 'none',
                   visible: false,
                 }),
                 forceMount: true,
