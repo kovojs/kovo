@@ -107,6 +107,24 @@ describe('wire parser HTML entity handling', () => {
     ]);
   });
 
+  it('keeps hydrated script chunks and wire query chunks on one parsed query shape', () => {
+    const hydrated = readQueryScriptChunks([
+      {
+        getAttribute: (name) =>
+          name === 'fw-query' ? 'product' : name === 'key' ? 'product>p1' : null,
+        textContent: '{"label":"Alice\'s & Bob\'s"}',
+      },
+    ]);
+    const wire = readQueryElementChunk({
+      attrs: ' name="product" key="product&gt;p1"',
+      content: '{&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}',
+    });
+
+    // SPEC.md §9.1/§9.4: server-rendered scripts, inline events, mutation
+    // responses, and typed reads share one query chunk currency after decoding.
+    expect(hydrated).toEqual([wire]);
+  });
+
   it('reports hydrated query script JSON with the same fw-query label as wire chunks', () => {
     const onError = vi.fn();
 

@@ -150,6 +150,8 @@ Current state:
   apply decodes and applies body chunks directly.
 - Readable and minified inline loader builds now have parser parity checks against the canonical
   `wire-parser.ts` helper closure.
+- Hydrated query scripts and wire `<fw-query>` chunks share one query payload parser, with
+  focused apply/hydration coverage split into `query-apply.test.ts`.
 
 Open:
 
@@ -162,11 +164,12 @@ Open:
 Latest focused evidence:
 
 - `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index-exports.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/query-apply.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-events.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-apply.test.ts packages/runtime/src/query-store.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell

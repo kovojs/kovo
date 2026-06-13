@@ -85,21 +85,15 @@ export function readQueryElementChunk(
   chunk: QueryElementChunkLike,
   onError?: RuntimeErrorReporter,
 ): QueryChunk | undefined {
-  const name = readAttribute(chunk.attrs, 'name');
-  if (!name) return undefined;
-
-  const key = readAttribute(chunk.attrs, 'key') ?? undefined;
-  const parsed = parseJsonValue(unescapeHtml(chunk.content));
-  if (!parsed.ok) {
-    reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
-    return undefined;
-  }
-
-  return {
-    ...(key === undefined ? {} : { key }),
-    name,
-    value: parsed.value,
-  };
+  return readQueryChunkPayload(
+    {
+      content: chunk.content,
+      decodeHtmlEntities: true,
+      key: readAttribute(chunk.attrs, 'key'),
+      name: readAttribute(chunk.attrs, 'name'),
+    },
+    onError,
+  );
 }
 
 export function readQueryScriptChunks(
@@ -112,21 +106,47 @@ export function readQueryScriptChunks(
     const name = script.getAttribute('fw-query');
     if (!name) continue;
 
-    const key = script.getAttribute('key') ?? undefined;
-    const parsed = parseJsonValue(script.textContent ?? 'null');
-    if (!parsed.ok) {
-      reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
-      continue;
-    }
-
-    queries.push({
-      ...(key === undefined ? {} : { key }),
-      name,
-      value: parsed.value,
-    });
+    const query = readQueryChunkPayload(
+      {
+        content: script.textContent ?? 'null',
+        decodeHtmlEntities: false,
+        key: script.getAttribute('key'),
+        name,
+      },
+      onError,
+    );
+    if (query) queries.push(query);
   }
 
   return queries;
+}
+
+interface QueryChunkPayload {
+  content: string;
+  decodeHtmlEntities: boolean;
+  key?: string | null;
+  name: string | null;
+}
+
+function readQueryChunkPayload(
+  payload: QueryChunkPayload,
+  onError?: RuntimeErrorReporter,
+): QueryChunk | undefined {
+  if (!payload.name) return undefined;
+
+  const parsed = parseJsonValue(
+    payload.decodeHtmlEntities ? unescapeHtml(payload.content) : payload.content,
+  );
+  if (!parsed.ok) {
+    reportMalformedJson(onError, `fw-query ${payload.name}`, parsed.error);
+    return undefined;
+  }
+
+  return {
+    ...(payload.key == null ? {} : { key: payload.key }),
+    name: payload.name,
+    value: parsed.value,
+  };
 }
 
 export function readMutationResponseBodyChunks(
