@@ -5212,6 +5212,22 @@ function domainWritePropertyFromDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): DomainWriteProperty | undefined {
+  if (Node.isVariableDeclaration(declaration)) {
+    const name = declaration.getNameNode();
+    const initializer = declaration.getInitializer();
+    if (!Node.isIdentifier(name) || !initializer) return undefined;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(expression)) return undefined;
+    const callee = expression.getExpression();
+    if (!Node.isIdentifier(callee) || callee.getText() !== 'write') return undefined;
+
+    return {
+      initializer,
+      keyNode: name,
+      memberName,
+    };
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     return {
       initializer: declaration.getInitializer(),

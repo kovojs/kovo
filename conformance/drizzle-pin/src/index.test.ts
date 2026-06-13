@@ -277,6 +277,83 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins project domain action namespace spreads for exported write variables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: `
+            export const cartItems = pgTable('cart_items', {
+              productId: text('product_id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'productId' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/actions.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import { cartItems } from './schema';
+
+            function addItem(db: PgDatabase<any, any, any>, productId: string) {
+              return db.insert(cartItems).values({ productId });
+            }
+
+            export const addItemAction = write(addItem);
+            export declare const hiddenAction: unknown;
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: `
+            import * as CartActions from './actions';
+
+            export const cart = domain({
+              ...CartActions,
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/actions.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:5',
+          },
+        ],
+      },
+      'cart.addItemAction': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins query-loader helper db handoff as FW406 under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

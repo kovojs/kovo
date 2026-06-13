@@ -615,6 +615,16 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `pnpm --filter @jiso/conformance-drizzle-pin test`,
       exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Evidence 2026-06-13 round265: namespace-spread domain actions whose exported members are
+      `const action = write(callback)` now resolve through ts-morph variable declarations instead
+      of being left to action-spread compatibility gaps; opaque namespace remainders still degrade
+      to `domainName.<spread>` FW406. `packages/drizzle/src/index.test.ts` covers the project
+      namespace spread, and `conformance/drizzle-pin/src/index.test.ts` pins the same surface
+      against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`, exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -628,6 +638,10 @@ Latest evidence:
 - `git diff --check`
 - `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`
 - `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`
+- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/drizzle/src`
+- `pnpm --filter @jiso/conformance-drizzle-pin test`
 - exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 

@@ -8270,6 +8270,84 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts exported namespace project domain action spreads from write variables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'schema.ts',
+          source: [
+            'export const cartItems = pgTable("cart_items", {',
+            '  productId: text("product_id").primaryKey(),',
+            '}, jiso({ domain: "cart", key: "productId" }));',
+          ].join('\n'),
+        },
+        {
+          fileName: 'actions.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { cartItems } from "./schema";',
+            '',
+            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export const addItemAction = write(addItem);',
+            'export declare const hiddenAction: unknown;',
+          ].join('\n'),
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import * as CartActions from "./actions";',
+            '',
+            'export const cart = domain({',
+            '  ...CartActions,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'actions.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:4',
+          },
+        ],
+      },
+      'cart.addItemAction': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts namespace-imported project write callback containers through barrels', () => {
     const graph = extractTouchGraphFromProject({
       files: [
