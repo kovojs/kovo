@@ -12,6 +12,7 @@ import {
 
 export interface OtpFieldStateProps {
   disabled?: boolean;
+  form?: string;
   inputMode?: OtpFieldInputMode;
   invalid?: boolean;
   length?: number;
@@ -116,6 +117,7 @@ export const OtpFieldHiddenInput = component('otp-field-hidden-input', {
   render(props: OtpFieldHiddenInputProps) {
     const attrs = otpFieldHiddenInputAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputMode === undefined ? {} : { inputMode: props.inputMode }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -137,6 +139,7 @@ export const OtpFieldHiddenInput = component('otp-field-hidden-input', {
         data-required={attrs['data-required']}
         data-slot={attrs['data-slot']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         inputMode={attrs.inputMode}
         maxLength={attrs.maxLength}

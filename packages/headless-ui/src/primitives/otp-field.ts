@@ -18,6 +18,7 @@ export type OtpFieldInputMode =
 
 export interface OtpFieldState {
   disabled?: boolean;
+  form?: string;
   inputMode?: OtpFieldInputMode;
   invalid?: boolean;
   length?: number;
@@ -122,6 +123,7 @@ export function otpFieldHiddenInputAttributes(
     'data-slot': 'hidden-input',
     autoComplete: 'one-time-code',
     disabled: options.disabled === true,
+    ...(options.form === undefined ? {} : { form: options.form }),
     inputMode: otpFieldInputMode(options.inputMode),
     maxLength: otpFieldLength(options.length),
     minLength: otpFieldLength(options.length),

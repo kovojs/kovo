@@ -921,6 +921,7 @@ describe('@jiso/ui styled package foundation', () => {
     const state = {
       descriptionId: 'otp-description',
       errorId: 'otp-error',
+      form: 'otp-form',
       invalid: true,
       labelledBy: 'otp-label',
       length: 6,
@@ -965,6 +966,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(hidden).toContain('aria-hidden="true"');
     expect(hidden).toContain('data-slot="hidden-input"');
     expect(hidden).toContain('autoComplete="one-time-code"');
+    expect(hidden).toContain('form="otp-form" id="otp-code"');
     expect(hidden).toContain('maxLength="6"');
     expect(hidden).toContain('minLength="6"');
     expect(hidden).toContain('name="otp-code"');

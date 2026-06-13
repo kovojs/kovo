@@ -1811,6 +1811,7 @@ export function OtpFieldDemo(): string {
   const state = {
     descriptionId: 'gallery-otp-description',
     errorId: 'gallery-otp-error',
+    form: 'gallery-otp-form',
     invalid: true,
     labelledBy: 'gallery-otp-label',
     length: 6,
@@ -1834,6 +1835,7 @@ export function OtpFieldDemo(): string {
       <label id="gallery-otp-label" for="gallery-otp-code">
         One-time code
       </label>
+      <form id="gallery-otp-form" data-gallery-form="otp-field" />
       <div data-ui-demo="otp-field">
         {OtpField.definition.render({
           ...state,

@@ -79,6 +79,7 @@ describe('headless-ui otp-field primitive', () => {
       otpFieldHiddenInputAttributes({
         id: 'otp',
         length: 4,
+        form: 'checkout',
         name: 'otp',
         pattern: '[0-9]*',
         required: true,
@@ -91,6 +92,7 @@ describe('headless-ui otp-field primitive', () => {
       'data-slot': 'hidden-input',
       autoComplete: 'one-time-code',
       disabled: false,
+      form: 'checkout',
       id: 'otp',
       inputMode: 'numeric',
       maxLength: 4,

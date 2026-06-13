@@ -400,9 +400,11 @@ describe('gallery demo fixtures', () => {
     expect(otpField.html).toContain('aria-describedby="gallery-otp-description gallery-otp-error"');
     expect(otpField.html).toContain('aria-invalid="true"');
     expect(otpField.html).toContain('data-required=""');
+    expect(otpField.html).toContain('id="gallery-otp-form" data-gallery-form="otp-field"');
     expect(otpField.html).toContain('for="gallery-otp-code"');
     expect(otpField.html).toContain('data-slot="hidden-input"');
     expect(otpField.html).toContain('autoComplete="one-time-code"');
+    expect(otpField.html).toContain('form="gallery-otp-form"');
     expect(otpField.html).toContain('name="gallery-otp-code"');
     expect(otpField.html).toContain('required tabIndex="-1"');
     expect(otpField.html).toContain('maxLength="6"');

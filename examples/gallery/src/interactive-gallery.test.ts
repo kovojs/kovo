@@ -424,7 +424,10 @@ describe('compiled interactive gallery demos', () => {
 
     expect(otpField).toContain('data-gallery-interactive="otp-field"');
     expect(otpField).toContain('fw-state=\'{"activeSlot":2,"value":"12"}\'');
+    expect(otpField).toContain("const formId = 'gallery-otp-form'");
+    expect(otpField).toContain('<form id={formId} data-gallery-form="otp-field" />');
     expect(otpField).toContain('otpFieldHiddenInputAttributes({');
+    expect(otpField).toContain('form: formId');
     expect(otpField).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryOtpFieldDemo\$input_input"/,
     );

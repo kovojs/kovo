@@ -452,6 +452,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'data-required=""',
     'data-slot="hidden-input"',
     'autoComplete="one-time-code"',
+    'form="gallery-otp-form"',
     'name="gallery-otp-code"',
     'maxLength="6"',
     'minLength="6"',

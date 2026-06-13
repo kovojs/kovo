@@ -16,7 +16,9 @@ export interface GalleryOtpFieldDemoState {
 export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
   state: () => ({ activeSlot: 2, value: '12' }),
   render: (_queries: Record<string, never>, state: GalleryOtpFieldDemoState) => {
+    const formId = 'gallery-otp-form';
     const fieldState = {
+      form: formId,
       length: 4,
       name: 'gallery-otp-code',
       pattern: '[0-9]*',
@@ -35,6 +37,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
         class="grid gap-2"
         data-gallery-interactive="otp-field"
       >
+        <form id={formId} data-gallery-form="otp-field" />
         <label id="gallery-interactive-otp-label" for="gallery-interactive-otp-hidden">
           Verification code
         </label>

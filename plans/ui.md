@@ -69,6 +69,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `FormData` checks.
       Number-field now preserves native input `form` ownership through headless/styled wrappers and
       proves generated direct input plus stepper updates keep browser `FormData` current.
+      OTP field now preserves external form ownership for its aggregate hidden input through
+      headless/styled wrappers, static fixture contracts, refreshed generated artifacts, and
+      browser-backed `FormData` checks as generated handlers update the value.
       Toggle-group keydown no longer traps disabled, empty, or fully disabled collections, and the
       compiled gallery now proves generated roving tabindex plus DOM focus movement.
       Checkbox-group now preserves native checkbox `form` ownership through headless/styled
@@ -109,7 +112,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       coverage prove manual roving focus remains separate from selected panel activation. Slider
       external form ownership is covered by headless/styled tests, static gallery contracts,
       refreshed generated artifacts, and a browser-backed `FormData` check across the generated
-      native range input update path.
+      native range input update path. OTP aggregate hidden-input external form ownership is covered
+      by headless/styled tests, static gallery contracts, refreshed generated artifacts, and a
+      browser-backed `FormData` check across generated value updates.
 - [ ] Add G3 axe checks and G4 visual baselines once route/state coverage is stable enough to avoid
       churn-heavy baselines.
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
@@ -217,6 +222,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/switch.ts packages/headless-ui/src/primitives/switch.test.ts packages/ui/src/switch.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/switch-demo.tsx examples/gallery/src/generated/interactive/switch-demo.tsx examples/gallery/src/generated/interactive/switch-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] OTP aggregate external form ownership slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/ui/src/otp-field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/otp-field-demo.tsx examples/gallery/src/generated/interactive/otp-field-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
       `git diff --check`.
 - [x] Command canceled keyboard default-prevention slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`;

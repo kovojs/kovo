@@ -948,6 +948,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
   it('updates OTP aggregate value, visible slots, and focus through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryOtpFieldDemo);
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-otp-form'));
     const hidden = required(
       root.querySelector<HTMLInputElement>('#gallery-interactive-otp-hidden'),
     );
@@ -965,8 +966,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('fw-state')).toBe('{"activeSlot":2,"value":"12"}');
     expect(root.getAttribute('role')).toBe('group');
     expect(root.getAttribute('aria-labelledby')).toBe('gallery-interactive-otp-label');
+    expect(hidden.form).toBe(form);
     expect(hidden.name).toBe('gallery-otp-code');
     expect(hidden.value).toBe('12');
+    expect(new FormData(form).get('gallery-otp-code')).toBe('12');
     expect(first.value).toBe('1');
     expect(second.value).toBe('2');
     expect(third.value).toBe('');
@@ -980,6 +983,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"123"}');
       expect(hidden.value).toBe('123');
+      expect(new FormData(form).get('gallery-otp-code')).toBe('123');
       expect(third.value).toBe('3');
       expect(third.getAttribute('data-filled')).toBe('');
       expect(fourth.tabIndex).toBe(0);
@@ -992,6 +996,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"1234"}');
       expect(root.getAttribute('data-complete')).toBe('');
       expect(hidden.value).toBe('1234');
+      expect(new FormData(form).get('gallery-otp-code')).toBe('1234');
       expect(fourth.value).toBe('4');
       expect(fourth.getAttribute('data-complete')).toBe('');
       expect(output.textContent).toBe('1234');
