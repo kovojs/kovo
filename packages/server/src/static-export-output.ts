@@ -19,10 +19,7 @@ import {
   type StaticExportOutputPlanItemKind,
   type StaticExportOutputTarget,
 } from './static-export-output-targets.js';
-import {
-  StaticExportError,
-  staticExportDiagnostic,
-} from './static-export-diagnostics.js';
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
   sortedHeaders,
   type StaticExportArtifact,

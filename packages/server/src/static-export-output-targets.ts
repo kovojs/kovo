@@ -1,9 +1,6 @@
 import * as path from 'node:path';
 
-import {
-  StaticExportError,
-  staticExportDiagnostic,
-} from './static-export-diagnostics.js';
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
   type StaticExportArtifact,
   type StaticExportAssetArtifact,

@@ -3875,7 +3875,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="fieldControlAttributes" data-invalid="author-fieldControlAttributes" data-required="author-fieldControlAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" disabled id="author-fieldControlAttributes" name="author-fieldControlAttributes" required class="primitive-fieldControlAttributes author-fieldControlAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="fieldControlAttributes" data-invalid="author-fieldControlAttributes" data-required="author-fieldControlAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" id="author-fieldControlAttributes" name="author-fieldControlAttributes" required class="primitive-fieldControlAttributes author-fieldControlAttributes">merged</div>",
           "name": "fieldControlAttributes",
         },
         {
@@ -3905,7 +3905,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="fieldsetRootAttributes" data-invalid="author-fieldsetRootAttributes" data-required="author-fieldsetRootAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" disabled id="author-fieldsetRootAttributes" class="primitive-fieldsetRootAttributes author-fieldsetRootAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="fieldsetRootAttributes" data-invalid="author-fieldsetRootAttributes" data-required="author-fieldsetRootAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" id="author-fieldsetRootAttributes" class="primitive-fieldsetRootAttributes author-fieldsetRootAttributes">merged</div>",
           "name": "fieldsetRootAttributes",
         },
         {

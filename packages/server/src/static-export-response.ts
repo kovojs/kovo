@@ -1,11 +1,5 @@
-import {
-  StaticExportError,
-  staticExportDiagnostic,
-} from './static-export-diagnostics.js';
-import {
-  sortedHeaders,
-  type StaticExportResponseSnapshot,
-} from './static-export-types.js';
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
+import { sortedHeaders, type StaticExportResponseSnapshot } from './static-export-types.js';
 
 interface StaticExportRouteDocumentResponseOptions {
   response: Response;
