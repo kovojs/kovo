@@ -100,8 +100,13 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.txt?raw';
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
+import numberFieldStaticRouteHtml from './visual-fixtures/number-field.html.txt?raw';
+import otpFieldStaticRouteHtml from './visual-fixtures/otp-field.html.txt?raw';
+import radioGroupStaticRouteHtml from './visual-fixtures/radio-group.html.txt?raw';
 import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
+import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
@@ -114,14 +119,24 @@ interface InteractiveDemoComponent {
 }
 
 type StaticVisualFixturePath =
+  | '/components/checkbox-group'
   | '/components/command'
+  | '/components/number-field'
+  | '/components/otp-field'
+  | '/components/radio-group'
   | '/components/select'
+  | '/components/slider'
   | '/components/table'
   | '/components/tabs';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
+  '/components/checkbox-group': checkboxGroupStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
+  '/components/number-field': numberFieldStaticRouteHtml,
+  '/components/otp-field': otpFieldStaticRouteHtml,
+  '/components/radio-group': radioGroupStaticRouteHtml,
   '/components/select': selectStaticRouteHtml,
+  '/components/slider': sliderStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
   '/components/tabs': tabsStaticRouteHtml,
 };
@@ -278,6 +293,11 @@ describe('compiled interactive gallery demos in the browser', () => {
     const selectRoute = mountStaticGalleryRoute('/components/select');
     const tableRoute = mountStaticGalleryRoute('/components/table');
     const commandRoute = mountStaticGalleryRoute('/components/command');
+    const checkboxGroupRoute = mountStaticGalleryRoute('/components/checkbox-group');
+    const radioGroupRoute = mountStaticGalleryRoute('/components/radio-group');
+    const numberFieldRoute = mountStaticGalleryRoute('/components/number-field');
+    const otpFieldRoute = mountStaticGalleryRoute('/components/otp-field');
+    const sliderRoute = mountStaticGalleryRoute('/components/slider');
 
     expect(visualGeometry(tabsRoute)).toEqual({
       height: 539,
@@ -295,11 +315,36 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 512,
       width: 860,
     });
+    expect(visualGeometry(checkboxGroupRoute)).toEqual({
+      height: 713,
+      width: 860,
+    });
+    expect(visualGeometry(radioGroupRoute)).toEqual({
+      height: 545,
+      width: 860,
+    });
+    expect(visualGeometry(numberFieldRoute)).toEqual({
+      height: 648,
+      width: 860,
+    });
+    expect(visualGeometry(otpFieldRoute)).toEqual({
+      height: 700,
+      width: 860,
+    });
+    expect(visualGeometry(sliderRoute)).toEqual({
+      height: 637,
+      width: 860,
+    });
 
     expect(await visualBaselineHash(tabsRoute)).toBe('9044926b');
     expect(await visualBaselineHash(selectRoute)).toBe('e0f770a7');
     expect(await visualBaselineHash(tableRoute)).toBe('09f0362a');
     expect(await visualBaselineHash(commandRoute)).toBe('d46c4bd3');
+    expect(await visualBaselineHash(checkboxGroupRoute)).toBe('e9a5f503');
+    expect(await visualBaselineHash(radioGroupRoute)).toBe('80d7704e');
+    expect(await visualBaselineHash(numberFieldRoute)).toBe('d5277948');
+    expect(await visualBaselineHash(otpFieldRoute)).toBe('6b72f908');
+    expect(await visualBaselineHash(sliderRoute)).toBe('5ff031a5');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

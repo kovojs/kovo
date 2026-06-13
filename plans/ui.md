@@ -151,6 +151,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `examples/gallery/src/visual-fixtures/command.html.txt` is synchronized against
       `renderGalleryRoute()`, and the Chromium browser gate asserts deterministic `860x512`
       geometry plus hash `d46c4bd3`.
+      Evidence 2026-06-13: the static visual baseline now covers the H2 native form-control route
+      family: checkbox-group, radio-group, number-field, otp-field, and slider. Their raw route
+      fixtures are synchronized against `renderGalleryRoute()`, and the Chromium browser gate
+      asserts deterministic route geometry plus screenshot hashes `e9a5f503`, `80d7704e`,
+      `d5277948`, `6b72f908`, and `5ff031a5`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -252,6 +257,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
       exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/command.html.txt plans/ui.md`;
+      `git diff --check`.
+- [x] H2 native form-control styled static visual-baseline slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/checkbox-group.html.txt examples/gallery/src/visual-fixtures/number-field.html.txt examples/gallery/src/visual-fixtures/otp-field.html.txt examples/gallery/src/visual-fixtures/radio-group.html.txt examples/gallery/src/visual-fixtures/slider.html.txt plans/ui.md`;
       `git diff --check`.
 - [x] Checkbox native mixed-state axe closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox.test.ts`;

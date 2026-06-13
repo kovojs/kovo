@@ -92,9 +92,14 @@ describe('gallery demo fixtures', () => {
 
   it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
     for (const [path, fileName] of [
+      ['/components/checkbox-group', 'checkbox-group.html.txt'],
       ['/components/command', 'command.html.txt'],
+      ['/components/number-field', 'number-field.html.txt'],
+      ['/components/otp-field', 'otp-field.html.txt'],
+      ['/components/radio-group', 'radio-group.html.txt'],
       ['/components/tabs', 'tabs.html.txt'],
       ['/components/select', 'select.html.txt'],
+      ['/components/slider', 'slider.html.txt'],
       ['/components/table', 'table.html.txt'],
     ] as const) {
       const route = galleryRoutes.find((candidate) => candidate.path === path);
