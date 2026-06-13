@@ -26,7 +26,7 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
       otp-field, scroll-area, field/fieldset integration. (All nine have headless primitive+tests,
       styled `@jiso/ui` component, gallery route, G2 behavior contract, and compiled interactive
       demo with browser + G3 axe-per-state coverage. Verified: `vitest packages/headless-ui
-  packages/ui examples/gallery` 530 pass + gallery browser 39 pass; emit-in-sync.)
+packages/ui examples/gallery` 530 pass + gallery browser 39 pass; emit-in-sync.)
 - [ ] H3 primitives: select, combobox, autocomplete, dropdown-menu, context-menu, menubar,
       navigation-menu, slider, toast, command.
 - [x] U1 styled foundation: token sheet, `cn()`, statically analyzable variant helper.
@@ -61,8 +61,6 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
 
 ## Open Work
 
-- [ ] Re-audit H2 exports, tests, styled wrappers, gallery routes, behavior contracts, merge
-      fixtures, and compiled interactive coverage before checking H2 complete.
 - [ ] Re-audit H3 exports, tests, styled wrappers, gallery routes, behavior contracts, and compiled
       interactive coverage before checking H3 complete.
 - [ ] Finish remaining state, focus, menu, and canceled-change restoration gaps for select,
@@ -108,8 +106,9 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
 
 ## Risks
 
-- [ ] H2/H3 checkboxes remain open until a same-session audit verifies every named primitive family
+- [ ] H3 checkbox remains open until a same-session audit verifies every named primitive family
       has exports, tests, wrappers, gallery route, behavior contract, and compiled/browser coverage.
+      (H1/H2 verified complete; H2 closed 2026-06-13 with 530 unit + 39 gallery-browser pass.)
 - [ ] G3/G4/G6 remain open until coverage is proven across the full component set, not only recently
       touched route families.
 - [ ] Browser visual checks may occasionally hit transient hash variants; rerun once and record
