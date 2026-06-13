@@ -253,6 +253,19 @@ Round95 app-shell Vite output/static-export evidence:
 - `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round96 app-shell Vite static-export options evidence:
+
+- `packages/server/src/vite-static-export-options.ts` now owns Vite static-export build/option
+  normalization: manifest-file build projection, write-vs-dry-run output stripping, and SPEC §9.5
+  manifest asset injection for export, inventory, and manifest callers.
+- `packages/server/src/vite-static-export.ts` is now a thinner public facade over the shared
+  option/result boundary, so export, inventory, and manifest paths no longer duplicate static
+  export option assembly.
+- `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-static-export.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export-options.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

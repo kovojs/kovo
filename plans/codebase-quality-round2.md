@@ -734,6 +734,14 @@ Closed evidence so far:
   stable. Evidence: `packages/server/src/vite-build-output.ts`,
   `packages/server/src/vite-build.test.ts`, `pnpm exec vitest --run packages/server/src`, and
   `pnpm exec tsc --noEmit --pretty false`.
+- Vite static-export build/option normalization now lives in
+  `packages/server/src/vite-static-export-options.ts`, covering manifest-file projection,
+  write-vs-dry-run output stripping, and SPEC §9.5 manifest asset injection while
+  `packages/server/src/vite-static-export.ts` stays a public export/inventory/manifest facade.
+  Evidence: `packages/server/src/vite-static-export-options.ts`,
+  `packages/server/src/vite-static-export-options.test.ts`,
+  `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
+  and `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 
