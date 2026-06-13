@@ -246,6 +246,12 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Opaque member helper handoffs that receive proven Drizzle receiver arguments now degrade to
+  FW406 in touch/query extraction instead of disappearing, while fake/lookalike receiver arguments
+  remain invisible. Evidence: `packages/drizzle/src/static.ts`,
+  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
+  `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

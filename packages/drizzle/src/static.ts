@@ -806,12 +806,17 @@ function extractProjectExternalDbArgumentCalls(
   const bodyStart = bodySourceStart(body);
 
   for (const call of touchBodyCallExpressions(body)) {
-    const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) continue;
+    const surface = externalHelperCallSurface(call);
+    if (!surface) continue;
 
-    const name = expression.getText();
+    const { name } = surface;
     if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
-    if (localFunctionKeyForIdentifier(expression, localFunctionNames)) continue;
+    if (
+      surface.identifier &&
+      localFunctionKeyForIdentifier(surface.identifier, localFunctionNames)
+    ) {
+      continue;
+    }
     if (!call.getArguments().some((arg) => isProjectDrizzleReceiverIdentifier(arg, receivers))) {
       continue;
     }
@@ -2046,12 +2051,17 @@ function externalQueryHelperDiagnostics(
   // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit FW406
   // boundary until their read/write summaries are proven interprocedurally.
   return queryExecutableCallExpressions(body).flatMap((call) => {
-    const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) return [];
+    const surface = externalHelperCallSurface(call);
+    if (!surface) return [];
 
-    const name = expression.getText();
+    const { name } = surface;
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
-    if (localFunctionKeyForIdentifier(expression, localFunctionKeys)) return [];
+    if (
+      surface.identifier &&
+      localFunctionKeyForIdentifier(surface.identifier, localFunctionKeys)
+    ) {
+      return [];
+    }
 
     const receiverName = queryHelperReceiverArgumentName(call, receiverReferences);
     if (!receiverName) return [];
@@ -3921,12 +3931,14 @@ function extractExternalDbArgumentCallsFromBody(
   const calls: ExternalDbArgumentCall[] = [];
 
   for (const call of touchBodyCallExpressions(body)) {
-    const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) continue;
+    const surface = externalHelperCallSurface(call);
+    if (!surface) continue;
 
-    const name = expression.getText();
+    const { name } = surface;
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
-    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    const key = surface.identifier
+      ? localFunctionKeyForIdentifier(surface.identifier, localFunctionKeys)
+      : undefined;
     if (key && localFunctionKeys.has(key)) continue;
 
     if (!call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))) {
@@ -3938,6 +3950,21 @@ function extractExternalDbArgumentCallsFromBody(
   }
 
   return calls;
+}
+
+interface ExternalHelperCallSurface {
+  identifier?: Node;
+  name: string;
+}
+
+function externalHelperCallSurface(call: CallExpression): ExternalHelperCallSurface | undefined {
+  const expression = call.getExpression();
+  if (Node.isIdentifier(expression)) {
+    return { identifier: expression, name: expression.getText() };
+  }
+
+  const name = staticExpressionPath(expression);
+  return name ? { name } : undefined;
 }
 
 function localFunctionKeyForIdentifier(
