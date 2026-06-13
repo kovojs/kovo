@@ -66,7 +66,6 @@ import {
   fwExplainEndpointAssertionFact,
   fwExplainListField,
   fwExplainMutationAssertionFact,
-  fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
   fwExplainScopeAuditAssertionFact,
   fwExplainUnguardedAssertionFact,
@@ -130,13 +129,8 @@ import {
   projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
 import {
-  loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
-  runStarterTemplateEmitGraph,
-  runStarterTemplateGraphAssertions,
-  runStarterTemplateViteTaskCommand,
-  starterClientTemplateBehaviorFact,
-  starterTemplateDevDependencyCoverage,
+  starterTemplateAcceptanceFact,
 } from '../packages/test/src/starter-template-fixtures.ts';
 import {
   enhancedMutationBehaviorFact,
@@ -2768,33 +2762,11 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {
-  const starterFacts = await loadStarterTemplateFacts(starterTemplatePaths);
-  const appSource = starterFacts.appSource;
-  const clientSource = starterFacts.clientSource;
-  assert.equal(typeof appSource, 'string');
-  assert.equal(typeof clientSource, 'string');
-  const packageFacts = starterFacts.package;
-  const viteTasks = starterFacts.viteTasks;
-  const starterGraph = starterFacts.graph;
-  const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' });
-  const cartAddExplain = fwExplain(starterGraph, {
-    kind: 'mutation',
-    optimistic: true,
-    target: 'cart/add',
-  });
-  const cartPageExplain = fwExplain(starterGraph, { kind: 'page', target: '/cart' });
-
-  assert.equal(packageFacts.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
-  assert.equal(packageFacts.scripts['fw-check'], undefined);
-  assert.equal(packageFacts.scripts['graph-assertions'], undefined);
-  assert.deepEqual(packageFacts.dependencies, [
-    '@jiso/better-auth',
-    '@jiso/core',
-    '@jiso/runtime',
-    '@jiso/server',
-  ]);
-  assert.deepEqual(
-    starterTemplateDevDependencyCoverage(packageFacts, [
+  const starterAcceptance = await starterTemplateAcceptanceFact({
+    assertFixpoint,
+    assertRenderEquivalence,
+    compileComponentModule,
+    expectedDevDependencies: [
       '@jiso/compiler',
       '@tailwindcss/vite',
       '@typescript/native-preview',
@@ -2804,45 +2776,54 @@ void test('P10 starter wires graph assertions into CI', async () => {
       'vite',
       'vite-plus',
       'vitest',
-    ]),
-    {
-      expected: [
-        '@jiso/compiler',
-        '@tailwindcss/vite',
-        '@typescript/native-preview',
-        'fw',
-        'tailwindcss',
-        'typescript',
-        'vite',
-        'vite-plus',
-        'vitest',
-      ],
-      missing: [],
-      present: [
-        '@jiso/compiler',
-        '@tailwindcss/vite',
-        '@typescript/native-preview',
-        'fw',
-        'tailwindcss',
-        'typescript',
-        'vite',
-        'vite-plus',
-        'vitest',
-      ],
-    },
-  );
+    ],
+    fwCheck,
+    fwExplain,
+    fwOutputs: starterTemplateFwOutputs,
+    ...starterTemplatePaths,
+  });
 
-  assert.deepEqual(fwCheckOkAssertionFact(fwCheck(starterGraph)), {
+  assert.deepEqual(starterAcceptance.package, {
+    dependencies: ['@jiso/better-auth', '@jiso/core', '@jiso/runtime', '@jiso/server'],
+    scripts: {
+      emitGraph: 'node scripts/emit-graph.mjs',
+      fwCheck: undefined,
+      graphAssertions: undefined,
+    },
+  });
+  assert.deepEqual(starterAcceptance.devDependencyCoverage, {
+    expected: [
+      '@jiso/compiler',
+      '@tailwindcss/vite',
+      '@typescript/native-preview',
+      'fw',
+      'tailwindcss',
+      'typescript',
+      'vite',
+      'vite-plus',
+      'vitest',
+    ],
+    missing: [],
+    present: [
+      '@jiso/compiler',
+      '@tailwindcss/vite',
+      '@typescript/native-preview',
+      'fw',
+      'tailwindcss',
+      'typescript',
+      'vite',
+      'vite-plus',
+      'vitest',
+    ],
+  });
+  assert.deepEqual(starterAcceptance.graphCheck, {
     exitCode: 0,
     issueCount: 0,
     status: 'ok',
     version: 'fw-check/v1',
   });
-  assert.deepEqual(
-    starterGraph.components?.map((component) => component.name),
-    ['CartBadge', 'CartPanel'],
-  );
-  assert.deepEqual(starterGraph.mutations, [
+  assert.deepEqual(starterAcceptance.graph.components, ['CartBadge', 'CartPanel']);
+  assert.deepEqual(starterAcceptance.graph.mutations, [
     {
       guards: ['authed'],
       invalidates: ['cart'],
@@ -2852,10 +2833,10 @@ void test('P10 starter wires graph assertions into CI', async () => {
       writes: ['cart'],
     },
   ]);
-  assert.deepEqual(starterGraph.optimistic, [
+  assert.deepEqual(starterAcceptance.graph.optimistic, [
     { mutation: 'cart/add', query: 'cart', status: 'await-fragment' },
   ]);
-  assert.deepEqual(starterGraph.pages, [
+  assert.deepEqual(starterAcceptance.graph.pages, [
     {
       i18n: ['en-US:cartTitle'],
       meta: {
@@ -2867,11 +2848,11 @@ void test('P10 starter wires graph assertions into CI', async () => {
       stylesheets: ['/src/styles.css'],
     },
   ]);
-  assert.deepEqual(starterGraph.queries, [{ domains: ['cart'], query: 'cart' }]);
-  assert.deepEqual(starterGraph.touchGraph?.['cart.addItem']?.touches, [
+  assert.deepEqual(starterAcceptance.graph.queries, [{ domains: ['cart'], query: 'cart' }]);
+  assert.deepEqual(starterAcceptance.graph.touchGraphSites['cart.addItem'], [
     { domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' },
   ]);
-  assert.deepEqual(fwExplainQueryAssertionFact(cartQueryExplain), {
+  assert.deepEqual(starterAcceptance.explain.cartQuery, {
     consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'],
     domainWrites: ['cart.addItem'],
     exitCode: 0,
@@ -2880,7 +2861,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
     subject: 'QUERY cart',
     version: 'fw-explain/v1',
   });
-  assert.deepEqual(fwExplainMutationAssertionFact(cartAddExplain), {
+  assert.deepEqual(starterAcceptance.explain.cartAdd, {
     exitCode: 0,
     guards: ['authed'],
     inputFields: ['productId', 'quantity'],
@@ -2901,7 +2882,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
     version: 'fw-explain/v1',
     writes: ['cart'],
   });
-  assert.deepEqual(fwExplainPageAssertionFact(cartPageExplain), {
+  assert.deepEqual(starterAcceptance.explain.cartPage, {
     exitCode: 0,
     i18n: ['en-US:cartTitle'],
     meta: 'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
@@ -2914,35 +2895,23 @@ void test('P10 starter wires graph assertions into CI', async () => {
     viewTransitions: [],
   });
 
-  assert.deepEqual(
-    {
-      input: viteTasks['fw-check']?.input,
-      output: viteTasks['fw-check']?.output,
-    },
-    {
-      input: [
-        { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-        { pattern: 'src/**/*', base: 'workspace' },
-      ],
-      output: ['graph.json'],
-    },
-  );
-  assert.deepEqual(
-    {
-      input: viteTasks['graph-assertions']?.input,
-      output: viteTasks['graph-assertions']?.output,
-    },
-    {
-      input: [
-        { pattern: 'graph.json', base: 'workspace' },
-        { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-        { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
-        { pattern: 'src/**/*', base: 'workspace' },
-      ],
-      output: undefined,
-    },
-  );
-  assert.deepEqual(starterFacts.ciRunCommands, [
+  assert.deepEqual(starterAcceptance.tasks.fwCheck, {
+    input: [
+      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+      { pattern: 'src/**/*', base: 'workspace' },
+    ],
+    output: ['graph.json'],
+  });
+  assert.deepEqual(starterAcceptance.tasks.graphAssertions, {
+    input: [
+      { pattern: 'graph.json', base: 'workspace' },
+      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+      { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
+      { pattern: 'src/**/*', base: 'workspace' },
+    ],
+    output: undefined,
+  });
+  assert.deepEqual(starterAcceptance.ciRunCommands, [
     'vp install',
     'vp check',
     'vp test',
@@ -2950,44 +2919,22 @@ void test('P10 starter wires graph assertions into CI', async () => {
     'vp run fw-check',
     'vp run graph-assertions',
   ]);
-
-  const taskOutputs = await Promise.all([
-    runStarterTemplateViteTaskCommand(
-      viteTasks['fw-check'].command,
-      starterTemplatePaths,
-      starterTemplateFwOutputs,
-    ),
-    runStarterTemplateViteTaskCommand(
-      viteTasks['graph-assertions'].command,
-      starterTemplatePaths,
-      starterTemplateFwOutputs,
-    ),
-  ]);
   assert.deepEqual(
-    taskOutputs.map((taskOutput) => taskOutput.output),
+    starterAcceptance.taskOutputs.map((taskOutput) => taskOutput.output),
     ['emit-graph/v1\nOK\nfw-check/v1\nOK\n', 'emit-graph/v1\nOK\ngraph-assertions/v1\nOK\n'],
   );
   assert.deepEqual(
-    taskOutputs.map((taskOutput) => taskOutput.graph),
-    [starterGraph, starterGraph],
+    starterAcceptance.taskOutputs.map((taskOutput) => taskOutput.graph),
+    [starterAcceptance.emittedGraph.graph, starterAcceptance.emittedGraph.graph],
   );
 
-  const emittedGraph = await runStarterTemplateEmitGraph(starterTemplatePaths);
-  assert.equal(emittedGraph.output, 'emit-graph/v1\nOK\n');
-  assert.deepEqual(emittedGraph.graph, starterGraph);
-  assert.equal(
-    await runStarterTemplateGraphAssertions(starterTemplatePaths, starterTemplateFwOutputs),
-    'graph-assertions/v1\nOK\n',
-  );
-
-  const starterAppCompile = compileComponentModule({
-    fileName: 'src/app.tsx',
-    source: appSource,
+  assert.equal(starterAcceptance.emittedGraph.output, 'emit-graph/v1\nOK\n');
+  assert.equal(starterAcceptance.graphAssertionsOutput, 'graph-assertions/v1\nOK\n');
+  assert.deepEqual(starterAcceptance.appCompile, {
+    fixpointAsserted: true,
+    renderEquivalenceAsserted: true,
   });
-  assert.doesNotThrow(() => assertFixpoint(starterAppCompile));
-  assert.doesNotThrow(() => assertRenderEquivalence(starterAppCompile));
-
-  assert.deepEqual(await starterClientTemplateBehaviorFact(clientSource), {
+  assert.deepEqual(starterAcceptance.browserClient, {
     appendedHtml: [['beforeend', '<li>p1</li>']],
     deferredApplication: {
       body: '<fw-fragment></fw-fragment>',
@@ -3021,12 +2968,12 @@ void test('P10 starter wires graph assertions into CI', async () => {
     loaderInstallCount: 1,
   });
 
-  assert.deepEqual(starterFacts.cssDirectives, [
+  assert.deepEqual(starterAcceptance.cssDirectives, [
     '"../index.html"',
     '"./**/*.{ts,tsx,html}"',
     'inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200")',
   ]);
-  assert.deepEqual(starterFacts.indexHtml.tags, [
+  assert.deepEqual(starterAcceptance.html.tags, [
     'html',
     'head',
     'meta',
@@ -3035,15 +2982,15 @@ void test('P10 starter wires graph assertions into CI', async () => {
     'title',
     'body',
   ]);
-  assert.deepEqual(starterFacts.indexHtml.htmlAttrs, { lang: 'en' });
-  assert.deepEqual(starterFacts.indexHtml.metaAttrs, [
+  assert.deepEqual(starterAcceptance.html.htmlAttrs, { lang: 'en' });
+  assert.deepEqual(starterAcceptance.html.metaAttrs, [
     { charset: 'UTF-8' },
     { content: 'width=device-width, initial-scale=1.0', name: 'viewport' },
   ]);
-  assert.deepEqual(starterFacts.indexHtml.linkAttrs, [
+  assert.deepEqual(starterAcceptance.html.linkAttrs, [
     { rel: 'stylesheet', href: '/src/styles.css' },
   ]);
-  assert.deepEqual(starterFacts.indexHtml.scriptAttrs, []);
+  assert.deepEqual(starterAcceptance.html.scriptAttrs, []);
 
   execFileSync('pnpm', ['exec', 'vitest', '--run', 'packages/create-jiso/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),

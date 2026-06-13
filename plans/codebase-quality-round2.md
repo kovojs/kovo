@@ -79,6 +79,11 @@ behavior projections used by the P1 fw-check generated-module gates.
 Shared starter-template fixtures now own starter browser client loader/fetch/fragment/deferred
 behavior projections for the P10 starter fw-check gate, so the monolith no longer replays those
 fake document/runtime mechanics inline.
+Shared starter-template fixtures now also own the starter acceptance projection for package
+scripts/dependencies, graph facts, `fw-check`/`fw-explain` assertions, Vite+ task execution, CI
+commands, emitted graph freshness, app compile fixpoint/render equivalence, CSS/HTML facts, and
+browser client behavior, so the P10 starter fw-check gate no longer assembles that broad fixture
+mechanic locally.
 Shared generated-module fixtures now own generated CSS artifact scope-rule projection for the P10
 normative-docs fw-check gate, so the monolith no longer extracts generated CSS source and parses
 scope rules locally.
@@ -252,6 +257,18 @@ Latest evidence:
   `generatedWireResponseBodies`, and `wireFixtureResponseBody()`; `tests/fw-check.node.mjs`
   consumes those public fixture seams for fixture loading, explicit byte pins, and deferred-stream
   wire response selection instead of local directory reads, source parsing, or generated wire maps.
+- P10 starter acceptance fixture slice:
+  `pnpm exec vitest --run packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`;
+  `pnpm exec vp check packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs`;
+  `pnpm run check:fw`;
+  `git diff --check`. Evidence: `packages/test/src/starter-template-fixtures.ts` exposes
+  `starterTemplateAcceptanceFact()` as a public fixture for starter package/dependency facts,
+  graph facts, `fw-check`/`fw-explain` projections, Vite+ task execution, CI command ordering,
+  emitted graph freshness, SPEC §5.2 app compile fixpoint/render-equivalence assertions,
+  CSS/HTML facts, and browser client behavior; `tests/fw-check.node.mjs` consumes that structured
+  fact instead of locally assembling those fixture mechanics.
 - Project graph artifact acceptance fixture slice:
   `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;

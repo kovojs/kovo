@@ -346,7 +346,10 @@ import {
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
   starterClientTemplateBehaviorFact,
+  starterTemplateAcceptanceFact,
   starterTemplateFacts,
+  type StarterTemplateAcceptanceFact,
+  type StarterTemplateAcceptanceOptions,
   type StarterClientTemplateBehaviorFact,
   type StarterClientTemplateFixture,
   type StarterTemplateFacts,
@@ -801,6 +804,7 @@ describe('@jiso/test package subpath exports', () => {
       versionShape: 'lower-hex-8',
     });
     expect(starterTemplateFacts).toBeTypeOf('function');
+    expect(starterTemplateAcceptanceFact).toBeTypeOf('function');
     expect(executeStarterClientTemplate).toBeTypeOf('function');
     expect(starterClientTemplateBehaviorFact).toBeTypeOf('function');
     expect(runStarterTemplateEmitGraph).toBeTypeOf('function');
@@ -1543,6 +1547,8 @@ type _PublicSubpathTypes = [
   TouchGraphProvenanceFact,
   TouchGraphSourceFact,
   TouchGraphSummaryEntryFact,
+  StarterTemplateAcceptanceFact,
+  StarterTemplateAcceptanceOptions,
   StarterClientTemplateBehaviorFact,
   StarterClientTemplateFixture,
   StarterTemplateFacts,

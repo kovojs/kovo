@@ -12,6 +12,15 @@ import {
   runCommandSequenceSync,
   type VitePlusTask,
 } from './command-fixtures.ts';
+import { fwCheckOkAssertionFact, type FwCheckOkAssertionFact } from './fw-check-fixtures.ts';
+import {
+  fwExplainMutationAssertionFact,
+  fwExplainPageAssertionFact,
+  fwExplainQueryAssertionFact,
+  type FwExplainMutationAssertionFact,
+  type FwExplainPageAssertionFact,
+  type FwExplainQueryAssertionFact,
+} from './fw-explain-fixtures.ts';
 import { htmlElementFacts, type HtmlElementFact } from './html-fragment.ts';
 import { cssSourceDirectives } from './source-fixtures.ts';
 
@@ -71,6 +80,79 @@ export interface StarterTemplateFwOutput {
 export interface StarterTemplateExecutionResult {
   graph: unknown;
   output: string;
+}
+
+export interface StarterTemplateGraphFact {
+  components: readonly string[];
+  mutations: unknown;
+  optimistic: unknown;
+  pages: unknown;
+  queries: unknown;
+  touchGraphSites: Record<string, unknown>;
+}
+
+export interface StarterTemplateTaskFact {
+  input: unknown;
+  output: unknown;
+}
+
+export interface StarterTemplateAcceptanceFact {
+  appCompile: {
+    fixpointAsserted: boolean;
+    renderEquivalenceAsserted: boolean;
+  };
+  browserClient: StarterClientTemplateBehaviorFact;
+  ciRunCommands: readonly string[];
+  cssDirectives: readonly string[];
+  devDependencyCoverage: StarterTemplateDevDependencyCoverage;
+  emittedGraph: StarterTemplateExecutionResult;
+  graph: StarterTemplateGraphFact;
+  graphAssertionsOutput: string;
+  graphCheck: FwCheckOkAssertionFact;
+  html: StarterTemplateIndexHtmlFacts;
+  package: {
+    dependencies: readonly string[];
+    scripts: {
+      emitGraph: unknown;
+      fwCheck: unknown;
+      graphAssertions: unknown;
+    };
+  };
+  taskOutputs: readonly StarterTemplateExecutionResult[];
+  tasks: {
+    fwCheck: StarterTemplateTaskFact;
+    graphAssertions: StarterTemplateTaskFact;
+  };
+  explain: {
+    cartAdd: FwExplainMutationAssertionFact;
+    cartPage: FwExplainPageAssertionFact;
+    cartQuery: FwExplainQueryAssertionFact;
+  };
+}
+
+export interface StarterTemplateAcceptanceOptions extends StarterTemplateFixturePaths {
+  assertFixpoint(result: unknown): void;
+  assertRenderEquivalence(result: unknown): void;
+  compileComponentModule(options: { fileName: string; source: string }): unknown;
+  expectedDevDependencies: readonly string[];
+  fwCheck(graph: Record<string, unknown>): { exitCode: number; output: string };
+  fwExplain(
+    graph: Record<string, unknown>,
+    options:
+      | { kind: 'mutation'; optimistic: true; target: string }
+      | { kind: 'page'; target: string }
+      | { kind: 'query'; target: string },
+  ): { exitCode: number; output: string };
+  fwOutputs: readonly StarterTemplateFwOutput[];
+}
+
+interface StarterTemplateGraphShape extends Record<string, unknown> {
+  components?: Array<{ name?: unknown }>;
+  mutations?: unknown;
+  optimistic?: unknown;
+  pages?: unknown;
+  queries?: unknown;
+  touchGraph?: Record<string, { touches?: unknown }>;
 }
 
 export interface ConformancePackageFixture {
@@ -188,6 +270,95 @@ export function starterTemplateDevDependencyCoverage(
     expected: [...expected],
     missing: expected.filter((dependencyName) => !devDependencyNames.has(dependencyName)),
     present,
+  };
+}
+
+export async function starterTemplateAcceptanceFact(
+  options: StarterTemplateAcceptanceOptions,
+): Promise<StarterTemplateAcceptanceFact> {
+  const starterFacts = await loadStarterTemplateFacts(options);
+  if (typeof starterFacts.appSource !== 'string') {
+    throw new Error('starter template exposes app TSX source');
+  }
+  if (typeof starterFacts.clientSource !== 'string') {
+    throw new Error('starter template exposes browser client source');
+  }
+
+  const graph = starterFacts.graph as StarterTemplateGraphShape;
+  const fwCheckTask = starterFacts.viteTasks['fw-check'];
+  const graphAssertionsTask = starterFacts.viteTasks['graph-assertions'];
+  const taskOutputs = await Promise.all([
+    runStarterTemplateViteTaskCommand(fwCheckTask?.command, options, options.fwOutputs),
+    runStarterTemplateViteTaskCommand(graphAssertionsTask?.command, options, options.fwOutputs),
+  ]);
+  const emittedGraph = await runStarterTemplateEmitGraph(options);
+  const graphAssertionsOutput = await runStarterTemplateGraphAssertions(options, options.fwOutputs);
+  const appCompile = options.compileComponentModule({
+    fileName: 'src/app.tsx',
+    source: starterFacts.appSource,
+  });
+  options.assertFixpoint(appCompile);
+  options.assertRenderEquivalence(appCompile);
+
+  // SPEC.md §5.2: starter app code is authored as TSX/JS; this acceptance
+  // projection verifies generated graph and runtime behavior without
+  // asserting lowered source text in the fw-check monolith.
+  return {
+    appCompile: {
+      fixpointAsserted: true,
+      renderEquivalenceAsserted: true,
+    },
+    browserClient: await starterClientTemplateBehaviorFact(starterFacts.clientSource),
+    ciRunCommands: starterFacts.ciRunCommands,
+    cssDirectives: starterFacts.cssDirectives,
+    devDependencyCoverage: starterTemplateDevDependencyCoverage(
+      starterFacts.package,
+      options.expectedDevDependencies,
+    ),
+    emittedGraph,
+    explain: {
+      cartAdd: fwExplainMutationAssertionFact(
+        options.fwExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
+      ),
+      cartPage: fwExplainPageAssertionFact(
+        options.fwExplain(graph, { kind: 'page', target: '/cart' }),
+      ),
+      cartQuery: fwExplainQueryAssertionFact(
+        options.fwExplain(graph, { kind: 'query', target: 'cart' }),
+      ),
+    },
+    graph: {
+      components: graph.components?.map((component) => String(component.name)) ?? [],
+      mutations: graph.mutations,
+      optimistic: graph.optimistic,
+      pages: graph.pages,
+      queries: graph.queries,
+      touchGraphSites: Object.fromEntries(
+        Object.entries(graph.touchGraph ?? {}).map(([key, value]) => [key, value.touches]),
+      ),
+    },
+    graphAssertionsOutput,
+    graphCheck: fwCheckOkAssertionFact(options.fwCheck(graph)),
+    html: starterFacts.indexHtml,
+    package: {
+      dependencies: starterFacts.package.dependencies,
+      scripts: {
+        emitGraph: starterFacts.package.scripts['emit-graph'],
+        fwCheck: starterFacts.package.scripts['fw-check'],
+        graphAssertions: starterFacts.package.scripts['graph-assertions'],
+      },
+    },
+    taskOutputs,
+    tasks: {
+      fwCheck: {
+        input: fwCheckTask?.input,
+        output: fwCheckTask?.output,
+      },
+      graphAssertions: {
+        input: graphAssertionsTask?.input,
+        output: graphAssertionsTask?.output,
+      },
+    },
   };
 }
 

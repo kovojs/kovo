@@ -12,6 +12,7 @@ import {
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
   starterClientTemplateBehaviorFact,
+  starterTemplateAcceptanceFact,
   starterTemplateDevDependencyCoverage,
   starterTemplateFacts,
 } from '@jiso/test/starter-template-fixtures';
@@ -352,6 +353,213 @@ export function applyJisoDeferredStreamResponse(body, options = {}) {
       await expect(runStarterTemplateGraphAssertions(paths, fwOutputs)).resolves.toBe(
         'graph-assertions/v1\nOK\n',
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('projects starter acceptance through one package-owned fixture seam', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-starter-acceptance-'));
+    const templateRoot = join(root, 'template');
+    const compilerRoot = join(root, 'compiler');
+    const graph = {
+      components: [{ name: 'CartBadge' }],
+      mutations: [{ key: 'cart/add' }],
+      optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'await-fragment' }],
+      pages: [{ route: '/cart' }],
+      queries: [{ domains: ['cart'], query: 'cart' }],
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' }],
+        },
+      },
+    };
+    const appSource = "export const App = component('starter-app', { render: () => <main /> });";
+    const clientSource = `
+import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+
+const store = createQueryStore();
+const queryPlans = {};
+const root = {
+  findFragmentTarget(target) {
+    const element = document.getElementById(target) ?? document.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
+    return element ? {
+      appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
+      readHtml() { return element.innerHTML; },
+      replaceWithHtml(html) { element.innerHTML = html; },
+    } : null;
+  },
+  querySelectorAll(selector) {
+    return document.querySelectorAll(selector);
+  },
+};
+
+installJisoLoader({
+  root: document,
+  queryStore: store,
+  enhancedMutations: {
+    fetch: (url, options) => fetch(url, options),
+    queryPlans,
+    root,
+    store,
+  },
+  importModule: (path) => import(path),
+});
+
+export function applyJisoDeferredStreamResponse(body, options = {}) {
+  return applyDeferredStreamResponseToDom({ body, root, store, queryPlans, ...options });
+}
+`;
+
+    try {
+      await mkdir(join(templateRoot, '.github/workflows'), { recursive: true });
+      await mkdir(join(templateRoot, 'scripts'), { recursive: true });
+      await mkdir(join(templateRoot, 'src'), { recursive: true });
+      await mkdir(compilerRoot, { recursive: true });
+      await writeFile(
+        join(compilerRoot, 'index.mjs'),
+        `export const graphFixture = ${JSON.stringify(graph)};\n`,
+        'utf8',
+      );
+      await writeFile(
+        join(templateRoot, '.github/workflows/ci.yml'),
+        [
+          'jobs:',
+          '  check:',
+          '    steps:',
+          '      - run: vp install',
+          '      - run: vp run fw-check',
+          '      - run: vp run graph-assertions',
+        ].join('\n'),
+      );
+      await writeFile(
+        join(templateRoot, 'package.json'),
+        JSON.stringify({
+          dependencies: { '@jiso/core': 'workspace:*', '@jiso/runtime': 'workspace:*' },
+          devDependencies: { '@jiso/compiler': 'workspace:*', fw: 'workspace:*' },
+          scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
+        }),
+      );
+      await writeFile(
+        join(templateRoot, 'vite.config.ts'),
+        [
+          "import { defineConfig } from 'vite-plus';",
+          'export default defineConfig({',
+          '  run: { tasks: {',
+          "    'fw-check': { command: 'node scripts/emit-graph.mjs && fw check graph.json', input: [{ pattern: 'src/**/*', base: 'workspace' }], output: ['graph.json'] },",
+          "    'graph-assertions': { command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs', input: [{ pattern: 'graph.json', base: 'workspace' }] },",
+          '  } },',
+          '});',
+        ].join('\n'),
+      );
+      await writeFile(
+        join(templateRoot, 'scripts/emit-graph.mjs'),
+        [
+          "import { writeFileSync } from 'node:fs';",
+          "import { graphFixture } from '@jiso/compiler';",
+          "writeFileSync('graph.json', JSON.stringify(graphFixture));",
+          "process.stdout.write('emit-graph/v1\\nOK\\n');",
+        ].join('\n'),
+      );
+      await writeFile(
+        join(templateRoot, 'scripts/graph-assertions.mjs'),
+        [
+          "import { execFileSync } from 'node:child_process';",
+          "execFileSync('fw', ['explain', 'query', 'cart', 'graph.json']);",
+          "process.stdout.write('graph-assertions/v1\\nOK\\n');",
+        ].join('\n'),
+      );
+      await writeFile(join(templateRoot, 'graph.json'), JSON.stringify(graph));
+      await writeFile(
+        join(templateRoot, 'index.html'),
+        '<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/styles.css"></head><body></body></html>',
+      );
+      await writeFile(join(templateRoot, 'src/app.tsx'), appSource);
+      await writeFile(join(templateRoot, 'src/client.ts'), clientSource);
+      await writeFile(join(templateRoot, 'src/styles.css'), '@source "../index.html";\n');
+
+      const compiled = { files: ['compiled'] };
+      const fwOutputs = [
+        { args: ['check', 'graph.json'], output: 'fw-check/v1\nOK\n' },
+        {
+          args: ['explain', 'query', 'cart', 'graph.json'],
+          output:
+            'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+        },
+      ];
+
+      await expect(
+        starterTemplateAcceptanceFact({
+          assertFixpoint(result) {
+            expect(result).toBe(compiled);
+          },
+          assertRenderEquivalence(result) {
+            expect(result).toBe(compiled);
+          },
+          compileComponentModule(options) {
+            expect(options).toEqual({ fileName: 'src/app.tsx', source: appSource });
+            return compiled;
+          },
+          compilerModuleUrl: pathToFileURL(join(compilerRoot, 'index.mjs')).href,
+          expectedDevDependencies: ['@jiso/compiler', 'fw'],
+          fwCheck(candidateGraph) {
+            expect(candidateGraph).toEqual(graph);
+            return { exitCode: 0, output: 'fw-check/v1\nOK\n' };
+          },
+          fwExplain(_candidateGraph, options) {
+            if (options.kind === 'mutation') {
+              return {
+                exitCode: 0,
+                output:
+                  'fw-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\n',
+              };
+            }
+            if (options.kind === 'page') {
+              return {
+                exitCode: 0,
+                output:
+                  'fw-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Cart description=- image=-\ni18n: -\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
+              };
+            }
+            return {
+              exitCode: 0,
+              output:
+                'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+            };
+          },
+          fwOutputs,
+          projectRoot: root,
+          templateRoot,
+        }),
+      ).resolves.toMatchObject({
+        appCompile: { fixpointAsserted: true, renderEquivalenceAsserted: true },
+        browserClient: {
+          deferredApplied: true,
+          loader: { hasEnhancedFetch: true, hasImportModule: true },
+        },
+        ciRunCommands: ['vp install', 'vp run fw-check', 'vp run graph-assertions'],
+        devDependencyCoverage: {
+          expected: ['@jiso/compiler', 'fw'],
+          missing: [],
+          present: ['@jiso/compiler', 'fw'],
+        },
+        emittedGraph: { graph, output: 'emit-graph/v1\nOK\n' },
+        graph: {
+          components: ['CartBadge'],
+          mutations: graph.mutations,
+          touchGraphSites: { 'cart.addItem': graph.touchGraph['cart.addItem'].touches },
+        },
+        graphAssertionsOutput: 'graph-assertions/v1\nOK\n',
+        graphCheck: { exitCode: 0, issueCount: 0, status: 'ok', version: 'fw-check/v1' },
+        package: {
+          dependencies: ['@jiso/core', '@jiso/runtime'],
+          scripts: { emitGraph: 'node scripts/emit-graph.mjs' },
+        },
+        taskOutputs: [
+          { graph, output: 'emit-graph/v1\nOK\nfw-check/v1\nOK\n' },
+          { graph, output: 'emit-graph/v1\nOK\ngraph-assertions/v1\nOK\n' },
+        ],
+      });
     } finally {
       await rm(root, { force: true, recursive: true });
     }
