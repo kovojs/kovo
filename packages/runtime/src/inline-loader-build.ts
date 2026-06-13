@@ -7,18 +7,24 @@ import ts from 'typescript';
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const inlineResponseApplySourcePath = fileURLToPath(
+  new URL('./inline-response-apply.ts', import.meta.url),
+);
 const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
+const inlineResponseApplyRootFunctionNames = ['applyInlineMutationResponseBody'] as const;
 const inlineWireParserRootFunctionNames = ['readInlineMutationResponseBodyChunks'] as const;
 
 export const inlineJisoLoaderGzipByteBudget = 4096;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
+export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
 
 export const inlineJisoLoaderInstallerReadableSource =
   buildInlineJisoLoaderInstallerReadableSource();
 
 export function buildInlineJisoLoaderInstallerReadableSource(
   wireParserReadableSource = inlineWireParserReadableSource,
+  responseApplyReadableSource = inlineResponseApplyReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -56,30 +62,23 @@ function installInlineJisoLoader(importModule) {
   const findFragmentTarget = (target) =>
     doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
   ${wireParserReadableSource}
-  const applyFragment = (fragment) => {
-    const element = findFragmentTarget(fragment.target);
-    if (!element) return;
-    if (fragment.mode === 'append') {
-      element.insertAdjacentHTML('beforeend', fragment.html);
-    } else {
-      element.innerHTML = fragment.html;
-    }
-  };
-  const applyResponseChunks = (chunks) => {
-    chunks.queries.forEach((query) => {
-      dispatchEvent(
-        new CustomEvent('jiso:query', {
-          detail: {
-            attrs: query.attrs,
-            content: query.content
-          },
-        }),
-      );
-    });
-    chunks.fragments.forEach(applyFragment);
+  ${responseApplyReadableSource}
+  const dispatchQuery = (query) => {
+    dispatchEvent(
+      new CustomEvent('jiso:query', {
+        detail: {
+          attrs: query.attrs,
+          content: query.content
+        },
+      }),
+    );
   };
   const applyResponseBody = (body) => {
-    applyResponseChunks(readInlineMutationResponseBodyChunks(body));
+    applyInlineMutationResponseBody(body, {
+      dispatchQuery,
+      findFragmentTarget,
+      readBody: readInlineMutationResponseBodyChunks,
+    });
   };
   const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {
@@ -178,8 +177,10 @@ export function buildInlineJisoLoaderInstallerSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
   assertDefaultInlineJisoLoaderInstallerWireParserParity(source);
+  assertDefaultInlineJisoLoaderInstallerResponseApplyParity(source);
   const installerSource = minifyInlineJavaScriptSource(source);
   assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(source, installerSource);
+  assertDefaultMinifiedInlineJisoLoaderInstallerResponseApplyParity(source, installerSource);
   return installerSource;
 }
 
@@ -256,23 +257,69 @@ export function assertInlineJisoLoaderGzipBudget(
 }
 
 function readInlineWireParserReadableSource(): string {
-  return extractInlineWireParserReadableSource(readFileSync(wireParserSourcePath, 'utf8'));
+  return extractInlineHelperReadableSource({
+    label: 'wire parser',
+    rootFunctionNames: inlineWireParserRootFunctionNames,
+    source: readFileSync(wireParserSourcePath, 'utf8'),
+    sourceFileName: 'wire-parser.ts',
+  });
+}
+
+function readInlineResponseApplyReadableSource(): string {
+  return extractInlineHelperReadableSource({
+    label: 'response apply',
+    rootFunctionNames: inlineResponseApplyRootFunctionNames,
+    source: readFileSync(inlineResponseApplySourcePath, 'utf8'),
+    sourceFileName: 'inline-response-apply.ts',
+  });
 }
 
 export function extractInlineWireParserReadableSource(
   source: string,
   rootFunctionNames: readonly string[] = inlineWireParserRootFunctionNames,
 ): string {
+  return extractInlineHelperReadableSource({
+    label: 'wire parser',
+    rootFunctionNames,
+    source,
+    sourceFileName: 'wire-parser.ts',
+  });
+}
+
+export function extractInlineResponseApplyReadableSource(
+  source: string,
+  rootFunctionNames: readonly string[] = inlineResponseApplyRootFunctionNames,
+): string {
+  return extractInlineHelperReadableSource({
+    label: 'response apply',
+    rootFunctionNames,
+    source,
+    sourceFileName: 'inline-response-apply.ts',
+  });
+}
+
+interface ExtractInlineHelperReadableSourceOptions {
+  label: string;
+  rootFunctionNames: readonly string[];
+  source: string;
+  sourceFileName: string;
+}
+
+function extractInlineHelperReadableSource({
+  label,
+  rootFunctionNames,
+  source,
+  sourceFileName,
+}: ExtractInlineHelperReadableSourceOptions): string {
   const sourceFile = ts.createSourceFile(
-    'wire-parser.ts',
+    sourceFileName,
     source,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TS,
   );
   const declarations = new Map<string, ts.FunctionDeclaration>();
-  const unsupportedTopLevelBindings =
-    collectUnsupportedInlineWireParserTopLevelBindings(sourceFile);
+  const unsupportedTopLevelBindings = collectUnsupportedInlineHelperTopLevelBindings(sourceFile);
 
   for (const statement of sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name) {
@@ -283,11 +330,12 @@ export function extractInlineWireParserReadableSource(
   const missing = rootFunctionNames.filter((name) => !declarations.has(name));
   if (missing.length > 0) {
     throw new Error(
-      `Inline Jiso loader wire parser source is missing helper(s): ${missing.join(', ')}`,
+      `Inline Jiso loader ${label} source is missing helper(s): ${missing.join(', ')}`,
     );
   }
 
-  const included = collectInlineWireParserDependencyClosure(
+  const included = collectInlineHelperDependencyClosure(
+    label,
     sourceFile,
     declarations,
     unsupportedTopLevelBindings,
@@ -338,9 +386,44 @@ export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
   }
 }
 
+export function assertInlineJisoLoaderInstallerResponseApplyParity(
+  installerSource: string,
+  responseApplySource: string = readFileSync(inlineResponseApplySourcePath, 'utf8'),
+): void {
+  const expected = extractInlineResponseApplyReadableSource(responseApplySource);
+  const count = countSubstring(installerSource, expected);
+
+  if (count !== 1) {
+    throw new Error(
+      `Inline Jiso loader readable source must embed the canonical response apply helper closure exactly once; found ${count}.`,
+    );
+  }
+}
+
+export function assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(
+  installerSource: string,
+  responseApplySource: string = readFileSync(inlineResponseApplySourcePath, 'utf8'),
+): void {
+  const expected = minifyInlineJavaScriptSource(
+    extractInlineResponseApplyReadableSource(responseApplySource),
+  );
+  const count = countSubstring(installerSource, expected);
+
+  if (count !== 1) {
+    throw new Error(
+      `Inline Jiso loader minified source must embed the canonical minified response apply helper closure exactly once; found ${count}.`,
+    );
+  }
+}
+
 function assertDefaultInlineJisoLoaderInstallerWireParserParity(source: string): void {
   if (source !== inlineJisoLoaderInstallerReadableSource) return;
   assertInlineJisoLoaderInstallerWireParserParity(source);
+}
+
+function assertDefaultInlineJisoLoaderInstallerResponseApplyParity(source: string): void {
+  if (source !== inlineJisoLoaderInstallerReadableSource) return;
+  assertInlineJisoLoaderInstallerResponseApplyParity(source);
 }
 
 function assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(
@@ -349,6 +432,14 @@ function assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(
 ): void {
   if (readableSource !== inlineJisoLoaderInstallerReadableSource) return;
   assertMinifiedInlineJisoLoaderInstallerWireParserParity(installerSource);
+}
+
+function assertDefaultMinifiedInlineJisoLoaderInstallerResponseApplyParity(
+  readableSource: string,
+  installerSource: string,
+): void {
+  if (readableSource !== inlineJisoLoaderInstallerReadableSource) return;
+  assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(installerSource);
 }
 
 function countSubstring(source: string, expected: string): number {
@@ -367,7 +458,8 @@ function countSubstring(source: string, expected: string): number {
   return count;
 }
 
-function collectInlineWireParserDependencyClosure(
+function collectInlineHelperDependencyClosure(
+  label: string,
   sourceFile: ts.SourceFile,
   declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
   unsupportedTopLevelBindings: ReadonlySet<string>,
@@ -382,11 +474,12 @@ function collectInlineWireParserDependencyClosure(
 
     const declaration = declarations.get(name);
     if (!declaration) {
-      throw new Error(`Inline Jiso loader wire parser source is missing helper: ${name}`);
+      throw new Error(`Inline Jiso loader ${label} source is missing helper: ${name}`);
     }
 
     visiting.add(name);
-    for (const dependency of collectInlineWireParserFunctionDependencies(
+    for (const dependency of collectInlineHelperFunctionDependencies(
+      label,
       sourceFile,
       declaration,
       declarations,
@@ -402,7 +495,8 @@ function collectInlineWireParserDependencyClosure(
   return included;
 }
 
-function collectInlineWireParserFunctionDependencies(
+function collectInlineHelperFunctionDependencies(
+  label: string,
   sourceFile: ts.SourceFile,
   declaration: ts.FunctionDeclaration,
   declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
@@ -419,7 +513,7 @@ function collectInlineWireParserFunctionDependencies(
       if (name !== ownName && declarations.has(name)) dependencies.add(name);
       if (unsupportedTopLevelBindings.has(name)) {
         throw new Error(
-          `Inline Jiso loader wire parser helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
+          `Inline Jiso loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
         );
       }
     }
@@ -434,9 +528,7 @@ function collectInlineWireParserFunctionDependencies(
   return dependencies;
 }
 
-function collectUnsupportedInlineWireParserTopLevelBindings(
-  sourceFile: ts.SourceFile,
-): Set<string> {
+function collectUnsupportedInlineHelperTopLevelBindings(sourceFile: ts.SourceFile): Set<string> {
   const bindings = new Set<string>();
 
   const addBindingName = (name: ts.BindingName | ts.Identifier): void => {

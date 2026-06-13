@@ -768,6 +768,31 @@ packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-js-minifier.test.ts` and
       `pnpm --filter @jiso/runtime run check:inline-loader`.
+      Evidence 2026-06-13 round270: inline enhanced-response application now extracts both sides of
+      the inline parser/apply boundary from runtime-owned source. `packages/runtime/src/wire-parser.ts`
+      still owns `readInlineMutationResponseBodyChunks`, while
+      `packages/runtime/src/inline-response-apply.ts` owns
+      `applyInlineMutationResponseBody`; `packages/runtime/src/inline-loader-build.ts` rejects
+      readable/minified drift for both helper closures before regenerating
+      `packages/runtime/src/inline-loader.ts`. `packages/runtime/src/inline-loader-parser-parity.test.ts`
+      pins readable/minified response-apply closure extraction, and
+      `packages/runtime/src/inline-loader-response-apply.test.ts` directly exercises the helper plus
+      readable/minified/generated/extracted installer parity. Verified by focused inline/apply tests
+      `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/mutation-response-dom.test.ts
+packages/runtime/src/mutation-response-wire-apply.test.ts
+packages/runtime/src/mutation-response-apply.test.ts`; full runtime
+      `pnpm exec vitest --run packages/runtime/src`; inline generation
+      `pnpm --filter @jiso/runtime run check:inline-loader`; browser runtime `pnpm run
+      test:browser`; exact `pnpm exec vp check packages/runtime/src/inline-response-apply.ts
+packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts plans/codebase-quality-round2.md`; and
+      `git diff --check`.
       Evidence 2026-06-13 round251: inline enhanced-response application now keeps body parsing and
       decoded chunk application as separate generated helpers: `applyResponseBody` calls extracted
       `readInlineMutationResponseBodyChunks` once and passes canonical raw query chunks plus decoded

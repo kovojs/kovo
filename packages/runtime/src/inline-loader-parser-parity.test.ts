@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertInlineJisoLoaderInstallerResponseApplyParity,
   assertInlineJisoLoaderInstallerWireParserParity,
+  assertMinifiedInlineJisoLoaderInstallerResponseApplyParity,
   assertMinifiedInlineJisoLoaderInstallerWireParserParity,
   buildInlineJisoLoaderInstallerReadableSource,
   buildInlineJisoLoaderInstallerSource,
+  extractInlineResponseApplyReadableSource,
   extractInlineWireParserReadableSource,
   inlineJisoLoaderInstallerReadableSource,
+  inlineResponseApplyReadableSource,
   inlineWireParserReadableSource,
 } from './inline-loader-build.js';
 
 describe('inline loader parser parity', () => {
-  it('generates readable inline loader source around the canonical parser helpers', () => {
+  it('generates readable inline loader source around canonical parser and apply helpers', () => {
     // SPEC.md §4.4/§9.1: the inline bootstrap scans the same query/fragment
     // chunks as the modular runtime, so readable source is generated from the
     // extracted parser helper closure instead of carrying a hand-copied parser.
@@ -33,12 +37,29 @@ describe('inline loader parser parity', () => {
       '  return { fragments: readElementChunks(body, "fw-fragment"), queries: readElementChunks(body, "fw-query") };',
       '}',
     ].join('\n');
+    const alternateReadableApply = [
+      'function applyInlineMutationResponseBody(body, options) {',
+      '  return applyInlineMutationResponseChunks(options.readBody(body), options);',
+      '}',
+      'function applyInlineMutationResponseChunks(chunks, options) {',
+      '  chunks.queries.forEach(options.dispatchQuery);',
+      '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
+      '}',
+      'function applyInlineFragment(fragment, findFragmentTarget) {',
+      '  const element = findFragmentTarget(fragment.target);',
+      '  if (element) element.innerHTML = fragment.html;',
+      '}',
+    ].join('\n');
 
     const defaultReadable = buildInlineJisoLoaderInstallerReadableSource();
-    const alternateReadable = buildInlineJisoLoaderInstallerReadableSource(alternateReadableParser);
+    const alternateReadable = buildInlineJisoLoaderInstallerReadableSource(
+      alternateReadableParser,
+      alternateReadableApply,
+    );
 
     expect(defaultReadable).toBe(inlineJisoLoaderInstallerReadableSource);
     expect(defaultReadable).toContain(inlineWireParserReadableSource);
+    expect(defaultReadable).toContain(inlineResponseApplyReadableSource);
     expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
     expect(inlineWireParserReadableSource).toContain('function readFragmentChunksFromElements(');
     expect(inlineWireParserReadableSource).toContain(
@@ -46,14 +67,21 @@ describe('inline loader parser parity', () => {
     );
     expect(inlineWireParserReadableSource).toContain('function readMutationResponseElementChunks(');
     expect(inlineWireParserReadableSource).not.toContain('export function');
-    expect(alternateReadable).toContain(alternateReadableParser);
-    expect(alternateReadable).not.toContain(inlineWireParserReadableSource);
-    expect(alternateReadable).toContain('readInlineMutationResponseBodyChunks(body)');
-    expect(alternateReadable).toContain('const applyResponseChunks = (chunks) =>');
-    expect(alternateReadable).toContain(
-      'applyResponseChunks(readInlineMutationResponseBodyChunks(body));',
+    expect(inlineResponseApplyReadableSource).toContain(
+      'function applyInlineMutationResponseBody(',
     );
-    expect(alternateReadable).toContain('chunks.fragments.forEach(applyFragment);');
+    expect(inlineResponseApplyReadableSource).toContain(
+      'function applyInlineMutationResponseChunks(',
+    );
+    expect(inlineResponseApplyReadableSource).toContain('function applyInlineFragment(');
+    expect(inlineResponseApplyReadableSource).not.toContain('export function');
+    expect(alternateReadable).toContain(alternateReadableParser);
+    expect(alternateReadable).toContain(alternateReadableApply);
+    expect(alternateReadable).not.toContain(inlineWireParserReadableSource);
+    expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);
+    expect(alternateReadable).toContain('readInlineMutationResponseBodyChunks(body)');
+    expect(alternateReadable).toContain('applyInlineMutationResponseBody(body, {');
+    expect(alternateReadable).toContain('readBody: readInlineMutationResponseBodyChunks');
   });
 
   it('extracts the inline wire parser dependency closure from the modular parser', () => {
@@ -194,6 +222,64 @@ describe('inline loader parser parity', () => {
         canonicalParser,
       ),
     ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
+  });
+
+  it('extracts and checks readable and minified inline response apply embeds', () => {
+    // SPEC.md §4.4/§9.1: inline query-event and fragment application is owned
+    // by a canonical runtime helper closure before minification, not by a
+    // second hand-written apply function inside the generated bootstrap.
+    const canonicalApply = [
+      'export function applyInlineMutationResponseBody(body, options) {',
+      '  return applyInlineMutationResponseChunks(options.readBody(body), options);',
+      '}',
+      'function applyInlineMutationResponseChunks(chunks, options) {',
+      '  chunks.queries.forEach(options.dispatchQuery);',
+      '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
+      '}',
+      'function applyInlineFragment(fragment, findFragmentTarget) {',
+      '  const element = findFragmentTarget(fragment.target);',
+      '  if (!element) return;',
+      '  if (fragment.mode === "append") {',
+      '    element.insertAdjacentHTML("beforeend", fragment.html);',
+      '  } else {',
+      '    element.innerHTML = fragment.html;',
+      '  }',
+      '}',
+    ].join('\n');
+    const canonicalReadable = extractInlineResponseApplyReadableSource(canonicalApply);
+    const readableInstaller = buildInlineJisoLoaderInstallerReadableSource(
+      inlineWireParserReadableSource,
+      canonicalReadable,
+    );
+    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
+
+    expect(canonicalReadable).toMatch(
+      /^function applyInlineFragment\(fragment, findFragmentTarget\).*function applyInlineMutationResponseChunks\(chunks, options\).*function applyInlineMutationResponseBody\(body, options\)/s,
+    );
+    expect(() =>
+      assertInlineJisoLoaderInstallerResponseApplyParity(readableInstaller, canonicalApply),
+    ).not.toThrow();
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(minifiedInstaller, canonicalApply),
+    ).not.toThrow();
+    expect(() =>
+      assertInlineJisoLoaderInstallerResponseApplyParity(
+        readableInstaller.replace(
+          'element.innerHTML = fragment.html;',
+          'element.textContent = fragment.html;',
+        ),
+        canonicalApply,
+      ),
+    ).toThrow('canonical response apply helper closure exactly once; found 0');
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(
+        minifiedInstaller.replace(
+          'element.innerHTML=fragment.html',
+          'element.textContent=fragment.html',
+        ),
+        canonicalApply,
+      ),
+    ).toThrow('canonical minified response apply helper closure exactly once; found 0');
   });
 
   it('rejects inline wire parser helpers that reach outside the function closure', () => {
