@@ -167,6 +167,17 @@ Implemented areas:
 - The shared `isJisoApp()` guard now also validates route, query, mutation, and endpoint declaration
   entries before dynamic app-shell modules reach request dispatch, Vite build wiring, or static
   export replay.
+- The create-jiso starter static preview now serves exported `/c/` modules with immutable cache
+  headers, keeping local static-host adoption aligned with SPEC §9.5 exported client-module
+  artifacts.
+
+Round373 starter static-preview immutable module evidence:
+
+- `packages/create-jiso/templates/scripts/preview-static.mjs` adds
+  `Cache-Control: public, max-age=31536000, immutable` only for exported `/c/` modules.
+- `packages/create-jiso/src/index.test.ts` proves the scaffolded template and generated
+  `vp run preview-static` flow serve `/c/starter.client.js?v=starter-r7` with the immutable header.
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
 
 Round368 closed aggregate declaration-entry guard evidence:
 

@@ -275,6 +275,10 @@ describe('create-jiso starter', () => {
       expect(previewStaticScript).toContain('Static export directory not found');
       expect(previewStaticScript).toContain("method !== 'GET' && method !== 'HEAD'");
       expect(previewStaticScript).toContain("'content-length': statSync(filePath).size");
+      expect(previewStaticScript).toContain("decodedPath.startsWith('/c/')");
+      expect(previewStaticScript).toContain(
+        "headers['cache-control'] = 'public, max-age=31536000, immutable'",
+      );
       const serveScript = readFileSync(join(root, 'scripts/serve.mjs'), 'utf8');
       expect(serveScript).toContain('createStarterServeServer');
       expect(serveScript).toContain('configFile: fileURLToPath(new URL');
@@ -573,6 +577,9 @@ describe('create-jiso starter', () => {
         });
         expect(headClientModule.status).toBe(200);
         expect(headClientModule.headers.get('content-type')).toContain('text/javascript');
+        expect(headClientModule.headers.get('cache-control')).toBe(
+          'public, max-age=31536000, immutable',
+        );
         await expect(headClientModule.text()).resolves.toBe('');
 
         const mutationFallback = await fetch(`${origin}/_m/cart/add`, { method: 'POST' });

@@ -100,10 +100,7 @@ function serveStaticExportFile(rawUrl, method, response) {
     return;
   }
 
-  response.writeHead(200, {
-    'content-length': statSync(filePath).size,
-    'content-type': contentType(filePath),
-  });
+  response.writeHead(200, responseHeaders(filePath, decodedPath));
   if (method === 'HEAD') {
     response.end();
     return;
@@ -202,6 +199,20 @@ function contentType(filePath) {
     default:
       return 'application/octet-stream';
   }
+}
+
+function responseHeaders(filePath, decodedPath) {
+  const headers = {
+    'content-length': statSync(filePath).size,
+    'content-type': contentType(filePath),
+  };
+
+  // SPEC.md section 9.5: exported /c/ modules are immutable app-shell artifacts.
+  if (decodedPath.startsWith('/c/')) {
+    headers['cache-control'] = 'public, max-age=31536000, immutable';
+  }
+
+  return headers;
 }
 
 function isMainModule() {

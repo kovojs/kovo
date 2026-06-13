@@ -168,6 +168,9 @@ export, Vite+ dev/build/export adoption, and guarded SPEC §9.5 boundaries.
 
 Latest evidence:
 
+- [x] Starter static preview now serves exported `/c/` modules with immutable cache headers, and the
+      generated starter export/preview test proves the `/c/starter.client.js?v=starter-r7` response
+      through `vp run preview-static`. Verified with focused create-jiso tests.
 - [x] Closed app aggregate guard now validates route, query, mutation, and endpoint declaration
       entries before request dispatch. Verified with server app/API/static-export/Vite tests, `tsc`,
       exact `vp check`, and `git diff --check`.
