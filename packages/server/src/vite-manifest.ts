@@ -159,34 +159,25 @@ export async function jisoAppShellViteManifestAssetsFromFile(
   );
 }
 
-function jisoAppShellViteManifestStylesheetHrefs(
-  manifest: JisoAppShellViteManifest,
-  options: JisoAppShellViteManifestHintOptions = {},
-): string[] {
-  return jisoAppShellViteManifestAssets(manifest, options)
-    .filter((asset) => asset.file.endsWith('.css'))
-    .map((asset) => asset.href);
-}
-
 export function jisoAppShellViteManifestStylesheetHref(
   manifest: JisoAppShellViteManifest,
   options: JisoAppShellViteManifestHintOptions = {},
 ): string {
-  const hrefs = jisoAppShellViteManifestStylesheetHrefs(manifest, options);
-  if (hrefs.length !== 1) {
+  let stylesheetHref: string | undefined;
+  let stylesheetCount = 0;
+  for (const asset of jisoAppShellViteManifestAssets(manifest, options)) {
+    if (!asset.file.endsWith('.css')) continue;
+    stylesheetHref = asset.href;
+    stylesheetCount += 1;
+  }
+
+  if (stylesheetCount !== 1 || stylesheetHref === undefined) {
     throw new Error(
-      `App shell Vite build manifest must contain exactly one stylesheet asset; found ${hrefs.length}.`,
+      `App shell Vite build manifest must contain exactly one stylesheet asset; found ${stylesheetCount}.`,
     );
   }
 
-  const href = hrefs[0];
-  if (href === undefined) {
-    throw new Error(
-      `App shell Vite build manifest must contain exactly one stylesheet asset; found ${hrefs.length}.`,
-    );
-  }
-
-  return href;
+  return stylesheetHref;
 }
 
 export async function jisoAppShellViteManifestStylesheetHrefFromFile(

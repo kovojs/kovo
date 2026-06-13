@@ -187,7 +187,7 @@ describe('server app shell Vite manifest planning', () => {
       jisoAppShellViteManifestStylesheetHref(
         {
           'src/cart.ts': {
-            css: ['assets/cart.css'],
+            css: ['assets/cart.css', 'https://cdn.example.test/reset.css'],
             file: 'assets/cart.js',
           },
         },

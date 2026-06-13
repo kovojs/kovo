@@ -1050,3 +1050,19 @@ Round263 app-shell replay/request closure evidence:
 - `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-request.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-client-modules.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+
+Round264 app-shell public boundary cleanup evidence:
+
+- `packages/server/src/index.ts` now type-exports `StaticExportCompileDiagnostic` directly from
+  the static-export diagnostic owner instead of routing the root type surface through the
+  app-shell static-export subpath.
+- `packages/server/src/vite-manifest.ts` deleted the remaining private plural stylesheet helper;
+  the singular public helper now counts stylesheet assets directly and continues to ignore
+  external CSS assets during SPEC §9.5 export-task stylesheet proof.
+- `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vp check packages/server/src/index.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
