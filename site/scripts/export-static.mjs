@@ -39,10 +39,12 @@ export async function exportSiteStaticApp({
   process.env.JISO_SITE_APP_SHELL_DEFAULT = 'off';
 
   try {
-    const [appShellModule, serverModule] = await Promise.all([
+    const [appShellModule, serverModule, serverAppShellModule] = await Promise.all([
       viteServer.ssrLoadModule('/scripts/app-shell.mjs'),
       viteServer.ssrLoadModule('@jiso/server'),
+      viteServer.ssrLoadModule('@jiso/server/app-shell'),
     ]);
+    const serverApi = { ...serverModule, ...serverAppShellModule };
     const { createSiteDistApp } = appShellModule;
     const {
       exportJisoAppShellViteBuildFromManifestFile,
@@ -50,34 +52,38 @@ export async function exportSiteStaticApp({
       isStaticExportDiagnosticError,
       jisoAppShellViteManifestStylesheetHrefFromFile,
       staticExportManifestForJisoAppShellViteBuildFromManifestFile,
-    } = serverModule;
+    } = serverApi;
 
     if (typeof createSiteDistApp !== 'function') {
       throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
     }
 
     if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
-      throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
+      throw new Error(
+        '@jiso/server/app-shell must export exportJisoAppShellViteBuildFromManifestFile.',
+      );
     }
     if (typeof formatStaticExportDiagnostics !== 'function') {
-      throw new Error('@jiso/server must export formatStaticExportDiagnostics.');
+      throw new Error('@jiso/server/app-shell must export formatStaticExportDiagnostics.');
     }
     if (typeof isStaticExportDiagnosticError !== 'function') {
-      throw new Error('@jiso/server must export isStaticExportDiagnosticError.');
+      throw new Error('@jiso/server/app-shell must export isStaticExportDiagnosticError.');
     }
     if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
+      throw new Error(
+        '@jiso/server/app-shell must export jisoAppShellViteManifestStylesheetHrefFromFile.',
+      );
     }
     if (typeof staticExportManifestForJisoAppShellViteBuildFromManifestFile !== 'function') {
       throw new Error(
-        '@jiso/server must export staticExportManifestForJisoAppShellViteBuildFromManifestFile.',
+        '@jiso/server/app-shell must export staticExportManifestForJisoAppShellViteBuildFromManifestFile.',
       );
     }
     staticExportTaskHelpers = { formatStaticExportDiagnostics, isStaticExportDiagnosticError };
 
     await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
-    const app = await createSiteDistApp({ distDir, publicDir, server: serverModule });
+    const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
     const manifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
       app,
       distDir: cssDistDir,

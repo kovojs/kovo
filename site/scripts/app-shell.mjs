@@ -8,6 +8,10 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
 const defaultServerModulePath = path.join(repoRoot, 'dist/server/src/index.mjs');
+const defaultServerAppShellModulePath = path.join(
+  repoRoot,
+  'dist/server/src/api/app-shell/index.mjs',
+);
 
 const textEncoder = new TextEncoder();
 
@@ -16,7 +20,7 @@ export async function createSiteDistApp({
   publicDir = defaultPublicDir,
   server,
 } = {}) {
-  const serverApi = server ?? (await import(pathToFileURL(defaultServerModulePath).href));
+  const serverApi = server ?? (await loadDefaultServerApi());
   const clientModules = serverApi.createMemoryVersionedClientModuleRegistry();
   const moduleHrefs = registerPublicClientModules(clientModules, publicDir);
 
@@ -25,6 +29,16 @@ export async function createSiteDistApp({
     document: { lang: 'en' },
     routes: siteDocumentRoutes(distDir, moduleHrefs, serverApi),
   });
+}
+
+async function loadDefaultServerApi() {
+  const [serverApi, appShellApi] = await Promise.all([
+    import(pathToFileURL(defaultServerModulePath).href),
+    existsSync(defaultServerAppShellModulePath)
+      ? import(pathToFileURL(defaultServerAppShellModulePath).href)
+      : import('@jiso/server/app-shell'),
+  ]);
+  return { ...serverApi, ...appShellApi };
 }
 
 export function siteDocumentRoutes(distDir = defaultDistDir, moduleHrefs = new Map(), server) {
