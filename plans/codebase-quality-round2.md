@@ -560,7 +560,7 @@ query events, enhanced submit, broadcast, and hydrated query scripts increasingl
 parser/apply helpers. Runtime test coverage has moved out of `index.test.ts` into focused
 query/apply/loader/optimism/morph/delegated-handler integration tests; the broad barrel test is now
 focused on public loader installation smoke only, while loader query hydration, enhanced mutations,
-and disposal live in dedicated runtime tests. Inline readable/minified/generated/extracted loader
+visible-return refetch, and disposal live in dedicated runtime tests. Inline readable/minified/generated/extracted loader
 parity coverage now owns parser-helper extraction in `inline-loader-parser-parity.test.ts` and
 inline enhanced-submit behavior in `inline-loader-enhanced-submit.test.ts`, leaving delegated
 handler, trigger, and response-apply parity in `inline-loader.test.ts`.
@@ -946,6 +946,15 @@ packages/runtime/src/mutation-response-wire-apply.test.ts
 packages/runtime/src/mutation-response-dom.test.ts
 packages/runtime/src/mutation-response-apply.test.ts plans/codebase-quality-round2.md`; and
       `git diff --check`.
+      Evidence 2026-06-13 round262: loader-level visible-return refetch integration moved from
+      `packages/runtime/src/query-store.test.ts` into
+      `packages/runtime/src/loader-visible-return-refetch.test.ts`, leaving `query-store.test.ts`
+      as the pure query-store owner while loader hydration/refetch still pins enhanced mutation,
+      broadcast replay, keyed query, and inserted script drift. Verified by `pnpm exec vitest --run
+packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-return-refetch.test.ts`,
+      full runtime `pnpm exec vitest --run packages/runtime/src`, browser runtime `pnpm exec vitest
+      --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      packages/runtime/src/query-hydration.browser.test.ts`, and `git diff --check`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1004,6 +1013,10 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       coverage split into wire-body and DOM owner suites and the root runtime type alias surface was
       narrowed. Command: `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round262: browser runtime checks passed after loader visible-return
+      refetch integration coverage moved into its own owner suite. Command: `pnpm exec vitest
+      --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 
