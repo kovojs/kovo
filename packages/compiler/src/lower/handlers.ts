@@ -14,6 +14,7 @@ import type {
   ElementParamType,
   HandlerLowering,
 } from '../types.js';
+import { elementParamAttributeNameFromExpression } from '../types.js';
 
 export function lowerEventHandlers(
   options: CompileComponentOptions,
@@ -262,7 +263,7 @@ function extractElementParams(
     : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
   return dedupeStrings(expressions).map((arg) => ({
-    attributeName: `data-p-${paramNameForExpression(arg)}`,
+    attributeName: elementParamAttributeNameFromExpression(arg),
     type: inferElementParamType(arg, zeroArgArrow, parsedPropertyAccesses),
     value: `{${arg}}`,
   }));
@@ -312,17 +313,4 @@ function collectSerializableMemberExpressions(
 
 function dedupeStrings(values: readonly string[]): string[] {
   return [...new Set(values)];
-}
-
-function paramNameForExpression(expression: string): string {
-  const segments = expression
-    .replace(/\[['"]([^'"]+)['"]\]/g, '.$1')
-    .split('.')
-    .filter(Boolean);
-  const last = segments.at(-1) ?? expression;
-  return last
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
 }

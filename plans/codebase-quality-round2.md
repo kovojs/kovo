@@ -302,6 +302,9 @@ Closed evidence so far:
 - Server-render terminal patching now calls the explicitly emit-only
   `applyComponentPipelineEmitPatches` helper; its offset map is not part of model validation or
   reparse sequencing.
+- Element-param attribute naming now lives beside the reverse `data-p-*` mapping in `types.ts`;
+  handler lowering consumes the shared helper instead of carrying a duplicate source-expression
+  normalizer.
 
 Open:
 

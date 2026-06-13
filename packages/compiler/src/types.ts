@@ -133,6 +133,19 @@ export function emitElementParamTypes(params: readonly ElementParam[]): string {
   return `fw-param-types="${entries}"`;
 }
 
+export function elementParamAttributeNameFromExpression(expression: string): string {
+  const segments = expression
+    .replace(/\[['"]([^'"]+)['"]\]/g, '.$1')
+    .split('.')
+    .filter(Boolean);
+  const last = segments.at(-1) ?? expression;
+  return `data-p-${last
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()}`;
+}
+
 export function elementParamNameFromAttribute(attributeName: string): string {
   return attributeName
     .replace(/^data-p-/, '')
