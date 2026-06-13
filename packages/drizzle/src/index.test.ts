@@ -9359,6 +9359,92 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks source parameter member receiver calls as FW406 instead of extracting table facts', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(context) {',
+          '  await context.db.update(users).set({});',
+          '  await context.tx.execute("select 1");',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:4',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks source query-loader member receivers as FW406 instead of deriving reads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/source-member-receiver", {',
+          '  load(_input, context) {',
+          '    runReport(context.db);',
+          '    context.tx.execute("select 1");',
+          '    return context.db.select({ id: users.id }).from(users);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface runReport() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/source-member-receiver',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
+  });
+
   it('marks source body-local receiver aliases as FW406 instead of extracting table facts', () => {
     const graph = extractTouchGraphFromSource([
       {

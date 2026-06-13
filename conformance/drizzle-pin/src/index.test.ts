@@ -2081,6 +2081,53 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins source query-loader member receivers as FW406 without fabricated reads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          "export const productQuery = query('product/source-member-receiver', {",
+          '  load(_input, context) {',
+          '    sendAudit(context.db);',
+          '    return context.db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface sendAudit() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface select() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+        ],
+        query: 'product/source-member-receiver',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('pins quoted source query-loader destructuring as FW406 without fabricated reads', () => {
     const facts = extractQueryFactsFromSource([
       {

@@ -2235,6 +2235,9 @@ function extractQueryDefinitionsFromSourceFile(
       ...(receiverMode === 'source'
         ? sourceQueryReceiverAliasDiagnostics(bodyObject, receiverReferences, localFunctionKeys)
         : []),
+      ...(receiverMode === 'source'
+        ? sourceQueryReceiverMemberDiagnostics(bodyObject, receiverReferences, localFunctionKeys)
+        : []),
       ...sourceDestructuredQueryReceiverDiagnostics(
         bodyObject,
         localFunctionKeys,
@@ -2454,7 +2457,12 @@ function isQueryReceiverIdentifier(
   receiverReferences: QueryReceiverReferences,
 ): boolean {
   if (!node) return false;
-  if (!Node.isIdentifier(node)) return isProjectDrizzleReceiverMemberExpression(node);
+  if (!Node.isIdentifier(node)) {
+    return (
+      receiverReferences.projectContainers === true &&
+      isProjectDrizzleReceiverMemberExpression(node)
+    );
+  }
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   if (receiverReferences.symbolKeys.size > 0 && symbolKey) {
@@ -2688,6 +2696,30 @@ function sourceQueryReceiverAliasDiagnostics(
     ).map((call) => ({
       code: 'FW406' as const,
       message: `${diagnosticDefinitions.FW406.message} Query uses source-mode Drizzle receiver alias surface ${call.name}() without project type proof.`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    })),
+  );
+}
+
+function sourceQueryReceiverMemberDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  localFunctionKeys: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
+
+  return queryCallbackBodies(body).flatMap((callbackBody) =>
+    extractSourceReceiverSurfaceCallsFromBody(
+      callbackBody,
+      localFunctionKeys,
+      (node) => isSourceQueryReceiverMemberExpression(node, receiverReferences),
+      undefined,
+      true,
+      (node) => isSourceQueryReceiverMemberExpression(node, receiverReferences),
+    ).map((call) => ({
+      code: 'FW406' as const,
+      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode Drizzle receiver member surface ${call.name}() without project type proof.`,
       severity: diagnosticDefinitions.FW406.severity,
       site: '',
     })),
@@ -4806,6 +4838,11 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
             localFunctionKeys,
             carrierSymbolKeys,
           ),
+          ...extractSourceParameterReceiverMemberSurfaceCallsFromBody(
+            bodyNode,
+            localFunctionKeys,
+            fn.callback,
+          ),
           ...extractOpaqueLocalHelperReceiverCallsFromBody(
             bodyNode,
             localFunctionKeys,
@@ -5619,6 +5656,7 @@ function extractSourceReceiverSurfaceCallsFromBody(
   isReceiverIdentifier: (node: Node | undefined) => boolean,
   bodyOffset = bodySourceStart(body),
   includeHelperCalls = true,
+  isReceiverMemberExpression?: (node: Node) => boolean,
 ): ExternalDbArgumentCall[] {
   const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, isReceiverIdentifier);
   const aliases = receiverMethodAliasesForBody(body, isReceiverIdentifier);
@@ -5639,6 +5677,7 @@ function extractSourceReceiverSurfaceCallsFromBody(
       isReceiverIdentifier,
       carrierSymbolKeys,
       bodyOffset,
+      isReceiverMemberExpression,
     );
     if (helper) calls.push(helper);
   }
@@ -5690,6 +5729,7 @@ function sourceReceiverHelperCallSurface(
   isReceiverIdentifier: (node: Node | undefined) => boolean,
   carrierSymbolKeys: ReadonlySet<string>,
   bodyOffset: number,
+  isReceiverMemberExpression?: (node: Node) => boolean,
 ): ExternalDbArgumentCall | null {
   const surface = externalHelperCallSurface(call);
   if (!surface) return null;
@@ -5701,7 +5741,14 @@ function sourceReceiverHelperCallSurface(
   if (
     !call
       .getArguments()
-      .some((arg) => receiverReferenceInArgument(arg, isReceiverIdentifier, carrierSymbolKeys))
+      .some((arg) =>
+        receiverReferenceInArgument(
+          arg,
+          isReceiverIdentifier,
+          carrierSymbolKeys,
+          isReceiverMemberExpression,
+        ),
+      )
   ) {
     return null;
   }
@@ -6389,6 +6436,84 @@ function isSourceReceiverCarrierMemberExpression(
   if (!path || path === rootPath || !path.startsWith(`${rootPath}.`)) return false;
 
   return carriedProperties.has(path.slice(rootPath.length + 1));
+}
+
+function extractSourceParameterReceiverMemberSurfaceCallsFromBody(
+  body: Node,
+  localFunctionKeys: ReadonlySet<string>,
+  callback: Node,
+): ExternalDbArgumentCall[] {
+  const receiverReferences = sourceCallbackParameterReferences(callback);
+  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
+
+  return extractSourceReceiverSurfaceCallsFromBody(
+    body,
+    localFunctionKeys,
+    (node) => isSourceParameterReceiverMemberExpression(node, receiverReferences),
+    undefined,
+    true,
+    (node) => isSourceParameterReceiverMemberExpression(node, receiverReferences),
+  );
+}
+
+function sourceCallbackParameterReferences(callback: Node): QueryReceiverReferences {
+  const names = new Set<string>();
+  const symbolKeys = new Set<string>();
+  if (
+    !Node.isArrowFunction(callback) &&
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
+  ) {
+    return { names, symbolKeys };
+  }
+
+  for (const parameter of callback.getParameters()) {
+    const name = parameter.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+
+    names.add(name.getText());
+    const symbolKey = resolvedSymbolKey(name.getSymbol());
+    if (symbolKey) symbolKeys.add(symbolKey);
+  }
+
+  return { names, symbolKeys };
+}
+
+function isSourceQueryReceiverMemberExpression(
+  node: Node | undefined,
+  receiverReferences: QueryReceiverReferences,
+): boolean {
+  return isSourceReceiverMemberExpression(node, (root) =>
+    isQueryReceiverIdentifier(root, receiverReferences),
+  );
+}
+
+function isSourceParameterReceiverMemberExpression(
+  node: Node | undefined,
+  receiverReferences: QueryReceiverReferences,
+): boolean {
+  return isSourceReceiverMemberExpression(node, (root) =>
+    isSourceDestructuredReceiverIdentifier(root, receiverReferences),
+  );
+}
+
+function isSourceReceiverMemberExpression(
+  node: Node | undefined,
+  isRootReceiver: (root: Node) => boolean,
+): boolean {
+  if (!node || (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node))) {
+    return false;
+  }
+
+  const root = staticExpressionRootIdentifier(node);
+  if (!root || !Node.isIdentifier(root) || !isRootReceiver(root)) return false;
+
+  const path = staticExpressionPath(node);
+  if (!path || path === root.getText()) return false;
+
+  const firstMember = path.slice(root.getText().length + 1).split('.')[0];
+  return firstMember === 'db' || firstMember === 'tx';
 }
 
 interface DirectDrizzleReceiverCallSurface {
