@@ -487,6 +487,80 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins typed context helper handoffs as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface ProductContext { db: PgDatabase<any, any, any> }',
+            'interface FakeContext { db: unknown }',
+            'declare function runReport(context: unknown): Promise<unknown[]>;',
+            '',
+            "export const productQuery = query('product/typed-context-helper', {",
+            '  async load(_input, context: ProductContext, fake: FakeContext) {',
+            '    await runReport({ fake });',
+            '    return runReport({ context });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface CartContext { db: PgDatabase<any, any, any> }',
+            'interface FakeContext { db: unknown }',
+            'declare function writeAudit(context: unknown): Promise<void>;',
+            '',
+            'export async function addItem(context: CartContext, fake: FakeContext) {',
+            '  await writeAudit({ fake });',
+            '  await writeAudit({ context });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to helper runReport().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+        ],
+        query: 'product/typed-context-helper',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+      },
+    ]);
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:9',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins nested typed Drizzle receiver carrier members under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

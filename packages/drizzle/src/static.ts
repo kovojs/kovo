@@ -546,6 +546,7 @@ interface ProjectDrizzleReceivers {
 
 interface QueryReceiverReferences {
   names: ReadonlySet<string>;
+  projectContainers?: boolean;
   symbolKeys: ReadonlySet<string>;
 }
 
@@ -2068,7 +2069,7 @@ function extractQueryDefinitionsFromSourceFile(
     const sourceDestructuredReceiverReferences =
       (options.receiverMode ?? 'source') === 'source'
         ? sourceQueryDestructuredReceiverNames(bodyArgument)
-        : { names: new Set<string>(), symbolKeys: new Set<string>() };
+        : { names: new Set<string>(), projectContainers: false, symbolKeys: new Set<string>() };
     const receiverReferences = queryCallbackReceiverReferences(
       bodyArgument,
       options.receiverMode ?? 'source',
@@ -2234,7 +2235,7 @@ function queryCallbackReceiverReferences(
     }
   }
 
-  const references = { names, symbolKeys };
+  const references = { names, projectContainers: mode === 'project', symbolKeys };
   appendQueryTransactionReceiverAliases(body, references);
   return references;
 }
@@ -5988,6 +5989,7 @@ function projectReceiverReferenceInArgument(
     (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
     carrierSymbolKeys,
     isProjectDrizzleReceiverMemberExpression,
+    isProjectDrizzleReceiverContainerExpression,
   );
 }
 
@@ -6004,6 +6006,7 @@ function queryReceiverReferenceInArgument(
     carrierReferences
       ? (node) => isSourceReceiverCarrierMemberExpression(node, carrierReferences)
       : undefined,
+    receiverReferences.projectContainers ? isProjectDrizzleReceiverContainerExpression : undefined,
   );
 }
 
@@ -6028,6 +6031,7 @@ function receiverReferenceInArgument(
   isReceiverIdentifier: (node: Node) => boolean,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
   isReceiverMemberExpression?: (node: Node) => boolean,
+  isReceiverContainerExpression?: (node: Node) => boolean,
 ): Node | undefined {
   // SPEC §10-§11: opaque helper handoffs may hide Drizzle work, so receiver values passed inside
   // containers degrade to FW406 while classified receiver call chains remain separately analyzed.
@@ -6039,6 +6043,7 @@ function receiverReferenceInArgument(
       isReceiverIdentifier,
       carrierSymbolKeys,
       isReceiverMemberExpression,
+      isReceiverContainerExpression,
     )
   ) {
     return argument;
@@ -6049,7 +6054,9 @@ function receiverReferenceInArgument(
     if (Node.isShorthandPropertyAssignment(node)) {
       const name = node.getNameNode();
       if (
-        (isReceiverIdentifier(name) || isReceiverCarrierIdentifier(name, carrierSymbolKeys)) &&
+        (isReceiverIdentifier(name) ||
+          isReceiverCarrierIdentifier(name, carrierSymbolKeys) ||
+          isReceiverContainerExpression?.(name) === true) &&
         !isIdentifierDeclarationPosition(name) &&
         !isInsideNestedFunction(name, argument)
       ) {
@@ -6063,6 +6070,7 @@ function receiverReferenceInArgument(
         isReceiverIdentifier,
         carrierSymbolKeys,
         isReceiverMemberExpression,
+        isReceiverContainerExpression,
       )
     ) {
       return node;
@@ -6078,10 +6086,13 @@ function isReceiverArgumentReference(
   isReceiverIdentifier: (node: Node) => boolean,
   carrierSymbolKeys: ReadonlySet<string>,
   isReceiverMemberExpression?: (node: Node) => boolean,
+  isReceiverContainerExpression?: (node: Node) => boolean,
 ): boolean {
   const isIdentifierReference =
     Node.isIdentifier(node) &&
-    (isReceiverIdentifier(node) || isReceiverCarrierIdentifier(node, carrierSymbolKeys));
+    (isReceiverIdentifier(node) ||
+      isReceiverCarrierIdentifier(node, carrierSymbolKeys) ||
+      isReceiverContainerExpression?.(node) === true);
   const isMemberReference = isReceiverMemberExpression?.(node) === true;
   if (!isIdentifierReference && !isMemberReference) {
     return false;
@@ -6097,6 +6108,51 @@ function isReceiverCarrierIdentifier(node: Node, carrierSymbolKeys: ReadonlySet<
   if (!Node.isIdentifier(node) || carrierSymbolKeys.size === 0) return false;
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   return symbolKey ? carrierSymbolKeys.has(symbolKey) : false;
+}
+
+function isProjectDrizzleReceiverContainerExpression(node: Node | undefined): boolean {
+  if (!node) return false;
+  if (!Node.isIdentifier(node) && !Node.isPropertyAccessExpression(node)) return false;
+  if (isProjectDrizzleReceiverMemberExpression(node)) return false;
+
+  return projectTypeContainsDrizzleReceiver(node.getType(), node, new Set(), 0);
+}
+
+function projectTypeContainsDrizzleReceiver(
+  type: MorphType,
+  location: Node,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  // SPEC §11.1: project-mode helper handoffs through typed containers stay visible as FW406 when
+  // ts-morph proves a Postgres Drizzle database member, instead of relying on source carrier paths.
+  if (depth > 4) return false;
+  const typeText = type.getText(location);
+  if (isDrizzleDatabaseTypeText(typeText)) return true;
+  if (seen.has(typeText)) return false;
+  seen.add(typeText);
+
+  for (const property of type.getProperties()) {
+    const propertyType = property.getTypeAtLocation(location);
+    const propertyText = propertyType.getText(location);
+    if (isDrizzleDatabaseTypeText(propertyText)) return true;
+    if (projectTypeContainsDrizzleReceiver(propertyType, location, seen, depth + 1)) {
+      return true;
+    }
+  }
+
+  const arrayElementType = type.getArrayElementType();
+  if (arrayElementType) {
+    return projectTypeContainsDrizzleReceiver(arrayElementType, location, seen, depth + 1);
+  }
+
+  for (const elementType of type.getTupleElements()) {
+    if (projectTypeContainsDrizzleReceiver(elementType, location, seen, depth + 1)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function receiverCarrierSymbolKeysForBody(

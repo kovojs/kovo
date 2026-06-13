@@ -159,6 +159,14 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       `carrier.db`, while fake sibling members remain ignored. `packages/drizzle/src/index.test.ts`
       and `conformance/drizzle-pin/src/index.test.ts` pin helper-container FW406 degradation for
       typed member handoff against package and real `drizzle-orm` Postgres receivers.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` now detects project-mode typed
+      containers whose ts-morph type contains a Postgres Drizzle database member and degrades
+      helper handoffs such as `audit({ context })`/`runReport({ context })` to FW406 instead of
+      dropping them; `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin query-loader and mutation/domain helper
+      handoffs while fake context containers remain ignored. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
