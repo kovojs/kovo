@@ -86,6 +86,44 @@ export interface ViteRedGreenBuildFixtureFact {
   redOutput: string;
 }
 
+export interface ViteProductionEmitContractFact {
+  handlerSummary: GeneratedHandlerReferenceSummaryFact;
+  mapIsNull: boolean;
+  middleware: {
+    cartEvents: unknown[];
+    contentType: string | undefined;
+    invocationResult: unknown;
+    nextCallsAfterHit: number;
+    nextCallsAfterStale: number;
+    statusCode: number | undefined;
+  };
+  pluginName: string;
+  prodEmit: {
+    stderr: string;
+    stdoutLines: string[];
+  };
+  renderedButtonAttrs: Record<string, string>;
+}
+
+export interface ViteProductionEmitContractOptions {
+  componentId?: string;
+  context?: Record<string, unknown>;
+  createPlugin: () => VitePluginLike;
+  executeClientModule: (
+    source: string,
+    options: { context?: Record<string, unknown>; runtime: Record<string, unknown> },
+  ) => Record<string, unknown>;
+  invocation?: { ctx: unknown; event: unknown };
+  prodEmit?: {
+    args?: string[];
+    command?: string;
+    cwd?: string;
+  };
+  projectRoot: string;
+  runtime: Record<string, unknown>;
+  source?: string;
+}
+
 export function vitePluginMiddlewareFact(
   plugin: VitePluginLike,
   options: { root: string },
@@ -272,6 +310,81 @@ export async function viteRedGreenBuildFixtureFact(
   } finally {
     await rm(fixtureRoot, { force: true, recursive: true });
   }
+}
+
+export async function viteProductionEmitContractFact(
+  options: ViteProductionEmitContractOptions,
+): Promise<ViteProductionEmitContractFact> {
+  const prodEmit = await execFileAsync(
+    options.prodEmit?.command ?? 'node',
+    options.prodEmit?.args ?? ['scripts/prod-emit-check.mjs'],
+    {
+      cwd: options.prodEmit?.cwd ?? options.projectRoot,
+      maxBuffer: 1024 * 1024 * 10,
+    },
+  );
+  const plugin = options.createPlugin();
+  const middlewareFact = vitePluginMiddlewareFact(plugin, { root: options.projectRoot });
+  const cartEvents: unknown[] = [];
+  const context =
+    options.context ??
+    ({
+      addToCart(id: unknown) {
+        cartEvents.push(id);
+        return `added:${String(id)}`;
+      },
+    } satisfies Record<string, unknown>);
+  const handlerTransform = viteHandlerTransformFact(plugin, {
+    id: options.componentId ?? join(options.projectRoot, 'routes/products/product-card.tsx'),
+    selector: { tag: 'button' },
+    source: options.source ?? productCardSourceFixture,
+  });
+  const middlewareResult = viteGeneratedHandlerMiddlewareFact({
+    context,
+    executeClientModule: options.executeClientModule,
+    handlerReference: handlerTransform.handlerReference,
+    invocation: options.invocation ?? { ctx: { params: { id: 'p1' } }, event: 'click' },
+    middleware: middlewareFact.middleware,
+    runtime: options.runtime,
+  });
+
+  return {
+    handlerSummary: handlerTransform.handlerSummary,
+    mapIsNull: handlerTransform.mapIsNull,
+    middleware: {
+      cartEvents,
+      contentType: middlewareResult.contentType,
+      invocationResult: middlewareResult.invocationResult,
+      nextCallsAfterHit: middlewareResult.nextCallsAfterHit,
+      nextCallsAfterStale: middlewareResult.nextCallsAfterStale,
+      statusCode: middlewareResult.statusCode,
+    },
+    pluginName: middlewareFact.pluginName,
+    prodEmit: {
+      stderr: prodEmit.stderr,
+      stdoutLines: commandOutputLines(prodEmit.stdout),
+    },
+    renderedButtonAttrs: handlerTransform.elements[0]?.attrs ?? {},
+  };
+}
+
+const productCardSourceFixture = `
+import { component } from '@jiso/core';
+
+export const ProductCard = component('product-card', {
+  render: () => (
+    <article>
+      <button onClick={() => addToCart(product.id)}>Add</button>
+    </article>
+  ),
+});
+`;
+
+function commandOutputLines(output: string): string[] {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function commandErrorOutput(error: unknown): string {

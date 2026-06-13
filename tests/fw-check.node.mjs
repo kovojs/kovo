@@ -139,9 +139,8 @@ import {
   optimismCleanupBehaviorFact,
 } from '../packages/test/src/runtime-fixtures.ts';
 import {
-  viteGeneratedHandlerMiddlewareFact,
   viteHandlerTransformFact,
-  vitePluginMiddlewareFact,
+  viteProductionEmitContractFact,
   viteRedGreenBuildFixtureFact,
   viteTransformElementFact,
 } from '../packages/test/src/vite-fixtures.ts';
@@ -3364,60 +3363,29 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
 });
 
 void test('S1 production build proves the compiler 1:1 emit contract', async () => {
-  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
-  const prodEmit = await execFileAsync('node', ['scripts/prod-emit-check.mjs'], {
-    cwd: projectRoot,
-    maxBuffer: 1024 * 1024 * 10,
+  const contract = await viteProductionEmitContractFact({
+    createPlugin: jisoVitePlugin,
+    executeClientModule: executeGeneratedClientModule,
+    projectRoot: projectRootPath,
+    runtime: generatedModuleRuntime,
   });
-  assert.equal(prodEmit.stderr, '');
-  assert.deepEqual(commandOutputLines(prodEmit.stdout), ['prod-emit-check/v1', 'OK']);
-
-  const plugin = jisoVitePlugin();
-  const middlewareFact = vitePluginMiddlewareFact(plugin, { root: projectRoot });
-  assert.equal(middlewareFact.pluginName, 'jiso');
-
-  const handlerTransform = viteHandlerTransformFact(plugin, {
-    id: join(projectRoot, 'routes/products/product-card.tsx'),
-    selector: { tag: 'button' },
-    source: `
-import { component } from '@jiso/core';
-
-export const ProductCard = component('product-card', {
-  render: () => (
-    <article>
-      <button onClick={() => addToCart(product.id)}>Add</button>
-    </article>
-  ),
-});
-`,
-  });
-  assert.equal(handlerTransform.mapIsNull, true);
-  assert.equal(handlerTransform.elements[0]?.attrs['data-p-id'], '{product.id}');
-  assert.deepEqual(handlerTransform.handlerSummary, {
+  assert.deepEqual(contract.prodEmit, { stderr: '', stdoutLines: ['prod-emit-check/v1', 'OK'] });
+  assert.equal(contract.pluginName, 'jiso');
+  assert.equal(contract.mapIsNull, true);
+  assert.equal(contract.renderedButtonAttrs['data-p-id'], '{product.id}');
+  assert.deepEqual(contract.handlerSummary, {
     handlerName: 'ProductCard$button_click',
     modulePath: '/c/routes/products/product-card.client.js',
     versionShape: 'lower-hex-8',
   });
-  const cartEvents = [];
-  const middlewareResult = viteGeneratedHandlerMiddlewareFact({
-    context: {
-      addToCart(id) {
-        cartEvents.push(id);
-        return `added:${id}`;
-      },
-    },
-    executeClientModule: executeGeneratedClientModule,
-    handlerReference: handlerTransform.handlerReference,
-    invocation: { ctx: { params: { id: 'p1' } }, event: 'click' },
-    middleware: middlewareFact.middleware,
-    runtime: generatedModuleRuntime,
+  assert.deepEqual(contract.middleware, {
+    cartEvents: ['p1'],
+    contentType: 'text/javascript',
+    invocationResult: 'added:p1',
+    nextCallsAfterHit: 0,
+    nextCallsAfterStale: 1,
+    statusCode: 200,
   });
-  assert.equal(middlewareResult.nextCallsAfterHit, 0);
-  assert.equal(middlewareResult.statusCode, 200);
-  assert.equal(middlewareResult.contentType, 'text/javascript');
-  assert.equal(middlewareResult.invocationResult, 'added:p1');
-  assert.deepEqual(cartEvents, ['p1']);
-  assert.equal(middlewareResult.nextCallsAfterStale, 1);
 });
 
 void test('D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces', async () => {

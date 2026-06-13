@@ -9,6 +9,7 @@ import {
   viteGeneratedHandlerMiddlewareFact,
   viteHandlerTransformFact,
   vitePluginMiddlewareFact,
+  viteProductionEmitContractFact,
   viteRedGreenBuildFixtureFact,
   viteTransformElementFact,
 } from './vite-fixtures.ts';
@@ -121,6 +122,81 @@ describe('vite-fixtures', () => {
     ).resolves.toEqual({
       greenDistEntries: ['assets', 'index.html'],
       redOutput: expect.stringContaining('Jiso Vite transform failed'),
+    });
+  });
+
+  it('projects the production emit contract and generated handler middleware into one fact', async () => {
+    const binDir = await mkdtemp(join(tmpdir(), 'jiso-prod-emit-fixture-bin-'));
+    const prodEmitExecutable = join(binDir, 'prod-emit.mjs');
+    await writeFile(
+      prodEmitExecutable,
+      ['#!/usr/bin/env node', "console.log('prod-emit-check/v1');", "console.log('OK');", ''].join(
+        '\n',
+      ),
+      'utf8',
+    );
+    await chmod(prodEmitExecutable, 0o755);
+
+    const plugin: VitePluginLike = {
+      configureServer(server) {
+        server.middlewares.use((request, response, next) => {
+          if (request.url === '/c/routes/products/product-card.client.js?cache=1&v=1234abcd') {
+            response.statusCode = 200;
+            response.setHeader('Content-Type', 'text/javascript');
+            response.end(
+              'export const ProductCard$button_click = (event, ctx) => addToCart(ctx.params.id);',
+            );
+            return;
+          }
+          next();
+        });
+      },
+      name: 'jiso',
+      transform() {
+        return {
+          code: `export function renderSource() { return '<button on:click="/c/routes/products/product-card.client.js?v=1234abcd#ProductCard$button_click" data-p-id="{product.id}">Add</button>'; }`,
+          map: null,
+        };
+      },
+    };
+
+    await expect(
+      viteProductionEmitContractFact({
+        createPlugin: () => plugin,
+        executeClientModule() {
+          return {
+            ProductCard$button_click: (_event: unknown, ctx: { params: { id: string } }) =>
+              `added:${ctx.params.id}`,
+          };
+        },
+        prodEmit: { args: [], command: prodEmitExecutable },
+        projectRoot: binDir,
+        runtime: {},
+      }),
+    ).resolves.toEqual({
+      handlerSummary: {
+        handlerName: 'ProductCard$button_click',
+        modulePath: '/c/routes/products/product-card.client.js',
+        versionShape: 'lower-hex-8',
+      },
+      mapIsNull: true,
+      middleware: {
+        cartEvents: [],
+        contentType: 'text/javascript',
+        invocationResult: 'added:p1',
+        nextCallsAfterHit: 0,
+        nextCallsAfterStale: 1,
+        statusCode: 200,
+      },
+      pluginName: 'jiso',
+      prodEmit: {
+        stderr: '',
+        stdoutLines: ['prod-emit-check/v1', 'OK'],
+      },
+      renderedButtonAttrs: {
+        'data-p-id': '{product.id}',
+        'on:click': '/c/routes/products/product-card.client.js?v=1234abcd#ProductCard$button_click',
+      },
     });
   });
 });

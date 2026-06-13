@@ -408,12 +408,15 @@ import {
   viteGeneratedHandlerMiddlewareFact,
   viteHandlerTransformFact,
   vitePluginMiddlewareFact,
+  viteProductionEmitContractFact,
   viteRedGreenBuildFixtureFact,
   viteTransformElementFact,
   type ViteGeneratedHandlerMiddlewareFact,
   type ViteHandlerTransformFact,
   type VitePluginLike,
   type VitePluginMiddlewareFact,
+  type ViteProductionEmitContractFact,
+  type ViteProductionEmitContractOptions,
   type ViteRedGreenBuildFixtureFact,
   type ViteTransformElementFact,
 } from '@jiso/test/vite-fixtures';
@@ -835,6 +838,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(viteTransformElementFact).toBeTypeOf('function');
     expect(viteHandlerTransformFact).toBeTypeOf('function');
     expect(viteGeneratedHandlerMiddlewareFact).toBeTypeOf('function');
+    expect(viteProductionEmitContractFact).toBeTypeOf('function');
     expect(viteRedGreenBuildFixtureFact).toBeTypeOf('function');
     expect(commandSequence('vp run fw-check')).toMatchObject([
       { args: ['run', 'fw-check'], executable: 'vp' },
@@ -1598,6 +1602,8 @@ type _PublicSubpathTypes = [
   ViteHandlerTransformFact,
   VitePluginLike,
   VitePluginMiddlewareFact,
+  ViteProductionEmitContractFact,
+  ViteProductionEmitContractOptions,
   ViteRedGreenBuildFixtureFact,
   ViteTransformElementFact,
 ];

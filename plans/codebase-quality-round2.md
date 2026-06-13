@@ -64,8 +64,8 @@ Shared runtime fixtures now own the loader smoke fake-root, visibility observer,
 template-stamp mechanics used by the P2 fw-check gate, so the monolith asserts a structured public
 runtime behavior fact instead of rebuilding that harness locally.
 Shared Vite fixtures now own plugin middleware capture, generated transform element/handler
-projections, generated-handler middleware smoke behavior, and red/green build temp-project
-mechanics for the S1 and D10 fw-check cases.
+projections, generated-handler middleware smoke behavior, the S1 production emit contract, and
+red/green build temp-project mechanics for the S1 and D10 fw-check cases.
 Shared compiler fixtures now own generated query-shape fact construction, query-update-plan
 projection, and diagnostic message projection for the P5 fw-check data-bind gate. Shared generated
 module fixtures now own generated-registry interface and consumer type assertions for the P2/P3/P1
@@ -202,6 +202,18 @@ Latest evidence:
   Vite manifest hint assets through the shared dist-file validator before route hint generation,
   keeping SPEC §9.5 Vite route hints aligned with static-export asset copy planning and rejecting
   unsafe `..` or encoded-dot paths before adoption/export wiring.
+- Phase 1/7 S1 Vite production emit fixture closure:
+  `pnpm exec vitest --run packages/test/src/vite-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "S1 production build" tests/fw-check.node.mjs`;
+  `pnpm exec vp check`;
+  `pnpm run check:fw`;
+  `git diff --check`.
+  Evidence: `packages/test/src/vite-fixtures.ts` now owns the S1 product-card source fixture,
+  `prod-emit-check/v1` command projection, Vite middleware capture, generated handler transform
+  summary, and executable handler invocation fact; `tests/fw-check.node.mjs` asserts that public
+  fixture fact instead of assembling the production emit and generated-client middleware harness
+  locally.
 - Phase 5 static export client-module discovery boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
