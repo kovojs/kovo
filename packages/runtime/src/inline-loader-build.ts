@@ -17,7 +17,7 @@ const inlineHelperSpecs = {
     label: 'response apply',
     readableParityLabel: 'canonical response apply helper closure',
     minifiedParityLabel: 'canonical minified response apply helper closure',
-    rootFunctionNames: ['applyInlineMutationResponseBody'],
+    rootFunctionNames: ['applyInlineMutationResponseChunks'],
     sourceFileName: 'inline-response-apply.ts',
     sourcePath: inlineResponseApplySourcePath,
   },
@@ -95,10 +95,9 @@ function installInlineJisoLoader(importModule) {
     );
   };
   const applyResponseBody = (body) => {
-    applyInlineMutationResponseBody(body, {
+    applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {
       dispatchQueries,
       findFragmentTarget,
-      readBody: readInlineMutationResponseBodyChunks,
     });
   };
   const fallbackSubmit = (form) => {

@@ -48,9 +48,11 @@ describe('inline loader minified artifact', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineMutationResponseBody(');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function applyInlineMutationResponseChunks(',
+    );
+    expect(inlineJisoLoaderInstallerSource).not.toContain(
+      'function applyInlineMutationResponseBody(',
     );
     expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain('function appendInlineFragment(');
@@ -59,7 +61,7 @@ describe('inline loader minified artifact', () => {
       'const dispatchQueries=(queries)=>{dispatchEvent(new CustomEvent',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseBody(body,{dispatchQueries,findFragmentTarget,readBody:readInlineMutationResponseBodyChunks,});',
+      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueries,findFragmentTarget,});',
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(

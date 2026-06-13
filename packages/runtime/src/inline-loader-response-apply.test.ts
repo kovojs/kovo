@@ -11,7 +11,7 @@ import {
 } from './inline-loader-build.js';
 import { expectInlineResponseApplyParity } from './inline-loader-response-apply-fixture.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
-import { applyInlineMutationResponseBody } from './inline-response-apply.js';
+import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 
 describe('inline loader response apply source', () => {
   it('generates readable inline loader source around the canonical response apply helper', () => {
@@ -19,9 +19,6 @@ describe('inline loader response apply source', () => {
     // are generated from the runtime-owned apply helper closure, while parser
     // extraction remains owned by the parser parity suite.
     const alternateReadableApply = [
-      'function applyInlineMutationResponseBody(body, options) {',
-      '  return applyInlineMutationResponseChunks(options.readBody(body), options);',
-      '}',
       'function applyInlineMutationResponseChunks(chunks, options) {',
       '  options.dispatchQueries(chunks.queries);',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
@@ -40,10 +37,10 @@ describe('inline loader response apply source', () => {
 
     expect(defaultReadable).toContain(inlineResponseApplyReadableSource);
     expect(inlineResponseApplyReadableSource).toContain(
-      'function applyInlineMutationResponseBody(',
-    );
-    expect(inlineResponseApplyReadableSource).toContain(
       'function applyInlineMutationResponseChunks(',
+    );
+    expect(inlineResponseApplyReadableSource).not.toContain(
+      'function applyInlineMutationResponseBody(',
     );
     expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragment(');
     expect(inlineResponseApplyReadableSource).toContain('function appendInlineFragment(');
@@ -51,7 +48,9 @@ describe('inline loader response apply source', () => {
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);
     expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);
-    expect(alternateReadable).toContain('applyInlineMutationResponseBody(body, {');
+    expect(alternateReadable).toContain(
+      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {',
+    );
   });
 
   it('extracts and checks readable and minified inline response apply embeds', () => {
@@ -59,10 +58,7 @@ describe('inline loader response apply source', () => {
     // by a canonical runtime helper closure before minification, not by a
     // second hand-written apply function inside the generated bootstrap.
     const canonicalApply = [
-      'export function applyInlineMutationResponseBody(body, options) {',
-      '  return applyInlineMutationResponseChunks(options.readBody(body), options);',
-      '}',
-      'function applyInlineMutationResponseChunks(chunks, options) {',
+      'export function applyInlineMutationResponseChunks(chunks, options) {',
       '  options.dispatchQueries(chunks.queries);',
       '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
       '}',
@@ -84,7 +80,7 @@ describe('inline loader response apply source', () => {
     const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
 
     expect(canonicalReadable).toMatch(
-      /^function applyInlineFragment\(fragment, findFragmentTarget\).*function applyInlineMutationResponseChunks\(chunks, options\).*function applyInlineMutationResponseBody\(body, options\)/s,
+      /^function applyInlineFragment\(fragment, findFragmentTarget\).*function applyInlineMutationResponseChunks\(chunks, options\)/s,
     );
     expect(() =>
       assertInlineJisoLoaderInstallerResponseApplyParity(readableInstaller, canonicalApply),
@@ -128,7 +124,7 @@ describe('inline loader response apply source', () => {
     expect(minifiedSource).not.toMatch(/\n|\s{2,}/);
   });
 
-  it('applies inline query events and fragments through the runtime-owned helper', () => {
+  it('applies decoded inline query events and fragments through the runtime-owned helper', () => {
     // SPEC.md §4.4/§9.1: the helper extracted into the inline loader owns the
     // tiny response apply step that bridges raw query chunks to modular query
     // event hydration and applies fragment patches.
@@ -156,26 +152,26 @@ describe('inline loader response apply source', () => {
       ],
     ]);
 
-    applyInlineMutationResponseBody('ignored body', {
-      dispatchQueries(queries) {
-        dispatched.push([...queries]);
+    applyInlineMutationResponseChunks(
+      {
+        fragments: [
+          { html: '<p>replace</p>', target: 'replace-target' },
+          { html: '<li>new</li>', mode: 'append', target: 'append-target' },
+        ],
+        queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 0, start: 0 }],
       },
-      findFragmentTarget(target) {
-        return targets.get(target) ?? null;
+      {
+        dispatchQueries(queries) {
+          dispatched.push([...queries]);
+        },
+        findFragmentTarget(target) {
+          return targets.get(target) ?? null;
+        },
       },
-      readBody(body) {
-        return {
-          fragments: [
-            { html: '<p>replace</p>', target: 'replace-target' },
-            { html: '<li>new</li>', mode: 'append', target: 'append-target' },
-          ],
-          queries: [{ attrs: ' name="cart"', content: body, end: 0, start: 0 }],
-        };
-      },
-    });
+    );
 
     expect(dispatched).toEqual([
-      [{ attrs: ' name="cart"', content: 'ignored body', end: 0, start: 0 }],
+      [{ attrs: ' name="cart"', content: 'decoded query', end: 0, start: 0 }],
     ]);
     expect(targets.get('replace-target')?.innerHTML).toBe('<p>replace</p>');
     expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');
