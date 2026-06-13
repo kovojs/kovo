@@ -31,6 +31,13 @@ import {
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
 import {
+  parseFwExportOutput,
+  type FwExportError,
+  type FwExportHtmlArtifact,
+  type FwExportOutput,
+  type FwExportSummary,
+} from '@jiso/test/fw-export-fixtures';
+import {
   createJisoTestHarness,
   type JisoTestContext,
   type JisoTestExecOptions,
@@ -242,6 +249,9 @@ describe('@jiso/test package subpath exports', () => {
         ['steps:', '  - uses: actions/checkout@v4', '  - run: vp check'].join('\n'),
       ),
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
+    expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
+      summary: { html: '0' },
+    });
     const wireFixture = [
       '### Cart read',
       '>>> REQUEST',
@@ -279,6 +289,10 @@ type _PublicSubpathTypes = [
   PnpmFilterTestCommand,
   VitestTaskCommand,
   WorkflowStepCommand,
+  FwExportError,
+  FwExportHtmlArtifact,
+  FwExportOutput,
+  FwExportSummary,
   ForbiddenBrowserArchitectureFact,
   JisoTestContext<{ cart: string[] }>,
   JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>,

@@ -102,6 +102,9 @@ Closed evidence so far:
 - `tests/fw-check.node.mjs` no longer owns its local HTTP wire fixture/request-response parser;
   Phase 0 wire gates consume structured `@jiso/test/wire-fixtures` facts while preserving
   byte-for-byte response body pins.
+- `tests/fw-check.node.mjs` no longer owns its local `fw-export/v1` CLI-output parser; the D10
+  static export gate consumes `@jiso/test/fw-export-fixtures` facts pinned by focused package and
+  package-export tests.
 
 Open:
 
@@ -147,6 +150,9 @@ Recent gates:
 - `node --test --test-name-pattern "Phase 0 wire fixtures are present and explicit|Phase 0 wire fixture response bodies match generated contracts byte-for-byte|Phase 0 wire fixture responses keep stable protocol metadata|SSE remains a v2 backlog fixture|D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/wire-fixtures.ts packages/test/src/wire-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "D10 seeded diagnostics gate Vite" tests/fw-check.node.mjs`
 
 ## Phase 2 - Compiler IR
 
@@ -695,6 +701,9 @@ Closed evidence so far:
 - `@jiso/test/wire-fixtures` exposes structured titled HTTP transcript, request, response, and
   response-only facts; package export tests pin the subpath seam, and Phase 0 `fw-check` wire gates
   consume it instead of a local parser.
+- `@jiso/test/fw-export-fixtures` exposes structured `fw-export/v1` HTML artifact, error, and
+  summary facts; package export tests pin the subpath seam, and the D10 `fw-check` export gate
+  consumes it instead of a local CLI-output parser.
 
 Open:
 
@@ -744,6 +753,9 @@ Recent gates:
 - `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "D10 seeded diagnostics gate Vite" tests/fw-check.node.mjs`
 
 ## Phase 7 - Test Restructuring
 
@@ -787,6 +799,9 @@ Closed evidence so far:
 - `packages/test/src/wire-fixtures.ts` now owns reusable wire fixture parsing; focused
   `wire-fixtures.test.ts`, package export tests, and targeted Phase 0 `fw-check` node tests pin the
   seam.
+- `packages/test/src/fw-export-fixtures.ts` now owns reusable `fw-export/v1` output parsing;
+  focused `fw-export-fixtures.test.ts`, package export tests, and the targeted D10 `fw-check` node
+  test pin the seam.
 
 Open:
 

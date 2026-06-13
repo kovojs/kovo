@@ -58,6 +58,7 @@ import {
   vpRunTaskName,
   workflowStepCommands,
 } from '../packages/test/src/command-fixtures.ts';
+import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
 import { htmlDocumentRegions, htmlElementFacts } from '../packages/test/src/html-fragment.ts';
 import {
   markdownFields,
@@ -218,55 +219,6 @@ const listProjectFiles = async (dir, predicate) => {
 
 const isLowerHex = (value) =>
   value.length > 0 && [...value].every((char) => '0123456789abcdef'.includes(char));
-
-const parseFwExportOutput = (output) => {
-  const lines = output.trimEnd().split('\n');
-  assert.equal(lines[0], 'fw-export/v1');
-  const htmlLines = [];
-  const errorLines = [];
-  let summary;
-
-  for (const line of lines.slice(1)) {
-    if (line.startsWith('HTML ')) {
-      const [kind, path, statusEntry, bytesEntry] = line.split(' ');
-      const [statusKey, statusValue] = statusEntry?.split('=') ?? [];
-      const [bytesKey, bytesValue] = bytesEntry?.split('=') ?? [];
-      assert.equal(kind, 'HTML');
-      assert.equal(statusKey, 'status');
-      assert.equal(bytesKey, 'bytes');
-      htmlLines.push({ bytes: Number(bytesValue), path, status: Number(statusValue) });
-      continue;
-    }
-
-    if (line.startsWith('ERROR ')) {
-      const [, code, routeEntry, ...messageParts] = line.split(' ');
-      const [routeKey, route] = routeEntry?.split('=') ?? [];
-      assert.equal(routeKey, 'route');
-      errorLines.push({ code, message: messageParts.join(' '), route });
-      continue;
-    }
-
-    if (line.startsWith('SUMMARY ')) {
-      summary = Object.fromEntries(
-        line
-          .slice('SUMMARY '.length)
-          .split(' ')
-          .map((entry) => {
-            const [key, value] = entry.split('=');
-            assert.ok(key && value !== undefined, `fw export summary entry is key=value: ${entry}`);
-            return [key, value];
-          }),
-      );
-      continue;
-    }
-
-    if (errorLines.length > 0) {
-      errorLines[errorLines.length - 1].message += `\n${line}`;
-    }
-  }
-
-  return { errors: errorLines, html: htmlLines, summary, version: lines[0] };
-};
 
 const assertOrderedIncludes = (items, before, after) => {
   const beforeIndex = items.indexOf(before);
@@ -5354,7 +5306,6 @@ export default createApp({
         },
       ],
       html: [],
-      summary: undefined,
       version: 'fw-export/v1',
     });
     await assert.rejects(readFile(join(cliRedOutDir, 'index.html'), 'utf8'));

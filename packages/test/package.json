@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./assertions": "./src/assertions.ts",
     "./command-fixtures": "./src/command-fixtures.ts",
+    "./fw-export-fixtures": "./src/fw-export-fixtures.ts",
     "./harness-operations": "./src/harness-operations.ts",
     "./harness": "./src/harness.ts",
     "./html-fragment": "./src/html-fragment.ts",
