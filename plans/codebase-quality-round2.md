@@ -457,6 +457,8 @@ carrying the old navigation-only compatibility name.
 Unused offset-map identity/prefix/composition helpers and the stale data-bind template-body
 validator export were deleted after the single model-patch pass and analyzer-owned template stamp
 facts made them dead.
+The parser model no longer exposes raw `openingSource`/`childSource` JSX element fields now that
+lowerers consume structured tag spans, slash-spacing, child-body, and expression-container facts.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -476,6 +478,12 @@ packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-
 packages/compiler/src/id-content-model.test.ts`; `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check packages/compiler/src/shared.ts
 packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`; `git diff --check`.
+- JSX model raw-source field deletion: `pnpm exec vitest --run
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/navigation-lowering.test.ts
+packages/compiler/src/view-transitions.test.ts packages/compiler/src/stamps.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts
+plans/codebase-quality-round2.md`; `git diff --check`.
 - Pre-derive lowering reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts

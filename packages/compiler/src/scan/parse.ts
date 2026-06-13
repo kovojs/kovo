@@ -108,13 +108,11 @@ export interface JsxElementModel {
   childBody: JsxElementChildBody | null;
   childExpressionContainers: readonly SourceSpan[];
   childNonWhitespaceCount: number;
-  childSource: string;
   closingStart: number;
   end: number;
   openingEnd: number;
   openingTagNameEnd: number;
   openingTagNameStart: number;
-  openingSource: string;
   selfClosing: boolean;
   selfClosingSlashHasLeadingWhitespace: boolean;
   start: number;
@@ -1200,14 +1198,12 @@ function jsxElementModel(
       ];
     }),
     childBody: jsxChildBody(childSource, openingElement.getEnd(), selfClosing),
-    childSource,
     ...jsxChildFacts(node, sourceFile),
     closingStart,
     end: node.getEnd(),
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
-    openingSource: source.slice(openingElement.getStart(sourceFile), openingElement.getEnd()),
     selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
       source,

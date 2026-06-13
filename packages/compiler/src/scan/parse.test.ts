@@ -467,8 +467,12 @@ export const ProductCard = component('product-card', {
     const link = elements.find((element) => element.tag === 'Link');
     const images = elements.filter((element) => element.tag === 'img');
 
-    expect(link?.openingSource).toBe('<Link to="/products/:id" params={{ id: \'p1\' }}>');
-    expect(link?.childSource).toBe('Product');
+    expect(link?.openingTagNameStart).toBe(source.indexOf('Link'));
+    expect(link?.openingTagNameEnd).toBe(source.indexOf(' to="/products/:id"'));
+    expect(link?.childBody).toEqual({
+      offset: source.indexOf('Product</Link>'),
+      source: 'Product',
+    });
     expect(images.map((element) => element.selfClosingSlashHasLeadingWhitespace)).toEqual([
       false,
       true,
