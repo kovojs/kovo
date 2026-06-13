@@ -18,23 +18,26 @@ export async function replayStaticExportClientModuleArtifacts({
   routeArtifacts,
 }: StaticExportClientModuleReplayOptions): Promise<StaticExportClientModuleArtifact[]> {
   const artifacts: StaticExportClientModuleArtifact[] = [];
-  const bodyByTargetPath = new Map<string, string>();
+  const artifactByTargetPath = new Map<string, StaticExportClientModuleArtifact>();
 
   for (const href of collectStaticExportClientModuleHrefs(routeArtifacts, context.origin)) {
     const artifact = await replayStaticExportClientModuleArtifact({ context, href });
-    const existingBody = bodyByTargetPath.get(artifact.path);
-    if (existingBody !== undefined && existingBody !== artifact.body) {
+    const existingArtifact = artifactByTargetPath.get(artifact.path);
+    if (
+      existingArtifact !== undefined &&
+      !staticExportClientModuleArtifactsMatch(existingArtifact, artifact)
+    ) {
       throw new StaticExportError([
         staticExportDiagnostic(
           artifact.path,
-          `FW229 static export found multiple client module versions for '${artifact.path}' with different bytes. Static hosts serve query-string variants from the same file path, so export documents must reference one immutable version per /c/ path.`,
+          `FW229 static export found multiple client module versions for '${artifact.path}' with different response snapshots. Static hosts serve query-string variants from the same file path, so export documents must reference one immutable version per /c/ path.`,
         ),
       ]);
     }
 
-    if (existingBody === undefined) {
+    if (existingArtifact === undefined) {
       artifacts.push(artifact);
-      bodyByTargetPath.set(artifact.path, artifact.body);
+      artifactByTargetPath.set(artifact.path, artifact);
     }
   }
 
@@ -63,4 +66,25 @@ async function replayStaticExportClientModuleArtifact({
     href,
     path: url.pathname,
   };
+}
+
+function staticExportClientModuleArtifactsMatch(
+  left: StaticExportClientModuleArtifact,
+  right: StaticExportClientModuleArtifact,
+): boolean {
+  return (
+    left.body === right.body &&
+    left.status === right.status &&
+    staticExportHeadersMatch(left.headers, right.headers)
+  );
+}
+
+function staticExportHeadersMatch(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftEntries = Object.entries(left);
+  if (leftEntries.length !== Object.keys(right).length) return false;
+
+  return leftEntries.every(([name, value]) => right[name] === value);
 }

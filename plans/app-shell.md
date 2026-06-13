@@ -127,6 +127,17 @@ Round288 Vite dev client-module request boundary evidence:
 - `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round289 static export client-module snapshot conflict evidence:
+
+- `packages/server/src/static-export-client-modules.ts` now rejects same-path `/c/` module
+  variants when any replayed response snapshot field differs, not only when bytes differ, keeping
+  SPEC §9.5 static-host output and public manifests representable by one immutable file per `/c/`
+  path.
+- `packages/server/src/static-export-document-client-modules.test.ts` proves byte-drift and
+  header-drift variants both fail with FW229 before client-module artifacts are published.
+- `pnpm exec vitest --run packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

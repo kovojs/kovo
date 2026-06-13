@@ -33,12 +33,58 @@ describe('server static export client module replay boundary', () => {
       diagnostics: [
         {
           code: 'FW229',
-          message: expect.stringContaining('multiple client module versions'),
+          message: expect.stringContaining('different response snapshots'),
           routePath: '/c/cart.js',
         },
       ],
     });
     expect(seen).toEqual(['/c/cart.js?v=one#Cart$add', '/c/cart.js?v=two#Cart$add']);
+  });
+
+  it('rejects same-path client module variants with matching bytes but different headers', async () => {
+    const seen: string[] = [];
+    const handler: RequestHandler = async (request) => {
+      const url = new URL(request.url);
+      seen.push(`${url.pathname}${url.search}`);
+      return new Response('export const stable = true;', {
+        headers: {
+          'Cache-Control':
+            url.searchParams.get('v') === 'one'
+              ? 'public, max-age=60'
+              : 'public, max-age=31536000, immutable',
+          'Content-Type': 'text/javascript; charset=utf-8',
+        },
+        status: 200,
+      });
+    };
+    const context = { handler, origin: 'https://jiso.local' };
+
+    await expect(
+      replayStaticExportClientModuleArtifacts({
+        context,
+        routeArtifacts: [
+          {
+            body: [
+              '<button on:click="/c/cart.js?v=one#Cart$add">',
+              '<script type="module" src="/c/cart.js?v=two"></script>',
+            ].join(''),
+            headers: {},
+            path: '/cart/index.html',
+            status: 200,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining('different response snapshots'),
+          routePath: '/c/cart.js',
+        },
+      ],
+    });
+    expect(seen).toEqual(['/c/cart.js?v=one', '/c/cart.js?v=two']);
   });
 
   it('replays same-origin absolute client module refs from HTML attributes and Link headers', async () => {

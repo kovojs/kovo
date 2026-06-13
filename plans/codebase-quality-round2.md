@@ -165,6 +165,13 @@ generated export artifacts inline.
 
 Latest evidence:
 
+- Phase 5 static export client-module snapshot conflict slice:
+  `pnpm exec vitest --run packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/static-export-client-modules.ts` now rejects same-path `/c/` module
+  variants when replayed response headers, status, or body differ, and
+  `packages/server/src/static-export-document-client-modules.test.ts` proves byte-drift and
+  header-drift variants fail with FW229 before SPEC §9.5 static-export artifacts are published.
 - Phase 5 Vite dev client-module request boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`. Evidence:
