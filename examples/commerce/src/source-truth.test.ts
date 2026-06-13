@@ -5,18 +5,16 @@ import { fileURLToPath } from 'node:url';
 import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
-  fwExplainEndpointFacts,
+  fwExplainEndpointAssertionFact,
   fwExplainListField,
   fwExplainMutationAssertionFact,
   fwExplainMutationQueryMatrixFact,
   fwExplainOptimisticStatuses,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
-  fwExplainScopeAuditFacts,
-  fwExplainSummary,
+  fwExplainScopeAuditAssertionFact,
   fwExplainUpdateConsumerMap,
   fwExplainUpdateConsumers,
-  parseFwExplainOutput,
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
@@ -292,48 +290,59 @@ describe('commerce source-truth graph acceptance', () => {
     });
 
     const unguardedExplain = fwExplain(commerceGraph, { unguarded: true });
-    expect(unguardedExplain.exitCode).toBe(0);
-    expect(parseFwExplainOutput(unguardedExplain.output).subject).toBe('UNGUARDED');
-    expect(fwExplainSummary(unguardedExplain.output, 'SUMMARY')).toEqual({ total: '0' });
+    expect(fwExplainScopeAuditAssertionFact(unguardedExplain)).toEqual({
+      exitCode: 0,
+      records: [],
+      subject: 'UNGUARDED',
+      summary: { total: '0' },
+      version: 'fw-explain/v1',
+    });
 
     const endpointsExplain = fwExplain(commerceGraph, { endpoints: true });
-    expect(endpointsExplain.exitCode).toBe(0);
-    expect(parseFwExplainOutput(endpointsExplain.output).subject).toBe('ENDPOINTS');
-    expect(fwExplainEndpointFacts(endpointsExplain.output)).toEqual([
-      {
-        auth: 'authed',
-        csrf: 'checked',
-        endpoint: 'attachments/download',
-        method: 'GET',
-        mount: 'exact',
-        path: '/attachments/:id',
-        writes: [],
-      },
-      {
-        auth: 'authed',
-        csrf: 'checked',
-        endpoint: 'orders/export',
-        method: 'GET',
-        mount: 'exact',
-        path: '/exports/orders.csv',
-        writes: [],
-      },
-      {
-        auth: 'verifier:stripe:v1:hmac-sha256',
-        csrf: 'exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256',
-        endpoint: 'payment/stripe',
-        method: 'POST',
-        mount: 'exact',
-        path: '/webhooks/stripe',
-        writes: ['order'],
-      },
-    ]);
-    expect(fwExplainSummary(endpointsExplain.output, 'SUMMARY')).toEqual({ total: '3' });
+    expect(fwExplainEndpointAssertionFact(endpointsExplain)).toEqual({
+      endpoints: [
+        {
+          auth: 'authed',
+          csrf: 'checked',
+          endpoint: 'attachments/download',
+          method: 'GET',
+          mount: 'exact',
+          path: '/attachments/:id',
+          writes: [],
+        },
+        {
+          auth: 'authed',
+          csrf: 'checked',
+          endpoint: 'orders/export',
+          method: 'GET',
+          mount: 'exact',
+          path: '/exports/orders.csv',
+          writes: [],
+        },
+        {
+          auth: 'verifier:stripe:v1:hmac-sha256',
+          csrf: 'exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256',
+          endpoint: 'payment/stripe',
+          method: 'POST',
+          mount: 'exact',
+          path: '/webhooks/stripe',
+          writes: ['order'],
+        },
+      ],
+      exitCode: 0,
+      subject: 'ENDPOINTS',
+      summary: { total: '3' },
+      version: 'fw-explain/v1',
+    });
 
     const unscopedExplain = fwExplain(commerceGraph, { unscoped: true });
-    expect(unscopedExplain.exitCode).toBe(0);
-    expect(parseFwExplainOutput(unscopedExplain.output).subject).toBe('UNSCOPED');
-    expect(fwExplainSummary(unscopedExplain.output, 'SUMMARY')).toEqual({ total: '0' });
+    expect(fwExplainScopeAuditAssertionFact(unscopedExplain)).toEqual({
+      exitCode: 0,
+      records: [],
+      subject: 'UNSCOPED',
+      summary: { total: '0' },
+      version: 'fw-explain/v1',
+    });
 
     const unscopedAuditExplain = fwExplain(
       {
@@ -350,18 +359,22 @@ describe('commerce source-truth graph acceptance', () => {
       },
       { unscoped: true },
     );
-    expect(unscopedAuditExplain.exitCode).toBe(0);
-    expect(fwExplainScopeAuditFacts(unscopedAuditExplain.output, 'UNSCOPED')).toEqual([
-      {
-        domain: 'attachment',
-        reason: 'attachment download filters id plus session user',
-        scope: 'unscoped',
-        site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
-        target: 'attachments/download',
-        targetKind: 'QUERY',
-      },
-    ]);
-    expect(fwExplainSummary(unscopedAuditExplain.output, 'SUMMARY')).toEqual({ total: '1' });
+    expect(fwExplainScopeAuditAssertionFact(unscopedAuditExplain)).toEqual({
+      exitCode: 0,
+      records: [
+        {
+          domain: 'attachment',
+          reason: 'attachment download filters id plus session user',
+          scope: 'unscoped',
+          site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
+          target: 'attachments/download',
+          targetKind: 'QUERY',
+        },
+      ],
+      subject: 'UNSCOPED',
+      summary: { total: '1' },
+      version: 'fw-explain/v1',
+    });
   });
 
   it('answers cart/add update intent mechanically from fw explain output', () => {

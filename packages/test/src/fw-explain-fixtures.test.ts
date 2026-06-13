@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  fwExplainEndpointAssertionFact,
   fwExplainEndpointFacts,
   fwExplainField,
   fwExplainListField,
@@ -10,6 +11,7 @@ import {
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
   fwExplainRecords,
+  fwExplainScopeAuditAssertionFact,
   fwExplainScopeAuditFacts,
   fwExplainSummary,
   fwExplainUpdateConsumerMap,
@@ -246,6 +248,64 @@ describe('@jiso/test fw explain fixture seam', () => {
     });
   });
 
+  it('exposes rawless assertion facts for endpoint and scope audit explanations', () => {
+    expect(
+      fwExplainEndpointAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'ENDPOINTS',
+          'ENDPOINT payment/stripe method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe:v1:hmac-sha256 csrf=exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256 writes=order',
+          'SUMMARY total=1',
+          '',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      endpoints: [
+        {
+          auth: 'verifier:stripe:v1:hmac-sha256',
+          csrf: 'exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256',
+          endpoint: 'payment/stripe',
+          method: 'POST',
+          mount: 'exact',
+          path: '/webhooks/stripe',
+          writes: ['order'],
+        },
+      ],
+      exitCode: 0,
+      subject: 'ENDPOINTS',
+      summary: { total: '1' },
+      version: 'fw-explain/v1',
+    });
+    expect(
+      fwExplainScopeAuditAssertionFact({
+        exitCode: 0,
+        output: [
+          'fw-explain/v1',
+          'UNSCOPED',
+          'UNSCOPED QUERY attachments/download domain=attachment scope=unscoped site=examples/commerce/src/app.ts:10 attachment download filters id plus session user',
+          'SUMMARY total=1',
+          '',
+        ].join('\n'),
+      }),
+    ).toEqual({
+      exitCode: 0,
+      records: [
+        {
+          domain: 'attachment',
+          reason: 'attachment download filters id plus session user',
+          scope: 'unscoped',
+          site: 'examples/commerce/src/app.ts:10',
+          target: 'attachments/download',
+          targetKind: 'QUERY',
+        },
+      ],
+      subject: 'UNSCOPED',
+      summary: { total: '1' },
+      version: 'fw-explain/v1',
+    });
+  });
+
   it('derives mutation-query matrix facts from fw-explain outputs', () => {
     const graph = {
       mutations: [{ key: 'cart/add' }, { key: 'order/receipt' }],
@@ -365,5 +425,11 @@ describe('@jiso/test fw explain fixture seam', () => {
     expect(() =>
       fwExplainScopeAuditFacts('fw-explain/v1\nUNSCOPED\nUNSCOPED cart\n', 'UNSCOPED'),
     ).toThrow('fw explain UNSCOPED record is');
+    expect(() =>
+      fwExplainScopeAuditAssertionFact({
+        exitCode: 0,
+        output: 'fw-explain/v1\nENDPOINTS\nSUMMARY total=0\n',
+      }),
+    ).toThrow('fw explain scope audit subject is UNGUARDED or UNSCOPED: ENDPOINTS');
   });
 });

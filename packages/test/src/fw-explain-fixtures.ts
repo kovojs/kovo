@@ -34,6 +34,22 @@ export interface FwExplainScopeAuditFact {
   targetKind: string;
 }
 
+export interface FwExplainEndpointAssertionFact {
+  endpoints: FwExplainEndpointFact[];
+  exitCode: number;
+  subject: string;
+  summary: FwExplainSummary;
+  version: FwExplainOutput['version'];
+}
+
+export interface FwExplainScopeAuditAssertionFact {
+  exitCode: number;
+  records: FwExplainScopeAuditFact[];
+  subject: 'UNGUARDED' | 'UNSCOPED';
+  summary: FwExplainSummary;
+  version: FwExplainOutput['version'];
+}
+
 export interface FwExplainResultLike {
   exitCode: number;
   output: string;
@@ -221,6 +237,37 @@ export function fwExplainPageAssertionFact(
     subject: parsed.subject,
     version: parsed.version,
     viewTransitions: listField(parsed, 'view-transitions'),
+  };
+}
+
+export function fwExplainEndpointAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainEndpointAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+
+  return {
+    endpoints: fwExplainEndpointFacts(result.output),
+    exitCode: result.exitCode,
+    subject: parsed.subject,
+    summary: fwExplainSummary(result.output, 'SUMMARY'),
+    version: parsed.version,
+  };
+}
+
+export function fwExplainScopeAuditAssertionFact(
+  result: FwExplainResultLike,
+): FwExplainScopeAuditAssertionFact {
+  const parsed = parseFwExplainOutput(result.output);
+  if (parsed.subject !== 'UNGUARDED' && parsed.subject !== 'UNSCOPED') {
+    throw new Error(`fw explain scope audit subject is UNGUARDED or UNSCOPED: ${parsed.subject}`);
+  }
+
+  return {
+    exitCode: result.exitCode,
+    records: fwExplainScopeAuditFacts(result.output, parsed.subject),
+    subject: parsed.subject,
+    summary: fwExplainSummary(result.output, 'SUMMARY'),
+    version: parsed.version,
   };
 }
 

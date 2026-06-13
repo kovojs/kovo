@@ -365,7 +365,9 @@ Shared graph fixtures now own checked-in graph artifact loading so commerce sour
 `fw-check` graph gates no longer parse commerce generated graph JSON locally. Shared graph fixtures
 also own static behavior summaries for component targets, domains, routes, invalidations,
 optimistic rows, and touch-graph keys. Shared HTML fragment fixtures now own selected-element
-counts and named query JSON projections used by commerce app-shell tests.
+counts and named query JSON projections used by commerce app-shell tests. Shared `fw-explain`
+fixtures now own endpoint and scope-audit assertion facts, so commerce source-truth tests no
+longer parse those subjects and summaries locally.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -406,6 +408,10 @@ Latest evidence:
 - `pnpm run check:build`
 - `node --test --test-name-pattern "D1 commerce enhanced fragments carry Tailwind stylesheet hints|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
 - exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app-shell.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- exact `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 7 - Test Restructuring
