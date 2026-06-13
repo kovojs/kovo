@@ -93,7 +93,10 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
                 : undefined;
 
               if (hidden) hidden['value'] = state.value;
-              if (second) second['value'] = '';
+              if (second) {
+                second['value'] = '';
+                Object(second)['removeAttribute']?.call(second, 'data-filled');
+              }
               if (output) output['textContent'] = state.value;
             }}
           />
@@ -167,6 +170,69 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
                 fourth['value'] = '4';
                 Object(fourth)['setAttribute']?.call(fourth, 'data-filled', '');
                 Object(fourth)['setAttribute']?.call(fourth, 'data-complete', '');
+              }
+              if (output) output['textContent'] = state.value;
+            }}
+            onPaste={() => {
+              const delegatedEvent = event;
+              const eventClipboard =
+                delegatedEvent === undefined
+                  ? undefined
+                  : Reflect['get'](Object(delegatedEvent), 'clipboardData');
+              const clipboardText =
+                eventClipboard === null || eventClipboard === undefined
+                  ? ''
+                  : Object(eventClipboard)['getData']?.call(eventClipboard, 'text');
+              state.value = String(clipboardText ?? '')
+                .replace(/\D/g, '')
+                .slice(0, 4);
+              state.activeSlot = state.value.length >= 4 ? 3 : state.value.length;
+
+              if (delegatedEvent !== undefined) {
+                Object(delegatedEvent)['preventDefault']?.call(delegatedEvent);
+              }
+
+              const doc = Reflect['get'](globalThis, 'document');
+              const root = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp')
+                : undefined;
+              const hidden = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
+                : undefined;
+
+              if (hidden) hidden['value'] = state.value;
+              for (let slotIndex = 0; slotIndex < 4; slotIndex += 1) {
+                const slot = doc
+                  ? Object(doc)['getElementById']?.call(
+                      doc,
+                      `gallery-interactive-otp-slot-${slotIndex}`,
+                    )
+                  : undefined;
+                const value = state.value[slotIndex] ?? '';
+
+                if (!slot) continue;
+                slot['value'] = value;
+                slot['tabIndex'] = slotIndex === state.activeSlot ? 0 : -1;
+                if (value) {
+                  Object(slot)['setAttribute']?.call(slot, 'data-filled', '');
+                } else {
+                  Object(slot)['removeAttribute']?.call(slot, 'data-filled');
+                }
+                if (state.value.length === 4) {
+                  Object(slot)['setAttribute']?.call(slot, 'data-complete', '');
+                } else {
+                  Object(slot)['removeAttribute']?.call(slot, 'data-complete');
+                }
+              }
+              if (state.value.length === 4) {
+                if (root) Object(root)['setAttribute']?.call(root, 'data-complete', '');
+                if (hidden) Object(hidden)['setAttribute']?.call(hidden, 'data-complete', '');
+              } else {
+                if (root) Object(root)['removeAttribute']?.call(root, 'data-complete');
+                if (hidden) Object(hidden)['removeAttribute']?.call(hidden, 'data-complete');
               }
               if (output) output['textContent'] = state.value;
             }}

@@ -1601,6 +1601,69 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
+  it('keeps generated OTP delete and paste states accessible', async () => {
+    const root = mountInteractiveDemo(GalleryOtpFieldDemo);
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-otp-form'));
+    const hidden = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-hidden'),
+    );
+    const first = required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-0'));
+    const second = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-1'),
+    );
+    const third = required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2'));
+    const fourth = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-3'),
+    );
+    const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="otp-value"]'));
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['keydown', 'paste'] });
+
+    second.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Backspace' }));
+
+    await vi.waitFor(() => {
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":1,"value":"1"}');
+      expect(root.hasAttribute('data-complete')).toBe(false);
+      expect(hidden.value).toBe('1');
+      expect(new FormData(form).get('gallery-otp-code')).toBe('1');
+      expect(first.value).toBe('1');
+      expect(second.value).toBe('');
+      expect(second.hasAttribute('data-filled')).toBe(false);
+      expect(output.textContent).toBe('1');
+    });
+
+    await expectNoAxeViolations(root);
+
+    const paste = new Event('paste', { bubbles: true, cancelable: true }) as Event & {
+      clipboardData: Pick<DataTransfer, 'getData'>;
+    };
+    Object.defineProperty(paste, 'clipboardData', {
+      value: { getData: () => '9 8 7 6' },
+    });
+
+    fourth.dispatchEvent(paste);
+
+    await vi.waitFor(() => {
+      expect(paste.defaultPrevented).toBe(true);
+      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"9876"}');
+      expect(root.getAttribute('data-complete')).toBe('');
+      expect(hidden.value).toBe('9876');
+      expect(hidden.getAttribute('data-complete')).toBe('');
+      expect(new FormData(form).get('gallery-otp-code')).toBe('9876');
+      expect(first.value).toBe('9');
+      expect(second.value).toBe('8');
+      expect(third.value).toBe('7');
+      expect(fourth.value).toBe('6');
+      expect(fourth.getAttribute('data-complete')).toBe('');
+      expect(fourth.tabIndex).toBe(0);
+      expect(output.textContent).toBe('9876');
+    });
+
+    await expectNoAxeViolations(root);
+  });
+
   it('opens and closes a native dialog through generated handlers and invoker attributes', async () => {
     const root = mountInteractiveDemo(GalleryDialogDemo);
     const trigger = required(root.querySelector<HTMLButtonElement>('button[command="show-modal"]'));

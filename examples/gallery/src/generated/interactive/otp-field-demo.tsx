@@ -59,7 +59,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               label: 'Verification code digit 1',
               slotIndex: 0,
             })}
-            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=a31bf6bc#GalleryOtpFieldDemo$input_keydown"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_keydown"
           />
           <input
             {...otpFieldInputAttributes({
@@ -68,7 +68,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               label: 'Verification code digit 2',
               slotIndex: 1,
             })}
-            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=a31bf6bc#GalleryOtpFieldDemo$input_keydown_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_keydown_2"
           />
           <input
             {...otpFieldInputAttributes({
@@ -77,7 +77,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               label: 'Verification code digit 3',
               slotIndex: 2,
             })}
-            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=a31bf6bc#GalleryOtpFieldDemo$input_input"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_input"
           />
           <input
             {...otpFieldInputAttributes({
@@ -86,7 +86,8 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               label: 'Verification code digit 4',
               slotIndex: 3,
             })}
-            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=a31bf6bc#GalleryOtpFieldDemo$input_input_2"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_input_2"
+            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_paste"
           />
         </div>
         <p id="gallery-interactive-otp-description">Enter the four digit code.</p>
