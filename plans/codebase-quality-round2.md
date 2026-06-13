@@ -90,8 +90,6 @@ Closed evidence so far:
   explicit `SourceReplacement` lists and are applied through `lowerComponentPipelinePatches`.
 - Many validators now consume parser-owned model facts: hrefs, bindings, event triggers, markup,
   component contracts, authoring surface, CSS host selector, and render-host stamping.
-- Handler lowering uses parser-owned zero-arg arrow body facts for parameter and `state` rewrites
-  before falling back to the legacy handler-expression reparse path.
 - Handler parameter type inference now relies on parser-owned `PropertyAccessPathModel`
   classifications only; `lower/handlers.ts` no longer imports TypeScript or reparses handler
   expressions.
@@ -100,25 +98,25 @@ Closed evidence so far:
 - Client handler body rewrites now use required parser-owned `HandlerArrowBody` spans only;
   `emit/client.ts` no longer imports TypeScript or exposes a standalone expression-reparse
   lowerer.
+- Handler lowering uses parser-owned zero-arg arrow body facts for parameter and `state` rewrites;
+  the legacy handler-expression reparse path has been removed.
 - IR authoring-surface diagnostics use header detection only; tag-specific FW235 help comes from
   parser-owned string-render facts.
+- Server-render replacements now flow through the shared pipeline patch seam instead of directly
+  applying source replacements in `compile.ts`.
 
 Open:
 
 - Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - Audit remaining production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex uses:
   keep parser/scanner internals and diagnostics; retire source-string lowerers/validators.
-- Push server-render patch application through the same offset-map seam if diagnostics depend on
-  post-server-render coordinates.
+- Decide whether server-render diagnostics ever need the returned offset map; currently
+  server-render patching is emit-only.
 - Keep the broader Phase 2 checkbox open until source-returning lowering is gone from the compile
   path or explicitly justified.
 
 Recent gates:
 
-- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
-- `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "FW235|authoring|compiler IR"`
-- `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
-- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
 - `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts plans/codebase-quality-round2.md`
 - `git diff --check`

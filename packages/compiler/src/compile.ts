@@ -28,7 +28,6 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import type { CompileComponentOptions, CompileResult } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
-import { applySourceReplacements } from './shared.js';
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   const packageComponentPrefixes = mergePackageComponentPrefixFacts(
@@ -126,7 +125,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverRender = serverRenderLowering(versionedHandlers, model);
-  const serverRenderedSource = applySourceReplacements(source, serverRender.replacements);
+  const serverRenderPatch = lowerComponentPipelinePatches(
+    derivePatch.state,
+    serverRender.replacements,
+    parseComponentModuleModel,
+  );
+  const serverRenderedSource = serverRenderPatch.state.source;
   const serverSource = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
     clientFileName: fileNames.client,
