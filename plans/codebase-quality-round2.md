@@ -135,6 +135,10 @@ boundaries.
 
 Latest evidence:
 
+- [x] Shipped inline-loader minified artifact tests now assert canonical minified wire-parser and
+      response-apply helper parity directly, replacing broad token pins for those helpers. Verified
+      with focused inline-loader artifact/minifier/runtime build checks, runtime tests, `tsc`, exact
+      `vp check`, and `git diff --check`.
 - [x] Default inline parser parity now checks the same canonical multi-file helper source used by
       generated inline-loader builds: `wire-html.ts` plus `wire-response-scanner.ts`. Verified with
       inline-loader parser parity tests, runtime inline-loader check, full runtime tests, `tsc`,

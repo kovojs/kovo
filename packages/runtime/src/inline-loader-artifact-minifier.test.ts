@@ -1,7 +1,11 @@
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
-import { inlineJisoLoaderGzipByteBudget } from './inline-loader-build.js';
+import {
+  assertMinifiedInlineJisoLoaderInstallerResponseApplyParity,
+  assertMinifiedInlineJisoLoaderInstallerWireParserParity,
+  inlineJisoLoaderGzipByteBudget,
+} from './inline-loader-build.js';
 import { inlineJisoLoaderInstallerSource, jisoLoaderSource } from './inline-loader.js';
 import { createInlineJisoLoaderSource as createPublicInlineJisoLoaderSource } from './index.js';
 
@@ -20,16 +24,15 @@ describe('inline loader minified artifact', () => {
     );
   });
 
-  it('keeps minified parser wire-contract tokens pinned in the extracted installer', () => {
+  it('keeps the shipped minified parser helper tied to the canonical runtime parser', () => {
     // SPEC.md §4.4/§9.1: inline and modular loaders must share query/fragment wire scanning.
     expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerWireParserParity(inlineJisoLoaderInstallerSource),
+    ).not.toThrow();
     expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
     expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function tagClose(');
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'function readMutationResponseElementChunks(',
-    );
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function readInlineMutationResponseBodyChunks(',
     );
@@ -47,22 +50,19 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
   });
 
-  it('keeps minified response-apply tokens pinned in the extracted installer', () => {
+  it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerResponseApplyParity(inlineJisoLoaderInstallerSource),
+    ).not.toThrow();
     expect(inlineJisoLoaderInstallerSource).toContain(
       'function applyInlineMutationResponseChunks(',
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain(
       'function applyInlineMutationResponseBody(',
     );
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragment(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragments(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyHtmlResponseFragments(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function dispatchInlineMutationQueries(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function appendHtmlResponseFragment(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function replaceHtmlResponseFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'const dispatchQueryEvent=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
     );
