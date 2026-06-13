@@ -419,10 +419,10 @@ identifier params use those facts for `data-p-*` names without expression-text f
 Handler call-argument extraction no longer fabricates params for unmodeled expression text:
 standalone references are lowered through parser reference spans, property accesses through parser
 access spans, and other call arguments remain diagnostic/client code instead of server-only params.
-View-transition, platform, static `<Link>`, and static `href()` lowerings are now collected from
-the original parsed model and applied as one pre-derive source-patch pass, removing the
-compatibility reparses between those independent lowerers while preserving the later reparse needed
-for generated derive/data-bind model facts.
+View-transition, platform, static `<Link>`, static `href()`, and inline-derive lowerings are now
+collected from the original parsed model and applied as one model source-patch pass. The compiler
+reparses only the combined lowered source needed for generated derive/data-bind model facts instead
+of reparsing once before inline-derive and again afterward.
 The now-unused ordered lowering sequence helper and tests were deleted after production compile
 stopped using it, leaving explicit patch passes as the remaining compile-path abstraction.
 The compiler pipeline no longer exports dead lowering/result option types left behind by the
@@ -438,6 +438,11 @@ carrying the old navigation-only compatibility name.
 
 Latest evidence:
 
+- Combined model-patch reparse reduction: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lowering.test.ts
+packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts
+packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts`;
+  `pnpm exec vitest --run packages/compiler/src`; `pnpm exec tsc --noEmit --pretty false`.
 - Pre-derive lowering reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts

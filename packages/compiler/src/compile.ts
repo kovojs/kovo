@@ -30,7 +30,6 @@ import {
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import { composeSourceOffsetMaps } from './shared.js';
 import type { CompileComponentOptions, CompileResult } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
@@ -63,35 +62,27 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const platformLowering = platformBehaviorLowering(originalState.model);
   const linkLowering = navigationLinkLowering(originalState.model);
   const hrefLowering = navigationHrefLowering(originalState.model);
-  const preDerivePatch = lowerComponentPipelinePatches(
+  const deriveLowering = lowerInlineAttributeDerives(
+    originalState.model,
+    componentName,
+    compileOptions,
+  );
+  const modelPatch = lowerComponentPipelinePatches(
     originalState,
     [
       ...viewTransitions.replacements,
       ...platformLowering.replacements,
       ...linkLowering.replacements,
       ...hrefLowering.replacements,
+      ...deriveLowering.replacements,
     ],
-    parseComponentModuleModel,
-  );
-  const preDeriveState = preDerivePatch.state;
-  const deriveLowering = lowerInlineAttributeDerives(
-    preDeriveState.model,
-    componentName,
-    compileOptions,
-  );
-  const derivePatch = lowerComponentPipelinePatches(
-    preDeriveState,
-    deriveLowering.replacements,
     parseComponentModuleModel,
     { prefix: deriveLowering.prefix },
   );
-  const source = derivePatch.state.source;
+  const source = modelPatch.state.source;
   const diagnosticSource = options.source;
-  const validationOffsetMap = composeSourceOffsetMaps(
-    preDerivePatch.sourceOffsetMap,
-    derivePatch.sourceOffsetMap,
-  );
-  const model = derivePatch.state.model;
+  const validationOffsetMap = modelPatch.sourceOffsetMap;
+  const model = modelPatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(model, compileOptions, componentName);
@@ -125,7 +116,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     : [];
   const serverRender = serverRenderLowering(versionedHandlers, model);
   const serverRenderPatch = applyComponentPipelineEmitPatches(
-    derivePatch.state,
+    modelPatch.state,
     serverRender.replacements,
   );
   const serverRenderedSource = serverRenderPatch.source;
