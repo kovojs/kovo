@@ -306,6 +306,7 @@ export const CommandItem = component('command-item', {
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
+        disabled={attrs['data-disabled'] === '' ? true : undefined}
         id={attrs.id}
         role={attrs.role}
         tabIndex={attrs.tabIndex}

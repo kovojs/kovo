@@ -4072,6 +4072,16 @@ Focused gates since that broad run:
   and drop link/behavior wiring, styled tooltip disabled triggers render native disabled buttons,
   and the gallery `fw explain` matrix covers `jiso-hover-card`/`jiso-tooltip` package-prefix
   provenance plus focus, pointerenter, keydown, state, and IDREF/ARIA merge records.
+- UI/gallery H3 styled menu/listbox native-disabled slice:
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+  `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "native disabled behavior")`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/ui/src/command.tsx packages/ui/src/context-menu.tsx packages/ui/src/dropdown-menu.tsx packages/ui/src/menubar.tsx packages/ui/src/index.test.tsx examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/command.html.txt examples/gallery/src/visual-fixtures/context-menu.html.txt examples/gallery/src/visual-fixtures/dropdown-menu.html.txt examples/gallery/src/visual-fixtures/menubar.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: styled command, dropdown-menu, context-menu, and menubar disabled
+  item buttons now preserve SPEC §3.1 native `disabled` behavior in addition to primitive
+  `aria-disabled`/`data-disabled`; static fixtures are synchronized and Chromium proves the
+  disabled controls cannot take focus.
 - [x] Runtime body apply closure.
       Evidence: added `applyMutationResponseBodyToRuntime()` as the internal body-string parser/apply
       seam in `packages/runtime/src/apply-mutation-response.ts`; `packages/runtime/src/mutation-apply.ts`,

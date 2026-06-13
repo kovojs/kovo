@@ -756,6 +756,34 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(new FormData(radioForm).get('gallery-shipping-speed')).toBeNull();
   });
 
+  it('preserves native disabled behavior for styled menu and command buttons in static routes', async () => {
+    const commandRoute = mountStaticGalleryRoute('/components/command');
+    const commandDelete = required(
+      commandRoute.querySelector<HTMLButtonElement>('#gallery-command-listbox-item-2'),
+    );
+    const dropdownRoute = mountStaticGalleryRoute('/components/dropdown-menu');
+    const dropdownArchive = required(
+      dropdownRoute.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-archive'),
+    );
+    const contextRoute = mountStaticGalleryRoute('/components/context-menu');
+    const contextDelete = required(
+      contextRoute.querySelector<HTMLButtonElement>('#gallery-context-menu-delete'),
+    );
+    const menubarRoute = mountStaticGalleryRoute('/components/menubar');
+    const menubarImport = required(
+      menubarRoute.querySelector<HTMLButtonElement>('#gallery-menubar-import'),
+    );
+
+    for (const button of [commandDelete, dropdownArchive, contextDelete, menubarImport]) {
+      expect(button.disabled).toBe(true);
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(button.getAttribute('data-disabled')).toBe('');
+
+      button.focus();
+      expect(document.activeElement).not.toBe(button);
+    }
+  });
+
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAccordionDemo);
     const shipping = required(

@@ -305,7 +305,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `selected: false` and preserve the previous open state when their follow-up item-select
       close change is canceled; context-menu also preserves its previous anchor point. Verified by
       focused headless tests, styled wrapper smoke coverage, static/generated gallery contracts,
-      and browser route tests for generated dropdown/context menu and menubar demos.
+      and browser route tests for generated dropdown/context menu and menubar demos. Evidence
+      2026-06-13: styled command, dropdown-menu, context-menu, and menubar item buttons now render
+      native `disabled` whenever primitive `data-disabled` is present, preserving SPEC §3.1 native
+      light-DOM disabled behavior; package render tests, synchronized static fixtures, and Chromium
+      route checks prove the disabled buttons keep `aria-disabled`/`data-disabled` and cannot take
+      focus.
       Evidence 2026-06-13: `sliderInputAttributes()` and styled `SliderInput` now preserve native
       external `form` ownership for the range control; static and compiled gallery routes prove the
       authored TSX remains generated-artifact fresh and Chromium `FormData` follows the generated
@@ -354,11 +359,21 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       package-prefix `fw explain` cases for focus, pointerenter, keydown, state, and IDREF/ARIA
       merge records, while `packages/ui/src/hover-card.tsx` and `packages/ui/src/tooltip.tsx`
       preserve disabled trigger semantics through styled wrappers.
+      Evidence 2026-06-13: the H3 styled menu/listbox button family now has native-disabled G2
+      coverage for command, dropdown-menu, context-menu, and menubar through wrapper render
+      assertions, synchronized static route fixtures, and Chromium focus checks.
 - [ ] Keep G6 compiled interactive demos app-authored TSX, checked in, generated-artifact fresh,
       and browser-tested when behavior changes.
 
 ## Latest Gates
 
+- [x] H3 styled menu/listbox native-disabled slice:
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "native disabled behavior")`;
+      `pnpm exec tsc --noEmit --pretty false`;
+      exact `pnpm exec vp check packages/ui/src/command.tsx packages/ui/src/context-menu.tsx packages/ui/src/dropdown-menu.tsx packages/ui/src/menubar.tsx packages/ui/src/index.test.tsx examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/command.html.txt examples/gallery/src/visual-fixtures/context-menu.html.txt examples/gallery/src/visual-fixtures/dropdown-menu.html.txt examples/gallery/src/visual-fixtures/menubar.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Overlay trigger disabled semantics and G2 provenance slice:
       `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/fw-explain-contracts.test.ts`;

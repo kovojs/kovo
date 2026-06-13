@@ -1613,12 +1613,18 @@ describe('@jiso/ui styled package foundation', () => {
         id: 'row-trigger',
         open: true,
       })}${ContextMenuContent.definition.render({
-        children: ContextMenuItem.definition.render({
+        children: `${ContextMenuItem.definition.render({
           highlightedValue: 'inspect',
           itemLabel: 'Inspect',
           itemValue: 'inspect',
           open: true,
-        }),
+        })}${ContextMenuItem.definition.render({
+          highlightedValue: 'inspect',
+          itemDisabled: true,
+          itemLabel: 'Delete',
+          itemValue: 'delete',
+          open: true,
+        })}`,
         id: 'row-menu',
         open: true,
         point: { x: 24, y: 32 },
@@ -1637,6 +1643,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(dropdown).toContain('tabIndex="0" type="button" value="rename"');
     expect(dropdown).toContain('data-disabled="" data-state="inactive"');
     expect(dropdown).toContain('aria-disabled="true"');
+    expect(dropdown).toContain(
+      'disabled role="menuitem" tabIndex="-1" type="button" value="archive"',
+    );
     expect(dropdownMenuTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
     expect(dropdownMenuContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
     expect(dropdownMenuItemClasses.join(' ')).toContain('data-[highlighted]:bg-neutral-100');
@@ -1649,6 +1658,10 @@ describe('@jiso/ui styled package foundation', () => {
     expect(context).toContain('data-anchor-x="24" data-anchor-y="32"');
     expect(context).toContain('role="menu" tabIndex="-1"');
     expect(context).toContain('data-highlighted="" data-state="active"');
+    expect(context).toContain('aria-disabled="true"');
+    expect(context).toContain(
+      'disabled role="menuitem" tabIndex="-1" type="button" value="delete"',
+    );
     expect(contextMenuTriggerClasses.join(' ')).toContain('border-dashed');
     expect(contextMenuContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
     expect(contextMenuItemClasses.join(' ')).toContain('data-[highlighted]:bg-neutral-100');
@@ -1659,6 +1672,7 @@ describe('@jiso/ui styled package foundation', () => {
       { hasPopup: true, label: 'File', value: 'file' },
       { label: 'Edit', value: 'edit' },
       { label: 'New', parentValue: 'file', value: 'new' },
+      { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
     ];
     const menubar = Menubar.definition.render({
       activeValue: 'file',
@@ -1676,14 +1690,22 @@ describe('@jiso/ui styled package foundation', () => {
         items: menubarItems,
         openValue: 'file',
       })}${MenubarSubmenu.definition.render({
-        children: MenubarItem.definition.render({
+        children: `${MenubarItem.definition.render({
           activeValue: 'new',
           itemLabel: 'New',
           itemParentValue: 'file',
           itemValue: 'new',
           items: menubarItems,
           openValue: 'file',
-        }),
+        })}${MenubarItem.definition.render({
+          activeValue: 'new',
+          itemDisabled: true,
+          itemLabel: 'Import',
+          itemParentValue: 'file',
+          itemValue: 'import',
+          items: menubarItems,
+          openValue: 'file',
+        })}`,
         id: 'file-menu',
         labelledBy: 'file-item',
         openValue: 'file',
@@ -1753,6 +1775,10 @@ describe('@jiso/ui styled package foundation', () => {
     expect(menubar).toContain('data-highlighted="" data-state="active"');
     expect(menubar).toContain('role="menu" tabIndex="-1"');
     expect(menubar).toContain('tabIndex="0" type="button" value="file"');
+    expect(menubar).toContain('aria-disabled="true"');
+    expect(menubar).toContain(
+      'disabled role="menuitem" tabIndex="-1" type="button" value="import"',
+    );
     expect(menubarItemClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
     expect(menubarSubmenuClasses.join(' ')).toContain('data-[state=closed]:hidden');
 
@@ -1856,6 +1882,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(command).toContain('aria-selected="true"');
     expect(command).toContain('data-highlighted="" data-state="active"');
     expect(command).toContain('aria-disabled="true"');
+    expect(command).toContain('disabled role="option" tabIndex="-1" type="button" value="delete"');
     expect(command).toContain('command="request-close" commandfor="command-dialog"');
     expect(command).toContain('id="command-value">Invite teammate</span>');
     expect(commandTriggerClasses.join(' ')).toContain('data-[state=open]:bg-neutral-100');
