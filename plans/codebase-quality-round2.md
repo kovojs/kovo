@@ -363,6 +363,15 @@ Closed evidence so far:
   `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`,
   `pnpm exec vp run build`, and
   `node --test --test-name-pattern "P2 loader smoke evidence is asserted through runtime behavior|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`.
+- Round103 harness evidence 2026-06-13: generated server/client/registry/css artifact checks in
+  `tests/fw-check.node.mjs` consume `@jiso/test/generated-module-fixtures` artifact selectors
+  instead of inline `files.find(file.kind)` or positional emitted-file membership checks; commerce
+  graph and package gates use `projectJsonFile` for structured artifact reads. Same-session
+  evidence: `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/source-fixtures.test.ts`,
+  `pnpm exec vp run build`, and
+  `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P2 compiler merges view transition stamps into existing styles|D2 commerce validates keyed append and optimistic reorder|D4 commerce adopt-dont-invent features stay represented|P10 commerce graph assertions answer behavior mechanically|P1 fragment targets emit typed registry facts|P4 commerce touch graph is a committed generated artifact|Conformance suites are an explicit gate|P1 minifier name preservation evidence remains represented|P1 typed data param coercion remains represented|P1 render-equivalence gate remains represented|framework-owned browser suite is wired into acceptance|P10 perf acceptance is wired through Playwright and CDP" tests/fw-check.node.mjs`
+  plus
+  `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`.
 
 Open:
 

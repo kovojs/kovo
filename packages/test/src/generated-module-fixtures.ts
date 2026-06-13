@@ -1,5 +1,31 @@
 import { runInNewContext } from 'node:vm';
 
+export interface GeneratedArtifactFile {
+  fileName?: string;
+  kind: string;
+  source: string;
+}
+
+export function generatedArtifactFile(
+  files: readonly GeneratedArtifactFile[],
+  kind: string,
+): GeneratedArtifactFile {
+  const matches = files.filter((file) => file.kind === kind);
+
+  if (matches.length !== 1) {
+    throw new Error(`Expected one generated ${kind} artifact; found ${matches.length}`);
+  }
+
+  return matches[0]!;
+}
+
+export function generatedArtifactSource(
+  files: readonly GeneratedArtifactFile[],
+  kind: string,
+): string {
+  return generatedArtifactFile(files, kind).source;
+}
+
 export class GeneratedFixtureMorphTarget {
   html: string;
 
@@ -183,6 +209,13 @@ export function executeGeneratedClientModule(
   return exports;
 }
 
+export function executeGeneratedClientArtifact(
+  files: readonly GeneratedArtifactFile[],
+  options: ExecuteGeneratedClientModuleOptions,
+): Record<string, unknown> {
+  return executeGeneratedClientModule(generatedArtifactSource(files, 'client'), options);
+}
+
 export function executeGeneratedServerRenderSource(source: string): string {
   const exports = {} as { renderSource?: () => string };
   const moduleSource = source.replace(
@@ -196,6 +229,12 @@ export function executeGeneratedServerRenderSource(source: string): string {
     throw new Error('Generated server render source exports renderSource()');
   }
   return exports.renderSource();
+}
+
+export function executeGeneratedServerRenderArtifact(
+  files: readonly GeneratedArtifactFile[],
+): string {
+  return executeGeneratedServerRenderSource(generatedArtifactSource(files, 'server'));
 }
 
 export function executeGeneratedBootstrapModule(

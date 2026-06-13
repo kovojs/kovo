@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
+  executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
+  generatedArtifactFile,
+  generatedArtifactSource,
   generatedHandlerReferenceFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
@@ -12,6 +16,30 @@ import {
 } from '@jiso/test/generated-module-fixtures';
 
 describe('@jiso/test generated module fixtures', () => {
+  it('selects generated artifacts by kind instead of positional file membership checks', () => {
+    const files = [
+      { fileName: 'cart.server.js', kind: 'server', source: 'server-source' },
+      { fileName: 'cart.client.js', kind: 'client', source: 'client-source' },
+      { fileName: 'cart.d.ts', kind: 'registry', source: 'registry-source' },
+    ];
+
+    expect(generatedArtifactFile(files, 'client')).toEqual({
+      fileName: 'cart.client.js',
+      kind: 'client',
+      source: 'client-source',
+    });
+    expect(generatedArtifactSource(files, 'registry')).toBe('registry-source');
+    expect(() => generatedArtifactFile(files, 'css')).toThrow(
+      'Expected one generated css artifact; found 0',
+    );
+    expect(() =>
+      generatedArtifactFile(
+        [...files, { kind: 'client', source: 'duplicate-client-source' }],
+        'client',
+      ),
+    ).toThrow('Expected one generated client artifact; found 2');
+  });
+
   it('executes generated client modules through explicit runtime bindings', () => {
     const exports = executeGeneratedClientModule(
       `
@@ -40,6 +68,34 @@ export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
     ).toBe(5);
   });
 
+  it('executes generated client artifacts by kind', () => {
+    const exports = executeGeneratedClientArtifact(
+      [
+        { kind: 'server', source: 'export function renderSource() { return ""; }' },
+        {
+          kind: 'client',
+          source: `
+import { handler } from '@jiso/runtime';
+export const Cart$click = handler((_event, ctx) => ctx.value);
+`,
+        },
+      ],
+      {
+        runtime: {
+          handler(callback: (event: unknown, ctx: { value: number }) => number) {
+            return (event: unknown, ctx: { value: number }) => callback(event, ctx);
+          },
+        },
+      },
+    );
+
+    expect(
+      (exports.Cart$click as (event: unknown, ctx: { value: number }) => number)(undefined, {
+        value: 7,
+      }),
+    ).toBe(7);
+  });
+
   it('executes generated server render modules without app-authored lowered source parsing in tests', () => {
     expect(
       executeGeneratedServerRenderSource(`
@@ -48,6 +104,22 @@ export function renderSource() {
 }
 `),
     ).toBe('<cart-badge><span data-bind="cart.count">1</span></cart-badge>');
+  });
+
+  it('executes generated server artifacts by kind', () => {
+    expect(
+      executeGeneratedServerRenderArtifact([
+        {
+          kind: 'server',
+          source: `
+export function renderSource() {
+  return '<cart-badge>1</cart-badge>';
+}
+`,
+        },
+        { kind: 'registry', source: 'export interface Components {}' },
+      ]),
+    ).toBe('<cart-badge>1</cart-badge>');
   });
 
   it('summarizes generated handler hrefs as reusable artifact facts', () => {

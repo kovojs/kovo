@@ -70,9 +70,12 @@ import {
 } from '../packages/test/src/fw-explain-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
 import {
+  executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
+  executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
+  generatedArtifactSource,
   generatedHandlerReferenceFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
@@ -452,8 +455,9 @@ void test('P10 constitution rejects forbidden browser architecture in framework 
 });
 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {
-  const commerceGraph = JSON.parse(
-    await readProjectFile('examples/commerce/src/generated/graph.json'),
+  const commerceGraph = await projectJsonFile(
+    projectRootPath,
+    'examples/commerce/src/generated/graph.json',
   );
   const cartAddExplain = fwExplain(commerceGraph, {
     kind: 'mutation',
@@ -511,7 +515,7 @@ export const DocCard = component('doc-card', {
 });
 `,
   });
-  const cssSource = behaviorFixture.files.find((file) => file.kind === 'css')?.source ?? '';
+  const cssSource = generatedArtifactSource(behaviorFixture.files, 'css');
   const cssManifest = collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
 
   assert.deepEqual(markdownNumberedListTitles(constitution), [
@@ -1195,12 +1199,11 @@ export const ProductCard = component('product-card', {
 });
 `,
   });
-  const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
-  const registrySource = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+  const registrySource = generatedArtifactSource(result.files, 'registry');
 
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
   // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
-  const renderedElements = htmlElementFacts(executeGeneratedServerRenderSource(serverSource));
+  const renderedElements = htmlElementFacts(executeGeneratedServerRenderArtifact(result.files));
   const renderedImage = renderedElements.find((element) => element.tag === 'img');
   assert.deepEqual(renderedImage?.attrs, {
     'fw-c': 'product-card',
@@ -1921,12 +1924,11 @@ export const ProductLinks = component('product-links', {
 });
 `,
   });
-  const serverSource = lowered.files.find((file) => file.kind === 'server')?.source ?? '';
-  const registrySource = lowered.files.find((file) => file.kind === 'registry')?.source ?? '';
+  const registrySource = generatedArtifactSource(lowered.files, 'registry');
   assert.deepEqual(lowered.diagnostics, []);
-  const renderedLinks = htmlElementFacts(executeGeneratedServerRenderSource(serverSource)).filter(
-    (element) => element.tag === 'a',
-  );
+  const renderedLinks = htmlElementFacts(
+    executeGeneratedServerRenderArtifact(lowered.files),
+  ).filter((element) => element.tag === 'a');
   assert.deepEqual(
     renderedLinks.map((element) => element.attrs.href),
     ['/products/p%201?max=500', '/cart'],
@@ -2339,8 +2341,9 @@ void test('P5 morph evidence preserves keyed identity and applies fragments', ()
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {
-  const commerceGraph = JSON.parse(
-    await readProjectFile('examples/commerce/src/generated/graph.json'),
+  const commerceGraph = await projectJsonFile(
+    projectRootPath,
+    'examples/commerce/src/generated/graph.json',
   );
   assert.deepEqual(
     commerceGraph.components.map((component) => [
@@ -2796,8 +2799,9 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
       },
     };
   };
-  const commerceGraph = JSON.parse(
-    await readProjectFile('examples/commerce/src/generated/graph.json'),
+  const commerceGraph = await projectJsonFile(
+    projectRootPath,
+    'examples/commerce/src/generated/graph.json',
   );
   const cartPage = commerceGraph.pages.find((page) => page.route === '/cart');
   const receiptMutation = commerceGraph.mutations.find((item) => item.key === 'order/receipt');
@@ -3049,8 +3053,10 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
-  const graphArtifact = await readProjectFile('examples/commerce/src/generated/graph.json');
-  const commerceGraph = JSON.parse(graphArtifact);
+  const commerceGraph = await projectJsonFile(
+    projectRootPath,
+    'examples/commerce/src/generated/graph.json',
+  );
   const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output;
   const cartAddExplain = fwExplain(commerceGraph, {
     kind: 'mutation',
@@ -5167,7 +5173,7 @@ export const CartRow = component('cart-row', {
 });
 `,
   });
-  const registrySource = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+  const registrySource = generatedArtifactSource(result.files, 'registry');
   const virtualRegistryFile = join(
     fileURLToPath(new URL('../', import.meta.url)),
     '.fw-check-virtual',
@@ -5238,8 +5244,9 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
-  const commerceGraph = JSON.parse(
-    await readProjectFile('examples/commerce/src/generated/graph.json'),
+  const commerceGraph = await projectJsonFile(
+    projectRootPath,
+    'examples/commerce/src/generated/graph.json',
   );
   const emitGraphCheck = await execFileAsync('node', ['scripts/emit-graph.mjs', '--check'], {
     cwd: new URL('../examples/commerce/', import.meta.url),
@@ -5339,7 +5346,7 @@ void test('Conformance suites are an explicit gate', async () => {
   for (const { directory, manifest } of conformancePackages) {
     assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
   }
-  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
   const conformanceTaskName = requiredVpRunTaskName('test:conformance', packageJson);
   const conformanceTask = viteTasks[conformanceTaskName];
@@ -5478,7 +5485,7 @@ export const CartBadge = component('cart-badge', {
     },
   ]);
 
-  const clientExports = executeGeneratedClientModule(compiled.files[1]?.source ?? '', {
+  const clientExports = executeGeneratedClientArtifact(compiled.files, {
     runtime: generatedModuleRuntime,
   });
   const countBinding = new GeneratedFixtureElement(
@@ -5783,16 +5790,13 @@ export const CartDrawer = component('cart-drawer', {
 });
 `,
   });
-  const cartBadgeClientFile = cartBadge.files.find((file) => file.kind === 'client');
-  assert.ok(cartBadgeClientFile, 'compiled output includes the cart badge client module');
-
   assert.deepEqual(cartBadge.handlerExports, [
     'CartBadge$removeItem',
     'CartBadge$button_click',
     'CartBadge$button_click_2',
   ]);
   const removeItemCalls = [];
-  const cartBadgeClient = executeGeneratedClientModule(cartBadgeClientFile.source, {
+  const cartBadgeClient = executeGeneratedClientArtifact(cartBadge.files, {
     context: {
       removeItem(event, ctx) {
         removeItemCalls.push({ ctx, event });
@@ -5835,12 +5839,7 @@ export const CartActions = component('cart-actions', {
 });
 `,
   });
-  const serverFile = result.files.find((file) => file.kind === 'server');
-  const clientFile = result.files.find((file) => file.kind === 'client');
-  assert.ok(serverFile, 'compiled output includes server render source');
-  assert.ok(clientFile, 'compiled output includes client handler source');
-
-  const buttons = htmlElementFacts(executeGeneratedServerRenderSource(serverFile.source)).filter(
+  const buttons = htmlElementFacts(executeGeneratedServerRenderArtifact(result.files)).filter(
     (element) => element.tag === 'button',
   );
   assert.equal(buttons.length, 2);
@@ -5850,7 +5849,7 @@ export const CartActions = component('cart-actions', {
   assert.equal(buttons[1]?.attrs['data-p-selected'], '{item.selected}');
   assert.equal(buttons[1]?.attrs['data-p-id'], '{item.id}');
 
-  const cartActions = executeGeneratedClientModule(clientFile.source, {
+  const cartActions = executeGeneratedClientArtifact(result.files, {
     context: {
       deselect: (id) => `deselect:${id}`,
       select: (id) => `select:${id}`,
@@ -5921,9 +5920,7 @@ export const CartTotal = component('cart-total', {
 });
 `,
   });
-  const serverFile = result.files.find((file) => file.kind === 'server');
-  assert.ok(serverFile, 'compiled output includes server render source');
-  const renderedElements = htmlElementFacts(executeGeneratedServerRenderSource(serverFile.source));
+  const renderedElements = htmlElementFacts(executeGeneratedServerRenderArtifact(result.files));
   const cartTotal = renderedElements.find((element) => element.tag === 'cart-total');
   const boundSpan = renderedElements.find((element) => element.tag === 'span');
 
@@ -5982,7 +5979,7 @@ export const CartTotal = component('cart-total', {
 });
 
 void test('framework-owned browser suite is wired into acceptance', async () => {
-  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const browserGate = vitePlusAcceptanceTaskFacts({
     ciWorkflowSource: ciWorkflow,
@@ -6016,7 +6013,7 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
-  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const perfGate = vitePlusAcceptanceTaskFacts({
     ciWorkflowSource: ciWorkflow,
