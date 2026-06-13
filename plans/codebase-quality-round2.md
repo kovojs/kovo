@@ -504,6 +504,9 @@ validator export were deleted after the single model-patch pass and analyzer-own
 facts made them dead.
 The parser model no longer exposes raw `openingSource`/`childSource` JSX element fields now that
 lowerers consume structured tag spans, slash-spacing, child-body, and expression-container facts.
+The terminal server-render emit patch helper now exposes only patched source; offset maps remain
+limited to model-changing passes and diagnostics instead of an unused emit-only compatibility
+contract.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -528,6 +531,11 @@ packages/compiler/src/scan/parse.test.ts packages/compiler/src/navigation-loweri
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/stamps.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
 packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts
+plans/codebase-quality-round2.md`; `git diff --check`.
+- Emit-only patch contract narrowing: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts
 plans/codebase-quality-round2.md`; `git diff --check`.
 - Pre-derive lowering reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts

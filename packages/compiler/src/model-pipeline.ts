@@ -1,4 +1,5 @@
 import {
+  applySourceReplacements,
   applySourceReplacementsWithOffsetMap,
   type SourceOffsetMap,
   type SourceReplacement,
@@ -15,13 +16,12 @@ interface ComponentPipelinePatchResult<Model> {
   state: ComponentPipelineState<Model>;
 }
 
-interface ComponentPipelineEmitPatchResult {
-  source: string;
-  sourceOffsetMap: SourceOffsetMap;
-}
-
 interface ComponentPipelinePatchOptions {
   prefix?: string;
+}
+
+export interface ComponentPipelineEmitPatchResult {
+  source: string;
 }
 
 export function componentPipelineState<Model>(
@@ -59,5 +59,7 @@ export function applyComponentPipelineEmitPatches(
   replacements: readonly SourceReplacement[],
   options: ComponentPipelinePatchOptions = {},
 ): ComponentPipelineEmitPatchResult {
-  return applySourceReplacementsWithOffsetMap(previous.source, replacements, options.prefix ?? '');
+  return {
+    source: `${options.prefix ?? ''}${applySourceReplacements(previous.source, replacements)}`,
+  };
 }
