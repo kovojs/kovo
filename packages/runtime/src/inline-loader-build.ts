@@ -427,6 +427,9 @@ function collectInlineWireParserFunctionDependencies(
     ts.forEachChild(node, visit);
   };
 
+  for (const parameter of declaration.parameters) {
+    if (parameter.initializer) visit(parameter.initializer);
+  }
   if (declaration.body) visit(declaration.body);
   return dependencies;
 }

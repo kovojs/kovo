@@ -108,6 +108,49 @@ describe('inline loader parser parity', () => {
     expect(extracted).not.toContain('export function');
   });
 
+  it('includes inline parser dependencies from default parameter initializers', () => {
+    // SPEC.md §4.4/§9.1: generated inline parser helpers must be a closed
+    // function set even when canonical parser defaults call helper functions.
+    const source = [
+      'export function readElementChunks(body, tagName = defaultTagName()) {',
+      '  return [{ attrs: readAttribute(body, "target"), content: tagName }];',
+      '}',
+      'function defaultTagName() {',
+      '  return "fw-fragment";',
+      '}',
+      'export function readAttribute(attrs, name) {',
+      '  return attrs + name;',
+      '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
+      'function readFragmentChunksFromElements(chunks = defaultChunks()) {',
+      '  return chunks.map(readFragmentElementChunk);',
+      '}',
+      'function defaultChunks() {',
+      '  return [];',
+      '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return { fragments: readElementChunks(body), queries: readElementChunks(body, "fw-query") };',
+      '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  const chunks = readMutationResponseElementChunks(body);',
+      '  return { fragments: readFragmentChunksFromElements(chunks.fragments), queries: chunks.queries };',
+      '}',
+    ].join('\n');
+
+    const extracted = extractInlineWireParserReadableSource(source);
+
+    expect(extracted).toContain('function defaultTagName()');
+    expect(extracted).toContain('function defaultChunks()');
+    expect(extracted).toMatch(
+      /function defaultTagName\(\).*function readAttribute\(attrs, name\).*function readElementChunks\(body, tagName = defaultTagName\(\)\)/s,
+    );
+    expect(extracted).toMatch(
+      /function defaultChunks\(\).*function readFragmentElementChunk\(fragment\).*function readFragmentChunksFromElements\(chunks = defaultChunks\(\)\)/s,
+    );
+  });
+
   it('checks readable and minified inline parser embeds against the modular parser', () => {
     // SPEC.md §4.4/§9.1: inline response scanning is allowed to be tiny, but
     // build-time checks must keep it byte-tied to the modular wire parser.
@@ -210,6 +253,24 @@ describe('inline loader parser parity', () => {
       '  return readMutationResponseElementChunks(body);',
       '}',
     ].join('\n');
+    const parameterInitializerSource = [
+      'const defaultTagName = () => "fw-fragment";',
+      'export function readElementChunks(body, tagName = defaultTagName()) {',
+      '  return readAttribute("", tagName) + body;',
+      '}',
+      'export function readAttribute(attrs) {',
+      '  return attrs;',
+      '}',
+      'export function readFragmentElementChunk(fragment) {',
+      '  return { html: fragment.content, target: readAttribute(fragment.attrs, "target") };',
+      '}',
+      'export function readMutationResponseElementChunks(body) {',
+      '  return readElementChunks(body);',
+      '}',
+      'export function readInlineMutationResponseBodyChunks(body) {',
+      '  return readMutationResponseElementChunks(body);',
+      '}',
+    ].join('\n');
 
     expect(() => extractInlineWireParserReadableSource(functionLocalSource)).toThrow(
       'references top-level binding hiddenHelper',
@@ -219,6 +280,9 @@ describe('inline loader parser parity', () => {
     );
     expect(() => extractInlineWireParserReadableSource(topLevelValueSource)).toThrow(
       'references top-level binding attributePattern',
+    );
+    expect(() => extractInlineWireParserReadableSource(parameterInitializerSource)).toThrow(
+      'references top-level binding defaultTagName',
     );
   });
 });

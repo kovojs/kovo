@@ -570,6 +570,14 @@ packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-response-apply.test.ts` and `pnpm --filter @jiso/runtime run
 check:inline-loader`.
+      Evidence 2026-06-13 round258: inline wire-parser closure extraction now follows helper
+      references from default parameter initializers, so future canonical parser defaults cannot
+      silently omit dependencies from the readable/minified inline loader. The extractor also
+      rejects unsupported top-level bindings reached from parameter defaults. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-minifier.test.ts`,
+      full runtime `pnpm exec vitest --run packages/runtime/src`, and `pnpm --filter
+      @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
       Evidence 2026-06-13: `packages/runtime/src/index.test.ts` now owns only public barrel
       loader smoke. `packages/runtime/src/loader-query-hydration.test.ts`,
