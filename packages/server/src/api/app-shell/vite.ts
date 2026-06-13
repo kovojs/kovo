@@ -42,6 +42,7 @@ export {
   jisoAppShellViteRouteEntries,
 } from '../../vite-manifest.js';
 export { jisoAppShellVitePlugin } from '../../vite-plugin.js';
+export { writeJisoAppShellVitePluginBuild } from '../../vite-plugin-build.js';
 export type {
   JisoAppShellBuildAsset,
   JisoAppShellRouteBuildEntry,
@@ -99,3 +100,7 @@ export type {
   JisoAppShellVitePlugin,
   JisoAppShellVitePluginOptions,
 } from '../../vite-plugin.js';
+export type {
+  JisoAppShellVitePluginBuildContext,
+  JisoAppShellVitePluginBuildResult,
+} from '../../vite-plugin-build.js';

@@ -70,6 +70,9 @@ describe('server app-shell public API barrels', () => {
       viteApi.exportJisoAppShellViteBuildFromManifestFile,
     );
     expect(publicApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);
+    expect(publicApi.writeJisoAppShellVitePluginBuild).toBe(
+      viteApi.writeJisoAppShellVitePluginBuild,
+    );
     expect(publicApi.jisoAppShellViteSsrDevPlugin).toBe(viteApi.jisoAppShellViteSsrDevPlugin);
     expect(publicApi.shouldHandleJisoAppShellViteRequest).toBe(
       viteApi.shouldHandleJisoAppShellViteRequest,
@@ -123,6 +126,9 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.isStaticExportDiagnostic).toBe(staticExportApi.isStaticExportDiagnostic);
     expect(appShellApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
+    expect(appShellApi.writeJisoAppShellVitePluginBuild).toBe(
+      viteApi.writeJisoAppShellVitePluginBuild,
+    );
     expect(appShellApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.exportJisoAppShellViteBuildFromManifestFile,
     );
@@ -197,6 +203,9 @@ describe('server app-shell public API barrels', () => {
       staticExportApi.isStaticExportDiagnosticError,
     );
     expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
+    expect(packageViteApi.writeJisoAppShellVitePluginBuild).toBe(
+      viteApi.writeJisoAppShellVitePluginBuild,
+    );
     expect(packageViteApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.exportJisoAppShellViteBuildFromManifestFile,
     );
@@ -239,6 +248,9 @@ describe('server app-shell public API barrels', () => {
       staticExportApi.isStaticExportDiagnostic,
     );
     expect(packageAppShellApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);
+    expect(packageAppShellApi.writeJisoAppShellVitePluginBuild).toBe(
+      viteApi.writeJisoAppShellVitePluginBuild,
+    );
     expect(packageAppShellApi.jisoAppShellViteSsrDevPlugin).toBe(
       viteApi.jisoAppShellViteSsrDevPlugin,
     );

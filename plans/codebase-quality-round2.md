@@ -147,7 +147,9 @@ document/client-module replay, app request document assembly, mutation request h
 app-shell dev/export/static-export helpers from public subpaths and includes a static preview task
 that serves exported `dist` output without Vite source fallback. Vite app-shell build output now
 returns the same compiled `/c/` module output plan that its staged writer commits, giving plugin
-`onBuild` consumers one observable target plan for build/static-export adoption.
+`onBuild` consumers one observable target plan for build/static-export adoption. Vite plugin
+`writeBundle` build/static-export execution now lives in a focused helper exported from the public
+app-shell Vite subpath, leaving the plugin module focused on middleware and hook delegation.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -158,6 +160,8 @@ returns the same compiled `/c/` module output plan that its staged writer commit
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`

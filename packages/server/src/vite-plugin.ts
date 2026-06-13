@@ -9,15 +9,9 @@ import {
   type JisoAppShellViteDevServer,
 } from './vite-dev.js';
 import type { JisoAppShellViteOutputBundle } from './vite-manifest.js';
-import {
-  createJisoAppShellViteBuildFromBundle,
-  type JisoAppShellVitePluginBuildOptions,
-} from './vite-build.js';
-import {
-  jisoAppShellViteOutputDir,
-  writeJisoAppShellViteBuildOutput,
-  type JisoAppShellViteOutputOptions,
-} from './vite-build-output.js';
+import type { JisoAppShellVitePluginBuildOptions } from './vite-build.js';
+import type { JisoAppShellViteOutputOptions } from './vite-build-output.js';
+import { writeJisoAppShellVitePluginBuild } from './vite-plugin-build.js';
 
 export interface JisoAppShellVitePlugin {
   configureServer(server: JisoAppShellViteDevServer): void;
@@ -81,25 +75,12 @@ export function jisoAppShellVitePlugin(
             const buildOptions = options.build;
             if (!buildOptions) return;
 
-            const outDir = buildOptions.outDir ?? jisoAppShellViteOutputDir(outputOptions);
-            const build = createJisoAppShellViteBuildFromBundle({
+            await writeJisoAppShellVitePluginBuild({
               app,
+              buildOptions,
               bundle,
-              ...(buildOptions.base === undefined ? {} : { base: buildOptions.base }),
-              ...(buildOptions.clientModules === undefined
-                ? {}
-                : { clientModules: buildOptions.clientModules }),
-              ...(buildOptions.routeEntryMap === undefined
-                ? {}
-                : { routeEntryMap: buildOptions.routeEntryMap }),
+              outputOptions,
             });
-            const output = await writeJisoAppShellViteBuildOutput(build, {
-              outDir,
-              ...(buildOptions.staticExport === undefined
-                ? {}
-                : { staticExport: buildOptions.staticExport }),
-            });
-            await buildOptions.onBuild?.(build, output);
           },
         }
       : {}),

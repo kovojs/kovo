@@ -249,6 +249,13 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
       `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
       and `git diff --check`.
+      Additional evidence 2026-06-13: Vite plugin `writeBundle` build/static-export execution now
+      lives in `packages/server/src/vite-plugin-build.ts`, with
+      `writeJisoAppShellVitePluginBuild()` exported through `@jiso/server/app-shell/vite` so the
+      plugin module delegates hook execution while preserving SPEC §9.5 Vite build output and
+      optional static export behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`.
       Additional evidence 2026-06-13: app-configured 404/500 error shells now report through a
       distinct `error-shell` `onError` diagnostic context and fall back to the stable no-internals
       document when the shell renderer itself fails (SPEC §9.2/§9.5). Same-session evidence:

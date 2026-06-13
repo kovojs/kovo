@@ -51,6 +51,9 @@ Implemented areas:
   manifest for directory-index documents, copied assets, and `/c/` modules. The create-jiso
   starter and commerce export tasks load the diagnostic helpers from `@jiso/server` instead of
   duplicating local FW229 formatting.
+- `vite-plugin-build.ts` owns the Vite plugin `writeBundle` build/static-export choreography and
+  exposes a public app-shell helper, leaving `vite-plugin.ts` focused on dev middleware and hook
+  delegation while preserving plugin `onBuild` output evidence.
 
 Recent gates:
 
@@ -593,4 +596,15 @@ Round149 app-shell static export diagnostic seam evidence:
 - `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "formats generated export task diagnostics|scaffolds real template files|runs .* with the built stylesheet href"`
+- `pnpm exec tsc --noEmit --pretty false`
+
+Round160 app-shell Vite plugin build boundary evidence:
+
+- `packages/server/src/vite-plugin-build.ts` now owns SPEC §9.5 Vite plugin `writeBundle`
+  build/output/static-export execution, so `packages/server/src/vite-plugin.ts` only wires dev
+  middleware and delegates the build hook.
+- `@jiso/server/app-shell/vite` now exports `writeJisoAppShellVitePluginBuild()`, and
+  `packages/server/src/api/app.test.ts` pins that helper through root, app-shell, and package
+  subpath barrels.
+- `pnpm exec vitest --run packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
