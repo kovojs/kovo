@@ -211,6 +211,13 @@ instead of patching process streams inside the monolith.
 
 Latest evidence:
 
+- Broad mini-wave gate after compiler/app-shell/harness/Drizzle/runtime/UI integrations:
+  `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
+  `pnpm run test:conformance`; `pnpm run check:build`. Evidence: main worktree through
+  `29752b8b` passed 844 formatted files, 744 lint/typechecked files, 7 typechecked
+  example/conformance projects, 248 test files / 2477 tests, 5 browser files / 16 tests,
+  Drizzle/Better Auth/auth/webhook/app-shell conformance suites, and production build / emit
+  checks.
 - CLI capture command fixture slice:
   `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
