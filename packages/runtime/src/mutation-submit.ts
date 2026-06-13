@@ -1,11 +1,11 @@
 import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
 
-import { applyMutationResponseToDom } from './apply-path.js';
-import type {
-  AppliedMutationResponse,
-  AppliedMutationResponseToDom,
-  ApplyMutationResponseToDomOptions,
-} from './apply-path.js';
+import {
+  applyMutationResponseToDom,
+  type AppliedMutationResponse,
+  type AppliedMutationResponseToDom,
+  type ApplyMutationResponseToDomOptions,
+} from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';

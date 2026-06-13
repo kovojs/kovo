@@ -241,6 +241,19 @@ Closed evidence so far:
   response and deferred-stream application into `apply-mutation-response.ts` and
   `apply-deferred-stream.ts`; `mutation-response.test.ts` proves direct split-module exports still
   share malformed-query handling, hooks, and aggregation behavior.
+- Query store/apply responsibilities are split: `query-store.ts` now owns only store identity,
+  snapshots, and subscriptions, while `query-apply.ts` owns chunk application, hydrated script
+  discovery, and the hydration replay ledger shared by mutation responses, typed-read refetch, and
+  browser hydration (SPEC.md §9.1/§9.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts
+packages/runtime/src/mutation-response.test.ts packages/runtime/src/broadcast.test.ts
+packages/runtime/src/index.test.ts`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/query-apply.ts packages/runtime/src/query-store.ts
+packages/runtime/src/query.ts packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader.ts
+packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-submit.ts
+packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`.
 
 Open:
 
@@ -259,6 +272,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-submit.ts`
+- `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-store.ts packages/runtime/src/query.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader.ts packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`
 - `git diff --check`
 
 ## Phase 5 - Server

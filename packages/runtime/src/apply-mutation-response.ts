@@ -1,8 +1,5 @@
-import {
-  applyQueryChunksToStore,
-  type QueryApplyInterposition,
-  type QueryStore,
-} from './query-store.js';
+import { applyQueryChunksToStore, type QueryApplyInterposition } from './query-apply.js';
+import type { QueryStore } from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';

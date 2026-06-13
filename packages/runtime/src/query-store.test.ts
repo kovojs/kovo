@@ -5,10 +5,10 @@ import {
   applyQueryChunksToStore,
   applyQueryChunkToStore,
   createQueryScriptHydrationLedger,
-  createQueryStore,
   hydrateQueryScripts,
   queryScriptsFromRoot,
-} from './query-store.js';
+} from './query-apply.js';
+import { createQueryStore } from './query-store.js';
 
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();

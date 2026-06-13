@@ -7,7 +7,7 @@ import { reportRuntimeContextError } from './error-policy.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
-import type { QueryScriptLike } from './query-store.js';
+import type { QueryScriptLike } from './query-apply.js';
 
 export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
 

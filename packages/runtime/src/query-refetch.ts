@@ -1,10 +1,13 @@
-import { applyMutationResponseToStore } from './apply-path.js';
-import type { AppliedMutationResponse } from './apply-path.js';
+import {
+  applyMutationResponseToStore,
+  type AppliedMutationResponse,
+} from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
-import { createQueryScriptHydrationLedger } from './query-store.js';
-import type { QueryScriptLike, QueryStore } from './query-store.js';
+import { createQueryScriptHydrationLedger } from './query-apply.js';
+import type { QueryScriptLike } from './query-apply.js';
+import type { QueryStore } from './query-store.js';
 
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;

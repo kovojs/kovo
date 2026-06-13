@@ -1,4 +1,4 @@
-import { applyMutationResponseToRuntime } from './apply-path.js';
+import { applyMutationResponseToRuntime } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MorphFragment, MorphRoot } from './morph.js';

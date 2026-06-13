@@ -17,18 +17,16 @@ export type {
 } from './query-bindings.js';
 export {
   createQueryScriptHydrationLedger,
-  createQueryStore,
   hydrateQueryScripts,
   queryScriptsFromRoot,
-} from './query-store.js';
+} from './query-apply.js';
+export { createQueryStore } from './query-store.js';
 export type {
   QueryScriptHydrationLedger,
   QueryScriptLike,
   QueryScriptRootLike,
-  QuerySnapshot,
-  QueryStore,
-  QueryUpdatePlan,
-} from './query-store.js';
+} from './query-apply.js';
+export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
 export { refetchQueries } from './query-refetch.js';
 export type {
   QueryRefetchFetch,

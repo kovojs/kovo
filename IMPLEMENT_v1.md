@@ -44,6 +44,20 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P4 Drizzle extraction has ts-morph-backed project/table/write coverage, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage. Round-2 audit caveat 2026-06-11: source-mode/query extraction still includes string/regex parsing and AST discoveries are rewritten back into source text, so end-to-end ts-morph extraction remains open in `plans/codebase-quality-round2.md` Phase 3.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
+      Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query
+      value identity/snapshot/subscription storage, while `packages/runtime/src/query-apply.ts`
+      owns shared query chunk application, hydrated script discovery, and hydration replay
+      ledgers for mutation responses, typed-read refetch, and browser hydration (SPEC §9.1/§9.4).
+      Same-session evidence: `pnpm exec vitest --run packages/runtime/src/query-store.test.ts
+packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm exec vp check
+packages/runtime/src/query-apply.ts packages/runtime/src/query-store.ts
+packages/runtime/src/query.ts packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader.ts
+packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-submit.ts
+packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
 - [x] FW227 nullable binding paths (SPEC §4.8, §6.2): optional-segment (`?.`) path grammar lowered by the compiler (P1), shared empty-rendering semantics in server renderer and loader/stamps (P2/P5), null-aware path typing against inferred query shapes with the leftJoin-nullability proof under `vp check` (P5), and a golden teaching error.
       Evidence 2026-06-11: `packages/compiler/src/query-bindings.test.ts` covers optional

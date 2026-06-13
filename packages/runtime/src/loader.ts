@@ -19,7 +19,7 @@ import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
 import { installQueryVisibleReturnRefetch } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
-import { queryScriptsFromRoot } from './query-store.js';
+import { queryScriptsFromRoot } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 
 export interface JisoLoaderOptions {
