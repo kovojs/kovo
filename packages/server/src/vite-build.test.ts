@@ -38,6 +38,7 @@ describe('server app shell Vite build seam', () => {
       await mkdir(join(distDir, 'assets'), { recursive: true });
       await writeFile(join(distDir, 'assets/cart.css'), '.cart{display:grid}');
       await writeFile(join(distDir, 'assets/cart.js'), 'export const cartAsset = true;');
+      await writeFile(join(distDir, 'assets/catalog.json'), '{"items":2}');
 
       const build = createJisoAppShellViteBuild({
         app: createApp({
@@ -79,7 +80,16 @@ describe('server app shell Vite build seam', () => {
 
       const output = await writeJisoAppShellViteBuildOutput(build, {
         outDir: distDir,
-        staticExport: { outDir },
+        staticExport: {
+          assets: [
+            {
+              contentType: 'application/json; charset=utf-8',
+              path: '/assets/catalog.json',
+              source: join(distDir, 'assets/catalog.json'),
+            },
+          ],
+          outDir,
+        },
       });
       expect(output.clientModuleOutputPlan).toEqual([
         {
@@ -97,6 +107,11 @@ describe('server app shell Vite build seam', () => {
           contentType: 'text/javascript; charset=utf-8',
           path: '/assets/cart.js',
           source: join(distDir, 'assets/cart.js'),
+        },
+        {
+          contentType: 'application/json; charset=utf-8',
+          path: '/assets/catalog.json',
+          source: join(distDir, 'assets/catalog.json'),
         },
       ]);
       await expect(readFile(join(distDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
@@ -119,6 +134,9 @@ describe('server app shell Vite build seam', () => {
       );
       await expect(readFile(join(outDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
         'export const cartAsset = true;',
+      );
+      await expect(readFile(join(outDir, 'assets/catalog.json'), 'utf8')).resolves.toBe(
+        '{"items":2}',
       );
     } finally {
       await Promise.all([

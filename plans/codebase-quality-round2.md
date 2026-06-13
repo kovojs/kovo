@@ -421,11 +421,13 @@ Static export option/result contracts now live with the artifact/manifest types 
 contracts through the `static-export.ts` orchestrator facade.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
-adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
-exported from the public app-shell Vite subpath, leaving the plugin module focused on middleware
-and hook delegation. Vite static export inventory/manifest option helpers now reject `outDir`
-with FW229 instead of silently dropping write targets, so R6 dry-run preview/export introspection
-cannot be mistaken for an output write path.
+adoption. Vite app-shell build output also reuses one planned SPEC §9.5 static-export asset list
+for both `staticExportAssets` and the write export, so custom `staticExport.assets` no longer
+diverge between the observable plan and exported files. Vite plugin `writeBundle`
+build/static-export execution now lives in a focused helper exported from the public app-shell Vite
+subpath, leaving the plugin module focused on middleware and hook delegation. Vite static export
+inventory/manifest option helpers now reject `outDir` with FW229 instead of silently dropping write
+targets, so R6 dry-run preview/export introspection cannot be mistaken for an output write path.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -452,6 +454,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 - `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts`
 - `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`

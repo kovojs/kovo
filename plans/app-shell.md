@@ -734,3 +734,18 @@ Round208 app-shell static-export owner forwarding evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round214 app-shell Vite build-output asset-plan evidence:
+
+- `packages/server/src/vite-build-output.ts` now computes the SPEC §9.5 Vite-backed static export
+  asset list once for build-output writes, exposes that same list on `staticExportAssets`, and
+  passes it directly into `exportStaticApp()` instead of letting the output summary and write path
+  diverge.
+- `packages/server/src/vite-build.test.ts` proves custom `staticExport.assets` appear in the
+  observable build-output asset plan and are written by the static export alongside manifest
+  assets.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
