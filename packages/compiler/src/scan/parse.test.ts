@@ -11,6 +11,7 @@ import {
   jsxExpressions,
   mutationHandlers,
   parseComponentModule,
+  soleJsxExpressionChild,
   solePropertyAccessPath,
   soleWrappedPropertyAccessPath,
   stringLiteralArrayValues,
@@ -74,6 +75,46 @@ export const CartBadge = component('cart-badge', {
         start: source.indexOf('cart.count'),
       }),
     );
+  });
+
+  it('records sole JSX expression children as parsed child facts', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <section>
+      <cart-badge>
+        {cart.count}
+      </cart-badge>
+      <cart-label>Count: {cart.count}</cart-label>
+      <cart-wrap><span>{cart.count}</span></cart-wrap>
+    </section>
+  ),
+});
+`;
+    const model = parseComponentModule('cart-badge.tsx', source);
+    const elements = jsxElements(model);
+    const badge = elements.find((element) => element.tag === 'cart-badge');
+    const label = elements.find((element) => element.tag === 'cart-label');
+    const wrap = elements.find((element) => element.tag === 'cart-wrap');
+
+    expect(badge).toBeDefined();
+    expect(label).toBeDefined();
+    expect(wrap).toBeDefined();
+    if (!badge || !label || !wrap) throw new Error('expected JSX fixture elements');
+
+    expect(badge.childNonWhitespaceCount).toBe(1);
+    expect(badge.childExpressionContainers).toEqual([
+      {
+        end: source.indexOf('{cart.count}') + '{cart.count}'.length,
+        start: source.indexOf('{cart.count}'),
+      },
+    ]);
+    expect(soleJsxExpressionChild(badge, model)?.solePropertyAccessPath).toBe('cart.count');
+
+    expect(label.childNonWhitespaceCount).toBe(2);
+    expect(soleJsxExpressionChild(label, model)).toBeNull();
+    expect(wrap.childNonWhitespaceCount).toBe(1);
+    expect(soleJsxExpressionChild(wrap, model)).toBeNull();
   });
 
   it('extracts one property access expression with optional receiver segments', () => {

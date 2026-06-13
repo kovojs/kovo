@@ -102,6 +102,8 @@ export interface JsxAttributeModel {
 export interface JsxElementModel {
   ancestorTags: readonly string[];
   attributes: readonly JsxAttributeModel[];
+  childExpressionContainers: readonly SourceSpan[];
+  childNonWhitespaceCount: number;
   childSource: string;
   closingStart: number;
   end: number;
@@ -405,6 +407,23 @@ export function jsxElementChildBody(element: JsxElementModel): JsxElementChildBo
     offset: element.openingEnd + leadingWhitespace,
     source: body,
   };
+}
+
+export function soleJsxExpressionChild(
+  element: JsxElementModel,
+  model: ComponentModuleModel,
+): JsxExpressionModel | null {
+  if (element.childNonWhitespaceCount !== 1) return null;
+
+  const [container] = element.childExpressionContainers;
+  if (!container) return null;
+
+  return (
+    model.jsxExpressions.find(
+      (expression) =>
+        expression.containerStart === container.start && expression.containerEnd === container.end,
+    ) ?? null
+  );
 }
 
 export function callExpressions(model: ComponentModuleModel): CallExpressionModel[] {
@@ -1178,6 +1197,7 @@ function jsxElementModel(
       ];
     }),
     childSource: ts.isJsxElement(node) ? source.slice(openingElement.getEnd(), closingStart) : '',
+    ...jsxChildFacts(node, sourceFile),
     closingStart,
     end: node.getEnd(),
     openingEnd: openingElement.getEnd(),
@@ -1187,6 +1207,46 @@ function jsxElementModel(
     selfClosing: !ts.isJsxElement(node),
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
+  };
+}
+
+function jsxChildFacts(
+  node: ts.JsxElement | ts.JsxSelfClosingElement,
+  sourceFile: ts.SourceFile,
+): Pick<JsxElementModel, 'childExpressionContainers' | 'childNonWhitespaceCount'> {
+  if (!ts.isJsxElement(node)) {
+    return {
+      childExpressionContainers: [],
+      childNonWhitespaceCount: 0,
+    };
+  }
+
+  const childExpressionContainers: SourceSpan[] = [];
+  let childNonWhitespaceCount = 0;
+
+  for (const child of node.children) {
+    if (ts.isJsxText(child)) {
+      if (!child.containsOnlyTriviaWhiteSpaces) childNonWhitespaceCount += 1;
+      continue;
+    }
+
+    if (ts.isJsxExpression(child)) {
+      if (child.expression) {
+        childNonWhitespaceCount += 1;
+        childExpressionContainers.push({
+          end: child.getEnd(),
+          start: child.getStart(sourceFile),
+        });
+      }
+      continue;
+    }
+
+    childNonWhitespaceCount += 1;
+  }
+
+  return {
+    childExpressionContainers,
+    childNonWhitespaceCount,
   };
 }
 

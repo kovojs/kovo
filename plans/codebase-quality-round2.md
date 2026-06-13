@@ -86,7 +86,9 @@ static `<Link>`, and view-transition lowering use explicit patch helpers in seve
 JSX spans now drive static `<Link>` tag/`href` patching and view-transition style insertion without
 reconstructing child or opening-tag source. Server render host stamping emits parsed attribute
 replacement/insertion patches for handlers, `fw-c`, `fw-deps`, and `fw-state`. Many validators now
-consume parser/model facts instead of regex or source-string facts.
+consume parser/model facts instead of regex or source-string facts. Inline text binding and
+data-bind drift validation now consume parser-provided sole JSX child facts instead of re-reading
+trimmed child source.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -107,6 +109,8 @@ Latest evidence:
 - exact `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `pnpm exec vitest --run packages/compiler/src/view-transitions.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts`
 - exact `pnpm exec vp check packages/compiler/src/lower/view-transitions.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/shared.ts`
+- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/stamps.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

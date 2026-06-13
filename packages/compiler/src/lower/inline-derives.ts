@@ -1,6 +1,7 @@
 import {
   jsxElements,
   jsxExpressions,
+  soleJsxExpressionChild,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -160,10 +161,7 @@ function inlineTextBinding(
   if (element.selfClosing) return null;
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
 
-  const content = element.childSource.trim();
-  if (!content.startsWith('{') || !content.endsWith('}')) return null;
-
-  const expression = soleJsxExpressionForElement(element, model)?.solePropertyAccessPath ?? null;
+  const expression = soleJsxExpressionChild(element, model)?.solePropertyAccessPath ?? null;
   if (!expression) return null;
 
   const query = expression.split('.', 1)[0];
@@ -202,17 +200,6 @@ function soleKnownQueryPath(
 
   const query = path.split('.', 1)[0];
   return query && knownQueries.has(query) ? path : null;
-}
-
-function soleJsxExpressionForElement(
-  element: JsxElementModel,
-  model: ComponentModuleModel,
-): JsxExpressionModel | null {
-  const expressions = jsxExpressions(model).filter(
-    (expression) =>
-      expression.start >= element.openingEnd && expression.end <= element.closingStart,
-  );
-  return expressions.length === 1 ? (expressions[0] ?? null) : null;
 }
 
 function isJsxAttributeExpression(
