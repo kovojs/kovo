@@ -110,6 +110,19 @@ Implemented areas:
   `createJisoAppShellViteStaticExportBuildFromManifestFile()` and delegate write, manifest, and
   inventory replay through the build-backed export helpers instead of carrying four duplicated
   wrapper bodies.
+- Plugin-time Vite static-export option projection now rejects stale runtime `distDir` fields with
+  FW229 before app replay or file writes, keeping SPEC §9.5 static-host asset roots owned by the
+  Vite output directory instead of an inert compatibility option.
+
+Round287b plugin-time Vite static-export option guard evidence:
+
+- `packages/server/src/vite-static-export-options.ts` now rejects `distDir` on
+  plugin/build-output static-export options before asset planning, replay, or writes.
+- `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-plugin-build.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell while the dynamic session shell stays non-exportable"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs -t "serves generated docs HTML through the app shell before static export copies modules"`
+- `pnpm exec tsc --noEmit --pretty false`
 
 Round284 manifest-file Vite replay cleanup evidence:
 

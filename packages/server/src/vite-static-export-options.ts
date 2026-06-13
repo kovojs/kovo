@@ -117,6 +117,7 @@ export function jisoAppShellViteBuildOutputStaticExportPlan(
   options: JisoAppShellViteBuildOutputStaticExportOptions,
   distDir: string | URL,
 ): JisoAppShellViteBuildOutputStaticExportPlan {
+  assertViteBuildOutputStaticExportOptions(options);
   const { assets, ...exportOptions } = options;
   const staticExportAssets = jisoAppShellViteBuildStaticExportAssets(build, {
     ...(assets === undefined ? {} : { assets }),
@@ -174,6 +175,20 @@ function assertViteStaticExportInventoryOptions(options: object): void {
       [
         'Vite app-shell static export inventory/manifest tasks are dry runs and must not receive outDir.',
         'Use exportJisoAppShellViteBuild() or exportJisoAppShellViteBuildFromManifestFile() to write files.',
+      ].join(' '),
+    ),
+  ]);
+}
+
+function assertViteBuildOutputStaticExportOptions(options: object): void {
+  if (!Object.prototype.hasOwnProperty.call(options, 'distDir')) return;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      'vite-static-export',
+      [
+        'Vite app-shell plugin/build-output static export uses the Vite output directory as its asset root and must not receive distDir.',
+        'Configure plugin build.outDir or Vite output.dir instead.',
       ].join(' '),
     ),
   ]);

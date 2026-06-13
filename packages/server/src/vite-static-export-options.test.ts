@@ -304,4 +304,67 @@ describe('server app shell Vite static export options boundary', () => {
       ]);
     }
   });
+
+  it('rejects build-only distDir on plugin-time static export options', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-reject-dist-'));
+    const staleDistDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-reject-stale-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-output-reject-out-'));
+
+    try {
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/plugin', {
+              page() {
+                return '<main>Plugin</main>';
+              },
+            }),
+          ],
+        }),
+        manifest: {
+          'src/plugin.client.ts': {
+            css: ['assets/plugin.css'],
+            file: 'assets/plugin.js',
+          },
+        },
+        routeEntryMap: {
+          '/plugin': 'src/plugin.client.ts',
+        },
+      });
+
+      let error: unknown;
+      try {
+        jisoAppShellViteBuildOutputStaticExportPlan(
+          build,
+          {
+            distDir: staleDistDir,
+            outDir,
+          } as unknown as Parameters<typeof jisoAppShellViteBuildOutputStaticExportPlan>[1],
+          distDir,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(StaticExportError);
+      expect(error).toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              'Vite app-shell plugin/build-output static export uses the Vite output directory as its asset root and must not receive distDir.',
+            ),
+            routePath: 'vite-static-export',
+          },
+        ],
+      });
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(staleDistDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
 });

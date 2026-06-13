@@ -161,6 +161,15 @@ so the monolith no longer assembles those document-region/query-script projectio
 
 Latest evidence:
 
+- Phase 5 plugin-time Vite static-export option guard slice:
+  `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-plugin-build.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell while the dynamic session shell stays non-exportable"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs -t "serves generated docs HTML through the app shell before static export copies modules"`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/vite-static-export-options.ts` now rejects stale runtime `distDir` fields on
+  plugin/build-output static-export options before asset planning, replay, or writes, keeping
+  SPEC §9.5 Vite static-host asset roots owned by the build output directory.
 - Phase 5 app aggregate client-module guard slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;
