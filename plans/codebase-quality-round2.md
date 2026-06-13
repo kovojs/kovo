@@ -659,6 +659,14 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `pnpm --filter @jiso/conformance-drizzle-pin test`, exact
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Evidence 2026-06-13 round269: wrapped static-expression surfaces such as
+      `(query(...) satisfies unknown)`, `(domain(...) as unknown)`, and wrapped `write(...)`
+      action initializers now remain visible to project/source extraction; opaque wrapped domain
+      aliases degrade to FW406 instead of disappearing. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin exact query/domain extraction plus FW406
+      degradation under package and real `drizzle-orm` Postgres receivers. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm --filter @jiso/conformance-drizzle-pin test`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -677,6 +685,10 @@ Latest evidence:
 - `pnpm exec vitest --run packages/drizzle/src`
 - `pnpm --filter @jiso/conformance-drizzle-pin test`
 - exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/drizzle/src`
+- `pnpm --filter @jiso/conformance-drizzle-pin test`
+- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 4 - Runtime

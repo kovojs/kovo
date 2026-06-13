@@ -1578,6 +1578,86 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins wrapped query and domain calls under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'declare const dynamicActions: any;',
+          '',
+          'export const productDomain = (domain({',
+          '  add: (write(addItem) satisfies unknown),',
+          '} as const) satisfies unknown);',
+          'export const dynamicProductDomain = (domain(dynamicActions) as unknown);',
+          '',
+          "export const productQuery = (query('product/wrapped-real', {",
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '} as const) satisfies unknown);',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'dynamicProductDomain.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:16',
+          },
+        ],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/wrapped-real',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:18',
+      },
+    ]);
+  });
+
   it('pins typed domain action spread members as FW406 under real Drizzle imports', () => {
     const graph = extractTouchGraphFromProject({
       files: [

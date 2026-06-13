@@ -640,11 +640,12 @@ function projectDomainWriteCallbacks(
     const domainName = declaration.getNameNode();
     const initializer = declaration.getInitializer();
     if (!Node.isIdentifier(domainName) || !initializer) continue;
-    if (!Node.isCallExpression(initializer)) continue;
-    const expression = initializer.getExpression();
+    const domainCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(domainCall)) continue;
+    const expression = domainCall.getExpression();
     if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
 
-    const domainObject = domainWriteObject(initializer.getArguments()[0]);
+    const domainObject = domainWriteObject(domainCall.getArguments()[0]);
     if (!domainObject.body) continue;
 
     for (const property of domainWriteProperties(domainObject.body)) {
@@ -2170,12 +2171,14 @@ function extractQueryDefinitionsFromSourceFile(
     if (!statement || statement.getDeclarationKind() !== 'const') continue;
 
     const initializer = declaration.getInitializer();
-    if (!initializer || !Node.isCallExpression(initializer)) continue;
+    if (!initializer) continue;
+    const queryCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(queryCall)) continue;
 
-    const expression = initializer.getExpression();
+    const expression = queryCall.getExpression();
     if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
 
-    const [queryArgument, bodyArgument] = initializer.getArguments();
+    const [queryArgument, bodyArgument] = queryCall.getArguments();
     if (!Node.isStringLiteral(queryArgument)) {
       continue;
     }
@@ -4967,11 +4970,12 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
     const domainName = declaration.getNameNode();
     const initializer = declaration.getInitializer();
     if (!Node.isIdentifier(domainName) || !initializer) continue;
-    if (!Node.isCallExpression(initializer)) continue;
-    const expression = initializer.getExpression();
+    const domainCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(domainCall)) continue;
+    const expression = domainCall.getExpression();
     if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
 
-    const domainObject = domainWriteObject(initializer.getArguments()[0]);
+    const domainObject = domainWriteObject(domainCall.getArguments()[0]);
     if (!domainObject.body) continue;
 
     for (const property of domainWriteProperties(domainObject.body)) {
@@ -4999,11 +5003,12 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
       const domainName = declaration.getNameNode();
       const initializer = declaration.getInitializer();
       if (!Node.isIdentifier(domainName) || !initializer) continue;
-      if (!Node.isCallExpression(initializer)) continue;
-      const expression = initializer.getExpression();
+      const domainCall = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isCallExpression(domainCall)) continue;
+      const expression = domainCall.getExpression();
       if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
 
-      const domainArgument = initializer.getArguments()[0];
+      const domainArgument = domainCall.getArguments()[0];
       const domainObject = domainWriteObject(domainArgument);
       if (domainObject.unresolved && domainArgument) {
         unresolved.push({
@@ -5256,11 +5261,13 @@ function domainWritePropertyFromDeclaration(
 function writeCallbackFunction(
   initializer: Node | undefined,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
-  if (!initializer || !Node.isCallExpression(initializer)) return null;
-  const expression = initializer.getExpression();
+  if (!initializer) return null;
+  const writeCall = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isCallExpression(writeCall)) return null;
+  const expression = writeCall.getExpression();
   if (!Node.isIdentifier(expression) || expression.getText() !== 'write') return null;
 
-  for (const argument of initializer.getArguments().toReversed()) {
+  for (const argument of writeCall.getArguments().toReversed()) {
     const callback = writeCallbackArgumentFunction(argument);
     if (callback) return callback;
   }

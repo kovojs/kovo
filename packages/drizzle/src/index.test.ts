@@ -11334,6 +11334,104 @@ export interface CommerceInvalidationSets {
     );
   });
 
+  it('extracts wrapped query declarations and domain write callbacks', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'export const productDomain = (domain({',
+          '  add: (write(addItem) satisfies unknown),',
+          '}) as unknown);',
+          '',
+          'export const productQuery = (query("product/wrapped", {',
+          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '}) satisfies unknown);',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/wrapped',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.domain.ts:16',
+      },
+    ]);
+  });
+
+  it('keeps wrapped opaque domain actions visible as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'declare const dynamicActions: any;',
+          '',
+          'export const productDomain = (domain(dynamicActions) satisfies unknown);',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'productDomain.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:3',
+          },
+        ],
+      },
+    });
+  });
+
   it('keeps insert-select nested reads classified as insert-select only', () => {
     const graph = extractTouchGraphFromSource([
       {
