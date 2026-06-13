@@ -97,6 +97,7 @@ export interface ToastPartAttributeOptions {
 
 export interface ToastActionAttributeOptions extends ToastState {
   actionValue?: string;
+  dismissOnAction?: boolean;
 }
 
 export type ToastChangeValue = Readonly<{
@@ -194,6 +195,7 @@ export function toastActionAttributes(
   return Object.freeze({
     ...toastDataAttributes(options),
     'data-action': '',
+    ...(options.dismissOnAction === false ? { 'data-dismiss-on-action': 'false' } : {}),
     disabled: options.disabled === true,
     type: 'button',
     ...(options.actionValue === undefined ? {} : { value: options.actionValue }),

@@ -75,6 +75,34 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             Undo
           </button>
           <button
+            {...toastActionAttributes({
+              ...toastState,
+              actionValue: 'keep-open',
+              dismissOnAction: false,
+            })}
+            data-toast-cancel-dismiss=""
+            onClick={() => {
+              if (!event) return;
+              Object(event)['preventDefault']?.call(event);
+              state.open = true;
+
+              const doc = Reflect['get'](globalThis, 'document');
+              const toast = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-toast')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
+                : undefined;
+              if (toast) {
+                toast['hidden'] = false;
+                Object(toast)['setAttribute']?.call(toast, 'data-state', 'open');
+              }
+              if (output) output['textContent'] = 'canceled';
+            }}
+          >
+            Keep open
+          </button>
+          <button
             {...toastCloseAttributes(toastState)}
             onClick={() => {
               state.open = false;

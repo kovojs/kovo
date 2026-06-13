@@ -546,6 +546,11 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_2"/,
     );
+    expect(toast).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_3"/,
+    );
+    expect(toast).toContain('data-toast-cancel-dismiss=""');
+    expect(toast).toContain('dismissOnAction: false');
   });
 
   it('executes generated client behavior for the stateful demos', () => {
@@ -1203,7 +1208,15 @@ describe('compiled interactive gallery demos', () => {
     expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
 
     const toastState = { open: true };
-    clientHandler(toast, 'GalleryToastDemo$button_click_2')(new Event('click'), {
+    const canceledToastClick = new Event('click', { cancelable: true });
+    clientHandler(toast, 'GalleryToastDemo$button_click_2')(canceledToastClick, {
+      params: {},
+      signal,
+      state: toastState,
+    });
+    expect(canceledToastClick.defaultPrevented).toBe(true);
+    expect(toastState).toEqual({ open: true });
+    clientHandler(toast, 'GalleryToastDemo$button_click_3')(new Event('click'), {
       params: {},
       signal,
       state: toastState,
@@ -1504,6 +1517,17 @@ describe('compiled interactive gallery demos', () => {
 
       const toast = evaluateClientModule('toast-demo.client.js', { document });
       const toastState = { open: true };
+      const canceledToastClick = new Event('click', { cancelable: true });
+      clientHandler(toast, 'GalleryToastDemo$button_click_2')(canceledToastClick, {
+        params: {},
+        signal,
+        state: toastState,
+      });
+      expect(canceledToastClick.defaultPrevented).toBe(true);
+      expect(toastState).toEqual({ open: true });
+      expect(element(document, 'gallery-toast').hidden).toBe(false);
+      expect(element(document, 'gallery-toast').attrs['data-state']).toBe('open');
+      expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('canceled');
       clientHandler(toast, 'GalleryToastDemo$section_keydown')(
         Object.assign(new Event('keydown'), { key: 'Enter' }),
         { params: {}, signal, state: toastState },

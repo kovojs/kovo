@@ -2502,6 +2502,12 @@ export function ToastDemo(): string {
           children: 'View deploy',
           id: 'gallery-toast',
         })}
+        {ToastAction.definition.render({
+          actionValue: 'keep-open',
+          children: 'Keep open',
+          dismissOnAction: false,
+          id: 'gallery-toast',
+        })}
         {ToastClose.definition.render({ children: 'Dismiss', id: 'gallery-toast' })}
       </>
     ),

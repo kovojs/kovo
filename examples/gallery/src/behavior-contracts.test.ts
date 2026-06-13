@@ -550,6 +550,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'data-state="open" data-variant="success"',
     'role="status"',
     'data-action=""',
+    'data-dismiss-on-action="false"',
     'data-dismiss=""',
     'data-state="closed" data-variant="error" hidden',
     'role="alert"',

@@ -623,6 +623,8 @@ describe('gallery demo fixtures', () => {
     expect(toast.html).toContain('data-part="description" id="gallery-toast-description"');
     expect(toast.html).toContain('data-action=""');
     expect(toast.html).toContain('type="button" value="open-deploy"');
+    expect(toast.html).toContain('data-dismiss-on-action="false"');
+    expect(toast.html).toContain('type="button" value="keep-open"');
     expect(toast.html).toContain('data-dismiss=""');
     expect(toast.html).toContain('data-state="closed" data-variant="error" hidden');
     expect(toast.html).toContain('role="alert"');

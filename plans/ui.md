@@ -72,7 +72,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       wrappers, avoids trapping keyboard navigation for disabled/empty collections, and proves
       generated roving focus plus browser `FormData` updates. Slider now preserves native range
       input `form` ownership through headless/styled wrappers, static gallery contracts, refreshed
-      generated artifacts, and browser-backed external `FormData` evidence.
+      generated artifacts, and browser-backed external `FormData` evidence. Toast action controls
+      now expose non-dismissing action intent through headless/styled attrs, and the compiled
+      gallery proves a canceled action keeps visible/open state before a later dismiss closes it.
 
 ## Open Work
 
@@ -170,7 +172,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       Evidence 2026-06-13: `sliderInputAttributes()` and styled `SliderInput` now preserve native
       external `form` ownership for the range control; static and compiled gallery routes prove the
       authored TSX remains generated-artifact fresh and Chromium `FormData` follows the generated
-      input handler from `25` to `75`.
+      input handler from `25` to `75`. Evidence 2026-06-13:
+      `toastActionAttributes({ dismissOnAction: false })` and styled `ToastAction` now preserve a
+      non-dismissing action marker; static fixtures, refreshed generated artifacts, generated-client
+      tests, and a browser-backed compiled gallery test prove the canceled toast action prevents
+      default, leaves `fw-state`/DOM visibility open, and a following dismiss closes the toast.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -189,6 +195,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t slider)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/slider.ts packages/headless-ui/src/primitives/slider.test.ts packages/ui/src/slider.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Toast non-dismissing action and compiled cancellation slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/toast.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t toast`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t toast)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/toast.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/toast.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
       `git diff --check`.
 - [x] Checkbox-group form ownership and keyboard/focus closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox-group.test.ts`;

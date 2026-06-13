@@ -1920,6 +1920,9 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     const toastRoot = mountInteractiveDemo(GalleryToastDemo);
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
+    const cancelDismiss = required(
+      toastRoot.querySelector<HTMLButtonElement>('[data-toast-cancel-dismiss]'),
+    );
     const dismiss = required(toastRoot.querySelector<HTMLButtonElement>('[data-dismiss]'));
     const toastOutput = required(
       toastRoot.querySelector<HTMLOutputElement>('[data-demo-state="toast-open"]'),
@@ -1932,6 +1935,15 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(toast.getAttribute('data-state')).toBe('open');
     expect(toast.hidden).toBe(false);
     expect(toastOutput.textContent).toBe('open');
+
+    cancelDismiss.click();
+
+    await vi.waitFor(() => {
+      expect(toastRoot.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(toast.hidden).toBe(false);
+      expect(toast.getAttribute('data-state')).toBe('open');
+      expect(toastOutput.textContent).toBe('canceled');
+    });
 
     dismiss.click();
 

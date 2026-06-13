@@ -1439,6 +1439,11 @@ describe('@jiso/ui styled package foundation', () => {
         actionValue: 'open-deploy',
         children: 'View',
         id: 'deploy-toast',
+      })}${ToastAction.definition.render({
+        actionValue: 'keep-open',
+        children: 'Keep open',
+        dismissOnAction: false,
+        id: 'deploy-toast',
       })}${ToastClose.definition.render({ children: 'Dismiss', id: 'deploy-toast' })}`,
       descriptionId: 'deploy-toast-description',
       id: 'deploy-toast',
@@ -1470,7 +1475,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(viewport).toContain('data-part="title" id="deploy-toast-title"');
     expect(viewport).toContain('data-part="description" id="deploy-toast-description"');
     expect(viewport).toContain('data-action=""');
+    expect(viewport).toContain('data-dismiss-on-action="false"');
     expect(viewport).toContain('type="button" value="open-deploy"');
+    expect(viewport).toContain('type="button" value="keep-open"');
     expect(viewport).toContain('data-dismiss=""');
     expect(hiddenToast).toContain('data-state="closed"');
     expect(hiddenToast).toContain('hidden id="hidden-toast"');

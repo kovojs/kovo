@@ -47,6 +47,7 @@ export interface ToastActionProps {
   children?: string;
   class?: ClassValue;
   disabled?: boolean;
+  dismissOnAction?: boolean;
   id: string;
   open?: boolean;
 }
@@ -184,6 +185,7 @@ export const ToastAction = component('toast-action', {
     const attrs = toastActionAttributes({
       ...(props.actionValue === undefined ? {} : { actionValue: props.actionValue }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.dismissOnAction === undefined ? {} : { dismissOnAction: props.dismissOnAction }),
       id: props.id,
       ...(props.open === undefined ? {} : { open: props.open }),
     });
@@ -192,6 +194,7 @@ export const ToastAction = component('toast-action', {
       <button
         class={cn(toastActionClassNames(), props.class)}
         data-action={attrs['data-action']}
+        data-dismiss-on-action={attrs['data-dismiss-on-action']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         data-variant={attrs['data-variant']}
