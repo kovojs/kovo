@@ -7624,6 +7624,65 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source domain actions from static object aliases and degrades opaque aliases', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'declare const dynamicActions: any;',
+          'const actions = { addItem: write(addItem) };',
+          '',
+          'export const cart = domain(actions);',
+          'export const dynamicCart = domain(dynamicActions);',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'dynamicCart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks opaque source domain action spreads as FW406 instead of dropping mutation surfaces', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -7874,6 +7933,70 @@ export interface CommerceInvalidationSets {
           },
         ],
         unresolved: [],
+      },
+    });
+  });
+
+  it('extracts project domain actions from static object aliases and degrades opaque aliases', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(db: PgDatabase, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'declare const dynamicActions: any;',
+            'const actions = { addItem: write(addItem) };',
+            '',
+            'export const cart = domain(actions);',
+            'export const dynamicCart = domain(dynamicActions);',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'dynamicCart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:13',
+          },
+        ],
       },
     });
   });

@@ -517,6 +517,13 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round260: external domain action objects such as
+      `domain(actionsAlias)` now resolve static object aliases through ts-morph symbols for source
+      and project mutation extraction, while opaque action aliases such as
+      `domain(dynamicActions)` degrade to `domainName.<spread>` FW406 entries instead of
+      disappearing. `packages/drizzle/src/index.test.ts` covers source/project behavior and
+      `conformance/drizzle-pin/src/index.test.ts` pins the project surface against real
+      `drizzle-orm` Postgres receiver types.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

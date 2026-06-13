@@ -644,10 +644,10 @@ function projectDomainWriteCallbacks(
     const expression = initializer.getExpression();
     if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
 
-    const domainObject = initializer.getArguments()[0];
-    if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
+    const domainObject = domainWriteObject(initializer.getArguments()[0]);
+    if (!domainObject.body) continue;
 
-    for (const property of domainWriteProperties(domainObject)) {
+    for (const property of domainWriteProperties(domainObject.body)) {
       const callback = writeCallbackFunction(property.initializer);
       if (!callback) continue;
 
@@ -4870,10 +4870,10 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
     const expression = initializer.getExpression();
     if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
 
-    const domainObject = initializer.getArguments()[0];
-    if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
+    const domainObject = domainWriteObject(initializer.getArguments()[0]);
+    if (!domainObject.body) continue;
 
-    for (const property of domainWriteProperties(domainObject)) {
+    for (const property of domainWriteProperties(domainObject.body)) {
       const callback = writeCallbackFunction(property.initializer);
       if (!callback) continue;
 
@@ -4902,17 +4902,24 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
       const expression = initializer.getExpression();
       if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
 
-      const domainObject = initializer.getArguments()[0];
-      if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
+      const domainArgument = initializer.getArguments()[0];
+      const domainObject = domainWriteObject(domainArgument);
+      if (domainObject.unresolved && domainArgument) {
+        unresolved.push({
+          name: `${domainName.getText()}.${UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER}`,
+          site: `${file.fileName}:${lineForIndex(file.source, domainArgument.getStart())}`,
+        });
+      }
+      if (!domainObject.body) continue;
 
-      for (const spread of unresolvedDomainWriteSpreads(domainObject)) {
+      for (const spread of unresolvedDomainWriteSpreads(domainObject.body)) {
         unresolved.push({
           name: `${domainName.getText()}.${UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER}`,
           site: `${file.fileName}:${lineForIndex(file.source, spread.getStart())}`,
         });
       }
 
-      for (const property of domainWriteProperties(domainObject)) {
+      for (const property of domainWriteProperties(domainObject.body)) {
         const initializer = property.initializer;
         if (!initializer || !Node.isCallExpression(initializer)) continue;
         const callExpression = initializer.getExpression();
@@ -4928,6 +4935,74 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
 
     return unresolved;
   });
+}
+
+interface DomainWriteObjectResolution {
+  body?: ObjectLiteralExpression;
+  unresolved: boolean;
+}
+
+function domainWriteObject(argument: Node | undefined): DomainWriteObjectResolution {
+  if (!argument) return { unresolved: true };
+  return domainWriteObjectFromNode(argument, new Set()) ?? { unresolved: true };
+}
+
+function domainWriteObjectFromNode(
+  node: Node,
+  seen: Set<string>,
+): DomainWriteObjectResolution | undefined {
+  // SPEC §10-§11: domain action objects are executable mutation surfaces; static aliases are
+  // followed through ts-morph symbols, while opaque aliases stay visible as FW406.
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
+
+  const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
+  if (seen.has(key)) return { unresolved: true };
+  seen.add(key);
+
+  for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
+    const body = domainWriteObjectFromDeclaration(declaration, seen);
+    if (body) return body;
+  }
+
+  const type = expression.getType();
+  return type.isAny() || type.isUnknown() ? { unresolved: true } : undefined;
+}
+
+function domainWriteObjectFromDeclaration(
+  declaration: Node,
+  seen: Set<string>,
+): DomainWriteObjectResolution | undefined {
+  if (Node.isVariableDeclaration(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
+  }
+
+  if (Node.isPropertyAssignment(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
+  }
+
+  if (Node.isShorthandPropertyAssignment(declaration)) {
+    return domainWriteObjectFromNode(declaration.getNameNode(), seen);
+  }
+
+  if (Node.isIdentifier(declaration)) {
+    const parent = declaration.getParent();
+    if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
+      const initializer = parent.getInitializer();
+      return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
+    }
+    if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+      const initializer = parent.getInitializer();
+      return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
+    }
+    if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+      return domainWriteObjectFromNode(parent.getNameNode(), seen);
+    }
+  }
+
+  return undefined;
 }
 
 function unresolvedDomainWriteSpreads(object: ObjectLiteralExpression): Node[] {
