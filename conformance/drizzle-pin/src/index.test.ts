@@ -2422,6 +2422,53 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(2);
   });
 
+  it('pins factory-returned typed receiver carriers as FW406 under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {}',
+            'declare function runReport(context: unknown): Promise<unknown[]>;',
+            'declare function makeContext(): { nested: { db: PgDatabase<any, any, any> } };',
+            'declare function makeFakeContext(): { nested: { db: FakeDb } };',
+            '',
+            "export const productQuery = query('product/factory-carrier', {",
+            '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '    void db;',
+            '    void fake;',
+            '    await runReport(makeFakeContext());',
+            '    await runReport(makeContext());',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver makeContext() to helper runReport().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:8',
+          },
+        ],
+        query: 'product/factory-carrier',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:8',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toHaveLength(1);
+  });
+
   it('does not fabricate project query facts from untyped query-loader receiver names', () => {
     const facts = extractQueryFactsFromProject({
       files: [

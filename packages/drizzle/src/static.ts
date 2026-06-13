@@ -7276,7 +7276,11 @@ function isReceiverArgumentReference(
       isReceiverCarrierIdentifier(node, carrierSymbolKeys) ||
       isReceiverContainerExpression?.(node) === true);
   const isMemberReference = isReceiverMemberExpression?.(node) === true;
-  if (!isIdentifierReference && !isMemberReference) {
+  const isContainerReference =
+    !Node.isObjectLiteralExpression(node) &&
+    !Node.isArrayLiteralExpression(node) &&
+    isReceiverContainerExpression?.(node) === true;
+  if (!isIdentifierReference && !isMemberReference && !isContainerReference) {
     return false;
   }
   if (Node.isIdentifier(node) && isIdentifierDeclarationPosition(node)) return false;
@@ -7294,9 +7298,11 @@ function isReceiverCarrierIdentifier(node: Node, carrierSymbolKeys: ReadonlySet<
 
 function isProjectDrizzleReceiverContainerExpression(node: Node | undefined): boolean {
   if (!node) return false;
-  if (!Node.isIdentifier(node) && !Node.isPropertyAccessExpression(node)) return false;
+  if (isFunctionLikeNode(node)) return false;
   if (isProjectDrizzleReceiverMemberExpression(node)) return false;
 
+  // SPEC §11.1: opaque helper handoffs through factory-returned typed carriers are still visible
+  // Drizzle surfaces when project facts prove the value contains a pinned Postgres receiver.
   return projectTypeContainsDrizzleReceiver(node.getType(), node, new Set(), 0);
 }
 

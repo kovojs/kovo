@@ -10829,6 +10829,46 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project external helpers receiving factory-returned typed carriers as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {}',
+            'declare function writeAudit(context: unknown): Promise<void>;',
+            'declare function makeContext(): { nested: { db: PgDatabase<any, any, any> } };',
+            'declare function makeFakeContext(): { nested: { db: FakeDb } };',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  void db;',
+            '  void fake;',
+            '  await writeAudit(makeFakeContext());',
+            '  await writeAudit(makeContext());',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:12',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks external helpers receiving assigned Drizzle carrier aliases as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

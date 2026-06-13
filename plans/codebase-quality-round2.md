@@ -752,6 +752,13 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
 conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       `git diff --check`.
+      Evidence 2026-06-13 round274: project-mode opaque helper handoffs now treat factory-returned
+      typed carrier expressions as ts-morph receiver-container facts, so `writeAudit(makeContext())`
+      and `runReport(makeContext())` degrade to FW406 when the returned type contains a pinned
+      Postgres Drizzle database instead of disappearing. Object/array literal wrappers still report
+      the contained receiver for stable diagnostics. `packages/drizzle/src/index.test.ts` covers the
+      package mutation graph surface, and `conformance/drizzle-pin/src/index.test.ts` pins the query
+      loader surface against real `drizzle-orm` Postgres receiver imports.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -759,6 +766,10 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 
 Latest evidence:
 
+- round274 factory-returned typed carrier helper-handoff slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - round273 tuple callback container slice:
   `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`;
   `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
