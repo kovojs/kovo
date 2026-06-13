@@ -100,6 +100,9 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
+import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
+import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 interface InteractiveDemoComponent {
@@ -108,6 +111,14 @@ interface InteractiveDemoComponent {
     state: () => unknown;
   };
 }
+
+type StaticVisualFixturePath = '/components/select' | '/components/table' | '/components/tabs';
+
+const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
+  '/components/select': selectStaticRouteHtml,
+  '/components/table': tableStaticRouteHtml,
+  '/components/tabs': tabsStaticRouteHtml,
+};
 
 const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js': accordionClient,
@@ -251,6 +262,32 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(route)).toBe('4cc3e6a7');
     expect(await visualBaselineHash(switchDemo)).toBe('1dc30a6d');
     expect(await visualBaselineHash(menuDemo)).toBe('b19a1055');
+  });
+
+  it('keeps stable visual baselines for representative styled static gallery routes', async () => {
+    await page.viewport(960, 720);
+    installVisualBaselineStyles();
+
+    const tabsRoute = mountStaticGalleryRoute('/components/tabs');
+    const selectRoute = mountStaticGalleryRoute('/components/select');
+    const tableRoute = mountStaticGalleryRoute('/components/table');
+
+    expect(visualGeometry(tabsRoute)).toEqual({
+      height: 539,
+      width: 860,
+    });
+    expect(visualGeometry(selectRoute)).toEqual({
+      height: 532,
+      width: 860,
+    });
+    expect(visualGeometry(tableRoute)).toEqual({
+      height: 591,
+      width: 860,
+    });
+
+    expect(await visualBaselineHash(tabsRoute)).toBe('9044926b');
+    expect(await visualBaselineHash(selectRoute)).toBe('e0f770a7');
+    expect(await visualBaselineHash(tableRoute)).toBe('09f0362a');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
@@ -2200,6 +2237,15 @@ function mountInteractiveDemo(component: InteractiveDemoComponent): HTMLElement 
   return required(host.firstElementChild as HTMLElement | null);
 }
 
+function mountStaticGalleryRoute(path: StaticVisualFixturePath): HTMLElement {
+  const html = staticVisualFixtureHtml[path];
+  const host = document.createElement('main');
+  host.innerHTML = html;
+  document.body.append(host);
+
+  return required(host.querySelector<HTMLElement>(`[data-gallery-route="${path}"]`));
+}
+
 function installGeneratedGalleryLoader(
   root: HTMLElement,
   options: { events?: readonly string[] } = {},
@@ -2285,26 +2331,33 @@ function installVisualBaselineStyles(): void {
       background: #ffffff;
     }
 
-    [data-gallery-route="/gallery/interactive"] > h1 {
+    [data-gallery-route^="/components/"] {
+      width: 860px;
+      margin: 0 0 18px;
+      padding: 24px 22px 30px;
+      background: #ffffff;
+    }
+
+    [data-gallery-route] > h1 {
       margin: 0 0 6px;
       font-size: 24px;
       line-height: 1.2;
     }
 
-    [data-demo-summary="compiled"] {
+    [data-demo-summary] {
       margin: 0 0 18px;
       max-width: 680px;
       color: #475569;
     }
 
-    nav[aria-label="Interactive demos"] {
+    nav[aria-label] {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
       margin: 0 0 18px;
     }
 
-    nav[aria-label="Interactive demos"] a {
+    nav[aria-label] a {
       border: 1px solid #cbd5e1;
       border-radius: 6px;
       padding: 4px 8px;
@@ -2323,9 +2376,40 @@ function installVisualBaselineStyles(): void {
     }
 
     [data-gallery-interactive-route] h2,
+    [data-gallery-demo] h2,
+    [data-gallery-demo] h3,
     [data-gallery-interactive] h3,
     [data-gallery-interactive] p {
       margin-top: 0;
+    }
+
+    [data-gallery-demo] {
+      display: grid;
+      gap: 10px;
+      width: 816px;
+      margin: 0;
+      padding: 14px;
+      border: 1px solid #dbe3ec;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+    }
+
+    [data-gallery-contract] {
+      margin: 0;
+      color: #475569;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #e2e8f0;
+      padding: 6px 8px;
+      text-align: left;
     }
 
     button,

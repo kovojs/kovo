@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -86,6 +88,19 @@ describe('gallery demo fixtures', () => {
       expect(html).toContain(`href="${path}"`);
     }
     expect(html).toContain(`aria-current="page" href="${route.path}"`);
+  });
+
+  it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
+    for (const [path, fileName] of [
+      ['/components/tabs', 'tabs.html.txt'],
+      ['/components/select', 'select.html.txt'],
+      ['/components/table', 'table.html.txt'],
+    ] as const) {
+      const route = galleryRoutes.find((candidate) => candidate.path === path);
+      if (!route) throw new Error(`Missing gallery route fixture for ${path}`);
+
+      expect(readVisualFixture(fileName)).toBe(`${renderGalleryRoute(route)}\n`);
+    }
   });
 
   it('renders accordion fixture with item, trigger, and panel wiring', () => {
@@ -806,4 +821,8 @@ function findFixture(path: (typeof galleryRoutes)[number]['path']) {
   }
 
   return fixture;
+}
+
+function readVisualFixture(fileName: string): string {
+  return readFileSync(new URL(`./visual-fixtures/${fileName}`, import.meta.url), 'utf8');
 }

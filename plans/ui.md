@@ -142,6 +142,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       role-bearing roots on neutral `div` hosts. The compiled route axe gate now runs with no
       disabled rules, and a browser-backed state axe test covers generated dropdown open, command
       dialog open, field invalid/error, and toast live-region states.
+      Evidence 2026-06-13: styled static gallery visual fixtures now cover representative H2
+      tabs, H3 select, and pure-markup table routes with raw HTML synchronized against
+      `renderGalleryRoute()`. The Chromium visual baseline gate asserts deterministic geometry and
+      screenshot hashes for those `@jiso/ui` static routes.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -234,6 +238,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Styled static gallery visual-baseline slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/raw-modules.d.ts examples/gallery/src/visual-fixtures/select.html.txt examples/gallery/src/visual-fixtures/table.html.txt examples/gallery/src/visual-fixtures/tabs.html.txt plans/ui.md`;
+      `git diff --check`.
 - [x] Checkbox native mixed-state axe closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t checkbox`;
