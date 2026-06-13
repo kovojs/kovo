@@ -111,12 +111,11 @@ import {
 import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
   drizzleQueryBehaviorSourceFixtures,
-  forbiddenBrowserArchitectureFacts,
   moduleImportFailureFact,
   projectQueryBehaviorFacts,
   projectQueryDiagnosticFacts,
   projectTouchGraphBehaviorFacts,
-  projectFileSources,
+  forbiddenBrowserArchitectureProjectFact,
   projectJsonFile,
   projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
@@ -453,18 +452,13 @@ void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () =
 
 void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {
   const ts = await import('typescript');
-  const sources = await projectFileSources({
+  const fact = await forbiddenBrowserArchitectureProjectFact({
     rootPath: projectRootPath,
-    directory: 'packages',
-    include: (path) => path.endsWith('.ts') && path.includes('/src/') && !path.endsWith('.test.ts'),
+    ts,
   });
-  const violations = [];
-
-  for (const { path, source } of sources) {
-    violations.push(...forbiddenBrowserArchitectureFacts(ts, path, source));
-  }
-
-  assert.deepEqual(violations, []);
+  assert.equal(fact.clean, true);
+  assert.equal(fact.checkedFileCount > 100, true);
+  assert.deepEqual(fact.violations, []);
 });
 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {

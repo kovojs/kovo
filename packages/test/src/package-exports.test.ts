@@ -367,6 +367,7 @@ import {
   cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
+  forbiddenBrowserArchitectureProjectFact,
   moduleImportFailureFact,
   projectDirectoryNames,
   projectFilePaths,
@@ -381,6 +382,7 @@ import {
   type CssScopeRuleFact,
   type DrizzleQueryBehaviorSourceFixtures,
   type ForbiddenBrowserArchitectureFact,
+  type ForbiddenBrowserArchitectureProjectFact,
   type ModuleImportFailureFact,
   type ProjectFileSourceFact,
   type ProjectFileTreeOptions,
@@ -842,6 +844,7 @@ describe('@jiso/test package subpath exports', () => {
       addItem: { reads: [], touches: [], unresolved: [] },
     });
     expect(forbiddenBrowserArchitectureFacts).toBeTypeOf('function');
+    expect(forbiddenBrowserArchitectureProjectFact).toBeTypeOf('function');
     expect(projectDirectoryNames).toBeTypeOf('function');
     expect(projectFilePaths).toBeTypeOf('function');
     expect(projectFileSources).toBeTypeOf('function');
@@ -868,6 +871,9 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<ProjectTouchGraphBehaviorFact>()
       .toHaveProperty('touches')
       .toMatchTypeOf<readonly unknown[]>();
+    expectTypeOf<ForbiddenBrowserArchitectureProjectFact>()
+      .toHaveProperty('violations')
+      .toEqualTypeOf<ForbiddenBrowserArchitectureFact[]>();
     expectTypeOf<ProjectPackageManifestFact>().toHaveProperty('directory').toEqualTypeOf<string>();
     expect(graphFixtureFile).toBeTypeOf('function');
     expect(commerceGraphBehaviorFact).toBeTypeOf('function');

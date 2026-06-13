@@ -42,6 +42,12 @@ export interface ForbiddenBrowserArchitectureFact {
   site: string;
 }
 
+export interface ForbiddenBrowserArchitectureProjectFact {
+  checkedFileCount: number;
+  clean: boolean;
+  violations: ForbiddenBrowserArchitectureFact[];
+}
+
 export interface ProjectSourceFixture {
   fileName: string;
   source: string;
@@ -408,6 +414,26 @@ export async function projectFileSources(
       source: await readFile(join(options.rootPath, path), 'utf8'),
     })),
   );
+}
+
+export async function forbiddenBrowserArchitectureProjectFact(options: {
+  rootPath: string;
+  ts: TypeScriptModule;
+}): Promise<ForbiddenBrowserArchitectureProjectFact> {
+  const sources = await projectFileSources({
+    rootPath: options.rootPath,
+    directory: 'packages',
+    include: (path) => path.endsWith('.ts') && path.includes('/src/') && !path.endsWith('.test.ts'),
+  });
+  const violations = sources.flatMap(({ path, source }) =>
+    forbiddenBrowserArchitectureFacts(options.ts, path, source),
+  );
+
+  return {
+    checkedFileCount: sources.length,
+    clean: violations.length === 0,
+    violations,
+  };
 }
 
 export async function projectJsonFile<T = unknown>(rootPath: string, path: string): Promise<T> {

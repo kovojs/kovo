@@ -53,6 +53,10 @@ page hints.
 
 Latest evidence:
 
+- [x] `forbiddenBrowserArchitectureProjectFact()` moved the P10 package source scan into
+      `@jiso/test/source-fixtures`; fw-check now consumes the structured clean/count/violation fact.
+      Verified with focused fixture/export tests, full `tests/fw-check.node.mjs`, `check:build`,
+      `tsc`, and `git diff --check`.
 - [x] `verificationLayerFwCheckDiagnosticsFact()` extracted P9 verification diagnostic graph
       construction into `@jiso/test/verification-fixtures`, with package export coverage and
       fw-check consuming the structured fixture. Verified with fixture/export tests, build,
@@ -228,6 +232,10 @@ update intent, query harnesses, file fixtures, CLI capture, and page hints.
 
 Latest evidence:
 
+- [x] P10 forbidden browser architecture verification now runs through a public
+      `@jiso/test/source-fixtures` project fixture instead of local fw-check TypeScript/project-file
+      loop mechanics. Verified with focused fixture/export tests, full `tests/fw-check.node.mjs`,
+      `check:build`, `tsc`, and `git diff --check`.
 - [x] Commerce and fw-check behavior fixtures listed in Phase 1 evidence now cover page hints, CLI
       capture, source-truth projections, and reusable server/HTML mechanics through public seams.
 - [x] Unguarded route/query/mutation fw-check audit now runs through a public `@jiso/test` fixture
@@ -250,6 +258,10 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 
 Latest evidence:
 
+- [x] `tests/fw-check.node.mjs` P10 architecture audit now asserts structured
+      `forbiddenBrowserArchitectureProjectFact()` behavior while fixture/export tests cover the
+      reusable scan seam. Verified with focused fixture/export tests, full `tests/fw-check.node.mjs`,
+      `check:build`, `tsc`, and `git diff --check`.
 - [x] `tests/fw-check.node.mjs` unguarded audit case now consumes
       `fwCheckUnguardedAuditBehaviorFact()` and asserts parsed diagnostic/target structures; package
       fixture and export tests cover the reusable seam. Verified with focused fixture/export tests,

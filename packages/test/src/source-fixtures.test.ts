@@ -10,6 +10,7 @@ import {
   cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
+  forbiddenBrowserArchitectureProjectFact,
   moduleImportFailureFact,
   projectDirectoryNames,
   projectFilePaths,
@@ -182,6 +183,56 @@ describe('@jiso/test source fixture seam', () => {
           manifest: { name: '@jiso/runtime' },
         },
       ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('audits framework source for forbidden browser architecture through a project fixture', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-browser-architecture-'));
+    try {
+      await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
+      await mkdir(join(root, 'packages/runtime/test'), { recursive: true });
+      await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
+      await writeFile(
+        join(root, 'packages/runtime/src/loader.ts'),
+        [
+          'customElements.define("cart-row", class extends HTMLElement {});',
+          'window.addEventListener("unload", () => {});',
+          '',
+        ].join('\n'),
+      );
+      await writeFile(
+        join(root, 'packages/runtime/src/loader.test.ts'),
+        'customElements.define("allowed-test", class extends HTMLElement {});',
+      );
+      await writeFile(join(root, 'packages/compiler/src/index.ts'), 'export const ok = true;');
+
+      await expect(
+        forbiddenBrowserArchitectureProjectFact({
+          rootPath: root,
+          ts,
+        }),
+      ).resolves.toEqual({
+        checkedFileCount: 2,
+        clean: false,
+        violations: [
+          {
+            column: 1,
+            fileName: 'packages/runtime/src/loader.ts',
+            label: 'customElements.define',
+            line: 1,
+            site: 'packages/runtime/src/loader.ts:1:1',
+          },
+          {
+            column: 1,
+            fileName: 'packages/runtime/src/loader.ts',
+            label: 'addEventListener unload',
+            line: 2,
+            site: 'packages/runtime/src/loader.ts:2:1',
+          },
+        ],
+      });
     } finally {
       await rm(root, { force: true, recursive: true });
     }
