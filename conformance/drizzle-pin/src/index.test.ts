@@ -1371,6 +1371,71 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins opaque domain action spreads as FW406 under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'declare const dynamicActions: any;',
+          'const staticActions = { add: write(addItem) };',
+          '',
+          'export const productDomain = domain({',
+          '  ...staticActions,',
+          '  ...dynamicActions,',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:16',
+          },
+        ],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins nested destructuring assignment receiver aliases under real Drizzle imports', () => {
     const files = [
       {

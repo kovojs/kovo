@@ -484,6 +484,13 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       fold exact Postgres read/touch summaries instead of disappearing or degrading as opaque helper
       handoffs. `packages/drizzle/src/index.test.ts` and
       `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` surfaces.
+      Evidence 2026-06-13 round258: opaque domain action spreads such as
+      `domain({ ...dynamicActions })` now remain visible as
+      `domainName.<spread>` FW406 mutation graph entries instead of disappearing when ts-morph
+      reports the spread expression as `any`/`unknown`; static spreads still resolve to exact
+      `write(...)` callbacks. `packages/drizzle/src/index.test.ts` pins source behavior and
+      `conformance/drizzle-pin/src/index.test.ts` pins the same surface against real `drizzle-orm`
+      Postgres receiver types.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

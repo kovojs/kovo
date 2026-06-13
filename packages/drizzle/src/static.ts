@@ -109,6 +109,7 @@ const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   'update',
 ]);
 const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
+const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
 
 export type QueryShape =
   | 'array'
@@ -4811,6 +4812,13 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
       const domainObject = initializer.getArguments()[0];
       if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
 
+      for (const spread of unresolvedDomainWriteSpreads(domainObject)) {
+        unresolved.push({
+          name: `${domainName.getText()}.${UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER}`,
+          site: `${file.fileName}:${lineForIndex(file.source, spread.getStart())}`,
+        });
+      }
+
       for (const property of domainWriteProperties(domainObject)) {
         const initializer = property.initializer;
         if (!initializer || !Node.isCallExpression(initializer)) continue;
@@ -4827,6 +4835,24 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
 
     return unresolved;
   });
+}
+
+function unresolvedDomainWriteSpreads(object: ObjectLiteralExpression): Node[] {
+  const unresolved: Node[] = [];
+
+  for (const property of object.getProperties()) {
+    if (!Node.isSpreadAssignment(property)) continue;
+    // SPEC §10-§11: an opaque domain action spread can contain hidden write(...) callbacks, so it
+    // must stay visible as FW406 instead of disappearing from the mutation graph.
+    const expression = unwrappedStaticExpressionNode(property.getExpression());
+    const spreadProperties = domainWritePropertiesFromSpread(property, new Set());
+    const type = expression.getType();
+    if (spreadProperties.length === 0 && (type.isAny() || type.isUnknown())) {
+      unresolved.push(property);
+    }
+  }
+
+  return unresolved;
 }
 
 function domainWriteProperties(

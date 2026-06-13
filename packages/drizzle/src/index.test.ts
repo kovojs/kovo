@@ -7568,6 +7568,67 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks opaque source domain action spreads as FW406 instead of dropping mutation surfaces', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'declare const dynamicActions: any;',
+          'const staticActions = { addItem: write(addItem) };',
+          '',
+          'export const cart = domain({',
+          '  ...staticActions,',
+          '  ...dynamicActions,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:12',
+          },
+        ],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts source write callbacks through nested static object aliases', () => {
     const graph = extractTouchGraphFromSource([
       {
