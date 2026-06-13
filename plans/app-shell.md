@@ -799,3 +799,16 @@ Round232 app-shell aggregate boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/api/app-shell/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round236 static-export facade closure evidence:
+
+- `packages/server/src/static-export.ts` now exports only `exportStaticApp`, leaving the
+  SPEC §9.5 compile/static-export diagnostic seam on `static-export-diagnostics.ts` and the public
+  `@jiso/server/app-shell/static-export` subpath. Static export inventory/manifest and output-plan
+  helpers are consumed from their owner modules instead of the orchestration facade.
+- `packages/server/src/api/app.test.ts` pins the reduced internal static-export facade and the
+  public app-shell replacement helpers, while `static-export.test.ts` and `vite-build.test.ts`
+  import diagnostics/manifests from the focused owner modules.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`

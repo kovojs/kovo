@@ -591,6 +591,9 @@ static-export subpaths.
 The `@jiso/server/app-shell` aggregate now composes from the split public app-shell subpaths, and
 the public API test proves its runtime values equal the union of those subpaths so manual aggregate
 inventory drift cannot hide behind the compatibility barrel.
+The internal `static-export.ts` orchestration facade now exports only `exportStaticApp`;
+compile/static-export diagnostics, manifest/inventory helpers, and output-plan helpers stay on
+their focused owner modules and the public `@jiso/server/app-shell/static-export` replacement seam.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite app-shell build output also reuses one planned SPEC §9.5 static-export asset list
@@ -633,6 +636,9 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/vite-build-assets.ts packages/server/src/vite-build-output.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 - `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`

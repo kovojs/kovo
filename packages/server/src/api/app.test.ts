@@ -18,6 +18,7 @@ import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
 import * as renderingApi from './rendering.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
+import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportTypesApi from '../static-export-types.js';
 import * as wireHtmlApi from '../wire-html.js';
@@ -39,6 +40,7 @@ describe('server app-shell public API barrels', () => {
     expect(Object.keys(localAppShellValues).sort()).toEqual(
       aggregateValueKeys(clientModulesApi, coreApi, nodeApi, staticExportApi, viteApi),
     );
+    expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
     for (const key of Object.keys(localAppShellValues)) {
       expect(packageAppShellValues[key]).toBe(localAppShellValues[key]);

@@ -9,40 +9,6 @@ import { replayStaticExportApp } from './static-export-replay.js';
 import { assertStaticExportCompileDiagnostics } from './static-export-diagnostics.js';
 import { type StaticExportOptions, type StaticExportResult } from './static-export-types.js';
 
-export {
-  StaticExportError,
-  formatStaticExportDiagnostic,
-  formatStaticExportDiagnostics,
-  isStaticExportDiagnostic,
-  isStaticExportDiagnosticError,
-} from './static-export-diagnostics.js';
-export { staticExportInventory, staticExportManifest } from './static-export-types.js';
-export type {
-  StaticExportCompileDiagnostic,
-  StaticExportDiagnostic,
-  StaticExportDiagnosticSeverity,
-} from './static-export-diagnostics.js';
-export type {
-  StaticExportArtifact,
-  StaticExportAssetArtifact,
-  StaticExportAssetInput,
-  StaticExportClientModuleArtifact,
-  StaticExportHtmlPathStyle,
-  StaticExportInventoryItem,
-  StaticExportManifest,
-  StaticExportManifestAsset,
-  StaticExportManifestClientModule,
-  StaticExportManifestRouteDocument,
-  StaticExportOptions,
-  StaticExportResult,
-} from './static-export-types.js';
-export { staticExportOutputPlan } from './static-export-output.js';
-export type {
-  StaticExportOutputPlanItem,
-  StaticExportOutputPlanItemKind,
-  StaticExportOutputPlanOptions,
-} from './static-export-output.js';
-
 export async function exportStaticApp(
   app: JisoApp,
   options: StaticExportOptions = {},

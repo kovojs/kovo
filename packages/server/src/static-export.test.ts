@@ -10,17 +10,16 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { guards } from './guards.js';
 import { respond } from './response.js';
 import { route } from './route.js';
+import { exportStaticApp } from './static-export.js';
 import {
-  exportStaticApp,
   formatStaticExportDiagnostic,
   formatStaticExportDiagnostics,
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
-  staticExportInventory,
-  staticExportManifest,
-  staticExportOutputPlan,
   StaticExportError,
-} from './static-export.js';
+} from './static-export-diagnostics.js';
+import { staticExportOutputPlan } from './static-export-output.js';
+import { staticExportInventory, staticExportManifest } from './static-export-types.js';
 
 describe('server static export', () => {
   it('exports a simple route through the app request handler to an html artifact', async () => {
