@@ -171,6 +171,8 @@ Current state:
 - Project nested destructuring assignment from typed context properties now recurses through
   ts-morph property type facts for exact receiver aliases, while source-mode nested carrier
   destructuring declarations and assignments degrade later mutation/query-loader surfaces to FW406.
+- Quoted source-mode destructured receiver slots use parsed property names, so `"db"`/`"tx"`
+  receiver parameters degrade to FW406 instead of disappearing or fabricating exact facts.
 - Fake/lookalike receivers and overwritten carrier members remain invisible.
 - V1 project receiver proof is Postgres-only: the broad `drizzle-orm` package-declaration
   fallback and SQLite/MySQL database type compatibility names were removed, and deferred
@@ -196,10 +198,10 @@ Latest focused evidence:
 - `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
-Latest result 2026-06-13: nested project destructuring assignment aliases and source nested
-carrier destructuring degradation are covered in `packages/drizzle/src/index.test.ts` and
-`conformance/drizzle-pin/src/index.test.ts`; the focused Drizzle package suite and real
-Drizzle conformance suite passed before this ledger update.
+Latest result 2026-06-13: quoted source destructured receiver parameters and query-loader
+bindings now use parsed property names in `packages/drizzle/src/static.ts` and degrade to FW406
+without exact facts; package and real Drizzle conformance coverage live in
+`packages/drizzle/src/index.test.ts` and `conformance/drizzle-pin/src/index.test.ts`.
 
 ## Phase 4 - Runtime
 

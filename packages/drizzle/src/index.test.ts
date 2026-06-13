@@ -628,6 +628,35 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks quoted source destructured receiver parameters as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export async function addItem({ "db": writer } = makeContext(), productId) {',
+          '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:4',
+          },
+        ],
+      },
+    });
+  });
+
   it('does not mark shadowed source destructured receiver names as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -3395,6 +3424,43 @@ export interface CommerceInvalidationSets {
         reads: [],
         shape: {},
         site: 'product.queries.ts:6',
+      },
+    ]);
+  });
+
+  it('marks quoted source query-loader db destructuring as FW406 instead of deriving reads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: [
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export const productQuery = query("product/quoted-destructured-db", {',
+          '  load(_input, { "db": reader }) {',
+          '    return reader.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode destructured Drizzle receiver surface select() without project type proof.',
+            severity: 'warn',
+            site: 'product.queries.ts:5',
+          },
+        ],
+        query: 'product/quoted-destructured-db',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:5',
       },
     ]);
   });

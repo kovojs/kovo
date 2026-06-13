@@ -582,6 +582,15 @@ conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality
 packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts
 packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md
 plans/codebase-quality-round2.md`, and `git diff --check`.
+      Additional evidence 2026-06-13: quoted source destructured receiver slots such as
+      `{ "db": writer }` now use parsed property-name facts for source-mode degradation, so touch
+      extraction and query-loader diagnostics emit FW406 instead of dropping the surface or
+      fabricating exact reads/writes. Package and real `drizzle-orm` conformance tests pin the
+      behavior. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`, `pnpm exec vp check
+packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts
+packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`, and `git diff --check`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query

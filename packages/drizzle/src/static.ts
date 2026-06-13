@@ -6034,7 +6034,8 @@ function isSourceReceiverBindingDeclaration(declaration: Node): boolean {
   if (!binding) return false;
 
   const bindingName = binding.getNameNode();
-  const propertyName = binding.getPropertyNameNode()?.getText();
+  const propertyNameNode = binding.getPropertyNameNode();
+  const propertyName = propertyNameNode ? propertyNameText(propertyNameNode) : undefined;
   if (!propertyName && Node.isIdentifier(bindingName)) {
     return isLikelyDrizzleReceiver(bindingName.getText());
   }
@@ -6126,7 +6127,7 @@ function appendSourceDestructuredReceiverBinding(
 
   for (const element of name.getElements()) {
     const binding = element.getNameNode();
-    const propertyName = element.getPropertyNameNode()?.getText();
+    const propertyName = propertyNameText(element.getPropertyNameNode() ?? binding);
 
     if (!propertyName && Node.isIdentifier(binding) && isLikelyDrizzleReceiver(binding.getText())) {
       appendSourceDestructuredReceiverIdentifier(binding, names, symbolKeys);

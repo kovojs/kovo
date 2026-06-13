@@ -1163,6 +1163,45 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins quoted source query-loader destructuring as FW406 without fabricated reads', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+        source: [
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          "export const productQuery = query('product/quoted-destructured-db', {",
+          '  load(_input, { "db": reader }) {',
+          '    return reader.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode destructured Drizzle receiver surface select() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+          },
+        ],
+        query: 'product/quoted-destructured-db',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('pins local query-loader helper reads under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -2108,6 +2147,38 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:4',
+          },
+        ],
+      },
+    });
+  });
+
+  it('pins quoted source destructured receiver parameters as FW406 without fabricated writes', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "import { pgTable } from 'drizzle-orm/pg-core';",
+          '',
+          "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+          '',
+          'export async function addItem({ "db": writer } = makeContext(), productId) {',
+          '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:6',
           },
         ],
       },
