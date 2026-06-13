@@ -494,6 +494,7 @@ export {
   menubarItemAttributes,
   menubarItemClick,
   menubarItemHighlighted,
+  menubarItemKeyDown,
   menubarItemOpen,
   menubarItemPointerEnter,
   menubarKeyDown,

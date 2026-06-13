@@ -5,6 +5,7 @@ import {
   menubarItemAttributes as exportedMenubarItemAttributes,
   menubarItemClick as exportedMenubarItemClick,
   menubarItemHighlighted as exportedMenubarItemHighlighted,
+  menubarItemKeyDown as exportedMenubarItemKeyDown,
   menubarItemOpen as exportedMenubarItemOpen,
   menubarItemPointerEnter as exportedMenubarItemPointerEnter,
   menubarKeyDown as exportedMenubarKeyDown,
@@ -23,6 +24,7 @@ import {
   menubarItemAttributes,
   menubarItemClick,
   menubarItemHighlighted,
+  menubarItemKeyDown,
   menubarItemOpen,
   menubarItemPointerEnter,
   menubarKeyDown,
@@ -291,6 +293,8 @@ describe('headless-ui menubar primitive', () => {
     pointerEvent.preventDefault();
     const itemEvent = new Event('click', { cancelable: true });
     itemEvent.preventDefault();
+    const itemKeyEvent = keydownEvent('Enter');
+    itemKeyEvent.preventDefault();
     const keyEvent = keydownEvent('Escape');
     keyEvent.preventDefault();
 
@@ -316,7 +320,107 @@ describe('headless-ui menubar primitive', () => {
     expect(
       menubarItemClick(itemEvent, { itemValue: 'new', openValue: 'file' }, options),
     ).toBeUndefined();
+    expect(
+      menubarItemKeyDown(itemKeyEvent, { itemValue: 'new', openValue: 'file' }, options),
+    ).toBeUndefined();
     expect(menubarKeyDown(keyEvent, { openValue: 'file' }, options)).toBeUndefined();
+  });
+
+  it('selects submenu items from keyboard activation keys', () => {
+    const seen: string[] = [];
+    const enterEvent = keydownEvent('Enter');
+    const spaceEvent = keydownEvent(' ');
+    const legacySpaceEvent = keydownEvent('Spacebar');
+
+    expect(
+      menubarItemKeyDown(
+        enterEvent,
+        {
+          activeValue: 'new',
+          itemParentValue: 'file',
+          itemValue: 'new',
+          items: menubarItems,
+          openValue: 'file',
+        },
+        {
+          onOpenChange(detail) {
+            seen.push(`open:${detail.reason}:${detail.value}`);
+          },
+          onSelect(detail) {
+            seen.push(`select:${detail.reason}:${detail.value}`);
+          },
+        },
+      ),
+    ).toMatchObject({
+      open: { changed: true, openValue: undefined },
+      selected: true,
+      value: 'new',
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+
+    expect(
+      menubarItemKeyDown(spaceEvent, {
+        itemParentValue: 'file',
+        itemValue: 'save',
+        items: menubarItems,
+        openValue: 'file',
+      }),
+    ).toMatchObject({ selected: true, value: 'save' });
+    expect(spaceEvent.defaultPrevented).toBe(true);
+
+    expect(
+      menubarItemKeyDown(legacySpaceEvent, {
+        itemParentValue: 'view',
+        itemValue: 'zoom-in',
+        items: menubarItems,
+        openValue: 'view',
+      }),
+    ).toMatchObject({ selected: true, value: 'zoom-in' });
+    expect(legacySpaceEvent.defaultPrevented).toBe(true);
+    expect(seen).toEqual(['select:keyboard:new', 'open:item-select:undefined']);
+    expect(
+      menubarItemKeyDown(keydownEvent('ArrowDown'), {
+        itemValue: 'new',
+        items: menubarItems,
+        openValue: 'file',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps keyboard item activation cancelable and disabled-aware', () => {
+    const disabledEvent = keydownEvent('Enter');
+    const disabledResult = menubarItemKeyDown(disabledEvent, {
+      itemParentValue: 'file',
+      itemValue: 'open',
+      items: menubarItems,
+      openValue: 'file',
+    });
+    expect(disabledResult).toEqual({
+      open: { changed: false, openValue: 'file' },
+      selected: false,
+      value: 'open',
+    });
+    expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledEvent = keydownEvent(' ');
+    const canceledResult = menubarItemKeyDown(
+      canceledEvent,
+      {
+        itemParentValue: 'file',
+        itemValue: 'new',
+        items: menubarItems,
+        openValue: 'file',
+      },
+      {
+        onSelect(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledResult?.selected).toBe(false);
+    expect(canceledResult?.open.openValue).toBe('file');
+    expect(canceledResult?.detail?.defaultPrevented).toBe(true);
+    expect(canceledEvent.defaultPrevented).toBe(true);
   });
 
   it('uses handler reasons and prevents native actions when disabled or canceled', () => {
@@ -395,6 +499,7 @@ describe('headless-ui menubar primitive', () => {
     expect(exportedMenubarItemAttributes).toBe(menubarItemAttributes);
     expect(exportedMenubarItemClick).toBe(menubarItemClick);
     expect(exportedMenubarItemHighlighted).toBe(menubarItemHighlighted);
+    expect(exportedMenubarItemKeyDown).toBe(menubarItemKeyDown);
     expect(exportedMenubarItemOpen).toBe(menubarItemOpen);
     expect(exportedMenubarItemPointerEnter).toBe(menubarItemPointerEnter);
     expect(exportedMenubarKeyDown).toBe(menubarKeyDown);

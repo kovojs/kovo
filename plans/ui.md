@@ -68,7 +68,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       Spacebar, native-link pass-through, disabled content, and matching gallery behavior
       contracts; dropdown-menu and context-menu item keyboard activation covers Enter, Space,
       legacy Spacebar, disabled/canceled state, headless barrel exports, static gallery contracts,
-      and compiled/browser interactive gallery keydown selection.
+      and compiled/browser interactive gallery keydown selection. Menubar submenu item keyboard
+      activation now covers Enter, Space, legacy Spacebar, disabled/canceled state, headless barrel
+      exports, generated-client DOM refs, and compiled/browser interactive gallery keydown
+      selection.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -85,6 +88,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Menubar keyboard selection slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t menubar`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/menubar.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/interactive/menubar-demo.tsx examples/gallery/src/generated/interactive/menubar-demo.tsx examples/gallery/src/generated/interactive/menubar-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`;
+      `git diff --check`.
 - [x] Dropdown/context-menu keyboard selection slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts`;
       `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;

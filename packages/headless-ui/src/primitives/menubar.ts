@@ -409,6 +409,26 @@ export function menubarItemClick(
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
  */
+export function menubarItemKeyDown(
+  event: MenubarKeyboardEvent,
+  state: MenubarItemAttributeOptions,
+  options: MenubarChangeOptions = {},
+): MenubarSelectResult | undefined {
+  if (event.defaultPrevented) return;
+  if (!menubarItemActivationKey(event.key)) return;
+
+  const result = selectMenubarItem(state, state.itemValue, 'keyboard', options);
+  event.preventDefault();
+
+  return result;
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
 export function menubarKeyDown(
   event: MenubarKeyboardEvent,
   state: MenubarState,
@@ -500,4 +520,8 @@ function menubarDataOrientation(
   orientation: CollectionOrientation | undefined,
 ): 'horizontal' | 'vertical' {
   return orientation === 'vertical' ? 'vertical' : 'horizontal';
+}
+
+function menubarItemActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ' || key === 'Spacebar';
 }

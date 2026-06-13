@@ -1472,9 +1472,13 @@ describe('compiled interactive gallery demos in the browser', () => {
     const menubarRoot = mountInteractiveDemo(GalleryMenubarDemo);
     const file = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-file'));
     const edit = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-edit'));
+    const newFile = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-new'));
     const fileMenu = required(menubarRoot.querySelector<HTMLElement>('#gallery-menubar-file-menu'));
     const openOutput = required(
       menubarRoot.querySelector<HTMLOutputElement>('[data-demo-state="menubar-open"]'),
+    );
+    const valueOutput = required(
+      menubarRoot.querySelector<HTMLOutputElement>('[data-demo-state="menubar-value"]'),
     );
     const menubarLoader = installGeneratedGalleryLoader(menubarRoot, {
       events: ['click', 'keydown'],
@@ -1509,6 +1513,19 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(file.getAttribute('aria-expanded')).toBe('true');
       expect(fileMenu.hidden).toBe(false);
       expect(openOutput.textContent).toBe('file');
+    });
+
+    newFile.focus();
+    await userEvent.keyboard('{Space}');
+
+    await vi.waitFor(() => {
+      expect(menubarRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"file","openValue":"","value":"new"}',
+      );
+      expect(file.getAttribute('aria-expanded')).toBe('false');
+      expect(fileMenu.hidden).toBe(true);
+      expect(openOutput.textContent).toBe('none');
+      expect(valueOutput.textContent).toBe('new');
     });
 
     const navRoot = mountInteractiveDemo(GalleryNavigationMenuDemo);

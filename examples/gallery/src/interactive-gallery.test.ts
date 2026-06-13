@@ -363,6 +363,9 @@ describe('compiled interactive gallery demos', () => {
     expect(menubar).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_click"/,
     );
+    expect(menubar).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_keydown"/,
+    );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
     expect(meter).toContain('fw-state=\'{"value":72}\'');
@@ -843,6 +846,16 @@ describe('compiled interactive gallery demos', () => {
       state: menubarState,
     });
     expect(menubarState).toEqual({ activeValue: 'file', openValue: 'file', value: 'new' });
+    const menubarKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: ' ',
+    });
+    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown')(menubarKeyboardEvent, {
+      params: {},
+      signal,
+      state: menubarState,
+    });
+    expect(menubarKeyboardEvent.defaultPrevented).toBe(true);
+    expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
 
     const meterState = { value: 72 };
     clientHandler(meter, 'GalleryMeterDemo$button_click')(new Event('click'), {
@@ -1138,6 +1151,7 @@ describe('compiled interactive gallery demos', () => {
           '[data-demo-state="dropdown-value"]',
           '[data-demo-state="menubar-active"]',
           '[data-demo-state="menubar-open"]',
+          '[data-demo-state="menubar-value"]',
           '[data-demo-state="navigation-open"]',
           '[data-demo-state="navigation-value"]',
           '[data-demo-state="scroll-area-position"]',
@@ -1243,6 +1257,19 @@ describe('compiled interactive gallery demos', () => {
       expect(element(document, 'gallery-menubar-file').attrs['aria-expanded']).toBe('true');
       expect(element(document, 'gallery-menubar-file-menu').hidden).toBe(false);
       expect(selector(document, '[data-demo-state="menubar-open"]').textContent).toBe('file');
+      const menubarKeyEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+        key: 'Enter',
+      });
+      clientHandler(menubar, 'GalleryMenubarDemo$button_keydown')(menubarKeyEvent, {
+        params: {},
+        signal,
+        state: menubarState,
+      });
+      expect(menubarKeyEvent.defaultPrevented).toBe(true);
+      expect(element(document, 'gallery-menubar-file').attrs['aria-expanded']).toBe('false');
+      expect(element(document, 'gallery-menubar-file-menu').hidden).toBe(true);
+      expect(selector(document, '[data-demo-state="menubar-open"]').textContent).toBe('none');
+      expect(selector(document, '[data-demo-state="menubar-value"]').textContent).toBe('new');
 
       const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js', { document });
       const navigationState = { activeValue: 'products', openValue: '', value: 'none' };

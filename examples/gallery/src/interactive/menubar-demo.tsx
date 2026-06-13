@@ -113,18 +113,56 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemParentValue: 'file',
               itemValue: 'new',
             })}
+            onKeyDown={() => {
+              if (
+                event &&
+                Object(event)['key'] !== 'Enter' &&
+                Object(event)['key'] !== ' ' &&
+                Object(event)['key'] !== 'Spacebar'
+              )
+                return;
+
+              if (event) Object(event)['preventDefault']?.call(event);
+              state.openValue = '';
+              state.value = 'new';
+              const doc = Reflect['get'](globalThis, 'document');
+              const file = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file')
+                : undefined;
+              const menu = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file-menu')
+                : undefined;
+              const openOutput = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="menubar-open"]')
+                : undefined;
+              const valueOutput = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="menubar-value"]')
+                : undefined;
+              if (file) Object(file)['setAttribute']?.call(file, 'aria-expanded', 'false');
+              if (menu) menu['hidden'] = true;
+              if (openOutput) openOutput['textContent'] = 'none';
+              if (valueOutput) valueOutput['textContent'] = 'new';
+            }}
             onClick={() => {
               state.openValue = '';
               state.value = 'new';
               const doc = Reflect['get'](globalThis, 'document');
+              const file = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file')
+                : undefined;
               const menu = doc
                 ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file-menu')
                 : undefined;
-              const output = doc
+              const openOutput = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="menubar-open"]')
+                : undefined;
+              const valueOutput = doc
                 ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="menubar-value"]')
                 : undefined;
+              if (file) Object(file)['setAttribute']?.call(file, 'aria-expanded', 'false');
               if (menu) menu['hidden'] = true;
-              if (output) output['textContent'] = 'new';
+              if (openOutput) openOutput['textContent'] = 'none';
+              if (valueOutput) valueOutput['textContent'] = 'new';
             }}
           >
             New file

@@ -38,7 +38,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
         {...menubarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="menubar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=ecf10a63#GalleryMenubarDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$section_keydown"
         fw-c="gallery-menubar-demo"
         fw-state='{"activeValue":"file","openValue":"","value":"new"}'
       >
@@ -50,7 +50,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
             itemLabel: 'File',
             itemValue: 'file',
           })}
-          on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=ecf10a63#GalleryMenubarDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$button_click"
         >
           File
         </button>
@@ -80,7 +80,8 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemParentValue: 'file',
               itemValue: 'new',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=ecf10a63#GalleryMenubarDemo$button_click_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=6c94a2ec#GalleryMenubarDemo$button_click_2"
           >
             New file
           </button>
