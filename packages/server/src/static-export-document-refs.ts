@@ -65,6 +65,12 @@ function collectStaticExportHtmlAttributeRefs(html: string): StaticExportHtmlAtt
     const start = html.indexOf('<', offset);
     if (start === -1) break;
 
+    const skippedMarkupEnd = readStaticExportSkippedMarkupEnd(html, start);
+    if (skippedMarkupEnd !== undefined) {
+      offset = skippedMarkupEnd;
+      continue;
+    }
+
     const tag = readStaticExportOpeningTag(html, start);
     if (tag === undefined) {
       offset = start + 1;
@@ -72,7 +78,7 @@ function collectStaticExportHtmlAttributeRefs(html: string): StaticExportHtmlAtt
     }
 
     refs.push(...readStaticExportHtmlAttributeRefs(tag.attributes));
-    offset = tag.end;
+    offset = readStaticExportRawTextElementEnd(html, tag) ?? tag.end;
   }
 
   return refs;
@@ -81,6 +87,7 @@ function collectStaticExportHtmlAttributeRefs(html: string): StaticExportHtmlAtt
 interface StaticExportOpeningTag {
   attributes: string;
   end: number;
+  name: string;
 }
 
 function readStaticExportOpeningTag(
@@ -97,6 +104,7 @@ function readStaticExportOpeningTag(
     offset += 1;
   }
 
+  const name = html.slice(start + 1, offset).toLowerCase();
   const attributesStart = offset;
   let quote: '"' | "'" | undefined;
   while (offset < html.length) {
@@ -109,6 +117,7 @@ function readStaticExportOpeningTag(
       return {
         attributes: html.slice(attributesStart, offset),
         end: offset + 1,
+        name,
       };
     }
 
@@ -116,6 +125,71 @@ function readStaticExportOpeningTag(
   }
 
   return undefined;
+}
+
+function readStaticExportSkippedMarkupEnd(html: string, start: number): number | undefined {
+  const afterOpen = html[start + 1];
+  if (afterOpen === undefined) return undefined;
+
+  if (afterOpen === '!') {
+    if (html.startsWith('<!--', start)) {
+      const commentEnd = html.indexOf('-->', start + 4);
+      return commentEnd === -1 ? html.length : commentEnd + 3;
+    }
+
+    return readStaticExportMarkupDeclarationEnd(html, start + 2);
+  }
+
+  if (afterOpen === '?' || afterOpen === '/') {
+    return readStaticExportMarkupDeclarationEnd(html, start + 2);
+  }
+
+  return undefined;
+}
+
+function readStaticExportMarkupDeclarationEnd(html: string, offset: number): number {
+  let quote: '"' | "'" | undefined;
+
+  while (offset < html.length) {
+    const char = html[offset];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '>') {
+      return offset + 1;
+    }
+
+    offset += 1;
+  }
+
+  return html.length;
+}
+
+const STATIC_EXPORT_RAW_TEXT_ELEMENTS = new Set(['script', 'style', 'textarea', 'title']);
+
+function readStaticExportRawTextElementEnd(
+  html: string,
+  tag: StaticExportOpeningTag,
+): number | undefined {
+  if (!STATIC_EXPORT_RAW_TEXT_ELEMENTS.has(tag.name)) return undefined;
+
+  const lowerHtml = html.toLowerCase();
+  const closePattern = `</${tag.name}`;
+  let closeStart = lowerHtml.indexOf(closePattern, tag.end);
+  while (
+    closeStart !== -1 &&
+    !isStaticExportTagNameBoundary(lowerHtml[closeStart + closePattern.length])
+  ) {
+    closeStart = lowerHtml.indexOf(closePattern, closeStart + closePattern.length);
+  }
+  if (closeStart === -1) return html.length;
+
+  return readStaticExportMarkupDeclarationEnd(html, closeStart + closePattern.length);
+}
+
+function isStaticExportTagNameBoundary(char: string | undefined): boolean {
+  return char === undefined || char === '>' || char === '/' || isStaticExportHtmlSpace(char);
 }
 
 function readStaticExportHtmlAttributeRefs(attributes: string): StaticExportHtmlAttributeRef[] {

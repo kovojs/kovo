@@ -646,6 +646,44 @@ describe('server static export', () => {
     expect(result.clientModules.map((artifact) => artifact.path)).toEqual(['/c/cart.client.js']);
   });
 
+  it('does not treat comments or raw-text examples as static export server endpoints', async () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const realHref = registry.put({
+      path: '/c/real.client.js',
+      source: 'export const real = "module";',
+      version: 'real-module',
+    });
+    registry.put({
+      path: '/c/example-only.client.js',
+      source: 'throw new Error("example-only module should not be copied");',
+      version: 'example-only',
+    });
+    const app = createApp({
+      clientModules: registry,
+      routes: [
+        route('/guide', {
+          page: () =>
+            [
+              '<main>',
+              '<!-- <form action="/_m/comment/add"><button>Add</button></form> -->',
+              '<script type="application/json">',
+              '{"example":"<button on:click=\\"/c/example-only.client.js?v=example-only#open\\" formaction=\\"/_m/script/add\\">Add</button>"}',
+              '</script>',
+              '<style>.example::before { content: \'<a href="/_q/style">\'; }</style>',
+              `<button on:click="${realHref}#Guide$open">Open</button>`,
+              '</main>',
+            ].join(''),
+        }),
+      ],
+    });
+
+    const result = await exportStaticApp(app, { origin: 'https://docs.example.test' });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/guide/index.html']);
+    expect(result.clientModules.map((artifact) => artifact.path)).toEqual(['/c/real.client.js']);
+  });
+
   it('formats static export diagnostics for starter and example export tasks', () => {
     const diagnostic = {
       code: 'FW229' as const,

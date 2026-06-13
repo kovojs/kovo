@@ -1068,6 +1068,9 @@ adoption test rejects accidental aggregate loading while proving manifest-backed
 Docs-site export now checks the manifest-file dry-run claim against the written static export
 result through the public `@jiso/server/app-shell/static-export` result helper before reporting
 SPEC §9.5 export-task evidence.
+Static export document reference discovery now distinguishes real opening-tag attributes from
+comments/declarations and raw-text element bodies, so SPEC §9.5 L0/L1 endpoint rejection and
+`/c/` module copy planning do not treat code/data examples as live exported document refs.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1113,6 +1116,15 @@ Latest evidence:
   `pnpm run check:build`;
   `pnpm --filter @jiso/site run build`;
   `node site/scripts/export-static.mjs --skip-build --skip-gallery`.
+- Round258 static-export raw-text scanner:
+  `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts packages/server/src/static-export-replay.test.ts`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|npm run static"`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  exact `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

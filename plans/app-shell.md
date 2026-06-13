@@ -962,3 +962,18 @@ Round257 docs-site manifest/result consistency evidence:
 - `pnpm run check:build`
 - `pnpm --filter @jiso/site run build`
 - `node site/scripts/export-static.mjs --skip-build --skip-gallery`
+
+Round258 static-export raw-text scanner evidence:
+
+- `packages/server/src/static-export-document-refs.ts` now reads real opening-tag attributes for
+  SPEC §9.5 L0/L1 endpoint and `/c/` module discovery, then skips comments/declarations and
+  raw-text element bodies so code/data examples in `script`, `style`, `textarea`, or `title` do
+  not produce false FW229 failures or copied client modules.
+- `pnpm exec vitest --run packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts packages/server/src/static-export-replay.test.ts`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm exec vp check packages/server/src/static-export-document-refs.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

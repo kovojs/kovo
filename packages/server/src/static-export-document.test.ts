@@ -209,4 +209,35 @@ describe('server static export document boundary', () => {
       '/c/cart.client.js?v=1#Cart$add',
     ]);
   });
+
+  it('ignores refs inside comments and raw-text element bodies while reading opening attributes', () => {
+    const exportOrigin = 'https://shop.example.test';
+    const routeArtifacts = [
+      {
+        body: [
+          '<main>',
+          '<!-- <form action="/_m/comment/add"><button>Add</button></form> -->',
+          '<script type="application/json" src="/c/config.client.js?v=1">',
+          '{"template":"</scripture><button on:click=\\"/c/script-body.client.js?v=1#open\\" formaction=\\"/_m/script/add\\">Add</button>"}',
+          '</script>',
+          '<style>.demo::before { content: \'<a href="/_q/style">\'; }</style>',
+          '<textarea><a href="/_q/textarea">example</a></textarea>',
+          '<title><a href="/_q/title">example</a></title>',
+          '<button on:click="/c/real.client.js?v=2#Real$open">Open</button>',
+          '</main>',
+        ].join(''),
+        headers: {},
+        path: '/cart/index.html',
+        status: 200,
+      },
+    ];
+
+    expect(
+      collectStaticExportServerEndpointRefs(routeArtifacts[0]?.body ?? '', exportOrigin),
+    ).toEqual([]);
+    expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
+      '/c/config.client.js?v=1',
+      '/c/real.client.js?v=2#Real$open',
+    ]);
+  });
 });
