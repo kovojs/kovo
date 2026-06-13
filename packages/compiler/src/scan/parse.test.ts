@@ -55,6 +55,7 @@ export const ChildSlot = component('child-slot', {
       offset: source.indexOf('<span>'),
       source: '<span>{cart.count}</span>',
     });
+    expect(slot.childBody).toEqual(jsxElementChildBody(slot));
   });
 
   it('records JSX expression container spans for source patches', () => {

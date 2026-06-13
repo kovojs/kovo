@@ -102,6 +102,7 @@ export interface JsxAttributeModel {
 export interface JsxElementModel {
   ancestorTags: readonly string[];
   attributes: readonly JsxAttributeModel[];
+  childBody: JsxElementChildBody | null;
   childExpressionContainers: readonly SourceSpan[];
   childNonWhitespaceCount: number;
   childSource: string;
@@ -397,17 +398,7 @@ export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
 }
 
 export function jsxElementChildBody(element: JsxElementModel): JsxElementChildBody | null {
-  if (element.selfClosing) return null;
-
-  const raw = element.childSource;
-  const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
-  const body = raw.trim();
-  if (!body) return null;
-
-  return {
-    offset: element.openingEnd + leadingWhitespace,
-    source: body,
-  };
+  return element.childBody;
 }
 
 export function soleJsxExpressionChild(
@@ -1178,6 +1169,10 @@ function jsxElementModel(
   const closingStart = ts.isJsxElement(node)
     ? node.closingElement.getStart(sourceFile)
     : node.getEnd();
+  const childSource = ts.isJsxElement(node)
+    ? source.slice(openingElement.getEnd(), closingStart)
+    : '';
+  const selfClosing = !ts.isJsxElement(node);
 
   return {
     ancestorTags: jsxAncestorTags(sourceFile, node),
@@ -1197,7 +1192,8 @@ function jsxElementModel(
         },
       ];
     }),
-    childSource: ts.isJsxElement(node) ? source.slice(openingElement.getEnd(), closingStart) : '',
+    childBody: jsxChildBody(childSource, openingElement.getEnd(), selfClosing),
+    childSource,
     ...jsxChildFacts(node, sourceFile),
     closingStart,
     end: node.getEnd(),
@@ -1205,7 +1201,7 @@ function jsxElementModel(
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
     openingSource: source.slice(openingElement.getStart(sourceFile), openingElement.getEnd()),
-    selfClosing: !ts.isJsxElement(node),
+    selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
       source,
       openingElement,
@@ -1213,6 +1209,23 @@ function jsxElementModel(
     ),
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
+  };
+}
+
+function jsxChildBody(
+  childSource: string,
+  openingEnd: number,
+  selfClosing: boolean,
+): JsxElementChildBody | null {
+  if (selfClosing) return null;
+
+  const leadingWhitespace = /^\s*/.exec(childSource)?.[0].length ?? 0;
+  const body = childSource.trim();
+  if (!body) return null;
+
+  return {
+    offset: openingEnd + leadingWhitespace,
+    source: body,
   };
 }
 
