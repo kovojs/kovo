@@ -156,6 +156,23 @@ Implemented areas:
   manifest parsing, route-entry expansion, or static-export asset projection helpers. Starter and
   commerce adoption keep using the public dev plugin, manifest-file stylesheet preflight, and
   build/export-with-manifest bridge while server internals retain the lower-level owners.
+- The focused `@jiso/server/app-shell/node` public subpath now exposes only the closed Node
+  adapter entrypoint and its adapter-level types; raw `IncomingMessage -> Request` conversion and
+  `Response -> ServerResponse` writer helpers stay internal to the server adapter owner.
+
+Round358 Node adapter public boundary evidence:
+
+- `packages/server/src/api/app-shell/node.ts` removes direct public forwards for
+  `nodeRequestToWebRequest()`, `writeWebResponseToNode()`, and writer options while preserving
+  `toNodeHandler()` plus `NodeHandlerOptions`/`NodeRequestHandler`.
+- `packages/server/src/api/app.test.ts` pins the public `@jiso/server/app-shell/node` value surface
+  to `toNodeHandler()` and compile-time asserts the removed writer option alias stays absent under
+  SPEC §9.5.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite-dev.test.ts examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/node.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round350 Vite manifest/asset helper public boundary evidence:
 

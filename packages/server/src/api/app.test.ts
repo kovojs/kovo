@@ -67,6 +67,12 @@ type FocusedNodeHandlerOptions = import('./app-shell/node.js').NodeHandlerOption
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type FocusedNodeRequestHandler = import('./app-shell/node.js').NodeRequestHandler;
 
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedFocusedWriteWebResponseToNodeOptions =
+  // @ts-expect-error SPEC.md §9.5: raw Node response writer options stay inside the node adapter
+  // implementation; public app-shell/node consumers receive only the closed adapter entrypoint.
+  import('./app-shell/node.js').WriteWebResponseToNodeOptions;
+
 // @ts-expect-error SPEC.md §9.5: plugin build-output client-module planning stays internal to the
 // Vite output writer, not a public app-shell/Vite consumer alias.
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
@@ -224,11 +230,7 @@ describe('server app-shell public API barrels', () => {
       'respond',
       'route',
     ]);
-    expect(moduleValueKeys(packageNodeApi)).toEqual([
-      'nodeRequestToWebRequest',
-      'toNodeHandler',
-      'writeWebResponseToNode',
-    ]);
+    expect(moduleValueKeys(packageNodeApi)).toEqual(['toNodeHandler']);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([
       'StaticExportError',
       'assertStaticExportManifestMatchesResult',
@@ -271,6 +273,8 @@ describe('server app-shell public API barrels', () => {
       clientModulesApi.versionedClientModuleHref,
     );
     expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
+    expect(packageNodeApi).not.toHaveProperty('nodeRequestToWebRequest');
+    expect(packageNodeApi).not.toHaveProperty('writeWebResponseToNode');
     expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(packageStaticExportApi.staticExportInventory).toBe(
       staticExportResultApi.staticExportInventory,

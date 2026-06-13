@@ -3571,6 +3571,15 @@ plans/codebase-quality-round2.md`; `git diff --check`.
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- Round358 Node adapter public boundary slice:
+  `packages/server/src/api/app-shell/node.ts` no longer forwards raw Node/Web conversion and
+  response-writer helpers; `packages/server/src/api/app.test.ts` pins the focused public subpath to
+  `toNodeHandler()` plus adapter-level types under SPEC §9.5.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/vite-dev.test.ts examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/node.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce
 
