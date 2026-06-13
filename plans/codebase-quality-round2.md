@@ -384,8 +384,8 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the Round140/Round141 integration wave through `03fccaf`:
-  inline loader check, 781 formatted files, 681 lint/typechecked files, and 7 typechecked
+- `pnpm run check` passed after the Round143/145/146/144/147 integration wave through `6a05b77`:
+  inline loader check, 782 formatted files, 682 lint/typechecked files, and 7 typechecked
   example/conformance projects.
   example/conformance projects.
 
@@ -444,6 +444,16 @@ Focused gates since that broad run:
   `git diff --check` passed in Round140.
 - UI: scroll-area native viewport state, headless/UI/gallery tests, primitive lint, exact
   `vp check`, and `git diff --check` passed in Round141.
+- Drizzle: nested destructuring assignment aliases, package suite, pinned conformance, exact
+  `vp check`, and `git diff --check` passed in Round143.
+- Server/app-shell: static export document/client-module replay consolidation, server/create-jiso
+  tests, `tsc`, exact `vp check`, and `git diff --check` passed in Round145.
+- Runtime: query runtime integration test split, full runtime suite, browser runtime,
+  inline-loader check, `tsc`, exact `vp check`, and `git diff --check` passed in Round146.
+- Harness: `fw-explain` assertion facts, commerce source-truth, targeted `fw-check`,
+  `check:build`, exact `vp check`, and `git diff --check` passed in Round144.
+- UI: fieldset disabled native evidence, headless/UI/gallery tests, primitive lint, exact
+  `vp check`, and `git diff --check` passed in Round147.
 
 Stale but useful broad references:
 
