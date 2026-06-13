@@ -56,25 +56,6 @@ export interface SourcePatchResult {
   sourceOffsetMap: SourceOffsetMap;
 }
 
-export function identitySourceOffsetMap(length: number): SourceOffsetMap {
-  return {
-    generatedLength: length,
-    originalLength: length,
-    segments: [{ generatedStart: 0, length, originalStart: 0 }],
-  };
-}
-
-export function prefixedSourceOffsetMap(
-  prefixLength: number,
-  originalLength: number,
-): SourceOffsetMap {
-  return {
-    generatedLength: prefixLength + originalLength,
-    originalLength,
-    segments: [{ generatedStart: prefixLength, length: originalLength, originalStart: 0 }],
-  };
-}
-
 export function sourceReplacementOffsetMap(
   originalLength: number,
   replacements: readonly SourceReplacement[],

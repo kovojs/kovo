@@ -454,8 +454,9 @@ The compiler pipeline no longer exports dead lowering/result option types left b
 sequence helper; only the active patch helpers keep annotated internal result shapes.
 The compile pipeline now names the combined pre-derive patch state for what it is rather than
 carrying the old navigation-only compatibility name.
-The unused offset-map composition helper and stale data-bind template-body validator export were
-deleted after the single model-patch pass and analyzer-owned template stamp facts made them dead.
+Unused offset-map identity/prefix/composition helpers and the stale data-bind template-body
+validator export were deleted after the single model-patch pass and analyzer-owned template stamp
+facts made them dead.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
