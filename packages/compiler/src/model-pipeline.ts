@@ -10,23 +10,18 @@ export interface ComponentPipelineState<Model> {
   source: string;
 }
 
-export interface ComponentPipelinePatchResult<Model> {
+interface ComponentPipelinePatchResult<Model> {
   sourceOffsetMap: SourceOffsetMap;
   state: ComponentPipelineState<Model>;
 }
 
-export interface ComponentPipelineEmitPatchResult {
+interface ComponentPipelineEmitPatchResult {
   source: string;
   sourceOffsetMap: SourceOffsetMap;
 }
 
-export interface ComponentPipelinePatchOptions {
+interface ComponentPipelinePatchOptions {
   prefix?: string;
-}
-
-export interface ComponentPipelineLowering {
-  prefix?: string;
-  replacements: readonly SourceReplacement[];
 }
 
 export function componentPipelineState<Model>(

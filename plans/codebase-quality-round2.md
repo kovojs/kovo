@@ -333,6 +333,8 @@ compatibility reparses between those independent lowerers while preserving the l
 for generated derive/data-bind model facts.
 The now-unused ordered lowering sequence helper and tests were deleted after production compile
 stopped using it, leaving explicit patch passes as the remaining compile-path abstraction.
+The compiler pipeline no longer exports dead lowering/result option types left behind by the
+sequence helper; only the active patch helpers keep annotated internal result shapes.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -350,6 +352,8 @@ packages/compiler/src/model-pipeline.test.ts`; `pnpm exec tsc --noEmit --pretty 
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/view-transitions.test.ts`; `pnpm exec tsc --noEmit --pretty false`.
+- Pipeline dead type cleanup: `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`.
 - Handler call-argument reference facts: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
 tsc --noEmit --pretty false`.
