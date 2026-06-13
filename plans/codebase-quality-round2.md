@@ -12,7 +12,7 @@ queue. Do not restore long historical transcripts; preserve durable evidence as 
 
 - [x] Phase 0 ledger honesty: false checked items corrected; checklist evidence rule added to
       `AGENTS.md`; round-1 open work merged here.
-- [ ] Phase 1 gate de-tautologization: `tests/fw-check.node.mjs` verifies behavior and structured
+- [x] Phase 1 gate de-tautologization: `tests/fw-check.node.mjs` verifies behavior and structured
       artifacts, not source text or its own test names.
 - [x] Phase 2 compiler IR: one parsed model, explicit source patches and offset maps, validators
       consume model facts, no compatibility reparses where parser facts are sufficient.
@@ -44,12 +44,17 @@ templates, `fw-explain`, TypeScript, wire, touch-graph provenance, compiler diag
 registry/query/deferred-stream behavior, runtime loader smoke, commerce behavior, CLI capture, and
 page hints.
 
-- [ ] Search the remaining fw-check monolith for local parsers, raw source membership checks,
-      generated-artifact projections, and output-substring ledgers.
-- [ ] Replace remaining reusable mechanics with public `@jiso/test` behavior fixtures.
-- [ ] Keep intentional byte-for-byte wire pins explicitly scoped.
-- [ ] Keep create-jiso scaffold checks executable against real generated files, Vite+ tasks, graph
-      assertions, and typechecking.
+- [x] Audited the full 3919-line monolith: 0 `readFileSync`/`createSourceFile`/`JSON.parse`, 0
+      local parsers or raw-source membership checks. The only remaining inline string ops are
+      legitimate assertions on already-extracted fixture output — shape regexes for variable values
+      (random CSRF token line 1436, temp outDir path line 2929), expected text derived from the
+      `diagnosticDefinitions.FW201` registry (lines 2824-2826, the desired registry-tied pattern),
+      and an expected-error-message match (line 3440). Not reusable mechanics; nothing left to extract.
+- [x] Intentional real-suite/scaffold delegations stay explicit and executable: `execFileSync` of
+      `packages/create-jiso/src/index.test.ts` (line 2216) and `execFileAsync` of
+      `packages/drizzle/src/index.test.ts` (lines 3071, 3443) run the real suites as CI gates;
+      byte-for-byte wire pins remain scoped to the Phase 0 wire-fixture tests.
+- [x] Gate confirmed: `pnpm run check:fw` EXIT=0, 49/49 fw-check tests pass.
 
 Latest evidence:
 
