@@ -105,6 +105,21 @@ Implemented areas:
 - `@jiso/server/app-shell/core` now owns the app-authoring route/response constructors needed by
   outside SPEC §9.5 export consumers, and the docs-site export path loads only focused app-shell
   SSR subpaths instead of merging the root `@jiso/server` package into its app factory.
+- Manifest-file Vite export helpers now share one SPEC §9.5 build/replay boundary: the focused
+  `@jiso/server/app-shell/vite` manifest-file functions construct the app-shell build once through
+  `createJisoAppShellViteStaticExportBuildFromManifestFile()` and delegate write, manifest, and
+  inventory replay through the build-backed export helpers instead of carrying four duplicated
+  wrapper bodies.
+
+Round284 manifest-file Vite replay cleanup evidence:
+
+- `packages/server/src/vite-static-export-manifest-file.ts` now owns a single local
+  `replayJisoAppShellViteManifestFileBuild()` helper for manifest-file write and dry-run tasks,
+  preserving the public focused Vite subpath while reducing the remaining module split duplication.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-static-export-manifest-file.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round278 docs-site app-shell boundary evidence:
 

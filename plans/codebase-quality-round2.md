@@ -147,6 +147,14 @@ markdown tables inline.
 
 Latest evidence:
 
+- Phase 5 manifest-file Vite replay cleanup slice:
+  `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-static-export-manifest-file.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence:
+  `packages/server/src/vite-static-export-manifest-file.ts` now routes manifest-file write,
+  manifest, and inventory tasks through one local SPEC §9.5 build/replay helper while preserving
+  the focused `@jiso/server/app-shell/vite` public boundary.
 - Phase 5 directory-index adoption closure slice:
   `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|runs .* with the built stylesheet href"`;
