@@ -218,6 +218,10 @@ describe('compiled interactive gallery demos', () => {
       'fw-state=\'{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}\'',
     );
     expect(autocomplete).toContain('autocompleteInputAttributes({');
+    expect(autocomplete).toContain(
+      'id="gallery-autocomplete-form" data-gallery-form="autocomplete"',
+    );
+    expect(autocomplete).toContain("form: 'gallery-autocomplete-form'");
     expect(autocomplete).toContain('autocompleteOptionAttributes({');
     expect(autocomplete).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$input_input"/,
@@ -258,6 +262,8 @@ describe('compiled interactive gallery demos', () => {
       'fw-state=\'{"highlightedValue":"austin","open":false,"value":"austin"}\'',
     );
     expect(combobox).toContain('comboboxInputAttributes({');
+    expect(combobox).toContain('id="gallery-combobox-form" data-gallery-form="combobox"');
+    expect(combobox).toContain("form: 'gallery-combobox-form'");
     expect(combobox).toContain('comboboxListboxAttributes({');
     expect(combobox).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$input_input"/,

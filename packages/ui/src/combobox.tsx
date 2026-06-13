@@ -15,6 +15,7 @@ import {
 
 export interface ComboboxStateProps {
   disabled?: boolean;
+  form?: string;
   highlightedValue?: string;
   invalid?: boolean;
   items?: readonly HeadlessComboboxItem[];
@@ -96,6 +97,7 @@ export const Combobox = component('combobox', {
   render(props: ComboboxProps) {
     const attrs = comboboxRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -130,6 +132,7 @@ export const ComboboxInput = component('combobox-input', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -159,6 +162,7 @@ export const ComboboxInput = component('combobox-input', {
         data-required={attrs['data-required']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         list={attrs.list}
         name={attrs.name}
@@ -176,6 +180,7 @@ export const ComboboxListbox = component('combobox-listbox', {
   render(props: ComboboxListboxProps) {
     const attrs = comboboxListboxAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -212,6 +217,7 @@ export const ComboboxOption = component('combobox-option', {
   render(props: ComboboxOptionProps) {
     const attrs = comboboxOptionAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
@@ -249,6 +255,7 @@ export const ComboboxValue = component('combobox-value', {
   render(props: ComboboxValueProps) {
     const attrs = comboboxValueAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),

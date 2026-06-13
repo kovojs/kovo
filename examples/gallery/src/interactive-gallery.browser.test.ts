@@ -413,6 +413,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   it('updates combobox listbox ARIA and selected value through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryComboboxDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-combobox-input'));
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-combobox-form'));
     const listbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
     const chicago = required(
       root.querySelector<HTMLButtonElement>('#gallery-combobox-listbox-option-2'),
@@ -431,7 +432,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(input.getAttribute('aria-expanded')).toBe('false');
     expect(input.getAttribute('aria-controls')).toBe('gallery-combobox-listbox');
     expect(input.name).toBe('gallery-city');
+    expect(input.form).toBe(form);
     expect(input.value).toBe('austin');
+    expect(new FormData(form).get('gallery-city')).toBe('austin');
     expect(listbox.hidden).toBe(true);
     expect(chicago.getAttribute('role')).toBe('option');
     expect(output.textContent).toBe('Austin');
@@ -461,6 +464,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         'gallery-combobox-listbox-option-2',
       );
       expect(currentInput.value).toBe('chicago');
+      expect(new FormData(form).get('gallery-city')).toBe('chicago');
       expect(currentListbox.hidden).toBe(false);
       expect(currentChicago.getAttribute('data-highlighted')).toBe('');
       expect(currentChicago.getAttribute('aria-selected')).toBe('true');
@@ -485,6 +489,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('false');
       expect(currentInput.value).toBe('chicago');
+      expect(new FormData(form).get('gallery-city')).toBe('chicago');
       expect(currentListbox.hidden).toBe(true);
       expect(currentOutput.textContent).toBe('Chicago city');
     });
@@ -501,6 +506,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"highlightedValue":"austin","open":false,"value":"austin"}',
       );
       expect(currentInput.value).toBe('austin');
+      expect(new FormData(form).get('gallery-city')).toBe('austin');
       expect(currentListbox.hidden).toBe(true);
     });
   });
@@ -508,6 +514,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   it('updates autocomplete datalist suggestions and value through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAutocompleteDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'));
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-autocomplete-form'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
     );
@@ -522,7 +529,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(input.getAttribute('aria-expanded')).toBe('false');
     expect(input.getAttribute('aria-controls')).toBe('gallery-autocomplete-list');
     expect(input.name).toBe('gallery-tag');
+    expect(input.form).toBe(form);
     expect(input.value).toBe('de');
+    expect(new FormData(form).get('gallery-tag')).toBe('de');
     expect(output.textContent).toBe('Design');
 
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -546,6 +555,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         'gallery-autocomplete-list-option-0',
       );
       expect(currentInput.value).toBe('dev');
+      expect(new FormData(form).get('gallery-tag')).toBe('dev');
       expect(currentDevelopment.value).toBe('development');
       expect(currentDevelopment.getAttribute('data-highlighted')).toBe('');
     });
@@ -567,6 +577,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('false');
       expect(currentInput.value).toBe('development');
+      expect(new FormData(form).get('gallery-tag')).toBe('development');
       expect(currentOutput.textContent).toBe('Development');
     });
 
@@ -586,6 +597,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"highlightedValue":"development","inputValue":"development","open":false,"value":"development"}',
       );
       expect(currentInput.value).toBe('development');
+      expect(new FormData(form).get('gallery-tag')).toBe('development');
       expect(currentOutput.textContent).toBe('Development');
     });
   });

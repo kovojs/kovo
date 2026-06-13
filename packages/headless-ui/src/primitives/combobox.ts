@@ -22,6 +22,7 @@ export interface ComboboxItem {
 
 export interface ComboboxState {
   disabled?: boolean;
+  form?: string;
   highlightedValue?: string;
   invalid?: boolean;
   items?: readonly ComboboxItem[];
@@ -179,6 +180,7 @@ export function comboboxInputAttributes(
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
     disabled: options.disabled === true,
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
     ...(options.required === true ? { required: true } : {}),

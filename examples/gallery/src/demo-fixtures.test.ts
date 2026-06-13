@@ -150,6 +150,8 @@ describe('gallery demo fixtures', () => {
       'aria-activedescendant="gallery-autocomplete-list-option-1"',
     );
     expect(autocomplete.html).toContain('list="gallery-autocomplete-list"');
+    expect(autocomplete.html).toContain('id="gallery-autocomplete-form"');
+    expect(autocomplete.html).toContain('form="gallery-autocomplete-form"');
     expect(autocomplete.html).toContain('name="gallery-plan-search"');
     expect(autocomplete.html).toContain('<datalist');
     expect(autocomplete.html).toContain('id="gallery-autocomplete-list"');
@@ -210,6 +212,8 @@ describe('gallery demo fixtures', () => {
     expect(combobox.html).toContain('aria-expanded="true"');
     expect(combobox.html).toContain('aria-controls="gallery-combobox-listbox"');
     expect(combobox.html).toContain('aria-activedescendant="gallery-combobox-listbox-option-1"');
+    expect(combobox.html).toContain('id="gallery-combobox-form"');
+    expect(combobox.html).toContain('form="gallery-combobox-form"');
     expect(combobox.html).toContain('name="gallery-assignee"');
     expect(combobox.html).toContain('role="listbox"');
     expect(combobox.html).toContain('id="gallery-combobox-listbox"');

@@ -698,6 +698,7 @@ export function AutocompleteDemo(): string {
   ];
   const state = {
     descriptionId: 'gallery-autocomplete-description',
+    form: 'gallery-autocomplete-form',
     highlightedValue: 'growth',
     inputValue: 'gr',
     items,
@@ -717,6 +718,7 @@ export function AutocompleteDemo(): string {
       <label id="gallery-autocomplete-label" for="gallery-autocomplete-input">
         Plan search
       </label>
+      <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
       <div data-ui-demo="autocomplete">
         {Autocomplete.definition.render({
           ...state,
@@ -1005,6 +1007,7 @@ export function ComboboxDemo(): string {
   ];
   const state = {
     descriptionId: 'gallery-combobox-description',
+    form: 'gallery-combobox-form',
     highlightedValue: 'grace',
     items,
     listboxId: 'gallery-combobox-listbox',
@@ -1024,6 +1027,7 @@ export function ComboboxDemo(): string {
       <label id="gallery-combobox-label" for="gallery-combobox-input">
         Assignee
       </label>
+      <form id="gallery-combobox-form" data-gallery-form="combobox" />
       <div data-ui-demo="combobox">
         {Combobox.definition.render({
           ...state,

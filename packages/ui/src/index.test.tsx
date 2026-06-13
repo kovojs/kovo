@@ -1269,6 +1269,7 @@ describe('@jiso/ui styled package foundation', () => {
     ];
     const state = {
       descriptionId: 'assignee-help',
+      form: 'assignee-form',
       highlightedValue: 'grace',
       items,
       listboxId: 'assignee-listbox',
@@ -1309,6 +1310,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(input).toContain('aria-autocomplete="list"');
     expect(input).toContain('aria-controls="assignee-listbox"');
     expect(input).toContain('aria-expanded="true"');
+    expect(input).toContain('form="assignee-form"');
     expect(input).toContain('list="assignee-listbox"');
     expect(input).toContain('role="combobox" type="text" value="ada"');
     expect(listbox).toContain('role="listbox"');
@@ -1330,6 +1332,7 @@ describe('@jiso/ui styled package foundation', () => {
     ];
     const state = {
       descriptionId: 'plan-search-help',
+      form: 'plan-form',
       highlightedValue: 'growth',
       inputValue: 'gr',
       items,
@@ -1367,6 +1370,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(AutocompleteValue.name).toBe('autocomplete-value');
     expect(input).toContain('aria-activedescendant="plan-suggestions-option-1"');
     expect(input).toContain('autocomplete="off"');
+    expect(input).toContain('form="plan-form"');
     expect(input).toContain('list="plan-suggestions"');
     expect(input).toContain('role="combobox" type="text" value="gr"');
     expect(list).toContain('<datalist');

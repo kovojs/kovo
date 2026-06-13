@@ -15,6 +15,7 @@ import {
 
 export interface AutocompleteStateProps {
   disabled?: boolean;
+  form?: string;
   highlightedValue?: string;
   inputValue?: string;
   invalid?: boolean;
@@ -98,6 +99,7 @@ export const Autocomplete = component('autocomplete', {
   render(props: AutocompleteProps) {
     const attrs = autocompleteRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputValue === undefined ? {} : { inputValue: props.inputValue }),
@@ -134,6 +136,7 @@ export const AutocompleteInput = component('autocomplete-input', {
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputValue === undefined ? {} : { inputValue: props.inputValue }),
@@ -165,6 +168,7 @@ export const AutocompleteInput = component('autocomplete-input', {
         data-required={attrs['data-required']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         list={attrs.list}
         name={attrs.name}
@@ -182,6 +186,7 @@ export const AutocompleteList = component('autocomplete-list', {
   render(props: AutocompleteListProps) {
     const attrs = autocompleteListAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputValue === undefined ? {} : { inputValue: props.inputValue }),
@@ -217,6 +222,7 @@ export const AutocompleteOption = component('autocomplete-option', {
   render(props: AutocompleteOptionProps) {
     const attrs = autocompleteOptionAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputValue === undefined ? {} : { inputValue: props.inputValue }),
@@ -255,6 +261,7 @@ export const AutocompleteValue = component('autocomplete-value', {
   render(props: AutocompleteValueProps) {
     const attrs = autocompleteValueAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.inputValue === undefined ? {} : { inputValue: props.inputValue }),

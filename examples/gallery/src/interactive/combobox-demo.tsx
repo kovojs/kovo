@@ -29,6 +29,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
   render: (_queries: Record<string, never>, state: GalleryComboboxDemoState) => {
     const listboxId = 'gallery-combobox-listbox';
     const comboboxState = {
+      form: 'gallery-combobox-form',
       highlightedValue: state.highlightedValue,
       items: cityOptions,
       listboxId,
@@ -48,6 +49,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
         <label id="gallery-combobox-label" for="gallery-combobox-input">
           City
         </label>
+        <form id="gallery-combobox-form" data-gallery-form="combobox" />
         <input
           {...comboboxInputAttributes({
             ...comboboxState,

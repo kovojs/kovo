@@ -186,6 +186,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `NavigationMenu`/`NavigationMenuList` render primitive `data-state`, and the compiled
       navigation-menu gallery proves Enter keyboard open, canceled Escape restoration, roving
       focus, and link selection through refreshed generated artifacts plus a browser-backed check.
+      Evidence 2026-06-13: combobox and autocomplete now preserve native external `form`
+      ownership through headless input attributes and styled input wrappers; static gallery
+      contracts and refreshed compiled demos prove the app-authored TSX, while browser checks
+      assert generated-handler value changes update `FormData` for the external form.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -260,6 +264,15 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "opens and selects from generated dropdown and context menu handlers|updates generated menubar and navigation-menu roving/open state")`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/dropdown-menu.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.ts packages/headless-ui/src/primitives/menubar.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Combobox/autocomplete native form ownership slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t "autocomplete|combobox"`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "combobox|autocomplete")`;
+      `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit`;
+      `pnpm exec vp check`;
       `git diff --check`.
 - [x] Compiled gallery axe and accessibility contract slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/index.test.tsx -t "context-menu|otp-field|toast"`;

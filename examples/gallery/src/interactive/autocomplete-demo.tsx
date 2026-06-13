@@ -30,6 +30,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
   render: (_queries: Record<string, never>, state: GalleryAutocompleteDemoState) => {
     const listId = 'gallery-autocomplete-list';
     const autocompleteState = {
+      form: 'gallery-autocomplete-form',
       highlightedValue: state.highlightedValue,
       inputValue: state.inputValue,
       items: tagOptions,
@@ -53,6 +54,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
         <label id="gallery-autocomplete-label" for="gallery-autocomplete-input">
           Tag
         </label>
+        <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
         <input
           {...autocompleteInputAttributes({
             ...autocompleteState,

@@ -22,6 +22,7 @@ export interface AutocompleteItem {
 
 export interface AutocompleteState {
   disabled?: boolean;
+  form?: string;
   highlightedValue?: string;
   inputValue?: string;
   invalid?: boolean;
@@ -211,6 +212,7 @@ export function autocompleteInputAttributes(
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
     ...(options.required === true ? { required: true } : {}),
