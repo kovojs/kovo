@@ -3684,6 +3684,7 @@ function queryLoadCallbackFromSpreadExpression(
 
 function queryCallbackPropertyIsLoad(node: Node): boolean {
   if (
+    !Node.isGetAccessorDeclaration(node) &&
     !Node.isMethodDeclaration(node) &&
     !Node.isPropertyAssignment(node) &&
     !Node.isShorthandPropertyAssignment(node)
@@ -3695,6 +3696,7 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
 
 function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | 'source'): boolean {
   if (
+    !Node.isGetAccessorDeclaration(node) &&
     !Node.isMethodDeclaration(node) &&
     !Node.isPropertyAssignment(node) &&
     !Node.isShorthandPropertyAssignment(node)
@@ -3705,6 +3707,7 @@ function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | 'source'
   if (!computedPropertyNameExpression(name) || propertyNameText(name, true)) return false;
 
   if (Node.isMethodDeclaration(node)) return true;
+  if (Node.isGetAccessorDeclaration(node)) return true;
   if (Node.isShorthandPropertyAssignment(node)) return true;
 
   const initializer = node.getInitializer();
@@ -3724,6 +3727,16 @@ function queryCallbackPropertyResolution(
 
   if (Node.isMethodDeclaration(node)) {
     return { kind: 'found', callbacks: [node], unresolved: false };
+  }
+
+  if (Node.isGetAccessorDeclaration(node)) {
+    if (mode === 'source') return { kind: 'unresolved' };
+    // SPEC §10.2/§11.1: accessor query options are executable loader surfaces; project
+    // extraction must prove the returned callback instead of dropping the member.
+    const callback = callbackFunctionFromGetAccessorDeclaration(node, new Set());
+    return callback
+      ? { kind: 'found', callbacks: [callback], unresolved: false }
+      : { kind: 'unresolved' };
   }
 
   if (Node.isShorthandPropertyAssignment(node)) {

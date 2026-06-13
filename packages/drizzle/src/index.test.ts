@@ -11724,6 +11724,29 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks source query-loader getter callbacks as FW406', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: [
+          'function loadProducts(_input, db) {',
+          '  return db.select({}).from(products);',
+          '}',
+          '',
+          'export const productQuery = query("product/source-getter-loader", {',
+          '  get load() {',
+          '    return loadProducts;',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      unresolvedQueryLoadFact('product/source-getter-loader', 'product.queries.ts:5'),
+    ]);
+  });
+
   it('marks source query loaders from config spreads as FW406', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -14141,6 +14164,47 @@ export interface CommerceInvalidationSets {
           name: 'string',
         },
         site: 'product.domain.ts:31',
+      },
+    ]);
+  });
+
+  it('extracts project query loader getters returning static callbacks', () => {
+    const files = [
+      pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<void> };']),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  name: text("name").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, name: products.name }).from(products);',
+          '}',
+          '',
+          'const options = {',
+          '  get load() {',
+          '    return loadProducts;',
+          '  },',
+          '};',
+          '',
+          'export const productQuery = query("product/getter-loader", options);',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/getter-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'product.domain.ts:18',
       },
     ]);
   });

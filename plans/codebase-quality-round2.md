@@ -126,6 +126,10 @@ FW406 instead of fabricated facts.
 
 Latest evidence:
 
+- [x] Query loader getter options now degrade in source mode and extract returned static callbacks in
+      project mode instead of dropping executable accessor loader surfaces. Verified with focused
+      Drizzle source/project tests, full Drizzle package tests, `tsc`, exact `vp check`, and
+      `git diff --check`.
 - [x] Drizzle update predicate subquery reads now have distinct `update-predicate` provenance, exact
       read-source coverage, and FW406 degradation for opaque predicate subquery sources. Verified
       with focused predicate/CTE tests, full Drizzle package plus pinned conformance tests, `tsc`,
