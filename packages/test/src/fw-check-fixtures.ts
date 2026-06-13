@@ -39,6 +39,13 @@ export interface FwCheckAssertionFact {
   version: FwCheckOutput['version'];
 }
 
+export interface FwCheckOkAssertionFact {
+  exitCode: 0;
+  issueCount: 0;
+  status: 'ok';
+  version: FwCheckOutput['version'];
+}
+
 export function parseFwCheckOutput(output: string): FwCheckOutput {
   const lines = output.trimEnd().split('\n');
   const version = lines[0];
@@ -85,6 +92,23 @@ export function fwCheckAssertionFact(result: FwCheckResultLike): FwCheckAssertio
     diagnostics: fact.diagnostics.map(({ raw: _raw, ...diagnostic }) => diagnostic),
     exitCode: fact.exitCode,
     status: fact.status,
+    version: fact.version,
+  };
+}
+
+export function fwCheckOkAssertionFact(result: FwCheckResultLike): FwCheckOkAssertionFact {
+  const fact = fwCheckAssertionFact(result);
+  const issueCount = fact.coverage.length + fact.diagnostics.length;
+  if (fact.exitCode !== 0 || fact.status !== 'ok' || issueCount !== 0) {
+    throw new Error(
+      `fw check expected OK: exitCode=${fact.exitCode} status=${fact.status} diagnostics=${fact.diagnostics.length} coverage=${fact.coverage.length}`,
+    );
+  }
+
+  return {
+    exitCode: 0,
+    issueCount: 0,
+    status: 'ok',
     version: fact.version,
   };
 }

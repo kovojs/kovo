@@ -16,7 +16,7 @@ import {
   fwExplainUpdateConsumers,
   parseFwExplainOutput,
 } from '@jiso/test/fw-explain-fixtures';
-import { fwCheckResultFact } from '@jiso/test/fw-check-fixtures';
+import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
   graphFragmentTargetForQuery,
   graphInvalidatedByQueries,
@@ -89,10 +89,9 @@ describe('commerce source-truth graph acceptance', () => {
         }),
       ]),
     );
-    expect(fwCheckResultFact(fwCheck(graphArtifact))).toEqual({
-      coverage: [],
-      diagnostics: [],
+    expect(fwCheckOkAssertionFact(fwCheck(graphArtifact))).toEqual({
       exitCode: 0,
+      issueCount: 0,
       status: 'ok',
       version: 'fw-check/v1',
     });
@@ -162,10 +161,9 @@ describe('commerce source-truth graph acceptance', () => {
       sourceLineMismatches: [],
       unresolvedMutations: [],
     });
-    expect(fwCheckResultFact(fwCheck(commerceGraph))).toEqual({
-      coverage: [],
-      diagnostics: [],
+    expect(fwCheckOkAssertionFact(fwCheck(commerceGraph))).toEqual({
       exitCode: 0,
+      issueCount: 0,
       status: 'ok',
       version: 'fw-check/v1',
     });

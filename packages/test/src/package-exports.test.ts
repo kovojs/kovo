@@ -60,6 +60,7 @@ import {
   fwCheckCoverageFacts,
   fwCheckDiagnosticAssertionFacts,
   fwCheckDiagnosticFacts,
+  fwCheckOkAssertionFact,
   fwCheckResultFact,
   parseFwCheckOutput,
   type FwCheckAssertionFact,
@@ -67,6 +68,7 @@ import {
   type FwCheckCoverageFact,
   type FwCheckDiagnosticAssertionFact,
   type FwCheckDiagnosticFact,
+  type FwCheckOkAssertionFact,
   type FwCheckOutput,
   type FwCheckResultFact,
 } from '@jiso/test/fw-check-fixtures';
@@ -544,6 +546,12 @@ describe('@jiso/test package subpath exports', () => {
       diagnostics: [],
       exitCode: 0,
     });
+    expect(fwCheckOkAssertionFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toEqual({
+      exitCode: 0,
+      issueCount: 0,
+      status: 'ok',
+      version: 'fw-check/v1',
+    });
     expect(
       fwCheckDiagnosticFacts(
         'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
@@ -659,6 +667,7 @@ type _PublicSubpathTypes = [
   FwCheckCoverageFact,
   FwCheckDiagnosticAssertionFact,
   FwCheckDiagnosticFact,
+  FwCheckOkAssertionFact,
   FwCheckOutput,
   FwCheckResultFact,
   GraphInvalidationMatrix,

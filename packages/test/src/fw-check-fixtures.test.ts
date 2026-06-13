@@ -6,6 +6,7 @@ import {
   fwCheckCoverageFacts,
   fwCheckDiagnosticAssertionFacts,
   fwCheckDiagnosticFacts,
+  fwCheckOkAssertionFact,
   fwCheckResultFact,
   parseFwCheckOutput,
 } from './fw-check-fixtures.js';
@@ -23,6 +24,12 @@ describe('@jiso/test fw-check fixture seam', () => {
       coverage: [],
       diagnostics: [],
       exitCode: 0,
+      status: 'ok',
+      version: 'fw-check/v1',
+    });
+    expect(fwCheckOkAssertionFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toEqual({
+      exitCode: 0,
+      issueCount: 0,
       status: 'ok',
       version: 'fw-check/v1',
     });
@@ -156,5 +163,15 @@ describe('@jiso/test fw-check fixture seam', () => {
     expect(() => parseFwCheckOutput('fw-explain/v1\nQUERY cart\n')).toThrow(
       'fw check output starts with fw-check/v1: fw-explain/v1',
     );
+  });
+
+  it('rejects non-OK results through the OK assertion seam', () => {
+    expect(() =>
+      fwCheckOkAssertionFact({
+        exitCode: 1,
+        output:
+          'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+      }),
+    ).toThrow('fw check expected OK: exitCode=1 status=issues diagnostics=1 coverage=0');
   });
 });

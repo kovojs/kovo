@@ -56,6 +56,9 @@ Current state:
   key/value fields, so update coverage, unguarded audit, verification diagnostics, FW235, and
   render-equivalence harness checks assert structured public facts instead of serialized output
   strings.
+- Shared `fw-check` fixtures now expose a rawless OK assertion fact, so commerce graph, starter
+  graph, and committed commerce touch-graph gates no longer duplicate the empty diagnostics /
+  coverage result object for SPEC §5.3 `fw-check/v1` success.
 - Integration fix: `fw-check` now uses the canonical
   `applyDeferredStreamResponseToRuntime` API after runtime compatibility export deletion.
 - Shared `@jiso/test/graph-fixtures` now derive graph page, fragment target, invalidation,
@@ -87,7 +90,11 @@ Latest focused evidence:
 - `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
 - `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
-- `pnpm exec vp check packages/test/package.json packages/test/src/fw-check-fixtures.ts packages/test/src/fw-check-fixtures.test.ts packages/test/src/touch-graph-fixtures.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/fw-check-fixtures.ts packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR

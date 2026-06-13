@@ -73,7 +73,7 @@ import {
   fwCheckAssertionFact,
   fwCheckCoverageAssertionFacts,
   fwCheckDiagnosticAssertionFacts,
-  fwCheckResultFact,
+  fwCheckOkAssertionFact,
 } from '../packages/test/src/fw-check-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
 import {
@@ -3138,10 +3138,9 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     target: 'order/receipt',
   }).output;
 
-  assert.deepEqual(fwCheckResultFact(fwCheck(commerceGraph)), {
-    coverage: [],
-    diagnostics: [],
+  assert.deepEqual(fwCheckOkAssertionFact(fwCheck(commerceGraph)), {
     exitCode: 0,
+    issueCount: 0,
     status: 'ok',
     version: 'fw-check/v1',
   });
@@ -3352,10 +3351,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
     },
   );
 
-  assert.deepEqual(fwCheckResultFact(fwCheck(starterGraph)), {
-    coverage: [],
-    diagnostics: [],
+  assert.deepEqual(fwCheckOkAssertionFact(fwCheck(starterGraph)), {
     exitCode: 0,
+    issueCount: 0,
     status: 'ok',
     version: 'fw-check/v1',
   });
@@ -5529,10 +5527,9 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   });
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
-  assert.deepEqual(fwCheckResultFact(fwCheck(commerceGraph)), {
-    coverage: [],
-    diagnostics: [],
+  assert.deepEqual(fwCheckOkAssertionFact(fwCheck(commerceGraph)), {
     exitCode: 0,
+    issueCount: 0,
     status: 'ok',
     version: 'fw-check/v1',
   });
