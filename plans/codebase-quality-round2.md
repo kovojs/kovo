@@ -127,6 +127,12 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       callback declarations; `packages/drizzle/src/index.test.ts` covers project query loaders plus
       source/project domain write callbacks; `conformance/drizzle-pin/src/index.test.ts` pins the
       same surfaces against real `drizzle-orm` Postgres receiver types.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` now treats project member receiver
+      expressions such as `carrier.db` as exact only when ts-morph proves their Postgres Drizzle
+      database type, removing the carrier-member FW406 fallback for proven reads/writes while
+      retaining FW406 for raw SQL, relational query APIs without static projection, helper handoff,
+      detached methods, and overwritten fake members; package and real `drizzle-orm` tests pin the
+      split.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

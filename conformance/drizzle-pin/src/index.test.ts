@@ -487,7 +487,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins nested Drizzle receiver carriers as FW406 under real Drizzle imports', () => {
+  it('pins nested typed Drizzle receiver carrier members under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -573,21 +573,21 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.update().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
@@ -614,15 +614,30 @@ describe('Drizzle pinned subset conformance', () => {
           },
         ],
         query: 'product/nested-carrier',
-        reads: [],
+        reads: ['product'],
         shape: {},
         site: 'conformance/drizzle-pin/src/product.queries.ts:16',
       },
     ]);
     expect(graph).toEqual({
       sync: {
-        reads: [],
-        touches: [],
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:21',
+            source: 'relational-query',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:20',
+            via: 'products',
+          },
+        ],
         unresolved: [
           {
             code: 'FW406',
@@ -643,16 +658,6 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:19',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/cart.domain.ts:20',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/cart.domain.ts:21',
           },
         ],
       },
@@ -1144,7 +1149,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(3);
   });
 
-  it('pins spread-copied carrier receiver calls as FW406 under real Drizzle imports', () => {
+  it('pins spread-copied typed receiver carrier members under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -1182,20 +1187,20 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.queries.ts:12',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call spread.db.execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/product.queries.ts:12',
           },
         ],
         query: 'product/spread-carrier',
-        reads: [],
+        reads: ['product'],
         shape: {},
         site: 'conformance/drizzle-pin/src/product.queries.ts:12',
       },
@@ -4001,7 +4006,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('pins direct real Drizzle query carrier members as explicit FW406 surfaces', () => {
+  it('pins direct real Drizzle query carrier members as exact reads with FW406 writes', () => {
     expect(sql`select * from users`).toBeDefined();
 
     const facts = extractQueryFactsFromProject({
@@ -4045,27 +4050,27 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
             severity: 'warn',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
         ],
         query: 'users/carrier-direct',
-        reads: [],
+        reads: ['user'],
         shape: {},
         site: 'conformance/drizzle-pin/src/user.queries.ts:14',
       },
@@ -4724,7 +4729,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins direct real Drizzle carrier member calls as explicit FW406 surfaces', () => {
+  it('pins direct real Drizzle carrier member calls as exact facts with FW406 raw calls', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         {
@@ -4759,23 +4764,28 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(graph).toEqual({
       configureUsers: {
-        reads: [],
-        touches: [],
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/users.domain.ts:18',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/users.domain.ts:17',
+            via: 'users',
+          },
+        ],
         unresolved: [
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/users.domain.ts:16',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/users.domain.ts:17',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'conformance/drizzle-pin/src/users.domain.ts:18',
           },
         ],
       },

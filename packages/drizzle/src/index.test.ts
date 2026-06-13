@@ -2528,7 +2528,7 @@ export interface CommerceInvalidationSets {
     expect(facts).toEqual([]);
   });
 
-  it('marks project query-loader direct receiver carrier members as FW406', () => {
+  it('extracts project query-loader direct typed receiver carrier members', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -2567,34 +2567,34 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'product.queries.ts:11',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
             severity: 'warn',
             site: 'product.queries.ts:11',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
             severity: 'warn',
             site: 'product.queries.ts:11',
           },
         ],
         query: 'product/carrier-direct',
-        reads: [],
+        reads: ['product'],
         shape: {},
         site: 'product.queries.ts:11',
       },
     ]);
   });
 
-  it('marks project query-loader nested receiver carrier members as FW406', () => {
+  it('extracts project query-loader nested typed receiver carrier members', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -2638,21 +2638,21 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface execute().',
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
             severity: 'warn',
             site: 'product.queries.ts:11',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface update().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.execute().',
             severity: 'warn',
             site: 'product.queries.ts:11',
           },
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses Drizzle receiver carrier surface relational-query().',
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.update().',
             severity: 'warn',
             site: 'product.queries.ts:11',
           },
@@ -2672,7 +2672,7 @@ export interface CommerceInvalidationSets {
           },
         ],
         query: 'product/carrier-nested',
-        reads: [],
+        reads: ['product'],
         shape: {},
         site: 'product.queries.ts:11',
       },
@@ -6121,7 +6121,7 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('marks project direct receiver carrier members as FW406 without fake sibling facts', () => {
+  it('extracts project direct typed receiver carrier members without fake sibling facts', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -6158,30 +6158,35 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       sync: {
-        reads: [],
-        touches: [],
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:15',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:14',
+            via: 'users',
+          },
+        ],
         unresolved: [
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:13',
           },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:14',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:15',
-          },
         ],
       },
     });
   });
 
-  it('marks project spread-copied receiver carrier members as FW406 without overridden fake facts', () => {
+  it('extracts project spread-copied typed receiver carrier members without overridden fake facts', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -6220,30 +6225,35 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       sync: {
-        reads: [],
-        touches: [],
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:17',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:16',
+            via: 'users',
+          },
+        ],
         unresolved: [
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:15',
           },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:16',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:17',
-          },
         ],
       },
     });
   });
 
-  it('marks project nested receiver carrier members as FW406 without nested fake overrides', () => {
+  it('extracts project nested typed receiver carrier members without nested fake overrides', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -6286,8 +6296,23 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       sync: {
-        reads: [],
-        touches: [],
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:18',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:17',
+            via: 'users',
+          },
+        ],
         unresolved: [
           {
             code: 'FW406',
@@ -6308,16 +6333,6 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:16',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:17',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:18',
           },
         ],
       },

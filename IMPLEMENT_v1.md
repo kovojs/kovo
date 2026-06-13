@@ -613,8 +613,10 @@ conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality
       `pnpm exec vitest --run conformance/drizzle-pin`.
       Additional evidence 2026-06-13: project-mode direct receiver carrier-member calls such as
       `carrier.db.execute()`, `carrier.db.update(...)`, and `carrier.db.query.users.findMany()`
-      now degrade to FW406 instead of producing exact touch/query facts through the carrier
-      boundary, while sibling fake carrier members remain invisible. Same-session evidence:
+      now use exact touch/query facts when ts-morph proves the member expression has the pinned
+      Postgres Drizzle database type; raw SQL, unprojected relational query API calls, detached
+      methods, helper handoffs, and overwritten fake members still degrade or stay invisible.
+      Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
       Additional evidence 2026-06-13: v1 Drizzle receiver/table proof is now Postgres-focused:

@@ -1118,7 +1118,9 @@ function extractProjectCarrierMemberReceiverCallsFromBody(
   for (const call of touchBodyCallExpressions(body)) {
     const surface = sourceReceiverCallSurface(
       call,
-      (node) => isSourceReceiverCarrierMemberExpression(node, references),
+      (node) =>
+        isSourceReceiverCarrierMemberExpression(node, references) &&
+        !isProjectDrizzleReceiverMemberExpression(node),
       bodyOffset,
     );
     if (surface) calls.push(surface);
@@ -1259,12 +1261,25 @@ function isProjectDrizzleReceiverIdentifier(
   node: Node | undefined,
   receivers: { names: ReadonlySet<string>; symbolKeys: ReadonlySet<string> },
 ): boolean {
-  if (!node || !Node.isIdentifier(node)) return false;
+  if (!node) return false;
+  if (!Node.isIdentifier(node)) {
+    // SPEC §11.1: project-mode member receivers such as `ctx.db` are exact facts when
+    // ts-morph proves the member type is the pinned Postgres Drizzle database type.
+    return isProjectDrizzleReceiverMemberExpression(node);
+  }
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   if (symbolKey) return receivers.symbolKeys.has(symbolKey);
 
   return receivers.names.has(node.getText());
+}
+
+function isProjectDrizzleReceiverMemberExpression(node: Node | undefined): boolean {
+  if (!node || (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node))) {
+    return false;
+  }
+
+  return isDrizzleReceiver(node);
 }
 
 function drizzleWriteChainRoot(call: CallExpression): Node {
@@ -2325,7 +2340,8 @@ function isQueryReceiverIdentifier(
   node: Node | undefined,
   receiverReferences: QueryReceiverReferences,
 ): boolean {
-  if (!node || !Node.isIdentifier(node)) return false;
+  if (!node) return false;
+  if (!Node.isIdentifier(node)) return isProjectDrizzleReceiverMemberExpression(node);
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   if (receiverReferences.symbolKeys.size > 0 && symbolKey) {
@@ -2358,11 +2374,18 @@ function unclassifiedQueryReceiverDiagnostics(
   // SPEC §10.2/§11.1: query loaders may not hide raw SQL, writes, transactions, or other
   // unclassified Drizzle receiver work under an empty fact set.
   return queryBodyCallExpressions(body, (call) => {
+    if (
+      boundReceiverMethodAccessName(call, (node) =>
+        isQueryReceiverIdentifier(node, receiverReferences),
+      )
+    ) {
+      return [];
+    }
+
     const surface = directDrizzleReceiverCallSurface(call);
     if (!surface || isSelectQueryCallName(surface.name)) return [];
 
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
-    if (!Node.isIdentifier(surface.receiver)) return [];
 
     return [
       {
