@@ -33,6 +33,8 @@ describe('server app shell Vite dev seam', () => {
     expect(
       shouldHandleJisoAppShellViteRequest(request('/_m/cart/add', { method: 'POST' }), app),
     ).toBe(true);
+    expect(shouldHandleJisoAppShellViteRequest(request('/c/dev.client.js?v=r7'), app)).toBe(true);
+    expect(shouldHandleJisoAppShellViteRequest(request('/c/dev.client.js'), app)).toBe(false);
     expect(shouldHandleJisoAppShellViteRequest(request('/src/styles.css'), app)).toBe(false);
   });
 
@@ -182,6 +184,12 @@ describe('server app shell Vite dev seam', () => {
         'public, max-age=31536000, immutable',
       );
       expect(moduleBody).toBe('export const loaded = true;');
+
+      const unversionedModuleResponse = await fetch(`${origin}/c/dev.client.js`);
+      const unversionedModuleBody = await unversionedModuleResponse.text();
+
+      expect(unversionedModuleResponse.status).toBe(404);
+      expect(unversionedModuleBody).toBe('vite fallback');
 
       const assetFallbackResponse = await fetch(`${origin}/src/styles.css`);
       const assetFallbackBody = await assetFallbackResponse.text();

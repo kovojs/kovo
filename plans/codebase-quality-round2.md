@@ -165,6 +165,13 @@ generated export artifacts inline.
 
 Latest evidence:
 
+- Phase 5 Vite dev client-module request boundary slice:
+  `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/vite-dev.ts` now lets unversioned `/c/*` requests fall through to Vite
+  dev middleware while retaining app-shell ownership for SPEC §9.5 immutable `/c/*?v=` client
+  modules, and `packages/server/src/vite-dev.test.ts` proves both the direct ownership predicate
+  and SSR dev middleware fallback behavior.
 - Phase 5 Vite plugin closed-app runtime guard slice:
   `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;

@@ -117,6 +117,16 @@ Implemented areas:
   JavaScript callers cannot pass a raw request handler or partial compatibility shell into the
   SPEC §9.5 dev/build/export replay boundary.
 
+Round288 Vite dev client-module request boundary evidence:
+
+- `packages/server/src/vite-dev.ts` now keeps Vite dev middleware ownership aligned with
+  SPEC §9.5 immutable client-module URLs: `/c/*?v=` app-shell module requests are served through
+  the loaded app, while unversioned `/c/*` requests fall through to Vite's asset/middleware stack.
+- `packages/server/src/vite-dev.test.ts` proves both the direct `shouldHandle...` boundary and the
+  SSR dev middleware fallback behavior.
+- `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

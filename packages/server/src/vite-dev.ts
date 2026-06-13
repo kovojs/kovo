@@ -154,6 +154,8 @@ export function shouldHandleJisoAppShellViteRequest(
   if (!request.url) return false;
 
   const url = new URL(request.url, 'http://jiso.local');
+  if (isUnversionedJisoAppShellClientModuleRequest(url)) return false;
+
   const match = matchShellDispatch({
     endpoints: app.endpoints,
     ...(request.method === undefined ? {} : { method: request.method }),
@@ -165,6 +167,13 @@ export function shouldHandleJisoAppShellViteRequest(
   if (match.kind === 'route') return match.methodAllowed;
 
   return true;
+}
+
+function isUnversionedJisoAppShellClientModuleRequest(url: URL): boolean {
+  // SPEC §9.5 reserves immutable app-shell client modules as /c/<module>?v=.
+  // During Vite dev, unversioned /c/ URLs must keep falling through to Vite's
+  // asset/middleware stack instead of being claimed by app replay.
+  return url.pathname.startsWith('/c/') && !url.searchParams.has('v');
 }
 
 export function renderJisoAppShellViteDevDiagnosticResponse(
