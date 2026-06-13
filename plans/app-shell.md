@@ -159,6 +159,24 @@ Implemented areas:
 - The focused `@jiso/server/app-shell/node` public subpath now exposes only the closed Node
   adapter entrypoint and its adapter-level types; raw `IncomingMessage -> Request` conversion and
   `Response -> ServerResponse` writer helpers stay internal to the server adapter owner.
+- The shared `isJisoApp()` closed-aggregate guard now validates optional app-shell execution slots
+  (`renderRoute`, error shells, document templates, session/error hooks, CSRF, and replay store)
+  before dev/build/export/request dispatch accepts dynamically loaded modules. `createRequestHandler()`
+  now applies the same SPEC §9.5 guard for JavaScript callers instead of letting malformed
+  compatibility shells reach request dispatch.
+
+Round363 closed aggregate execution-slot guard evidence:
+
+- `packages/server/src/app-guards.ts` tightens `isJisoApp()` around function-valued optional
+  app-shell fields, CSRF shape, and replay-store shape while preserving the `createApp()` aggregate.
+- `packages/server/src/app.ts` rejects raw handlers or malformed compatibility shells before
+  `Request -> Response` dispatch; `packages/server/src/app.test.ts`,
+  `packages/server/src/api/app.test.ts`, and `examples/commerce/src/app-shell.test.ts` prove the
+  request, public API, and commerce adoption paths.
+- `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite.test.ts examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/app.ts packages/server/src/app.test.ts packages/server/src/api/app.test.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round358 Node adapter public boundary evidence:
 

@@ -268,6 +268,14 @@ Latest evidence:
   values from the focused public Vite subpath, while `packages/server/src/api/app.test.ts` pins
   those SPEC §9.5 internal helper values and option aliases absent and starter/commerce adoption
   tests keep resolving the public Vite bridge plus manifest-file stylesheet preflight.
+- Phase 5 closed aggregate execution-slot guard slice:
+  `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite.test.ts examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/app.ts packages/server/src/app.test.ts packages/server/src/api/app.test.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/app-guards.ts` now rejects malformed optional
+  app-shell execution slots, CSRF options, and replay stores; `packages/server/src/app.ts` applies
+  that SPEC §9.5 guard before request dispatch; server API and commerce adoption tests prove raw or
+  compatibility shells cannot cross the public request/static-export boundary.
 - Broad mini-wave gate after UI/runtime/harness/Drizzle integrations:
   `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
   `pnpm run test:conformance`; `pnpm run check:build`. Evidence: clean main worktree at

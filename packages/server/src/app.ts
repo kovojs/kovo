@@ -1,5 +1,6 @@
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
+import { isJisoApp } from './app-guards.js';
 export type {
   AppDocumentOptions,
   AppErrorShellOptions,
@@ -40,5 +41,11 @@ export function createApp<SessionValue = unknown>(
 }
 
 export function createRequestHandler(app: JisoApp): RequestHandler {
+  if (!isJisoApp(app)) {
+    throw new TypeError(
+      'createRequestHandler() requires a Jiso app aggregate. SPEC §9.5 request dispatch must start from createApp(), not a raw request handler or compatibility shell.',
+    );
+  }
+
   return (request) => handleAppRequest(app, request);
 }

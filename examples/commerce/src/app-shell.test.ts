@@ -578,6 +578,12 @@ describe('commerce app shell HTTP entry', () => {
       expect(
         isJisoApp({
           ...shell.app,
+          renderRoute: '<main>compat</main>',
+        }),
+      ).toBe(false);
+      expect(
+        isJisoApp({
+          ...shell.app,
           clientModules: {
             resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
           },

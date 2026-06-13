@@ -38,6 +38,23 @@ describe('server createApp request shell', () => {
     expect('use' in app).toBe(false);
   });
 
+  it('rejects malformed compatibility shells before request dispatch', () => {
+    const app = createApp({ routes: [route('/products/:id', {})] });
+    const rawHandler = async () => new Response('<main>compat</main>');
+
+    expect(() =>
+      createRequestHandler(rawHandler as unknown as Parameters<typeof createRequestHandler>[0]),
+    ).toThrow(
+      'createRequestHandler() requires a Jiso app aggregate. SPEC §9.5 request dispatch must start from createApp(), not a raw request handler or compatibility shell.',
+    );
+    expect(() =>
+      createRequestHandler({
+        ...app,
+        renderRoute: '<main>compat</main>',
+      } as unknown as Parameters<typeof createRequestHandler>[0]),
+    ).toThrow('createRequestHandler() requires a Jiso app aggregate.');
+  });
+
   it('dispatches a matched route through Request to document Response', async () => {
     const productRoute = route('/products/:id', {
       meta: { title: 'Product' },

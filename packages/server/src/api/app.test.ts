@@ -387,8 +387,16 @@ describe('server app-shell public API barrels', () => {
 
     expect(packageCoreApi.isJisoApp(app)).toBe(true);
     expect(packageCoreApi.isJisoApp({ ...app, document: undefined })).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, document: { template: '<html></html>' } })).toBe(
+      false,
+    );
     expect(packageCoreApi.isJisoApp({ ...app, errorShells: undefined })).toBe(false);
+    expect(
+      packageCoreApi.isJisoApp({ ...app, errorShells: { notFound: '<main>404</main>' } }),
+    ).toBe(false);
     expect(packageCoreApi.isJisoApp({ ...app, clientModules: {} })).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
+    expect(packageCoreApi.isJisoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
     expect(
       packageCoreApi.isJisoApp({
         ...app,
