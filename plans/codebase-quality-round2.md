@@ -286,8 +286,6 @@ Open:
 Latest known broad results from 2026-06-12:
 
 - `pnpm run check` passed after the integrated compiler/server/runtime/drizzle/harness/UI wave.
+- `pnpm run test` passed: 178 files, 1778 tests.
 - `pnpm run test:browser` passed.
 - `pnpm run test:conformance` passed.
-- `pnpm run test` failed only because CLI add-catalog expectations had not yet been updated for
-  newly added `@jiso/ui` `checkbox`, `switch`, and `toggle` exports; the test was updated in the
-  cleanup commit and must be rerun.
