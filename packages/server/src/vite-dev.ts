@@ -111,9 +111,11 @@ export function jisoAppShellViteSsrDevPlugin(
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
           const app = readJisoAppShellViteSsrApp(module, appExportName, moduleId);
-          const shouldHandle =
-            options.shouldHandleRequest?.(request, app) ??
-            shouldHandleJisoAppShellViteRequest(request, app);
+          const shouldHandle = shouldHandleJisoAppShellViteDevRequest(
+            request,
+            app,
+            options.shouldHandleRequest,
+          );
           if (!shouldHandle) {
             next();
             return;
@@ -160,6 +162,19 @@ export function shouldHandleJisoAppShellViteRequest(
   if (match.kind === 'route') return match.methodAllowed;
 
   return true;
+}
+
+function shouldHandleJisoAppShellViteDevRequest(
+  request: IncomingMessage,
+  app: JisoApp,
+  shouldHandleRequest: JisoAppShellViteSsrDevPluginOptions['shouldHandleRequest'],
+): boolean {
+  if (!request.url) return false;
+
+  const url = new URL(request.url, 'http://jiso.local');
+  if (isUnversionedJisoAppShellClientModuleRequest(url)) return false;
+
+  return shouldHandleRequest?.(request, app) ?? shouldHandleJisoAppShellViteRequest(request, app);
 }
 
 function isUnversionedJisoAppShellClientModuleRequest(url: URL): boolean {

@@ -203,6 +203,41 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('keeps unversioned client modules on the Vite fallback even with a custom predicate', async () => {
+    const app = createApp({ routes: [route('/cart', {})] });
+    let middleware: JisoAppShellViteMiddleware | undefined;
+    let customPredicateCalls = 0;
+    const plugin = jisoAppShellViteSsrDevPlugin({
+      moduleId: '/src/app-shell.ts',
+      shouldHandleRequest() {
+        customPredicateCalls += 1;
+        return true;
+      },
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    await expect(
+      new Promise<void>((resolve, reject) => {
+        middleware?.(
+          request('/c/cart.client.js'),
+          {} as Parameters<JisoAppShellViteMiddleware>[1],
+          (error) => (error ? reject(error) : resolve()),
+        );
+      }),
+    ).resolves.toBeUndefined();
+    expect(customPredicateCalls).toBe(0);
+  });
+
   it('rejects Request -> Response exports at the explicit node handler boundary', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
     let middleware: JisoAppShellViteMiddleware | undefined;

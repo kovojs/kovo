@@ -132,6 +132,20 @@ Implemented areas:
   `shouldHandleJisoAppShellViteRequest()` ownership predicate; the stale
   `shouldHandleJisoAppShellViteSsrRequest()` wrapper is removed from production and the focused
   public app-shell Vite subpath.
+- Vite dev middleware now applies the SPEC §9.5 immutable `/c/` reservation before caller-provided
+  ownership predicates, so unversioned client-module URLs keep falling through to Vite's static
+  asset stack instead of being claimed by a compatibility predicate.
+
+Round322 Vite dev client-module predicate boundary evidence:
+
+- `packages/server/src/vite-dev.ts` routes plugin-time custom request predicates through the same
+  unversioned `/c/` fallthrough guard used by the canonical app-shell Vite request predicate.
+- `packages/server/src/vite-dev.test.ts` proves a custom `shouldHandleRequest()` returning true is
+  not invoked for unversioned `/c/*.client.js` requests and the middleware calls the Vite fallback.
+- `pnpm exec vitest --run packages/server/src/vite-dev.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round320 Vite dev request predicate alias removal evidence:
 

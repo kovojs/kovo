@@ -185,6 +185,14 @@ fixtures inline.
 
 Latest evidence:
 
+- Phase 5 Vite dev client-module predicate boundary slice:
+  `pnpm exec vitest --run packages/server/src/vite-dev.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/vite-dev.ts` now applies the SPEC §9.5
+  unversioned `/c/` fallthrough guard before caller-provided Vite dev ownership predicates, and
+  `packages/server/src/vite-dev.test.ts` proves a custom `shouldHandleRequest()` cannot claim
+  unversioned client-module URLs away from Vite's fallback/static asset stack.
 - Phase 5 Vite dev request predicate alias removal slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-dev.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
