@@ -149,7 +149,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       is attempted. Dropdown-menu, context-menu, and menubar selection now restore unselected state
       when the required item-select close transition is canceled, with context-menu anchor point
       preservation covered by primitive tests and existing compiled gallery browser route checks
-      rerun for dropdown/context and menubar.
+      rerun for dropdown/context and menubar. Command keyboard selection now prevents native
+      follow-up behavior when Enter selection or Escape close is canceled, with primitive tests,
+      styled wrapper smoke coverage, refreshed generated artifacts, and browser-backed command
+      route evidence for a canceled Enter that leaves the dialog open and value restored.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -189,7 +192,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       Evidence 2026-06-13: combobox and autocomplete now preserve native external `form`
       ownership through headless input attributes and styled input wrappers; static gallery
       contracts and refreshed compiled demos prove the app-authored TSX, while browser checks
-      assert generated-handler value changes update `FormData` for the external form.
+      assert generated-handler value changes update `FormData` for the external form. Evidence
+      2026-06-13: `commandKeyDown()` now prevents default for canceled Enter selection and
+      canceled Escape close paths; the compiled command gallery records a canceled Enter action
+      through refreshed generated artifacts and Chromium-backed DOM/state assertions.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -201,6 +207,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Command canceled keyboard default-prevention slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t command`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t command)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts packages/ui/src/index.test.tsx examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Slider native external form ownership slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/slider.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t slider`;

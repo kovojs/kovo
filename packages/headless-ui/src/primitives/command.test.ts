@@ -455,7 +455,40 @@ describe('headless-ui command primitive', () => {
       selected: false,
       value: expect.objectContaining({ changed: false, value: 'open-file' }),
     });
-    expect(canceledCloseEvent.defaultPrevented).toBe(false);
+    expect(canceledCloseEvent.defaultPrevented).toBe(true);
+
+    const canceledValueEvent = commandKeyEvent('Enter');
+    const canceledValueResult = commandKeyDown(
+      canceledValueEvent,
+      { highlightedValue: 'publish', items: commandItems, open: true, value: 'open-file' },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledValueResult).toMatchObject({
+      selected: false,
+      value: expect.objectContaining({ changed: false, value: 'open-file' }),
+    });
+    expect(canceledValueEvent.defaultPrevented).toBe(true);
+
+    const canceledEscapeEvent = commandKeyEvent('Escape');
+    const canceledEscapeResult = commandKeyDown(
+      canceledEscapeEvent,
+      { open: true },
+      {
+        onOpenChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledEscapeResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true, reason: 'escape-key' }),
+      open: true,
+    });
+    expect(canceledEscapeEvent.defaultPrevented).toBe(true);
 
     const enterEvent = commandKeyEvent('Enter');
     const enterResult = commandKeyDown(enterEvent, {

@@ -15,6 +15,7 @@ import {
 export interface GalleryCommandDemoState {
   highlightedValue: string;
   inputValue: string;
+  lastKeyAction: string;
   open: boolean;
   value: string;
 }
@@ -33,7 +34,13 @@ const commandItems: readonly CommandItem[] = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryCommandDemo = component('gallery-command-demo', {
-  state: () => ({ highlightedValue: 'dashboard', inputValue: '', open: false, value: 'dashboard' }),
+  state: () => ({
+    highlightedValue: 'dashboard',
+    inputValue: '',
+    lastKeyAction: 'idle',
+    open: false,
+    value: 'dashboard',
+  }),
   render: (_queries: Record<string, never>, state: GalleryCommandDemoState) => {
     const contentId = 'gallery-command-dialog';
     const listboxId = 'gallery-command-listbox';
@@ -104,8 +111,8 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               if (output) output['textContent'] = 'invite';
             }}
             onKeyDown={() => {
-              state.open = false;
-              state.value = state.highlightedValue;
+              if (event && Object(event)['key'] !== 'Enter') return;
+              if (event) Object(event)['preventDefault']?.call(event);
               const doc = Reflect['get'](globalThis, 'document');
               const dialog = doc
                 ? Object(doc)['getElementById']?.call(doc, 'gallery-command-dialog')
@@ -113,13 +120,29 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               const output = doc
                 ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-value"]')
                 : undefined;
-              if (dialog) Object(dialog)['close']?.call(dialog);
-              if (output) {
-                if (state.highlightedValue === 'invite') {
-                  output['textContent'] = 'Invite teammate';
-                } else {
-                  output['textContent'] = 'Open dashboard';
+              const canceled = doc
+                ? Object(doc)['querySelector']?.call(
+                    doc,
+                    '[data-demo-state="command-key-canceled"]',
+                  )
+                : undefined;
+              if (state.value === 'dashboard') {
+                state.lastKeyAction = 'canceled';
+                if (canceled) canceled['textContent'] = 'canceled';
+                if (output) output['textContent'] = 'Open dashboard';
+              } else {
+                state.open = false;
+                state.value = state.highlightedValue;
+                state.lastKeyAction = 'selected';
+                if (dialog) Object(dialog)['close']?.call(dialog);
+                if (output) {
+                  if (state.value === 'invite') {
+                    output['textContent'] = 'Invite teammate';
+                  } else {
+                    output['textContent'] = 'Open dashboard';
+                  }
                 }
+                if (canceled) canceled['textContent'] = 'selected';
               }
             }}
           />
@@ -179,6 +202,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
           </button>
         </dialog>
         <output data-demo-state="command-input">{state.inputValue || 'empty'}</output>
+        <output data-demo-state="command-key-canceled">{state.lastKeyAction}</output>
         <output data-demo-state="command-value">{commandValueText(commandState)}</output>
       </section>
     );

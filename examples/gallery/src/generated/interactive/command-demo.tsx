@@ -16,6 +16,7 @@ import {
 export interface GalleryCommandDemoState {
   highlightedValue: string;
   inputValue: string;
+  lastKeyAction: string;
   open: boolean;
   value: string;
 }
@@ -34,7 +35,13 @@ const commandItems: readonly CommandItem[] = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryCommandDemo = component('gallery-command-demo', {
-  state: () => ({ highlightedValue: 'dashboard', inputValue: '', open: false, value: 'dashboard' }),
+  state: () => ({
+    highlightedValue: 'dashboard',
+    inputValue: '',
+    lastKeyAction: 'idle',
+    open: false,
+    value: 'dashboard',
+  }),
   render: (_queries: Record<string, never>, state: GalleryCommandDemoState) => {
     const contentId = 'gallery-command-dialog';
     const listboxId = 'gallery-command-listbox';
@@ -54,12 +61,12 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
         class="grid gap-2"
         data-gallery-interactive="command"
         fw-c="gallery-command-demo"
-        fw-state='{"highlightedValue":"dashboard","inputValue":"","open":false,"value":"dashboard"}'
+        fw-state='{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}'
       >
         <button
           {...commandTriggerAttributes({ ...commandState, contentId })}
           id="gallery-command-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click"
         >
           Open command
         </button>
@@ -79,8 +86,8 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               id: 'gallery-command-input',
               labelledBy: 'gallery-command-title',
             })}
-            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$input_input"
-            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$input_keydown"
+            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$input_keydown"
           />
           <div {...commandListboxAttributes({ ...commandState, id: listboxId })}>
             <button
@@ -100,7 +107,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Invite teammate',
                 itemValue: 'invite',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click_2"
             >
               Invite teammate
             </button>
@@ -118,12 +125,13 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
           </div>
           <button
             {...commandCloseAttributes({ ...commandState, contentId })}
-            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click_3"
           >
             Close
           </button>
         </dialog>
         <output data-demo-state="command-input">{state.inputValue || 'empty'}</output>
+        <output data-demo-state="command-key-canceled">{state.lastKeyAction}</output>
         <output data-demo-state="command-value">{commandValueText(commandState)}</output>
       </section>
     );

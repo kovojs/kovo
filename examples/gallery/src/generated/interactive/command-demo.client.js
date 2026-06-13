@@ -28,8 +28,8 @@ export const GalleryCommandDemo$input_input = handler((event, ctx) => {
   if (output) output['textContent'] = 'invite';
 });
 export const GalleryCommandDemo$input_keydown = handler((event, ctx) => {
-  ctx.state.open = false;
-  ctx.state.value = ctx.state.highlightedValue;
+  if (event && Object(event)['key'] !== 'Enter') return;
+  if (event) Object(event)['preventDefault']?.call(event);
   const doc = Reflect['get'](globalThis, 'document');
   const dialog = doc
     ? Object(doc)['getElementById']?.call(doc, 'gallery-command-dialog')
@@ -37,13 +37,26 @@ export const GalleryCommandDemo$input_keydown = handler((event, ctx) => {
   const output = doc
     ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-value"]')
     : undefined;
-  if (dialog) Object(dialog)['close']?.call(dialog);
-  if (output) {
-    if (ctx.state.highlightedValue === 'invite') {
-      output['textContent'] = 'Invite teammate';
-    } else {
-      output['textContent'] = 'Open dashboard';
+  const canceled = doc
+    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-key-canceled"]')
+    : undefined;
+  if (ctx.state.value === 'dashboard') {
+    ctx.state.lastKeyAction = 'canceled';
+    if (canceled) canceled['textContent'] = 'canceled';
+    if (output) output['textContent'] = 'Open dashboard';
+  } else {
+    ctx.state.open = false;
+    ctx.state.value = ctx.state.highlightedValue;
+    ctx.state.lastKeyAction = 'selected';
+    if (dialog) Object(dialog)['close']?.call(dialog);
+    if (output) {
+      if (ctx.state.value === 'invite') {
+        output['textContent'] = 'Invite teammate';
+      } else {
+        output['textContent'] = 'Open dashboard';
+      }
     }
+    if (canceled) canceled['textContent'] = 'selected';
   }
 });
 export const GalleryCommandDemo$button_click_2 = handler((event, ctx) => {

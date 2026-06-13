@@ -563,13 +563,19 @@ export function commandKeyDown(
 
   if (event.key === 'Escape') {
     const result = setCommandOpen(state, false, 'escape-key', options);
-    if (result.changed) event.preventDefault();
+    if (result.changed || result.detail?.defaultPrevented === true) event.preventDefault();
     return result;
   }
 
   if (event.key === 'Enter' && state.highlightedValue !== undefined) {
     const result = selectCommandItem(state, state.highlightedValue, 'enter-key', options);
-    if (result.selected) event.preventDefault();
+    if (
+      result.selected ||
+      result.value.detail?.defaultPrevented === true ||
+      result.open.detail?.defaultPrevented === true
+    ) {
+      event.preventDefault();
+    }
     return result;
   }
 

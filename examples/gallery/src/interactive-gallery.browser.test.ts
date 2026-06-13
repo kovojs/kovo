@@ -1883,6 +1883,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const commandInput = required(
       commandRoot.querySelector<HTMLOutputElement>('[data-demo-state="command-input"]'),
     );
+    const commandKeyCanceled = required(
+      commandRoot.querySelector<HTMLOutputElement>('[data-demo-state="command-key-canceled"]'),
+    );
     const commandValue = required(
       commandRoot.querySelector<HTMLOutputElement>('[data-demo-state="command-value"]'),
     );
@@ -1903,7 +1906,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         '/c/examples/gallery/src/generated/interactive/command-demo.client.js',
       );
       expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"dashboard","inputValue":"","open":true,"value":"dashboard"}',
+        '{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":true,"value":"dashboard"}',
       );
       expect(dialog.open).toBe(true);
     });
@@ -1912,7 +1915,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"invite","inputValue":"invite","open":true,"value":"dashboard"}',
+        '{"highlightedValue":"invite","inputValue":"invite","lastKeyAction":"idle","open":true,"value":"dashboard"}',
       );
       expect(input.value).toBe('invite');
       expect(input.getAttribute('aria-activedescendant')).toBe('gallery-command-listbox-item-1');
@@ -1920,30 +1923,28 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(commandInput.textContent).toBe('invite');
     });
 
-    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
-
-    await vi.waitFor(() => {
-      expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"invite","inputValue":"invite","open":false,"value":"invite"}',
-      );
-      expect(dialog.open).toBe(false);
-      expect(commandValue.textContent).toBe('Invite teammate');
+    const canceledEnter = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
     });
-
-    trigger.click();
+    input.dispatchEvent(canceledEnter);
 
     await vi.waitFor(() => {
       expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"invite","inputValue":"invite","open":true,"value":"invite"}',
+        '{"highlightedValue":"invite","inputValue":"invite","lastKeyAction":"canceled","open":true,"value":"dashboard"}',
       );
+      expect(canceledEnter.defaultPrevented).toBe(true);
       expect(dialog.open).toBe(true);
+      expect(commandKeyCanceled.textContent).toBe('canceled');
+      expect(commandValue.textContent).toBe('Open dashboard');
     });
 
     invite.click();
 
     await vi.waitFor(() => {
       expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"invite","inputValue":"invite","open":false,"value":"invite"}',
+        '{"highlightedValue":"invite","inputValue":"invite","lastKeyAction":"canceled","open":false,"value":"invite"}',
       );
       expect(dialog.open).toBe(false);
       expect(commandValue.textContent).toBe('Invite teammate');

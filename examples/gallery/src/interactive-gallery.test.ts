@@ -277,7 +277,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(command).toContain('data-gallery-interactive="command"');
     expect(command).toContain(
-      'fw-state=\'{"highlightedValue":"dashboard","inputValue":"","open":false,"value":"dashboard"}\'',
+      'fw-state=\'{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}\'',
     );
     expect(command).toContain(
       "{ id: 'gallery-command-listbox-item-1', label: 'Invite teammate', value: 'invite' }",
@@ -746,6 +746,7 @@ describe('compiled interactive gallery demos', () => {
     const commandState = {
       highlightedValue: 'dashboard',
       inputValue: '',
+      lastKeyAction: 'idle',
       open: false,
       value: 'dashboard',
     };
@@ -757,6 +758,7 @@ describe('compiled interactive gallery demos', () => {
     expect(commandState).toEqual({
       highlightedValue: 'dashboard',
       inputValue: '',
+      lastKeyAction: 'idle',
       open: true,
       value: 'dashboard',
     });
@@ -768,10 +770,11 @@ describe('compiled interactive gallery demos', () => {
     expect(commandState).toEqual({
       highlightedValue: 'invite',
       inputValue: 'invite',
+      lastKeyAction: 'idle',
       open: true,
       value: 'dashboard',
     });
-    clientHandler(command, 'GalleryCommandDemo$input_keydown')(new Event('keydown'), {
+    clientHandler(command, 'GalleryCommandDemo$input_keydown')(keyEvent('Enter'), {
       params: {},
       signal,
       state: commandState,
@@ -779,8 +782,9 @@ describe('compiled interactive gallery demos', () => {
     expect(commandState).toEqual({
       highlightedValue: 'invite',
       inputValue: 'invite',
-      open: false,
-      value: 'invite',
+      lastKeyAction: 'canceled',
+      open: true,
+      value: 'dashboard',
     });
     commandState.open = true;
     clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
@@ -791,6 +795,7 @@ describe('compiled interactive gallery demos', () => {
     expect(commandState).toEqual({
       highlightedValue: 'invite',
       inputValue: 'invite',
+      lastKeyAction: 'canceled',
       open: false,
       value: 'invite',
     });
@@ -1318,6 +1323,7 @@ describe('compiled interactive gallery demos', () => {
           '[data-demo-state="navigation-value"]',
           '[data-demo-state="scroll-area-position"]',
           '[data-demo-state="command-input"]',
+          '[data-demo-state="command-key-canceled"]',
           '[data-demo-state="command-value"]',
           '[data-demo-state="toolbar-active"]',
           '[data-demo-state="toolbar-pressed"]',
@@ -1508,6 +1514,7 @@ describe('compiled interactive gallery demos', () => {
       const commandState = {
         highlightedValue: 'dashboard',
         inputValue: '',
+        lastKeyAction: 'idle',
         open: false,
         value: 'dashboard',
       };
@@ -1524,14 +1531,26 @@ describe('compiled interactive gallery demos', () => {
         'true',
       );
       expect(selector(document, '[data-demo-state="command-input"]').textContent).toBe('invite');
-      clientHandler(command, 'GalleryCommandDemo$input_keydown')(new Event('keydown'), {
+      const commandEnter = keyEvent('Enter');
+      clientHandler(command, 'GalleryCommandDemo$input_keydown')(commandEnter, {
         params: {},
         signal,
         state: commandState,
       });
-      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(1);
+      expect(commandEnter.defaultPrevented).toBe(true);
+      expect(commandState).toEqual({
+        highlightedValue: 'invite',
+        inputValue: 'invite',
+        lastKeyAction: 'canceled',
+        open: true,
+        value: 'dashboard',
+      });
+      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(0);
+      expect(selector(document, '[data-demo-state="command-key-canceled"]').textContent).toBe(
+        'canceled',
+      );
       expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
-        'Invite teammate',
+        'Open dashboard',
       );
       commandState.open = true;
       clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
@@ -1539,7 +1558,7 @@ describe('compiled interactive gallery demos', () => {
         signal,
         state: commandState,
       });
-      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(2);
+      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(1);
       expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
         'Invite teammate',
       );
