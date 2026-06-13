@@ -29,6 +29,7 @@ export function hydrateQueryScripts(
     ...definedProps({
       afterApplyQuery: options.afterApplyQuery,
       applyQuery: options.applyQuery,
+      onError: options.onError,
       queryPlans: options.queryPlans,
       root: options.root,
     }),

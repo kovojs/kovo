@@ -47,6 +47,7 @@ export function applyInlineQueryEventToRuntime(
   return applyQueryChunksToRuntime(options.store, chunks, {
     ...definedProps({
       applyQuery: options.applyQuery,
+      onError: options.onError,
       queryPlans: options.queryPlans,
       root: options.root,
     }),

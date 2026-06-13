@@ -294,4 +294,42 @@ describe('query script hydration', () => {
       'Malformed JSON in fw-query inventory',
     );
   });
+
+  it('reports direct hydration apply failures while applying later scripts', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const productPlan = vi.fn();
+    const applyError = new Error('direct query hydration apply failed');
+
+    store.subscribe('product', productPlan, 'p1');
+
+    const hydrated = hydrateQueryScripts(
+      store,
+      [
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          textContent: '{"count":1}',
+        },
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'product:p1' : null),
+          textContent: '{"stock":9}',
+        },
+      ],
+      {
+        applyQuery(query) {
+          if (query.name === 'cart') throw applyError;
+        },
+        onError,
+      },
+    );
+
+    // SPEC.md §9.1/§9.4: direct script hydration, visible-return hydration,
+    // mutation responses, and typed reads use one decoded query apply path; a
+    // failed query must not fork batch continuation behavior.
+    expect(hydrated).toEqual(['product:p1']);
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('product', 'p1')).toEqual({ stock: 9 });
+    expect(productPlan).toHaveBeenCalledWith({ stock: 9 });
+    expect(onError).toHaveBeenCalledWith(applyError);
+  });
 });

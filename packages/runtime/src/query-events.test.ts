@@ -151,6 +151,43 @@ describe('inline query events', () => {
     expect(seen).toEqual(['cart:cart:c1', 'product:p1']);
   });
 
+  it('reports inline query event apply failures while applying later queries', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const productPlan = vi.fn();
+    const applyError = new Error('inline query apply failed');
+
+    store.subscribe('product', productPlan, 'p1');
+
+    expect(
+      applyInlineQueryEventToRuntime(
+        {
+          detail: {
+            queries: [
+              { attrs: ' name="cart"', content: '{"count":3}' },
+              { attrs: ' name="product:p1"', content: '{"stock":7}' },
+            ],
+          },
+        },
+        {
+          applyQuery(query) {
+            if (query.name === 'cart') throw applyError;
+          },
+          onError,
+          store,
+        },
+      ),
+    ).toEqual(['product:p1']);
+
+    // SPEC.md §9.1/§9.4: inline query hydration shares the decoded mutation
+    // query apply primitive, so one failed query reports through the runtime
+    // error seam without aborting later query truth in the same batch.
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('product', 'p1')).toEqual({ stock: 7 });
+    expect(productPlan).toHaveBeenCalledWith({ stock: 7 });
+    expect(onError).toHaveBeenCalledWith(applyError);
+  });
+
   it('ignores removed inline query compatibility events', () => {
     const store = createQueryStore();
 

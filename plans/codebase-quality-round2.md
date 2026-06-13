@@ -183,6 +183,17 @@ Latest evidence:
   validates public SPEC §9.5 static-export `origin` options before synthetic replay, accepting
   only absolute `http(s)` origins without path, search, or hash and proving `exportStaticApp()`
   rejects invalid origins before route replay or output writes.
+- Phase 4 runtime hydration apply-error continuation slice:
+  `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/query-script-hydration.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src/query-visible-return.test.ts packages/runtime/src/loader-query-hydration.test.ts`;
+  `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/query-hydration.browser.test.ts`;
+  `pnpm exec vp check packages/runtime/src/query-events.ts packages/runtime/src/query-events.test.ts packages/runtime/src/query-script-hydration.ts packages/runtime/src/query-script-hydration.test.ts packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/runtime/src/query-events.ts` and
+  `packages/runtime/src/query-script-hydration.ts` now forward hydration apply failures through
+  the canonical decoded query apply `onError` seam, so one bad inline-event or direct script query
+  does not abort later valid query chunks in the same batch. Focused node and browser tests prove
+  SPEC §9.1/§9.4 query truth continues through the shared mutation/typed-read apply path with
+  loader-context error reporting intact.
 - Phase 5 Vite manifest hint static-host boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

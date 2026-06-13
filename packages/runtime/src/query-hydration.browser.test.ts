@@ -230,4 +230,45 @@ describe('query hydration browser runtime', () => {
 
     loader.dispose();
   });
+
+  it('continues browser inline query event batches after an apply failure', () => {
+    document.body.innerHTML = '<output data-bind="product.stock"></output>';
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const output = document.querySelector('output');
+    const applyError = new Error('browser inline query apply failed');
+    if (!output) throw new Error('missing product binding output');
+
+    const loader = installJisoLoader({
+      applyQuery(query) {
+        if (query.name === 'cart') throw applyError;
+      },
+      importModule: vi.fn(),
+      onError,
+      queryPlans: { product: { bindings: true } },
+      queryStore: store,
+      root: document,
+    });
+
+    window.dispatchEvent(
+      new CustomEvent('jiso:query', {
+        detail: {
+          queries: [
+            { attrs: ' name="cart"', content: '{"count":5}' },
+            { attrs: ' name="product"', content: '{"stock":8}' },
+          ],
+        },
+      }),
+    );
+
+    // SPEC.md §9.1/§9.4: browser inline query event hydration enters the same
+    // decoded query apply path as mutation responses and typed reads; a failed
+    // hook reports through the loader seam without losing later query chunks.
+    expect(onError).toHaveBeenCalledWith(applyError, { phase: 'query-hydration' });
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('product')).toEqual({ stock: 8 });
+    expect(output.textContent).toBe('8');
+
+    loader.dispose();
+  });
 });
