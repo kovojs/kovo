@@ -122,15 +122,17 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       churn-heavy baselines.
       Evidence 2026-06-13: compiled interactive gallery now has a browser-backed `axe-core` route
       gate over all generated demos, with focused rule exceptions documented next to the test for
-      native dialog snapshots, current combobox/section role-table drift, DOM-only checkbox
-      indeterminate state. Context-menu triggers now expose `role="button"`, OTP requiredness stays
+      current combobox/section role-table drift. Context-menu triggers now expose `role="button"`,
+      OTP requiredness stays
       on native inputs instead of unsupported group `aria-required`, and toast live regions render
       on neutral elements. Menubar compiled demos now keep state outputs and popup menu content
       outside the `role="menubar"` root, so `aria-required-children` is enforced by the route-level
       axe gate. Checkbox mixed state now applies the native `indeterminate` DOM property before the
       route scan and removes the `aria-conditional-attr` exception; verified by
       `packages/headless-ui/src/primitives/checkbox.test.ts` and
-      `examples/gallery/src/interactive-gallery.browser.test.ts`.
+      `examples/gallery/src/interactive-gallery.browser.test.ts`. Dialog route snapshots no longer
+      require the route-level `aria-hidden-focus` exception; verified by
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`.
       Evidence 2026-06-13: `examples/gallery/src/interactive-gallery.browser.test.ts` now includes
       a deterministic Chromium visual-baseline scaffold for the compiled interactive route plus
       switch and dropdown-menu representative states, asserting viewport geometry and stable

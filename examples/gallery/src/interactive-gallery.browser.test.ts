@@ -2328,9 +2328,6 @@ function installVisualBaselineStyles(): void {
 }
 
 const interactiveGalleryAxeRules = {
-  // Dialog demos intentionally render closed native dialogs in route snapshots.
-  // Their focused browser tests assert modal naming and focus behavior separately.
-  'aria-hidden-focus': { enabled: false },
   // Axe's role table lags current APG/browser practice for input-backed combobox
   // demos and role-bearing section roots. Focused browser tests below assert the
   // exact ARIA contracts for those primitives.
