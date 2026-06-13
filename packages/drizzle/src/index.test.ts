@@ -530,7 +530,7 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('extracts source writes through destructured receiver parameters', () => {
+  it('marks source destructured receiver parameters as FW406 instead of extracting table facts', () => {
     const graph = extractTouchGraphFromSource([
       {
         fileName: 'cart.domain.ts',
@@ -547,17 +547,36 @@ export interface CommerceInvalidationSets {
     expect(graph).toEqual({
       addItem: {
         reads: [],
-        touches: [
+        touches: [],
+        unresolved: [
           {
-            domain: 'cart',
-            keys: 'arg:productId',
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:4',
-            via: 'cart_items',
           },
         ],
-        unresolved: [],
       },
     });
+  });
+
+  it('does not mark shadowed source destructured receiver names as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export async function addItem({ db: writer } = makeContext(), productId) {',
+          '  {',
+          '  const writer = fakeDb();',
+          '  await writer.update(cartItems).set({ productId });',
+          '  }',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({});
   });
 
   it('extracts source writes through static element-access write methods', () => {
@@ -2970,7 +2989,7 @@ export interface CommerceInvalidationSets {
     expect(facts).toEqual([]);
   });
 
-  it('keeps explicit source query-loader db destructuring compatibility', () => {
+  it('marks source query-loader db destructuring as FW406 instead of deriving reads', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'product.queries.ts',
@@ -2990,11 +3009,18 @@ export interface CommerceInvalidationSets {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode destructured Drizzle receiver surface select() without project type proof.',
+            severity: 'warn',
+            site: 'product.queries.ts:6',
+          },
+        ],
         query: 'product/destructured-db',
-        reads: ['product'],
-        shape: {
-          id: 'string',
-        },
+        reads: [],
+        shape: {},
         site: 'product.queries.ts:6',
       },
     ]);

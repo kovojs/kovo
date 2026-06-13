@@ -643,7 +643,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(facts).toEqual([]);
   });
 
-  it('pins source query-loader destructuring to explicit db receiver slots', () => {
+  it('pins source query-loader destructuring as FW406 without fabricated reads', () => {
     const facts = extractQueryFactsFromSource([
       {
         fileName: 'conformance/drizzle-pin/src/product.queries.ts',
@@ -671,11 +671,18 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode destructured Drizzle receiver surface select() without project type proof.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:13',
+          },
+        ],
         query: 'product/destructured-db',
-        reads: ['product'],
-        shape: {
-          id: 'string',
-        },
+        reads: [],
+        shape: {},
         site: 'conformance/drizzle-pin/src/product.queries.ts:13',
       },
     ]);
@@ -1328,7 +1335,7 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
-  it('pins source destructured receiver parameters for write extraction', () => {
+  it('pins source destructured receiver parameters as FW406 without fabricated writes', () => {
     const graph = extractTouchGraphFromSource([
       {
         fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
@@ -1346,15 +1353,14 @@ describe('Drizzle pinned subset conformance', () => {
     expect(graph).toEqual({
       addItem: {
         reads: [],
-        touches: [
+        touches: [],
+        unresolved: [
           {
-            domain: 'cart',
-            keys: 'arg:productId',
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:4',
-            via: 'cart_items',
           },
         ],
-        unresolved: [],
       },
     });
   });

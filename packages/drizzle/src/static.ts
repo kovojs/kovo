@@ -1804,6 +1804,10 @@ function extractQueryDefinitionsFromSourceFile(
     }
 
     const query = queryArgument.getLiteralText();
+    const sourceDestructuredReceiverReferences =
+      (options.receiverMode ?? 'source') === 'source'
+        ? sourceQueryDestructuredReceiverNames(bodyArgument)
+        : { names: new Set<string>(), symbolKeys: new Set<string>() };
     const receiverReferences = queryCallbackReceiverReferences(
       bodyArgument,
       options.receiverMode ?? 'source',
@@ -1830,6 +1834,11 @@ function extractQueryDefinitionsFromSourceFile(
       ...((options.receiverMode ?? 'source') === 'source'
         ? ambientSourceQueryReceiverDiagnostics(bodyArgument, localFunctionKeys)
         : []),
+      ...sourceDestructuredQueryReceiverDiagnostics(
+        bodyArgument,
+        localFunctionKeys,
+        sourceDestructuredReceiverReferences,
+      ),
     ];
     const localHelperCalls = queryLocalHelperCalls(
       bodyArgument,
@@ -2230,6 +2239,25 @@ function ambientSourceQueryReceiverDiagnostics(
   );
 }
 
+function sourceDestructuredQueryReceiverDiagnostics(
+  body: ObjectLiteralExpression,
+  localFunctionKeys: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
+): TouchGraphDiagnostic[] {
+  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
+
+  return queryCallbackBodies(body).flatMap((callbackBody) =>
+    extractSourceReceiverSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
+      isSourceDestructuredReceiverIdentifier(node, receiverReferences),
+    ).map((call) => ({
+      code: 'FW406' as const,
+      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode destructured Drizzle receiver surface ${call.name}() without project type proof.`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    })),
+  );
+}
+
 function queryExecutableCallExpressions(body: ObjectLiteralExpression): CallExpression[] {
   return queryCallbackBodies(body)
     .flatMap((callbackBody) => touchBodyCallExpressions(callbackBody))
@@ -2308,20 +2336,26 @@ function appendUntypedQueryReceiverBinding(
     return;
   }
 
-  if (!Node.isObjectBindingPattern(name)) return;
+  // SPEC §11.1: source-mode destructured `db`/`tx` slots are not type proof. They stay visible
+  // as FW406 surfaces via sourceDestructuredQueryReceiverDiagnostics instead of fabricating reads.
+}
 
-  for (const element of name.getElements()) {
-    const binding = element.getNameNode();
-    const propertyName = element.getPropertyNameNode()?.getText();
-    // SPEC §11.1: without project type identity, source destructuring is proof only for the
-    // canonical Drizzle receiver slots; arbitrary destructured names would fabricate query facts.
-    const isCanonicalReceiverSlot =
-      propertyName === 'db' ||
-      propertyName === 'tx' ||
-      (!propertyName && Node.isIdentifier(binding) && isLikelyDrizzleReceiver(binding.getText()));
-    if (!isCanonicalReceiverSlot || !Node.isIdentifier(binding)) continue;
-    appendQueryReceiverIdentifierBinding(binding, names, symbolKeys);
+function sourceQueryDestructuredReceiverNames(
+  body: ObjectLiteralExpression,
+): QueryReceiverReferences {
+  const names = new Set<string>();
+  const symbolKeys = new Set<string>();
+
+  for (const property of body.getProperties()) {
+    const callback = queryCallbackFunction(property);
+    if (!callback) continue;
+
+    const receiverParameter = queryCallbackParameterNodes(callback)[1];
+    const receiver = receiverParameter?.getNameNode();
+    if (receiver) appendSourceDestructuredReceiverBinding(receiver, names, symbolKeys);
   }
+
+  return { names, symbolKeys };
 }
 
 function appendQueryReceiverIdentifierBinding(
@@ -3864,6 +3898,7 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
 
     return functions.map((fn): ExtractedFunction => {
       const receiverNames = new Set(fn.receiverNames ?? sourceDrizzleReceiverNames(fn.callback));
+      const ambiguousReceiverReferences = sourceDestructuredReceiverReferences(fn.callback);
       const { bodyNode, callback: _callback, ...extracted } = fn;
       const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(bodyNode, (node) =>
         isSourceDrizzleReceiverIdentifier(node, receiverNames),
@@ -3902,6 +3937,9 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
           ),
           ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
           ...extractAmbientSourceReceiverCallsFromBody(bodyNode, localFunctionKeys),
+          ...extractSourceReceiverSurfaceCallsFromBody(bodyNode, localFunctionKeys, (node) =>
+            isSourceDestructuredReceiverIdentifier(node, ambiguousReceiverReferences),
+          ),
         ],
         writeCalls: extractDrizzleWriteCallsFromBody(bodyNode, receiverNames),
       };
@@ -4299,21 +4337,36 @@ function extractAmbientSourceReceiverCallsFromBody(
 ): ExternalDbArgumentCall[] {
   // SPEC §11.1: source-mode `db`/`tx` globals are ambiguous; keep the surface visible as FW406
   // instead of deriving table facts from an undeclared compatibility receiver.
-  const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, isUnboundSourceReceiverName);
-  const aliases = receiverMethodAliasesForBody(body, isUnboundSourceReceiverName);
+  return extractSourceReceiverSurfaceCallsFromBody(
+    body,
+    localFunctionKeys,
+    isUnboundSourceReceiverName,
+    bodyOffset,
+  );
+}
+
+function extractSourceReceiverSurfaceCallsFromBody(
+  body: Node,
+  localFunctionKeys: ReadonlySet<string>,
+  isReceiverIdentifier: (node: Node | undefined) => boolean,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, isReceiverIdentifier);
+  const aliases = receiverMethodAliasesForBody(body, isReceiverIdentifier);
   const calls: ExternalDbArgumentCall[] = [];
 
   for (const call of touchBodyCallExpressions(body)) {
-    const direct = ambientSourceReceiverCallSurface(call, bodyOffset);
+    const direct = sourceReceiverCallSurface(call, isReceiverIdentifier, bodyOffset);
     if (direct) calls.push(direct);
 
     const alias = receiverMethodAliasCallName(call, aliases);
     const aliasIndex = call.getStart() - bodyOffset;
     if (alias && aliasIndex >= 0) calls.push({ index: aliasIndex, name: alias });
 
-    const helper = ambientSourceReceiverHelperCallSurface(
+    const helper = sourceReceiverHelperCallSurface(
       call,
       localFunctionKeys,
+      isReceiverIdentifier,
       carrierSymbolKeys,
       bodyOffset,
     );
@@ -4325,8 +4378,9 @@ function extractAmbientSourceReceiverCallsFromBody(
   );
 }
 
-function ambientSourceReceiverCallSurface(
+function sourceReceiverCallSurface(
   call: CallExpression,
+  isReceiverIdentifier: (node: Node | undefined) => boolean,
   bodyOffset: number,
 ): ExternalDbArgumentCall | null {
   const index = call.getStart() - bodyOffset;
@@ -4335,23 +4389,23 @@ function ambientSourceReceiverCallSurface(
   if (isDrizzleWriteCall(call)) {
     const operation = staticAccessName(call.getExpression());
     const receiver = staticAccessExpression(call.getExpression());
-    return operation && isUnboundSourceReceiverName(receiver) ? { index, name: operation } : null;
+    return operation && isReceiverIdentifier(receiver) ? { index, name: operation } : null;
   }
 
   const selectRead = selectReadCall(call);
-  if (selectRead && isUnboundSourceReceiverName(selectRead.receiver)) {
+  if (selectRead && isReceiverIdentifier(selectRead.receiver)) {
     return { index, name: 'select' };
   }
 
   const relationalRead = relationalReadCall(call);
-  if (relationalRead && isUnboundSourceReceiverName(relationalRead.receiver)) {
+  if (relationalRead && isReceiverIdentifier(relationalRead.receiver)) {
     return { index, name: 'relational-query' };
   }
 
   const surface = directDrizzleReceiverCallSurface(call);
   if (
     surface &&
-    isUnboundSourceReceiverName(surface.receiver) &&
+    isReceiverIdentifier(surface.receiver) &&
     (surface.name === 'transaction' || isUnclassifiedDirectDrizzleReceiverMethod(surface.name))
   ) {
     return { index, name: surface.displayName ?? surface.name };
@@ -4360,9 +4414,10 @@ function ambientSourceReceiverCallSurface(
   return null;
 }
 
-function ambientSourceReceiverHelperCallSurface(
+function sourceReceiverHelperCallSurface(
   call: CallExpression,
   localFunctionKeys: ReadonlySet<string>,
+  isReceiverIdentifier: (node: Node | undefined) => boolean,
   carrierSymbolKeys: ReadonlySet<string>,
   bodyOffset: number,
 ): ExternalDbArgumentCall | null {
@@ -4375,9 +4430,7 @@ function ambientSourceReceiverHelperCallSurface(
   if (
     !call
       .getArguments()
-      .some((arg) =>
-        receiverReferenceInArgument(arg, isUnboundSourceReceiverName, carrierSymbolKeys),
-      )
+      .some((arg) => receiverReferenceInArgument(arg, isReceiverIdentifier, carrierSymbolKeys))
   ) {
     return null;
   }
@@ -4930,6 +4983,22 @@ function sourceDrizzleReceiverNames(callback: Node): string[] {
   return [...names];
 }
 
+function sourceDestructuredReceiverReferences(callback: Node): QueryReceiverReferences {
+  const names = new Set<string>();
+  const symbolKeys = new Set<string>();
+  if (
+    Node.isArrowFunction(callback) ||
+    Node.isFunctionDeclaration(callback) ||
+    Node.isFunctionExpression(callback)
+  ) {
+    for (const param of callback.getParameters()) {
+      appendSourceDestructuredReceiverBinding(param.getNameNode(), names, symbolKeys);
+    }
+  }
+
+  return { names, symbolKeys };
+}
+
 function sourceReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
   if (
     !Node.isArrowFunction(callback) &&
@@ -4952,6 +5021,15 @@ function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void 
     return;
   }
 
+  // SPEC §11.1: destructured source-mode receiver slots are not precise receiver proof. They are
+  // tracked separately as FW406 surfaces instead of feeding read/write extraction.
+}
+
+function appendSourceDestructuredReceiverBinding(
+  name: Node,
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
   if (!Node.isObjectBindingPattern(name)) return;
 
   for (const element of name.getElements()) {
@@ -4959,13 +5037,36 @@ function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void 
     const propertyName = element.getPropertyNameNode()?.getText();
 
     if (!propertyName && Node.isIdentifier(binding) && isLikelyDrizzleReceiver(binding.getText())) {
-      names.add(binding.getText());
+      appendSourceDestructuredReceiverIdentifier(binding, names, symbolKeys);
       continue;
     }
 
     if (propertyName !== 'db' && propertyName !== 'tx') continue;
-    if (Node.isIdentifier(binding)) names.add(binding.getText());
+    if (Node.isIdentifier(binding)) {
+      appendSourceDestructuredReceiverIdentifier(binding, names, symbolKeys);
+    }
   }
+}
+
+function appendSourceDestructuredReceiverIdentifier(
+  binding: Node,
+  names: Set<string>,
+  symbolKeys: Set<string>,
+): void {
+  if (!Node.isIdentifier(binding)) return;
+  names.add(binding.getText());
+  const symbolKey = resolvedSymbolKey(binding.getSymbol());
+  if (symbolKey) symbolKeys.add(symbolKey);
+}
+
+function isSourceDestructuredReceiverIdentifier(
+  node: Node | undefined,
+  receiverReferences: QueryReceiverReferences,
+): boolean {
+  if (!node || !Node.isIdentifier(node)) return false;
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
+  if (symbolKey) return receiverReferences.symbolKeys.has(symbolKey);
+  return receiverReferences.names.has(node.getText());
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {

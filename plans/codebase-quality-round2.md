@@ -19,6 +19,11 @@ with same-session file/test evidence.
       the model; regex/source-string lowerers and validator reparses retired.
 - [ ] Phase 3 Drizzle extraction: ts-morph/project facts end-to-end; bespoke lexers deleted;
       fabricated facts removed or degraded to FW406; relational/execute coverage pinned.
+      Round96 evidence 2026-06-13: source-mode destructured `db`/`tx` receiver slots now degrade
+      visible write/query-loader surfaces to FW406 instead of fabricating exact table facts, while
+      fake destructuring and same-name local shadows stay invisible through ts-morph symbol checks.
+      Same-session evidence: `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] Phase 4 runtime: inline-loader minification/parity closed; duplicate wire/apply parsers
       removed; runtime split completed subtractively.
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
