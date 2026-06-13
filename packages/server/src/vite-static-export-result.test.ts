@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { StaticExportResult } from './static-export-types.js';
+import {
+  assertStaticExportManifestUsesDirectoryIndexDocuments,
+  staticExportManifest,
+} from './static-export-result.js';
 import { jisoAppShellViteStaticExportWithManifest } from './vite-static-export-result.js';
 
 function staticExportResult(path: string): StaticExportResult {
@@ -69,5 +73,26 @@ describe('server app shell Vite static export result boundary', () => {
     ).rejects.toThrow(
       'Static export manifest does not match the written export result. Expected routeDocuments=1, clientModules=0, assets=0, files=1. Received routeDocuments=1, clientModules=0, assets=0, files=1.',
     );
+  });
+
+  it('rejects stale flat route-document manifests before export tasks publish compatibility output', async () => {
+    const flatResult = staticExportResult('/about.html');
+
+    expect(() =>
+      assertStaticExportManifestUsesDirectoryIndexDocuments(staticExportManifest(flatResult)),
+    ).toThrow(
+      'Static export manifest contains non-directory-index route documents. Invalid route documents: /about.html. SPEC §9.5 exports route documents as directory-index HTML.',
+    );
+
+    await expect(
+      jisoAppShellViteStaticExportWithManifest({
+        async dryRun() {
+          return flatResult;
+        },
+        async write() {
+          return flatResult;
+        },
+      }),
+    ).rejects.toThrow('non-directory-index route documents');
   });
 });

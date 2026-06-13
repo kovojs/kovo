@@ -8,6 +8,7 @@ export {
 } from '../../static-export-diagnostics.js';
 export {
   assertStaticExportManifestMatchesResult,
+  assertStaticExportManifestUsesDirectoryIndexDocuments,
   staticExportInventory,
   staticExportManifest,
 } from '../../static-export-result.js';

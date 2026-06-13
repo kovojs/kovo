@@ -126,6 +126,9 @@ describe('server app-shell public API barrels', () => {
     expect(packageStaticExportApi.assertStaticExportManifestMatchesResult).toBe(
       staticExportResultApi.assertStaticExportManifestMatchesResult,
     );
+    expect(packageStaticExportApi.assertStaticExportManifestUsesDirectoryIndexDocuments).toBe(
+      staticExportResultApi.assertStaticExportManifestUsesDirectoryIndexDocuments,
+    );
     expect(packageStaticExportApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,
     );

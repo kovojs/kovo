@@ -77,6 +77,8 @@ export function assertStaticExportManifestMatchesResult(
   manifest: StaticExportManifest,
 ): void {
   const expected = staticExportManifest(result);
+  assertStaticExportManifestUsesDirectoryIndexDocuments(expected);
+  assertStaticExportManifestUsesDirectoryIndexDocuments(manifest);
   const expectedSignature = staticExportManifestSignature(expected);
   const actualSignature = staticExportManifestSignature(manifest);
 
@@ -89,6 +91,30 @@ export function assertStaticExportManifestMatchesResult(
       `Received ${staticExportManifestSummary(manifest)}.`,
     ].join(' '),
   );
+}
+
+// SPEC §9.5: static export publishes route documents as directory-index HTML
+// so static hosts do not depend on flat `.html` rewrite compatibility.
+export function assertStaticExportManifestUsesDirectoryIndexDocuments(
+  manifest: Pick<StaticExportManifest, 'routeDocuments'>,
+): void {
+  const flatDocuments = manifest.routeDocuments
+    .map((document) => document.path)
+    .filter((path) => !isDirectoryIndexDocumentPath(path));
+
+  if (flatDocuments.length === 0) return;
+
+  throw new Error(
+    [
+      'Static export manifest contains non-directory-index route documents.',
+      `Invalid route documents: ${flatDocuments.join(', ')}.`,
+      'SPEC §9.5 exports route documents as directory-index HTML.',
+    ].join(' '),
+  );
+}
+
+function isDirectoryIndexDocumentPath(path: string): boolean {
+  return path === '/index.html' || /^\/.+\/index\.html$/.test(path);
 }
 
 function staticExportManifestSignature(manifest: StaticExportManifest): string {

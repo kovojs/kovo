@@ -2,7 +2,7 @@ import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child
 import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createNetServer, type AddressInfo } from 'node:net';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -645,6 +645,8 @@ describe('commerce app shell HTTP entry', () => {
         expect(htmlLinkHrefs(cartHtml, { rel: 'modulepreload' })).toEqual([
           commerceClientModuleHref,
         ]);
+        await expect(access(path.join(outDir, 'cart.html'))).rejects.toThrow();
+        await expect(access(path.join(outDir, 'login.html'))).rejects.toThrow();
 
         const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
         expect(htmlDocumentFacts(loginHtml).title).toBe('Jiso Commerce Sign In');

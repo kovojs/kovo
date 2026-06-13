@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -377,6 +377,7 @@ describe('site app-shell export adoption', () => {
     await expect(
       readFile(path.join(outDir, 'docs', 'installation', 'index.html'), 'utf8'),
     ).resolves.toContain('<h1>Installation</h1>');
+    await expect(access(path.join(outDir, 'docs', 'installation.html'))).rejects.toThrow();
     await expect(readFile(path.join(outDir, 'c', 'search.js'), 'utf8')).resolves.toBe(
       'export function open() { document.body.dataset.search = "open"; }\n',
     );

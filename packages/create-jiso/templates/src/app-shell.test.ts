@@ -5,7 +5,11 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { exportStaticApp } from '@jiso/server/app-shell/static-export';
+import {
+  assertStaticExportManifestUsesDirectoryIndexDocuments,
+  exportStaticApp,
+  staticExportManifest,
+} from '@jiso/server/app-shell/static-export';
 import { createServer as createViteServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 
@@ -40,6 +44,12 @@ describe('starter app shell', () => {
 
       expect(result.diagnostics).toEqual([]);
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/index.html']);
+      expect(staticExportManifest(result).routeDocuments.map((artifact) => artifact.path)).toEqual([
+        '/index.html',
+      ]);
+      expect(() =>
+        assertStaticExportManifestUsesDirectoryIndexDocuments(staticExportManifest(result)),
+      ).not.toThrow();
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
         starterClientModuleHref,
       ]);
