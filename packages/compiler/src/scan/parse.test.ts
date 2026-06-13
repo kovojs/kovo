@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   arrowFunctionParts,
   callExpressions,
+  componentOptionObjectEntries,
   componentRenderHostElement,
   documentElementActionFromZeroArgArrow,
   functionBodyPropertyAccessPaths,
@@ -197,6 +198,23 @@ export const CartBadge = component('cart-badge', {
     const [component] = parseComponentModule('cart-badge.tsx', source).components;
 
     expect(component?.stateReturnObject?.staticValue).toBeUndefined();
+  });
+
+  it('records component prop constructor types as parser model facts', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  props: { label: String, count: Number, open: Boolean, meta: customProp },
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`;
+    const model = parseComponentModule('cart-badge.tsx', source);
+
+    expect(componentOptionObjectEntries(model, 'props')).toEqual([
+      { key: 'label', staticConstructorType: 'string', value: 'String' },
+      { key: 'count', staticConstructorType: 'number', value: 'Number' },
+      { key: 'open', staticConstructorType: 'boolean', value: 'Boolean' },
+      { key: 'meta', value: 'customProp' },
+    ]);
   });
 
   it('records first HTML tag names for exported renderSource returns', () => {

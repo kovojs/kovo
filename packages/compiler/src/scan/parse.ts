@@ -11,6 +11,7 @@ export interface ComponentOptionEntry {
 
 export interface ObjectLiteralEntry {
   key: string;
+  staticConstructorType?: 'boolean' | 'number' | 'string';
   value?: string;
 }
 
@@ -1129,6 +1130,16 @@ function isNumericLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   return /^-?\d(?:\d|\.)*$/.test(node.getText(sourceFile));
 }
 
+function staticConstructorTypeEntry(
+  expression: ts.Expression,
+): { staticConstructorType: ObjectLiteralEntry['staticConstructorType'] } | {} {
+  if (!ts.isIdentifier(expression)) return {};
+  if (expression.text === 'String') return { staticConstructorType: 'string' };
+  if (expression.text === 'Number') return { staticConstructorType: 'number' };
+  if (expression.text === 'Boolean') return { staticConstructorType: 'boolean' };
+  return {};
+}
+
 function propertyNameText(name: ts.PropertyName): string | null {
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
@@ -1150,6 +1161,7 @@ function objectLiteralEntries(
       return [
         {
           key,
+          ...staticConstructorTypeEntry(property.initializer),
           value: source.slice(
             property.initializer.getStart(sourceFile),
             property.initializer.getEnd(),

@@ -13,7 +13,7 @@ describe('fragment target validation', () => {
       source: `
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
-  props: { rowId: String },
+  props: { rowId: String, quantity: Number, selected: Boolean },
   queries: { cart: cartQuery },
   render: ({ cart, rowId }) => <tr fw-c="cart-row" data-row={rowId}>{renderOnce(cart.count)}</tr>,
 });
@@ -21,9 +21,11 @@ export const CartRow = component('cart-row', {
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.files[2]?.source).toContain("'cart-row': { rowId: string };");
+    expect(result.files[2]?.source).toContain(
+      "'cart-row': { rowId: string; quantity: number; selected: boolean };",
+    );
     expect(result.files[2]?.source).toContain(`interface FragmentTargets {
-  'cart-row': { rowId: string };
+  'cart-row': { rowId: string; quantity: number; selected: boolean };
   }`);
   });
 

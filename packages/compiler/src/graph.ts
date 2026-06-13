@@ -102,24 +102,15 @@ function componentQueryNames(model: ComponentModuleModel): string[] {
 }
 
 function fragmentTargetPropsType(model: ComponentModuleModel): string {
-  const props = componentOptionObjectEntries(model, 'props')
-    .map((entry) => ({
-      key: entry.key,
-      type: entry.value ? propConstructorType(entry.value) : undefined,
-    }))
-    .filter((entry): entry is { key: string; type: string } => entry.type !== undefined);
+  const props = componentOptionObjectEntries(model, 'props').flatMap((entry) =>
+    entry.staticConstructorType === undefined
+      ? []
+      : [{ key: entry.key, type: entry.staticConstructorType }],
+  );
 
   if (props.length === 0) return '{}';
 
   return `{ ${props.map((prop) => `${prop.key}: ${prop.type}`).join('; ')} }`;
-}
-
-function propConstructorType(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (trimmed === 'String') return 'string';
-  if (trimmed === 'Number') return 'number';
-  if (trimmed === 'Boolean') return 'boolean';
-  return undefined;
 }
 
 function deriveInvalidationFactsFromGraph(

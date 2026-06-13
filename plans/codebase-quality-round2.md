@@ -1235,6 +1235,15 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Fragment target prop constructor model cleanup: `pnpm exec vitest --run
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/fragment-targets.test.ts
+packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/scan/parse.ts packages/compiler/src/graph.ts
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/fragment-targets.test.ts`;
+  `git diff --check`. Evidence: parser object entries now carry `staticConstructorType` facts for
+  `String`/`Number`/`Boolean` prop declarations, and `graph.ts` derives fragment target prop
+  types from those model facts instead of trimming raw prop initializer source text.
 - Fragment target static-fact cleanup: `pnpm exec vitest --run
 packages/compiler/src/scan/parse.test.ts packages/compiler/src/fragment-targets.test.ts
 packages/compiler/src/compile-component.test.ts packages/compiler/src/registry.test.ts`;
