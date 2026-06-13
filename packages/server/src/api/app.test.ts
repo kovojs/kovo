@@ -21,6 +21,8 @@ import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
+import * as viteStaticExportBuildApi from '../vite-static-export-build.js';
+import * as viteStaticExportManifestFileApi from '../vite-static-export-manifest-file.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
@@ -117,26 +119,51 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.writeJisoAppShellVitePluginBuild).toBe(
       viteApi.writeJisoAppShellVitePluginBuild,
     );
+    expect(packageViteApi.exportJisoAppShellViteBuild).toBe(viteApi.exportJisoAppShellViteBuild);
+    expect(viteApi.exportJisoAppShellViteBuild).toBe(
+      viteStaticExportBuildApi.exportJisoAppShellViteBuild,
+    );
     expect(packageViteApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.exportJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(viteApi.exportJisoAppShellViteBuildFromManifestFile).toBe(
+      viteStaticExportManifestFileApi.exportJisoAppShellViteBuildFromManifestFile,
     );
     expect(packageViteApi.exportJisoAppShellViteBuildWithManifestFromManifestFile).toBe(
       viteApi.exportJisoAppShellViteBuildWithManifestFromManifestFile,
     );
+    expect(viteApi.exportJisoAppShellViteBuildWithManifestFromManifestFile).toBe(
+      viteStaticExportManifestFileApi.exportJisoAppShellViteBuildWithManifestFromManifestFile,
+    );
     expect(packageViteApi.exportJisoAppShellViteBuildWithManifest).toBe(
       viteApi.exportJisoAppShellViteBuildWithManifest,
+    );
+    expect(viteApi.exportJisoAppShellViteBuildWithManifest).toBe(
+      viteStaticExportBuildApi.exportJisoAppShellViteBuildWithManifest,
     );
     expect(packageViteApi.staticExportInventoryForJisoAppShellViteBuild).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuild,
     );
+    expect(viteApi.staticExportInventoryForJisoAppShellViteBuild).toBe(
+      viteStaticExportBuildApi.staticExportInventoryForJisoAppShellViteBuild,
+    );
     expect(packageViteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
+      viteStaticExportManifestFileApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
     );
     expect(packageViteApi.staticExportManifestForJisoAppShellViteBuild).toBe(
       viteApi.staticExportManifestForJisoAppShellViteBuild,
     );
+    expect(viteApi.staticExportManifestForJisoAppShellViteBuild).toBe(
+      viteStaticExportBuildApi.staticExportManifestForJisoAppShellViteBuild,
+    );
     expect(packageViteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(viteApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile).toBe(
+      viteStaticExportManifestFileApi.staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     );
     expect(packageViteApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
     expect(packageViteApi.jisoAppShellViteBuildStaticExportAssets).toBe(

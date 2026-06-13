@@ -3,7 +3,7 @@ import type { VersionedClientModuleInput } from './client-modules.js';
 import type { JisoApp } from './app-types.js';
 import type { PageHintOptions } from './hints.js';
 import type { JisoAppShellViteBuildOutput } from './vite-build-output.js';
-import type { JisoAppShellVitePluginStaticExportOptions } from './vite-static-export.js';
+import type { JisoAppShellVitePluginStaticExportOptions } from './vite-static-export-options.js';
 import {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestFromBundle,

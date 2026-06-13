@@ -75,9 +75,29 @@ Implemented areas:
 - `vite-static-export-result.ts` owns the SPEC §9.5 Vite export-task proof that a dry-run manifest
   and written static-host result match, leaving `vite-static-export.ts` as the public facade over
   build/manifest-file export entry points.
+- `vite-static-export-build.ts` now owns build-backed SPEC §9.5 export replay, inventory, manifest,
+  and manifest/write consistency helpers; `vite-static-export-manifest-file.ts` owns the
+  manifest-file wrappers. `vite-static-export.ts` is only the public facade, and `vite-build.ts`
+  type-imports plugin static-export options from the option owner instead of the facade.
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
+
+Round273 Vite static-export facade extraction evidence:
+
+- `packages/server/src/vite-static-export-build.ts` owns build-backed export/write, dry-run
+  inventory, manifest projection, and dry-run/write consistency for SPEC §9.5 Vite export tasks.
+  `packages/server/src/vite-static-export-manifest-file.ts` owns manifest-file construction and
+  option projection, leaving `packages/server/src/vite-static-export.ts` as a public re-export
+  facade. `packages/server/src/api/app.test.ts` pins the public app-shell Vite subpath to those
+  focused owners.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-static-export-build.ts packages/server/src/vite-static-export-manifest-file.ts packages/server/src/vite-static-export.ts packages/server/src/vite-build.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round272 Vite static-export result boundary evidence:
 

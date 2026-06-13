@@ -1533,6 +1533,10 @@ adoption instead of each consumer hand-wiring duplicate calls.
 The Vite static-export result proof now lives in `packages/server/src/vite-static-export-result.ts`:
 that boundary converts dry-run replay to a manifest, runs the write replay, and asserts both
 surfaces match, leaving `vite-static-export.ts` as the build/manifest-file public facade.
+Vite build-backed export replay now lives in `packages/server/src/vite-static-export-build.ts`,
+while manifest-file export wrappers live in `packages/server/src/vite-static-export-manifest-file.ts`;
+`vite-static-export.ts` is only the public facade, and the app-shell Vite public API test pins that
+subpath to the focused owners.
 Static export inventory/manifest projection now lives in `packages/server/src/static-export-result.ts`
 and response-header snapshots in `static-export-headers.ts`, leaving `static-export-types.ts` as a
 type/contract module while the app-shell static-export public subpath forwards from the focused
@@ -1573,6 +1577,20 @@ public app exports instead of falling back to stale named-app or shell-object co
 - [x] Delete dead compatibility modules and aliases as soon as tests pin the public replacement.
 
 Latest evidence:
+
+- Round273 Vite static-export facade extraction:
+  `packages/server/src/vite-static-export-build.ts` owns build-backed export/write, dry-run
+  inventory, manifest projection, and dry-run/write consistency for SPEC §9.5 Vite export tasks;
+  `packages/server/src/vite-static-export-manifest-file.ts` owns manifest-file construction and
+  option projection; `packages/server/src/vite-static-export.ts` is now a public re-export facade
+  and `packages/server/src/api/app.test.ts` pins the app-shell Vite subpath to the focused owners.
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-static-export-options.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/vite-static-export-build.ts packages/server/src/vite-static-export-manifest-file.ts packages/server/src/vite-static-export.ts packages/server/src/vite-build.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 - Round272 Vite static-export result boundary:
   `packages/server/src/vite-static-export-result.ts` owns the dry-run manifest/write-result
