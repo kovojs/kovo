@@ -4290,6 +4290,53 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins project relational query tables from declarations instead of loader-local shadows', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
+
+            const users = pgTable('users', {
+              active: boolean('active').notNull(),
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users/shadowed-relational', {
+              load(_input, db: PgDatabase<any, any, any>, fake: { users: unknown }) {
+                {
+                  const { users } = fake;
+                  void users;
+                }
+                return db.query.users.findMany({ where: eq(users.active, true) });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:10',
+          },
+        ],
+        query: 'users/shadowed-relational',
+        reads: ['user'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:10',
+      },
+    ]);
+  });
+
   it('pins unresolved project relational read sources as explicit FW406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

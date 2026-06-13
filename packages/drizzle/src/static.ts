@@ -244,7 +244,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
             sourceFile,
             extraction.tableNamesBySymbol,
           ),
-          tableNamesByIdentifier: projectTableNamesByIdentifierText(
+          relationalTableNames: projectRelationalTableNamesByProperty(
             sourceFile,
             extraction.tableNamesBySymbol,
           ),
@@ -330,7 +330,7 @@ function projectFunctionExtractionsByFileName(
       sourceFile,
       extraction.tableNamesBySymbol,
     );
-    const tableNamesByIdentifier = projectTableNamesByIdentifierText(
+    const relationalTableNames = projectRelationalTableNamesByProperty(
       sourceFile,
       extraction.tableNamesBySymbol,
     );
@@ -356,7 +356,7 @@ function projectFunctionExtractionsByFileName(
             extraction.tableNamesBySymbol,
             namespaceTableNames,
           ),
-          ...extractProjectRelationalReadCalls(body, file, receivers, tableNamesByIdentifier),
+          ...extractProjectRelationalReadCalls(body, file, receivers, relationalTableNames),
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
@@ -394,7 +394,7 @@ function projectFunctionExtractionsByFileName(
             extraction.tableNamesBySymbol,
             namespaceTableNames,
           ),
-          ...extractProjectRelationalReadCalls(body, file, receivers, tableNamesByIdentifier),
+          ...extractProjectRelationalReadCalls(body, file, receivers, relationalTableNames),
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
@@ -428,7 +428,7 @@ function projectFunctionExtractionsByFileName(
             callback.body,
             file,
             receivers,
-            tableNamesByIdentifier,
+            relationalTableNames,
           ),
         ],
         unresolvedCalls: [],
@@ -971,7 +971,7 @@ function extractProjectRelationalReadCalls(
   body: Node,
   file: SourceFileInput,
   receivers: ProjectDrizzleReceivers,
-  tableNamesByIdentifier: ReadonlyMap<string, string>,
+  relationalTableNames: ReadonlyMap<string, string>,
 ): ExtractedReadCall[] {
   const bodyStart = bodySourceStart(body);
   const calls: ExtractedReadCall[] = [];
@@ -985,7 +985,7 @@ function extractProjectRelationalReadCalls(
       operation: 'relational-query',
       site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
       tableExpression:
-        tableNamesByIdentifier.get(read.tableExpression) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
+        relationalTableNames.get(read.tableExpression) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
     });
   }
 
@@ -1531,25 +1531,50 @@ function sourceColumnShapesForTables(
   return scoped;
 }
 
-function projectTableNamesByIdentifierText(
+function projectRelationalTableNamesByProperty(
   sourceFile: SourceFile,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, string> {
   const names = new Map<string, string>();
   const ambiguous = new Set<string>();
 
-  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
-    if (!tableName) continue;
+  const append = (name: string, node: Node) => {
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(node.getSymbol()) ?? '');
+    if (!tableName) return;
 
-    const text = identifier.getText();
-    const existing = names.get(text);
+    const existing = names.get(name);
     if (existing && existing !== tableName) {
-      ambiguous.add(text);
-      continue;
+      ambiguous.add(name);
+      return;
     }
 
-    names.set(text, tableName);
+    names.set(name, tableName);
+  };
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getNameNode();
+    if (Node.isIdentifier(name)) append(name.getText(), name);
+  }
+
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    for (const specifier of declaration.getNamedImports()) {
+      const local = specifier.getAliasNode() ?? specifier.getNameNode();
+      append(local.getText(), local);
+    }
+
+    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+    if (!declaration.getNamespaceImport() || !moduleSourceFile) continue;
+    for (const [name, tableName] of projectExportedTableNamesByName(
+      moduleSourceFile,
+      tableNamesBySymbol,
+    )) {
+      const existing = names.get(name);
+      if (existing && existing !== tableName) {
+        ambiguous.add(name);
+        continue;
+      }
+      names.set(name, tableName);
+    }
   }
 
   for (const text of ambiguous) names.delete(text);
@@ -2031,7 +2056,7 @@ interface ProjectQueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
   namespaceTableNames: ProjectNamespaceTableNames;
-  tableNamesByIdentifier: ReadonlyMap<string, string>;
+  relationalTableNames: ReadonlyMap<string, string>;
   tableNamesBySymbol: ReadonlyMap<string, string>;
 }
 
@@ -2049,7 +2074,7 @@ function extractProjectQueryDefinitions(
       : {}),
     readTableIdentifier: resolveTableIdentifier,
     receiverMode: 'project',
-    relationalTableName: (name) => options.tableNamesByIdentifier.get(name),
+    relationalTableName: (name) => options.relationalTableNames.get(name),
   });
 }
 

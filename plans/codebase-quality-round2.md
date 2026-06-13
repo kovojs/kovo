@@ -141,6 +141,11 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       retaining FW406 for raw SQL, relational query APIs without static projection, helper handoff,
       detached methods, and overwritten fake members; package and real `drizzle-orm` tests pin the
       split.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` deleted the project relational query
+      resolver that scanned every identifier text and now builds `db.query.<table>` proof from
+      table declaration/import/namespace-export symbols; `packages/drizzle/src/index.test.ts` pins
+      namespace-imported relational query tables, and `conformance/drizzle-pin/src/index.test.ts`
+      pins real `drizzle-orm` relational query facts despite loader-local shadows.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

@@ -2338,6 +2338,49 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('resolves project relational query tables from namespace-imported table symbols', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'user.queries.ts',
+          source: `
+            import * as schema from "./schema";
+
+            export const usersQuery = query("users/namespace", {
+              load(_input, db: PgDatabase) {
+                return db.query.users.findMany({ where: eq(schema.users.active, true) });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'user.queries.ts:4',
+          },
+        ],
+        query: 'users/namespace',
+        reads: ['user'],
+        shape: {},
+        site: 'user.queries.ts:4',
+      },
+    ]);
+  });
+
   it('marks project relational query read sources that cannot resolve to a table as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
