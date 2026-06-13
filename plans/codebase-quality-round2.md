@@ -198,6 +198,8 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 
 ## Current Gates
 
+- [x] Broad gate after mini-wave through `8d4b595f`: `pnpm run check` passed on 850 formatted
+      files, 750 lint/typechecked files, and 7 example/conformance typecheck projects.
 - [x] Broad gate after first integration wave through `ea06b9c7`: `pnpm run check` passed on
       844 formatted files, 744 lint/typechecked files, and 7 example/conformance typecheck projects.
 - [x] UI G6 sheet/drawer compiled gallery slice added app-authored demos, generated artifacts,
