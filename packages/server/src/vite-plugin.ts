@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+import { isJisoApp } from './app-guards.js';
 import { createRequestHandler } from './app.js';
 import type { JisoApp } from './app-types.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
@@ -33,6 +34,7 @@ export function jisoAppShellVitePlugin(
   app: JisoApp,
   options: JisoAppShellVitePluginOptions = {},
 ): JisoAppShellVitePlugin {
+  assertJisoAppShellVitePluginApp(app);
   const requestHandler = createRequestHandler(app);
   const nodeHandler = toNodeHandler(requestHandler);
 
@@ -83,4 +85,12 @@ export function jisoAppShellVitePlugin(
         }
       : {}),
   };
+}
+
+function assertJisoAppShellVitePluginApp(app: JisoApp): void {
+  if (isJisoApp(app)) return;
+
+  throw new TypeError(
+    'jisoAppShellVitePlugin() requires a Jiso app aggregate. SPEC §9.5 Vite dev/build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+  );
 }

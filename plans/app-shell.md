@@ -113,6 +113,23 @@ Implemented areas:
 - Plugin-time Vite static-export option projection now rejects stale runtime `distDir` fields with
   FW229 before app replay or file writes, keeping SPEC §9.5 static-host asset roots owned by the
   Vite output directory instead of an inert compatibility option.
+- The public Vite plugin now applies the shared closed-app aggregate guard at runtime, so
+  JavaScript callers cannot pass a raw request handler or partial compatibility shell into the
+  SPEC §9.5 dev/build/export replay boundary.
+
+Round287c Vite plugin closed-app runtime guard evidence:
+
+- `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the
+  request handler or node adapter, using the same `isJisoApp()` boundary as dynamic dev/export
+  module loading.
+- `packages/server/src/vite.test.ts` proves real apps still construct the plugin and raw
+  `createRequestHandler(app)` inputs fail at runtime while the compile-time app-only assertion
+  remains pinned.
+- `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell while the dynamic session shell stays non-exportable"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs -t "serves generated docs HTML through the app shell before static export copies modules"`
+- `pnpm exec tsc --noEmit --pretty false`
 
 Round287b plugin-time Vite static-export option guard evidence:
 

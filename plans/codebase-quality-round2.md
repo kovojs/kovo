@@ -165,6 +165,16 @@ generated export artifacts inline.
 
 Latest evidence:
 
+- Phase 5 Vite plugin closed-app runtime guard slice:
+  `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "exports the public commerce shell while the dynamic session shell stays non-exportable"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs -t "serves generated docs HTML through the app shell before static export copies modules"`;
+  `pnpm exec tsc --noEmit --pretty false`. Evidence:
+  `packages/server/src/vite-plugin.ts` now applies the shared `isJisoApp()` aggregate guard before
+  creating Vite dev/build/export handlers, and `packages/server/src/vite.test.ts` proves runtime
+  JavaScript callers cannot pass raw request handlers or partial compatibility shells into the
+  SPEC §9.5 Vite plugin boundary.
 - Phase 5 plugin-time Vite static-export option guard slice:
   `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;

@@ -38,6 +38,19 @@ describe('server app shell Vite plugin', () => {
   it('exports the Vite plugin from the split plugin boundary', () => {
     expect(jisoAppShellVitePlugin).toBe(splitJisoAppShellVitePlugin);
 
+    const app = createApp();
+    expect(jisoAppShellVitePlugin(app).name).toBe('jiso-app-shell');
+    expect(() =>
+      jisoAppShellVitePlugin(createRequestHandler(app) as unknown as ReturnType<typeof createApp>),
+    ).toThrow(
+      'jisoAppShellVitePlugin() requires a Jiso app aggregate. SPEC §9.5 Vite dev/build/export replay must start from createApp(), not a raw request handler or compatibility shell.',
+    );
+    expect(() =>
+      jisoAppShellVitePlugin({ routes: [], endpoints: [] } as unknown as ReturnType<
+        typeof createApp
+      >),
+    ).toThrow('jisoAppShellVitePlugin() requires a Jiso app aggregate.');
+
     function expectVitePluginAppOnly(app: ReturnType<typeof createApp>): void {
       jisoAppShellVitePlugin(app);
       // SPEC.md section 9.5: R5 plugin inputs stay tied to the closed app aggregate
