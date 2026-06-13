@@ -38,12 +38,20 @@ export class GeneratedFixtureElement {
     return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
   }
 
+  closest(selector: string): GeneratedFixtureElement | null {
+    return this.matches(selector) ? this : null;
+  }
+
   matches(selector: string): boolean {
     const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
-    if (exactAttribute) return this.getAttribute(exactAttribute[1] ?? '') === exactAttribute[2];
+    if (exactAttribute) {
+      return this.getAttribute(cssAttributeName(exactAttribute[1] ?? '')) === exactAttribute[2];
+    }
 
     const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
-    return presentAttribute ? this.getAttribute(presentAttribute[1] ?? '') !== null : false;
+    return presentAttribute
+      ? this.getAttribute(cssAttributeName(presentAttribute[1] ?? '')) !== null
+      : false;
   }
 
   removeAttribute(name: string): void {
@@ -59,6 +67,9 @@ export class GeneratedFixtureElement {
     this.attributes.push({ name, value });
   }
 }
+
+const cssAttributeName = (selectorAttributeName: string): string =>
+  selectorAttributeName.replaceAll('\\:', ':');
 
 export class GeneratedFixtureTemplateStampHost extends GeneratedFixtureElement {
   items: Array<Record<string, unknown> & { html: string }> = [];
@@ -109,6 +120,35 @@ export interface ExecuteGeneratedBootstrapModuleResult {
   documentRoot: GeneratedFixtureMorphRoot;
   exports: Record<string, unknown>;
   store: unknown;
+}
+
+export type GeneratedHandlerReferenceVersionShape = 'lower-hex-8' | 'invalid';
+
+export interface GeneratedHandlerReferenceFact {
+  handlerName: string;
+  modulePath: string;
+  requestPath: string;
+  staleVersionRequestPath: string;
+  version: string;
+  versionShape: GeneratedHandlerReferenceVersionShape;
+}
+
+const isLowerHex = (value: string): boolean => /^[0-9a-f]+$/.test(value);
+
+export function generatedHandlerReferenceFact(
+  href: string,
+  baseUrl = 'http://jiso.test',
+): GeneratedHandlerReferenceFact {
+  const url = new URL(href, baseUrl);
+  const version = url.searchParams.get('v') ?? '';
+  return {
+    handlerName: url.hash.startsWith('#') ? url.hash.slice(1) : '',
+    modulePath: url.pathname,
+    requestPath: `${url.pathname}?cache=1&v=${version}`,
+    staleVersionRequestPath: `${url.pathname}?v=00000000`,
+    version,
+    versionShape: version.length === 8 && isLowerHex(version) ? 'lower-hex-8' : 'invalid',
+  };
 }
 
 const rewriteGeneratedRuntimeImports = (source: string): string =>

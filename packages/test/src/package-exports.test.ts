@@ -66,10 +66,12 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
+  generatedHandlerReferenceFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
   GeneratedFixtureTemplateStampHost,
+  type GeneratedHandlerReferenceFact,
 } from '@jiso/test/generated-module-fixtures';
 import {
   createJisoTestHarness,
@@ -399,6 +401,11 @@ describe('@jiso/test package subpath exports', () => {
     expect(executeGeneratedClientModule).toBeTypeOf('function');
     expect(executeGeneratedServerRenderSource).toBeTypeOf('function');
     expect(executeGeneratedBootstrapModule).toBeTypeOf('function');
+    expect(generatedHandlerReferenceFact('/c/cart.client.js?v=0a1b2c3d#Cart$click')).toMatchObject({
+      handlerName: 'Cart$click',
+      modulePath: '/c/cart.client.js',
+      versionShape: 'lower-hex-8',
+    });
     expect(new GeneratedFixtureMorphRoot().querySelectorAll('*')).toEqual([]);
     expect(new GeneratedFixtureMorphTarget('ready').readHtml()).toBe('ready');
     expect(
@@ -487,6 +494,7 @@ type _PublicSubpathTypes = [
   WireTranscriptResponse,
   ParsedSqlOperation,
   TypeScriptInterfaceMemberTypes,
+  GeneratedHandlerReferenceFact,
   DbObservationOptions,
   DbVerificationConfig,
   DbVerificationDiagnostic,

@@ -326,6 +326,13 @@ Closed evidence so far:
   `pnpm exec vitest --run packages/test/src/mcp-fixtures.test.ts packages/test/src/package-exports.test.ts`,
   `pnpm exec vp run build`, and
   `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`.
+- Round102 harness evidence 2026-06-13: generated handler href/version checks and loader smoke
+  escaped-attribute selector handling in `tests/fw-check.node.mjs` consume
+  `@jiso/test/generated-module-fixtures` artifact/DOM facts instead of local URL/hash/version and
+  selector parsers. Same-session evidence:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`,
+  `pnpm exec vp run build`, and
+  `node --test --test-name-pattern "P2 loader smoke evidence is asserted through runtime behavior|S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`.
 
 Open:
 

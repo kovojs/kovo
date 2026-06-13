@@ -4,6 +4,7 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
+  generatedHandlerReferenceFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -49,6 +50,34 @@ export function renderSource() {
     ).toBe('<cart-badge><span data-bind="cart.count">1</span></cart-badge>');
   });
 
+  it('summarizes generated handler hrefs as reusable artifact facts', () => {
+    expect(
+      generatedHandlerReferenceFact(
+        '/c/routes/products/product-card.client.js?v=0a1b2c3d#ProductCard$button_click',
+      ),
+    ).toEqual({
+      handlerName: 'ProductCard$button_click',
+      modulePath: '/c/routes/products/product-card.client.js',
+      requestPath: '/c/routes/products/product-card.client.js?cache=1&v=0a1b2c3d',
+      staleVersionRequestPath: '/c/routes/products/product-card.client.js?v=00000000',
+      version: '0a1b2c3d',
+      versionShape: 'lower-hex-8',
+    });
+  });
+
+  it('marks malformed generated handler href versions without hiding the parsed target', () => {
+    expect(
+      generatedHandlerReferenceFact(
+        '/c/routes/products/product-card.client.js?v=zzzzzzzz#ProductCard$button_click',
+      ),
+    ).toMatchObject({
+      handlerName: 'ProductCard$button_click',
+      modulePath: '/c/routes/products/product-card.client.js',
+      version: 'zzzzzzzz',
+      versionShape: 'invalid',
+    });
+  });
+
   it('exposes DOM fixture roots that satisfy runtime query/update seams', () => {
     const root = new GeneratedFixtureMorphRoot();
     const binding = new GeneratedFixtureElement(
@@ -66,6 +95,18 @@ export function renderSource() {
     expect(root.querySelectorAll('[data-derive="cart.empty"]')).toHaveLength(1);
     expect(root.findFragmentTarget('cart-badge')?.readHtml()).toBe('<cart-badge>0</cart-badge>');
     expect(stamp.textContent).toBe('<li>Tea</li>');
+  });
+
+  it('matches escaped attribute selectors and closest() for generated loader fixtures', () => {
+    const element = new GeneratedFixtureElement({
+      'fw-state': 'ready',
+      'on:load': '/c/app.js#load',
+    });
+
+    expect(element.matches('[on\\:load]')).toBe(true);
+    expect(element.matches('[on\\:load="/c/app.js#load"]')).toBe(true);
+    expect(element.closest('[fw-state]')).toBe(element);
+    expect(element.closest('[on\\:idle]')).toBeNull();
   });
 
   it('executes generated bootstrap modules with captured loader and deferred hooks', () => {

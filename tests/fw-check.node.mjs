@@ -73,6 +73,7 @@ import {
   executeGeneratedBootstrapModule,
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
+  generatedHandlerReferenceFact,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -207,9 +208,6 @@ const runCliCommand = async (args) => {
     process.stderr.write = originalStderrWrite;
   }
 };
-
-const isLowerHex = (value) =>
-  value.length > 0 && [...value].every((char) => '0123456789abcdef'.includes(char));
 
 const assertHtmlMainMarker = (source, marker, message) => {
   assert.equal(
@@ -973,21 +971,7 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
     },
     visibilityState: 'visible',
   };
-  const eventElement = (attributes) => ({
-    attributes: Object.entries(attributes).map(([name, value]) => ({ name, value })),
-    getAttribute(name) {
-      return attributes[name] ?? null;
-    },
-    setAttribute(name, value) {
-      attributes[name] = value;
-    },
-    closest(selector) {
-      const trigger = selector.match(/^\[on\\:(.+)\]$/)?.[1];
-      if (trigger && attributes[`on:${trigger}`] !== undefined) return this;
-      if (selector === '[fw-state]' && attributes['fw-state'] !== undefined) return this;
-      return null;
-    },
-  });
+  const eventElement = (attributes) => new GeneratedFixtureElement(attributes);
   const calls = [];
   const waitForCalls = async (count) => {
     for (let attempts = 0; attempts < 10 && calls.length < count; attempts += 1) {
@@ -4439,12 +4423,19 @@ export const ProductCard = component('product-card', {
   assert.equal(buttons.length, 1);
   assert.equal(buttons[0]?.attrs['data-p-id'], '{product.id}');
   const handlerRef = buttons[0]?.attrs['on:click'] ?? '';
-  const handlerUrl = new URL(handlerRef, 'http://jiso.test');
-  assert.equal(handlerUrl.pathname, '/c/routes/products/product-card.client.js');
-  assert.equal(handlerUrl.searchParams.get('v')?.length, 8);
-  assert.equal(isLowerHex(handlerUrl.searchParams.get('v') ?? ''), true);
-
-  const version = handlerUrl.searchParams.get('v') ?? '';
+  const handlerReference = generatedHandlerReferenceFact(handlerRef);
+  assert.deepEqual(
+    {
+      handlerName: handlerReference.handlerName,
+      modulePath: handlerReference.modulePath,
+      versionShape: handlerReference.versionShape,
+    },
+    {
+      handlerName: 'ProductCard$button_click',
+      modulePath: '/c/routes/products/product-card.client.js',
+      versionShape: 'lower-hex-8',
+    },
+  );
   const headers = new Map();
   let body = '';
   let nextCalls = 0;
@@ -4457,7 +4448,7 @@ export const ProductCard = component('product-card', {
     },
   };
 
-  middleware({ url: `${handlerUrl.pathname}?cache=1&v=${version}` }, response, () => {
+  middleware({ url: handlerReference.requestPath }, response, () => {
     nextCalls += 1;
   });
 
@@ -4474,12 +4465,14 @@ export const ProductCard = component('product-card', {
     },
     runtime: generatedModuleRuntime,
   });
-  const handlerName = handlerUrl.hash.slice(1);
-  assert.equal(typeof clientExports[handlerName], 'function');
-  assert.equal(clientExports[handlerName]('click', { params: { id: 'p1' } }), 'added:p1');
+  assert.equal(typeof clientExports[handlerReference.handlerName], 'function');
+  assert.equal(
+    clientExports[handlerReference.handlerName]('click', { params: { id: 'p1' } }),
+    'added:p1',
+  );
   assert.deepEqual(cartEvents, ['p1']);
 
-  middleware({ url: `${handlerUrl.pathname}?v=00000000` }, response, () => {
+  middleware({ url: handlerReference.staleVersionRequestPath }, response, () => {
     nextCalls += 1;
   });
   assert.equal(nextCalls, 1);
@@ -4518,7 +4511,7 @@ export const DiagnosticCard = component('diagnostic-card', {
       tag: 'button',
     })[0]?.attrs;
     const loweredHref = loweredAttrs?.['on:click'] ?? '';
-    const loweredUrl = new URL(loweredHref, 'http://jiso.test');
+    const loweredHandlerReference = generatedHandlerReferenceFact(loweredHref);
 
     assert.equal(diagnosticMessage.summary, 'Jiso Vite transform failed with 1 error diagnostic.');
     assert.deepEqual(
@@ -4529,10 +4522,18 @@ export const DiagnosticCard = component('diagnostic-card', {
       },
       { code: 'FW201', location: `${fileName}:5:25`, message: diagnosticDefinitions.FW201.message },
     );
-    assert.equal(loweredUrl.pathname, '/c/routes/diagnostic-card.client.js');
-    assert.equal(loweredUrl.searchParams.get('v')?.length, 8);
-    assert.equal(isLowerHex(loweredUrl.searchParams.get('v') ?? ''), true);
-    assert.equal(loweredUrl.hash, '#DiagnosticCard$button_click');
+    assert.deepEqual(
+      {
+        handlerName: loweredHandlerReference.handlerName,
+        modulePath: loweredHandlerReference.modulePath,
+        versionShape: loweredHandlerReference.versionShape,
+      },
+      {
+        handlerName: 'DiagnosticCard$button_click',
+        modulePath: '/c/routes/diagnostic-card.client.js',
+        versionShape: 'lower-hex-8',
+      },
+    );
     assert.deepEqual(redDiagnostic?.help, [
       { label: 'Would lower to', text: loweringHelp?.text },
       { label: 'Blocked expression', text: "() => window.alert('x')" },
@@ -4578,12 +4579,19 @@ export const DiagnosticCard = component('diagnostic-card', {
   assert.equal(lintButtons.length, 1);
   assert.equal(lintButtons[0]?.['fw-c'], 'diagnostic-card');
   assert.equal(lintButtons[0]?.['data-p-ok'], '{response.ok}');
-  const lintHandlerUrl = new URL(lintButtons[0]?.['on:click'] ?? '', 'http://jiso.test');
-  assert.equal(lintHandlerUrl.pathname, '/c/routes/diagnostic-card.client.js');
-  const lintVersion = lintHandlerUrl.searchParams.get('v') ?? '';
-  assert.equal(lintVersion.length, 8);
-  assert.equal(isLowerHex(lintVersion), true);
-  assert.equal(lintHandlerUrl.hash, '#DiagnosticCard$button_click');
+  const lintHandlerReference = generatedHandlerReferenceFact(lintButtons[0]?.['on:click'] ?? '');
+  assert.deepEqual(
+    {
+      handlerName: lintHandlerReference.handlerName,
+      modulePath: lintHandlerReference.modulePath,
+      versionShape: lintHandlerReference.versionShape,
+    },
+    {
+      handlerName: 'DiagnosticCard$button_click',
+      modulePath: '/c/routes/diagnostic-card.client.js',
+      versionShape: 'lower-hex-8',
+    },
+  );
   assert.deepEqual(
     lintDiagnostics.map((diagnostic) => ({
       code: diagnostic.code,
