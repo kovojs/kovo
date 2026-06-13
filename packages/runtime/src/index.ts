@@ -127,8 +127,6 @@ export type {
   TemplateStampHost,
   TemplateStampItem,
 } from './query-bindings.js';
-export { applyQueryChunksToRuntime } from './query-apply.js';
-export type { ApplyQueryChunksToRuntimeOptions } from './query-apply.js';
 export {
   applyInlineQueryEventToRuntime,
   installInlineQueryEventHydration,

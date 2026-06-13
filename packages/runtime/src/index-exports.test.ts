@@ -51,7 +51,6 @@ import {
   applyQueryBindings,
   supportsQueryBindings,
 } from './query-bindings.js';
-import { applyQueryChunksToRuntime } from './query-apply.js';
 import {
   applyInlineQueryEventToRuntime,
   installInlineQueryEventHydration,
@@ -59,6 +58,11 @@ import {
 import { refetchQueries } from './query-refetch.js';
 import { createQueryStore } from './query-store.js';
 import { derive } from './derive.js';
+
+// @ts-expect-error SPEC.md §9.4: decoded query apply options belong to the query-apply module,
+// not the root runtime barrel.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+import type { ApplyQueryChunksToRuntimeOptions as RemovedRootApplyQueryChunksToRuntimeOptions } from './index.js';
 
 // @ts-expect-error SPEC.md §9.1: rooted decoded apply results use the root-aware runtime name.
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
@@ -83,6 +87,11 @@ type RemovedRootFragmentChunk = import('./index.js').FragmentChunk;
 // not a duplicated root runtime compatibility type.
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootQueryChunk = import('./index.js').QueryChunk;
+
+// @ts-expect-error SPEC.md §9.4: decoded query chunk apply is an internal runtime primitive,
+// not a root runtime compatibility export.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootApplyQueryChunksToRuntime = typeof import('./index.js').applyQueryChunksToRuntime;
 
 describe('runtime root exports', () => {
   it('exports loader and handler modules directly from their canonical implementations', () => {
@@ -154,12 +163,12 @@ describe('runtime root exports', () => {
     expect(runtime.applyCompiledQueryUpdatePlan).toBe(applyCompiledQueryUpdatePlan);
     expect(runtime.applyQueryBindings).toBe(applyQueryBindings);
     expect(runtime.supportsQueryBindings).toBe(supportsQueryBindings);
-    expect(runtime.applyQueryChunksToRuntime).toBe(applyQueryChunksToRuntime);
     expect(runtime.applyInlineQueryEventToRuntime).toBe(applyInlineQueryEventToRuntime);
     expect(runtime.installInlineQueryEventHydration).toBe(installInlineQueryEventHydration);
     expect(runtime.refetchQueries).toBe(refetchQueries);
     expect(runtime.createQueryStore).toBe(createQueryStore);
     expect(runtime.derive).toBe(derive);
+    expect(Object.hasOwn(runtime, 'applyQueryChunksToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyQueryChunkToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyQueryChunksToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'createQueryScriptHydrationLedger')).toBe(false);
