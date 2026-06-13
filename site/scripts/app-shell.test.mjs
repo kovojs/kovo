@@ -5,7 +5,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import * as server from '@jiso/server';
 import * as serverAppShellClientModules from '@jiso/server/app-shell/client-modules';
 import * as serverAppShellCore from '@jiso/server/app-shell/core';
 import * as serverAppShellStaticExport from '@jiso/server/app-shell/static-export';
@@ -64,7 +63,7 @@ describe('site app-shell export adoption', () => {
       'export function copy() { document.body.dataset.copied = ""; }\n',
     );
 
-    const serverApi = { ...server, ...serverAppShellClientModules, ...serverAppShellCore };
+    const serverApi = { ...serverAppShellClientModules, ...serverAppShellCore };
     expect(siteDocumentRouteEntries(distDir).map((entry) => entry.routePath)).toEqual([
       '/docs/installation',
       '/',
@@ -92,7 +91,7 @@ describe('site app-shell export adoption', () => {
       ),
     ).resolves.toBe('export function open() { document.body.dataset.search = "open"; }\n');
 
-    const result = await server.exportStaticApp(app, { outDir });
+    const result = await serverAppShellStaticExport.exportStaticApp(app, { outDir });
 
     const exportedIndex = await readFile(path.join(outDir, 'index.html'), 'utf8');
     const exportedInstallation = await readFile(
@@ -150,9 +149,9 @@ describe('site app-shell export adoption', () => {
       `${JSON.stringify({ routes: ['/', '/docs/installation'] })}\n`,
     );
 
-    const serverApi = { ...server, ...serverAppShellClientModules, ...serverAppShellCore };
+    const serverApi = { ...serverAppShellClientModules, ...serverAppShellCore };
     const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
-    const result = await server.exportStaticApp(app, { outDir });
+    const result = await serverAppShellStaticExport.exportStaticApp(app, { outDir });
 
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
       '/index.html',
@@ -216,9 +215,6 @@ describe('site app-shell export adoption', () => {
         async close() {},
         async ssrLoadModule(id) {
           loadedModuleIds.push(id);
-          if (id === '@jiso/server') {
-            return server;
-          }
           if (id === '@jiso/server/app-shell/client-modules') {
             return serverAppShellClientModules;
           }
@@ -249,6 +245,9 @@ describe('site app-shell export adoption', () => {
           if (id === '@jiso/server/app-shell') {
             throw new Error('docs export must load focused app-shell subpaths');
           }
+          if (id === '@jiso/server') {
+            throw new Error('docs export must not load the root server package');
+          }
           if (id === '/scripts/app-shell.mjs') return { createSiteDistApp };
           throw new Error(`unexpected SSR module ${id}`);
         },
@@ -274,7 +273,6 @@ describe('site app-shell export adoption', () => {
     ).resolves.not.toContain('api/app-shell/index.mjs');
     expect(loadedModuleIds).toEqual([
       '/scripts/app-shell.mjs',
-      '@jiso/server',
       '@jiso/server/app-shell/client-modules',
       '@jiso/server/app-shell/core',
       '@jiso/server/app-shell/static-export',
@@ -410,7 +408,7 @@ describe('site app-shell export adoption', () => {
       createSiteDistApp({
         distDir,
         publicDir,
-        server: { ...server, ...serverAppShellClientModules, ...serverAppShellCore },
+        server: { ...serverAppShellClientModules, ...serverAppShellCore },
       }),
     ).rejects.toThrow(".jiso-site-routes.json declares '/missing'");
   });

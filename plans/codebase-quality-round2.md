@@ -140,6 +140,12 @@ Latest evidence:
   `pnpm exec vitest --run packages/runtime/src`;
   `pnpm run check:inline-loader`;
   `git diff --check`.
+- Phase 5 docs-site app-shell boundary slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check packages/server/src/api/app-shell/core.ts packages/server/src/api/app.test.ts site/scripts/app-shell.mjs site/scripts/export-static.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `@jiso/server/app-shell/core` now exposes `route()`/`respond` for
+  SPEC §9.5 app construction, and `site/scripts/export-static.mjs` loads only focused app-shell SSR
+  subpaths.
 - P10 acceptance command-fixture slice:
   `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

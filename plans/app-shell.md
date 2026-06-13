@@ -91,6 +91,20 @@ Implemented areas:
   `createMemoryVersionedClientModuleRegistry()`, and `toNodeHandler()` are available from the
   built root while the deleted aggregate `@jiso/server/app-shell` compatibility subpath stays
   absent.
+- `@jiso/server/app-shell/core` now owns the app-authoring route/response constructors needed by
+  outside SPEC §9.5 export consumers, and the docs-site export path loads only focused app-shell
+  SSR subpaths instead of merging the root `@jiso/server` package into its app factory.
+
+Round278 docs-site app-shell boundary evidence:
+
+- `packages/server/src/api/app-shell/core.ts` forwards `route()` and `respond` for app
+  construction while `packages/server/src/api/app.test.ts` pins those public subpath identities.
+  `site/scripts/app-shell.mjs` and `site/scripts/export-static.mjs` no longer load the root
+  server package for docs app construction/export; `site/scripts/app-shell.test.mjs` proves the
+  focused SSR module list and static export output.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `git diff --check`
 
 Round276 built-root P10 boundary evidence:
 

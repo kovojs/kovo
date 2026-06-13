@@ -7,7 +7,6 @@ const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
-const defaultServerModulePath = path.join(repoRoot, 'dist/server/src/index.mjs');
 const defaultServerAppShellClientModulesPath = path.join(
   repoRoot,
   'dist/server/src/api/app-shell/client-modules.mjs',
@@ -34,20 +33,25 @@ export async function createSiteDistApp({
 }
 
 async function loadDefaultServerApi() {
-  const [serverApi, clientModulesApi, coreApi] = await Promise.all([
-    import(pathToFileURL(defaultServerModulePath).href),
+  const [clientModulesApi, coreApi] = await Promise.all([
     loadAppShellSubpath(
       defaultServerAppShellClientModulesPath,
       '@jiso/server/app-shell/client-modules',
+      ['createMemoryVersionedClientModuleRegistry'],
     ),
-    loadAppShellSubpath(defaultServerAppShellCorePath, '@jiso/server/app-shell/core'),
+    loadAppShellSubpath(defaultServerAppShellCorePath, '@jiso/server/app-shell/core', [
+      'createApp',
+      'route',
+      'respond',
+    ]),
   ]);
-  return { ...serverApi, ...clientModulesApi, ...coreApi };
+  return { ...clientModulesApi, ...coreApi };
 }
 
-async function loadAppShellSubpath(builtModulePath, packageSubpath) {
+async function loadAppShellSubpath(builtModulePath, packageSubpath, requiredExports = []) {
   if (existsSync(builtModulePath)) {
-    return await import(pathToFileURL(builtModulePath).href);
+    const builtApi = await import(pathToFileURL(builtModulePath).href);
+    if (requiredExports.every((name) => builtApi[name] !== undefined)) return builtApi;
   }
 
   return await import(packageSubpath);
@@ -216,7 +220,7 @@ function contentHash(source) {
 export const app =
   process.env.JISO_SITE_APP_SHELL_DEFAULT !== 'off' &&
   existsSync(defaultDistDir) &&
-  existsSync(defaultServerModulePath)
+  existsSync(defaultServerAppShellCorePath)
     ? await createSiteDistApp()
     : undefined;
 

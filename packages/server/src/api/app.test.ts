@@ -17,6 +17,8 @@ import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
 import * as renderingApi from './rendering.js';
 import * as routingApi from './routing.js';
+import * as responseApi from '../response.js';
+import * as routeApi from '../route.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
@@ -37,6 +39,8 @@ describe('server app-shell public API barrels', () => {
       'createMemoryVersionedClientModuleRegistry',
       'createRequestHandler',
       'exportStaticApp',
+      'respond',
+      'route',
       'toNodeHandler',
     ]);
     const rootAppShellEntrypointValues = {
@@ -45,6 +49,8 @@ describe('server app-shell public API barrels', () => {
         clientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: coreApi.createRequestHandler,
       exportStaticApp: staticExportApi.exportStaticApp,
+      respond: coreApi.respond,
+      route: coreApi.route,
       toNodeHandler: nodeApi.toNodeHandler,
     };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
@@ -104,6 +110,8 @@ describe('server app-shell public API barrels', () => {
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {
     expect(packageCoreApi.createApp).toBe(coreApi.createApp);
     expect(packageCoreApi.isJisoApp).toBe(coreApi.isJisoApp);
+    expect(packageCoreApi.route).toBe(routeApi.route);
+    expect(packageCoreApi.respond).toBe(responseApi.respond);
     expect(packageClientModulesApi.versionedClientModuleHref).toBe(
       clientModulesApi.versionedClientModuleHref,
     );

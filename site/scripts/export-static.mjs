@@ -41,21 +41,18 @@ export async function exportSiteStaticApp({
   try {
     const [
       appShellModule,
-      serverModule,
       serverClientModulesModule,
       serverCoreModule,
       serverStaticExportModule,
       serverViteModule,
     ] = await Promise.all([
       viteServer.ssrLoadModule('/scripts/app-shell.mjs'),
-      viteServer.ssrLoadModule('@jiso/server'),
       viteServer.ssrLoadModule('@jiso/server/app-shell/client-modules'),
       viteServer.ssrLoadModule('@jiso/server/app-shell/core'),
       viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
       viteServer.ssrLoadModule('@jiso/server/app-shell/vite'),
     ]);
     const serverApi = {
-      ...serverModule,
       ...serverClientModulesModule,
       ...serverCoreModule,
       ...serverStaticExportModule,
