@@ -410,6 +410,18 @@ Round107 app-shell mutation lifecycle/wire ownership evidence:
 - `pnpm exec vp check packages/server/src/app-mutation-request.ts packages/server/src/app-mutation-request.test.ts packages/server/src/guards.ts packages/server/src/mutation.ts packages/server/src/api/data.ts packages/server/src/api/app.test.ts packages/server/src/static-export-response.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round154 app-shell Vite output plan evidence:
+
+- `packages/server/src/vite-client-module-output.ts` now owns an inspectable SPEC §9.5
+  compiled `/c/` module output plan and the staged commit that writes that exact plan.
+- `writeJisoAppShellViteBuildOutput()` returns that client-module output plan alongside the
+  built module list, Vite static-export asset inputs, and optional static export result, so Vite
+  plugin `onBuild` consumers observe the same targets the output commit publishes.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

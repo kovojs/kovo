@@ -12,7 +12,10 @@ import {
   jisoAppShellViteOutputDir,
   writeJisoAppShellViteBuildOutput,
 } from './vite-build-output.js';
-import { writeJisoAppShellViteClientModuleOutput } from './vite-client-module-output.js';
+import {
+  jisoAppShellViteClientModuleOutputPlan,
+  writeJisoAppShellViteClientModuleOutput,
+} from './vite-client-module-output.js';
 import {
   exportJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
@@ -78,6 +81,12 @@ describe('server app shell Vite build seam', () => {
         outDir: distDir,
         staticExport: { outDir },
       });
+      expect(output.clientModuleOutputPlan).toEqual([
+        {
+          path: '/c/cart.client.js',
+          targetPath: join(distDir, 'c/cart.client.js'),
+        },
+      ]);
       expect(output.staticExportAssets).toEqual([
         {
           contentType: 'text/css; charset=utf-8',
@@ -211,6 +220,31 @@ describe('server app shell Vite build seam', () => {
         ]),
       ).rejects.toThrow(/target '.*blocked\.client\.js' is a directory/);
       await expect(readFile(join(distDir, 'c/ok.client.js'))).rejects.toThrow();
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
+  it('plans Vite app-shell client module output through the write helper boundary', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-client-module-plan-dist-'));
+
+    try {
+      expect(
+        jisoAppShellViteClientModuleOutputPlan(distDir, [
+          {
+            file: 'c/search.client.js',
+            href: '/c/search.client.js?v=search-v1',
+            path: '/c/search.client.js',
+            source: 'export const search = true;',
+            version: 'search-v1',
+          },
+        ]),
+      ).toEqual([
+        {
+          path: '/c/search.client.js',
+          targetPath: join(distDir, 'c/search.client.js'),
+        },
+      ]);
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }

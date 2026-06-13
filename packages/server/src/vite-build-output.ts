@@ -7,7 +7,11 @@ import {
   exportJisoAppShellViteBuild,
   type JisoAppShellViteBuildStaticExportOptions,
 } from './vite-static-export.js';
-import { writeJisoAppShellViteClientModuleOutput } from './vite-client-module-output.js';
+import {
+  jisoAppShellViteClientModuleOutputPlan,
+  writeJisoAppShellViteClientModuleOutput,
+  type JisoAppShellViteClientModuleOutputPlanItem,
+} from './vite-client-module-output.js';
 
 export interface JisoAppShellViteOutputOptions {
   dir?: string;
@@ -27,6 +31,7 @@ export interface JisoAppShellViteBuildOutputStaticExportOptions extends Omit<
 }
 
 export interface JisoAppShellViteBuildOutput {
+  clientModuleOutputPlan: readonly JisoAppShellViteClientModuleOutputPlanItem[];
   clientModules: readonly JisoAppShellBuiltClientModule[];
   staticExport?: StaticExportResult;
   staticExportAssets: readonly StaticExportAssetInput[];
@@ -40,6 +45,7 @@ export async function writeJisoAppShellViteBuildOutput(
   const root = resolvedFileSystemPath(options.outDir);
 
   const output: JisoAppShellViteBuildOutput = {
+    clientModuleOutputPlan: jisoAppShellViteClientModuleOutputPlan(root, build.clientModules),
     clientModules: build.clientModules,
     staticExportAssets: jisoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root }),
   };

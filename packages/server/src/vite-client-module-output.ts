@@ -4,9 +4,13 @@ import * as path from 'node:path';
 import type { JisoAppShellBuiltClientModule } from './vite-build.js';
 import { viteDistSourcePath } from './vite-build-assets.js';
 
-interface JisoAppShellViteClientModuleWrite {
-  source: string;
+export interface JisoAppShellViteClientModuleOutputPlanItem {
+  path: string;
   targetPath: string;
+}
+
+interface JisoAppShellViteClientModuleWrite extends JisoAppShellViteClientModuleOutputPlanItem {
+  source: string;
 }
 
 export async function writeJisoAppShellViteClientModuleOutput(
@@ -42,11 +46,24 @@ export async function writeJisoAppShellViteClientModuleOutput(
   }
 }
 
+export function jisoAppShellViteClientModuleOutputPlan(
+  root: string,
+  modules: readonly JisoAppShellBuiltClientModule[],
+): JisoAppShellViteClientModuleOutputPlanItem[] {
+  // SPEC §9.5: build hooks and static export tasks inspect the same immutable
+  // /c/ module targets that the Vite app-shell output commit will publish.
+  return jisoAppShellViteClientModuleWrites(root, modules).map((write) => ({
+    path: write.path,
+    targetPath: write.targetPath,
+  }));
+}
+
 function jisoAppShellViteClientModuleWrites(
   root: string,
   modules: readonly JisoAppShellBuiltClientModule[],
 ): JisoAppShellViteClientModuleWrite[] {
   return modules.map((module) => ({
+    path: module.path,
     source: module.source,
     targetPath: viteDistSourcePath(root, module.file),
   }));

@@ -789,6 +789,12 @@ describe('server app shell Vite plugin', () => {
       });
 
       await expect(writeJisoAppShellViteBuildOutput(build, { outDir })).resolves.toEqual({
+        clientModuleOutputPlan: [
+          {
+            path: '/c/cart.client.js',
+            targetPath: join(outDir, 'c/cart.client.js'),
+          },
+        ],
         clientModules: [
           {
             file: 'c/cart.client.js',
@@ -854,6 +860,12 @@ describe('server app shell Vite plugin', () => {
       expect(built).toHaveLength(1);
       expect(outputs).toEqual([
         {
+          clientModuleOutputPlan: [
+            {
+              path: '/c/cart.client.js',
+              targetPath: join(outDir, 'c/cart.client.js'),
+            },
+          ],
           clientModules: [
             {
               file: 'c/cart.client.js',
@@ -954,6 +966,12 @@ describe('server app shell Vite plugin', () => {
       );
 
       expect(outputs).toHaveLength(1);
+      expect(outputs[0]?.clientModuleOutputPlan).toEqual([
+        {
+          path: '/c/cart.client.js',
+          targetPath: join(outDir, 'c/cart.client.js'),
+        },
+      ]);
       expect(outputs[0]?.staticExportAssets).toEqual([
         {
           contentType: 'text/css; charset=utf-8',

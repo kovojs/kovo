@@ -65,6 +65,7 @@ export type {
   JisoAppShellViteManifestFileBuildOptions,
   JisoAppShellVitePluginBuildOptions,
 } from '../../vite-build.js';
+export type { JisoAppShellViteClientModuleOutputPlanItem } from '../../vite-client-module-output.js';
 export type {
   JisoAppShellViteBuildOutput,
   JisoAppShellViteBuildOutputOptions,
