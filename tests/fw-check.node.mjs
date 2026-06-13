@@ -49,13 +49,15 @@ import {
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
+  assertOrderedItems,
   nodeTaskCommand,
+  loadVitePlusConfig,
   pnpmFilterTestCommands,
   pnpmRunScriptNames,
   requiredVpRunTaskName,
   runCommandSequenceSync,
   vitestTaskCommand,
-  vpRunTaskName,
+  workflowVpRunTaskNames,
   workflowStepCommands,
 } from '../packages/test/src/command-fixtures.ts';
 import {
@@ -210,14 +212,6 @@ const listProjectFiles = async (dir, predicate) => {
 const isLowerHex = (value) =>
   value.length > 0 && [...value].every((char) => '0123456789abcdef'.includes(char));
 
-const assertOrderedIncludes = (items, before, after) => {
-  const beforeIndex = items.indexOf(before);
-  const afterIndex = items.indexOf(after);
-  assert.notEqual(beforeIndex, -1, `${before} is present`);
-  assert.notEqual(afterIndex, -1, `${after} is present`);
-  assert.ok(beforeIndex < afterIndex, `${before} precedes ${after}`);
-};
-
 const assertHtmlMainMarker = (source, marker, message) => {
   assert.equal(
     htmlElementFacts(source).find((element) => element.tag === 'main')?.attrs[
@@ -248,37 +242,8 @@ const generatedBootstrapRuntime = {
   installJisoLoader() {},
 };
 
-const loadVitePlusConfig = async (configPath = 'vite.config.ts') => {
-  const ts = await import('typescript');
-  const module = { exports: {} };
-  const compiled = ts.transpileModule(await readProjectFile(configPath), {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText;
-
-  runInNewContext(compiled, {
-    exports: module.exports,
-    module,
-    require(specifier) {
-      if (specifier === 'vite-plus') {
-        return { defineConfig: (config) => config };
-      }
-      if (specifier === '@tailwindcss/vite') {
-        const tailwindcss = () => ({ name: 'tailwindcss-test-stub' });
-        tailwindcss.default = tailwindcss;
-        tailwindcss.__esModule = true;
-        return tailwindcss;
-      }
-      assert.fail(`unexpected Vite+ config import ${specifier}`);
-    },
-  });
-
-  return jsonClone(module.exports.default);
-};
-
-const jsonClone = (value) => JSON.parse(JSON.stringify(value));
+const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
+  loadVitePlusConfig(await readProjectFile(configPath));
 
 const executeStarterClientTemplate = async (source) => {
   const ts = await import('typescript');
@@ -3521,8 +3486,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
     readProjectFile('packages/create-jiso/templates/index.html'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
-  const viteTasks = (await loadVitePlusConfig('packages/create-jiso/templates/vite.config.ts')).run
-    .tasks;
+  const viteTasks = (
+    await loadProjectVitePlusConfig('packages/create-jiso/templates/vite.config.ts')
+  ).run.tasks;
   const ciSteps = workflowStepCommands(ciWorkflow);
   const starterGraph = JSON.parse(starterGraphSource);
   const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
@@ -5638,7 +5604,7 @@ void test('Conformance suites are an explicit gate', async () => {
     assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
   }
   const packageJson = JSON.parse(await readProjectFile('package.json'));
-  const viteTasks = (await loadVitePlusConfig()).run.tasks;
+  const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
   const conformanceTaskName = requiredVpRunTaskName('test:conformance', packageJson);
   const conformanceTask = viteTasks[conformanceTaskName];
   assert.ok(conformanceTask, `${conformanceTaskName} task is defined`);
@@ -6275,10 +6241,8 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts.acceptance);
-  const ciTaskNames = workflowStepCommands(ciWorkflow)
-    .map((step) => vpRunTaskName(step.run ?? ''))
-    .filter(Boolean);
-  const tasks = (await loadVitePlusConfig()).run.tasks;
+  const ciTaskNames = workflowVpRunTaskNames(ciWorkflow);
+  const tasks = (await loadProjectVitePlusConfig()).run.tasks;
   const browserTaskName = requiredVpRunTaskName('test:browser', packageJson);
   const browserTask = tasks[browserTaskName];
   assert.ok(browserTask, `${browserTaskName} task is defined`);
@@ -6311,10 +6275,8 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts.acceptance);
-  const ciTaskNames = workflowStepCommands(ciWorkflow)
-    .map((step) => vpRunTaskName(step.run ?? ''))
-    .filter(Boolean);
-  const tasks = (await loadVitePlusConfig()).run.tasks;
+  const ciTaskNames = workflowVpRunTaskNames(ciWorkflow);
+  const tasks = (await loadProjectVitePlusConfig()).run.tasks;
   const perfTaskName = requiredVpRunTaskName('test:p10-perf', packageJson);
   const perfTask = tasks[perfTaskName];
   assert.ok(perfTask, `${perfTaskName} task is defined`);
@@ -6325,10 +6287,10 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
 
   assert.equal(typeof runP10PerfAcceptance, 'function');
   assert.equal(acceptanceScripts.includes('test:p10-perf'), true);
-  assertOrderedIncludes(acceptanceScripts, 'check:build', 'test:p10-perf');
-  assertOrderedIncludes(acceptanceScripts, 'test:p10-perf', 'check:fw');
-  assertOrderedIncludes(ciTaskNames, 'build', perfTaskName);
-  assertOrderedIncludes(ciTaskNames, perfTaskName, 'fw-check');
+  assertOrderedItems(acceptanceScripts, 'check:build', 'test:p10-perf');
+  assertOrderedItems(acceptanceScripts, 'test:p10-perf', 'check:fw');
+  assertOrderedItems(ciTaskNames, 'build', perfTaskName);
+  assertOrderedItems(ciTaskNames, perfTaskName, 'fw-check');
   assert.deepEqual(perfTask.input, [
     { auto: true },
     { base: 'workspace', pattern: modulePath },

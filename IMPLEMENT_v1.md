@@ -281,6 +281,10 @@ plans/codebase-quality-round2.md`.
       `packages/test/src/typescript-fixtures.test.ts` and `packages/test/src/package-exports.test.ts`.
       Same-session evidence: `pnpm exec vitest --run packages/test/src` and
       `pnpm exec vp check packages/test/package.json packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/typescript-fixtures.ts packages/test/src/typescript-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs`.
+      Additional evidence 2026-06-13: `@jiso/test/command-fixtures`
+      now owns reusable Vite+ config loading, workflow `vp run` task extraction, and ordered-task
+      assertions used by the SPEC §16 acceptance gates in `fw-check`; package tests and package
+      export tests pin the seam before targeted `fw-check` node coverage.
 - [x] FW411 write-side-only exemption (SPEC §10.1, §11.2): static exempt-table read-set check in the extraction pass (P4) and the runtime observed-read check in the db verification wrapper (P9), with golden diagnostics. Evidence added: FW411 is in the shared core diagnostic registry/type; `@jiso/drizzle` recognizes `jiso({ exempt: true })`, omits exempt writes from the touch graph, and emits a query-fact FW411 diagnostic when a query reads an exempt table; `@jiso/test` accepts `verification.exemptTables`, allows writes to those tables, and fails observed direct/raw-SQL reads with FW411.
 - [x] P9 v1.5 has full FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostic table evidence plus commerce mutation-suite runtime/static verification-loop acceptance. Evidence added: the commerce matrix acceptance path runs `cart/add` through `@jiso/test` with `touchGraphKey: 'cart.addItem'`, runs `order/receipt` through a no-write verifier with `touchGraphKey: 'order/receipt'`, and asserts both verifier paths report no static/runtime drift before checking the enhanced wire output (SPEC §11.2).
 - [x] D1 Tailwind-first path is implemented in commerce and starter scaffolds with stylesheet delivery tests.

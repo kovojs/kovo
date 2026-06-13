@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertOrderedItems,
   commandSequence,
+  loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
   pnpmRunScriptName,
@@ -9,6 +11,7 @@ import {
   requiredVpRunTaskName,
   vitestTaskCommand,
   vpRunTaskName,
+  workflowVpRunTaskNames,
   workflowStepCommands,
 } from './command-fixtures.js';
 
@@ -53,6 +56,16 @@ describe('@jiso/test command fixtures', () => {
     );
   });
 
+  it('asserts required task ordering without keeping local fw-check helpers', () => {
+    expect(() =>
+      assertOrderedItems(['build', 'perf', 'fw-check'], 'build', 'fw-check'),
+    ).not.toThrow();
+    expect(() => assertOrderedItems(['fw-check', 'perf'], 'perf', 'fw-check')).toThrow(
+      'perf precedes fw-check',
+    );
+    expect(() => assertOrderedItems(['build'], 'build', 'fw-check')).toThrow('fw-check is present');
+  });
+
   it('extracts task-specific command facts used by framework gates', () => {
     expect(vitestTaskCommand('vitest --run --config vitest.browser.config.ts')).toEqual({
       configPath: 'vitest.browser.config.ts',
@@ -70,18 +83,48 @@ describe('@jiso/test command fixtures', () => {
   });
 
   it('collects workflow run and uses commands without exposing fw-check to YAML text scans', () => {
-    expect(
-      workflowStepCommands(
-        [
-          'name: CI',
-          'jobs:',
-          '  test:',
-          '    steps:',
-          '      - uses: actions/checkout@v4',
-          '      - run: vp install',
-          '      - run: vp check',
-        ].join('\n'),
-      ),
-    ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp install' }, { run: 'vp check' }]);
+    const workflow = [
+      'name: CI',
+      'jobs:',
+      '  test:',
+      '    steps:',
+      '      - uses: actions/checkout@v4',
+      '      - run: vp install',
+      '      - run: vp run build',
+    ].join('\n');
+
+    expect(workflowStepCommands(workflow)).toEqual([
+      { uses: 'actions/checkout@v4' },
+      { run: 'vp install' },
+      { run: 'vp run build' },
+    ]);
+    expect(workflowVpRunTaskNames(workflow)).toEqual(['build']);
+  });
+
+  it('loads Vite+ task configs through the fixture seam', async () => {
+    const config = await loadVitePlusConfig(
+      [
+        "import { defineConfig } from 'vite-plus';",
+        "import tailwindcss from '@tailwindcss/vite';",
+        'export default defineConfig({',
+        '  plugins: [tailwindcss()],',
+        '  run: {',
+        '    tasks: {',
+        "      'fw-check': {",
+        "        command: 'fw check graph.json',",
+        "        input: [{ pattern: 'src/**/*', base: 'workspace' }],",
+        "        output: ['graph.json'],",
+        '      },',
+        '    },',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+
+    expect(config.run?.tasks?.['fw-check']).toEqual({
+      command: 'fw check graph.json',
+      input: [{ pattern: 'src/**/*', base: 'workspace' }],
+      output: ['graph.json'],
+    });
   });
 });

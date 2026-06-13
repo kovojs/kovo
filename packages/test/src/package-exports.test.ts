@@ -15,7 +15,9 @@ import {
   type PropertyTestResult,
 } from '@jiso/test/assertions';
 import {
+  assertOrderedItems,
   commandSequence,
+  loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
   pnpmRunScriptNames,
@@ -23,11 +25,14 @@ import {
   runCommandSequenceSync,
   vitestTaskCommand,
   vpRunTaskName,
+  workflowVpRunTaskNames,
   workflowStepCommands,
   type CommandInvocation,
   type NodeTaskCommand,
   type PnpmFilterTestCommand,
   type VitestTaskCommand,
+  type VitePlusConfig,
+  type VitePlusTask,
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
 import {
@@ -289,6 +294,9 @@ describe('@jiso/test package subpath exports', () => {
         ['steps:', '  - uses: actions/checkout@v4', '  - run: vp check'].join('\n'),
       ),
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
+    expect(workflowVpRunTaskNames('steps:\n  - run: vp run fw-check')).toEqual(['fw-check']);
+    expect(() => assertOrderedItems(['build', 'fw-check'], 'build', 'fw-check')).not.toThrow();
+    expect(loadVitePlusConfig).toBeTypeOf('function');
     expect(parseFwExportOutput('fw-export/v1\nSUMMARY html=0')).toMatchObject({
       summary: { html: '0' },
     });
@@ -339,6 +347,8 @@ type _PublicSubpathTypes = [
   NodeTaskCommand,
   PnpmFilterTestCommand,
   VitestTaskCommand,
+  VitePlusConfig,
+  VitePlusTask,
   WorkflowStepCommand,
   FwExplainOutput,
   FwExportError,

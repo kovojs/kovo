@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
+import { runInNewContext } from 'node:vm';
 
 export interface CommandInvocation {
   args: readonly string[];
@@ -27,10 +28,24 @@ export interface WorkflowStepCommand {
   uses?: string;
 }
 
+export interface VitePlusTask {
+  command?: unknown;
+  input?: unknown;
+  output?: unknown;
+}
+
+export interface VitePlusConfig {
+  run?: {
+    tasks?: Record<string, VitePlusTask>;
+  };
+}
+
 function requireString(value: unknown, message: string): string {
   if (typeof value !== 'string') assert.fail(message);
   return value;
 }
+
+const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 export function workflowStepCommands(source: string): WorkflowStepCommand[] {
   const steps: WorkflowStepCommand[] = [];
@@ -46,6 +61,12 @@ export function workflowStepCommands(source: string): WorkflowStepCommand[] {
   }
 
   return steps;
+}
+
+export function workflowVpRunTaskNames(source: string): string[] {
+  return workflowStepCommands(source)
+    .map((step) => vpRunTaskName(step.run ?? ''))
+    .filter((taskName): taskName is string => Boolean(taskName));
 }
 
 export function pnpmRunScriptName(command: string): string | undefined {
@@ -75,6 +96,44 @@ export function requiredVpRunTaskName(
   const taskName = vpRunTaskName(command);
   assert.ok(taskName, `${scriptName} delegates to a Vite+ task`);
   return taskName;
+}
+
+export function assertOrderedItems(items: readonly string[], before: string, after: string): void {
+  const beforeIndex = items.indexOf(before);
+  const afterIndex = items.indexOf(after);
+  assert.notEqual(beforeIndex, -1, `${before} is present`);
+  assert.notEqual(afterIndex, -1, `${after} is present`);
+  assert.ok(beforeIndex < afterIndex, `${before} precedes ${after}`);
+}
+
+export async function loadVitePlusConfig(source: string): Promise<VitePlusConfig> {
+  const ts = await import('typescript');
+  const module = { exports: {} as { default?: VitePlusConfig } };
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+
+  runInNewContext(compiled, {
+    exports: module.exports,
+    module,
+    require(specifier: string) {
+      if (specifier === 'vite-plus') {
+        return { defineConfig: (config: VitePlusConfig) => config };
+      }
+      if (specifier === '@tailwindcss/vite') {
+        const tailwindcss = () => ({ name: 'tailwindcss-test-stub' });
+        tailwindcss.default = tailwindcss;
+        tailwindcss.__esModule = true;
+        return tailwindcss;
+      }
+      assert.fail(`unexpected Vite+ config import ${specifier}`);
+    },
+  });
+
+  return jsonClone(module.exports.default ?? {});
 }
 
 export function vitestTaskCommand(command: unknown): VitestTaskCommand {

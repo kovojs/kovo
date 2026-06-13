@@ -125,6 +125,9 @@ Closed evidence so far:
   parsers or TypeScript virtual-program helpers; commerce/starter graph-answerability and
   registry/type gates consume `@jiso/test/fw-explain-fixtures` and
   `@jiso/test/typescript-fixtures` seams pinned by focused package tests and package exports.
+- `tests/fw-check.node.mjs` no longer owns its local Vite+ config evaluator, workflow `vp run`
+  task extraction, or acceptance task-order helper; starter, conformance, browser, and perf gates
+  consume `@jiso/test/command-fixtures` facts pinned by focused package tests and package exports.
 
 Open:
 
@@ -814,6 +817,9 @@ Closed evidence so far:
   `@jiso/test/typescript-fixtures` exposes virtual TypeScript diagnostic and interface-member
   facts for SPEC §5.2 registry/type assertions; `fw-check` consumes both seams instead of owning
   local parsers/helpers.
+- `@jiso/test/command-fixtures` exposes reusable Vite+ config loading, workflow `vp run` task
+  extraction, and ordered-task assertions for SPEC §16 acceptance gates; `fw-check` consumes those
+  facts instead of owning local config-evaluation and ordering helpers.
 
 Open:
 
@@ -843,6 +849,7 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/harness-verifier.test.ts packages/test/src/query-verifier.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
+- `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - `node --test --test-name-pattern "S2 loader budget and inline enhanced form behavior" tests/fw-check.node.mjs`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
@@ -917,6 +924,10 @@ Closed evidence so far:
 - `packages/test/src/fw-explain-fixtures.ts` and `packages/test/src/typescript-fixtures.ts` now
   own reusable CLI-output and virtual TypeScript fixture facts; focused package tests, package
   export tests, and targeted `fw-check` node tests pin the seams.
+- `packages/test/src/command-fixtures.ts` now also owns reusable Vite+ config loading,
+  workflow `vp run` task extraction, and ordered-gate assertions for SPEC §16 acceptance wiring;
+  `command-fixtures.test.ts`, package export tests, and targeted `fw-check` node tests pin the
+  seam.
 
 Open:
 
