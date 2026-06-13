@@ -393,7 +393,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'autoComplete="off"',
     'maxLength="240"',
     '<select aria-describedby="gallery-field-plan-description"',
-    '<option value="team" selected>Team</option>',
+    'selected value="team">Team</option>',
     'disabled form="gallery-field-external-form" id="gallery-fieldset"',
     'name="seat-options"',
     'for="gallery-fieldset-seat"',
