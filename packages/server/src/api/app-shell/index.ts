@@ -91,6 +91,7 @@ export type {
   StaticExportManifestAsset,
   StaticExportManifestClientModule,
   StaticExportManifestRouteDocument,
+  StaticExportNonExportablePolicy,
   StaticExportOptions,
   StaticExportOutputPlanItem,
   StaticExportOutputPlanItemKind,

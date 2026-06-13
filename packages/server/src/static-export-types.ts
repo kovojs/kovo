@@ -77,12 +77,13 @@ export interface StaticExportManifestAsset {
 }
 
 export type StaticExportHtmlPathStyle = 'directory' | 'flat';
+export type StaticExportNonExportablePolicy = 'error' | 'skip';
 
 export interface StaticExportOptions {
   assets?: readonly StaticExportAssetInput[];
   diagnostics?: readonly import('./static-export-diagnostics.js').StaticExportCompileDiagnostic[];
   htmlPathStyle?: StaticExportHtmlPathStyle;
-  onNonExportable?: 'error' | 'skip';
+  onNonExportable?: StaticExportNonExportablePolicy;
   origin?: string;
   outDir?: string | URL;
 }

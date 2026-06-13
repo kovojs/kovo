@@ -4,18 +4,14 @@ import {
   replayStaticExportRouteDocumentArtifact,
 } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
-import {
-  StaticExportError,
-  staticExportDiagnostic,
-  type StaticExportDiagnostic,
-} from './static-export-diagnostics.js';
+import { StaticExportError, type StaticExportDiagnostic } from './static-export-diagnostics.js';
+import { normalizeStaticExportHtmlPathStyle } from './static-export-options.js';
 import {
   type StaticExportArtifact,
   type StaticExportClientModuleArtifact,
   type StaticExportHtmlPathStyle,
+  type StaticExportNonExportablePolicy,
 } from './static-export-types.js';
-
-export type StaticExportNonExportablePolicy = 'error' | 'skip';
 
 export interface StaticExportAppReplayOptions {
   app: JisoApp;
@@ -44,7 +40,7 @@ export async function replayStaticExportApp({
 
   const handler = createRequestHandler(app);
   const origin = originOption ?? 'https://jiso.local';
-  const htmlPathStyle = staticExportHtmlPathStyle(htmlPathStyleOption);
+  const htmlPathStyle = normalizeStaticExportHtmlPathStyle(htmlPathStyleOption);
   const artifacts: StaticExportArtifact[] = [];
 
   for (const routeTarget of routePlan.targets) {
@@ -79,20 +75,4 @@ export async function replayStaticExportApp({
     }),
     diagnostics,
   };
-}
-
-function staticExportHtmlPathStyle(
-  style: StaticExportHtmlPathStyle | undefined,
-): StaticExportHtmlPathStyle {
-  if (style === undefined) return 'directory';
-  if (style === 'flat' || style === 'directory') return style;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      'htmlPathStyle',
-      `FW229 static export refused htmlPathStyle '${String(
-        style,
-      )}'. Expected 'flat' or 'directory'.`,
-    ),
-  ]);
 }

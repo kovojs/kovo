@@ -769,3 +769,18 @@ Round222 app-shell replay/request boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-request.ts packages/server/src/static-export-request.test.ts packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/api/app-shell/index.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round228 app-shell static-export option boundary evidence:
+
+- `packages/server/src/static-export-options.ts` now owns SPEC §9.5 route-document path-style
+  normalization and FW229 option diagnostics for export/replay callers, so
+  `static-export-replay.ts` no longer keeps a local html-path compatibility validator while
+  `static-export-types.ts` stays limited to static-export data/option shapes.
+- `StaticExportNonExportablePolicy` is now the single public policy type behind
+  `StaticExportOptions.onNonExportable` and is exported through the app-shell static-export and
+  aggregate subpaths.
+- `pnpm exec vitest --run packages/server/src/static-export-options.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-options.ts packages/server/src/static-export-options.test.ts packages/server/src/static-export-types.ts packages/server/src/static-export-replay.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app-shell/index.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

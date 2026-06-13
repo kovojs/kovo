@@ -19,6 +19,7 @@ export type {
   StaticExportManifestAsset,
   StaticExportManifestClientModule,
   StaticExportManifestRouteDocument,
+  StaticExportNonExportablePolicy,
   StaticExportOptions,
   StaticExportResult,
 } from '../../static-export-types.js';
