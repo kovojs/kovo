@@ -1048,6 +1048,14 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       broadcast replay interposition before DOM binding/morph effects. Verified by focused runtime,
       full runtime, inline-loader, browser runtime, exact `vp check`, and `git diff --check`
       commands listed in Latest evidence.
+      Evidence 2026-06-13 round265: minified inline response apply parity now has a direct owner
+      suite in `packages/runtime/src/inline-loader-minified-response-apply.test.ts`, with the shared
+      response fixture extracted to `packages/runtime/src/inline-loader-response-apply-fixture.ts`.
+      The focused suite proves the freshly minified inline loader keeps enhanced mutation response
+      query events and fragment effects in parity with `applyMutationResponseToDom`; the existing
+      artifact-wide response suite still covers readable, minified, generated-bootstrap, and
+      extracted installer sources. Verified by focused runtime and full runtime commands listed in
+      Latest evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1117,6 +1125,9 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       Evidence 2026-06-13 round264: browser runtime checks passed after loader-level `applyQuery`
       was threaded through enhanced submit and default broadcast replay. Command: `pnpm exec vitest
       --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
+      Evidence 2026-06-13 round265: browser runtime checks passed after the minified inline
+      response apply parity split. Command: `pnpm exec vitest --run --config
+      vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
 
 Latest evidence:
 
@@ -1179,6 +1190,13 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm --filter @jiso/runtime run check:inline-loader`;
   `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
   exact `pnpm exec vp check packages/runtime/src/loader.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/loader-query-apply-interposition.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round265 minified inline response apply closure:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-minified-response-apply.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/loader-query-apply-interposition.test.ts packages/runtime/src/mutation-submit.test.ts packages/runtime/src/broadcast.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-minified-response-apply.test.ts packages/runtime/src/inline-loader-response-apply-fixture.ts packages/runtime/src/inline-loader-test-utils.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 5 - Server And App Shell
