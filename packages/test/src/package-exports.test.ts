@@ -120,6 +120,7 @@ import {
   fwCheckDiagnosticFacts,
   fwCheckOkAssertionFact,
   fwCheckResultFact,
+  fwCheckUnguardedAuditBehaviorFact,
   parseFwCheckOutput,
   type FwCheckAssertionFact,
   type FwCheckCoverageAssertionFact,
@@ -129,6 +130,7 @@ import {
   type FwCheckOkAssertionFact,
   type FwCheckOutput,
   type FwCheckResultFact,
+  type FwCheckUnguardedAuditBehaviorFact,
 } from '@jiso/test/fw-check-fixtures';
 import {
   fwExplainComponentAssertionFact,
@@ -1409,6 +1411,7 @@ describe('@jiso/test package subpath exports', () => {
       status: 'ok',
       version: 'fw-check/v1',
     });
+    expect(fwCheckUnguardedAuditBehaviorFact).toBeTypeOf('function');
     expect(
       fwCheckDiagnosticFacts(
         'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
@@ -1706,6 +1709,7 @@ type _PublicSubpathTypes = [
   FwCheckOkAssertionFact,
   FwCheckOutput,
   FwCheckResultFact,
+  FwCheckUnguardedAuditBehaviorFact,
   DocumentQueryScriptBehaviorFact,
   CommerceGraphBehaviorFact,
   CommerceGraphBehaviorOptions<ProjectGraphFixture>,

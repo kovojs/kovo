@@ -8,6 +8,7 @@ import {
   fwCheckDiagnosticFacts,
   fwCheckOkAssertionFact,
   fwCheckResultFact,
+  fwCheckUnguardedAuditBehaviorFact,
   parseFwCheckOutput,
 } from './fw-check-fixtures.js';
 
@@ -173,5 +174,79 @@ describe('@jiso/test fw-check fixture seam', () => {
           'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
       }),
     ).toThrow('fw check expected OK: exitCode=1 status=issues diagnostics=1 coverage=0');
+  });
+
+  it('projects unguarded route, query, and mutation audits through a reusable behavior fact', () => {
+    const observedGraphs: unknown[] = [];
+    const fact = fwCheckUnguardedAuditBehaviorFact({
+      fwCheck(graph) {
+        observedGraphs.push(graph);
+        return {
+          exitCode: 0,
+          output: [
+            'fw-check/v1',
+            'WARN UNGUARDED inventory/sync mutation is reachable without an auth guard.',
+            'WARN UNGUARDED page /admin is reachable without an auth guard.',
+            'WARN UNGUARDED query adminOrders is reachable without an auth guard.',
+            '',
+          ].join('\n'),
+        };
+      },
+    });
+
+    expect(fact).toEqual({
+      coverage: [],
+      diagnostics: [
+        {
+          code: 'UNGUARDED',
+          message: 'mutation is reachable without an auth guard.',
+          properties: {},
+          severity: 'WARN',
+          target: 'inventory/sync',
+        },
+        {
+          code: 'UNGUARDED',
+          message: 'is reachable without an auth guard.',
+          properties: {},
+          severity: 'WARN',
+          target: 'page /admin',
+        },
+        {
+          code: 'UNGUARDED',
+          message: 'is reachable without an auth guard.',
+          properties: {},
+          severity: 'WARN',
+          target: 'query adminOrders',
+        },
+      ],
+      exitCode: 0,
+      status: 'issues',
+      targets: {
+        mutation: ['inventory/sync'],
+        page: ['/admin'],
+        query: ['adminOrders'],
+      },
+      version: 'fw-check/v1',
+    });
+    expect(observedGraphs).toEqual([
+      {
+        mutations: [
+          { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+          { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
+        ],
+        optimistic: [
+          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+          { mutation: 'inventory/sync', query: 'adminOrders', status: 'await-fragment' },
+        ],
+        pages: [
+          { guards: ['authed'], queries: ['cart'], route: '/cart' },
+          { guards: [], queries: ['adminOrders'], route: '/admin' },
+        ],
+        queries: [
+          { domains: ['cart'], guards: ['authed'], query: 'cart' },
+          { domains: ['product'], guards: [], query: 'adminOrders' },
+        ],
+      },
+    ]);
   });
 });

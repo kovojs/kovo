@@ -71,7 +71,10 @@ import {
   fwExplainUnguardedAssertionFact,
   fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
-import { fwCheckAssertionFact } from '../packages/test/src/fw-check-fixtures.ts';
+import {
+  fwCheckAssertionFact,
+  fwCheckUnguardedAuditBehaviorFact,
+} from '../packages/test/src/fw-check-fixtures.ts';
 import { fwExportStaticBehaviorFact } from '../packages/test/src/fw-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
@@ -1463,59 +1466,40 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
 });
 
 void test('P3 route and query guard removal is mechanically audited by fw check', () => {
-  // SPEC.md section 6.4 and IMPLEMENT_v1.md P3 require route/query guards to surface
-  // through the unguarded audit when removed.
-  assert.deepEqual(
-    fwCheckAssertionFact(
-      fwCheck({
-        mutations: [
-          { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
-          { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
-        ],
-        optimistic: [
-          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-          { mutation: 'inventory/sync', query: 'adminOrders', status: 'await-fragment' },
-        ],
-        pages: [
-          { guards: ['authed'], queries: ['cart'], route: '/cart' },
-          { guards: [], queries: ['adminOrders'], route: '/admin' },
-        ],
-        queries: [
-          { domains: ['cart'], guards: ['authed'], query: 'cart' },
-          { domains: ['product'], guards: [], query: 'adminOrders' },
-        ],
-      }),
-    ),
-    {
-      coverage: [],
-      diagnostics: [
-        {
-          code: 'UNGUARDED',
-          message: 'mutation is reachable without an auth guard.',
-          properties: {},
-          severity: 'WARN',
-          target: 'inventory/sync',
-        },
-        {
-          code: 'UNGUARDED',
-          message: 'is reachable without an auth guard.',
-          properties: {},
-          severity: 'WARN',
-          target: 'page /admin',
-        },
-        {
-          code: 'UNGUARDED',
-          message: 'is reachable without an auth guard.',
-          properties: {},
-          severity: 'WARN',
-          target: 'query adminOrders',
-        },
-      ],
-      exitCode: 0,
-      status: 'issues',
-      version: 'fw-check/v1',
+  assert.deepEqual(fwCheckUnguardedAuditBehaviorFact({ fwCheck }), {
+    coverage: [],
+    diagnostics: [
+      {
+        code: 'UNGUARDED',
+        message: 'mutation is reachable without an auth guard.',
+        properties: {},
+        severity: 'WARN',
+        target: 'inventory/sync',
+      },
+      {
+        code: 'UNGUARDED',
+        message: 'is reachable without an auth guard.',
+        properties: {},
+        severity: 'WARN',
+        target: 'page /admin',
+      },
+      {
+        code: 'UNGUARDED',
+        message: 'is reachable without an auth guard.',
+        properties: {},
+        severity: 'WARN',
+        target: 'query adminOrders',
+      },
+    ],
+    exitCode: 0,
+    status: 'issues',
+    targets: {
+      mutation: ['inventory/sync'],
+      page: ['/admin'],
+      query: ['adminOrders'],
     },
-  );
+    version: 'fw-check/v1',
+  });
 });
 
 void test('P5 morph evidence preserves keyed identity and applies fragments', async () => {

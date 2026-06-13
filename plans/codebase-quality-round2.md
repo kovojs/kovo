@@ -64,6 +64,9 @@ Latest evidence:
 - [x] CLI capture behavior extracted to `@jiso/test/command-fixtures`, replacing local stream patching
       in the D10 fw-check static-export gate. Verified with fixture/export tests, build, targeted
       fw-check, commerce source-truth, `tsc`, exact `vp check`, and `git diff --check`.
+- [x] `fwCheckUnguardedAuditBehaviorFact()` extracted the route/query/mutation unguarded audit graph
+      into `@jiso/test/fw-check-fixtures`, with fw-check consuming parsed structured facts. Verified
+      with fixture/export tests, full `tests/fw-check.node.mjs`, `check:build`, and `pnpm run check`.
 
 ## Phase 2 - Compiler IR
 
@@ -199,6 +202,9 @@ Latest evidence:
 
 - [x] Commerce and fw-check behavior fixtures listed in Phase 1 evidence now cover page hints, CLI
       capture, source-truth projections, and reusable server/HTML mechanics through public seams.
+- [x] Unguarded route/query/mutation fw-check audit now runs through a public `@jiso/test` fixture
+      seam rather than local monolith graph plumbing. Verified with fixture/export tests, full
+      `tests/fw-check.node.mjs`, `check:build`, and `pnpm run check`.
 
 ## Phase 7 - Test Restructuring
 
@@ -209,6 +215,13 @@ fixture or focused test and keep diagnostics tied to `diagnosticDefinitions`.
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
 - [ ] Keep `plans/*` evidence terse: current status plus command list, not repeated history.
+
+Latest evidence:
+
+- [x] `tests/fw-check.node.mjs` unguarded audit case now consumes
+      `fwCheckUnguardedAuditBehaviorFact()` and asserts parsed diagnostic/target structures; package
+      fixture and export tests cover the reusable seam. Verified with focused fixture/export tests,
+      full `tests/fw-check.node.mjs`, `check:build`, and `pnpm run check`.
 
 ## Current Gates
 

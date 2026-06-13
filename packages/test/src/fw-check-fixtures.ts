@@ -46,6 +46,28 @@ export interface FwCheckOkAssertionFact {
   version: FwCheckOutput['version'];
 }
 
+export interface FwCheckUnguardedAuditBehaviorFact {
+  coverage: FwCheckCoverageAssertionFact[];
+  diagnostics: FwCheckDiagnosticAssertionFact[];
+  exitCode: number;
+  status: FwCheckOutput['status'];
+  targets: {
+    mutation: string[];
+    page: string[];
+    query: string[];
+  };
+  version: FwCheckOutput['version'];
+}
+
+export interface FwCheckUnguardedAuditGraph {
+  mutations: Array<{ guards?: readonly string[]; key: string; writes?: readonly string[] }>;
+  optimistic?: Array<{ mutation: string; query: string; status: string }>;
+  pages: Array<{ guards?: readonly string[]; queries?: readonly string[]; route: string }>;
+  queries: Array<{ domains?: readonly string[]; guards?: readonly string[]; query: string }>;
+}
+
+export type FwCheckCommand = (graph: FwCheckUnguardedAuditGraph) => FwCheckResultLike;
+
 export function parseFwCheckOutput(output: string): FwCheckOutput {
   const lines = output.trimEnd().split('\n');
   const version = lines[0];
@@ -110,6 +132,49 @@ export function fwCheckOkAssertionFact(result: FwCheckResultLike): FwCheckOkAsse
     issueCount: 0,
     status: 'ok',
     version: fact.version,
+  };
+}
+
+export function fwCheckUnguardedAuditBehaviorFact(options: {
+  fwCheck: FwCheckCommand;
+}): FwCheckUnguardedAuditBehaviorFact {
+  // SPEC.md section 6.4 and IMPLEMENT_v1.md P3 require route/query guards to surface
+  // through the unguarded audit when removed.
+  const fact = fwCheckAssertionFact(
+    options.fwCheck({
+      mutations: [
+        { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+        { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
+      ],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'inventory/sync', query: 'adminOrders', status: 'await-fragment' },
+      ],
+      pages: [
+        { guards: ['authed'], queries: ['cart'], route: '/cart' },
+        { guards: [], queries: ['adminOrders'], route: '/admin' },
+      ],
+      queries: [
+        { domains: ['cart'], guards: ['authed'], query: 'cart' },
+        { domains: ['product'], guards: [], query: 'adminOrders' },
+      ],
+    }),
+  );
+  const unguardedDiagnostics = fact.diagnostics.filter(({ code }) => code === 'UNGUARDED');
+
+  return {
+    ...fact,
+    targets: {
+      mutation: unguardedDiagnostics
+        .filter(({ message }) => message === 'mutation is reachable without an auth guard.')
+        .map(({ target }) => target),
+      page: unguardedDiagnostics
+        .filter(({ target }) => target.startsWith('page '))
+        .map(({ target }) => target.slice('page '.length)),
+      query: unguardedDiagnostics
+        .filter(({ target }) => target.startsWith('query '))
+        .map(({ target }) => target.slice('query '.length)),
+    },
   };
 }
 
