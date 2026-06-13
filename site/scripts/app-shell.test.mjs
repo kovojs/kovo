@@ -137,6 +137,7 @@ describe('site app-shell export adoption', () => {
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
     const loadedModuleIds = [];
+    const manifestResultAssertions = [];
     const staticExportManifestFiles = [];
     const stylesheetManifestFiles = [];
     const exportScript = await readFile(path.join(siteRoot, 'scripts/export-static.mjs'), 'utf8');
@@ -191,6 +192,18 @@ describe('site app-shell export adoption', () => {
           if (id === '@jiso/server/app-shell/static-export') {
             return {
               ...serverAppShellStaticExport,
+              assertStaticExportManifestMatchesResult(result, manifest) {
+                manifestResultAssertions.push({
+                  assets: result.assets.length,
+                  manifestAssets: manifest.assets.length,
+                  manifestRouteDocuments: manifest.routeDocuments.length,
+                  routeDocuments: result.artifacts.length,
+                });
+                return serverAppShellStaticExport.assertStaticExportManifestMatchesResult(
+                  result,
+                  manifest,
+                );
+              },
             };
           }
           if (id === '@jiso/server/app-shell/vite') {
@@ -228,6 +241,7 @@ describe('site app-shell export adoption', () => {
 
     expect(exportScript).toContain('formatStaticExportDiagnostics');
     expect(exportScript).toContain('isStaticExportDiagnosticError');
+    expect(exportScript).toContain('assertStaticExportManifestMatchesResult');
     expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
     expect(exportScript).toContain('staticExportManifestForJisoAppShellViteBuildFromManifestFile');
     expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
@@ -243,6 +257,14 @@ describe('site app-shell export adoption', () => {
     ]);
     expect(stylesheetManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
     expect(staticExportManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
+    expect(manifestResultAssertions).toEqual([
+      {
+        assets: 1,
+        manifestAssets: 1,
+        manifestRouteDocuments: 2,
+        routeDocuments: 2,
+      },
+    ]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
       '/docs/installation/index.html',
       '/index.html',

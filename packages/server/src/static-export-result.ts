@@ -69,3 +69,42 @@ export function staticExportManifest(result: StaticExportResultArtifacts): Stati
     routeDocuments,
   };
 }
+
+// SPEC §9.5: manifest/inventory task evidence must describe the same static
+// host surface that a write export publishes.
+export function assertStaticExportManifestMatchesResult(
+  result: StaticExportResultArtifacts,
+  manifest: StaticExportManifest,
+): void {
+  const expected = staticExportManifest(result);
+  const expectedSignature = staticExportManifestSignature(expected);
+  const actualSignature = staticExportManifestSignature(manifest);
+
+  if (actualSignature === expectedSignature) return;
+
+  throw new Error(
+    [
+      'Static export manifest does not match the written export result.',
+      `Expected ${staticExportManifestSummary(expected)}.`,
+      `Received ${staticExportManifestSummary(manifest)}.`,
+    ].join(' '),
+  );
+}
+
+function staticExportManifestSignature(manifest: StaticExportManifest): string {
+  return JSON.stringify({
+    assets: manifest.assets,
+    clientModules: manifest.clientModules,
+    files: manifest.files,
+    routeDocuments: manifest.routeDocuments,
+  });
+}
+
+function staticExportManifestSummary(manifest: StaticExportManifest): string {
+  return [
+    `routeDocuments=${manifest.routeDocuments.length}`,
+    `clientModules=${manifest.clientModules.length}`,
+    `assets=${manifest.assets.length}`,
+    `files=${manifest.files.length}`,
+  ].join(', ');
+}

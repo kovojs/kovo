@@ -88,6 +88,9 @@ describe('server app-shell public API barrels', () => {
     expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appShellApi.staticExportInventory).toBe(staticExportResultApi.staticExportInventory);
     expect(appShellApi.staticExportManifest).toBe(staticExportResultApi.staticExportManifest);
+    expect(appShellApi.assertStaticExportManifestMatchesResult).toBe(
+      staticExportResultApi.assertStaticExportManifestMatchesResult,
+    );
     expect(appShellApi.staticExportOutputPlan).toBe(staticExportOutputApi.staticExportOutputPlan);
     expect(appShellApi.formatStaticExportDiagnostics).toBe(
       staticExportDiagnosticsApi.formatStaticExportDiagnostics,
@@ -139,6 +142,9 @@ describe('server app-shell public API barrels', () => {
     expect(packageStaticExportApi.staticExportManifest).toBe(
       staticExportResultApi.staticExportManifest,
     );
+    expect(packageStaticExportApi.assertStaticExportManifestMatchesResult).toBe(
+      staticExportResultApi.assertStaticExportManifestMatchesResult,
+    );
     expect(packageStaticExportApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,
     );
@@ -189,6 +195,9 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageAppShellApi.staticExportManifest).toBe(
       staticExportResultApi.staticExportManifest,
+    );
+    expect(packageAppShellApi.assertStaticExportManifestMatchesResult).toBe(
+      staticExportResultApi.assertStaticExportManifestMatchesResult,
     );
     expect(packageAppShellApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,

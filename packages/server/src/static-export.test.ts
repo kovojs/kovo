@@ -19,7 +19,11 @@ import {
   StaticExportError,
 } from './static-export-diagnostics.js';
 import { staticExportOutputPlan } from './static-export-output.js';
-import { staticExportInventory, staticExportManifest } from './static-export-result.js';
+import {
+  assertStaticExportManifestMatchesResult,
+  staticExportInventory,
+  staticExportManifest,
+} from './static-export-result.js';
 
 describe('server static export', () => {
   it('exports a simple route through the app request handler to an html artifact', async () => {
@@ -458,7 +462,9 @@ describe('server static export', () => {
       ],
     });
 
-    expect(staticExportManifest(result)).toEqual({
+    const manifest = staticExportManifest(result);
+
+    expect(manifest).toEqual({
       assets: [
         {
           headers: { 'content-type': 'text/css; charset=utf-8' },
@@ -534,6 +540,15 @@ describe('server static export', () => {
         },
       ],
     });
+    expect(() => assertStaticExportManifestMatchesResult(result, manifest)).not.toThrow();
+    expect(() =>
+      assertStaticExportManifestMatchesResult(result, {
+        ...manifest,
+        routeDocuments: manifest.routeDocuments.slice(1),
+      }),
+    ).toThrow(
+      'Static export manifest does not match the written export result. Expected routeDocuments=2, clientModules=1, assets=1, files=4. Received routeDocuments=1, clientModules=1, assets=1, files=4.',
+    );
   });
 
   it('rejects exported documents that reference server mutation or query endpoints', async () => {

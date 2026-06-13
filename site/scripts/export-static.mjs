@@ -63,6 +63,7 @@ export async function exportSiteStaticApp({
     };
     const { createSiteDistApp } = appShellModule;
     const {
+      assertStaticExportManifestMatchesResult,
       exportJisoAppShellViteBuildFromManifestFile,
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
@@ -77,6 +78,11 @@ export async function exportSiteStaticApp({
     if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
       throw new Error(
         '@jiso/server/app-shell/vite must export exportJisoAppShellViteBuildFromManifestFile.',
+      );
+    }
+    if (typeof assertStaticExportManifestMatchesResult !== 'function') {
+      throw new Error(
+        '@jiso/server/app-shell/static-export must export assertStaticExportManifestMatchesResult.',
       );
     }
     if (typeof formatStaticExportDiagnostics !== 'function') {
@@ -118,6 +124,7 @@ export async function exportSiteStaticApp({
       manifestFile,
       outDir,
     });
+    assertStaticExportManifestMatchesResult(result, manifest);
 
     return { ...result, manifest };
   } finally {

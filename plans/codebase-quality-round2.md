@@ -1026,6 +1026,9 @@ so stale `index.html` files in `dist` cannot silently become exported docs route
 Docs-site export now also composes public app-shell helpers from the focused client-modules, core,
 static-export, and Vite subpaths instead of the aggregate app-shell compatibility module; its
 adoption test rejects accidental aggregate loading while proving manifest-backed static replay.
+Docs-site export now checks the manifest-file dry-run claim against the written static export
+result through the public `@jiso/server/app-shell/static-export` result helper before reporting
+SPEC §9.5 export-task evidence.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -1064,6 +1067,13 @@ Latest evidence:
   `node site/scripts/export-static.mjs --skip-build --skip-gallery`;
   exact `pnpm exec vp check site/scripts/export-static.mjs site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Round257 docs-site manifest/result consistency:
+  `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  `pnpm --filter @jiso/site run build`;
+  `node site/scripts/export-static.mjs --skip-build --skip-gallery`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

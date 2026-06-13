@@ -946,3 +946,19 @@ Round256 docs-site split-subpath export adoption evidence:
 - `node site/scripts/export-static.mjs --skip-build --skip-gallery`
 - `pnpm exec vp check site/scripts/export-static.mjs site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round257 docs-site manifest/result consistency evidence:
+
+- `packages/server/src/static-export-result.ts` now owns a public
+  `assertStaticExportManifestMatchesResult()` check for SPEC §9.5 export-task evidence, so a dry-run
+  manifest claim must match the route document, `/c/` module, and asset surface published by a
+  write export.
+- Docs-site export calls that focused `@jiso/server/app-shell/static-export` helper after the
+  manifest-file dry run and write export, and the adoption test proves the public helper runs on
+  the docs export result before task evidence is returned.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm --filter @jiso/site run build`
+- `node site/scripts/export-static.mjs --skip-build --skip-gallery`
