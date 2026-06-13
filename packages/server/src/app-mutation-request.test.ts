@@ -43,13 +43,7 @@ describe('server app mutation request boundary', () => {
       method: 'POST',
     });
 
-    const response = await handleAppMutationRequest(
-      app,
-      request,
-      new URL(request.url),
-      'cart/add',
-      () => new Response('wrong method', { status: 405 }),
-    );
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
 
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('/cart');

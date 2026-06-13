@@ -460,3 +460,13 @@ Round109 app-shell static export diagnostic boundary evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round117 app-shell dispatch/Vite subpath evidence:
+
+- `packages/server/src/app-dispatch.ts` now owns matched SPEC §9.5 request dispatch for
+  client modules, query endpoints, mutation POSTs, raw endpoints, route documents, 405s, and 404
+  error shells; `app-request.ts` keeps URL normalization plus the outer error fallback.
+- `packages/server/src/api/app-shell/vite.ts` exports directly from the split Vite owners instead
+  of routing the app-shell Vite subpath through the aggregate `vite.ts`.
+- `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`

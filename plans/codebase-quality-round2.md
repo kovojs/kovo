@@ -173,9 +173,13 @@ Current state:
   client-module replay, and compile-diagnostic blocking have been split into focused modules.
 - App request document assembly and mutation request handling have been subtracted from the main
   dispatcher.
+- Matched SPEC §9.5 dispatch branches now live in `app-dispatch.ts`, leaving `app-request.ts`
+  focused on URL normalization and outer error fallback.
 - Vite app-shell plugin code lives in `vite-plugin.ts`; `vite.ts` is closer to an aggregate.
 - Root exports now point at the app-shell owner directly instead of an internal compatibility
   barrel.
+- App-shell Vite subpath exports now route directly to split owner modules instead of through
+  aggregate `vite.ts`.
 
 Open:
 
@@ -188,11 +192,10 @@ Open:
 
 Latest focused evidence:
 
-- `pnpm exec vitest --run packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts`
-- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/server/src/app-request.ts packages/server/src/app-dispatch.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.ts packages/server/src/app-mutation-request.test.ts packages/server/src/response.ts packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce
@@ -250,6 +253,8 @@ Focused gates since that broad run:
   and `git diff --check` passed through `4ff2168` plus integration fix `e88a45d`.
 - Server/app-shell: static-export diagnostics, Vite/static export tests, full server suite,
   `tsc`, exact `vp check`, and `git diff --check` passed through `b980a06`.
+- Server/app-shell: matched dispatch extraction, full server suite, `tsc`, exact `vp check`, and
+  `git diff --check` passed through `2319a5f`.
 - UI/gallery: toolbar primitive/UI tests, headless primitive lint, gallery generated-artifact
   check, gallery unit/browser suites, exact `vp check`, and `git diff --check` passed through
   `2a1917d`.

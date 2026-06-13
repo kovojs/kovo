@@ -1,20 +1,9 @@
-import { renderVersionedClientModuleResponse } from './client-modules.js';
 import { reportServerError } from './diagnostics.js';
-import { runEndpoint } from './endpoint.js';
-import {
-  renderQueryRegistryEndpointResponse,
-  type QueryEndpointRegistry,
-  type QueryEndpointRequest,
-} from './query.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
 import type { JisoApp } from './app.js';
-import {
-  appRequestUrl,
-  renderAppErrorDocumentResponse,
-  renderAppRouteDocumentResponse,
-} from './app-document.js';
-import { handleAppMutationRequest } from './app-mutation-request.js';
+import { dispatchMatchedAppRequest } from './app-dispatch.js';
+import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 
 export async function handleAppRequest(app: JisoApp, request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -34,70 +23,7 @@ export async function handleAppRequest(app: JisoApp, request: Request): Promise<
   }
 
   try {
-    if (match.kind === 'client-module') {
-      return routeResponseToWebResponse(
-        renderVersionedClientModuleResponse(app.clientModules, {
-          ...(app.onError === undefined ? {} : { onError: app.onError }),
-          url: appRequestUrl(url),
-        }),
-        request,
-      );
-    }
-
-    if (match.kind === 'query') {
-      const queryRequest: QueryEndpointRequest<Request> = {
-        currentUrl: appRequestUrl(url),
-        ...(app.onError === undefined ? {} : { onError: app.onError }),
-        request,
-        search: url.searchParams,
-        ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
-      };
-
-      return routeResponseToWebResponse(
-        await renderQueryRegistryEndpointResponse<Request>(
-          { queries: app.queries as QueryEndpointRegistry<Request>['queries'] },
-          decodeURIComponent(match.key),
-          queryRequest,
-        ),
-        request,
-      );
-    }
-
-    if (match.kind === 'mutation') {
-      return await handleAppMutationRequest(
-        app,
-        request,
-        url,
-        decodeURIComponent(match.key),
-        methodNotAllowedResponse,
-      );
-    }
-
-    if (match.kind === 'endpoint') {
-      return await runEndpoint(match.endpoint, request);
-    }
-
-    if (match.kind === 'route') {
-      if (!match.methodAllowed) {
-        return methodNotAllowedResponse(request, match.allowedMethods);
-      }
-
-      return routeResponseToWebResponse(
-        await renderAppRouteDocumentResponse({
-          app,
-          params: match.params,
-          request,
-          route: match.route,
-          url,
-        }),
-        request,
-      );
-    }
-
-    return routeResponseToWebResponse(
-      await renderAppErrorDocumentResponse(app, request, 404),
-      request,
-    );
+    return await dispatchMatchedAppRequest({ app, match, request, url });
   } catch (error) {
     reportServerError(app.onError, error, {
       operation: 'app-request',
@@ -109,14 +35,4 @@ export async function handleAppRequest(app: JisoApp, request: Request): Promise<
       request,
     );
   }
-}
-
-function methodNotAllowedResponse(request: Request, allowedMethods: readonly string[]): Response {
-  return new Response(request.method === 'HEAD' ? null : 'Method Not Allowed', {
-    headers: {
-      Allow: allowedMethods.join(', '),
-      'Content-Type': 'text/plain; charset=utf-8',
-    },
-    status: 405,
-  });
 }

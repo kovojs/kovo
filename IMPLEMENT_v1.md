@@ -1046,6 +1046,13 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       query, mutation, endpoint, route-document, and configured error-shell dispatch. Focused
       verification: `pnpm exec vitest --run packages/server/src` and
       `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: matched request dispatch moved further into
+      `packages/server/src/app-dispatch.ts`, so `app-request.ts` now owns URL normalization and
+      the outer error fallback while the matched dispatcher owns SPEC §9.5 client-module, query,
+      mutation, raw endpoint, route-document, 405, and 404 branches. The app-shell Vite subpath
+      barrel also re-exports directly from split Vite owner modules. Focused verification:
+      `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/api/app.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`.
       Evidence 2026-06-13: static-export document reference discovery moved subtractively into
       `packages/server/src/static-export-document.ts`, leaving
       `packages/server/src/static-replay.ts` to own synthetic request replay and artifact assembly

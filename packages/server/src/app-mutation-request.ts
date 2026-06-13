@@ -1,6 +1,6 @@
 import { resolveLifecycleRequest } from './guards.js';
 import { renderMutationEndpointResponse, type MutationDefinition } from './mutation.js';
-import { serverResponseToWebResponse } from './response.js';
+import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
 import type { JisoApp } from './app.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
@@ -10,10 +10,9 @@ export async function handleAppMutationRequest(
   request: Request,
   url: URL,
   mutationKey: string,
-  methodNotAllowedResponse: (request: Request, allowedMethods: readonly string[]) => Response,
 ): Promise<Response> {
   if (request.method.toUpperCase() !== 'POST') {
-    return methodNotAllowedResponse(request, ['POST']);
+    return methodNotAllowedWebResponse(request, ['POST']);
   }
 
   const mutation = app.mutations.find((candidate) => candidate.key === mutationKey);
