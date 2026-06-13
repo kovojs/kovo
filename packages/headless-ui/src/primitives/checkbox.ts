@@ -39,6 +39,10 @@ export type CheckboxPrimitiveAttributes = PrimitiveDataAttributes &
 
 export type CheckboxTriggerEvent = Event;
 
+export interface CheckboxNativeInput {
+  indeterminate: boolean;
+}
+
 export function checkboxRootAttributes(state: CheckboxState): CheckboxPrimitiveAttributes {
   const checked = state.checked === true;
 
@@ -52,6 +56,13 @@ export function checkboxRootAttributes(state: CheckboxState): CheckboxPrimitiveA
     type: 'checkbox',
     ...(state.value === undefined ? {} : { value: state.value }),
   });
+}
+
+export function applyCheckboxIndeterminate(
+  input: CheckboxNativeInput,
+  checked: CheckboxCheckedState,
+): void {
+  input.indeterminate = checked === 'indeterminate';
 }
 
 export function setCheckboxChecked(

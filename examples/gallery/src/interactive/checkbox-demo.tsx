@@ -23,6 +23,14 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
           {...attrs}
           onClick={() => {
             state.checked = state.checked === 'indeterminate' ? true : !state.checked;
+            const doc = Reflect['get'](globalThis, 'document');
+            const input = doc
+              ? Object(doc)['querySelector']?.call(
+                  doc,
+                  '[data-gallery-interactive="checkbox"] input[type="checkbox"]',
+                )
+              : undefined;
+            if (input) input['indeterminate'] = false;
           }}
         />
         <span>Email summary</span>

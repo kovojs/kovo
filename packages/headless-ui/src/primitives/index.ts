@@ -123,6 +123,7 @@ export type {
 } from './avatar.js';
 
 export {
+  applyCheckboxIndeterminate,
   checkboxRootAttributes,
   checkboxTriggerClick,
   setCheckboxChecked,
@@ -134,6 +135,7 @@ export type {
   CheckboxChangeReason,
   CheckboxChangeResult,
   CheckboxCheckedState,
+  CheckboxNativeInput,
   CheckboxPrimitiveAttributes,
   CheckboxState,
   CheckboxTriggerEvent,

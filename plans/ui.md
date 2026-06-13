@@ -81,6 +81,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       generated artifacts, and browser-backed external `FormData` evidence. Toast action controls
       now expose non-dismissing action intent through headless/styled attrs, and the compiled
       gallery proves a canceled action keeps visible/open state before a later dismiss closes it.
+      Checkbox mixed state now has an exported native `indeterminate` property helper; the compiled
+      checkbox demo clears the property after generated state transitions, and the route-level axe
+      gate enforces `aria-conditional-attr` without a checkbox exception.
 
 ## Open Work
 
@@ -124,7 +127,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       on native inputs instead of unsupported group `aria-required`, and toast live regions render
       on neutral elements. Menubar compiled demos now keep state outputs and popup menu content
       outside the `role="menubar"` root, so `aria-required-children` is enforced by the route-level
-      axe gate.
+      axe gate. Checkbox mixed state now applies the native `indeterminate` DOM property before the
+      route scan and removes the `aria-conditional-attr` exception; verified by
+      `packages/headless-ui/src/primitives/checkbox.test.ts` and
+      `examples/gallery/src/interactive-gallery.browser.test.ts`.
       Evidence 2026-06-13: `examples/gallery/src/interactive-gallery.browser.test.ts` now includes
       a deterministic Chromium visual-baseline scaffold for the compiled interactive route plus
       switch and dropdown-menu representative states, asserting viewport geometry and stable
@@ -217,6 +223,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Checkbox native mixed-state axe closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/checkbox.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t checkbox`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/checkbox.ts packages/headless-ui/src/primitives/checkbox.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/interactive/checkbox-demo.tsx examples/gallery/src/generated/interactive/checkbox-demo.tsx examples/gallery/src/generated/interactive/checkbox-demo.client.js examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Menubar compiled axe structure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t menubar`;

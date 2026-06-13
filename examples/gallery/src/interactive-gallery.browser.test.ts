@@ -1,5 +1,6 @@
 import axe from 'axe-core';
 import { installJisoLoader, type JisoLoader } from '@jiso/runtime';
+import { applyCheckboxIndeterminate } from '@jiso/headless-ui/primitives';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 
@@ -154,6 +155,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const host = document.createElement('div');
     host.innerHTML = renderInteractiveGalleryRoute();
     document.body.append(host);
+    applyRouteCheckboxIndeterminate(host);
 
     const results = await axe.run(host, {
       rules: interactiveGalleryAxeRules,
@@ -638,6 +640,8 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     expect(root.getAttribute('fw-state')).toBe('{"checked":"indeterminate"}');
     expect(input.getAttribute('aria-checked')).toBe('mixed');
+    applyCheckboxIndeterminate(input, 'indeterminate');
+    expect(input.indeterminate).toBe(true);
     expect(output.textContent).toBe('indeterminate');
 
     input.click();
@@ -645,6 +649,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
       expect(input.checked).toBe(true);
+      expect(input.indeterminate).toBe(false);
     });
 
     input.focus();
@@ -653,6 +658,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
       expect(input.checked).toBe(false);
+      expect(input.indeterminate).toBe(false);
     });
   });
 
@@ -2329,10 +2335,15 @@ const interactiveGalleryAxeRules = {
   // demos and role-bearing section roots. Focused browser tests below assert the
   // exact ARIA contracts for those primitives.
   'aria-allowed-role': { enabled: false },
-  // Native checkbox indeterminate state is a DOM property, not serializable HTML.
-  // The checkbox browser test asserts the runtime mixed state transition.
-  'aria-conditional-attr': { enabled: false },
 } as const;
+
+function applyRouteCheckboxIndeterminate(root: ParentNode): void {
+  for (const input of root.querySelectorAll<HTMLInputElement>(
+    'input[type="checkbox"][data-state="indeterminate"]',
+  )) {
+    applyCheckboxIndeterminate(input, 'indeterminate');
+  }
+}
 
 function formatAxeViolations(violations: axe.Result[]): string[] {
   return violations.flatMap((violation) =>

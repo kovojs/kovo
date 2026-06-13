@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyCheckboxIndeterminate as exportedApplyCheckboxIndeterminate,
   checkboxRootAttributes as exportedCheckboxRootAttributes,
   checkboxTriggerClick as exportedCheckboxTriggerClick,
   setCheckboxChecked as exportedSetCheckboxChecked,
   toggleCheckbox as exportedToggleCheckbox,
 } from '../index.js';
 import {
+  applyCheckboxIndeterminate,
   checkboxRootAttributes,
   checkboxTriggerClick,
   setCheckboxChecked,
@@ -44,6 +46,19 @@ describe('headless-ui checkbox primitive', () => {
       required: true,
       type: 'checkbox',
     });
+  });
+
+  it('applies mixed state through the native checkbox DOM property', () => {
+    const input = { indeterminate: false };
+
+    applyCheckboxIndeterminate(input, 'indeterminate');
+    expect(input.indeterminate).toBe(true);
+
+    applyCheckboxIndeterminate(input, true);
+    expect(input.indeterminate).toBe(false);
+
+    applyCheckboxIndeterminate(input, false);
+    expect(input.indeterminate).toBe(false);
   });
 
   it('dispatches a cancelable checked change detail before committing state', () => {
@@ -171,6 +186,7 @@ describe('headless-ui checkbox primitive', () => {
   });
 
   it('is exported through the package root', () => {
+    expect(exportedApplyCheckboxIndeterminate).toBe(applyCheckboxIndeterminate);
     expect(exportedCheckboxRootAttributes).toBe(checkboxRootAttributes);
     expect(exportedCheckboxTriggerClick).toBe(checkboxTriggerClick);
     expect(exportedSetCheckboxChecked).toBe(setCheckboxChecked);

@@ -27,7 +27,7 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
       >
         <input
           {...attrs}
-          on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=3872a063#GalleryCheckboxDemo$input_click"
+          on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b5c8961b#GalleryCheckboxDemo$input_click"
         />
         <span>Email summary</span>
         <output data-demo-state="checked">{String(state.checked)}</output>
