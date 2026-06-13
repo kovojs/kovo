@@ -135,6 +135,56 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('does not emit Vite app-shell client modules when plugin-time static export is rejected', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-reject-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-output-reject-export-'));
+
+    try {
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/admin', {
+              guard: () => true,
+              page() {
+                return '<main>Admin</main>';
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/admin.client.js',
+            source: 'export const admin = true;',
+            version: 'admin-v1',
+          },
+        ],
+      });
+
+      await expect(
+        writeJisoAppShellViteBuildOutput(build, {
+          outDir: distDir,
+          staticExport: { outDir },
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining("cannot export guarded route '/admin'"),
+            routePath: '/admin',
+          },
+        ],
+      });
+      await expect(readFile(join(distDir, 'c/admin.client.js'))).rejects.toThrow();
+      await expect(readFile(join(outDir, 'admin/index.html'))).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('returns Vite build-backed static export inventory without writing output', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-dist-'));
     const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-export-'));

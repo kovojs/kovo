@@ -266,6 +266,18 @@ Round96 app-shell Vite static-export options evidence:
 - `pnpm exec vp check packages/server/src/vite-static-export.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export-options.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round97 app-shell Vite output atomicity evidence:
+
+- `writeJisoAppShellViteBuildOutput()` now preplans compiled `/c/` module writes and runs the
+  optional SPEC §9.5 static export gate before writing helper-owned Vite output files, so FW229
+  plugin-time export rejection does not leave partial app-shell client modules behind.
+- `packages/server/src/vite-build.test.ts` pins guarded-route FW229 rejection with no emitted
+  Vite `/c/` file and no static export document.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:

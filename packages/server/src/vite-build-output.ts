@@ -42,25 +42,21 @@ export async function writeJisoAppShellViteBuildOutput(
   options: JisoAppShellViteBuildOutputOptions,
 ): Promise<JisoAppShellViteBuildOutput> {
   const root = resolvedFileSystemPath(options.outDir);
-
-  for (const module of build.clientModules) {
-    // SPEC §9.5: production app-shell builds publish immutable /c/ client modules
-    // as files a static host can retain by versioned URL.
-    const targetPath = viteDistSourcePath(root, module.file);
-    await mkdir(path.dirname(targetPath), { recursive: true });
-    await writeFile(targetPath, module.source, 'utf8');
-  }
+  const clientModuleWrites = jisoAppShellViteClientModuleWrites(root, build.clientModules);
 
   const output: JisoAppShellViteBuildOutput = {
     clientModules: build.clientModules,
     staticExportAssets: jisoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root }),
   };
-  if (!options.staticExport) return output;
 
-  output.staticExport = await exportJisoAppShellViteBuild(assertStaticExportBuild(build), {
-    ...options.staticExport,
-    distDir: root,
-  });
+  if (options.staticExport) {
+    output.staticExport = await exportJisoAppShellViteBuild(assertStaticExportBuild(build), {
+      ...options.staticExport,
+      distDir: root,
+    });
+  }
+
+  await writeJisoAppShellViteClientModules(clientModuleWrites);
 
   return output;
 }
@@ -86,4 +82,25 @@ function assertStaticExportBuild(
     clientModules: build.clientModules,
     routeHints: [],
   };
+}
+
+function jisoAppShellViteClientModuleWrites(
+  root: string,
+  modules: readonly JisoAppShellBuiltClientModule[],
+): { source: string; targetPath: string }[] {
+  return modules.map((module) => ({
+    source: module.source,
+    targetPath: viteDistSourcePath(root, module.file),
+  }));
+}
+
+async function writeJisoAppShellViteClientModules(
+  writes: readonly { source: string; targetPath: string }[],
+): Promise<void> {
+  for (const write of writes) {
+    // SPEC §9.5: production app-shell builds publish immutable /c/ client modules
+    // as files a static host can retain by versioned URL.
+    await mkdir(path.dirname(write.targetPath), { recursive: true });
+    await writeFile(write.targetPath, write.source, 'utf8');
+  }
 }
