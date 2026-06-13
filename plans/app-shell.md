@@ -138,6 +138,21 @@ Round289 static export client-module snapshot conflict evidence:
 - `pnpm exec vitest --run packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round290 static export route-document target safety evidence:
+
+- `packages/server/src/static-export-route-plan.ts` now rejects concrete route document targets
+  whose URL path segments decode to separators, dot segments, or invalid URL encoding before
+  SPEC §9.5 synthetic replay. `packages/server/src/static-export-output-targets.ts` keeps the
+  same route-document segment guard for direct output-plan callers.
+- `packages/server/src/static-export-route-plan.test.ts`,
+  `packages/server/src/static-export-output-targets.test.ts`, and
+  `packages/server/src/static-export.test.ts` prove unsafe static routes/param `staticPaths` fail
+  with FW229 before replay or writes, while direct output planning rejects unsafe route artifacts.
+- `pnpm exec vitest --run packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-route-plan.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

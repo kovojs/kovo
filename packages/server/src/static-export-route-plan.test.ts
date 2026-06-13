@@ -125,4 +125,44 @@ describe('server static export route plan', () => {
       ],
     });
   });
+
+  it('rejects static-host-unsafe concrete route targets before synthetic replay', () => {
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          routes: [
+            route('/docs/%2e%2e', {
+              page: () => '<main>Unsafe docs</main>',
+            }),
+            route('/products/:id', {
+              page: () => '<main>Product</main>',
+              staticPaths: ['/products/%2f', '/products/%E0%A4%A'],
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [
+        {
+          code: 'FW229',
+          message:
+            "FW229 static export cannot export concrete route target '/docs/%2e%2e' for route '/docs/%2e%2e' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
+          routePath: '/docs/%2e%2e',
+        },
+        {
+          code: 'FW229',
+          message:
+            "FW229 static export cannot export concrete route target '/products/%2f' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
+          routePath: '/products/:id',
+        },
+        {
+          code: 'FW229',
+          message:
+            "FW229 static export cannot export concrete route target '/products/%E0%A4%A' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
+          routePath: '/products/:id',
+        },
+      ],
+      targets: [],
+    });
+  });
 });

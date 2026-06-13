@@ -82,11 +82,25 @@ describe('server static export output target boundary', () => {
       staticExportOutputTargets(
         {
           ...base,
-          artifacts: [{ body: '<!doctype html>', headers: {}, path: '/../x.html', status: 200 }],
+          artifacts: [
+            { body: '<!doctype html>', headers: {}, path: '/%2e%2e/x.html', status: 200 },
+          ],
         },
         root,
       ),
-    ).toThrow(/outside the configured output directory/);
+    ).toThrow(/unsafe route document path segment/);
+
+    expect(() =>
+      staticExportOutputTargets(
+        {
+          ...base,
+          artifacts: [
+            { body: '<!doctype html>', headers: {}, path: '/%E0%A4%A.html', status: 200 },
+          ],
+        },
+        root,
+      ),
+    ).toThrow(/not valid URL encoding/);
 
     expect(() =>
       staticExportOutputTargets(

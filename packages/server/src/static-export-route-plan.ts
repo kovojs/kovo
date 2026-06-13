@@ -135,6 +135,11 @@ function addStaticExportRouteTarget(
   diagnostics: StaticExportDiagnostic[],
   target: StaticExportRouteTarget,
 ): void {
+  if (!staticExportRouteTargetPathIsSafe(target.path)) {
+    diagnostics.push(unsafeStaticExportRouteTargetDiagnostic(target.routePath, target.path));
+    return;
+  }
+
   const existing = targetPaths.get(target.path);
   if (existing) {
     // SPEC §9.5 static export replays a synthetic GET per concrete route document;
@@ -150,6 +155,36 @@ function addStaticExportRouteTarget(
 
   targetPaths.set(target.path, target);
   targets.push(target);
+}
+
+function staticExportRouteTargetPathIsSafe(pathname: string): boolean {
+  // SPEC §9.5 publishes route documents as static-host directory-index files; keep each
+  // concrete URL segment representable as one filesystem/static-host segment before replay.
+  return pathname
+    .split('/')
+    .filter(Boolean)
+    .every((segment) => staticExportRouteTargetPathSegmentIsSafe(segment));
+}
+
+function staticExportRouteTargetPathSegmentIsSafe(segment: string): boolean {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    return false;
+  }
+
+  return decoded !== '.' && decoded !== '..' && !decoded.includes('/') && !decoded.includes('\\');
+}
+
+function unsafeStaticExportRouteTargetDiagnostic(
+  routePath: string,
+  targetPath: string,
+): StaticExportDiagnostic {
+  return staticExportDiagnostic(
+    routePath,
+    `FW229 static export cannot export concrete route target '${targetPath}' for route '${routePath}' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.`,
+  );
 }
 
 function routeHasParams(path: string): boolean {

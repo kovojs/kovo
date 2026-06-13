@@ -88,7 +88,17 @@ function assertNoStaticExportOutputConflicts(targets: readonly StaticExportOutpu
 }
 
 function staticExportArtifactTargetPath(root: string, artifactPath: string): string {
-  const targetPath = path.resolve(root, artifactPath.replace(/^\/+/, ''));
+  const segments = artifactPath.split('/').filter(Boolean).map(decodeRouteDocumentPathSegment);
+  if (segments.length === 0) {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        artifactPath,
+        `FW229 static export refused route document '${artifactPath}' because it does not name an output file.`,
+      ),
+    ]);
+  }
+
+  const targetPath = path.resolve(root, ...segments);
   if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
 
   throw new StaticExportError([
@@ -97,6 +107,31 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
       `FW229 static export refused to write '${artifactPath}' outside the configured output directory.`,
     ),
   ]);
+}
+
+function decodeRouteDocumentPathSegment(segment: string): string {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        segment,
+        `FW229 static export cannot write route document path segment '${segment}' because it is not valid URL encoding.`,
+      ),
+    ]);
+  }
+
+  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        segment,
+        `FW229 static export refused unsafe route document path segment '${segment}'.`,
+      ),
+    ]);
+  }
+
+  return decoded;
 }
 
 function staticExportClientModuleTargetPath(root: string, modulePath: string): string {

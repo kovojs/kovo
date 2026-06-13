@@ -1171,6 +1171,39 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects static-host-unsafe route document targets before replay or writes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    let rendered = false;
+    try {
+      const app = createApp({
+        routes: [
+          route('/products/:id', {
+            page: () => {
+              rendered = true;
+              return '<main>Product</main>';
+            },
+            staticPaths: ['/products/%2f'],
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            routePath: '/products/:id',
+            message: expect.stringContaining('unsafe URL path segment'),
+          },
+        ],
+      });
+      expect(rendered).toBe(false);
+      await expect(readFile(path.join(outDir, 'products', '%2f', 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('fails or skips loudly for param routes without staticPaths metadata', async () => {
     const app = createApp({
       routes: [
