@@ -77,7 +77,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             '}',
             '',
             'export const productQuery = query("product", {',
-            '  load(input, db) {',
+            '  load(input, db: PgDatabase) {',
             '    return db.select({ id: products.id, stock: products.stock }).from(products).where(eq(products.id, input.id));',
             '  },',
             '});',
@@ -967,7 +967,7 @@ export interface CommerceInvalidationSets {
 
           export const cartQuery = query("cart", {
             output: s.object({ count: s.number() }),
-            async load(input, db) {
+            async load(input, db: PgDatabase) {
               return db.select({
                 count: sql<number>\`count(*)\`,
                 productId: products.id,
@@ -1012,13 +1012,13 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const distinctProducts = query("products/distinct", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.selectDistinct({ name: products.name }).from(products);
             },
           });
 
           export const firstProductNames = query("products/distinct-on", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
             },
           });
@@ -1058,7 +1058,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "cart", key: "cartId" }));
 
           export const cartQuery = query("cart", {
-            load(input, db) {
+            load(input, db: PgDatabase) {
               return db.select({
                 qty: cartItems.qty,
               }).from(cartItems).where(eq(cartItems["cartId"], input["cartId"]));
@@ -1092,7 +1092,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({ id: products.id }).from((() => products)());
             },
           });
@@ -1145,7 +1145,7 @@ export interface CommerceInvalidationSets {
           import * as cartSchema from "./cart.schema";
 
           export const cartProductQuery = query("cart/product", {
-            load(input, db) {
+            load(input, db: PgDatabase) {
               return db.select({
                 id: cartSchema.products.id,
               }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
@@ -1196,7 +1196,7 @@ export interface CommerceInvalidationSets {
             import * as cartSchema from "./cart.schema";
 
             export const cartProductQuery = query("cart/product", {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({
                   id: cartSchema.products.id,
                 }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
@@ -1240,7 +1240,7 @@ export interface CommerceInvalidationSets {
             import * as cartSchema from "./cart.schema";
 
             export const cartProductQuery = query("cart/product", {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({
                   id: cartSchema["products"].id,
                 }).from(cartSchema["products"]).where(eq(cartSchema["products"].id, input.id));
@@ -1296,7 +1296,7 @@ export interface CommerceInvalidationSets {
             import * as schema from "./schema";
 
             export const cartProductQuery = query("cart/product", {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({
                   id: schema["cartProducts"].id,
                 }).from(schema.cartProducts).where(eq(schema.cartProducts.id, input.id));
@@ -1332,7 +1332,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               return db.select({
                 message: auditLog.message,
                 name: products.name,
@@ -1389,7 +1389,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 archived: products.archived,
                 discount: products.name,
@@ -1437,7 +1437,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 note: products.note,
                 stock: products.stock,
@@ -1483,7 +1483,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 id: products.id,
                 location: products.location,
@@ -1535,7 +1535,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               await db.select({ message: auditLog.message }).from(auditLog);
               return db.select({ name: products.name }).from(products);
             },
@@ -1571,7 +1571,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               const fixture = "return db.select({ message: auditLog.message }).from(auditLog)";
               // return db.select({ message: auditLog.message }).from(auditLog);
               await db.select({ message: auditLog.message }).from(auditLog);
@@ -1602,7 +1602,7 @@ export interface CommerceInvalidationSets {
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
 
           export const cartQuery = query("cart", {
-            async load(input, db) {
+            async load(input, db: PgDatabase) {
               return db.select({
                 count: sql<number>\`count(*)\`,
               }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
@@ -1655,14 +1655,14 @@ export interface CommerceInvalidationSets {
 
           export const literalOutputQuery = query("cart/literal", {
             "output": s.object({ count: s.number() }),
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
 
           export const computedOutputQuery = query("cart/computed", {
             ["output"]: s.object({ count: s.number() }),
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
@@ -1684,7 +1684,7 @@ export interface CommerceInvalidationSets {
           export const cartQuery = query("cart", {
             // output: s.object({ count: s.number() }),
             description: "output: not a schema",
-            async load(input, db) {
+            async load(input, db: PgDatabase) {
               return db.select({
                 count: sql<number>\`count(*)\`,
               }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
@@ -1716,14 +1716,14 @@ export interface CommerceInvalidationSets {
 
           export const dynamicOutputQuery = query("cart/dynamic", {
             [outputKey]: s.object({ count: s.number() }),
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
 
           export const spreadOutputQuery = query("cart/spread", {
             ...sharedQueryConfig,
-            async load(_input, db) {
+            async load(_input, db: PgDatabase) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
@@ -1761,7 +1761,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", { sku: text("sku").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(input, db) {
+            load(input, db: PgDatabase) {
               return db.select({ sku: products.sku }).from(products).where(eq(products.sku, input.sku));
             },
           });
@@ -1789,7 +1789,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(input, db) {
+            load(input, db: PgDatabase) {
               const fixture = ".where(eq(products.id, input.id))";
               // return db.select({ name: products.name }).from(products).where(eq(products.id, input.id));
               return db.select({ name: products.name }).from(products);
@@ -1822,7 +1822,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 displayName: formatName(products.name),
                 stock: computeStock(products.id),
@@ -1873,7 +1873,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 "display:name,raw": products.name,
                 "unresolved:value,raw": compute(products.id),
@@ -1918,7 +1918,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 displayName: products["name"],
                 id: products["id"],
@@ -1952,7 +1952,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 count: "sql<number>\`count(*)\`",
                 id: products.id,
@@ -1994,7 +1994,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               const id = products.id;
               return db.select({ id }).from(products);
             },
@@ -2030,7 +2030,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select().from(products);
             },
           });
@@ -2074,7 +2074,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product/raw", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.execute(sql\`select * from products\`);
             },
           });
@@ -2109,7 +2109,7 @@ export interface CommerceInvalidationSets {
           export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
 
           export const usersQuery = query("users", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.query.users.findMany({ where: eq(users.active, true) });
             },
           });
@@ -2153,7 +2153,7 @@ export interface CommerceInvalidationSets {
           export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
 
           export const usersQuery = query("users", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.query['users']['findMany']({ where: eq(users.active, true) });
             },
           });
@@ -2189,7 +2189,7 @@ export interface CommerceInvalidationSets {
             export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
 
             export const usersQuery = query("users", {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
               },
             });
@@ -2235,7 +2235,7 @@ export interface CommerceInvalidationSets {
             }, jiso({ domain: "product", key: "id" }));
 
             export const productQuery = query("product/write", {
-              async load(_input, db) {
+              async load(_input, db: PgDatabase) {
                 await db.update(products).set({ id: "p1" });
                 return [];
               },
@@ -2281,6 +2281,30 @@ export interface CommerceInvalidationSets {
 
             export const productQuery = query("product/fake-db", {
               load(_input, db: FakeDb) {
+                db.update(products);
+                return db.select({ id: products.id }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([]);
+  });
+
+  it('does not fabricate project query facts from untyped source-mode receiver names', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            export const productQuery = query("product/untyped-db", {
+              load(_input, db) {
                 db.update(products);
                 return db.select({ id: products.id }).from(products);
               },
@@ -2360,7 +2384,7 @@ export interface CommerceInvalidationSets {
             declare function readCache(client: unknown): Promise<unknown[]>;
 
             export const productQuery = query("product/helper", {
-              async load(_input, db) {
+              async load(_input, db: PgDatabase) {
                 await readCache(cache);
                 return loadProducts(db);
               },
@@ -2571,7 +2595,7 @@ export interface CommerceInvalidationSets {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               const fixture = ".from(auditLog) db.query.auditLog.findMany(";
               // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
               return db.select({ name: products.name }).from(products);
@@ -2723,9 +2747,9 @@ export interface CommerceInvalidationSets {
         source: [
           'export const auditLog = pgTable("audit_log", { message: text("message").notNull() }, jiso({ domain: "audit", key: "id" }));',
           '',
-          '// export const commentedQuery = query("commented", { load(_input, db) { return db.select({ message: auditLog.message }).from(auditLog); } });',
-          'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
-          'const templated = `export const templatedQuery = query("templated", { load(_input, db) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
+          '// export const commentedQuery = query("commented", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });',
+          'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
+          'const templated = `export const templatedQuery = query("templated", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
           'export const keepModule = { quoted, templated };',
           '',
         ].join('\n'),
@@ -2759,7 +2783,7 @@ export interface CommerceInvalidationSets {
             import { items } from "./cart.schema";
 
             export const cartQuery = query("cart", {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
               },
             });
@@ -2802,7 +2826,7 @@ export interface CommerceInvalidationSets {
             import { items } from "./schema";
 
             export const itemQuery = query("item", {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({ qty: items.qty }).from(items).where(eq(items.id, input.id));
               },
             });
@@ -2827,7 +2851,7 @@ export interface CommerceInvalidationSets {
             import { items } from "./schema";
 
             export const itemQuery = query("item", {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({ qty: items.qty }).from(items).where(eq(items.id, input.id));
               },
             });
@@ -2885,7 +2909,7 @@ export interface CommerceInvalidationSets {
             function tableFor<T>(table: T): T { return table; }
 
             export const itemQuery = query("item", {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({ id: items.id }).from(tableFor(items));
               },
             });
@@ -2997,7 +3021,7 @@ export interface CommerceInvalidationSets {
             }, jiso({ domain: "product", key: "id" }));
 
             export const productQuery = query("product", {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   archived: products.archived,
                   createdAt: products.createdAt,
@@ -3055,7 +3079,7 @@ export interface CommerceInvalidationSets {
             }, jiso({ domain: "product", key: "id" }));
 
             export const productQuery = query("product", {
-              async load(_input, db) {
+              async load(_input, db: PgDatabase) {
                 await db.select({ message: auditLog.message }).from(auditLog);
                 return db.select({ name: products.name }).from(products);
               },
@@ -3093,7 +3117,7 @@ export interface CommerceInvalidationSets {
             }, jiso({ domain: "review", key: "productId" }));
 
             export const productQuery = query("product", {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   name: products.name,
                   review: { rating: reviews.rating },
@@ -3141,7 +3165,7 @@ export interface CommerceInvalidationSets {
           }, jiso({ domain: "review", key: "productId" }));
 
           export const reviewQuery = query("review", {
-            load(_input, db) {
+            load(_input, db: PgDatabase) {
               return db.select({
                 product: { name: products.name },
                 review: { rating: reviews.rating },
@@ -3194,7 +3218,7 @@ export interface CommerceInvalidationSets {
             }, jiso({ domain: "review", key: "productId" }));
 
             export const productReviewQuery = query("productReview", {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   productName: products.name,
                   reviewRating: reviews.rating,

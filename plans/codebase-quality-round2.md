@@ -205,11 +205,16 @@ Closed evidence so far:
   `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
 - Project-mode typed destructured Drizzle receiver bindings now contribute write and query facts
-  from the resolved binding symbol while explicitly typed fake contexts stay invisible; untyped
-  query-loader receiver compatibility remains pinned. Evidence: `packages/drizzle/src/static.ts`,
-  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
-  `pnpm exec vitest --run packages/drizzle/src`, and
-  `pnpm exec vitest --run conformance/drizzle-pin`.
+  from the resolved binding symbol while explicitly typed fake contexts stay invisible. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Project query-loader receiver extraction no longer falls back to untyped source-mode `db`/`tx`
+  compatibility names; project fixtures now annotate positive query-loader receivers as
+  `PgDatabase`, and untyped lookalike loaders stay invisible instead of fabricating read/write
+  facts. Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

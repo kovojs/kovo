@@ -77,7 +77,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   archived: products['archived'],
                   createdAt: products.createdAt,
@@ -135,7 +135,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'review', key: 'productId' }));
 
             export const productQuery = query('product', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   name: products.name,
                   review: { rating: reviews.rating },
@@ -188,7 +188,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'review', key: 'productId' }));
 
             export const discountQuery = query('discount/full', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   productName: products.name,
                   discountPercent: discounts.percent,
@@ -197,7 +197,7 @@ describe('Drizzle pinned subset conformance', () => {
             });
 
             export const reviewQuery = query('review/right', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   product: { name: products.name },
                   review: { rating: reviews.rating },
@@ -338,6 +338,32 @@ describe('Drizzle pinned subset conformance', () => {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('does not fabricate project query facts from untyped query-loader receiver names', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/untyped-db', {
+              load(_input, db) {
+                db.update(products);
+                return db.select({ id: products.id }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([]);
   });
 
   it('pins local query-loader helper reads under real Drizzle imports', () => {
@@ -1436,13 +1462,13 @@ describe('Drizzle pinned subset conformance', () => {
             import { items } from './cart.schema';
 
             export const cartQuery = query('cart', {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
               },
             });
 
             export const cartCountQuery = query('cart/count', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({ count: sql<number>\`count(*)\` }).from(items);
               },
             });
@@ -1518,7 +1544,7 @@ describe('Drizzle pinned subset conformance', () => {
             import * as cartSchema from './cart.schema';
 
             export const cartProductQuery = query('cart/product', {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({
                   id: cartSchema.products.id,
                 }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
@@ -1562,7 +1588,7 @@ describe('Drizzle pinned subset conformance', () => {
             import * as cartSchema from './cart.schema';
 
             export const cartProductQuery = query('cart/product', {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({
                   id: cartSchema['products'].id,
                 }).from(cartSchema['products']).where(eq(cartSchema['products'].id, input.id));
@@ -1621,7 +1647,7 @@ describe('Drizzle pinned subset conformance', () => {
             import * as schema from './schema';
 
             export const cartProductQuery = query('cart/product', {
-              load(input, db) {
+              load(input, db: PgDatabase) {
                 return db.select({
                   id: schema['cartProducts'].id,
                 }).from(schema.cartProducts).where(eq(schema.cartProducts.id, input.id));
@@ -1666,13 +1692,13 @@ describe('Drizzle pinned subset conformance', () => {
             import { products } from './product.schema';
 
             export const distinctProducts = query('products/distinct', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.selectDistinct({ name: products.name }).from(products);
               },
             });
 
             export const firstProductNames = query('products/distinct-on', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
               },
             });
@@ -1723,7 +1749,7 @@ describe('Drizzle pinned subset conformance', () => {
             import { products } from './product.schema';
 
             export const productQuery = query('product', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   note: products.note,
                   stock: products.stock,
@@ -1778,7 +1804,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({
                   id: products.id,
                   location: products.location,
@@ -1824,7 +1850,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 const fixture = ".from(auditLog) db.query.auditLog.findMany(";
                 // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
                 return db.select({ name: products.name }).from(products);
@@ -1867,7 +1893,7 @@ describe('Drizzle pinned subset conformance', () => {
             function tableFor<T>(table: T): T { return table; }
 
             export const productQuery = query('product', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.select({ id: products.id }).from(tableFor(products));
               },
             });
@@ -1910,7 +1936,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/raw', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.execute(sql\`select * from users\`);
               },
             });
@@ -2086,7 +2112,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.query['users']['findMany']({ where: eq(users.active, true) });
               },
             });
@@ -2123,7 +2149,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users/template-access', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.query[\`users\`][\`findFirst\`]({ where: eq(users.active, true) });
               },
             });
@@ -2160,7 +2186,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
 
             export const usersQuery = query('users', {
-              load(_input, db) {
+              load(_input, db: PgDatabase) {
                 return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
               },
             });
@@ -2208,7 +2234,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
-              load(_input, reader) {
+              load(_input, reader: PgDatabase) {
                 const fixture = { query: { auditLog: { findMany() { return []; } } } };
                 fixture.query.auditLog.findMany();
                 return reader.select({ name: products.name }).from(products);

@@ -1845,11 +1845,8 @@ function appendQueryReceiverParameterReferences(
   symbolKeys: Set<string>,
 ): void {
   if (mode === 'project') {
-    if (!parameter.getTypeNode()) {
-      appendUntypedQueryReceiverBinding(name, names, symbolKeys);
-      return;
-    }
-
+    // SPEC §11.1: project query facts require a proven Drizzle receiver. Untyped loader
+    // parameters stay invisible instead of falling back to source-mode db/tx name guesses.
     appendProjectDrizzleReceiverBinding(name, names, symbolKeys);
     return;
   }

@@ -51,6 +51,12 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       conformance tests pin the behavior. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-12: project query-loader receiver extraction no longer falls
+      back to untyped source-mode `db`/`tx` compatibility names; positive project query fixtures
+      now use explicit `PgDatabase` receiver annotations, and untyped lookalike loaders stay
+      invisible instead of fabricating facts. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query
