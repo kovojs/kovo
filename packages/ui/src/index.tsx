@@ -142,3 +142,20 @@ export type {
   ToggleGroupProps,
   ToggleGroupStateProps,
 } from './toggle-group.js';
+export {
+  Toolbar,
+  ToolbarButton,
+  ToolbarItem,
+  toolbarButtonClassNames,
+  toolbarButtonClasses,
+  toolbarClassNames,
+  toolbarClasses,
+  toolbarItemClassNames,
+  toolbarItemClasses,
+} from './toolbar.js';
+export type {
+  ToolbarButtonProps,
+  ToolbarItemProps,
+  ToolbarProps,
+  ToolbarStateProps,
+} from './toolbar.js';

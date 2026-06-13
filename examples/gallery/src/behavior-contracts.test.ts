@@ -155,6 +155,11 @@ const expectedBehaviorContracts = {
     dataState: 'pressed, off, disabled',
     keyboard: 'Arrow keys move focus over enabled toggle buttons',
   },
+  '/components/toolbar': {
+    changeReasons: 'button-click, keyboard, programmatic',
+    dataState: 'pressed, unpressed, disabled',
+    keyboard: 'Arrow keys move focus over enabled toolbar buttons',
+  },
   '/components/tooltip': {
     changeReasons:
       'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, escape-key, programmatic',
@@ -354,6 +359,16 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'tabIndex="0" type="button" value="bold"',
     'data-disabled="" data-state="off" disabled',
     'tabIndex="-1" type="button" value="strike"',
+  ],
+  '/components/toolbar': [
+    'role="toolbar"',
+    'aria-labelledby="gallery-toolbar-label"',
+    'aria-describedby="gallery-toolbar-description"',
+    'aria-pressed="true"',
+    'data-pressed="true"',
+    'tabIndex="0" type="button" value="bold"',
+    'data-disabled="" data-pressed="false" disabled',
+    'tabIndex="-1" type="button" value="link"',
   ],
   '/components/tooltip': [
     'jiso-tooltip="gallery-tooltip-content"',

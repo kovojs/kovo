@@ -37,6 +37,7 @@ const expectedRoutes = [
   '/components/tabs',
   '/components/toggle',
   '/components/toggle-group',
+  '/components/toolbar',
   '/components/tooltip',
 ] as const satisfies readonly GalleryRoute['path'][];
 
@@ -278,6 +279,23 @@ describe('gallery demo fixtures', () => {
     expect(toggleGroup.html).toContain('tabIndex="-1" type="button" value="strike"');
   });
 
+  it('renders toolbar fixture with native buttons and roving attributes', () => {
+    const toolbar = findFixture('/components/toolbar');
+
+    expect(toolbar.html).toContain('data-gallery-demo="toolbar"');
+    expect(toolbar.html).toContain('data-ui-demo="toolbar"');
+    expect(toolbar.html).toContain('role="toolbar"');
+    expect(toolbar.html).toContain('aria-labelledby="gallery-toolbar-label"');
+    expect(toolbar.html).toContain('aria-describedby="gallery-toolbar-description"');
+    expect(toolbar.html).toContain('aria-pressed="true"');
+    expect(toolbar.html).toContain('data-pressed="true"');
+    expect(toolbar.html).toContain('id="gallery-toolbar-bold"');
+    expect(toolbar.html).toContain('tabIndex="0" type="button" value="bold"');
+    expect(toolbar.html).toContain('id="gallery-toolbar-link"');
+    expect(toolbar.html).toContain('data-disabled="" data-pressed="false" disabled');
+    expect(toolbar.html).toContain('tabIndex="-1" type="button" value="link"');
+  });
+
   it('renders radio-group fixture with native radio inputs and roving attributes', () => {
     const radioGroup = findFixture('/components/radio-group');
 
@@ -402,6 +420,7 @@ describe('gallery demo fixtures', () => {
     const table = findFixture('/components/table');
     const tabs = findFixture('/components/tabs');
     const toggleGroup = findFixture('/components/toggle-group');
+    const toolbar = findFixture('/components/toolbar');
 
     expect(alert.html).toContain('data-ui-demo="alert"');
     expect(alert.html).toContain('role="status"');
@@ -470,6 +489,11 @@ describe('gallery demo fixtures', () => {
     expect(toggleGroup.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
     expect(toggleGroup.html).toContain('data-[state=pressed]:bg-white');
     expect(toggleGroup.html).toContain('gallery-toggle-group-bold');
+
+    expect(toolbar.html).toContain('data-ui-demo="toolbar"');
+    expect(toolbar.html).toContain('rounded-md border border-neutral-200 bg-white');
+    expect(toolbar.html).toContain('data-[pressed=true]:bg-neutral-950');
+    expect(toolbar.html).toContain('gallery-toolbar-bold');
   });
 });
 

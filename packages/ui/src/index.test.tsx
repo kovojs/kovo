@@ -41,6 +41,9 @@ import {
   ToggleGroup,
   ToggleGroupButton,
   ToggleGroupItem,
+  Toolbar,
+  ToolbarButton,
+  ToolbarItem,
   breadcrumbClasses,
   buttonClasses,
   checkboxGroupClasses,
@@ -63,6 +66,9 @@ import {
   toggleGroupButtonClasses,
   toggleGroupClasses,
   toggleGroupItemClasses,
+  toolbarButtonClasses,
+  toolbarClasses,
+  toolbarItemClasses,
 } from './index.js';
 
 const sourceDir = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +92,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Tabs.name).toBe('tabs');
     expect(Toggle.name).toBe('toggle');
     expect(ToggleGroup.name).toBe('toggle-group');
+    expect(Toolbar.name).toBe('toolbar');
 
     expect(
       Button.definition.render({
@@ -137,6 +144,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
     expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
+    expect(toolbarClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
   });
 
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {
@@ -348,6 +356,58 @@ describe('@jiso/ui styled package foundation', () => {
     expect(toggleGroupButtonClasses.join(' ')).toContain('data-[state=pressed]:bg-white');
   });
 
+  it('wraps the headless toolbar primitive as styled roving controls', () => {
+    const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'link' }];
+    const state = {
+      activeValue: 'bold',
+      items,
+      orientation: 'vertical' as const,
+    };
+
+    const root = Toolbar.definition.render({
+      ...state,
+      children: 'format controls',
+      descriptionId: 'format-help',
+      id: 'formatting-toolbar',
+      labelledBy: 'format-label',
+    });
+    const item = ToolbarItem.definition.render({
+      ...state,
+      children: 'bold button',
+      id: 'bold-item',
+      itemValue: 'bold',
+    });
+    const button = ToolbarButton.definition.render({
+      ...state,
+      children: 'Bold',
+      id: 'bold-button',
+      itemValue: 'bold',
+      pressed: true,
+    });
+    const disabledButton = ToolbarButton.definition.render({
+      ...state,
+      children: 'Link',
+      itemValue: 'link',
+      pressed: false,
+    });
+
+    expect(ToolbarItem.name).toBe('toolbar-item');
+    expect(ToolbarButton.name).toBe('toolbar-button');
+    expect(root).toContain('aria-describedby="format-help"');
+    expect(root).toContain('aria-labelledby="format-label"');
+    expect(root).toContain('aria-orientation="vertical"');
+    expect(root).toContain('data-orientation="vertical" id="formatting-toolbar" role="toolbar"');
+    expect(item).toContain('id="bold-item"');
+    expect(button).toContain('aria-pressed="true"');
+    expect(button).toContain('data-pressed="true"');
+    expect(button).toContain('id="bold-button" tabIndex="0" type="button" value="bold"');
+    expect(disabledButton).toContain('aria-pressed="false"');
+    expect(disabledButton).toContain('data-disabled="" data-pressed="false" disabled');
+    expect(disabledButton).toContain('tabIndex="-1" type="button" value="link"');
+    expect(toolbarItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
+    expect(toolbarButtonClasses.join(' ')).toContain('data-[pressed=true]:bg-neutral-950');
+  });
+
   it('exports table primitives as styled semantic markup', () => {
     expect(Table.name).toBe('table');
     expect(TableHead.name).toBe('table-head');
@@ -519,6 +579,7 @@ describe('@jiso/ui styled package foundation', () => {
       'tabs.tsx',
       'toggle.tsx',
       'toggle-group.tsx',
+      'toolbar.tsx',
     ]
       .map(readSource)
       .join('\n');

@@ -87,6 +87,9 @@ import {
   ToggleGroup,
   ToggleGroupButton,
   ToggleGroupItem,
+  Toolbar,
+  ToolbarButton,
+  ToolbarItem,
 } from '@jiso/ui';
 
 export type GalleryComponent =
@@ -119,6 +122,7 @@ export type GalleryComponent =
   | 'tabs'
   | 'toggle'
   | 'toggle-group'
+  | 'toolbar'
   | 'tooltip';
 
 export type GalleryPrimitive = GalleryComponent;
@@ -311,6 +315,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/toggle-group',
     render: () => ToggleGroupDemo(),
     title: 'Toggle Group',
+  },
+  {
+    component: 'toolbar',
+    path: '/components/toolbar',
+    render: () => ToolbarDemo(),
+    title: 'Toolbar',
   },
   {
     component: 'tooltip',
@@ -1064,6 +1074,55 @@ export function ToggleGroupDemo(): string {
         changeReasons: 'item-click, keyboard, programmatic',
         dataState: 'pressed, off, disabled',
         keyboard: 'Arrow keys move focus over enabled toggle buttons',
+      })}
+    </section>
+  );
+}
+
+export function ToolbarDemo(): string {
+  const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'link' }];
+  const state = {
+    activeValue: 'bold',
+    items,
+  };
+
+  return (
+    <section data-gallery-demo="toolbar">
+      <p data-demo-summary="no-js">
+        Toolbar keeps formatting commands as native buttons with toolbar semantics and roving
+        tabindex.
+      </p>
+      <h2 id="gallery-toolbar-label">Formatting</h2>
+      <p id="gallery-toolbar-description">
+        Move between editor commands without leaving the group.
+      </p>
+      <div data-ui-demo="toolbar">
+        {Toolbar.definition.render({
+          ...state,
+          children: items
+            .map((item) =>
+              ToolbarItem.definition.render({
+                ...state,
+                children: ToolbarButton.definition.render({
+                  ...state,
+                  children: item.value,
+                  id: `gallery-toolbar-${item.value}`,
+                  itemValue: item.value,
+                  pressed: item.value === 'bold',
+                }),
+                id: `gallery-toolbar-${item.value}-item`,
+                itemValue: item.value,
+              }),
+            )
+            .join(''),
+          descriptionId: 'gallery-toolbar-description',
+          labelledBy: 'gallery-toolbar-label',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'button-click, keyboard, programmatic',
+        dataState: 'pressed, unpressed, disabled',
+        keyboard: 'Arrow keys move focus over enabled toolbar buttons',
       })}
     </section>
   );
