@@ -165,6 +165,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       success variant action/close controls and the closed assertive toast state. The raw route
       fixture is synchronized against `renderGalleryRoute()`, and the Chromium browser gate
       asserts deterministic `860x543` geometry plus hash `31f9f1c4`.
+      Evidence 2026-06-13: the static visual baseline now covers the overlay route family:
+      hover-card, popover, and tooltip. Tooltip's static route now renders the styled
+      `@jiso/ui` wrapper surface, the raw route fixtures are synchronized against
+      `renderGalleryRoute()`, and the Chromium browser gate asserts deterministic route geometry
+      plus screenshot hashes `5e6e6eb4`, `cf798fae`, and `fcf88f35`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and

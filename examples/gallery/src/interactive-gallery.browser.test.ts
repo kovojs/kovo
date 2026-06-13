@@ -104,16 +104,19 @@ import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
 import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
+import hoverCardStaticRouteHtml from './visual-fixtures/hover-card.html.txt?raw';
 import menubarStaticRouteHtml from './visual-fixtures/menubar.html.txt?raw';
 import navigationMenuStaticRouteHtml from './visual-fixtures/navigation-menu.html.txt?raw';
 import numberFieldStaticRouteHtml from './visual-fixtures/number-field.html.txt?raw';
 import otpFieldStaticRouteHtml from './visual-fixtures/otp-field.html.txt?raw';
+import popoverStaticRouteHtml from './visual-fixtures/popover.html.txt?raw';
 import radioGroupStaticRouteHtml from './visual-fixtures/radio-group.html.txt?raw';
 import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
 import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
 import toastStaticRouteHtml from './visual-fixtures/toast.html.txt?raw';
+import tooltipStaticRouteHtml from './visual-fixtures/tooltip.html.txt?raw';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 interface InteractiveDemoComponent {
@@ -128,32 +131,38 @@ type StaticVisualFixturePath =
   | '/components/command'
   | '/components/context-menu'
   | '/components/dropdown-menu'
+  | '/components/hover-card'
   | '/components/menubar'
   | '/components/navigation-menu'
   | '/components/number-field'
   | '/components/otp-field'
+  | '/components/popover'
   | '/components/radio-group'
   | '/components/select'
   | '/components/slider'
   | '/components/table'
   | '/components/tabs'
-  | '/components/toast';
+  | '/components/toast'
+  | '/components/tooltip';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/checkbox-group': checkboxGroupStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
   '/components/context-menu': contextMenuStaticRouteHtml,
   '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
+  '/components/hover-card': hoverCardStaticRouteHtml,
   '/components/menubar': menubarStaticRouteHtml,
   '/components/navigation-menu': navigationMenuStaticRouteHtml,
   '/components/number-field': numberFieldStaticRouteHtml,
   '/components/otp-field': otpFieldStaticRouteHtml,
+  '/components/popover': popoverStaticRouteHtml,
   '/components/radio-group': radioGroupStaticRouteHtml,
   '/components/select': selectStaticRouteHtml,
   '/components/slider': sliderStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
   '/components/tabs': tabsStaticRouteHtml,
   '/components/toast': toastStaticRouteHtml,
+  '/components/tooltip': tooltipStaticRouteHtml,
 };
 
 const generatedModules: Record<string, Record<string, unknown>> = {
@@ -375,7 +384,6 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 543,
       width: 860,
     });
-
     expect(await visualBaselineHash(tabsRoute)).toBe('9044926b');
     expect(await visualBaselineHash(selectRoute)).toBe('e0f770a7');
     expect(await visualBaselineHash(tableRoute)).toBe('09f0362a');
@@ -390,6 +398,27 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(menubarRoute)).toBe('279cb945');
     expect(await visualBaselineHash(navigationMenuRoute)).toBe('3c8e6a99');
     expect(await visualBaselineHash(toastRoute)).toBe('31f9f1c4');
+
+    const hoverCardRoute = mountStaticGalleryRoute('/components/hover-card');
+    const popoverRoute = mountStaticGalleryRoute('/components/popover');
+    const tooltipRoute = mountStaticGalleryRoute('/components/tooltip');
+
+    expect(visualGeometry(hoverCardRoute)).toEqual({
+      height: 531,
+      width: 860,
+    });
+    expect(visualGeometry(popoverRoute)).toEqual({
+      height: 503,
+      width: 860,
+    });
+    expect(visualGeometry(tooltipRoute)).toEqual({
+      height: 503,
+      width: 860,
+    });
+
+    expect(await visualBaselineHash(hoverCardRoute)).toBe('5e6e6eb4');
+    expect(await visualBaselineHash(popoverRoute)).toBe('cf798fae');
+    expect(await visualBaselineHash(tooltipRoute)).toBe('fcf88f35');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

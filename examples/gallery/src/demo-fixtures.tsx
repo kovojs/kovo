@@ -21,9 +21,6 @@ import {
   progressRootAttributes,
   separatorRootAttributes,
   tabsRootAttributes,
-  tooltipContentAttributes,
-  tooltipRootAttributes,
-  tooltipTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 import {
   Alert,
@@ -140,6 +137,9 @@ import {
   TabsList,
   TabsPanel,
   TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   Toggle,
   ToggleGroup,
   ToggleGroupButton,
@@ -2627,12 +2627,20 @@ export function TooltipDemo(): string {
   };
 
   return (
-    <section {...tooltipRootAttributes(state)} data-gallery-demo="tooltip">
+    <section data-gallery-demo="tooltip">
       <p data-demo-summary="no-js">
         Tooltip uses package-prefixed behavior attributes and a manual popover content node.
       </p>
-      <button {...tooltipTriggerAttributes(state)}>Inspect status</button>
-      <div {...tooltipContentAttributes(state)}>Status updates every minute.</div>
+      {Tooltip.definition.render({
+        children:
+          TooltipTrigger.definition.render({ ...state, children: 'Inspect status' }) +
+          TooltipContent.definition.render({
+            ...state,
+            children: 'Status updates every minute.',
+          }),
+        id: 'gallery-tooltip',
+        open: state.open,
+      })}
       {renderBehaviorContract({
         changeReasons:
           'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, escape-key, programmatic',

@@ -96,16 +96,19 @@ describe('gallery demo fixtures', () => {
       ['/components/command', 'command.html.txt'],
       ['/components/context-menu', 'context-menu.html.txt'],
       ['/components/dropdown-menu', 'dropdown-menu.html.txt'],
+      ['/components/hover-card', 'hover-card.html.txt'],
       ['/components/menubar', 'menubar.html.txt'],
       ['/components/navigation-menu', 'navigation-menu.html.txt'],
       ['/components/number-field', 'number-field.html.txt'],
       ['/components/otp-field', 'otp-field.html.txt'],
+      ['/components/popover', 'popover.html.txt'],
       ['/components/radio-group', 'radio-group.html.txt'],
       ['/components/tabs', 'tabs.html.txt'],
       ['/components/select', 'select.html.txt'],
       ['/components/slider', 'slider.html.txt'],
       ['/components/table', 'table.html.txt'],
       ['/components/toast', 'toast.html.txt'],
+      ['/components/tooltip', 'tooltip.html.txt'],
     ] as const) {
       const route = galleryRoutes.find((candidate) => candidate.path === path);
       if (!route) throw new Error(`Missing gallery route fixture for ${path}`);
