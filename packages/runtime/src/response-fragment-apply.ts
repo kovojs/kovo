@@ -6,6 +6,11 @@ export interface ResponseFragmentApplyOptions<Target> {
   replaceFragment(target: Target, html: string): void;
 }
 
+export interface HtmlResponseFragmentApplyTarget {
+  innerHTML: string;
+  insertAdjacentHTML(position: 'beforeend', html: string): void;
+}
+
 export function applyResponseFragment<Target>(
   fragment: FragmentChunk,
   options: ResponseFragmentApplyOptions<Target>,
@@ -34,4 +39,25 @@ export function applyResponseFragments<Target>(
   }
 
   return applied;
+}
+
+export function applyHtmlResponseFragments(
+  fragments: readonly FragmentChunk[],
+  findFragmentTarget: (target: string) => HtmlResponseFragmentApplyTarget | null | undefined,
+): string[] {
+  // SPEC.md §9.1: inline loader HTML patching uses the same decoded fragment
+  // target filtering and applied-target reporting as modular DOM morph apply.
+  return applyResponseFragments(fragments, {
+    appendFragment: appendHtmlResponseFragment,
+    findFragmentTarget,
+    replaceFragment: replaceHtmlResponseFragment,
+  });
+}
+
+function appendHtmlResponseFragment(element: HtmlResponseFragmentApplyTarget, html: string): void {
+  element.insertAdjacentHTML('beforeend', html);
+}
+
+function replaceHtmlResponseFragment(element: HtmlResponseFragmentApplyTarget, html: string): void {
+  element.innerHTML = html;
 }

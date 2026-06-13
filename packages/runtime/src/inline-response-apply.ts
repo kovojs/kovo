@@ -1,10 +1,8 @@
 import type { ElementChunk, InlineMutationResponseBodyChunks } from './wire-response-scanner.js';
-import { applyResponseFragments } from './response-fragment-apply.js';
-
-export interface InlineResponseApplyTarget {
-  innerHTML: string;
-  insertAdjacentHTML(position: 'beforeend', html: string): void;
-}
+import {
+  applyHtmlResponseFragments,
+  type HtmlResponseFragmentApplyTarget,
+} from './response-fragment-apply.js';
 
 export interface InlineQueryEventInit {
   detail: {
@@ -14,7 +12,7 @@ export interface InlineQueryEventInit {
 
 export interface InlineMutationResponseApplyOptions {
   dispatchQueryEvent(type: 'jiso:query', init: InlineQueryEventInit): void;
-  findFragmentTarget(target: string): InlineResponseApplyTarget | null | undefined;
+  findFragmentTarget(target: string): HtmlResponseFragmentApplyTarget | null | undefined;
 }
 
 export function applyInlineMutationResponseChunks(
@@ -25,11 +23,9 @@ export function applyInlineMutationResponseChunks(
   // mutation response chunks through this runtime-owned helper closure, not a
   // forked inline-only query/fragment apply path.
   dispatchInlineMutationQueries(chunks.queries, options);
-  return applyResponseFragments(chunks.fragments, {
-    appendFragment: appendInlineFragment,
-    findFragmentTarget: (target) => options.findFragmentTarget(target),
-    replaceFragment: replaceInlineFragment,
-  });
+  return applyHtmlResponseFragments(chunks.fragments, (target) =>
+    options.findFragmentTarget(target),
+  );
 }
 
 function dispatchInlineMutationQueries(
@@ -41,12 +37,4 @@ function dispatchInlineMutationQueries(
       queries: queries.map((query) => ({ attrs: query.attrs, content: query.content })),
     },
   });
-}
-
-function appendInlineFragment(element: InlineResponseApplyTarget, html: string): void {
-  element.insertAdjacentHTML('beforeend', html);
-}
-
-function replaceInlineFragment(element: InlineResponseApplyTarget, html: string): void {
-  element.innerHTML = html;
 }

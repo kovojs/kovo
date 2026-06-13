@@ -1243,6 +1243,10 @@ Inline and modular fragment response apply now share `applyResponseFragment` and
 inline helper supplies tiny DOM append/replace adapters, while `packages/runtime/src/morph.ts`
 supplies the modular morph and island-signal cleanup adapters around the same target/mode and
 applied-target-list decision.
+The inline HTML append/replace adapter has also moved into
+`packages/runtime/src/response-fragment-apply.ts` as `applyHtmlResponseFragments`, so
+`packages/runtime/src/inline-response-apply.ts` only dispatches decoded query events and delegates
+decoded fragment application to the shared fragment helper extracted into the inline loader.
 Inline enhanced-response apply now parses response bodies in the generated installer and enters the
 extracted helper at `applyInlineMutationResponseChunks`, deleting the inline-only
 `applyInlineMutationResponseBody` parser/apply wrapper while preserving readable/minified artifact
@@ -1981,6 +1985,19 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
 
 Latest evidence:
 
+- Round287c runtime fragment adapter closure:
+  `pnpm exec vitest --run packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/mutation-response-wire-apply.test.ts packages/runtime/src/inline-loader-enhanced-submit.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm run check:inline-loader`;
+  `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/mutation-response-dom.browser.test.ts packages/runtime/src/loader.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/response-fragment-apply.ts packages/runtime/src/response-fragment-apply.test.ts packages/runtime/src/inline-response-apply.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/runtime/src/response-fragment-apply.ts` now owns
+  `applyHtmlResponseFragments` and the HTML append/replace adapter used by the extracted SPEC.md
+  §4.4/§9.1 inline response apply closure; `packages/runtime/src/inline-response-apply.ts`
+  delegates decoded fragments to that shared helper, and the regenerated
+  `packages/runtime/src/inline-loader.ts` pins the shared helper in the minified bootstrap.
 - Round253 private fragment parser surface:
   `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts

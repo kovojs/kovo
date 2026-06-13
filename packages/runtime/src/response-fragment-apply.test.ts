@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyResponseFragment, applyResponseFragments } from './response-fragment-apply.js';
+import {
+  applyHtmlResponseFragments,
+  applyResponseFragment,
+  applyResponseFragments,
+} from './response-fragment-apply.js';
 
 interface TestFragmentTarget {
   html: string;
@@ -69,6 +73,46 @@ describe('response fragment apply primitive', () => {
 
     expect(applied).toEqual(['replace-target', 'append-target']);
     expect(targets.get('replace-target')?.html).toBe('<p>new</p>');
+    expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
+  });
+
+  it('applies HTML response fragments through the shared inline adapter', () => {
+    // SPEC.md §4.4/§9.1: the inline loader patch adapter is a shared fragment
+    // apply helper, not duplicate append/replace code in the inline response seam.
+    const targets = new Map([
+      [
+        'replace-target',
+        {
+          html: '',
+          innerHTML: '<p>old</p>',
+          insertAdjacentHTML(_position: 'beforeend', html: string) {
+            this.html += html;
+          },
+        },
+      ],
+      [
+        'append-target',
+        {
+          html: '<li>old</li>',
+          innerHTML: '',
+          insertAdjacentHTML(_position: 'beforeend', html: string) {
+            this.html += html;
+          },
+        },
+      ],
+    ]);
+
+    const applied = applyHtmlResponseFragments(
+      [
+        { html: '<p>new</p>', target: 'replace-target' },
+        { html: '<li>new</li>', mode: 'append', target: 'append-target' },
+        { html: '<aside>ignored</aside>', target: 'missing-target' },
+      ],
+      (target) => targets.get(target) ?? null,
+    );
+
+    expect(applied).toEqual(['replace-target', 'append-target']);
+    expect(targets.get('replace-target')?.innerHTML).toBe('<p>new</p>');
     expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
   });
 });

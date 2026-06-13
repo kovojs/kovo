@@ -56,9 +56,10 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain('function applyResponseFragments(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function applyHtmlResponseFragments(');
     expect(inlineJisoLoaderInstallerSource).toContain('function dispatchInlineMutationQueries(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function appendInlineFragment(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function replaceInlineFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function appendHtmlResponseFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function replaceHtmlResponseFragment(');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'const dispatchQueryEvent=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
     );
@@ -69,7 +70,7 @@ describe('inline loader minified artifact', () => {
       'function applyResponseFragments(fragments,options){const applied=[];for(const fragment of fragments)',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'return applyResponseFragments(chunks.fragments,{appendFragment:appendInlineFragment',
+      'return applyHtmlResponseFragments(chunks.fragments,(target)=>options.findFragmentTarget(target))',
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(
