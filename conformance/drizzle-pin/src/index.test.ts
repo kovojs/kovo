@@ -908,6 +908,73 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins assignment Drizzle receiver aliases with real imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              select(value?: unknown): { from(table: unknown): Promise<unknown[]> };
+              update(table: unknown): { set(value: unknown): Promise<void> };
+            }
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              stock: integer('stock').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export async function restock(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {
+              let writer;
+              writer = db;
+              let fakeWriter;
+              fakeWriter = fake;
+              await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));
+              await fakeWriter.update(products).set({ stock: 0 });
+            }
+
+            export const productQuery = query('product/assignment-alias', {
+              load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
+                let reader;
+                reader = db;
+                let fakeReader;
+                fakeReader = fake;
+                fakeReader.select({ id: products.id }).from(products);
+                return reader.select({ id: products.id, stock: products.stock }).from(products);
+              },
+            });
+          `,
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:19',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/assignment-alias',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:23',
+      },
+    ]);
+  });
+
   it('pins namespace-imported project write targets with real Drizzle tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [

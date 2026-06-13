@@ -415,6 +415,12 @@ Closed evidence so far:
   `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
   `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Project-mode body-local assignment aliases now carry typed Drizzle receiver proof by ts-morph
+  symbol identity, so `let writer; writer = db` contributes write/query facts while assignments
+  from fake/lookalike receivers stay invisible. Evidence: `packages/drizzle/src/static.ts`,
+  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
+  `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

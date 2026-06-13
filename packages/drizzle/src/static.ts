@@ -637,14 +637,69 @@ function appendProjectDrizzleReceiverBindingsFromBody(
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
   // SPEC §11.1: body-local receiver aliases are accepted only when their binding type resolves to
-  // Drizzle; untyped source-mode destructuring is not proof.
-  for (const declaration of touchBodyVariableDeclarations(body)) {
-    appendProjectDrizzleReceiverBinding(
-      declaration.getNameNode(),
-      receivers.names,
-      receivers.symbolKeys,
-    );
+  // Drizzle or when project symbols prove a direct alias of an already-proven Drizzle receiver.
+  let changed = true;
+
+  while (changed) {
+    const before = receivers.names.size + receivers.symbolKeys.size;
+
+    for (const declaration of touchBodyVariableDeclarations(body)) {
+      appendProjectDrizzleReceiverBinding(
+        declaration.getNameNode(),
+        receivers.names,
+        receivers.symbolKeys,
+      );
+      appendProjectDrizzleReceiverInitializerAlias(declaration, receivers);
+    }
+
+    appendProjectDrizzleReceiverAssignmentAliases(body, receivers);
+    changed = receivers.names.size + receivers.symbolKeys.size !== before;
   }
+}
+
+function appendProjectDrizzleReceiverInitializerAlias(
+  declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  const binding = declaration.getNameNode();
+  if (!Node.isIdentifier(binding)) return;
+
+  const initializer = declaration.getInitializer();
+  if (!initializer) return;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!isProjectDrizzleReceiverIdentifier(expression, receivers)) return;
+
+  appendProjectDrizzleReceiverAliasIdentifier(binding, receivers);
+}
+
+function appendProjectDrizzleReceiverAssignmentAliases(
+  body: Node,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  for (const expression of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (!isTouchBodyNode(expression, body)) continue;
+    if (expression.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+
+    const left = unwrappedStaticExpressionNode(expression.getLeft());
+    if (!Node.isIdentifier(left)) continue;
+
+    const right = unwrappedStaticExpressionNode(expression.getRight());
+    if (!isProjectDrizzleReceiverIdentifier(right, receivers)) continue;
+
+    appendProjectDrizzleReceiverAliasIdentifier(left, receivers);
+  }
+}
+
+function appendProjectDrizzleReceiverAliasIdentifier(
+  identifier: Node,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  if (!Node.isIdentifier(identifier)) return;
+
+  receivers.names.add(identifier.getText());
+  const symbolKey = resolvedSymbolKey(identifier.getSymbol());
+  if (symbolKey) receivers.symbolKeys.add(symbolKey);
 }
 
 function appendProjectTransactionReceiverAliases(

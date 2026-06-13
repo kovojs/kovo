@@ -5392,6 +5392,78 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('uses project assignment receiver aliases without fake context fabrication', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProduct(db: PgDatabase, fake: FakeDb, productId: string) {',
+          '  let writer;',
+          '  writer = db;',
+          '  let fakeWriter;',
+          '  fakeWriter = fake;',
+          '  await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '  await fakeWriter.update(products).set({ stock: 2 });',
+          '}',
+          '',
+          'export const productQuery = query("product/assignment-alias", {',
+          '  load(_input, db: PgDatabase, fake: FakeDb) {',
+          '    let reader;',
+          '    reader = db;',
+          '    let fakeReader;',
+          '    fakeReader = fake;',
+          '    fakeReader.select({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:18',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/assignment-alias',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:22',
+      },
+    ]);
+  });
+
   it('resolves imported table symbols instead of same-name tables from other modules', () => {
     const graph = extractTouchGraphFromProject({
       files: [
