@@ -15,10 +15,7 @@ import type {
   ElementParamType,
   HandlerLowering,
 } from '../types.js';
-import {
-  elementParamAttributeNameFromExpression,
-  elementParamAttributeNameFromPropertyName,
-} from '../types.js';
+import { elementParamAttributeNameFromPropertyName } from '../types.js';
 
 export function lowerEventHandlers(
   options: CompileComponentOptions,
@@ -218,7 +215,7 @@ export function capturesUnserializableReferences(references: readonly string[]):
 
 interface ElementParamCandidate {
   expression: string;
-  terminalName?: string;
+  terminalName: string;
   type?: ElementParamType;
 }
 
@@ -272,9 +269,7 @@ function extractElementParams(
     : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
   return dedupeElementParamCandidates(candidates).map((candidate) => ({
-    attributeName: candidate.terminalName
-      ? elementParamAttributeNameFromPropertyName(candidate.terminalName)
-      : elementParamAttributeNameFromExpression(candidate.expression),
+    attributeName: elementParamAttributeNameFromPropertyName(candidate.terminalName),
     expression: candidate.expression,
     type:
       candidate.type ??

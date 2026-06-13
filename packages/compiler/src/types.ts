@@ -134,15 +134,6 @@ export function emitElementParamTypes(params: readonly ElementParam[]): string {
   return `fw-param-types="${entries}"`;
 }
 
-export function elementParamAttributeNameFromExpression(expression: string): string {
-  const segments = expression
-    .replace(/\[['"]([^'"]+)['"]\]/g, '.$1')
-    .split('.')
-    .filter(Boolean);
-  const last = segments.at(-1) ?? expression;
-  return elementParamAttributeNameFromPropertyName(last);
-}
-
 export function elementParamAttributeNameFromPropertyName(name: string): string {
   return `data-p-${name
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')

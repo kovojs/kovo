@@ -351,10 +351,10 @@ Data-derive stamp analysis now uses the shared binding-path parser instead of lo
 handling.
 Relative binding detection is centralized in query-shape helpers and reused by query update
 analysis plus data-bind validation. Handler param lowering now consumes parser-provided terminal
-property names for captured member expressions when emitting `data-p-*` names, instead of
+property names for captured member expressions when emitting `data-p-*` names, without
 rediscovering the final segment from expression text.
 Zero-argument handler call arguments now carry parser-provided reference facts, and standalone
-identifier params use those facts for `data-p-*` names before falling back to expression text.
+identifier params use those facts for `data-p-*` names without expression-text fallback parsing.
 Handler call-argument extraction no longer fabricates params for unmodeled expression text:
 standalone references are lowered through parser reference spans, property accesses through parser
 access spans, and other call arguments remain diagnostic/client code instead of server-only params.
@@ -397,6 +397,11 @@ tsc --noEmit --pretty false`.
 - Handler call-argument fallback removal: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
 tsc --noEmit --pretty false`.
+- Handler param expression-parser deletion: `pnpm exec vitest --run
+packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/scan/parse.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact
+  `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/types.ts
+packages/compiler/src/handler-lowering.test.ts`; `git diff --check`.
 - Handler param terminal-name facts: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts
 packages/compiler/src/compile-component.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact

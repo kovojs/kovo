@@ -18,7 +18,7 @@ function escapeRegExp(value: string): string {
 }
 
 describe('handler lowering', () => {
-  it('keeps element param source expressions as parsed lowering facts', () => {
+  it('names element params from parsed property-access terminal facts', () => {
     const source = `
 import { component } from '@jiso/core';
 
