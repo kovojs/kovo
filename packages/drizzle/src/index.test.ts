@@ -7173,6 +7173,54 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks unresolved source domain write callback references as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'declare const actionName: string;',
+          'const callbacks = { addItem };',
+          '',
+          'export const cart = domain({',
+          '  addItem: write(callbacks[actionName]),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
+          },
+        ],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts source static element-access write callback aliases from domain authoring surfaces', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -9433,6 +9481,46 @@ export interface CommerceInvalidationSets {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('marks unresolved source query-loader callback references as FW406', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function loadUsers(_input, db) {',
+          '  return db.select({ id: users.id }).from(users);',
+          '}',
+          '',
+          'declare const loaderName: string;',
+          'const loaders = { loadUsers };',
+          '',
+          'export const usersQuery = query("users/unresolved-source-loader", {',
+          '  load: loaders[loaderName],',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'user.queries.ts:10',
+          },
+        ],
+        query: 'users/unresolved-source-loader',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:10',
+      },
+    ]);
   });
 
   it('extracts source query-loader callbacks through nested static object aliases', () => {

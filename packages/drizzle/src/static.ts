@@ -189,6 +189,19 @@ function extractTouchGraphFromPreparedFiles(
       unresolvedIdentifiers,
     );
 
+    for (const unresolved of unresolvedDomainWriteCallbacks(file)) {
+      graph[unresolved.name] = createTouchGraphEntry({
+        reads: [],
+        unresolved: [
+          {
+            operation: 'domain-write-callback',
+            site: unresolved.site,
+          },
+        ],
+        writes: [],
+      });
+    }
+
     for (const fn of functions) {
       if (fn.summaryOnly) continue;
 
@@ -2186,6 +2199,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
+      ...unresolvedQueryCallbackDiagnostics(bodyArgument),
       ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
       ...receiverMethodAliasQueryDiagnostics(bodyArgument, receiverReferences),
@@ -2714,6 +2728,24 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
     return false;
   }
   return propertyNameText(node.getNameNode()) === 'load';
+}
+
+function unresolvedQueryCallbackDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+
+  for (const property of body.getProperties()) {
+    if (!queryCallbackPropertyIsLoad(property)) continue;
+    if (queryCallbackFunction(property)) continue;
+
+    diagnostics.push({
+      code: 'FW406',
+      message: `${diagnosticDefinitions.FW406.message} Query load callback could not be statically resolved.`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    });
+  }
+
+  return diagnostics;
 }
 
 function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
@@ -4707,6 +4739,43 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
   }
 
   return callbacks;
+}
+
+function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; site: string }[] {
+  return withParsedSourceFile(file, (sourceFile) => {
+    const unresolved: { name: string; site: string }[] = [];
+
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const domainName = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(domainName) || !initializer) continue;
+      if (!Node.isCallExpression(initializer)) continue;
+      const expression = initializer.getExpression();
+      if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+
+      const domainObject = initializer.getArguments()[0];
+      if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
+
+      for (const property of domainObject.getProperties()) {
+        if (!Node.isPropertyAssignment(property)) continue;
+        const memberName = propertyNameText(property.getNameNode());
+        if (!memberName) continue;
+
+        const initializer = property.getInitializer();
+        if (!initializer || !Node.isCallExpression(initializer)) continue;
+        const callExpression = initializer.getExpression();
+        if (!Node.isIdentifier(callExpression) || callExpression.getText() !== 'write') continue;
+        if (writeCallbackFunction(initializer)) continue;
+
+        unresolved.push({
+          name: `${domainName.getText()}.${memberName}`,
+          site: `${file.fileName}:${lineForIndex(file.source, initializer.getStart())}`,
+        });
+      }
+    }
+
+    return unresolved;
+  });
 }
 
 function writeCallbackFunction(

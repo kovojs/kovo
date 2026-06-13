@@ -249,8 +249,10 @@ indirect receiver, carrier, destructuring, nested destructuring, detached method
 quoted property surfaces now degrade to FW406 instead of fabricating exact facts. Project tuple
 receiver aliases now use ts-morph tuple/array element type facts for exact Postgres receiver proof,
 while source-mode array receiver carriers degrade destructured and assigned aliases to FW406.
-Shorthand query loaders now resolve through ts-morph symbols instead of disappearing. V1 proof
-remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
+Shorthand query loaders now resolve through ts-morph symbols instead of disappearing. Dynamic or
+otherwise unresolved query-loader and domain-write callback references now degrade to FW406 instead
+of dropping the executable surface. V1 proof remains Postgres-only; SQLite/MySQL conformance is
+deferred to late hardening.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
@@ -345,6 +347,12 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       same surfaces against real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round253: unresolved dynamic callback references such as
+      `load: loaders[loaderName]` and `write(callbacks[actionName])` now remain visible as FW406
+      instead of being dropped from query facts or domain write touch graphs; package and real
+      `drizzle-orm` conformance tests pin the source/project behavior. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
       Evidence 2026-06-13: static callback references such as
       `LoaderBarrel.loaders["loadProducts"]` and `CallbackBarrel.callbacks["addItem"]` now resolve
       through ts-morph receiver type member symbols before falling back to local object walking, so
@@ -400,7 +408,7 @@ Latest evidence:
 
 - `pnpm exec vitest --run packages/drizzle/src`
 - `pnpm exec vitest --run conformance/drizzle-pin`
-- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 4 - Runtime

@@ -1279,6 +1279,98 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins unresolved dynamic callback references as FW406 under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id }).from(products);',
+          '}',
+          '',
+          'declare const actionName: string;',
+          'declare const loaderName: string;',
+          'const callbacks = { addItem };',
+          'const loaders = { loadProducts };',
+          '',
+          'export const productDomain = domain({',
+          '  add: write(callbacks[actionName]),',
+          '});',
+          '',
+          "export const productQuery = query('product/unresolved-dynamic-loader', {",
+          '  load: loaders[loaderName],',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:21',
+          },
+        ],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:24',
+          },
+        ],
+        query: 'product/unresolved-dynamic-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.domain.ts:24',
+      },
+    ]);
+  });
+
   it('pins nested destructuring assignment receiver aliases under real Drizzle imports', () => {
     const files = [
       {
