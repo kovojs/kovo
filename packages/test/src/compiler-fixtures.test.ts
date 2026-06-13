@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  compilerDataBindBehaviorFact,
   compilerDiagnosticFacts,
   compilerDiagnosticMessageFacts,
   compilerGeneratedQueryShapeFact,
@@ -116,9 +117,36 @@ describe('@jiso/test compiler fixture facts', () => {
       compilerQueryUpdatePlanFacts([
         {
           componentName: 'CartBadge',
+          derives: [
+            {
+              exportName: 'CartBadge$isEmpty',
+              expression: 'cart.count === 0',
+              input: 'cart',
+              name: 'CartBadge$isEmpty',
+              param: 'cart',
+              selector: '[data-derive="cart.CartBadge$isEmpty"]',
+              sourceSpan: { start: 3 },
+            },
+          ],
           paths: ['cart.count', 'cart.items'],
           query: 'cart',
           sourceSpan: { start: 1 },
+          stamps: [
+            {
+              attr: 'disabled',
+              derive: {
+                exportName: 'CartBadge$button_disabled_derive',
+                expression: 'cart.count === 0',
+                input: 'cart',
+                name: 'CartBadge$button_disabled_derive',
+                param: 'cart',
+                selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+                sourceSpan: { start: 4 },
+              },
+              selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+              sourceSpan: { start: 5 },
+            },
+          ],
           templateStamps: [
             {
               itemBindingPlaceholders: [
@@ -143,8 +171,32 @@ describe('@jiso/test compiler fixture facts', () => {
     ).toEqual([
       {
         componentName: 'CartBadge',
+        derives: [
+          {
+            exportName: 'CartBadge$isEmpty',
+            expression: 'cart.count === 0',
+            input: 'cart',
+            name: 'CartBadge$isEmpty',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$isEmpty"]',
+          },
+        ],
         paths: ['cart.count', 'cart.items'],
         query: 'cart',
+        stamps: [
+          {
+            attr: 'disabled',
+            derive: {
+              exportName: 'CartBadge$button_disabled_derive',
+              expression: 'cart.count === 0',
+              input: 'cart',
+              name: 'CartBadge$button_disabled_derive',
+              param: 'cart',
+              selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+            },
+            selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+          },
+        ],
         templateStamps: [
           {
             itemBindingPlaceholders: [
@@ -163,6 +215,155 @@ describe('@jiso/test compiler fixture facts', () => {
             template: '<li>Item</li>',
           },
         ],
+      },
+    ]);
+  });
+
+  it('owns the data-bind query-shape fixture assembly for fw-check', () => {
+    const compiledSources: string[] = [];
+    const fact = compilerDataBindBehaviorFact({
+      compileComponentModule({ queryShapeFacts, source }) {
+        compiledSources.push(source);
+
+        if (source.includes('cart.count">2</span>') && queryShapeFacts?.[0]?.query === 'cart') {
+          const cartShape = queryShapeFacts[0]?.shape as { count?: string; items?: unknown };
+          if (cartShape.count !== 'number') {
+            return {
+              diagnostics: [
+                {
+                  code: 'FW302',
+                  message: 'data-bind path is not present in the declared query shape. cart.count',
+                  severity: 'error',
+                },
+              ],
+              queryUpdatePlans: [],
+            };
+          }
+
+          return {
+            diagnostics: [],
+            queryUpdatePlans: [
+              {
+                componentName: 'CartBadge',
+                paths: ['cart.count', 'cart.empty', 'cart.items'],
+                query: 'cart',
+                templateStamps: [
+                  {
+                    itemBindingPlaceholders: [
+                      {
+                        path: '.qty',
+                        readPath: 'qty',
+                        readSegments: [{ name: 'qty', optional: false }],
+                        value: '0',
+                      },
+                    ],
+                    key: 'productId',
+                    list: 'cart.items',
+                    listReadPath: 'items',
+                    listReadSegments: [{ name: 'items', optional: false }],
+                    selector: '[data-bind-list="cart.items"]',
+                    template: '<li>Item</li>',
+                  },
+                ],
+              },
+            ],
+          };
+        }
+
+        if (source.includes('data-bind=".missing"')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW302',
+                message: 'data-bind path is not present in the declared query shape. cart.items',
+                severity: 'error',
+              },
+            ],
+            queryUpdatePlans: [],
+          };
+        }
+
+        if (source.includes('product.review.rating')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW227',
+                help: 'Fixes: use optional traversal.\nSPEC §4.8 requires explicit null handling.',
+                message:
+                  'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
+                severity: 'error',
+              },
+            ],
+            queryUpdatePlans: [],
+          };
+        }
+
+        return { diagnostics: [], queryUpdatePlans: [] };
+      },
+      diagnosticDefinitions: {
+        FW227: {
+          help: 'Fixes: use optional traversal.\nSPEC §4.8 requires explicit null handling.',
+        },
+        FW302: { message: 'data-bind path is not present in the declared query shape.' },
+      },
+      queryShapesFromFacts(facts) {
+        return Object.fromEntries(facts.map((entry) => [entry.query, entry.shape]));
+      },
+    });
+
+    expect(compiledSources).toHaveLength(5);
+    expect(fact.queryShapes).toEqual({
+      cart: {
+        count: 'number',
+        empty: 'boolean',
+        items: [{ name: 'string', productId: 'string', qty: 'number' }],
+      },
+    });
+    expect(fact.validCartBindingDiagnostics).toEqual([]);
+    expect(fact.validCartBindingPlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        paths: ['cart.count', 'cart.empty', 'cart.items'],
+        query: 'cart',
+        templateStamps: [
+          {
+            itemBindingPlaceholders: [
+              {
+                path: '.qty',
+                readPath: 'qty',
+                readSegments: [{ name: 'qty', optional: false }],
+                value: '0',
+              },
+            ],
+            key: 'productId',
+            list: 'cart.items',
+            listReadPath: 'items',
+            listReadSegments: [{ name: 'items', optional: false }],
+            selector: '[data-bind-list="cart.items"]',
+            template: '<li>Item</li>',
+          },
+        ],
+      },
+    ]);
+    expect(fact.staleGeneratedShapeDiagnostics).toEqual([
+      {
+        code: 'FW302',
+        message: 'data-bind path is not present in the declared query shape. cart.count',
+      },
+    ]);
+    expect(fact.invalidListStampDiagnostics).toEqual([
+      {
+        code: 'FW302',
+        message: 'data-bind path is not present in the declared query shape. cart.items',
+      },
+    ]);
+    expect(fact.optionalNullablePathDiagnostics).toEqual([]);
+    expect(fact.unsafeNullablePathDiagnostics).toEqual([
+      {
+        code: 'FW227',
+        help: 'Fixes: use optional traversal.\nSPEC §4.8 requires explicit null handling.',
+        message:
+          'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
       },
     ]);
   });

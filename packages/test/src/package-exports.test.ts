@@ -56,15 +56,19 @@ import {
   type WorkflowStepCommand,
 } from '@jiso/test/command-fixtures';
 import {
+  compilerDataBindBehaviorFact,
   compilerDiagnosticMessageFacts,
   compilerDiagnosticFacts,
   compilerGeneratedQueryShapeFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
+  type CompilerDataBindBehaviorFact,
+  type CompilerDeriveFact,
   type CompilerDiagnosticFact,
   type CompilerDiagnosticMessageFact,
   type CompilerQueryUpdatePlanFact,
   type CompilerQueryShapeFact,
+  type CompilerStampFact,
   type CompilerUpdateCoverageFact,
 } from '@jiso/test/compiler-fixtures';
 import {
@@ -854,13 +858,29 @@ describe('@jiso/test package subpath exports', () => {
       { componentName: 'Cart', paths: ['cart.count'], query: 'cart', templateStamps: [] },
     ]);
     expect(
+      compilerDataBindBehaviorFact({
+        compileComponentModule: () => ({ diagnostics: [], queryUpdatePlans: [] }),
+        diagnosticDefinitions: { FW227: { help: 'Use ?.' }, FW302: { message: 'missing path' } },
+        queryShapesFromFacts: (facts) => facts.map((fact) => fact.query),
+      }),
+    ).toMatchObject({
+      diagnostics: { FW227Help: 'Use ?.', FW302Message: 'missing path' },
+      optionalNullablePathDiagnostics: [],
+      queryShapes: ['cart'],
+    });
+    expect(
       compilerUpdateCoverageFacts([
         { componentName: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' },
       ]),
     ).toEqual([{ component: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' }]);
+    expectTypeOf<CompilerDataBindBehaviorFact>()
+      .toHaveProperty('validCartBindingPlans')
+      .toEqualTypeOf<CompilerQueryUpdatePlanFact[]>();
+    expectTypeOf<CompilerDeriveFact>().toHaveProperty('selector').toEqualTypeOf<string>();
     expectTypeOf<CompilerDiagnosticFact>().toHaveProperty('code').toEqualTypeOf<string>();
     expectTypeOf<CompilerDiagnosticMessageFact>().toHaveProperty('message').toEqualTypeOf<string>();
     expectTypeOf<CompilerQueryShapeFact>().toHaveProperty('source').toEqualTypeOf<string>();
+    expectTypeOf<CompilerStampFact>().toHaveProperty('derive').toEqualTypeOf<CompilerDeriveFact>();
     expectTypeOf<CompilerUpdateCoverageFact>().toHaveProperty('component').toEqualTypeOf<string>();
     expect(commandOutputLines('one\r\ntwo\n')).toEqual(['one', 'two']);
     expect(commandSequenceWithoutLast('vp run build && vp run fw-check')).toBe('vp run build');

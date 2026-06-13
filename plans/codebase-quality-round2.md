@@ -158,7 +158,10 @@ so the monolith no longer assembles those document-region/query-script projectio
 Shared fw-export fixtures now own D10 static export red/green mechanics for API and CLI paths,
 including temp app-module generation, emitted artifact presence, structured CLI output projection,
 and exported main-marker checks, so the monolith no longer creates export temp projects or reads
-generated export artifacts inline.
+generated export artifacts inline. Shared compiler fixtures now own the P5 data-bind generated
+query-shape fixture assembly, nullable-path diagnostics, and D3 derive/stamp query-plan
+projection, so those fw-check cases no longer keep reusable TSX source assembly or raw compiler
+offset fields in the monolith.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -179,6 +182,18 @@ Latest evidence:
   targets whose URL path segments decode to separators, dot segments, or invalid URL encoding
   before SPEC §9.5 synthetic replay, and `packages/server/src/static-export-output-targets.ts`
   applies the same guard to direct output-plan callers.
+- Phase 1/7 compiler fixture harness closure:
+  `pnpm exec vitest --run packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `node --test --test-name-pattern "P5 data-bind|D3 deferred" tests/fw-check.node.mjs`;
+  `pnpm run check:build`;
+  `pnpm exec vp check`;
+  `pnpm run check:fw`;
+  `git diff --check`.
+  Evidence: `packages/test/src/compiler-fixtures.ts` now owns the reusable P5 data-bind
+  query-shape source assembly and compiler diagnostic projections, while
+  `compilerQueryUpdatePlanFacts()` strips D3 derive/stamp source-span and template offset fields;
+  `tests/fw-check.node.mjs` asserts those public fixture facts instead of assembling local TSX
+  sources or comparing raw compiler artifact internals.
 - Phase 5 static export client-module snapshot conflict slice:
   `pnpm exec vitest --run packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`. Evidence:

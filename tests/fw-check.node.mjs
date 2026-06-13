@@ -54,9 +54,8 @@ import {
   p10PerfAcceptanceProjectFact,
 } from '../packages/test/src/command-fixtures.ts';
 import {
+  compilerDataBindBehaviorFact,
   compilerDiagnosticFacts,
-  compilerDiagnosticMessageFacts,
-  compilerGeneratedQueryShapeFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
 } from '../packages/test/src/compiler-fixtures.ts';
@@ -3498,57 +3497,27 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
 });
 
 void test('P5 data-bind paths are checked against generated query shape facts', async () => {
-  assert.equal(
-    diagnosticDefinitions.FW302.message,
-    'data-bind path is not present in the declared query shape.',
-  );
-  assert.equal(
-    diagnosticDefinitions.FW227.help,
-    [
+  const dataBindFact = compilerDataBindBehaviorFact({
+    compileComponentModule,
+    diagnosticDefinitions,
+    queryShapesFromFacts,
+  });
+  assert.deepEqual(dataBindFact.diagnostics, {
+    FW227Help: [
       'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
       'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
     ].join('\n'),
-  );
-
-  const generatedCartShapeFacts = [
-    compilerGeneratedQueryShapeFact({
-      query: 'cart',
-      shape: {
-        count: 'number',
-        empty: 'boolean',
-        items: [{ name: 'string', productId: 'string', qty: 'number' }],
-      },
-    }),
-  ];
-  assert.deepEqual(queryShapesFromFacts(generatedCartShapeFacts), {
+    FW302Message: 'data-bind path is not present in the declared query shape.',
+  });
+  assert.deepEqual(dataBindFact.queryShapes, {
     cart: {
       count: 'number',
       empty: 'boolean',
       items: [{ name: 'string', productId: 'string', qty: 'number' }],
     },
   });
-
-  const validCartBindings = compileComponentModule({
-    fileName: 'cart-badge.tsx',
-    queryShapeFacts: generatedCartShapeFacts,
-    source: `
-export const CartBadge = component('cart-badge', {
-  render: () => (
-    <cart-badge>
-      <span data-bind="cart.count">2</span>
-      <button data-bind:hidden="cart.empty">Checkout</button>
-      <ul data-bind-list="cart.items" fw-key="productId">
-        <template fw-stamp>
-          <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
-        </template>
-      </ul>
-    </cart-badge>
-  ),
-});
-`,
-  });
-  assert.deepEqual(validCartBindings.diagnostics, []);
-  assert.deepEqual(compilerQueryUpdatePlanFacts(validCartBindings.queryUpdatePlans), [
+  assert.deepEqual(dataBindFact.validCartBindingDiagnostics, []);
+  assert.deepEqual(dataBindFact.validCartBindingPlans, [
     {
       componentName: 'CartBadge',
       paths: ['cart.count', 'cart.empty', 'cart.items'],
@@ -3580,68 +3549,19 @@ export const CartBadge = component('cart-badge', {
       ],
     },
   ]);
-
-  const staleGeneratedShape = compileComponentModule({
-    fileName: 'cart-badge.tsx',
-    queryShapeFacts: [
-      compilerGeneratedQueryShapeFact({
-        query: 'cart',
-        shape: { itemCount: 'number' },
-      }),
-    ],
-    source: `
-export const CartBadge = component('cart-badge', {
-  render: () => <span data-bind="cart.count">2</span>,
-});
-`,
-  });
-  assert.deepEqual(compilerDiagnosticMessageFacts(staleGeneratedShape.diagnostics), [
+  assert.deepEqual(dataBindFact.staleGeneratedShapeDiagnostics, [
     {
       code: 'FW302',
       message: 'data-bind path is not present in the declared query shape. cart.count',
     },
   ]);
-
-  const invalidListStamp = compileComponentModule({
-    fileName: 'cart-badge.tsx',
-    queryShapeFacts: generatedCartShapeFacts,
-    source: `
-export const CartBadge = component('cart-badge', {
-  render: () => (
-    <ul data-bind-list="cart.items" fw-key="sku">
-      <template fw-stamp>
-        <li><span data-bind=".missing">0</span></li>
-      </template>
-    </ul>
-  ),
-});
-`,
-  });
-  assert.deepEqual(compilerDiagnosticMessageFacts(invalidListStamp.diagnostics), [
+  assert.deepEqual(dataBindFact.invalidListStampDiagnostics, [
     {
       code: 'FW302',
       message: 'data-bind path is not present in the declared query shape. cart.items',
     },
   ]);
-
-  const nullableFacts = [
-    compilerGeneratedQueryShapeFact({
-      query: 'product',
-      shape: {
-        name: 'string',
-        review: {
-          kind: 'nullable',
-          shape: {
-            rating: {
-              kind: 'nullable',
-              shape: 'number',
-            },
-          },
-        },
-      },
-    }),
-  ];
-  assert.deepEqual(queryShapesFromFacts(nullableFacts), {
+  assert.deepEqual(dataBindFact.nullableQueryShapes, {
     product: {
       name: 'string',
       review: {
@@ -3655,27 +3575,8 @@ export const CartBadge = component('cart-badge', {
       },
     },
   });
-  const optionalNullablePath = compileComponentModule({
-    fileName: 'product-card.tsx',
-    queryShapeFacts: nullableFacts,
-    source: `
-export const ProductCard = component('product-card', {
-  render: () => <span data-bind="product.review?.rating">5</span>,
-});
-`,
-  });
-  assert.deepEqual(optionalNullablePath.diagnostics, []);
-
-  const unsafeNullablePath = compileComponentModule({
-    fileName: 'product-card.tsx',
-    queryShapeFacts: nullableFacts,
-    source: `
-export const ProductCard = component('product-card', {
-  render: () => <span data-bind="product.review.rating">5</span>,
-});
-`,
-  });
-  assert.deepEqual(compilerDiagnosticMessageFacts(unsafeNullablePath.diagnostics), [
+  assert.deepEqual(dataBindFact.optionalNullablePathDiagnostics, []);
+  assert.deepEqual(dataBindFact.unsafeNullablePathDiagnostics, [
     {
       code: 'FW227',
       help: diagnosticDefinitions.FW227.help,
@@ -4455,8 +4356,32 @@ export const CartBadge = component('cart-badge', {
   assert.deepEqual(compilerQueryUpdatePlanFacts(compiled.queryUpdatePlans), [
     {
       componentName: 'CartBadge',
+      derives: [
+        {
+          exportName: 'CartBadge$isEmpty',
+          expression: 'cart.count === 0',
+          input: 'cart',
+          name: 'CartBadge$isEmpty',
+          param: 'cart',
+          selector: '[data-derive="cart.CartBadge$isEmpty"]',
+        },
+      ],
       paths: ['cart.count', 'cart.empty', 'cart.items'],
       query: 'cart',
+      stamps: [
+        {
+          attr: 'disabled',
+          derive: {
+            exportName: 'CartBadge$button_disabled_derive',
+            expression: 'cart.count === 0',
+            input: 'cart',
+            name: 'CartBadge$button_disabled_derive',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+          },
+          selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+        },
+      ],
       templateStamps: [
         {
           itemBindingPlaceholders: [
