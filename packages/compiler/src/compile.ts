@@ -22,7 +22,6 @@ import {
   applyComponentPipelineEmitPatches,
   componentPipelineState,
   lowerComponentPipelinePatches,
-  lowerComponentPipelineSequence,
 } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
@@ -61,21 +60,20 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
   const viewTransitions = viewTransitionLowering(originalState.model);
-  let platformLowering = platformBehaviorLowering(originalState.model);
-  const navigationPatch = lowerComponentPipelineSequence(
+  const platformLowering = platformBehaviorLowering(originalState.model);
+  const linkLowering = navigationLinkLowering(originalState.model);
+  const hrefLowering = navigationHrefLowering(originalState.model);
+  const preDerivePatch = lowerComponentPipelinePatches(
     originalState,
     [
-      () => viewTransitions,
-      (state) => {
-        platformLowering = platformBehaviorLowering(state.model);
-        return platformLowering;
-      },
-      (state) => navigationLinkLowering(state.model),
-      (state) => navigationHrefLowering(state.model),
+      ...viewTransitions.replacements,
+      ...platformLowering.replacements,
+      ...linkLowering.replacements,
+      ...hrefLowering.replacements,
     ],
     parseComponentModuleModel,
   );
-  const navigationState = navigationPatch.state;
+  const navigationState = preDerivePatch.state;
   const deriveLowering = lowerInlineAttributeDerives(
     navigationState.model,
     componentName,
@@ -90,7 +88,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const source = derivePatch.state.source;
   const diagnosticSource = options.source;
   const validationOffsetMap = composeSourceOffsetMaps(
-    navigationPatch.sourceOffsetMap,
+    preDerivePatch.sourceOffsetMap,
     derivePatch.sourceOffsetMap,
   );
   const model = derivePatch.state.model;

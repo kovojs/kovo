@@ -309,6 +309,10 @@ identifier params use those facts for `data-p-*` names before falling back to ex
 Handler call-argument extraction no longer fabricates params for unmodeled expression text:
 standalone references are lowered through parser reference spans, property accesses through parser
 access spans, and other call arguments remain diagnostic/client code instead of server-only params.
+View-transition, platform, static `<Link>`, and static `href()` lowerings are now collected from
+the original parsed model and applied as one pre-derive source-patch pass, removing the
+compatibility reparses between those independent lowerers while preserving the later reparse needed
+for generated derive/data-bind model facts.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -318,6 +322,10 @@ access spans, and other call arguments remain diagnostic/client code instead of 
 
 Latest evidence:
 
+- Pre-derive lowering reparse reduction: `pnpm exec vitest --run
+packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts
+packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/model-pipeline.test.ts`; `pnpm exec tsc --noEmit --pretty false`.
 - Handler call-argument reference facts: `pnpm exec vitest --run
 packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`; `pnpm exec
 tsc --noEmit --pretty false`.
