@@ -68,6 +68,16 @@ with same-session file/test evidence.
       pnpm --filter @jiso/runtime run check:inline-loader
       pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/loader.ts packages/runtime/src/index.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md
       ```
+      Round103 evidence 2026-06-13: `packages/runtime/src/inline-loader-build.ts` now derives
+      the inline wire-parser helper dependency closure from `packages/runtime/src/wire-parser.ts`
+      roots instead of trusting a manually complete helper list, and rejects function-valued local
+      helper shapes so future inline/modular parser drift fails during generation. Same-session
+      evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-events.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

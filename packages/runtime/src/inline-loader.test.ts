@@ -10,6 +10,7 @@ import {
   buildInlineJisoLoaderModuleSource,
   buildInlineJisoLoaderInstallerSource,
   emitInlineJisoLoaderModule,
+  extractInlineWireParserReadableSource,
   inlineJisoLoaderGzipByteBudget,
   inlineJisoLoaderInstallerReadableSource,
   inlineWireParserReadableSource,
@@ -133,6 +134,60 @@ describe('inline loader source', () => {
     expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
     expect(inlineWireParserReadableSource).not.toContain('export function');
     expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
+  });
+
+  it('extracts the inline wire parser dependency closure from the modular parser', () => {
+    // SPEC.md §4.4/§9.1: the inline bootstrap scans the same query/fragment
+    // chunks as the modular runtime, so parser helper drift must fail at build time.
+    const source = [
+      'export function readElementChunks(body) {',
+      '  return matchingElementEnd(body) + readAttribute("", "target");',
+      '}',
+      'function matchingElementEnd(body) {',
+      '  return tagClose(body) + escapeRegExp(body);',
+      '}',
+      'function tagClose(source) {',
+      '  return source.length;',
+      '}',
+      'function escapeRegExp(value) {',
+      '  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");',
+      '}',
+      'export function readAttribute(attrs, name) {',
+      '  return unescapeHtml(attrs + name);',
+      '}',
+      'function unescapeHtml(value) {',
+      '  return value.replaceAll("&amp;", "&");',
+      '}',
+      'function unusedHelper() {',
+      '  return "unused";',
+      '}',
+    ].join('\n');
+
+    const extracted = extractInlineWireParserReadableSource(source);
+
+    expect(extracted).toMatch(
+      /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\)/s,
+    );
+    expect(extracted).not.toContain('unusedHelper');
+    expect(extracted).not.toContain('export function');
+  });
+
+  it('rejects inline wire parser helpers hidden behind function-valued locals', () => {
+    // SPEC.md §4.4: the inline parser extractor is intentionally narrow; new
+    // helper shapes must be made explicit before they can enter the bootstrap.
+    const source = [
+      'const hiddenHelper = (value) => value;',
+      'export function readElementChunks(body) {',
+      '  return hiddenHelper(body);',
+      '}',
+      'export function readAttribute(attrs) {',
+      '  return attrs;',
+      '}',
+    ].join('\n');
+
+    expect(() => extractInlineWireParserReadableSource(source)).toThrow(
+      'only supports top-level function declarations',
+    );
   });
 
   it('emits the checked-in runtime module from the readable inline loader source', () => {

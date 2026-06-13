@@ -8,14 +8,7 @@ import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
-const inlineWireParserFunctionNames = [
-  'escapeRegExp',
-  'tagClose',
-  'matchingElementEnd',
-  'readElementChunks',
-  'readAttribute',
-  'unescapeHtml',
-] as const;
+const inlineWireParserRootFunctionNames = ['readElementChunks', 'readAttribute'] as const;
 
 export const inlineJisoLoaderGzipByteBudget = 4096;
 
@@ -251,7 +244,13 @@ export function assertInlineJisoLoaderGzipBudget(
 }
 
 function readInlineWireParserReadableSource(): string {
-  const source = readFileSync(wireParserSourcePath, 'utf8');
+  return extractInlineWireParserReadableSource(readFileSync(wireParserSourcePath, 'utf8'));
+}
+
+export function extractInlineWireParserReadableSource(
+  source: string,
+  rootFunctionNames: readonly string[] = inlineWireParserRootFunctionNames,
+): string {
   const sourceFile = ts.createSourceFile(
     'wire-parser.ts',
     source,
@@ -259,29 +258,44 @@ function readInlineWireParserReadableSource(): string {
     true,
     ts.ScriptKind.TS,
   );
-  const declarations = new Map<string, string>();
+  const declarations = new Map<string, ts.FunctionDeclaration>();
+  const unsupportedFunctionLikeValues = new Set<string>();
 
   for (const statement of sourceFile.statements) {
-    if (!ts.isFunctionDeclaration(statement) || !statement.name) continue;
-    if (!(inlineWireParserFunctionNames as readonly string[]).includes(statement.name.text)) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      declarations.set(statement.name.text, statement);
       continue;
     }
 
-    declarations.set(
-      statement.name.text,
-      statement.getText(sourceFile).replace(/^export\s+function/, 'function'),
-    );
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      if (
+        ts.isArrowFunction(declaration.initializer) ||
+        ts.isFunctionExpression(declaration.initializer)
+      ) {
+        unsupportedFunctionLikeValues.add(declaration.name.text);
+      }
+    }
   }
 
-  const missing = inlineWireParserFunctionNames.filter((name) => !declarations.has(name));
+  const missing = rootFunctionNames.filter((name) => !declarations.has(name));
   if (missing.length > 0) {
     throw new Error(
       `Inline Jiso loader wire parser source is missing helper(s): ${missing.join(', ')}`,
     );
   }
 
-  const helperSource = inlineWireParserFunctionNames
+  const included = collectInlineWireParserDependencyClosure(
+    sourceFile,
+    declarations,
+    unsupportedFunctionLikeValues,
+    rootFunctionNames,
+  );
+  const helperSource = [...included]
     .map((name) => declarations.get(name))
+    .filter((declaration): declaration is ts.FunctionDeclaration => declaration !== undefined)
+    .map((declaration) => declaration.getText(sourceFile).replace(/^export\s+function/, 'function'))
     .join('\n\n');
   const transpiled = ts.transpileModule(helperSource, {
     compilerOptions: {
@@ -291,6 +305,70 @@ function readInlineWireParserReadableSource(): string {
   }).outputText;
 
   return transpiled.replace(/^"use strict";\s*/, '').trim();
+}
+
+function collectInlineWireParserDependencyClosure(
+  sourceFile: ts.SourceFile,
+  declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
+  unsupportedFunctionLikeValues: ReadonlySet<string>,
+  rootFunctionNames: readonly string[],
+): Set<string> {
+  const included = new Set<string>();
+  const visiting = new Set<string>();
+
+  const include = (name: string): void => {
+    if (included.has(name)) return;
+    if (visiting.has(name)) return;
+
+    const declaration = declarations.get(name);
+    if (!declaration) {
+      throw new Error(`Inline Jiso loader wire parser source is missing helper: ${name}`);
+    }
+
+    visiting.add(name);
+    for (const dependency of collectInlineWireParserFunctionDependencies(
+      sourceFile,
+      declaration,
+      declarations,
+      unsupportedFunctionLikeValues,
+    )) {
+      include(dependency);
+    }
+    included.add(name);
+    visiting.delete(name);
+  };
+
+  for (const name of rootFunctionNames) include(name);
+  return included;
+}
+
+function collectInlineWireParserFunctionDependencies(
+  sourceFile: ts.SourceFile,
+  declaration: ts.FunctionDeclaration,
+  declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
+  unsupportedFunctionLikeValues: ReadonlySet<string>,
+): Set<string> {
+  const dependencies = new Set<string>();
+  const ownName = declaration.name?.text;
+
+  const visit = (node: ts.Node): void => {
+    if (node === declaration.name) return;
+
+    if (ts.isIdentifier(node)) {
+      const name = node.text;
+      if (name !== ownName && declarations.has(name)) dependencies.add(name);
+      if (unsupportedFunctionLikeValues.has(name)) {
+        throw new Error(
+          `Inline Jiso loader wire parser helper ${ownName ?? '<anonymous>'} references ${name}, but inline extraction only supports top-level function declarations.`,
+        );
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  if (declaration.body) visit(declaration.body);
+  return dependencies;
 }
 
 export function assertInlineJisoLoaderModuleArtifactParity(
