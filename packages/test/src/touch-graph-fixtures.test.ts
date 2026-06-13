@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  touchGraphProvenanceHonestyFact,
   touchGraphProvenanceFact,
   touchGraphSourceFacts,
   touchGraphSourceSiteSummaryFact,
@@ -93,7 +94,9 @@ describe('@jiso/test touch graph fixture seam', () => {
         linesArePositive: true,
         paths: ['src/cart.ts'],
       });
-      await expect(touchGraphProvenanceFact(root, touchGraph)).resolves.toEqual({
+      const provenance = await touchGraphProvenanceFact(root, touchGraph);
+
+      expect(provenance).toEqual({
         entries: {
           'cart.addItem': {
             reads: [],
@@ -122,6 +125,19 @@ describe('@jiso/test touch graph fixture seam', () => {
           paths: ['src/cart.ts'],
         },
         sourceLineMismatches: [],
+        unresolvedMutations: [],
+      });
+      expect(touchGraphProvenanceHonestyFact(provenance)).toEqual({
+        entryKeys: ['cart.addItem'],
+        sourceLineMismatches: [],
+        sourceSites: {
+          count: 2,
+          linesArePositive: true,
+          paths: ['src/cart.ts'],
+        },
+        touchCountsByMutation: {
+          'cart.addItem': 2,
+        },
         unresolvedMutations: [],
       });
     } finally {

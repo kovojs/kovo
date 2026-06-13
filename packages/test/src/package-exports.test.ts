@@ -256,6 +256,7 @@ import {
   cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
+  moduleImportFailureFact,
   projectDirectoryNames,
   projectFilePaths,
   projectFileSources,
@@ -269,6 +270,7 @@ import {
   type CssScopeRuleFact,
   type DrizzleQueryBehaviorSourceFixtures,
   type ForbiddenBrowserArchitectureFact,
+  type ModuleImportFailureFact,
   type ProjectFileSourceFact,
   type ProjectFileTreeOptions,
   type ProjectPackageManifestFact,
@@ -302,9 +304,11 @@ import {
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
 import {
   touchGraphProvenanceFact,
+  touchGraphProvenanceHonestyFact,
   touchGraphSourceFacts,
   touchGraphSourceSiteSummaryFact,
   touchGraphSummaryFacts,
+  type TouchGraphProvenanceHonestyFact,
   type TouchGraphProvenanceFact,
   type TouchGraphSourceFact,
   type TouchGraphSummaryEntryFact,
@@ -545,6 +549,14 @@ describe('@jiso/test package subpath exports', () => {
     expect(projectFileSources).toBeTypeOf('function');
     expect(projectJsonFile).toBeTypeOf('function');
     expect(projectPackageManifestFacts).toBeTypeOf('function');
+    expect(
+      moduleImportFailureFact(new Error('Cannot load packages/core/src/diagnostics.js'), [
+        'packages/core/src/diagnostics.js',
+      ]),
+    ).toEqual({
+      allowed: true,
+      matchedReason: 'packages/core/src/diagnostics.js',
+    });
     expect(projectSourceLineFacts).toBeTypeOf('function');
     expect(projectSourceSiteFact('examples/commerce/src/app.ts:7')).toEqual({
       line: 7,
@@ -562,6 +574,34 @@ describe('@jiso/test package subpath exports', () => {
     expect(graphFixtureFile).toBeTypeOf('function');
     expectTypeOf<ProjectGraphFixture>().toMatchTypeOf<Record<string, unknown>>();
     expect(touchGraphProvenanceFact).toBeTypeOf('function');
+    expect(
+      touchGraphProvenanceHonestyFact({
+        entries: {
+          'cart.addItem': {
+            reads: [],
+            touches: [
+              {
+                domain: 'cart',
+                keys: null,
+                predicate: undefined,
+                sitePath: 'src/cart.ts',
+                via: 'cart_items',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+        siteSummary: { count: 1, linesArePositive: true, paths: ['src/cart.ts'] },
+        sourceLineMismatches: [],
+        unresolvedMutations: [],
+      }),
+    ).toEqual({
+      entryKeys: ['cart.addItem'],
+      sourceLineMismatches: [],
+      sourceSites: { count: 1, linesArePositive: true, paths: ['src/cart.ts'] },
+      touchCountsByMutation: { 'cart.addItem': 1 },
+      unresolvedMutations: [],
+    });
     expect(touchGraphSourceFacts).toBeTypeOf('function');
     expect(
       touchGraphSourceSiteSummaryFact({
@@ -1129,8 +1169,10 @@ type _PublicSubpathTypes = [
   McpCompileResponseFact,
   McpJsonRpcResponseFact,
   CssScopeRuleFact,
+  ModuleImportFailureFact,
   ProjectSourceLineFact,
   ProjectSourceSiteFact,
+  TouchGraphProvenanceHonestyFact,
   TouchGraphProvenanceFact,
   TouchGraphSourceFact,
   TouchGraphSummaryEntryFact,

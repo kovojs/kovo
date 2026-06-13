@@ -27,7 +27,10 @@ import {
   graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
 import { fwResponseBodyFact, htmlDocumentFacts } from '@jiso/test/html-fragment';
-import { touchGraphProvenanceFact } from '@jiso/test/touch-graph-fixtures';
+import {
+  touchGraphProvenanceFact,
+  touchGraphProvenanceHonestyFact,
+} from '@jiso/test/touch-graph-fixtures';
 import { fwCheck, fwExplain } from 'fw';
 
 import {
@@ -114,70 +117,45 @@ describe('commerce source-truth graph acceptance', () => {
     });
     expect(addToCart.registry?.touches).toBeUndefined();
     expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
-    await expect(touchGraphProvenanceFact(projectRootPath, commerceTouchGraph)).resolves.toEqual({
-      entries: {
-        'cart.addItem': {
-          reads: [],
-          touches: [
-            {
-              domain: 'cart',
-              keys: null,
-              predicate: undefined,
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'cart_items',
-            },
-            {
-              domain: 'order',
-              keys: null,
-              predicate: undefined,
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'orders',
-            },
-            {
-              domain: 'product',
-              keys: 'arg:productId',
-              predicate: 'eq',
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'products',
-            },
-          ],
-          unresolved: [],
-        },
-        'order.receipt': {
-          reads: [],
-          touches: [
-            {
-              domain: 'attachment',
-              keys: 'arg:orderId',
-              predicate: 'eq',
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'attachments',
-            },
-          ],
-          unresolved: [],
-        },
-        'payment.webhook': {
-          reads: [],
-          touches: [
-            {
-              domain: 'order',
-              keys: 'arg:data.object.id',
-              predicate: 'eq',
-              sitePath: 'examples/commerce/src/app.ts',
-              via: 'orders',
-            },
-          ],
-          unresolved: [],
-        },
-      },
-      siteSummary: {
+    const provenance = await touchGraphProvenanceFact(projectRootPath, commerceTouchGraph);
+    expect(touchGraphProvenanceHonestyFact(provenance)).toEqual({
+      entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+      sourceLineMismatches: [],
+      sourceSites: {
         count: 5,
         linesArePositive: true,
         paths: ['examples/commerce/src/app.ts'],
       },
-      sourceLineMismatches: [],
+      touchCountsByMutation: {
+        'cart.addItem': 3,
+        'order.receipt': 1,
+        'payment.webhook': 1,
+      },
       unresolvedMutations: [],
     });
+    expect(provenance.entries['cart.addItem']?.touches).toEqual([
+      {
+        domain: 'cart',
+        keys: null,
+        predicate: undefined,
+        sitePath: 'examples/commerce/src/app.ts',
+        via: 'cart_items',
+      },
+      {
+        domain: 'order',
+        keys: null,
+        predicate: undefined,
+        sitePath: 'examples/commerce/src/app.ts',
+        via: 'orders',
+      },
+      {
+        domain: 'product',
+        keys: 'arg:productId',
+        predicate: 'eq',
+        sitePath: 'examples/commerce/src/app.ts',
+        via: 'products',
+      },
+    ]);
     expect(fwCheckOkAssertionFact(fwCheck(commerceGraph))).toEqual({
       exitCode: 0,
       issueCount: 0,

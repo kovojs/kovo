@@ -10,6 +10,7 @@ import {
   cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
+  moduleImportFailureFact,
   projectDirectoryNames,
   projectFilePaths,
   projectFileSources,
@@ -54,6 +55,26 @@ describe('@jiso/test source fixture seam', () => {
         scope: 'doc-card',
       },
     ]);
+  });
+
+  it('projects allowed module import failures without caller-side substring checks', () => {
+    expect(
+      moduleImportFailureFact(new Error('Cannot load: packages/core/src/diagnostics.js'), [
+        '__filename is not defined in ES module scope',
+        'packages/core/src/diagnostics.js',
+      ]),
+    ).toEqual({
+      allowed: true,
+      matchedReason: 'packages/core/src/diagnostics.js',
+    });
+    expect(
+      moduleImportFailureFact(new Error('Cannot load unrelated module'), [
+        '__filename is not defined in ES module scope',
+      ]),
+    ).toEqual({
+      allowed: false,
+      matchedReason: null,
+    });
   });
 
   it('turns generated graph source sites into path and line facts', () => {

@@ -65,6 +65,14 @@ export interface TouchGraphProvenanceFact {
   unresolvedMutations: string[];
 }
 
+export interface TouchGraphProvenanceHonestyFact {
+  entryKeys: string[];
+  sourceLineMismatches: string[];
+  sourceSites: ProjectSourceSiteSummaryFact;
+  touchCountsByMutation: Record<string, number>;
+  unresolvedMutations: string[];
+}
+
 export function touchGraphSourceSites(touchGraph: TouchGraphFixture): string[] {
   return Object.values(touchGraph)
     .flatMap((entry) => entry.touches ?? [])
@@ -110,6 +118,22 @@ export async function touchGraphProvenanceFact(
     unresolvedMutations: Object.entries(summary)
       .filter(([, entry]) => entry.unresolved.length > 0)
       .map(([mutation]) => mutation),
+  };
+}
+
+export function touchGraphProvenanceHonestyFact(
+  provenance: TouchGraphProvenanceFact,
+): TouchGraphProvenanceHonestyFact {
+  return {
+    entryKeys: Object.keys(provenance.entries).sort(),
+    sourceLineMismatches: provenance.sourceLineMismatches,
+    sourceSites: provenance.siteSummary,
+    touchCountsByMutation: Object.fromEntries(
+      Object.entries(provenance.entries)
+        .map(([mutation, entry]): [string, number] => [mutation, entry.touches.length])
+        .sort(([left], [right]) => left.localeCompare(right)),
+    ),
+    unresolvedMutations: provenance.unresolvedMutations,
   };
 }
 

@@ -47,6 +47,11 @@ export interface ProjectSourceFixture {
   source: string;
 }
 
+export interface ModuleImportFailureFact {
+  allowed: boolean;
+  matchedReason: string | null;
+}
+
 export interface ProjectQueryDiagnosticFact {
   code: string;
   message: string;
@@ -123,6 +128,21 @@ export function cssScopeRules(source: string): CssScopeRuleFact[] {
         : undefined;
     })
     .filter((rule): rule is CssScopeRuleFact => rule !== undefined);
+}
+
+export function moduleImportFailureFact(
+  error: unknown,
+  allowedReasons: readonly string[],
+): ModuleImportFailureFact {
+  const message = String(
+    error && typeof error === 'object' && 'stack' in error ? error.stack : error,
+  );
+  const matchedReason = allowedReasons.find((reason) => message.includes(reason)) ?? null;
+
+  return {
+    allowed: matchedReason !== null,
+    matchedReason,
+  };
 }
 
 export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSourceFixtures {

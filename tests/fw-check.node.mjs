@@ -127,6 +127,7 @@ import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
+  moduleImportFailureFact,
   projectQueryBehaviorFacts,
   projectQueryDiagnosticFacts,
   projectTouchGraphBehaviorFacts,
@@ -134,7 +135,10 @@ import {
   projectJsonFile,
   projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
-import { touchGraphProvenanceFact } from '../packages/test/src/touch-graph-fixtures.ts';
+import {
+  touchGraphProvenanceFact,
+  touchGraphProvenanceHonestyFact,
+} from '../packages/test/src/touch-graph-fixtures.ts';
 import {
   loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
@@ -4669,13 +4673,12 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   try {
     drizzle = await import('../packages/drizzle/src/static.ts');
   } catch (error) {
-    const importFailure = String(error?.stack ?? error);
-    assert.equal(
-      importFailure.includes('__filename is not defined in ES module scope') ||
-        importFailure.includes('packages/core/src/diagnostics.js'),
-      true,
-      'unexpected Drizzle static import failure',
-    );
+    const importFailureFact = moduleImportFailureFact(error, [
+      '__filename is not defined in ES module scope',
+      'packages/core/src/diagnostics.js',
+    ]);
+    assert.equal(importFailureFact.allowed, true, 'unexpected Drizzle static import failure');
+    assert.notEqual(importFailureFact.matchedReason, null);
     await execFileAsync(
       'pnpm',
       [
@@ -4944,13 +4947,21 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     { stderr: '', stdout: '' },
   );
   const provenance = await touchGraphProvenanceFact(projectRootPath, commerceGraph.touchGraph);
-  assert.deepEqual(provenance.siteSummary, {
-    count: 5,
-    linesArePositive: true,
-    paths: ['examples/commerce/src/app.ts'],
+  assert.deepEqual(touchGraphProvenanceHonestyFact(provenance), {
+    entryKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
+    sourceLineMismatches: [],
+    sourceSites: {
+      count: 5,
+      linesArePositive: true,
+      paths: ['examples/commerce/src/app.ts'],
+    },
+    touchCountsByMutation: {
+      'cart.addItem': 3,
+      'order.receipt': 1,
+      'payment.webhook': 1,
+    },
+    unresolvedMutations: [],
   });
-  assert.deepEqual(provenance.sourceLineMismatches, []);
-  assert.deepEqual(provenance.unresolvedMutations, []);
   assert.deepEqual(provenance.entries, {
     'cart.addItem': {
       reads: [],

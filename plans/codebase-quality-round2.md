@@ -85,6 +85,9 @@ scope rules locally.
 Shared generated-module fixtures now own committed-IR freshness facts for authored/generated
 component pairs, including compiler fixpoint/render-equivalence hook execution and exact generated
 output comparison against SPEC.md section 5.2 provenance.
+Shared source fixtures now own allowed module-import failure projection for fw-check fallback paths,
+and shared touch-graph fixtures now own provenance honesty summaries used by both the fw-check
+commerce committed graph gate and commerce source-truth tests.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -210,6 +213,12 @@ Latest evidence:
   targeted `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
   exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Source/touch-graph harness projection slice:
+  `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P3 Drizzle query facts include select shapes and instance keys|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR
