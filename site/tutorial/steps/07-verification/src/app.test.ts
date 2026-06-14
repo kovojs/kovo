@@ -195,23 +195,30 @@ describe('tutorial step 07 — testing & verification', () => {
       [...(commerceCartAdd?.writes ?? [])].sort(),
     );
 
-    // Same optimistic statuses per pair (the list query is named productGrid
-    // in commerce, products here).
+    // Same optimistic COVERAGE per pair (the list query is named productGrid in
+    // commerce, products here). The tutorial teaches v1 hand-written/await-fragment
+    // optimism; the reference commerce app has since adopted v2 derived optimism
+    // (SPEC.md §10.5). Both cover exactly the same (mutation × query) pairs with an
+    // explicit, non-UNHANDLED status — that coverage parity is the invariant here,
+    // not the v1-vs-v2 status string.
     const queryNameMap: Record<string, string> = {
       cart: 'cart',
       orderHistory: 'orderHistory',
       products: 'productGrid',
     };
-    const shopStatuses = shopGraph.optimistic.map((entry) => ({
-      mutation: entry.mutation,
-      query: queryNameMap[entry.query],
-      status: entry.status,
-    }));
-    const commerceStatuses = commerceGraph.optimistic.filter(
-      (entry) => entry.mutation === 'cart/add',
+    const pairKey = (entry: { mutation: string; query: string }) =>
+      `${entry.mutation} ${entry.query}`;
+    const shopPairs = shopGraph.optimistic.map((entry) =>
+      pairKey({ mutation: entry.mutation, query: queryNameMap[entry.query] ?? entry.query }),
     );
-    expect(shopStatuses).toEqual(expect.arrayContaining(commerceStatuses));
-    expect(commerceStatuses).toEqual(expect.arrayContaining(shopStatuses));
+    const commercePairs = commerceGraph.optimistic
+      .filter((entry) => entry.mutation === 'cart/add')
+      .map(pairKey);
+    // Both apps cover exactly the same three cart/add (mutation × query) pairs.
+    expect([...shopPairs].sort()).toEqual([...commercePairs].sort());
+    expect(shopPairs).toHaveLength(3);
+    // No pair is UNHANDLED on either side (commerce derived, shop hand-written/await).
+    expect(commerceGraph.optimistic.every((entry) => entry.status !== 'UNHANDLED')).toBe(true);
 
     // Same enhanced wire: fw-query truth plus fragments, same failure code.
     const request = shopRequest();

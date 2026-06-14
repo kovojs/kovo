@@ -149,7 +149,7 @@ describe('create-jiso starter', () => {
           'manual-invalidates: -',
           'updates: cart->component:CartBadge,component:CartPanel,page:/cart',
           'OPTIMISTIC cart await-fragment',
-          'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0',
+          'OPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=1 UNHANDLED=0 PUNTED=0',
           '',
         ].join('\n'),
       });
