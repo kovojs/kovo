@@ -1,0 +1,72 @@
+# deepsec parse-failure debug dump
+# phase: investigate
+# agentType: claude-agent-sdk
+# timestamp: 2026-06-14T05:49:28.102Z
+# error: Error: Agent produced output that wasn't a parseable JSON findings array: Unterminated string in JSON at position 2497 (line 27 column 126). First 400 chars: My investigation is complete. I've traced all flagged data flows, followed the import chain (`html.ts`, `csrf.ts`, `replay.ts`, `shell.ts`, `app-dispatch.ts`, `schema.ts`, `guards.ts`), and verified mitigations. ## Summary The scanner's flagged items are almost all **false positives** (proper escaping, inbound-only URL parsing, developer-controlled keys). However, open-ended review surfaced a ge
+# batch (5 files):
+  - packages/server/src/mutation.ts
+  - packages/server/src/app-document.ts
+  - packages/server/src/app-request.ts
+  - packages/server/src/document-diagnostics.ts
+  - packages/server/src/match.ts
+# --- raw agent output begins on next line ---
+My investigation is complete. I've traced all flagged data flows, followed the import chain (`html.ts`, `csrf.ts`, `replay.ts`, `shell.ts`, `app-dispatch.ts`, `schema.ts`, `guards.ts`), and verified mitigations.
+
+## Summary
+
+The scanner's flagged items are almost all **false positives** (proper escaping, inbound-only URL parsing, developer-controlled keys). However, open-ended review surfaced a genuine **unauthenticated open redirect** spanning `match.ts` (root cause) and `app-request.ts` (sink), plus a low-impact object-injection quirk.
+
+```json
+[
+  {
+    "filePath": "packages/server/src/mutation.ts",
+    "findings": []
+  },
+  {
+    "filePath": "packages/server/src/app-document.ts",
+    "findings": [
+      {
+        "severity": "BUG",
+        "vulnSlug": "object-injection",
+        "title": "searchParamsToRecord assigns user-controlled query-string keys into a plain object (prototype-setter quirk)",
+        "description": "searchParamsToRecord builds `const record: Record<string,...> = {}` and then assigns `record[key] = value` / `record[key] = [existing, value]` where `key` is an attacker-controlled query-string parameter name (lines 104-112). Because `record` is a plain object literal, a request like `?__proto__=a&__proto__=b` causes `record['__proto__'] = [Object.prototype, 'a']` on the first iteration, which invokes the `__proto__` accessor setter and replaces the record's [[Prototype]] with that array (the second iteration then pushes to it). The resulting `search` object behaves oddly downstream (e.g. `search instanceof Array` becomes true, legitimate keys resolve via the array prototype), and the same un-guarded pattern exists in schema.ts `appendRecordValue` (used for FormData → mutation input). Impact is limited: it only mutates the prototype of the freshly-created per-request record, NOT the global `Object.prototype`, so it is not classic global prototype pollution and yields no privilege escalation or cross-user effect — at worst it corrupts parsing/branching of the attacker's own request. Reporting as a robustness/defense-in-depth bug, not an exploitable security hole. (The scanner's SSRF flag on L76 `new URL(request.url)` is a false positive — that only parses the inbound request URL for error-logging context, with no outbound fetch.)",
+        "lineNumbers": [101, 104, 106, 111],
+        "recommendation": "Create the accumulator with `Object.create(null)` (no prototype, no `__proto__` setter), or explicitly skip the keys `__proto__`, `constructor`, and `prototype`, or use a `Map`. Apply the same fix to schema.ts `appendRecordValue`/`entriesToRecord`.",
+        "confidence": "low"
+      }
+    ]
+  },
+  {
+    "filePath": "packages/server/src/app-request.ts",
+    "findings": [
+      {
+        "severity": "MEDIUM",
+        "vulnSlug": "open-redirect",
+        "title": "Unauthenticated open redirect via protocol-relative pathname in trailing-slash normalization",
+        "description": "handleAppRequest emits a normalization redirect before any route/endpoint matching or guard runs:\n\n```\nif (match.normalization.redirect) {\n  url.pathname = match.normalization.redirect.pathname;\n  return new Response(null, {\n    headers: { Location: `${url.pathname}${url.search}${url.hash}` },\n    status: match.normalization.redirect.status, // 308\n  });\n}\n```\n\nThe redirect pathname comes from `normalizePathname` (match.ts), which only strips TRAILING slashes (`absolutePathname.replace(/\\/+$/, '')`) and never collapses/rejects LEADING slashes. For an inbound request to `https://victim.com//evil.com/`, `new URL(request.url).pathname` is `//evil.com/`; normalizePathname returns `{ redirect: { pathname: '//evil.com', status: 308 } }` (only the trailing slash is removed). The handler then sets `url.pathname = '//evil.com'` and builds `Location: //evil.com<search><hash>`. WHATWG URL preserves the leading double-slash in the pathname (the host is already parsed, so `//evil.com` stays in the path), and a `Location` value beginning with `//` is a protocol-relative URL — the browser resolves it to `https://evil.com`. Because the redirect is produced for ANY path with a trailing slash regardless of whether it matches a route, and it short-circuits before authentication, any unauthenticated attacker can craft a link on the victim origin that 308-redirects victims to an arbitrary external host (phishing, OAuth `redirect_uri`/token theft, etc.). The 308 is also cacheable, worsening impact. Note guards.ts `loginLocationWithNext` is NOT affected — it correctly encodes `next` as a query param and validates origin.",
+        "lineNumbers": [17, 18, 20, 21],
+        "recommendation": "Before emitting the redirect, ensure the Location is a same-origin path: collapse leading slashes (e.g. reject or rewrite any pathname matching `^/{2,}` or `^/\\\\`) so the redirect target cannot become protocol-relative. Prefer building the redirect target as a guaranteed-relative path (e.g. `'/' + pathname.replace(/^\\/+/, '')`) and never let `url.pathname` start with `//`. Fix the root cause in match.ts `normalizePathname` (see related finding).",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "filePath": "packages/server/src/document-diagnostics.ts",
+    "findings": []
+  },
+  {
+    "filePath": "packages/server/src/match.ts",
+    "findings": [
+      {
+        "severity": "MEDIUM",
+        "vulnSlug": "open-redirect",
+        "title": "normalizePathname preserves leading '//', producing protocol-relative redirect targets (root cause of the app-request.ts open redirect)",
+        "description": "This is the root cause of the open redirect reported on app-request.ts (same single vulnerability, reported here because the fix belongs in this function). `normalizePathname` computes `normalized = absolutePathname === '/' ? '/' : absolutePathname.replace(/\\/+$/, '') || '/'` (line 55). The regex `\\/+$` only collapses TRAILING slashes; leading and protocol-relative-style double slashes are left intact. For input `//evil.com/`, `absolutePathname` is `//evil.com/` and `normalized` is `//evil.com`, which differs from the input, so the function returns a 308 `redirect` whose `pathname` is `//evil.com` (lines 65-73). That attacker-influenced, protocol-relative pathname is then placed verbatim into a `Location` header by handleAppRequest, yielding an open redirect to an external origin. (Separately, the scanner's object-injection flag on L187 `params[routeSegment.name ?? routeSegment.value.slice(1)] = pathnameSegment` is a FALSE POSITIVE: the assignment key derives from the developer-authored route segment name, e.g. `:id`, not from user input; the value is a plain string and `params` is a fresh literal — no exploitable injection.)",
+        "lineNumbers": [55, 65, 66, 68],
+        "recommendation": "In normalizePathname, collapse/normalize leading slashes (e.g. reduce a run of leading `/` to a single `/`) and treat backslashes, so a normalized pathname can never begin with `//`. This guarantees any redirect derived from it is an unambiguous same-origin absolute path.",
+        "confidence": "high"
+      }
+    ]
+  }
+]
+```
