@@ -62,10 +62,10 @@ export default defineConfig({
         ],
       },
       'conformance-drizzle': {
-        command: 'vitest --run conformance/drizzle-pin/src/index.test.ts',
+        command: 'vitest --run conformance/drizzle-pin/src/',
         input: [
           { auto: true },
-          { pattern: 'conformance/drizzle-pin/src/index.test.ts', base: 'workspace' },
+          { pattern: 'conformance/drizzle-pin/src/**/*.ts', base: 'workspace' },
           { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
         ],
       },
