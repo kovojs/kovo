@@ -10,6 +10,21 @@ import {
   type ComboboxItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/combobox.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS =
+  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
+const INPUT_CLASS =
+  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
+const LISTBOX_CLASS =
+  'max-h-56 overflow-auto rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[state=closed]:hidden';
+const OPTION_CLASS =
+  'rounded px-2 py-1.5 text-sm text-neutral-700 data-[highlighted]:bg-neutral-100 data-[state=checked]:font-medium data-[state=checked]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const VALUE_CLASS = 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500';
+const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+
 export interface GalleryComboboxDemoState {
   highlightedValue: string;
   open: boolean;
@@ -43,10 +58,10 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
     return (
       <section
         {...comboboxRootAttributes({ ...comboboxState, id: 'gallery-combobox-root' })}
-        class="grid gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="combobox"
       >
-        <label id="gallery-combobox-label" for="gallery-combobox-input">
+        <label id="gallery-combobox-label" for="gallery-combobox-input" class={LABEL_CLASS}>
           City
         </label>
         <form id="gallery-combobox-form" data-gallery-form="combobox" />
@@ -57,6 +72,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
             labelledBy: 'gallery-combobox-label',
           })}
           id="gallery-combobox-input"
+          class={INPUT_CLASS}
           onInput={() => {
             state.open = true;
             state.highlightedValue = 'chicago';
@@ -133,6 +149,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
             id: listboxId,
             labelledBy: 'gallery-combobox-label',
           })}
+          class={LISTBOX_CLASS}
         >
           <button
             {...comboboxOptionAttributes({
@@ -141,6 +158,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               itemLabel: 'Austin',
               itemValue: 'austin',
             })}
+            class={OPTION_CLASS}
             onClick={() => {
               state.open = false;
               state.highlightedValue = 'austin';
@@ -174,6 +192,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               itemLabel: 'Boston',
               itemValue: 'boston',
             })}
+            class={OPTION_CLASS}
           >
             Boston
           </button>
@@ -183,6 +202,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               id: 'gallery-combobox-listbox-option-2',
               itemValue: 'chicago',
             })}
+            class={OPTION_CLASS}
             onClick={() => {
               state.open = false;
               state.highlightedValue = 'chicago';
@@ -209,7 +229,11 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
             Chicago city
           </button>
         </div>
-        <output {...comboboxValueAttributes(comboboxState)} data-demo-state="combobox-value">
+        <output
+          {...comboboxValueAttributes(comboboxState)}
+          class={VALUE_CLASS}
+          data-demo-state="combobox-value"
+        >
           {comboboxValueText(comboboxState)}
         </output>
       </section>

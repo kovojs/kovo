@@ -10,6 +10,21 @@ import {
   type AutocompleteItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/autocomplete.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS =
+  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
+const INPUT_CLASS =
+  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
+const LIST_CLASS =
+  'rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 shadow-sm';
+const OPTION_CLASS =
+  'text-neutral-950 data-[highlighted]:font-medium data-[state=checked]:font-medium disabled:text-neutral-400';
+const VALUE_CLASS = 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500';
+const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+
 export interface GalleryAutocompleteDemoState {
   highlightedValue: string;
   inputValue: string;
@@ -48,10 +63,10 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
           ...autocompleteState,
           id: 'gallery-autocomplete-root',
         })}
-        class="grid gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="autocomplete"
       >
-        <label id="gallery-autocomplete-label" for="gallery-autocomplete-input">
+        <label id="gallery-autocomplete-label" for="gallery-autocomplete-input" class={LABEL_CLASS}>
           Tag
         </label>
         <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
@@ -62,6 +77,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
             labelledBy: 'gallery-autocomplete-label',
           })}
           id="gallery-autocomplete-input"
+          class={INPUT_CLASS}
           onInput={() => {
             state.inputValue = 'dev';
             state.highlightedValue = 'development';
@@ -120,6 +136,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
             id: listId,
             labelledBy: 'gallery-autocomplete-label',
           })}
+          class={LIST_CLASS}
         >
           <option
             {...autocompleteOptionAttributes({
@@ -127,6 +144,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
               id: 'gallery-autocomplete-list-option-0',
               itemValue: 'development',
             })}
+            class={OPTION_CLASS}
             onClick={() => {
               state.inputValue = 'development';
               state.open = false;
@@ -152,6 +170,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
         </datalist>
         <output
           {...autocompleteValueAttributes(autocompleteState)}
+          class={VALUE_CLASS}
           data-demo-state="autocomplete-value"
         >
           {autocompleteValueText(autocompleteState)}

@@ -3,6 +3,15 @@
 import { component } from '@jiso/core';
 import { checkboxRootAttributes, type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS =
+  'inline-flex items-center gap-2 text-sm text-neutral-950 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
+const INPUT_CLASS =
+  'h-4 w-4 rounded border border-neutral-300 text-neutral-950 accent-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
+
 export interface GalleryCheckboxDemoState {
   checked: CheckboxCheckedState;
 }
@@ -20,17 +29,20 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
 
     return (
       <label
-        class="inline-flex items-center gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="checkbox"
         fw-c="gallery-checkbox-demo"
         fw-state='{"checked":"indeterminate"}'
       >
         <input
           {...attrs}
+          class={INPUT_CLASS}
           on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b5c8961b#GalleryCheckboxDemo$input_click"
         />
-        <span>Email summary</span>
-        <output data-demo-state="checked">{String(state.checked)}</output>
+        <span class="select-none leading-none">Email summary</span>
+        <output class="text-xs text-neutral-500" data-demo-state="checked">
+          {String(state.checked)}
+        </output>
       </label>
     );
   },

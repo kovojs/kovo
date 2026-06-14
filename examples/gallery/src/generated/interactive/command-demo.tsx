@@ -13,6 +13,24 @@ import {
   type CommandItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/command.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50';
+const TRIGGER_CLASS =
+  'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-neutral-100';
+const DIALOG_CLASS =
+  'w-full max-w-lg rounded-md border border-neutral-200 bg-white p-4 text-neutral-950 shadow-lg backdrop:bg-black/20 data-[state=closed]:hidden';
+const INPUT_CLASS =
+  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 data-[placeholder]:text-neutral-500';
+const LISTBOX_CLASS =
+  'mt-3 max-h-64 overflow-auto rounded-md border border-neutral-200 bg-white p-1 data-[state=closed]:hidden';
+const ITEM_CLASS =
+  'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[state=checked]:font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const CLOSE_CLASS =
+  'mt-3 inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
+
 export interface GalleryCommandDemoState {
   highlightedValue: string;
   inputValue: string;
@@ -61,7 +79,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
     return (
       <section
         {...commandRootAttributes(commandState)}
-        class="grid gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="command"
         fw-c="gallery-command-demo"
         fw-state='{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}'
@@ -69,6 +87,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
         <form id="gallery-command-form" data-gallery-form="command"></form>
         <button
           {...commandTriggerAttributes({ ...commandState, contentId })}
+          class={TRIGGER_CLASS}
           id="gallery-command-trigger"
           on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click"
         >
@@ -81,6 +100,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
             descriptionId: 'gallery-command-description',
             titleId: 'gallery-command-title',
           })}
+          class={DIALOG_CLASS}
         >
           <h2 id="gallery-command-title">Command menu</h2>
           <p id="gallery-command-description">Search project actions.</p>
@@ -90,10 +110,14 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               id: 'gallery-command-input',
               labelledBy: 'gallery-command-title',
             })}
+            class={INPUT_CLASS}
             on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$input_input"
             on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$input_keydown"
           />
-          <div {...commandListboxAttributes({ ...commandState, id: listboxId })}>
+          <div
+            {...commandListboxAttributes({ ...commandState, id: listboxId })}
+            class={LISTBOX_CLASS}
+          >
             <button
               {...commandItemAttributes({
                 ...commandState,
@@ -101,6 +125,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Open dashboard',
                 itemValue: 'dashboard',
               })}
+              class={ITEM_CLASS}
             >
               Open dashboard
             </button>
@@ -111,6 +136,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Invite teammate',
                 itemValue: 'invite',
               })}
+              class={ITEM_CLASS}
               on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click_2"
             >
               Invite teammate
@@ -123,12 +149,14 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Delete project',
                 itemValue: 'delete',
               })}
+              class={ITEM_CLASS}
             >
               Delete project
             </button>
           </div>
           <button
             {...commandCloseAttributes({ ...commandState, contentId })}
+            class={CLOSE_CLASS}
             on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click_3"
           >
             Close

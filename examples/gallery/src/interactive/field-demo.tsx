@@ -10,6 +10,28 @@ import {
   fieldsetRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/field.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const FIELD_CLASS =
+  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[required]:font-medium';
+const LABEL_CLASS =
+  'text-sm font-medium leading-none text-neutral-900 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70';
+const CONTROL_CLASS =
+  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500';
+const TEXTAREA_CLASS =
+  'min-h-24 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500';
+const SELECT_CLASS =
+  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-950 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 aria-[invalid=true]:border-red-500 aria-[invalid=true]:focus-visible:outline-red-500';
+const SELECT_OPTION_CLASS = 'text-neutral-950 disabled:text-neutral-400';
+const DESCRIPTION_CLASS = 'text-sm text-neutral-500';
+const ERROR_CLASS = 'text-sm font-medium text-red-600';
+const FIELDSET_CLASS =
+  'grid gap-3 rounded-md border border-neutral-200 p-4 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:border-red-300';
+const LEGEND_CLASS = 'px-1 text-sm font-medium text-neutral-900';
+const OUTPUT_CLASS = 'text-xs text-neutral-500';
+
 export interface GalleryFieldDemoState {
   email: string;
   invalid: boolean;
@@ -37,10 +59,14 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
     };
 
     return (
-      <form data-gallery-interactive="field" id="gallery-interactive-field-form">
+      <form
+        data-gallery-interactive="field"
+        id="gallery-interactive-field-form"
+        class="grid gap-4"
+      >
         <div
           {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
-          class="grid gap-2"
+          class={FIELD_CLASS}
         >
           <label
             {...fieldLabelAttributes({
@@ -48,6 +74,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               controlId: 'gallery-interactive-field-email-input',
               id: 'gallery-interactive-field-email-label',
             })}
+            class={LABEL_CLASS}
           >
             Email
           </label>
@@ -62,6 +89,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               pattern: '.+@jiso\\.dev',
             })}
             type="email"
+            class={CONTROL_CLASS}
             value={state.email}
             onInput={() => {
               state.email = 'ada@jiso.dev';
@@ -96,6 +124,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               id: 'gallery-interactive-field-email-description',
               required: true,
             })}
+            class={DESCRIPTION_CLASS}
           >
             Use a reachable address for receipts.
           </p>
@@ -104,18 +133,22 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               id: 'gallery-interactive-field-email-error',
               visible: state.invalid,
             })}
+            class={ERROR_CLASS}
           >
             Enter a complete email address.
           </p>
-          <output data-demo-state="field-email">{state.email}</output>
+          <output data-demo-state="field-email" class={OUTPUT_CLASS}>
+            {state.email}
+          </output>
         </div>
 
-        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-profile' })}>
+        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-profile' })} class={FIELD_CLASS}>
           <label
             {...fieldLabelAttributes({
               controlId: 'gallery-interactive-field-bio',
               id: 'gallery-interactive-field-bio-label',
             })}
+            class={LABEL_CLASS}
           >
             Bio
           </label>
@@ -126,21 +159,26 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               id: 'gallery-interactive-field-bio',
               name: 'gallery-bio',
             })}
+            class={TEXTAREA_CLASS}
             rows={2}
           >
             Frontend systems lead.
           </textarea>
-          <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-bio-description' })}>
+          <p
+            {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-bio-description' })}
+            class={DESCRIPTION_CLASS}
+          >
             Short public profile summary.
           </p>
         </div>
 
-        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-plan' })}>
+        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-plan' })} class={FIELD_CLASS}>
           <label
             {...fieldLabelAttributes({
               controlId: 'gallery-interactive-field-plan-select',
               id: 'gallery-interactive-field-plan-label',
             })}
+            class={LABEL_CLASS}
           >
             Plan
           </label>
@@ -152,6 +190,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               name: 'gallery-plan',
               required: true,
             })}
+            class={SELECT_CLASS}
             value={state.plan}
             onChange={() => {
               state.plan = state.plan === 'team' ? 'enterprise' : 'team';
@@ -167,17 +206,26 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               if (output) output['textContent'] = state.plan;
             }}
           >
-            <option value="team" selected={state.plan === 'team'}>
+            <option value="team" selected={state.plan === 'team'} class={SELECT_OPTION_CLASS}>
               Team
             </option>
-            <option value="enterprise" selected={state.plan === 'enterprise'}>
+            <option
+              value="enterprise"
+              selected={state.plan === 'enterprise'}
+              class={SELECT_OPTION_CLASS}
+            >
               Enterprise
             </option>
           </select>
-          <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-plan-description' })}>
+          <p
+            {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-plan-description' })}
+            class={DESCRIPTION_CLASS}
+          >
             Native select remains the submitted control.
           </p>
-          <output data-demo-state="field-plan">{state.plan}</output>
+          <output data-demo-state="field-plan" class={OUTPUT_CLASS}>
+            {state.plan}
+          </output>
         </div>
 
         <fieldset
@@ -188,15 +236,17 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             id: 'gallery-interactive-fieldset',
             name: 'gallery-shipping',
           })}
+          class={FIELDSET_CLASS}
         >
           <legend
             {...fieldsetLegendAttributes({
               id: 'gallery-interactive-fieldset-legend',
               required: true,
             })}
+            class={LEGEND_CLASS}
           >
             Shipping options
-            <label>
+            <label class="ml-2 inline-flex items-center gap-1 text-sm font-normal text-neutral-700">
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
@@ -228,15 +278,19 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               Disable shipping group
             </label>
           </legend>
-          <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}>
+          <p
+            {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}
+            class={DESCRIPTION_CLASS}
+          >
             Grouped controls inherit native fieldset disabled behavior.
           </p>
-          <label>
+          <label class="grid gap-2 text-sm font-medium leading-none text-neutral-900">
             <input
               form="gallery-interactive-field-form"
               name="gallery-seat"
               type="text"
               value="window"
+              class={CONTROL_CLASS}
             />
             Seat preference
           </label>

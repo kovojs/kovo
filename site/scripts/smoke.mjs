@@ -124,13 +124,15 @@ try {
       galleryScripts.push(url.pathname);
     }
   });
-  await page.goto(`${origin}/gallery/interactive/`, { waitUntil: 'networkidle' });
+  // The interactive demos are folded into the component gallery pages; the
+  // accordion page carries the compiled demo (wrapped as #accordion-demo).
+  await page.goto(`${origin}/gallery/components/accordion/`, { waitUntil: 'networkidle' });
   check(
     await page
-      .locator('main[data-gallery-route="/gallery/interactive"]')
+      .locator('#accordion-demo')
       .count()
       .then((count) => count === 1),
-    'JS: interactive gallery route renders',
+    'JS: folded accordion gallery page renders the interactive demo',
   );
   const accordionButton = page
     .locator('#accordion-demo button[on\\:click*="accordion-demo.client.js"]')

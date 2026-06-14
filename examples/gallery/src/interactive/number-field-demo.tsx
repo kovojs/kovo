@@ -7,6 +7,20 @@ import {
   numberFieldRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/number-field.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS =
+  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
+const CONTROL_CLASS =
+  'inline-flex h-9 w-fit items-center overflow-hidden rounded-md border border-neutral-300 bg-white shadow-sm data-[disabled]:opacity-60 data-[invalid]:border-red-400';
+const INPUT_CLASS =
+  'h-9 w-20 border-0 bg-transparent px-3 text-center text-sm text-neutral-950 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:text-red-950';
+const BUTTON_CLASS =
+  'inline-flex h-9 w-9 items-center justify-center border-neutral-200 bg-neutral-50 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 data-[action=decrement]:border-r data-[action=increment]:border-l data-[disabled]:opacity-70';
+const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+
 export interface GalleryNumberFieldDemoState {
   value: number;
 }
@@ -30,14 +44,17 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
     return (
       <form
         {...numberFieldRootAttributes(fieldState)}
-        class="inline-grid gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="number-field"
         id={formId}
       >
-        <label for={inputId}>Seats</label>
-        <div class="inline-flex items-center gap-1">
+        <label for={inputId} class={LABEL_CLASS}>
+          Seats
+        </label>
+        <div class={CONTROL_CLASS}>
           <button
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
+            class={BUTTON_CLASS}
             onClick={() => {
               state.value = state.value <= 0 ? 0 : state.value - 1;
               const doc = Reflect['get'](globalThis, 'document');
@@ -61,6 +78,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
               id: inputId,
               label: 'Seats',
             })}
+            class={INPUT_CLASS}
             onInput={() => {
               const delegatedEvent = event;
               const eventTarget =
@@ -86,6 +104,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
           />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
+            class={BUTTON_CLASS}
             onClick={() => {
               state.value = state.value >= 5 ? 5 : state.value + 1;
               const doc = Reflect['get'](globalThis, 'document');
@@ -103,7 +122,9 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
             +
           </button>
         </div>
-        <output data-demo-state="value">{String(state.value)}</output>
+        <output data-demo-state="value" class="text-xs text-neutral-500">
+          {String(state.value)}
+        </output>
       </form>
     );
   },

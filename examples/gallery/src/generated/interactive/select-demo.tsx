@@ -10,6 +10,18 @@ import {
   type SelectItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/select.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS =
+  'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
+const TRIGGER_CLASS =
+  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
+const ITEM_CLASS = 'text-neutral-950 data-[state=checked]:font-medium disabled:text-neutral-400';
+const VALUE_CLASS = 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500';
+const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+
 export interface GallerySelectDemoState {
   value: string;
 }
@@ -37,13 +49,13 @@ export const GallerySelectDemo = component('gallery-select-demo', {
     return (
       <section
         {...selectRootAttributes({ ...selectState, id: 'gallery-select-root' })}
-        class="grid gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="select"
         fw-c="gallery-select-demo"
         fw-state='{"value":"standard"}'
       >
         <form id="gallery-select-form" data-gallery-form="select" />
-        <label id="gallery-select-label" for="gallery-select-control">
+        <label id="gallery-select-label" for="gallery-select-control" class={LABEL_CLASS}>
           Shipping speed
         </label>
         <select
@@ -53,6 +65,7 @@ export const GallerySelectDemo = component('gallery-select-demo', {
             labelledBy: 'gallery-select-label',
           })}
           id="gallery-select-control"
+          class={TRIGGER_CLASS}
           on:change="/c/examples/gallery/src/generated/interactive/select-demo.client.js?v=d98e8019#GallerySelectDemo$select_change"
         >
           {shippingOptions.map((item) => (
@@ -63,12 +76,17 @@ export const GallerySelectDemo = component('gallery-select-demo', {
                 itemLabel: item.label ?? item.value,
                 itemValue: item.value,
               })}
+              class={ITEM_CLASS}
             >
               {item.label ?? item.value}
             </option>
           ))}
         </select>
-        <output {...selectValueAttributes(selectState)} data-demo-state="select-value">
+        <output
+          {...selectValueAttributes(selectState)}
+          class={VALUE_CLASS}
+          data-demo-state="select-value"
+        >
           {selectValueText(selectState)}
         </output>
       </section>

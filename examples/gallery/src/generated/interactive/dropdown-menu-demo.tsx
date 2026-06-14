@@ -9,6 +9,18 @@ import {
   type DropdownMenuItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/dropdown-menu.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS = 'relative inline-block text-sm text-neutral-950 data-[disabled]:opacity-50';
+const TRIGGER_CLASS =
+  'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-neutral-100';
+const CONTENT_CLASS =
+  'min-w-40 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-md outline-none data-[state=closed]:hidden';
+const ITEM_CLASS =
+  'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+
 export interface GalleryDropdownMenuDemoState {
   highlightedValue: string;
   open: boolean;
@@ -43,6 +55,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
       >
         <button
           {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
+          class={TRIGGER_CLASS}
           id="gallery-dropdown-menu-trigger"
           on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click"
         >
@@ -50,6 +63,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
         </button>
         <div
           {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
+          class={CONTENT_CLASS}
           on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$div_keydown"
         >
           <button
@@ -59,6 +73,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemLabel: 'Duplicate',
               itemValue: 'duplicate',
             })}
+            class={ITEM_CLASS}
             on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click_2"
           >
             Duplicate
@@ -71,6 +86,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemLabel: 'Archive',
               itemValue: 'archive',
             })}
+            class={ITEM_CLASS}
           >
             Archive
           </button>
@@ -81,6 +97,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemLabel: 'Rename',
               itemValue: 'rename',
             })}
+            class={ITEM_CLASS}
             on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_keydown"
             on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click_3"
           >

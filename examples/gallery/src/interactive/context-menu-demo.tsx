@@ -8,6 +8,17 @@ import {
   type ContextMenuItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/context-menu.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const TRIGGER_CLASS =
+  'rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-sm text-neutral-700 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 data-[state=open]:border-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const CONTENT_CLASS =
+  'min-w-40 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-md outline-none data-[state=closed]:hidden';
+const ITEM_CLASS =
+  'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+
 export interface GalleryContextMenuDemoState {
   highlightedValue: string;
   open: boolean;
@@ -41,6 +52,7 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
       >
         <div
           {...contextMenuTriggerAttributes({ ...menuState, contentId })}
+          class={TRIGGER_CLASS}
           id="gallery-context-menu-trigger"
           onContextMenu={() => {
             state.open = true;
@@ -79,7 +91,7 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
         >
           Right click target
         </div>
-        <div {...contextMenuContentAttributes({ ...menuState, id: contentId })}>
+        <div {...contextMenuContentAttributes({ ...menuState, id: contentId })} class={CONTENT_CLASS}>
           <button
             {...contextMenuItemAttributes({
               ...menuState,
@@ -87,6 +99,7 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemLabel: 'Copy link',
               itemValue: 'copy',
             })}
+            class={ITEM_CLASS}
           >
             Copy link
           </button>
@@ -98,6 +111,7 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemLabel: 'Delete',
               itemValue: 'delete',
             })}
+            class={ITEM_CLASS}
           >
             Delete
           </button>
@@ -108,6 +122,7 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemLabel: 'Inspect',
               itemValue: 'inspect',
             })}
+            class={ITEM_CLASS}
             onKeyDown={() => {
               if (
                 event &&

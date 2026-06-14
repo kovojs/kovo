@@ -6,6 +6,16 @@ import {
   toggleGroupRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle-group.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const GROUP_CLASS =
+  'inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 text-neutral-950 data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
+const ITEM_CLASS = 'inline-flex data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50';
+const BUTTON_CLASS =
+  'inline-flex h-8 min-w-8 items-center justify-center rounded px-2.5 text-sm font-medium text-neutral-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[state=pressed]:bg-white data-[state=pressed]:text-neutral-950 data-[state=pressed]:shadow-sm data-[disabled]:opacity-50';
+
 export interface GalleryToggleGroupDemoState {
   activeValue: string;
   value: string;
@@ -40,7 +50,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
           ...groupState,
           labelledBy: 'gallery-toggle-group-label',
         })}
-        class="grid gap-2"
+        class="grid gap-2 text-sm text-neutral-950"
         data-gallery-interactive="toggle-group"
         onKeyDown={() => {
           state.activeValue = state.activeValue === 'bold' ? 'italic' : 'bold';
@@ -58,14 +68,17 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
           if (state.activeValue === 'italic' && italic) Object(italic)['focus']?.call(italic);
         }}
       >
-        <h3 id="gallery-toggle-group-label">Text style</h3>
-        <div class="inline-flex gap-1">
-          <span {...toggleGroupItemAttributes(boldState)}>
+        <h3 id="gallery-toggle-group-label" class="text-sm font-medium">
+          Text style
+        </h3>
+        <div class={GROUP_CLASS}>
+          <span {...toggleGroupItemAttributes(boldState)} class={ITEM_CLASS}>
             <button
               {...toggleGroupButtonAttributes({
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
+              class={BUTTON_CLASS}
               onClick={() => {
                 state.value =
                   state.value === 'bold,italic'
@@ -121,22 +134,24 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
               Bold
             </button>
           </span>
-          <span {...toggleGroupItemAttributes(strikeState)}>
+          <span {...toggleGroupItemAttributes(strikeState)} class={ITEM_CLASS}>
             <button
               {...toggleGroupButtonAttributes({
                 ...strikeState,
                 id: 'gallery-toggle-group-strike',
               })}
+              class={BUTTON_CLASS}
             >
               Strike
             </button>
           </span>
-          <span {...toggleGroupItemAttributes(italicState)}>
+          <span {...toggleGroupItemAttributes(italicState)} class={ITEM_CLASS}>
             <button
               {...toggleGroupButtonAttributes({
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
+              class={BUTTON_CLASS}
               onClick={() => {
                 state.value =
                   state.value === 'bold,italic'
@@ -193,7 +208,9 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
             </button>
           </span>
         </div>
-        <output data-demo-state="toggle-group-value">{state.value || 'none'}</output>
+        <output class="text-xs text-neutral-500" data-demo-state="toggle-group-value">
+          {state.value || 'none'}
+        </output>
       </section>
     );
   },

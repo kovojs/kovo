@@ -8,6 +8,18 @@ import {
   tabsTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/tabs.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS = 'w-full text-neutral-950 data-[disabled]:opacity-50';
+const LIST_CLASS =
+  'inline-flex h-10 items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-1 data-[orientation=vertical]:h-auto data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
+const TRIGGER_CLASS =
+  'inline-flex h-8 items-center justify-center rounded px-3 text-sm font-medium text-neutral-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none data-[state=active]:bg-white data-[state=active]:text-neutral-950 data-[state=active]:shadow-sm data-[disabled]:opacity-50';
+const PANEL_CLASS =
+  'mt-3 rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400';
+
 export interface GalleryTabsDemoState {
   activeValue: string;
   value: string;
@@ -34,13 +46,16 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
     return (
       <section
         {...tabsRootAttributes(rootState)}
-        class="grid gap-2"
+        class={ROOT_CLASS}
         data-gallery-interactive="tabs"
         on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$section_keydown"
         fw-c="gallery-tabs-demo"
         fw-state='{"activeValue":"overview","value":"overview"}'
       >
-        <div {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}>
+        <div
+          {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}
+          class={LIST_CLASS}
+        >
           <button
             {...tabsTriggerAttributes({
               ...rootState,
@@ -48,6 +63,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'overview',
               panelId: 'gallery-tabs-overview-panel',
             })}
+            class={TRIGGER_CLASS}
             on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$button_click"
           >
             Overview
@@ -59,6 +75,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'details',
               panelId: 'gallery-tabs-details-panel',
             })}
+            class={TRIGGER_CLASS}
             on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$button_click_2"
           >
             Details
@@ -70,6 +87,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'audit',
               panelId: 'gallery-tabs-audit-panel',
             })}
+            class={TRIGGER_CLASS}
           >
             Audit
           </button>
@@ -81,6 +99,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
             itemValue: 'overview',
             triggerId: 'gallery-tabs-overview-trigger',
           })}
+          class={PANEL_CLASS}
         >
           Summary metrics stay visible without client runtime.
         </section>
@@ -91,6 +110,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
             itemValue: 'details',
             triggerId: 'gallery-tabs-details-trigger',
           })}
+          class={PANEL_CLASS}
         >
           Detailed notes are selected by click or arrow-key activation.
         </section>
@@ -101,6 +121,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
             itemValue: 'audit',
             triggerId: 'gallery-tabs-audit-trigger',
           })}
+          class={PANEL_CLASS}
         >
           Disabled audit notes stay out of the roving keyboard path.
         </section>

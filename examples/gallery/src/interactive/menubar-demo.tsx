@@ -7,6 +7,17 @@ import {
   type MenubarItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/menubar.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const ROOT_CLASS =
+  'inline-flex rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-sm data-[orientation=vertical]:flex-col data-[disabled]:opacity-50';
+const ITEM_CLASS =
+  'inline-flex h-8 items-center rounded px-2.5 text-sm text-neutral-700 outline-none data-[state=open]:bg-neutral-100 data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const SUBMENU_CLASS =
+  'min-w-40 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-md outline-none data-[state=closed]:hidden';
+
 export interface GalleryMenubarDemoState {
   activeValue: string;
   openValue: string;
@@ -53,7 +64,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
           if (output) output['textContent'] = 'edit';
         }}
       >
-        <div {...menubarRootAttributes(rootState)} class="flex gap-1">
+        <div {...menubarRootAttributes(rootState)} class={ROOT_CLASS}>
           <button
             {...menubarItemAttributes({
               ...rootState,
@@ -62,6 +73,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemLabel: 'File',
               itemValue: 'file',
             })}
+            class={ITEM_CLASS}
             onClick={() => {
               state.activeValue = 'file';
               state.openValue = state.openValue === 'file' ? '' : 'file';
@@ -94,6 +106,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemLabel: 'Edit',
               itemValue: 'edit',
             })}
+            class={ITEM_CLASS}
           >
             Edit
           </button>
@@ -105,6 +118,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
             labelledBy: 'gallery-menubar-file',
             value: 'file',
           })}
+          class={SUBMENU_CLASS}
         >
           <button
             {...menubarItemAttributes({
@@ -114,6 +128,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemParentValue: 'file',
               itemValue: 'new',
             })}
+            class={ITEM_CLASS}
             onKeyDown={() => {
               if (
                 event &&
@@ -177,6 +192,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemParentValue: 'file',
               itemValue: 'import',
             })}
+            class={ITEM_CLASS}
           >
             Import
           </button>

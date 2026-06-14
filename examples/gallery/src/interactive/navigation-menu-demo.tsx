@@ -11,6 +11,22 @@ import {
   type NavigationMenuItem,
 } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/navigation-menu.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+const LIST_CLASS =
+  'flex list-none items-center gap-1 rounded-md border border-neutral-200 bg-white p-1 shadow-sm data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
+const ITEM_CLASS = 'relative data-[disabled]:opacity-50';
+const TRIGGER_CLASS =
+  'inline-flex h-9 items-center rounded px-3 text-sm font-medium text-neutral-700 outline-none transition-colors hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 data-[state=open]:bg-neutral-100 data-[highlighted]:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const LINK_CLASS =
+  'inline-flex h-9 items-center rounded px-3 text-sm font-medium text-neutral-700 outline-none transition-colors hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 data-[highlighted]:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+const CONTENT_CLASS =
+  'mt-2 rounded-md border border-neutral-200 bg-white p-3 text-sm text-neutral-700 shadow-md outline-none data-[state=closed]:hidden';
+const VIEWPORT_CLASS =
+  'mt-2 rounded-md border border-neutral-200 bg-white shadow-md data-[state=closed]:hidden';
+
 export interface GalleryNavigationMenuDemoState {
   activeValue: string;
   openValue: string;
@@ -96,8 +112,11 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           }
         }}
       >
-        <div {...navigationMenuListAttributes(rootState)}>
-          <div {...navigationMenuItemAttributes({ ...rootState, itemValue: 'products' })}>
+        <div {...navigationMenuListAttributes(rootState)} class={LIST_CLASS}>
+          <div
+            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'products' })}
+            class={ITEM_CLASS}
+          >
             <button
               {...navigationMenuTriggerAttributes({
                 ...rootState,
@@ -106,6 +125,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemLabel: 'Products',
                 itemValue: 'products',
               })}
+              class={TRIGGER_CLASS}
               onClick={() => {
                 state.openValue = state.openValue === 'products' ? '' : 'products';
                 const doc = Reflect['get'](globalThis, 'document');
@@ -135,7 +155,10 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
               Products
             </button>
           </div>
-          <div {...navigationMenuItemAttributes({ ...rootState, itemValue: 'docs' })}>
+          <div
+            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'docs' })}
+            class={ITEM_CLASS}
+          >
             <a
               {...navigationMenuLinkAttributes({
                 ...rootState,
@@ -144,6 +167,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemLabel: 'Docs',
                 itemValue: 'docs',
               })}
+              class={LINK_CLASS}
               onClick={() => {
                 state.openValue = '';
                 state.value = 'docs';
@@ -166,11 +190,13 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
             labelledBy: 'gallery-navigation-products-trigger',
             value: 'products',
           })}
+          class={CONTENT_CLASS}
         >
           Platform primitives and gallery fixtures
         </div>
         <div
           {...navigationMenuViewportAttributes({ ...rootState, id: 'gallery-navigation-viewport' })}
+          class={VIEWPORT_CLASS}
         />
         <output data-demo-state="navigation-open">{state.openValue || 'none'}</output>
         <output data-demo-state="navigation-value">{state.value}</output>

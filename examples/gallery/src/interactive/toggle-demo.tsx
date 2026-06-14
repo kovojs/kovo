@@ -2,6 +2,14 @@
 import { component } from '@jiso/core';
 import { toggleRootAttributes } from '@jiso/headless-ui/primitives';
 
+// Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
+// so this interactive demo matches the component-gallery look. Importing @jiso/ui
+// directly is FW234 (component package without a prefix), so the classes are
+// inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
+// BUTTON_CLASS = toggleClassNames base + the default `outline` variant.
+const BUTTON_CLASS =
+  'inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=pressed]:bg-neutral-950 data-[state=pressed]:text-white border-neutral-300 bg-white text-neutral-950 shadow-sm hover:bg-neutral-50 focus-visible:outline-neutral-400';
+
 export interface GalleryToggleDemoState {
   pressed: boolean;
 }
@@ -14,17 +22,20 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
     const attrs = toggleRootAttributes({ pressed: state.pressed });
 
     return (
-      <section class="grid gap-2" data-gallery-interactive="toggle">
+      <section class="grid gap-2 text-sm text-neutral-950" data-gallery-interactive="toggle">
         <button
           {...attrs}
           aria-label="Toggle gallery density"
+          class={BUTTON_CLASS}
           onClick={() => {
             state.pressed = !state.pressed;
           }}
         >
           Dense rows
         </button>
-        <output data-demo-state="pressed">{state.pressed ? 'pressed' : 'off'}</output>
+        <output class="text-xs text-neutral-500" data-demo-state="pressed">
+          {state.pressed ? 'pressed' : 'off'}
+        </output>
       </section>
     );
   },

@@ -391,7 +391,6 @@ describe('site app-shell export adoption', () => {
       [
         'scripts/export-static.mjs',
         '--skip-build',
-        '--skip-gallery',
         '--css-dist-dir',
         cssDistDir,
         '--dist-dir',
