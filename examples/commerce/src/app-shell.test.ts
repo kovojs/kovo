@@ -722,7 +722,9 @@ describe('commerce app shell HTTP entry', () => {
         await closeServer();
         await rm(outDir, { force: true, recursive: true });
       }
-    });
+      // A cold, --no-cache static export now bundles the Drizzle/PGlite (WASM)
+      // data layer, so the build runs ~10-15s — well past Vitest's 5s default.
+    }, 120_000);
   }
 });
 
