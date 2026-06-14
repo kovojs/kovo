@@ -25,6 +25,10 @@ export async function createSiteDistApp({
   assertSiteAppShellServerApi(serverApi);
   const clientModules = serverApi.createMemoryVersionedClientModuleRegistry();
   const moduleHrefs = registerPublicClientModules(clientModules, publicDir);
+  // The folded component pages reference the gallery's compiled interactive
+  // client modules (/c/examples/gallery/.../<name>.client.js?v=…). Register them
+  // so the static-export replay can serve and copy them (else FW229).
+  registerGalleryInteractiveClientModules(clientModules);
 
   return serverApi.createApp({
     clientModules,
@@ -130,6 +134,44 @@ function registerPublicClientModules(clientModules, publicDir) {
   }
 
   return hrefs;
+}
+
+/** Register the compiled interactive-gallery client modules with the same path
+ * + version the folded component pages reference. Mirrors the version-extraction
+ * in examples/gallery/src/app-shell.ts (the version lives in the generated
+ * server markup's on:click href). */
+function registerGalleryInteractiveClientModules(clientModules) {
+  const generatedDir = path.join(repoRoot, 'examples/gallery/src/generated/interactive');
+  if (!existsSync(generatedDir)) return;
+
+  for (const entry of sortedDirectoryEntries(generatedDir)) {
+    if (!entry.name.endsWith('.client.js')) continue;
+
+    const name = entry.name.replace(/\.client\.js$/, '');
+    const source = readFileSync(path.join(generatedDir, entry.name), 'utf8');
+    const serverTsx = readFileSync(path.join(generatedDir, `${name}.tsx`), 'utf8');
+    const pathName = `/c/examples/gallery/src/generated/interactive/${name}.client.js`;
+    clientModules.put({
+      path: pathName,
+      source,
+      version: galleryInteractiveClientModuleVersion(serverTsx, pathName, name),
+    });
+  }
+}
+
+function galleryInteractiveClientModuleVersion(serverTsx, modulePath, name) {
+  const escaped = modulePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`${escaped}\\?v=([0-9a-f]{8})#`, 'g');
+  const versions = new Set();
+  let match;
+  while ((match = pattern.exec(serverTsx)) !== null) versions.add(match[1]);
+
+  if (versions.size !== 1) {
+    throw new Error(
+      `site app shell: expected one generated client version for ${name}, found ${versions.size}.`,
+    );
+  }
+  return [...versions][0];
 }
 
 function rewriteClientModuleHrefs(html, moduleHrefs) {

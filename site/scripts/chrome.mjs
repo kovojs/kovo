@@ -161,7 +161,25 @@ const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label
  * §16.1); islands (search, theme, copy) load on first interaction only. The
  * theme script also runs pre-paint so there is no light-mode flash.
  */
-export function renderDocument({ body, chromeless = false, description, path, title }) {
+export function renderDocument({
+  body,
+  chromeless = false,
+  description,
+  modulepreloads = [],
+  path,
+  title,
+}) {
+  // Interactive gallery demos compile to versioned /c/ client modules; preload
+  // them so the inline loader's first dispatch (SPEC §4.4) imports from cache.
+  // The modules import `handler` from the bare specifier `@jiso/runtime`, so an
+  // import map (before the preloads, per the import-maps spec) resolves it to
+  // the browser shim. Only emitted when a page actually has interactive demos.
+  const importMap = modulepreloads.length
+    ? '<script type="importmap">{"imports":{"@jiso/runtime":"/c/jiso-runtime.js"}}</script>\n    '
+    : '';
+  const preloadLinks = modulepreloads
+    .map((href) => `<link rel="modulepreload" href="${escapeHtml(href)}" />`)
+    .join('\n    ');
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -173,7 +191,7 @@ export function renderDocument({ body, chromeless = false, description, path, ti
     <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/assets/site.css" />
-    <script>${jisoLoaderSource}</script>
+    ${importMap}${preloadLinks ? `${preloadLinks}\n    ` : ''}<script>${jisoLoaderSource}</script>
   </head>
   <body class="font-sans antialiased">
     ${chromeless ? '' : SiteHeader.definition.render({}, {}, { activePath: path })}

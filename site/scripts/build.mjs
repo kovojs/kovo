@@ -115,7 +115,7 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
-async function loadGalleryRoutes() {
+async function loadGalleryData() {
   const viteModulePath = resolveViteModulePath();
   const { createServer } = await import(pathToFileURL(viteModulePath).href);
   const vite = await createServer({
@@ -126,8 +126,18 @@ async function loadGalleryRoutes() {
   });
 
   try {
+    // Static styled fixtures (every component) + the compiled interactive demos
+    // (stateful components) + their versioned /c/ client-module hrefs. The folded
+    // component pages render the interactive demo when one exists, else the
+    // static fixture, so each /gallery/components/X page is styled and live.
     const gallery = await vite.ssrLoadModule('/examples/gallery/src/demo-fixtures.tsx');
-    return gallery.galleryRoutes;
+    const interactive = await vite.ssrLoadModule('/examples/gallery/src/interactive-docs.tsx');
+    const appShell = await vite.ssrLoadModule('/examples/gallery/src/app-shell.ts');
+    return {
+      clientHrefs: appShell.galleryInteractiveClientModuleHrefs,
+      galleryRoutes: gallery.galleryRoutes,
+      interactiveDemos: interactive.interactiveGalleryDemos,
+    };
   } finally {
     await vite.close();
   }
@@ -151,7 +161,46 @@ function galleryUrl(routePath) {
   return `/gallery${routePath}/`;
 }
 
-function renderGalleryPage(route, routes) {
+/** Static redirect for the retired /gallery/interactive/ URL → gallery index.
+ * Meta-refresh + canonical works on any static host and with JS disabled; the
+ * visible link keeps check-links happy and gives a manual fallback. */
+function renderGalleryInteractiveRedirect() {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gallery · Jiso</title>
+    <meta name="description" content="The interactive gallery has moved into the component gallery." />
+    <link rel="canonical" href="/gallery/" />
+    <meta http-equiv="refresh" content="0; url=/gallery/" />
+  </head>
+  <body>
+    <p>The interactive gallery is now part of the <a href="/gallery/">component gallery</a>.</p>
+  </body>
+</html>
+`;
+}
+
+/** The behavior-contract table (SPEC §4.6 surface) is authored inside each
+ * static fixture. When a component renders its interactive demo instead, lift
+ * that table out of the fixture so the contract stays on the page. */
+function extractBehaviorContract(staticHtml) {
+  const match = staticHtml.match(/<table data-gallery-contract[\s\S]*?<\/table>/);
+  return match ? match[0] : '';
+}
+
+function rewriteGalleryDemoHrefs(html, route) {
+  return html.replace(
+    /\shref="\/(?!assets\/|c\/|docs\/|tutorial\/|guides\/|gallery\/|api\/|spec\/|fonts\/|llms\.txt|$)([^"]*)"/g,
+    (_match, href) => {
+      if (href.startsWith('components/')) return ` href="/gallery/${href}/"`;
+      return ` href="${galleryUrl(route.path)}"`;
+    },
+  );
+}
+
+function renderGalleryPage(route, routes, interactive) {
   const nav = routes
     .map(
       (candidate) =>
@@ -161,21 +210,27 @@ function renderGalleryPage(route, routes) {
     )
     .join('');
 
-  const demo = route
-    .render()
-    .replace(
-      /\shref="\/(?!assets\/|c\/|docs\/|tutorial\/|guides\/|gallery\/|api\/|spec\/|fonts\/|llms\.txt|$)([^"]*)"/g,
-      (_match, href) => {
-        if (href.startsWith('components/')) return ` href="/gallery/${href}/"`;
-        return ` href="${galleryUrl(route.path)}"`;
-      },
-    );
+  // Interactive demo (styled + compiled handlers) when available, with the
+  // behavior contract lifted from the static fixture; otherwise the static
+  // styled fixture for display-only components (button, badge, table, …).
+  const staticHtml = route.render();
+  // Wrap with the demo's id (as the standalone interactive page did) so any
+  // in-demo self-anchor (e.g. hover-card → #hover-card-demo) still resolves.
+  const demoSource = interactive
+    ? `<div data-gallery-interactive-route="${escapeHtml(interactive.name)}" id="${escapeHtml(
+        interactive.name,
+      )}">${interactive.render()}${extractBehaviorContract(staticHtml)}</div>`
+    : staticHtml;
+  const demo = rewriteGalleryDemoHrefs(demoSource, route);
+  const blurb = interactive
+    ? `Live compiled demo for the ${escapeHtml(route.title)} component contract.`
+    : `Static fixture output for the ${escapeHtml(route.title)} component contract.`;
 
   return `<div class="gallery-page">
     <header class="gallery-head">
       <p class="eyebrow">Gallery</p>
       <h1>${escapeHtml(route.title)}</h1>
-      <p>Static fixture output for the ${escapeHtml(route.title)} component contract.</p>
+      <p>${blurb}</p>
     </header>
     <nav class="gallery-nav" aria-label="Gallery components">${nav}</nav>
     <div class="gallery-demo">${demo}</div>
@@ -223,7 +278,17 @@ async function main() {
 
   const sections = [];
   for (const section of SECTIONS) sections.push(await loadSection(section));
-  const galleryRoutes = await loadGalleryRoutes();
+  const { clientHrefs, galleryRoutes, interactiveDemos } = await loadGalleryData();
+  // Map gallery component → its compiled interactive demo. Demo names are the
+  // component plus a `-demo` suffix; client-module hrefs are index-aligned with
+  // the demo list (examples/gallery/src/app-shell.ts). pure-markup-demo has no
+  // component route and is intentionally dropped.
+  const interactiveByComponent = new Map(
+    interactiveDemos.map((demo, index) => [
+      demo.name.replace(/-demo$/, ''),
+      { modulepreloads: [clientHrefs[index]], name: demo.name, render: demo.render },
+    ]),
+  );
   const routeManifest = [];
   async function writeRoutePage(urlPath, html) {
     routeManifest.push(urlPath);
@@ -231,16 +296,10 @@ async function main() {
   }
   const gallerySection = {
     key: 'gallery',
-    pages: [
-      {
-        title: 'Interactive Gallery',
-        url: '/gallery/interactive/',
-      },
-      ...galleryRoutes.map((route) => ({
-        title: route.title,
-        url: galleryUrl(route.path),
-      })),
-    ],
+    pages: galleryRoutes.map((route) => ({
+      title: route.title,
+      url: galleryUrl(route.path),
+    })),
     title: 'Gallery',
   };
   const groups = sections
@@ -330,33 +389,16 @@ async function main() {
     ),
   );
 
-  await writeRoutePage(
-    '/gallery/interactive/',
-    finishPage(
-      renderDocument({
-        body: renderDocsPage({
-          activePath: '/gallery/interactive/',
-          groups,
-          html: `<div class="gallery-page">
-    <header class="gallery-head">
-      <p class="eyebrow">Gallery</p>
-      <h1>Interactive Gallery</h1>
-      <p>Compiled Jiso UI primitive demos with generated client handlers.</p>
-    </header>
-  </div>`,
-          prose: false,
-        }),
-        description: 'Compiled Jiso UI primitive demos with generated client handlers.',
-        path: '/gallery/interactive/',
-        title: 'Interactive Gallery · Jiso',
-      }),
-    ),
-  );
+  // The standalone interactive gallery is folded into the component pages
+  // below; keep the old URL alive as a redirect to the gallery index so links
+  // and bookmarks don't 404.
+  await writeRoutePage('/gallery/interactive/', renderGalleryInteractiveRedirect());
 
   for (const [position, route] of galleryRoutes.entries()) {
     const prev = galleryRoutes[position - 1];
     const next = galleryRoutes[position + 1];
-    const html = renderGalleryPage(route, galleryRoutes);
+    const interactive = interactiveByComponent.get(route.component);
+    const html = renderGalleryPage(route, galleryRoutes, interactive);
     const url = galleryUrl(route.path);
 
     await writeRoutePage(
@@ -372,6 +414,7 @@ async function main() {
             prose: false,
           }),
           description: `${route.title} component gallery fixture.`,
+          modulepreloads: interactive?.modulepreloads ?? [],
           path: url,
           title: `${route.title} · Gallery · Jiso`,
         }),
@@ -385,13 +428,6 @@ async function main() {
       url,
     });
   }
-
-  searchIndex.push({
-    section: 'Gallery',
-    text: 'Compiled Jiso UI primitive demos with generated client handlers.',
-    title: 'Interactive Gallery',
-    url: '/gallery/interactive/',
-  });
 
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
   await writeRoutePage(
