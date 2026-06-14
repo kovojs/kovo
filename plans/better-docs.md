@@ -56,8 +56,9 @@ reference-grade precision injected mid-lesson; self-congratulation. Rewrite rule
 - [ ] Rewrite remaining guides to lead with a goal and footer the citations: `mutations`,
       `optimistic`, `styling`, `deployment`, `testing`, `fw-explain`, `streaming`,
       `compiler-internals`. (In progress — lane `agent/docs-guides`.)
-- [ ] De-preach the 8 tutorial chapters: keep the tested extracted snippets, strip aphoristic
-      headers and triads. (In progress — lane `agent/docs-tutorial`; `{{snippet}}` markers preserved.)
+- [x] De-preach the 8 tutorial chapters: kept the tested extracted snippets (all `{{snippet}}`
+      markers byte-identical), stripped aphoristic headers/triads, citations to per-chapter footers.
+      Integrated `79e5cd9e`; build resolves all snippets, link-check green.
 
 ### API reference (Goal 2)
 
@@ -77,12 +78,15 @@ package sources have no JSDoc — the fix is upstream, not in the markdown.
 
 ### Agent layer (dedicated)
 
-- [ ] Generate `llms.txt` + `llms-full.txt` from the same sources (human pages + agent bundle from
-      one source, including the now-documented API markdown).
-- [ ] Build a diagnostics→fix catalog: the `FW###` registry as an indexed reference page.
-- [ ] Add a per-page collapsible "Spec & diagnostics" footer carrying the precision moved out of
-      prose.
-- [ ] Ship a canonical copy-paste examples set agents can pattern-match against.
+- [x] Generate `llms.txt` + `llms-full.txt` from the same sources during `build.mjs` (index +
+      ~399KB full corpus with snippets/captures substituted, SPEC appended). Integrated `447d9613`.
+- [x] Build a diagnostics→fix catalog: `site/gen/reference/diagnostics.md` generated from
+      `diagnosticDefinitions`, all 35 `FW###` codes, in a new Reference section + top nav.
+- [x] Add a per-page collapsible "Spec & diagnostics" footer carrying the precision moved out of
+      prose. (Done inline in every rewritten page via `<details>`; lanes replicate it.)
+- [ ] Ship a canonical copy-paste examples set agents can pattern-match against. (Partially served
+      by `llms-full.txt` + the example-bearing API refs + guides; a dedicated patterns page is the
+      remaining stretch item.)
 
 ### Gates / no-drift
 
