@@ -1,6 +1,17 @@
 export type {
+  AlgebraicField,
+  AlgebraicQueryShape,
+  DerivationResult,
   DiagnosticCode,
+  OrderByColumn,
+  PuntReason,
   ReadSite,
+  Rowset,
+  RowsetFilter,
+  RowWitness,
+  SymbolicEffect,
+  SymbolicMatch,
+  SymbolicValue,
   TouchGraph,
   TouchGraphEntry,
   TouchSite,
@@ -9514,11 +9525,21 @@ function aggregateField(
     }
   }
 
-  // A single `t.col` projection that ships one keyed scalar.
+  // A single `t.col` projection is a Scalar ONLY when the rowset is pinned to one
+  // keyed row (`eq(key, …)`); otherwise it ships an array of rows ⇒ AGG (handled by
+  // the caller's projection path). Returning undefined defers to that AGG path.
   const scalarColumn = selectColumnReference(expression, table, context.resolveTable);
-  if (scalarColumn) return { column: scalarColumn, kind: 'scalar', rowset };
+  if (scalarColumn && rowsetPinsKey(rowset)) {
+    return { column: scalarColumn, kind: 'scalar', rowset };
+  }
 
   return undefined;
+}
+
+/** True when the rowset's filter chain pins its instance key to one row (`eq(key, …)`). */
+function rowsetPinsKey(rowset: Rowset): boolean {
+  if (!rowset.key) return false;
+  return rowset.filters.some((filter) => filter.op === 'eq' && filter.column === rowset.key);
 }
 
 interface ProjectionColumns {
