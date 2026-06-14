@@ -178,7 +178,7 @@ describe('@jiso/test markdown fixture seam', () => {
           '1. **Source-derived names.** Names remain derived.',
           '2. **One-to-one file mapping.** Files remain mapped.',
           '3. **Registry atomicity.** Pending.',
-          '## 13. Open Design Areas (named, not hand-waved)',
+          '## 13. Open Design Areas',
           '**13.1 CSS:** details',
         ].join('\n'),
       }),
