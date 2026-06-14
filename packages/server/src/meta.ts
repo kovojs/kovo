@@ -1,10 +1,34 @@
 import type { QueryDefinition, QueryResult } from './query.js';
 import type { I18nCatalog, RouteMeta, RouteMetaFactory } from './hints.js';
 
+/**
+ * Declare static document metadata (title, description, image) for a route's
+ * head. Pass the result as a route's `meta` (SPEC §6.4).
+ *
+ * @param definition - The route metadata fields.
+ * @returns The same `RouteMeta`, typed.
+ * @example
+ * import { meta } from '@jiso/server';
+ *
+ * export const homeMeta = meta({
+ *   title: 'Jiso Shop',
+ *   description: 'Fresh coffee gear.',
+ * });
+ */
 export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
   return definition;
 }
 
+/**
+ * Derive route metadata from a query's loaded value, so the document head
+ * reflects the same data the page rendered. Returns a deferred meta factory when
+ * given just a derive function, or resolved meta when given the value directly
+ * (SPEC §6.4).
+ *
+ * @param queryDefinition - The query whose result drives the metadata.
+ * @param derive - Maps the query's value to `RouteMeta`.
+ * @returns A `RouteMetaFactory` (deferred) or resolved `RouteMeta`.
+ */
 export function metaFromQuery<const Query extends QueryDefinition, const Meta extends RouteMeta>(
   queryDefinition: Query,
   derive: (value: QueryResult<Query>) => Meta,
@@ -39,6 +63,20 @@ export function metaFromQuery<
   return maybeDerive(valueOrDerive);
 }
 
+/**
+ * Declare a typed message catalog for one locale. Look messages up with `t`,
+ * which type-checks keys against this catalog. i18n stays server-rendered
+ * (SPEC §13.5).
+ *
+ * @param locale - The catalog's locale tag (e.g. `'en'`).
+ * @param messages - A map of message keys to template strings (`{name}` placeholders).
+ * @returns An `I18nCatalog`.
+ * @example
+ * import { i18n, t } from '@jiso/server';
+ *
+ * const en = i18n('en', { greeting: 'Hello, {name}!' });
+ * const text: string = t(en, 'greeting', { name: 'Sam' });
+ */
 export function i18n<const Messages extends Record<string, string>>(
   locale: string,
   messages: Messages,
@@ -46,6 +84,15 @@ export function i18n<const Messages extends Record<string, string>>(
   return { locale, messages };
 }
 
+/**
+ * Resolve a message from an i18n catalog, substituting `{name}` placeholders.
+ * The `key` is type-checked against the catalog's messages (SPEC §13.5).
+ *
+ * @param catalog - The catalog to read from.
+ * @param key - A message key present in the catalog.
+ * @param values - Placeholder substitutions.
+ * @returns The resolved, substituted message string.
+ */
 export function t<
   Messages extends Record<string, string>,
   Key extends Extract<keyof Messages, string>,

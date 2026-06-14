@@ -1,9 +1,11 @@
 import type { StorageCapability, StorageObjectInfo } from '@jiso/core';
 
+/** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
   parse(input: unknown): T;
 }
 
+/** Extract the parsed value type of a `Schema`. */
 export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
 
 interface AsyncSchema<T> extends Schema<T> {
@@ -19,6 +21,7 @@ export interface ValidationFailurePayload {
   issues: readonly ValidationIssue[];
 }
 
+/** Thrown by a schema's `parse` when input is invalid; carries the per-field `issues`. */
 export class SchemaValidationError extends Error {
   readonly issues: readonly ValidationIssue[];
 
@@ -29,6 +32,24 @@ export class SchemaValidationError extends Error {
   }
 }
 
+/**
+ * The schema builder. Compose validators with `s.object`, `s.string`,
+ * `s.number`, `s.boolean`, `s.array`, and `s.file`; each returns a `Schema`
+ * whose `parse` coerces and validates `FormData`-shaped input, so the same
+ * schema validates JSON and form submissions (SPEC §6.3).
+ *
+ * @example
+ * import { s } from '@jiso/server';
+ *
+ * const input = s.object({
+ *   productId: s.string(),
+ *   quantity: s.number().int().min(1).default(1),
+ *   tags: s.array(s.string()),
+ * });
+ *
+ * const parsed = input.parse({ productId: 'p1', quantity: '2', tags: 'a' });
+ * // parsed.quantity === 2, parsed.tags === ['a']
+ */
 export const s = {
   array<Item>(item: Schema<Item>): Schema<Item[]> {
     return {

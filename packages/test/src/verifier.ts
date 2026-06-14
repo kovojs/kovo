@@ -24,6 +24,7 @@ export type {
 export type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 export { diagnosticMessage } from './verifier-diagnostics.js';
 
+/** Wraps a database to record operations and assert each write is covered by the touch graph. */
 export interface DbVerifier {
   assertCovered(touchGraphKey?: string): void;
   assertCoveredOperations(observed: readonly ObservedDbOperation[], touchGraphKey?: string): void;
@@ -42,6 +43,15 @@ export interface DbVerifier {
   wrap<Db>(db: Db): Db;
 }
 
+/**
+ * Create a database verifier from a touch graph: `wrap` a db to record its
+ * operations, then assert that every write is covered by the domains its
+ * mutation declared, and every read by its query's read set (SPEC §10.1, §11).
+ *
+ * @param touchGraph - The compiled touch graph to verify against.
+ * @param config - Verification configuration (which tables/domains to observe).
+ * @returns A `DbVerifier`.
+ */
 export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationConfig): DbVerifier {
   const recorder = createObservationRecorder();
   const rootProxyCache = new WeakMap<object, object>();

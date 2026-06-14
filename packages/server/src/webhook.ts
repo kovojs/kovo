@@ -128,6 +128,30 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
   value?: Value;
 }
 
+/**
+ * Declare a webhook endpoint: a named POST receiver that verifies the raw
+ * payload signature before parsing input, then runs a handler that can record
+ * domain changes and is idempotent by construction. Pass a `WebhookVerifier`
+ * (e.g. `stripeSignature`) or `verify: 'none'` with a justification (SPEC §9.1).
+ *
+ * @param name - The webhook's identifier.
+ * @param definition - The `path`, `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).
+ * @returns A `WebhookDeclaration` (a verified `EndpointDeclaration`).
+ * @example
+ * import { domain, webhook, s } from '@jiso/server';
+ *
+ * const order = domain('order');
+ *
+ * export const orderPaid = webhook('order-paid', {
+ *   path: '/webhooks/order-paid',
+ *   verify: 'none',
+ *   verifyJustification: 'internal test fixture',
+ *   input: s.object({ orderId: s.string() }),
+ *   handler(input, context) {
+ *     return { changes: [context.recordChange(order, { keys: [input.orderId] })] };
+ *   },
+ * });
+ */
 export function webhook<
   const Name extends string,
   const Path extends string,

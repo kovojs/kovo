@@ -2,6 +2,7 @@ import type { Domain } from './domain.js';
 
 const ARGUMENT_TOUCH_KEY_PREFIX = 'arg:';
 
+/** A record of one domain a mutation touched, optionally scoped to specific keys. */
 export interface ChangeRecord<DomainKey extends string = string, Input = unknown> {
   domain: DomainKey;
   keys?: readonly string[];
@@ -10,12 +11,14 @@ export interface ChangeRecord<DomainKey extends string = string, Input = unknown
   reason?: string;
 }
 
+/** Options for `invalidate`/`context.invalidate`: row keys, input echo, and a reason. */
 export interface InvalidateOptions<Input = unknown> {
   input?: Input;
   keys?: readonly string[];
   reason?: string;
 }
 
+/** A statically inferred touch site on a mutation: a domain and an optional key expression. */
 export interface MutationTouchSite {
   domain: string;
   keys: null | string;
@@ -26,6 +29,21 @@ interface MutationChangeRecordRegistry {
   touches?: readonly Domain[];
 }
 
+/**
+ * Build a change record that marks a domain (optionally scoped to row `keys`) as
+ * touched. Returned from mutation handlers via `context.invalidate`, or used
+ * directly to declare manual invalidation; every query reading the domain reruns
+ * (SPEC §10.3).
+ *
+ * @param domain - The domain to invalidate.
+ * @param options - Optional row `keys`, an `input` echo, and a `reason`.
+ * @returns A `ChangeRecord` for the touched domain.
+ * @example
+ * import { domain, invalidate } from '@jiso/server';
+ *
+ * const cart = domain('cart');
+ * const change = invalidate(cart, { reason: 'item added' });
+ */
 export function invalidate<const DomainKey extends string, Input = unknown>(
   domain: Domain<DomainKey>,
   options: InvalidateOptions<Input> = {},

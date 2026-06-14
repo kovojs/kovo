@@ -55,6 +55,15 @@ interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
   decodedQueryCount: number;
 }
 
+/**
+ * Refetch named queries over the typed-read endpoint and apply the results to
+ * the query store and bindings. A background "visible return" layer: individual
+ * query failures are reported via `onError` and skipped while the rest continue
+ * (SPEC §4.4, §9.4).
+ *
+ * @param options - The `queries` to refetch, the `queryStore`, a `fetch`, and apply/plan hooks.
+ * @returns The applied query responses.
+ */
 export async function refetchQueries(
   options: RefetchQueriesOptions,
 ): Promise<RefetchedQueryResponse[]> {

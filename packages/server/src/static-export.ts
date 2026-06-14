@@ -15,6 +15,15 @@ import {
 } from './static-export-diagnostics.js';
 import { type StaticExportOptions, type StaticExportResult } from './static-export-types.js';
 
+/**
+ * Pre-render an app's static routes to files on disk for static hosting,
+ * verifying the app aggregate and compile diagnostics before emitting
+ * (SPEC §9.5).
+ *
+ * @param app - An app aggregate from `createApp`.
+ * @param options - Output directory and static-export options.
+ * @returns A `StaticExportResult` describing the emitted files.
+ */
 export async function exportStaticApp(
   app: JisoApp,
   options: StaticExportOptions = {},

@@ -3,15 +3,32 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { escapeAttribute } from './html.js';
 import { formLikeToRecord } from './schema.js';
 
+/** CSRF config: a `secret` and a `sessionId` extractor that binds the token to a session. */
 export interface CsrfOptions<Request> {
   secret: string;
   sessionId: (request: Request) => string | undefined;
 }
 
+/** `CsrfOptions` plus the optional form `field` name to validate against. */
 export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
   field?: string;
 }
 
+/**
+ * Mint a session-bound CSRF synchronizer token for a request (SPEC §6.6).
+ *
+ * @param request - The request to derive the session from.
+ * @param options - The CSRF `secret` and `sessionId` extractor.
+ * @returns The CSRF token string.
+ * @example
+ * import { csrfToken } from '@jiso/server';
+ *
+ * interface Req { session: { id: string } }
+ * const token: string = csrfToken({ session: { id: 's1' } } as Req, {
+ *   secret: 'shop-secret',
+ *   sessionId: (request: Req) => request.session.id,
+ * });
+ */
 export function csrfToken<Request>(request: Request, options: CsrfOptions<Request>): string {
   const sessionId = options.sessionId(request);
   if (!sessionId) throw new Error('csrfToken requires a session id');
@@ -19,6 +36,15 @@ export function csrfToken<Request>(request: Request, options: CsrfOptions<Reques
   return createCsrfToken(sessionId, options.secret);
 }
 
+/**
+ * Render a hidden `<input>` carrying a CSRF token, ready to drop inside a form.
+ * Forms emitted by the framework include this automatically; use it for
+ * hand-written forms (SPEC §6.6).
+ *
+ * @param request - The request to derive the session from.
+ * @param options - CSRF options plus an optional `field` name (defaults to `fw-csrf`).
+ * @returns The hidden-input HTML string.
+ */
 export function csrfField<Request>(
   request: Request,
   options: CsrfOptions<Request> & { field?: string },

@@ -2,31 +2,37 @@ import type { Form, FormInput, InvalidationSets, JsonValue, QueryRegistry } from
 import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 
+/** A pure optimistic predictor: map a query's current value plus the mutation input to the predicted value. */
 export type OptimisticTransform<Input = unknown, Value = unknown> = (
   current: Value,
   input: Input,
 ) => Value;
 
+/** A client-side record of one domain a mutation changed, optionally key-scoped. */
 export interface MutationChangeRecord {
   domain: string;
   keys?: readonly string[];
 }
 
+/** A change a mutation made, carrying its input, used to key optimistic updates. */
 export interface OptimisticChange<Input = unknown> extends MutationChangeRecord {
   input: Input;
 }
 
+/** How to derive the query-instance key an optimistic change applies to. */
 export type OptimisticQueryKey<Input = unknown> =
   | ((change: OptimisticChange<Input>) => string | undefined)
   | string
   | undefined;
 
+/** An optimistic plan: per-query transforms, an optional `queue`, and instance-key derivation. */
 export interface OptimisticPlan<Input = unknown> {
   keys?: Readonly<Record<string, OptimisticQueryKey<Input>>>;
   queue?: string;
   transforms: Record<string, OptimisticTransform<Input>>;
 }
 
+/** One query's optimistic policy: a transform, or `'await-fragment'` to wait for server truth. */
 export type OptimisticEntry<Input = unknown, Value = unknown> =
   | OptimisticTransform<Input, Value>
   | 'await-fragment';
@@ -43,6 +49,25 @@ type InvalidatedQueryValues<Definition> = {
   [QueryName in InvalidatedQueryNames<Definition>]: QueryRegistry[QueryName];
 };
 
+/**
+ * The exhaustiveness-checked optimistic plan for a mutation form. Keyed by the
+ * queries the mutation invalidates, each entry is either a pure
+ * `OptimisticTransform` (predict from input) or `'await-fragment'` (a recorded
+ * decision to wait for server truth). TypeScript requires an entry per
+ * invalidated query, so deleting a transform turns the `satisfies` clause red
+ * (SPEC §10.4, §10.6).
+ *
+ * @example
+ * import { form } from '@jiso/core';
+ * import type { OptimisticFor } from '@jiso/runtime';
+ *
+ * const addToCart = form('cart/add');
+ *
+ * export const addToCartOptimistic = {
+ *   queue: 'cart',
+ *   transforms: {},
+ * } satisfies OptimisticFor<typeof addToCart>;
+ */
 export type OptimisticFor<
   Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
   QueryValues extends Record<string, unknown> = InvalidatedQueryValues<Definition>,

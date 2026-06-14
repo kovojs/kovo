@@ -8,6 +8,7 @@ export interface QueryWireRenderOptions {
   version?: number | string | undefined;
 }
 
+/** Options for `renderQueryScript`: the query `name`, its `value`, and optional instance `key`. */
 export interface QueryScriptRenderOptions {
   key?: string | undefined;
   name: string;
@@ -31,6 +32,18 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
   return `<fw-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</fw-query>`;
 }
 
+/**
+ * Serialize a query's initial value into the inline `<script type="application/json"
+ * fw-query>` tag the runtime hydrates from on first paint. Emit one per query a
+ * page reads so the client store starts populated without a round-trip (SPEC §9.4).
+ *
+ * @param options - The query `name`, its `value`, and optional instance `key`.
+ * @returns The query-script HTML string.
+ * @example
+ * import { renderQueryScript } from '@jiso/server';
+ *
+ * const html: string = renderQueryScript({ name: 'cart', value: { count: 2 } });
+ */
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
 

@@ -38,6 +38,7 @@ export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRo
   search: Record<string, string | string[]>;
 }
 
+/** Options for `createApp`: the routes, queries, mutations, endpoints, document, CSRF, and session config. */
 export interface CreateAppOptions<SessionValue = unknown> {
   clientModules?: VersionedClientModuleRegistry;
   csrf?: CsrfValidationOptions<Request>;
@@ -54,6 +55,7 @@ export interface CreateAppOptions<SessionValue = unknown> {
   sessionProvider?: SessionProvider<Request, SessionValue>;
 }
 
+/** The assembled app aggregate returned by `createApp`; request dispatch starts here. */
 export interface JisoApp<SessionValue = unknown> {
   clientModules: VersionedClientModuleRegistry;
   csrf?: CsrfValidationOptions<Request>;

@@ -1,5 +1,7 @@
+/** A subscriber callback invoked with a query's new value when it changes. */
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
+/** The client query store: get/set/subscribe to query values and take snapshots. */
 export interface QueryStore {
   get<Value = unknown>(name: string, key?: string): Value | undefined;
   snapshot(
@@ -10,8 +12,21 @@ export interface QueryStore {
   subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>, key?: string): () => void;
 }
 
+/** A point-in-time copy of query values, used to roll back optimistic updates. */
 export type QuerySnapshot = Map<string, unknown>;
 
+/**
+ * Create the client-side query store: the in-memory source of truth the loader
+ * hydrates from `<fw-query>` scripts and that bindings and optimistic updates
+ * read and write (SPEC §9.4).
+ *
+ * @returns A fresh `QueryStore`.
+ * @example
+ * import { createQueryStore } from '@jiso/runtime';
+ *
+ * const store = createQueryStore();
+ * store.set('cart', { count: 1 });
+ */
 export function createQueryStore(): QueryStore {
   const values = new Map<string, unknown>();
   const plans = new Map<string, Set<QueryUpdatePlan>>();

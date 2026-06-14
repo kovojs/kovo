@@ -19,6 +19,7 @@ import {
 } from './schema.js';
 import { renderQueryWireHtml } from './wire-html.js';
 
+/** The context a query's `load` receives: the current request value. */
 export interface QueryLoadContext<Request = unknown> {
   request: Request;
 }
@@ -46,6 +47,7 @@ export interface QueryEndpointRegistry<Request = unknown> {
   queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
 }
 
+/** The shape of a query: its key, `load`, `reads` domains, and optional args/output/guard/version. */
 export interface QueryDefinition<
   Key extends string = string,
   Value = unknown,
@@ -100,6 +102,26 @@ export interface RegisteredQueryDefinition {
   version?: BivariantQueryVersion | number | string;
 }
 
+/**
+ * Declare a typed read. A query couples a stable key, a `load` function, and the
+ * domains it `reads`. The read set is the entire invalidation declaration —
+ * nothing else registers anywhere; when a mutation touches a domain in `reads`,
+ * this query reruns (SPEC §10.2). Optional `args` validate inputs, `output`
+ * validates results, and `version`/`instanceKey` control caching identity.
+ *
+ * @param key - The query's stable registry key.
+ * @param definition - `load`, `reads`, and optional `args`/`output`/`guard`/`version`.
+ * @returns A query definition carrying `key`.
+ * @example
+ * import { domain, query } from '@jiso/server';
+ *
+ * const product = domain('product');
+ *
+ * export const productsQuery = query('products', {
+ *   load: () => ({ items: [] as { id: string }[] }),
+ *   reads: [product],
+ * });
+ */
 export function query<
   const Key extends string,
   Input,
@@ -118,10 +140,23 @@ export function query<const Key extends string>(
   return { ...definition, key };
 }
 
+/** Extract the resolved value type a query's `load` produces. */
 export type QueryResult<Query> = Query extends { load: (...args: never[]) => infer Value }
   ? Awaited<Value>
   : unknown;
 
+/**
+ * Execute a query against raw input and a request, returning a typed result
+ * without rendering a wire response. Parses `args`, runs the guard, calls
+ * `load`, and validates `output`. Use the render helpers for HTTP; use this for
+ * the structured result directly, e.g. in tests (SPEC §10.2).
+ *
+ * @param definition - The query to run.
+ * @param rawInput - Unparsed input for the query's `args`.
+ * @param request - The per-request value passed to `load`.
+ * @param options - Optional session provider and error hook.
+ * @returns A `QueryEndpointResult`: a success with the value, or a typed failure.
+ */
 export async function runQuery<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
@@ -171,6 +206,14 @@ export interface QueryEndpointFailure {
   status: 422 | 429;
 }
 
+/**
+ * Run a query and render its HTTP endpoint response (the typed-read endpoint of
+ * SPEC §9.4): a JSON body with caching headers, or a guard-failure response.
+ *
+ * @param definition - The query to run.
+ * @param endpointRequest - The request plus optional search input and guard-failure options.
+ * @returns A `QueryEndpointResponse` (status, headers, JSON body).
+ */
 export async function renderQueryEndpointResponse<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   endpointRequest: QueryEndpointRequest<Request>,

@@ -94,6 +94,7 @@ export type {
 } from './verifier.js';
 export { customVerifier, hmacSignature, standardWebhooks, stripeSignature } from './verifier.js';
 
+/** Any value that survives a JSON round-trip; the boundary type for island state and wire payloads (SPEC §4.1). */
 export type JsonValue =
   | null
   | boolean
@@ -102,8 +103,10 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+/** Opaque result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult = unknown;
 
+/** Typed body of a component: its query bindings, island state factory, and `render`. */
 export interface ComponentDefinition<
   Queries = Record<string, unknown>,
   State extends JsonValue = JsonValue,
@@ -114,6 +117,7 @@ export interface ComponentDefinition<
   render: (queries: Queries, state: State) => ComponentRenderResult;
 }
 
+/** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
   fragmentTarget?: boolean;
   queries?: unknown;
@@ -121,11 +125,34 @@ export interface ComponentDefinitionInput {
   render: (...args: never[]) => ComponentRenderResult;
 }
 
+/** A named component descriptor returned by `component()`. */
 export interface Component<Name extends string, Definition extends ComponentDefinitionInput> {
   name: Name;
   definition: Definition;
 }
 
+/**
+ * Declare a UI component with a stable name, optional query bindings, optional
+ * serializable island state, and a render function. The component name becomes
+ * the custom-element tag the compiler lowers `render` into; queries and state
+ * are passed to `render` at runtime. Authored components are plain TSX — the
+ * compiler derives stamps, bindings, and the client module, so you never write
+ * `data-bind`/`fw-*` attributes by hand (SPEC §4.1).
+ *
+ * @param name - Custom-element tag name; also the component's identity in the registry.
+ * @param definition - `render` plus optional `queries`, `state`, and `fragmentTarget`.
+ * @returns A `Component` descriptor the compiler lowers and the server renders.
+ * @example
+ * import { component } from '@jiso/core';
+ *
+ * type CounterState = { count: number };
+ *
+ * export const Counter = component('app-counter', {
+ *   state: (): CounterState => ({ count: 0 }),
+ *   render: (_queries: Record<string, never>, state: CounterState) =>
+ *     `<button>${state.count}</button>`,
+ * });
+ */
 export function component<
   const Name extends string,
   const Definition extends ComponentDefinitionInput,
@@ -133,35 +160,46 @@ export function component<
   return { definition, name };
 }
 
+/** A typed query handle: a key and the result type it resolves to. */
 export interface Query<Key extends string, Result> {
   key: Key;
   result?: Result;
 }
 
+/** Augmentable registry mapping query keys to result types (declaration-merged by apps). */
 export interface QueryRegistry {}
 
+/** Augmentable registry mapping mutation keys to input/failure types. */
 export interface MutationRegistry {}
 
+/** Augmentable registry mapping fragment-target names to their props. */
 export interface FragmentTargets {}
 
+/** Augmentable registry mapping route paths to their `Route` descriptors. */
 export interface RouteRegistry {}
 
+/** Augmentable registry of declared endpoints. */
 export interface EndpointRegistry {}
 
+/** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
 export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
 
+/** Whether an endpoint matches an exact path or a path prefix. */
 export type EndpointMount = 'exact' | 'prefix';
 
+/** Records an explicit, justified opt-out of default-on CSRF for an endpoint (SPEC §6.6). */
 export interface EndpointCsrfExemption {
   exempt: true;
   justification: string;
 }
 
+/** How an endpoint authenticates: a named verifier, a named custom scheme, or a justified `none`. */
 export type EndpointAuthDeclaration =
   | { kind: 'custom'; name: string }
   | { kind: 'none'; justification: string }
   | { kind: 'verifier'; name: string };
 
+/** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
 export interface Endpoint<
   Path extends string,
   Method extends EndpointMethod = EndpointMethod,
@@ -174,6 +212,7 @@ export interface Endpoint<
   path: Path;
 }
 
+/** Augmentable registry mapping mutation keys to the query names they invalidate (drives `OptimisticFor`). */
 export interface InvalidationSets {}
 
 type RegistryKey<Registry> = keyof Registry extends never
@@ -191,6 +230,7 @@ type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}
 type PathParams<Path extends string> =
   PathParamNames<Path> extends never ? {} : Record<PathParamNames<Path>, string>;
 
+/** A route descriptor: typed path, param/search shapes, and prefetch policy. */
 export interface Route<
   Path extends string,
   Params extends Record<string, string> = PathParams<Path>,
@@ -202,6 +242,7 @@ export interface Route<
   search?: Search;
 }
 
+/** Options accepted by `route()`: param/search shapes and prefetch policy. */
 export interface RouteOptions<
   Params extends Record<string, string> = Record<string, never>,
   Search extends Record<string, JsonValue> = Record<string, JsonValue>,
@@ -231,6 +272,23 @@ type RouteGetFormArgs<Definition> = keyof RouteParams<Definition> extends never
   ? [options?: { params?: RouteParams<Definition> }]
   : [options: { params: RouteParams<Definition> }];
 
+/**
+ * Declare a route descriptor: a typed path plus its param/search shapes. This
+ * is the registry-level seed used for typed links (`href`, `Link`, `redirect`);
+ * to also attach a server page handler, use `route` from `@jiso/server`, which
+ * extends this with `page`, guards, and meta (SPEC §6.4).
+ *
+ * @param path - URL pattern; `:name` segments become typed params.
+ * @param options - Optional `params`/`search` shapes and `prefetch` policy.
+ * @returns A `Route` descriptor keyed by `path`.
+ * @example
+ * import { route } from '@jiso/core';
+ *
+ * export const productRoute = route('/products/:id', {
+ *   params: { id: '' },
+ *   prefetch: 'conservative',
+ * });
+ */
 export function route<
   const Path extends string,
   Params extends Record<string, string> = PathParams<Path>,
@@ -239,6 +297,19 @@ export function route<
   return { ...options, path };
 }
 
+/**
+ * Build a URL string for a registered route, substituting `:param` segments
+ * and appending typed `search` values. Params for the path are required and
+ * type-checked against the route's declared shape (SPEC §6.4).
+ *
+ * @param path - A registered route path.
+ * @param options - `params` for the path segments and optional `search`.
+ * @returns The encoded URL string.
+ * @example
+ * import { href } from '@jiso/core';
+ *
+ * const url: string = href('/products/:id', { params: { id: 'p1' } });
+ */
 export function href<const Path extends RegistryKey<RouteRegistry>>(
   path: Path,
   options: RouteHrefOptions<RouteFor<Path>>,
@@ -249,10 +320,25 @@ export function href<const Path extends RegistryKey<RouteRegistry>>(
   );
 }
 
+/** Result of `Link()`: a resolved `href` string ready to spread onto an anchor. */
 export interface LinkDescriptor {
   href: string;
 }
 
+/**
+ * Build a typed link descriptor (`{ href }`) for a registered route. Same
+ * typing as `href`, returned as an object you can spread onto an anchor
+ * (SPEC §6.4).
+ *
+ * @param path - A registered route path.
+ * @param options - `params` for the path segments and optional `search`.
+ * @returns A `LinkDescriptor` carrying the resolved `href`.
+ * @example
+ * import { Link } from '@jiso/core';
+ *
+ * const link = Link('/products/:id', { params: { id: 'p1' } });
+ * const anchor = `<a href="${link.href}">View</a>`;
+ */
 export function Link<const Path extends RegistryKey<RouteRegistry>>(
   path: Path,
   options: RouteHrefOptions<RouteFor<Path>>,
@@ -260,11 +346,25 @@ export function Link<const Path extends RegistryKey<RouteRegistry>>(
   return { href: href(path, options) };
 }
 
+/** A 303 redirect outcome returned by `redirect()`. */
 export interface Redirect {
   location: string;
   status: 303;
 }
 
+/**
+ * Build a 303 redirect to a registered route. Return it from a route page or
+ * mutation handler to send the browser to a typed destination (SPEC §6.4).
+ *
+ * @param path - A registered route path.
+ * @param options - `params` for the path segments and optional `search`.
+ * @returns A `Redirect` with `status: 303` and the resolved `location`.
+ * @example
+ * import { redirect } from '@jiso/core';
+ *
+ * const toProduct = redirect('/products/:id', { params: { id: 'p1' } });
+ * // toProduct.status === 303
+ */
 export function redirect<const Path extends RegistryKey<RouteRegistry>>(
   path: Path,
   options: RouteHrefOptions<RouteFor<Path>>,
@@ -298,6 +398,18 @@ function searchValueToString(value: JsonValue): string {
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
+/**
+ * Reference a registered query by key for component bindings. This is the
+ * client-facing query handle (just `{ key }`); the server-side query with a
+ * loader and read set is `query` from `@jiso/server` (SPEC §10.2).
+ *
+ * @param key - A registered query key.
+ * @returns A typed `Query` handle whose `result` reflects the registry entry.
+ * @example
+ * import { query } from '@jiso/core';
+ *
+ * export const cart = query('cart');
+ */
 export function query<
   const Key extends RegistryKey<QueryRegistry>,
   Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
@@ -305,6 +417,7 @@ export function query<
   return { key };
 }
 
+/** A typed mutation form handle: its key, input shape, and failure type. */
 export interface Form<
   Key extends string,
   Input extends Record<string, JsonValue> = Record<string, JsonValue>,
@@ -315,15 +428,18 @@ export interface Form<
   key: Key;
 }
 
+/** A typed accessor for one search field of a GET form (`form.get(...).input(name)`). */
 export interface GetFormInput<Name extends string> {
   name: Name;
 }
 
+/** Renderable descriptor for a GET form element: its `action` and `method`. */
 export interface GetFormDescriptor {
   action: string;
   method: 'get';
 }
 
+/** A GET-route search form: its action, `Form` descriptor, and typed `input(name)` accessors. */
 export interface GetForm<
   Path extends string,
   Search extends Record<string, JsonValue> = Record<string, JsonValue>,
@@ -335,6 +451,7 @@ export interface GetForm<
   path: Path;
 }
 
+/** The built-in validation failure shape returned when form input fails parsing. */
 export interface FormValidationFailure {
   code: 'VALIDATION';
   fields: Record<string, string>;
@@ -378,14 +495,17 @@ type MutationErrorFailures<Errors> =
       }[Extract<keyof Errors, string>]
     : JsonValue;
 
+/** Extract the input shape of a `Form` definition. */
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, unknown> ? Input : never;
 
+/** Extract the failure type of a `Form`, unioned with the built-in validation failure. */
 export type FormFailure<Definition> =
   Definition extends Form<string, Record<string, JsonValue>, infer Failure>
     ? Failure | FormValidationFailure
     : never;
 
+/** The string-literal union of a form's field names. */
 export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
 
 type MissingFormFields<
@@ -434,10 +554,31 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
   };
 }
 
+/**
+ * Reference a registered mutation as a typed form, or a GET route as a search
+ * form via `form.get`. `form(key)` returns a `Form` whose input and failure
+ * types come from the mutation registry; `form.get(path)` returns a descriptor
+ * with typed `input(name)` accessors for the route's search fields (SPEC §6.3).
+ *
+ * @example
+ * import { form } from '@jiso/core';
+ *
+ * export const addToCart = form('cart/add');
+ * export const search = form.get('/products');
+ */
 export const form = Object.assign(createMutationForm, {
   get: getRouteForm,
 });
 
+/**
+ * Assert and return the exhaustive field list of a form. TypeScript rejects the
+ * call unless `fields` names every input field of the form, so renaming a field
+ * surfaces as a type error at every call site (SPEC §6.3).
+ *
+ * @param _form - The form whose fields are being enumerated.
+ * @param fields - The complete tuple of the form's field names.
+ * @returns The same `fields` tuple, typed.
+ */
 export function formFields<
   Definition extends Form<string, Record<string, JsonValue>, unknown>,
   const Fields extends readonly FormFieldName<Definition>[],
@@ -445,11 +586,26 @@ export function formFields<
   return fields as Fields;
 }
 
+/** A fragment-target patch: the target name plus the props to re-render it with. */
 export interface FragmentTargetPatch<Target extends string, Props> {
   props: Props;
   target: Target;
 }
 
+/**
+ * Address a server-rendered fragment target for a wire patch, pairing the
+ * target name with its typed props. The mutation wire replaces the live
+ * `<fw-fragment target="…">` with freshly rendered HTML (SPEC §9.1).
+ *
+ * @param target - A registered fragment-target name.
+ * @param props - The props that target's renderer expects.
+ * @returns A `FragmentTargetPatch` carrying the target and props.
+ * @example
+ * import { fragmentTarget } from '@jiso/core';
+ *
+ * const patch = fragmentTarget('product-form', {});
+ * // patch.target === 'product-form'
+ */
 export function fragmentTarget<const Target extends RegistryKey<FragmentTargets>>(
   target: Target,
   props: Target extends keyof FragmentTargets ? FragmentTargets[Target] : Record<string, never>,
@@ -460,19 +616,35 @@ export function fragmentTarget<const Target extends RegistryKey<FragmentTargets>
   return { props, target };
 }
 
+/** A typed event descriptor: its name, payload type, and server-populated payload keys. */
 export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {
   name: Name;
   payload?: Payload;
   serverFactKeys?: readonly string[];
 }
 
+/** Extract the payload type of an `EventDefinition`. */
 export type EventPayload<Definition> =
   Definition extends EventDefinition<string, infer Payload> ? Payload : never;
 
+/** Options for `event()`: which payload keys the server is allowed to supply. */
 export interface EventOptions<Payload extends JsonValue = JsonValue> {
   serverFactKeys?: readonly Extract<keyof Payload, string>[];
 }
 
+/**
+ * Declare a typed client event with a serializable payload. Handlers dispatch
+ * and listen for events by this name; `serverFactKeys` marks payload fields the
+ * server is allowed to populate (SPEC §4.3).
+ *
+ * @param name - Event name used when dispatching and listening.
+ * @param options - Optional `serverFactKeys` naming server-provided payload fields.
+ * @returns An `EventDefinition` whose `payload` type is `Payload`.
+ * @example
+ * import { event } from '@jiso/core';
+ *
+ * export const itemAdded = event<'item-added', { id: string }>('item-added');
+ */
 export function event<const Name extends string, Payload extends JsonValue = JsonValue>(
   name: Name,
   options: EventOptions<Payload> = {},

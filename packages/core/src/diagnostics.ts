@@ -1,5 +1,7 @@
+/** Severity tier of a diagnostic, from blocking `error` down to advisory `notice`. */
 export type DiagnosticSeverity = 'error' | 'warn' | 'lint' | 'notice';
 
+/** The string-literal union of every `FW###` diagnostic code the framework can emit. */
 export type DiagnosticCode =
   | 'FW201'
   | 'FW210'
@@ -37,6 +39,7 @@ export type DiagnosticCode =
   | 'FW410'
   | 'FW411';
 
+/** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
   code: DiagnosticCode;
   detailLabels?: Readonly<Record<string, string>>;
@@ -45,11 +48,24 @@ export interface DiagnosticDefinition {
   message: string;
 }
 
+/** Options controlling how `diagnosticDefinitionText` includes or prefers help text. */
 export interface DiagnosticTextOptions {
   includeHelp?: boolean;
   preferHelp?: boolean;
 }
 
+/**
+ * Render the human-readable text for a diagnostic code, optionally including or
+ * preferring its help line.
+ *
+ * @param code - A `FW###` diagnostic code.
+ * @param options - Whether to include/prefer the help text.
+ * @returns The diagnostic's message (and help, when requested).
+ * @example
+ * import { diagnosticDefinitionText } from '@jiso/core';
+ *
+ * const text: string = diagnosticDefinitionText('FW201', { includeHelp: true });
+ */
 export function diagnosticDefinitionText(
   code: DiagnosticCode,
   options: DiagnosticTextOptions = {},
@@ -62,10 +78,24 @@ export function diagnosticDefinitionText(
   return `${message} ${help}`;
 }
 
+/**
+ * Type guard: narrow an unknown value to a known `FW###` diagnostic code.
+ *
+ * @param value - The value to test.
+ * @returns `true` when `value` is a registered `DiagnosticCode`.
+ * @example
+ * import { isDiagnosticCode } from '@jiso/core';
+ *
+ * const code: unknown = 'FW201';
+ * if (isDiagnosticCode(code)) {
+ *   // code is now typed as DiagnosticCode
+ * }
+ */
 export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
   return typeof value === 'string' && value in diagnosticDefinitions;
 }
 
+/** The frozen registry of every `FW###` diagnostic: code → definition (message, severity, help). */
 export const diagnosticDefinitions = {
   FW201: {
     code: 'FW201',

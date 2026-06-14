@@ -99,6 +99,24 @@ export interface WriteDefinition<
   touches: Touches;
 }
 
+/**
+ * Declare a reusable write: a named operation plus the exact domains it
+ * `touches`. Composing mutations from `write`s makes the touched-domain set
+ * explicit and auditable instead of inferred (SPEC §10.3).
+ *
+ * @param definition - The write's `key`, `touches` domains, and `run` body.
+ * @returns The same `WriteDefinition`, typed.
+ * @example
+ * import { domain, write } from '@jiso/server';
+ *
+ * const cart = domain('cart');
+ *
+ * export const addItem = write({
+ *   key: 'cart/add-item',
+ *   touches: [cart],
+ *   run: (productId: string, quantity: number) => ({ productId, quantity }),
+ * });
+ */
 export function write<
   const Key extends string,
   const Touches extends readonly Domain[],
@@ -153,6 +171,41 @@ export interface RunMutationOptions<
   csrf?: CsrfValidationOptions<Request>;
 }
 
+/**
+ * Declare a typed write. A mutation couples a stable key, an input `Schema`, a
+ * `handler` that performs the write, optional typed `errors`, an optional
+ * `guard`, and an optional `transaction` wrapper. The input schema doubles as
+ * `FormData` coercion; `context.fail(code, payload)` returns a typed failure;
+ * `context.invalidate(domain)` records what the write touched so dependent
+ * queries rerun (SPEC §10.3). CSRF is default-on — supply `csrf` or set it to
+ * `false` with justification.
+ *
+ * @param key - The mutation's stable registry key.
+ * @param definition - Input schema, handler, and optional errors/guard/transaction/csrf.
+ * @returns A `MutationDefinition` carrying `key`.
+ * @example
+ * import { mutation, s } from '@jiso/server';
+ *
+ * interface CartRequest {
+ *   db: { add(productId: string, quantity: number): void };
+ * }
+ *
+ * export const addToCart = mutation('cart/add', {
+ *   csrf: false,
+ *   input: s.object({
+ *     productId: s.string(),
+ *     quantity: s.number().int().min(1).default(1),
+ *   }),
+ *   errors: {
+ *     OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }),
+ *   },
+ *   handler(input, request: CartRequest, context) {
+ *     if (input.quantity > 10) return context.fail('OUT_OF_STOCK', { available: 10 });
+ *     request.db.add(input.productId, input.quantity);
+ *     return { productId: input.productId };
+ *   },
+ * });
+ */
 export function mutation<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -170,6 +223,15 @@ export function mutation<
   return { ...definition, key };
 }
 
+/**
+ * Attach an error-boundary renderer to a fragment renderer, so a fragment that
+ * throws while rendering degrades to boundary HTML instead of failing the whole
+ * mutation response (SPEC §9.1).
+ *
+ * @param renderer - The fragment renderer to wrap.
+ * @param boundary - The renderer invoked when `renderer` throws.
+ * @returns The fragment renderer with an `errorBoundary` attached.
+ */
 export function errorBoundary<Renderer extends FragmentRenderer>(
   renderer: Renderer,
   boundary: ErrorBoundaryRenderer,
@@ -177,6 +239,19 @@ export function errorBoundary<Renderer extends FragmentRenderer>(
   return { ...renderer, errorBoundary: boundary };
 }
 
+/**
+ * Execute a mutation against raw input and a request, returning a typed result
+ * without rendering any wire response. Validates CSRF and input, runs guards and
+ * the transaction wrapper, and collects the change records. Prefer the render
+ * helpers for HTTP; use this when you want the structured result directly (for
+ * example in tests) (SPEC §10.3).
+ *
+ * @param definition - The mutation to run.
+ * @param rawInput - Unparsed input (e.g. `FormData` or a record).
+ * @param request - The per-request value passed to the handler.
+ * @param options - Optional CSRF, session provider, and error hook.
+ * @returns A `MutationResult`: a success with changes/value, or a typed failure.
+ */
 export async function runMutation<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -291,6 +366,15 @@ class MutationRollback extends Error {
   }
 }
 
+/**
+ * Run a mutation and render the SPEC §9.1 fragment-wire response (the
+ * enhanced/JavaScript path). Prefer `renderMutationEndpointResponse`, which
+ * dispatches between this and the no-JS path automatically.
+ *
+ * @param definition - The mutation to run.
+ * @param wireRequest - The parsed wire request (raw input, request, fragment renderers).
+ * @returns A `MutationWireResponse` of fragment HTML.
+ */
 export async function renderMutationResponse<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -433,6 +517,39 @@ function mutationServerErrorResponse<Request>(
   };
 }
 
+/**
+ * Run a mutation and render the single response that serves both modes: the
+ * SPEC §9.1 fragment wire when the request carries the enhancement headers, and
+ * a POST-redirect-GET document otherwise. One handler answers JavaScript and
+ * no-JavaScript clients identically (SPEC §6.3, §9.1).
+ *
+ * @param definition - The mutation to run.
+ * @param endpointRequest - Raw input, request, wire headers, `redirectTo`, fragment renderers, and failure renderers.
+ * @returns A `MutationEndpointResponse` (status, headers, body).
+ * @example
+ * import { mutation, renderMutationEndpointResponse, s } from '@jiso/server';
+ *
+ * interface Req { db: { add(id: string): void } }
+ *
+ * const addToCart = mutation('cart/add', {
+ *   csrf: false,
+ *   input: s.object({ productId: s.string() }),
+ *   handler(input, request: Req) {
+ *     request.db.add(input.productId);
+ *     return { productId: input.productId };
+ *   },
+ * });
+ *
+ * export function submit(rawInput: unknown, request: Req, headers: Headers) {
+ *   return renderMutationEndpointResponse(addToCart, {
+ *     fragmentRenderers: [],
+ *     headers,
+ *     rawInput,
+ *     redirectTo: '/',
+ *     request,
+ *   });
+ * }
+ */
 export async function renderMutationEndpointResponse<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -462,6 +579,15 @@ export async function renderMutationEndpointResponse<
   });
 }
 
+/**
+ * Run a mutation and render the no-JavaScript POST-redirect-GET response: a 303
+ * redirect on success, or a re-rendered failure page. The fallback half of
+ * `renderMutationEndpointResponse` (SPEC §6.3).
+ *
+ * @param definition - The mutation to run.
+ * @param noJsRequest - Raw input, request, `redirectTo`, and optional failure-page renderer.
+ * @returns A `NoJsMutationResponse` (redirect or document).
+ */
 export async function renderNoJsMutationResponse<
   const Key extends string,
   InputSchema extends Schema<unknown>,

@@ -41,6 +41,7 @@ type RouteParamsFor<Path extends string, ParamsSchema extends MaybeSchema<Record
 type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, JsonValue>>> =
   SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
 
+/** The typed context a route `page` receives: parsed `params`, `search`, and the `path`. */
 export interface RouteRequest<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
@@ -51,6 +52,7 @@ export interface RouteRequest<
   search: RouteSearchFor<SearchSchema>;
 }
 
+/** The body of a route passed to `route()`: `page`, param/search schemas, guards, and meta/hints. */
 export interface RouteDefinition<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
@@ -70,6 +72,7 @@ export interface RouteDefinition<
   staticPaths?: readonly string[];
 }
 
+/** A `RouteDefinition` with its `path` attached, as returned by `route()`. */
 export interface RouteDeclaration<
   Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
@@ -81,11 +84,37 @@ export interface RouteDeclaration<
   path: Path;
 }
 
+/** Raw, unparsed `params`/`search` input handed to a route before schema parsing. */
 export interface RouteRequestInput {
   params?: unknown;
   search?: unknown;
 }
 
+/**
+ * Declare a server route with a `page` handler. The path's `:params` and any
+ * `search` schema are parsed and passed to `page` as a typed context; `page`
+ * returns the page value (rendered by `renderRoutePageResponse`), `notFound()`,
+ * or a response outcome. Optional `guard`/`onUnauthenticated` gate access, and
+ * meta/hint fields control the document head (SPEC §6.4). Pages are complete
+ * server-rendered documents — there is no client router.
+ *
+ * @param path - URL pattern; `:name` segments become typed params.
+ * @param definition - The `page` handler plus optional `params`/`search` schemas, guards, and meta.
+ * @returns A `RouteDeclaration` carrying `path`.
+ * @example
+ * import { notFound, route, s } from '@jiso/server';
+ *
+ * const catalog = new Map<string, { name: string }>();
+ *
+ * export const productRoute = route('/products/:id', {
+ *   params: s.object({ id: s.string() }),
+ *   page({ params }) {
+ *     const product = catalog.get(params.id);
+ *     if (!product) return notFound();
+ *     return `<h1>${product.name}</h1>`;
+ *   },
+ * });
+ */
 export function route<
   const Path extends string,
   const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
@@ -124,6 +153,16 @@ export function parseRouteRequest<
   };
 }
 
+/**
+ * Return a 404 not-found outcome from a route `page` handler.
+ *
+ * @returns A `NotFound` marker (`{ notFound: true, status: 404 }`).
+ * @example
+ * import { notFound } from '@jiso/server';
+ *
+ * const missing = notFound();
+ * // missing.status === 404
+ */
 export function notFound(): NotFound {
   return { notFound: true, status: 404 };
 }
@@ -186,6 +225,27 @@ export interface RoutePageFailure {
   status: 404 | 422 | 429;
 }
 
+/**
+ * Run a route and render its full HTTP response: parse params/search, run the
+ * guard, call `page`, and turn the result into a `RoutePageResponse` (status,
+ * headers, body), or a guard-failure response. The default `render` stringifies
+ * the page value; pass a custom `render` to wrap it in a document (SPEC §6.4).
+ *
+ * @param definition - The route to run.
+ * @param input - Raw `params`/`search` to parse.
+ * @param request - The per-request value passed to `page`.
+ * @param render - Turns the page value into an HTML string (defaults to `String`).
+ * @param options - Guard-failure, session, and error options.
+ * @returns A `RoutePageResponse`.
+ * @example
+ * import { renderRoutePageResponse, route } from '@jiso/server';
+ *
+ * const homeRoute = route('/', { page: () => '<h1>Home</h1>' });
+ *
+ * export function renderHome() {
+ *   return renderRoutePageResponse(homeRoute, {}, {});
+ * }
+ */
 export async function renderRoutePageResponse<
   const Path extends string,
   ParamsSchema extends MaybeSchema<Record<string, string>>,

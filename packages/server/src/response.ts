@@ -1,11 +1,16 @@
+/** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
 
+/** A header bag mapping header names to values. */
 export type ResponseHeaders = Record<string, ResponseHeaderValue>;
 
+/** A single mutation-response header value (alias of `ResponseHeaderValue`). */
 export type MutationResponseHeaderValue = ResponseHeaderValue;
 
+/** A mutation-response header bag (alias of `ResponseHeaders`). */
 export type MutationResponseHeaders = ResponseHeaders;
 
+/** The common shape of every server response: `body`, `headers`, and `status`. */
 export interface ServerResponseBase<
   Body,
   Headers extends ResponseHeaders = ResponseHeaders,
@@ -16,6 +21,7 @@ export interface ServerResponseBase<
   status: Status;
 }
 
+/** A renderable route body: a string, bytes, an ArrayBuffer, or a byte stream. */
 export type RouteResponseBody = ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string;
 
 export type WebResponseBody = RouteResponseBody | null;
@@ -24,11 +30,13 @@ export type RouteResponseStatus = 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
 
 export type DocumentRouteResponseBody = Exclude<RouteResponseBody, ArrayBuffer>;
 
+/** The 404 marker returned by `notFound()`. */
 export interface NotFound {
   notFound: true;
   status: 404;
 }
 
+/** A non-document route outcome (file/stream) produced by `respond`. */
 export interface RouteResponseOutcome {
   body: RouteResponseBody;
   contentDisposition: string;
@@ -38,6 +46,7 @@ export interface RouteResponseOutcome {
   routeResponse: true;
 }
 
+/** Options for `respond.file`: content type and optional filename/etag/headers. */
 export interface RouteFileOptions {
   contentType: string;
   etag?: string;
@@ -45,10 +54,12 @@ export interface RouteFileOptions {
   headers?: Record<string, string>;
 }
 
+/** Options for `respond.stream`: `RouteFileOptions` plus inline/attachment disposition. */
 export interface RouteStreamOptions extends RouteFileOptions {
   disposition?: 'attachment' | 'inline';
 }
 
+/** A fully rendered route HTTP response (status, headers, body). */
 export interface RoutePageResponse extends ServerResponseBase<
   RouteResponseBody,
   Record<string, string>,
@@ -68,6 +79,13 @@ export type HeaderSource =
       get(name: string): null | string;
     };
 
+/**
+ * Type guard for anything `readHeader` accepts: a `Headers`, an entries
+ * iterable, or a plain header record.
+ *
+ * @param value - The value to test.
+ * @returns `true` when `value` is a usable header source.
+ */
 export function isHeaderSource(value: unknown): value is HeaderSource {
   if (typeof value !== 'object' || value === null) return false;
 
@@ -82,6 +100,14 @@ export function isHeaderSource(value: unknown): value is HeaderSource {
   return entries.length > 0 && entries.every(([, header]) => isHeaderRecordValue(header));
 }
 
+/**
+ * Read a single header value by name from any `HeaderSource`, case-insensitively,
+ * joining multi-valued headers with `, `.
+ *
+ * @param headers - The header source to read from.
+ * @param name - The header name (case-insensitive).
+ * @returns The header value, or `undefined` if absent.
+ */
 export function readHeader(headers: HeaderSource, name: string): string | undefined {
   if ('get' in headers && typeof headers.get === 'function') {
     return headers.get(name) ?? undefined;
@@ -127,6 +153,23 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
   ) as Headers;
 }
 
+/**
+ * Build a non-document route response from a route `page` handler: `respond.file`
+ * for an attachment download, `respond.stream` for a streamed body. Both set the
+ * content type and disposition; return the result instead of a page value
+ * (SPEC §6.4).
+ *
+ * @example
+ * import { respond, route } from '@jiso/server';
+ *
+ * export const exportRoute = route('/export.csv', {
+ *   page: () =>
+ *     respond.file('id,name\n1,Kettle\n', {
+ *       contentType: 'text/csv',
+ *       filename: 'products.csv',
+ *     }),
+ * });
+ */
 export const respond = {
   file(body: Exclude<RouteResponseBody, ReadableStream<Uint8Array>>, options: RouteFileOptions) {
     return routeResponseOutcome(body, {

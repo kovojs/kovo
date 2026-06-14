@@ -102,6 +102,18 @@ interface FileSystemMetadataRecord {
 const textEncoder = new TextEncoder();
 const sidecarSuffix = '.jiso-storage.json';
 
+/**
+ * Create an in-memory object store implementing `StorageCapability`. Useful for
+ * tests and local development where uploads should not touch disk or a bucket.
+ *
+ * @param options - Optional `now` clock for deterministic `lastModified` values.
+ * @returns A `StorageCapability` backed by a `Map`.
+ * @example
+ * import { createMemoryStorage } from '@jiso/core';
+ *
+ * const storage = createMemoryStorage();
+ * await storage.put('avatars/1.png', new Uint8Array([1, 2, 3]));
+ */
 export function createMemoryStorage(options: MemoryStorageOptions = {}): StorageCapability {
   const objects = new Map<string, StoredMemoryObject>();
   const now = options.now ?? (() => new Date());
@@ -145,6 +157,17 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
   };
 }
 
+/**
+ * Create an object store backed by a directory on the local filesystem. Object
+ * metadata is kept in sidecar JSON files alongside each blob.
+ *
+ * @param options - The `root` directory under which objects are stored.
+ * @returns A `StorageCapability` backed by the filesystem.
+ * @example
+ * import { createFileSystemStorage } from '@jiso/core';
+ *
+ * const storage = createFileSystemStorage({ root: './uploads' });
+ */
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
   const root = options.root;
 
@@ -201,6 +224,13 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
   };
 }
 
+/**
+ * Adapt any S3-compatible object client (AWS S3, R2, MinIO, …) to the
+ * `StorageCapability` interface, so the same upload code works across backends.
+ *
+ * @param options - The bucket and an `S3CompatibleObjectClient` implementation.
+ * @returns A `StorageCapability` backed by the given client and bucket.
+ */
 export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): StorageCapability {
   const prefix = options.prefix === undefined ? undefined : normalizeStoragePrefix(options.prefix);
 
@@ -256,6 +286,17 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
   };
 }
 
+/**
+ * Normalize a storage key: trim, collapse slashes, and reject path-traversal so
+ * keys cannot escape their prefix.
+ *
+ * @param key - The raw object key.
+ * @returns The normalized key.
+ * @example
+ * import { normalizeStorageKey } from '@jiso/core';
+ *
+ * const key: string = normalizeStorageKey('/avatars//1.png');
+ */
 export function normalizeStorageKey(key: string): string {
   if (key.length === 0) throw new Error('Storage key must not be empty.');
   if (key.includes('\0')) throw new Error('Storage key must not contain null bytes.');
@@ -269,6 +310,17 @@ export function normalizeStorageKey(key: string): string {
   return parts.join('/');
 }
 
+/**
+ * Materialize any `StorageBody` (string, ArrayBuffer, typed array, or stream)
+ * into a single `Uint8Array`.
+ *
+ * @param body - The storage body to read.
+ * @returns The body's bytes as a `Uint8Array`.
+ * @example
+ * import { storageBodyToBytes } from '@jiso/core';
+ *
+ * const bytes: Uint8Array = await storageBodyToBytes('hello');
+ */
 export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array> {
   if (typeof body === 'string') return textEncoder.encode(body);
   if (body instanceof ArrayBuffer) return new Uint8Array(body.slice(0));

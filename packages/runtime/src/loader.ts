@@ -20,6 +20,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 
+/** Options for `installJisoLoader`: the root, module importer, query store/plans, and lifecycle hooks. */
 export interface JisoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
   enhancedMutations?: EnhancedMutationLoaderOptions;
@@ -39,6 +40,7 @@ export interface JisoLoaderOptions {
   root: LoaderRoot;
 }
 
+/** A running loader instance: the delegated `events` it listens for and a `dispose` to tear it down. */
 export interface JisoLoader {
   dispose(): void;
   events: readonly string[];
@@ -46,6 +48,16 @@ export interface JisoLoader {
 
 const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 
+/**
+ * Install the Jiso client loader on a root element: wire delegated events,
+ * hydrate the query store from inline scripts, lazy-load island handlers on
+ * first interaction, and apply mutation fragment patches and optimistic updates.
+ * This is the single client entry point; the compiler emits the inline bootstrap
+ * that calls it (SPEC §8). Returns a handle whose `dispose` removes all listeners.
+ *
+ * @param options - The `root`, an `importModule` to load handler bundles, and optional query/lifecycle hooks.
+ * @returns A `JisoLoader` handle.
+ */
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();

@@ -34,6 +34,13 @@ export function versionedClientModuleHref(href: string, version: string): string
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+/**
+ * Create an in-memory registry of versioned client modules — the default store
+ * `createApp` uses to serve hashed island/handler bundles to the browser.
+ *
+ * @param options - Optional registry configuration.
+ * @returns A `VersionedClientModuleRegistry`.
+ */
 export function createMemoryVersionedClientModuleRegistry(
   options: MemoryVersionedClientModuleRegistryOptions = {},
 ): VersionedClientModuleRegistry {

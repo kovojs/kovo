@@ -19,6 +19,15 @@ export type NodeRequestHandler = (
 
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
+/**
+ * Adapt a Web-standard `RequestHandler` (from `createRequestHandler`) to a Node
+ * `http`/`https` `(req, res)` listener, translating between Node and Web
+ * request/response objects.
+ *
+ * @param handler - The Web request handler to adapt.
+ * @param options - Node adapter options (e.g. base URL resolution).
+ * @returns A Node request listener.
+ */
 export function toNodeHandler(
   handler: RequestHandler,
   options: NodeHandlerOptions = {},

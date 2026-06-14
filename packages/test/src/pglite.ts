@@ -1,5 +1,6 @@
 import { PGlite, type PGliteOptions, type Results } from '@electric-sql/pglite';
 
+/** A PGlite-backed test database handle: `exec`/`query`/`sql` SQL helpers plus `read`/`write` and `close`. */
 export interface PgliteTestDb {
   close(): Promise<void>;
   exec(statement: string): Promise<Results[]>;
@@ -17,6 +18,13 @@ export interface PgliteTestDb {
   ): Promise<Row[]>;
   write(table: string, value: Record<string, unknown>): Promise<void>;
 }
+/**
+ * Spin up an ephemeral in-process Postgres (PGlite) for tests, returning a
+ * handle with SQL and row helpers. No external database required.
+ *
+ * @param options - PGlite options (e.g. data directory; defaults to in-memory).
+ * @returns A ready `PgliteTestDb`.
+ */
 export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<PgliteTestDb> {
   const pglite = new PGlite(options);
   await pglite.waitReady;

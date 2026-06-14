@@ -3,6 +3,7 @@ import type { ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 import type { Schema } from './schema.js';
 
+/** A guard's failure outcome: the auth/rate-limit reason, status, and optional retry-after. */
 export interface GuardFailure {
   auth?: 'unauthenticated' | 'unauthorized';
   code: 'RATE_LIMITED' | 'UNAUTHORIZED';
@@ -11,18 +12,22 @@ export interface GuardFailure {
   status: 422 | 429;
 }
 
+/** What a guard returns: `true` to allow, or a `GuardFailure` to reject. */
 export type GuardResult = boolean | GuardFailure;
 
+/** An access guard over a request; may refine the request type when it passes. */
 export interface Guard<Request, RefinedRequest extends Request = Request> {
   (request: Request): GuardResult | Promise<GuardResult>;
   readonly refines?: (request: Request) => request is RefinedRequest;
 }
 
+/** The minimal authenticated-user shape guards inspect: `id` and `roles`. */
 export interface SessionUserLike {
   id?: string;
   roles?: readonly string[];
 }
 
+/** A request carrying an optional session; the constraint for built-in guards. */
 export interface SessionRequestLike {
   session?: {
     id?: string;
@@ -30,12 +35,14 @@ export interface SessionRequestLike {
   } | null;
 }
 
+/** A request narrowed to one with a present session user, produced by `guards.authed`. */
 export type AuthenticatedRequest<Request extends SessionRequestLike> = Request & {
   session: NonNullable<Request['session']> & {
     user: NonNullable<NonNullable<Request['session']>['user']>;
   };
 };
 
+/** The app's session declaration returned by `session()`: `parse`, `provider`, and `schema`. */
 export interface SessionDefinition<Value> {
   parse(request: { session?: unknown }): Value;
   provider<RawRequest>(
@@ -44,10 +51,12 @@ export interface SessionDefinition<Value> {
   schema: Schema<Value>;
 }
 
+/** A function that resolves the session value from a raw request (or null). */
 export type SessionProvider<RawRequest, SessionValue> = (
   request: RawRequest,
 ) => Promise<SessionValue | null | undefined> | SessionValue | null | undefined;
 
+/** Per-request options shared across the lifecycle: error hook and session provider. */
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown> {
   onError?: ServerErrorHandler;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
@@ -86,6 +95,7 @@ interface HttpGuardFailureResponse extends ServerResponseBase<
   303 | 403
 > {}
 
+/** Options for `guards.rateLimit`: window size, max requests, scope, and key function. */
 export interface RateLimitOptions<Request> {
   key?: (request: Request) => string;
   max: number;
@@ -97,6 +107,23 @@ export interface RateLimitOptions<Request> {
 const defaultRateLimitWindowMs = 60_000;
 const defaultRateLimitMaxKeys = 10_000;
 
+/**
+ * Built-in guard factories for routes, queries, and mutations. `guards.authed()`
+ * requires a logged-in session (and refines the request type), `guards.role(r)`
+ * requires a role, `guards.rateLimit(opts)` throttles, and `guards.all(...)`
+ * composes guards left-to-right. Attach the result as a `guard` on a route,
+ * query, or mutation (SPEC §6.5).
+ *
+ * @example
+ * import { guards, route, type SessionRequestLike } from '@jiso/server';
+ *
+ * interface AppRequest extends SessionRequestLike {}
+ *
+ * export const dashboard = route('/dashboard', {
+ *   guard: guards.authed<AppRequest>(),
+ *   page: () => '<h1>Dashboard</h1>',
+ * });
+ */
 export const guards = {
   all<Request, RefinedRequest extends Request = Request>(
     ...items: Guard<Request, RefinedRequest>[]
@@ -157,6 +184,20 @@ export const guards = {
   },
 };
 
+/**
+ * Declare the session schema for the app: how to `parse` the raw session into a
+ * typed value, and how to wire a `provider` that resolves the session from a
+ * request. The parsed type flows into guards and request types (SPEC §6.5).
+ *
+ * @param schema - A `Schema` describing the session shape.
+ * @returns A `SessionDefinition` with `parse`, `provider`, and the `schema`.
+ * @example
+ * import { s, session } from '@jiso/server';
+ *
+ * export const appSession = session(
+ *   s.object({ userId: s.string() }),
+ * );
+ */
 export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> {
   return {
     parse(request) {

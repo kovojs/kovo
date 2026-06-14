@@ -5,8 +5,10 @@ import type {
   EndpointMount,
 } from '@jiso/core';
 
+/** A `Request` guaranteed to carry no session, as endpoint handlers receive. */
 export type EndpointRequest = Request & { readonly session?: never };
 
+/** An endpoint handler: maps a session-free `Request` to a `Response`. */
 export type EndpointHandler = (request: EndpointRequest) => Promise<Response> | Response;
 
 interface EndpointDefinitionBase<Method extends EndpointMethod, Mount extends EndpointMount> {
@@ -26,11 +28,13 @@ interface EndpointCsrfExempt {
   csrfJustification: string;
 }
 
+/** The body passed to `endpoint()`: handler, method/mount, and the CSRF default-or-exempt choice. */
 export type EndpointDefinition<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
 > = EndpointDefinitionBase<Method, Mount> & (EndpointCsrfDefault | EndpointCsrfExempt);
 
+/** An endpoint with its path attached, as returned by `endpoint()`. */
 export interface EndpointDeclaration<
   Path extends string = string,
   Method extends EndpointMethod = EndpointMethod,
@@ -39,6 +43,26 @@ export interface EndpointDeclaration<
   handler: EndpointHandler;
 }
 
+/**
+ * Declare a raw HTTP endpoint: a `handler` taking a `Request` and returning a
+ * `Response`, mounted at an exact path or a path `prefix`. Endpoints are the
+ * escape hatch for machine traffic (webhooks, APIs) that bypasses the page/query
+ * pipeline. CSRF is default-on — opt out with `csrf: false` plus a justification
+ * (SPEC §6.6).
+ *
+ * @param path - The path the endpoint mounts at.
+ * @param definition - The `handler`, plus optional `method`, `mount`, `auth`, and CSRF opt-out.
+ * @returns An `EndpointDeclaration`.
+ * @example
+ * import { endpoint } from '@jiso/server';
+ *
+ * export const health = endpoint('/healthz', {
+ *   method: 'GET',
+ *   csrf: false,
+ *   csrfJustification: 'read-only health probe',
+ *   handler: () => new Response('ok'),
+ * });
+ */
 export function endpoint<
   const Path extends string,
   const Method extends EndpointMethod = EndpointMethod,
@@ -61,6 +85,14 @@ export function endpoint<
   };
 }
 
+/**
+ * Invoke an endpoint's handler for a request (with the session stripped, since
+ * endpoints are session-free by construction).
+ *
+ * @param definition - The endpoint to run.
+ * @param request - The incoming request.
+ * @returns The handler's `Response`.
+ */
 export async function runEndpoint(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   request: Request,
@@ -68,6 +100,14 @@ export async function runEndpoint(
   return definition.handler(endpointRequestWithoutSession(request));
 }
 
+/**
+ * Test whether an endpoint matches a method and pathname, honoring exact vs
+ * `prefix` mounting.
+ *
+ * @param definition - The endpoint to test.
+ * @param input - The incoming `pathname` and optional `method`.
+ * @returns `true` when the endpoint matches.
+ */
 export function endpointMatches(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   input: { method?: string; pathname: string },

@@ -97,6 +97,23 @@ export interface StandardWebhooksOptions {
 const defaultWebhookToleranceSeconds = 5 * 60;
 const textEncoder = new TextEncoder();
 
+/**
+ * Build an HMAC webhook verifier that checks a signature header against the raw
+ * payload bytes before any parsing — the default for machine endpoints (SPEC §9.1).
+ * `stripeSignature` and `standardWebhooks` are presets layered on this.
+ *
+ * @param options - Secret(s), header name, encoding, payload derivation, and tolerance.
+ * @returns An `HmacSignatureVerifier` with an async `verify`.
+ * @example
+ * import { hmacSignature } from '@jiso/core';
+ *
+ * export const verifier = hmacSignature({
+ *   encoding: 'hex',
+ *   header: 'x-signature',
+ *   payload: (request) => request.payload,
+ *   secret: 'whsec_test',
+ * });
+ */
 export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerifier {
   const name = options.name ?? 'hmac';
   const scheme = options.scheme ?? `hmac-sha256:${options.encoding}`;
@@ -122,6 +139,29 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
   };
 }
 
+/**
+ * Wrap a custom verification function as a named webhook verifier, for schemes
+ * that HMAC presets do not cover.
+ *
+ * @param name - Identifier recorded on the verifier and its `custom:<name>` scheme.
+ * @param verify - Predicate over the raw request returning whether it is authentic.
+ * @returns A `CustomWebhookVerifier`.
+ * @example
+ * import { customVerifier, type WebhookHeaders } from '@jiso/core';
+ *
+ * function tokenFrom(headers: WebhookHeaders): string | undefined {
+ *   if ('get' in headers && typeof headers.get === 'function') {
+ *     const value = headers.get('x-token');
+ *     return typeof value === 'string' ? value : undefined;
+ *   }
+ *   return undefined;
+ * }
+ *
+ * export const verifier = customVerifier(
+ *   'static-token',
+ *   (request) => tokenFrom(request.headers) === 'expected',
+ * );
+ */
 export function customVerifier(
   name: string,
   verify: (request: WebhookVerificationRequest) => Promise<boolean> | boolean,
@@ -136,6 +176,17 @@ export function customVerifier(
   };
 }
 
+/**
+ * Preset HMAC verifier for Stripe's `stripe-signature` header (timestamped,
+ * multi-signature, 5-minute tolerance).
+ *
+ * @param options - The Stripe webhook signing secret(s).
+ * @returns An `HmacSignatureVerifier` configured for Stripe.
+ * @example
+ * import { stripeSignature } from '@jiso/core';
+ *
+ * export const verifier = stripeSignature({ secret: 'whsec_test' });
+ */
 export function stripeSignature(options: StripeSignatureOptions): HmacSignatureVerifier {
   // D6 E3 / SPEC §9.1: machine endpoints verify raw payload bytes before parsing.
   return hmacSignature({
@@ -156,6 +207,17 @@ export function stripeSignature(options: StripeSignatureOptions): HmacSignatureV
   });
 }
 
+/**
+ * Preset HMAC verifier for the Standard Webhooks spec (`webhook-id`,
+ * `webhook-timestamp`, `webhook-signature` headers).
+ *
+ * @param options - The Standard Webhooks signing secret(s).
+ * @returns An `HmacSignatureVerifier` configured for Standard Webhooks.
+ * @example
+ * import { standardWebhooks } from '@jiso/core';
+ *
+ * export const verifier = standardWebhooks({ secret: 'whsec_test' });
+ */
 export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatureVerifier {
   return hmacSignature({
     encoding: 'base64',

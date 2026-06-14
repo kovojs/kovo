@@ -1,6 +1,7 @@
 import { inspect, isDeepStrictEqual } from 'node:util';
 import type { InferSchema, MutationDefinition, MutationResult, Schema } from '@jiso/server';
 
+/** An expected mutation failure: a code, or a code with an expected payload. */
 export type MutationErrorExpectation<
   Errors extends Record<string, Schema<unknown>>,
   Code extends Extract<keyof Errors, string>,
@@ -11,11 +12,13 @@ export type MutationErrorExpectation<
       payload?: InferSchema<Errors[Code]>;
     };
 
+/** One property-test case: an initial `state` and the mutation `input` to apply. */
 export interface PropertyCase<State, Input> {
   input: Input;
   state: State;
 }
 
+/** Options for `propertyTest`: the optimistic `predict`, the eventual `apply`, the `cases`, and an optional `shape` projection. */
 export interface PropertyTestOptions<State, Input, ClientShape = unknown> {
   apply: (state: State, input: Input) => State;
   cases: Iterable<PropertyCase<State, Input>>;
@@ -23,10 +26,21 @@ export interface PropertyTestOptions<State, Input, ClientShape = unknown> {
   shape?: (state: State) => ClientShape;
 }
 
+/** The result of `propertyTest`: how many `cases` ran. */
 export interface PropertyTestResult {
   cases: number;
 }
 
+/**
+ * Assert that a mutation result is a typed failure with the expected code (and,
+ * optionally, payload), returning the typed payload for further assertions.
+ * Throws with a descriptive message on mismatch (SPEC §10.3).
+ *
+ * @param mutation - The mutation whose result is being checked (for typing and messages).
+ * @param result - The `MutationResult` to assert against.
+ * @param expected - The expected error code, or `{ code, payload }`.
+ * @returns The typed error payload.
+ */
 export function assertMutationError<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -62,6 +76,26 @@ export function assertMutationError<
   return result.error.payload as InferSchema<Errors[Code]>;
 }
 
+/**
+ * Property-check that an optimistic prediction matches the eventual server
+ * result across many cases. For each case it runs `predict` and the real
+ * `apply`, projects both with `shape`, and throws on the first divergence —
+ * proving the optimistic transform is sound (SPEC §10.4).
+ *
+ * @param options - The `predict`, `apply`, `cases`, and optional `shape` projection.
+ * @returns A `PropertyTestResult` with the number of cases run.
+ * @example
+ * import { propertyTest } from '@jiso/test';
+ *
+ * type Cart = { count: number };
+ *
+ * const result = propertyTest<Cart, { quantity: number }>({
+ *   apply: (state, input) => ({ count: state.count + input.quantity }),
+ *   predict: (state, input) => ({ count: state.count + input.quantity }),
+ *   cases: [{ state: { count: 0 }, input: { quantity: 2 } }],
+ * });
+ * // result.cases === 1
+ */
 export function propertyTest<State, Input, ClientShape = State>(
   options: PropertyTestOptions<State, Input, ClientShape>,
 ): PropertyTestResult {

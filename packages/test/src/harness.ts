@@ -11,6 +11,7 @@ import { createDbVerifier } from './verifier.js';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 import type { DbVerificationConfig } from './verifier-observation.js';
 
+/** The context a Jiso test receives: the `db`, and helpers to `exec` mutations, run `query`s, load a `page`, and read verification diagnostics. */
 export interface JisoTestContext<Db = unknown> {
   db: Db;
   dbHandle(): Db;
@@ -33,6 +34,7 @@ export interface JisoTestRequest<Db> {
   db: Db;
 }
 
+/** Options for `createJisoTestHarness`: the `db`, optional `pages`, request stub, touch graph, and verification config. */
 export interface JisoTestHarnessOptions<Db> {
   db: Db;
   pages?: Record<string, string | (() => string | Promise<string>)>;
@@ -41,8 +43,17 @@ export interface JisoTestHarnessOptions<Db> {
   verification?: DbVerificationConfig;
 }
 
+/** Options for a single `exec` of a mutation inside the harness. */
 export type JisoTestExecOptions<Request> = HarnessMutationOptions<Request>;
 
+/**
+ * Create a test harness around a database: run mutations and queries, load
+ * pages, and—when given a touch graph and verification config—verify that
+ * writes only touch the domains their mutations declared (SPEC §10.1, §11).
+ *
+ * @param options - The `db` plus optional pages, request stub, touch graph, and verification config.
+ * @returns A `JisoTestContext` with `exec`/`query`/`page` helpers.
+ */
 export function createJisoTestHarness<Db>(
   options: JisoTestHarnessOptions<Db>,
 ): JisoTestContext<Db> {

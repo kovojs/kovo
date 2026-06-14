@@ -12,11 +12,29 @@ export type ImportHandlerModule = (url: string) => Promise<Record<string, unknow
 
 export type { ElementParamValue, HandlerContext, IslandSignalScope } from './handler-context.js';
 
+/** A client event handler: receives the DOM `event` and a typed island `HandlerContext`. */
 export type ClientHandler<State = unknown, Params = Record<string, ElementParamValue>> = (
   event: Event,
   ctx: HandlerContext<State, Params>,
 ) => void | Promise<void>;
 
+/**
+ * Type a client event handler for an island. The handler receives the DOM event
+ * and a `HandlerContext` exposing the island's typed `state` and element params.
+ * The compiler links it to an `on:event` binding and loads its module on first
+ * interaction (SPEC §4.3). Identity function at runtime; it exists for typing.
+ *
+ * @param fn - The handler implementation.
+ * @returns The same handler, typed.
+ * @example
+ * import { handler } from '@jiso/runtime';
+ *
+ * type CounterState = { count: number };
+ *
+ * export const increment = handler<CounterState>((_event, ctx) => {
+ *   ctx.state.count += 1;
+ * });
+ */
 export function handler<State = unknown, Params = Record<string, ElementParamValue>>(
   fn: ClientHandler<State, Params>,
 ): ClientHandler<State, Params> {

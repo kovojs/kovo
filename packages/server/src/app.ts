@@ -16,6 +16,24 @@ export type {
 } from './app-types.js';
 import type { CreateAppOptions, JisoApp, RequestHandler } from './app-types.js';
 
+/**
+ * Assemble the app aggregate: the routes, queries, mutations, endpoints,
+ * document options, and session provider that make up a Jiso application. The
+ * returned `JisoApp` is the single object request dispatch starts from; pass it
+ * to `createRequestHandler` or a platform adapter like `toNodeHandler`
+ * (SPEC §9.5).
+ *
+ * @param options - Routes, queries, mutations, endpoints, document, CSRF, and session config.
+ * @returns A `JisoApp` aggregate with defaults filled in.
+ * @example
+ * import { createApp, createRequestHandler, route } from '@jiso/server';
+ *
+ * const app = createApp({
+ *   routes: [route('/', { page: () => '<h1>Home</h1>' })],
+ * });
+ *
+ * export const handler = createRequestHandler(app);
+ */
 export function createApp<SessionValue = unknown>(
   options: CreateAppOptions<SessionValue> = {},
 ): JisoApp<SessionValue> {
@@ -40,6 +58,14 @@ export function createApp<SessionValue = unknown>(
   };
 }
 
+/**
+ * Turn a `JisoApp` into a `(request: Request) => Response` handler that dispatches
+ * to routes, queries, mutations, and endpoints. Requires an app built by
+ * `createApp` (SPEC §9.5).
+ *
+ * @param app - An app aggregate from `createApp`.
+ * @returns A request handler suitable for the platform's server.
+ */
 export function createRequestHandler(app: JisoApp): RequestHandler {
   if (!isJisoApp(app)) {
     throw new TypeError(
