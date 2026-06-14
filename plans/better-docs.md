@@ -53,9 +53,9 @@ reference-grade precision injected mid-lesson; self-congratulation. Rewrite rule
 - [x] Establish the voice template by rewriting `guides/queries.md` per the Voice Rules (scenario
       opener, plain headings, second person, citations in a `<details>` footer). It is the exemplar
       the rewrite lanes copy.
-- [ ] Rewrite remaining guides to lead with a goal and footer the citations: `mutations`,
+- [x] Rewrite remaining guides to lead with a goal and footer the citations: `mutations`,
       `optimistic`, `styling`, `deployment`, `testing`, `fw-explain`, `streaming`,
-      `compiler-internals`. (In progress — lane `agent/docs-guides`.)
+      `compiler-internals`. Integrated `8ab1dabc`; all code/captures preserved, build + link-check green.
 - [x] De-preach the 8 tutorial chapters: kept the tested extracted snippets (all `{{snippet}}`
       markers byte-identical), stripped aphoristic headers/triads, citations to per-chapter footers.
       Integrated `79e5cd9e`; build resolves all snippets, link-check green.
