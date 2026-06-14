@@ -1,17 +1,21 @@
 ---
 title: Mutations & forms
-description: Write to the server through real forms, with typed inputs, typed errors, and a round-trip you can read in the Network panel.
+description: Write to the server through one real form that works with or without JavaScript, with typed inputs and typed errors.
 order: 2
 ---
 
 # Mutations & forms
 
-A mutation is a named, schema-validated POST. Its no-JS form is the contract; the enhanced
-JavaScript path is an upgrade of the same endpoint, not a different one. One handler, two
-response modes. By the end of this guide you'll have followed one mutation from declaration to
-the bytes on the wire — including what happens when it fails. SPEC §9.1
+You need an "Add to cart" button that posts to the server, validates its input, refreshes the
+badge, and shows a typed error when the item is out of stock. You write that once, as a single
+mutation. The no-JS form posts it; the enhanced path fetches the same endpoint and morphs the
+result in. This guide follows one mutation from declaration to the bytes on the wire, including
+what happens when it fails.
 
 ## Declare a mutation
+
+A mutation is a named POST with a schema-validated input. Here is the one the commerce reference
+app uses:
 
 ```ts
 // app.ts — the commerce reference app's shape
@@ -38,27 +42,26 @@ export const addToCart = mutation('cart/add', {
     if (!found || found.stock < input.quantity) {
       return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
     }
-    // writes go through the domain layer — direct db access in handlers is lint FW330
+    // writes go through the domain layer — direct db access in handlers is a lint error
     return { productId: input.productId, quantity: input.quantity };
   },
 });
 ```
 
-Everything here is declared exactly once and derived everywhere else. SPEC §6.3
+You declare each part once, and the framework derives the rest from it:
 
-- **`input`** is the single source of truth for field names, types, _and_ FormData coercion.
-  Attribute and form values arrive as strings; `s.number().int().min(1).default(1)` says how
-  `quantity` becomes a number, once, schema-style. The same schema validates the wire at runtime —
-  types-without-validators was rejected. SPEC §6.6
-- **`errors`** declares the failure vocabulary. `context.fail('OUT_OF_STOCK', …)` is typed against
-  it, and consumers receive an exhaustive discriminated union. SPEC §9.2
-- **`guard`** composes combinators; `authed` refines `req.session` so the user is non-null inside
-  the handler, and every mutation joins the `fw explain --unguarded` audit — the report of
-  everything reachable without authentication. SPEC §10.3
+- **`input`** names the fields, their types, and their FormData coercion. Form values arrive as
+  strings; `s.number().int().min(1).default(1)` says how `quantity` becomes a number. The same
+  schema validates the wire at runtime.
+- **`errors`** is the failure vocabulary. `context.fail('OUT_OF_STOCK', …)` is typed against it,
+  and callers receive an exhaustive discriminated union.
+- **`guard`** composes from combinators. `authed` refines `req.session` so the user is non-null
+  inside the handler, and every mutation shows up in the `fw explain --unguarded` audit — the
+  report of everything reachable without authentication.
 
-## The form is the output
+## Render the form
 
-The rendered form is a real form. This is what the commerce app serves:
+The rendered form is an ordinary form. This is what the commerce app serves:
 
 ```html
 <form method="post" action="/_m/cart/add" enhance>
@@ -69,12 +72,11 @@ The rendered form is a real form. This is what the commerce app serves:
 </form>
 ```
 
-With JavaScript disabled, this form simply posts. Nothing about it is framework-flavored except
-the `enhance` marker the loader uses to intercept submission when JS _is_ present.
+With JavaScript disabled, this form posts. The only framework-specific part is the `enhance`
+marker, which the loader uses to intercept submission when JS is present.
 
-On the authoring side, field names and completeness are type-checked against the mutation's input
-schema — a missing required field or a typo'd `name` is a compile error, not a silent validation
-failure in production. SPEC §6.3
+Field names are type-checked against the mutation's input schema. A missing required field or a
+typo'd `name` is a compile error, so you find out at build time instead of in production:
 
 ```ts
 import { form, formFields } from '@jiso/core';
@@ -85,9 +87,9 @@ formFields(f, ['productId', 'quantity']); // ✗ compile error if a required fie
 
 ## CSRF is on by default
 
-`fw-csrf` is a session-bound synchronizer token stamped into every emitted mutation form and
-verified before anything else happens — before schema parsing, before replay lookup, before
-guards. In app code that means rendering the field: SPEC §6.6
+`fw-csrf` is a session-bound token stamped into every emitted mutation form. The server verifies
+it before anything else — before schema parsing, before replay lookup, before guards. In app code,
+you render the field:
 
 ```ts
 import { csrfField } from '@jiso/server';
@@ -95,13 +97,13 @@ import { csrfField } from '@jiso/server';
 const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name="csrf" value="…">
 ```
 
-CSRF is default-on for server-rendered mutation endpoints. The only opt-out is an explicit
-`csrf: false` per mutation, reserved for non-browser or externally authenticated endpoints —
-and that posture is visible in the `fw explain --endpoints` audit. SPEC §11.4
+CSRF stays on for server-rendered mutation endpoints unless you set `csrf: false` on a mutation,
+which you reserve for non-browser or externally authenticated endpoints. Any opt-out shows up in
+the `fw explain --endpoints` audit.
 
 ## The request lifecycle
 
-Every mutation POST runs the same fixed pipeline. SPEC §10.3
+Every mutation POST runs the same pipeline:
 
 ```
 CSRF validation → replay lookup by idempotency key → parse + coerce input (schema)
@@ -110,15 +112,15 @@ CSRF validation → replay lookup by idempotency key → parse + coerce input (s
                      ↘ on fail(): ROLLBACK → typed error fragment, 422
 ```
 
-Queries re-run _after_ commit, so a response can never render pre-commit data — which would
-visibly revert the user's optimistic update. The `FW-Idem` hidden field makes duplicate
-submissions replayable: the server answers a duplicate with the stored response instead of
-re-executing the handler. SPEC §10.3, §9.1
+Queries re-run after commit, so a response never renders pre-commit data — which would visibly
+revert the user's optimistic update. The `FW-Idem` hidden field makes duplicate submissions
+replayable: the server answers a duplicate with the stored response instead of running the handler
+again.
 
 ## The enhanced round-trip
 
-With JS present, the loader intercepts the submit and turns it into a fetch. The wire is designed
-to be read in the Network panel. SPEC §9.1
+With JS present, the loader intercepts the submit and turns it into a fetch. You can read the whole
+exchange in the Network panel:
 
 ```http
 POST /_m/cart/add HTTP/1.1
@@ -141,27 +143,28 @@ FW-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1"]
 </fw-fragment>
 ```
 
-The pieces:
+What each piece does:
 
-- **`FW-Targets`** is read off the live DOM's `fw-deps` stamps at submit time. The server holds no
-  session of what's on screen — it answers a stateless question. This matters for
+- **`FW-Targets`** is read off the live DOM's `fw-deps` stamps at submit time. The server keeps no
+  session of what's on screen; it answers a self-contained question. This matters for
   [deployment](/guides/deployment/).
 - **`<fw-query>`** chunks replace the client's query values and run each query's update plan across
-  every dependent island. SPEC §4.8
+  every dependent island.
 - **`<fw-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and nested
-  island state survive; `mode="append"` is the explicit vocabulary for pagination and streams.
+  island state survive. `mode="append"` is the explicit vocabulary for pagination and streams.
 - **`FW-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
   mutation input or failure detail.
 
-A fragment update is a tiny navigation, not a different programming model: fragments are rendered
-by the same functions as full pages, so partials cannot drift from pages. SPEC §9.1
+Fragments are rendered by the same functions as full pages, so a partial can't drift from the page
+it patches.
 
 ## The no-JS path: POST-redirect-GET
 
-The same endpoint, seeing no `FW-Fragment` header, answers PRG. From the commerce app's tests:
-a successful no-JS `cart/add` returns `303` with `Location: /cart` and `Cache-Control: no-store`,
-and the next GET renders the updated page. Errors re-render the full page with messages in place.
-You do not write this twice — the server helper renders both modes from one declaration. SPEC §9.1
+When the same endpoint sees no `FW-Fragment` header, it answers with PRG. In the commerce app's
+tests, a successful no-JS `cart/add` returns `303` with `Location: /cart` and
+`Cache-Control: no-store`, and the next GET renders the updated page. Errors re-render the full page
+with messages in place. You don't write this path twice — one server helper renders both modes from
+the same declaration:
 
 ```ts
 import { renderMutationEndpointResponse } from '@jiso/server';
@@ -181,12 +184,12 @@ return renderMutationEndpointResponse(addToCart, {
 });
 ```
 
-## When a mutation fails: the 422 path
+## Handle a failure: the 422 path
 
-Failures get the same one-endpoint treatment. Validation failures (schema, with field paths) and
-declared error codes return HTTP 422 with a fragment that re-renders the form with messages; the
-enhanced path morphs just the form, the no-JS path re-renders the page. The commerce app's
-out-of-stock failure on the enhanced path is exactly: SPEC §9.2
+Failures use the same one endpoint. Validation failures (schema, with field paths) and declared
+error codes return HTTP 422 with a fragment that re-renders the form with messages. The enhanced
+path morphs just the form; the no-JS path re-renders the page. Here is the commerce app's
+out-of-stock failure on the enhanced path:
 
 ```http
 HTTP/1.1 422 Unprocessable Content
@@ -199,22 +202,22 @@ Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
 </fw-fragment>
 ```
 
-Because the form is morphed (not replaced), the user's field values and focus survive the error.
-Programmatic submission gets the same union, typed:
+Because the form is morphed rather than replaced, the user's field values and focus survive the
+error. A programmatic submission gets the same typed union:
 
 ```ts
 ctx.submit(addToCart, {
   input: { productId, quantity: 1 },
   onError: (err) => {
     if (err.code === 'OUT_OF_STOCK') toast(`Only ${err.data.availableQuantity} left`);
-    // err is the exhaustive union of declared codes plus VALIDATION (SPEC §6.3)
+    // err is the exhaustive union of declared codes plus VALIDATION
   },
 });
 ```
 
-Unexpected server failures stay outside the typed union and never leak internals: rendering
-failures after commit return a render-error fragment with HTTP 500 and a sanitized `FW-Changes`
-header for writes that already committed. SPEC §9.2
+Unexpected server failures stay outside the typed union and don't leak internals. A render failure
+after commit returns a render-error fragment with HTTP 500 and a sanitized `FW-Changes` header for
+the writes that already committed.
 
 ## Audit what you built
 
@@ -236,11 +239,23 @@ manual-invalidates: -
 updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart
 ```
 
-Guard chain, input surface, write set, derived invalidations, and every consumer that updates —
-one diffable artifact. See [reading fw check & fw explain](/guides/fw-explain/). SPEC §5.3
+One diffable artifact gives you the guard chain, the input surface, the write set, the derived
+invalidations, and every consumer that updates. See
+[reading fw check & fw explain](/guides/fw-explain/).
 
 ## Next
 
 - [Optimistic updates](/guides/optimistic/) — make the round-trip feel instant.
 - [Queries & invalidation](/guides/queries/) — where `invalidates:` comes from.
 - [Testing](/guides/testing/) — mutations as request/response assertions, no browser.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+The mutation contract and the enhanced round-trip: SPEC §9.1. Declare-once derivation: SPEC §6.3.
+Input schema and FormData coercion, plus CSRF default-on: SPEC §6.6. Typed errors and the 422 path:
+SPEC §9.2. The guard chain, the unguarded audit, and the request lifecycle: SPEC §10.3. The
+endpoints audit: SPEC §11.4. Update plans across dependent islands: SPEC §4.8. Direct db access in a
+handler is **FW330**. The `fw explain` artifact format: SPEC §5.3.
+
+</details>
