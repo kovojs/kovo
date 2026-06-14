@@ -179,6 +179,84 @@ function cleanJsDoc(raw) {
     .trim();
 }
 
+/**
+ * Parse a cleaned JSDoc body into structured parts: the summary (text before
+ * the first block tag), `@param`/`@returns` rows, and `@example` code blocks.
+ * The whole doc is also kept verbatim so callers that want the raw text (and
+ * the SPEC §N citations inside it) still have it.
+ */
+function parseJsDoc(doc) {
+  const lines = doc.split('\n');
+  const summaryLines = [];
+  const params = [];
+  const examples = [];
+  let returns;
+  let mode = 'summary';
+  let buffer = [];
+
+  const flushExample = () => {
+    if (mode !== 'example') return;
+    examples.push(buffer.join('\n').replace(/\n+$/, ''));
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const paramMatch = /^@param\s+(\S+)\s*-?\s*(.*)$/.exec(line);
+    const returnsMatch = /^@returns?\s*(.*)$/.exec(line);
+    const exampleMatch = /^@example\b\s*(.*)$/.exec(line);
+
+    if (paramMatch || returnsMatch || exampleMatch) {
+      flushExample();
+      if (paramMatch) {
+        mode = 'param';
+        params.push({ description: paramMatch[2].trim(), name: paramMatch[1] });
+      } else if (returnsMatch) {
+        mode = 'returns';
+        returns = returnsMatch[1].trim();
+      } else {
+        mode = 'example';
+        buffer = exampleMatch[1].trim() ? [exampleMatch[1]] : [];
+      }
+      continue;
+    }
+
+    // Continuation lines extend whatever tag is currently open.
+    if (mode === 'summary') {
+      summaryLines.push(line);
+    } else if (mode === 'param') {
+      const last = params[params.length - 1];
+      last.description = `${last.description} ${line.trim()}`.trim();
+    } else if (mode === 'returns') {
+      returns = `${returns} ${line.trim()}`.trim();
+    } else if (mode === 'example') {
+      buffer.push(line);
+    }
+  }
+  flushExample();
+
+  return {
+    examples,
+    params,
+    returns: returns === undefined || returns === '' ? undefined : returns,
+    summary: summaryLines.join('\n').trim(),
+  };
+}
+
+function escapeTableCell(text) {
+  return text.replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
+}
+
+function renderParamsTable(parsed) {
+  const rows = parsed.params.map(
+    (param) => `| \`${param.name}\` | ${escapeTableCell(param.description)} |`,
+  );
+  if (parsed.returns !== undefined) {
+    rows.push(`| *(returns)* | ${escapeTableCell(parsed.returns)} |`);
+  }
+  if (rows.length === 0) return [];
+  return ['| Parameter | Description |', '| --- | --- |', ...rows];
+}
+
 /** JSDoc comment for a declaration (variable declarations carry their docs on
  * the enclosing statement). Doc text passes through verbatim so "SPEC §N.N"
  * citations survive for the pipeline's auto-linker. */
@@ -301,16 +379,30 @@ function collectExports(sourceFile, checker, packageName) {
   return entries;
 }
 
+/** Render one export: summary prose, a params/returns table, the type
+ * signature, then each `@example` as its own fenced `ts` block (the shape the
+ * `@example` typecheck gate extracts). Undocumented exports keep the explicit
+ * marker so they are flagged, never omitted. */
 function renderEntry(entry) {
-  return [
-    `### \`${entry.name}\``,
-    '',
-    entry.doc === '' ? UNDOCUMENTED : entry.doc,
-    '',
-    '```ts',
-    entry.signature,
-    '```',
-  ].join('\n');
+  const parsed = entry.doc === '' ? undefined : parseJsDoc(entry.doc);
+  const body = parsed && parsed.summary !== '' ? parsed.summary : entry.doc;
+
+  const lines = [`### \`${entry.name}\``, '', entry.doc === '' ? UNDOCUMENTED : body, ''];
+
+  if (parsed) {
+    const table = renderParamsTable(parsed);
+    if (table.length > 0) lines.push(...table, '');
+  }
+
+  lines.push('```ts', entry.signature, '```');
+
+  if (parsed) {
+    for (const example of parsed.examples) {
+      lines.push('', '**Example**', '', '```ts', example, '```');
+    }
+  }
+
+  return lines.join('\n');
 }
 
 function renderPage(pkg, entries) {

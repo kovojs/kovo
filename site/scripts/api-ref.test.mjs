@@ -91,4 +91,40 @@ describe('api-ref generator', () => {
       await rm(again, { force: true, recursive: true });
     }
   }, 60_000);
+
+  it('renders @param/@returns as a markdown table for documented exports', () => {
+    // The `component` export is documented with params + a returns row.
+    const section = corePage.slice(corePage.indexOf('### `component`'));
+    expect(section).toContain('| Parameter | Description |');
+    expect(section).toContain('| --- | --- |');
+    expect(section).toMatch(/^\| `name` \| .+\|$/m);
+    expect(section).toMatch(/^\| \*\(returns\)\* \| .+\|$/m);
+  });
+
+  it('renders @example blocks as fenced ts sections after an Example marker', () => {
+    const section = corePage.slice(
+      corePage.indexOf('### `component`'),
+      corePage.indexOf('### `route`'),
+    );
+    expect(section).toContain('**Example**');
+    // The example is its own fenced block and imports the real export.
+    const exampleStart = section.indexOf('**Example**');
+    expect(section.slice(exampleStart)).toContain("import { component } from '@jiso/core';");
+    // Each documented export still has exactly one signature fence.
+    expect(section.match(/```ts/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('documents the app-facing export tier across packages', () => {
+    // Coverage must be meaningful, not the historical "0 documented".
+    const expected = {
+      '@jiso/core': 40,
+      '@jiso/drizzle': 4,
+      '@jiso/runtime': 15,
+      '@jiso/server': 70,
+      '@jiso/test': 12,
+    };
+    for (const pkg of result.packages) {
+      expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);
+    }
+  });
 });
