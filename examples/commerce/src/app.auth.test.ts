@@ -20,6 +20,7 @@ import {
 import {
   commerceAuthRequest,
   mutationSetCookieHeaders,
+  readOrders,
   setCookieHeaders,
 } from './app-test-helpers.js';
 
@@ -39,7 +40,7 @@ describe('commerce example', () => {
       },
     });
 
-    expect(db.orders[0]?.userId).toBe('u1');
+    expect((await readOrders(db))[0]?.userId).toBe('u1');
   });
 
   it('maps Better Auth cookies into the commerce session provider', async () => {

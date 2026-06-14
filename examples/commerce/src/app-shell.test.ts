@@ -37,6 +37,7 @@ import {
   createCommerceAppShell,
   createCommerceStaticExportShell,
 } from './app-shell.js';
+import { readOrders } from './app-test-helpers.js';
 import { commerceSharedAppShellDevPlugin, commerceViteConfig } from '../vite.config.ts';
 
 let server: Server | undefined;
@@ -282,7 +283,7 @@ describe('commerce app shell HTTP entry', () => {
         '[{"domain":"order","keys":["order-dev-http-1"]}]',
       );
       expect(webhookResponseBody).toBe('ok');
-      expect(viteShell.commerceAppShell.db.orders).toContainEqual({
+      expect(await readOrders(viteShell.commerceAppShell.db)).toContainEqual({
         id: 'order-dev-http-1',
         productId: 'p1',
         qty: 1,
