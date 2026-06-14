@@ -23,11 +23,12 @@ function escapeHtml(value) {
 }
 
 const NAV = [
-  { href: '/docs/installation/', label: 'Docs' },
+  { href: '/docs/why-jiso/', label: 'Docs' },
   { href: '/tutorial/', label: 'Tutorial' },
   { href: '/guides/', label: 'Guides' },
   { href: '/gallery/', label: 'Gallery' },
   { href: '/api/', label: 'API' },
+  { href: '/reference/', label: 'Reference' },
   { href: '/spec/', label: 'Spec' },
 ];
 
@@ -218,6 +219,8 @@ const SECTION_INTROS = {
   gallery:
     'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
   guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
+  reference:
+    'Generated catalogs for agents and humans — every framework diagnostic and its fix, kept in sync with the registry.',
   tutorial:
     'Build a real e-commerce app in eight chapters — catalog, cart, optimistic updates, streaming, and a behavior graph your CI can check.',
 };
