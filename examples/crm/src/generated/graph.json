@@ -1,0 +1,236 @@
+{
+  "mutations": [
+    {
+      "guards": ["authed"],
+      "inputFields": ["id", "name", "email", "ownerId"],
+      "invalidates": ["contact"],
+      "key": "addContact",
+      "session": "crmSession",
+      "writes": ["contact"]
+    },
+    {
+      "guards": ["authed"],
+      "inputFields": ["id", "contactId", "stage", "amount", "ownerId"],
+      "invalidates": ["contact", "deal"],
+      "key": "createDeal",
+      "session": "crmSession",
+      "writes": ["contact", "deal"]
+    },
+    {
+      "guards": ["authed"],
+      "inputFields": ["dealId", "stage"],
+      "invalidates": ["deal"],
+      "key": "moveDeal",
+      "session": "crmSession",
+      "writes": ["deal"]
+    },
+    {
+      "guards": ["authed"],
+      "inputFields": ["dealId"],
+      "invalidates": ["deal"],
+      "key": "closeDeal",
+      "session": "crmSession",
+      "writes": ["deal"]
+    }
+  ],
+  "queries": [
+    {
+      "domains": ["contact"],
+      "query": "contactList"
+    },
+    {
+      "domains": ["deal"],
+      "query": "dealList"
+    },
+    {
+      "domains": ["deal"],
+      "query": "contactDealCount"
+    },
+    {
+      "domains": ["deal"],
+      "query": "openDeals"
+    },
+    {
+      "domains": ["deal"],
+      "query": "pipelineByStage"
+    }
+  ],
+  "optimistic": [
+    {
+      "mutation": "addContact",
+      "query": "contactList",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "closeDeal",
+      "query": "contactDealCount",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "closeDeal",
+      "query": "dealList",
+      "status": "await-fragment"
+    },
+    {
+      "mutation": "closeDeal",
+      "query": "openDeals",
+      "status": "hand-written"
+    },
+    {
+      "mutation": "closeDeal",
+      "query": "pipelineByStage",
+      "status": "await-fragment",
+      "derivation": {
+        "status": "PUNTED",
+        "reason": {
+          "code": "opaque-shape",
+          "shape": "group-by-having"
+        }
+      }
+    },
+    {
+      "mutation": "createDeal",
+      "query": "contactDealCount",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "createDeal",
+      "query": "contactList",
+      "status": "hand-written"
+    },
+    {
+      "mutation": "createDeal",
+      "query": "dealList",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "createDeal",
+      "query": "openDeals",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "createDeal",
+      "query": "pipelineByStage",
+      "status": "hand-written",
+      "derivation": {
+        "status": "PUNTED",
+        "reason": {
+          "code": "opaque-shape",
+          "shape": "group-by-having"
+        }
+      }
+    },
+    {
+      "mutation": "moveDeal",
+      "query": "contactDealCount",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "moveDeal",
+      "query": "dealList",
+      "status": "derived",
+      "derivation": {
+        "status": "derived"
+      }
+    },
+    {
+      "mutation": "moveDeal",
+      "query": "openDeals",
+      "status": "await-fragment",
+      "derivation": {
+        "status": "PUNTED",
+        "reason": {
+          "code": "membership-entry",
+          "field": "stage"
+        }
+      }
+    },
+    {
+      "mutation": "moveDeal",
+      "query": "pipelineByStage",
+      "status": "await-fragment",
+      "derivation": {
+        "status": "PUNTED",
+        "reason": {
+          "code": "opaque-shape",
+          "shape": "group-by-having"
+        }
+      }
+    }
+  ],
+  "touchGraph": {
+    "addContact": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "contact",
+          "keys": null,
+          "site": "examples/crm/src/mutations.ts:58",
+          "via": "contacts"
+        }
+      ],
+      "unresolved": []
+    },
+    "createDeal": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "contact",
+          "keys": "arg:contactId",
+          "site": "examples/crm/src/mutations.ts:89",
+          "via": "contacts"
+        },
+        {
+          "domain": "deal",
+          "keys": null,
+          "site": "examples/crm/src/mutations.ts:88",
+          "via": "deals"
+        }
+      ],
+      "unresolved": []
+    },
+    "moveDeal": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "deal",
+          "keys": "arg:dealId",
+          "site": "examples/crm/src/mutations.ts:147",
+          "via": "deals"
+        }
+      ],
+      "unresolved": []
+    },
+    "closeDeal": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "deal",
+          "keys": "arg:dealId",
+          "site": "examples/crm/src/mutations.ts:213",
+          "via": "deals"
+        }
+      ],
+      "unresolved": []
+    }
+  },
+  "components": []
+}
