@@ -372,6 +372,42 @@ describe('compiled interactive gallery demos in the browser', () => {
     await expectNoAxeViolations(toastRoot);
   });
 
+  it('has no axe violations in the static styled component fixtures', async () => {
+    // SPEC §12.1: the static-only styled families (no interactive end-state to drive) must each be
+    // axe-clean as rendered. These fixtures are otherwise only geometry/hash-checked, so this is the
+    // sole accessibility gate for the static tier.
+    const staticOnlyFixtures = [
+      '/components/alert',
+      '/components/avatar',
+      '/components/badge',
+      '/components/breadcrumb',
+      '/components/button',
+      '/components/card',
+      '/components/kbd',
+      '/components/separator',
+      '/components/skeleton',
+      '/components/table',
+    ] as const satisfies readonly StaticVisualFixturePath[];
+
+    for (const fixture of staticOnlyFixtures) {
+      // Each fixture's route element is itself a <main> landmark. We axe-run that single route
+      // <main> in isolation (via a <div> host, not the <main> wrapper mountStaticGalleryRoute uses
+      // for its geometry baselines) so the assertion is about the styled component's own markup, not
+      // a nested-landmark artifact of the test harness's mount wrapper.
+      const host = document.createElement('div');
+      host.innerHTML = staticVisualFixtureHtml[fixture];
+      document.body.append(host);
+      const route = required(host.querySelector<HTMLElement>(`[data-gallery-route="${fixture}"]`));
+
+      await expectNoAxeViolations(route);
+
+      // Each route is its own <main> landmark; remove this fixture before mounting the next one so
+      // the document never holds two main landmarks at once (axe's landmark rules are document-wide,
+      // not scoped to the axe.run root).
+      host.remove();
+    }
+  });
+
   it('keeps stable visual baselines for the compiled route and representative states', async () => {
     await page.viewport(900, 700);
 
@@ -847,6 +883,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentBillingPanel.hidden).toBe(false);
       expect(currentOutput.textContent).toBe('billing');
     });
+
+    // SPEC §12.1: the accordion expanded end-state (one trigger aria-expanded=true with its
+    // panel visible) must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('opens and resolves a native alert dialog through generated handlers', async () => {
@@ -889,6 +929,11 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
+
+    // SPEC §12.1: the open alertdialog top-layer state (role=alertdialog, aria-modal, labelled +
+    // described, focus trapped inside) must stay axe-clean. axe.run(root) descends into the
+    // promoted <dialog> because it remains a DOM child of root.
+    await expectNoAxeViolations(root);
 
     cancel.click();
 
@@ -1003,7 +1048,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('Express');
     });
 
-    // SPEC §13.1 G3: the select end-state after a canceled disabled change (labelled
+    // SPEC §12.1: the select end-state after a canceled disabled change (labelled
     // native select with grouped/disabled options) must stay axe-clean.
     await expectNoAxeViolations(root);
   });
@@ -1069,7 +1114,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('Chicago city');
     });
 
-    // SPEC §13.1 G3: the combobox open state (expanded combobox with an active descendant
+    // SPEC §12.1: the combobox open state (expanded combobox with an active descendant
     // over a visible role="listbox" carrying a disabled option) must stay axe-clean.
     await expectNoAxeViolations(root);
 
@@ -1162,7 +1207,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentDevelopment.getAttribute('data-highlighted')).toBe('');
     });
 
-    // SPEC §13.1 G3: the autocomplete open state (expanded combobox with an active
+    // SPEC §12.1: the autocomplete open state (expanded combobox with an active
     // descendant over the suggestion datalist) must stay axe-clean.
     await expectNoAxeViolations(root);
 
@@ -1228,6 +1273,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"pressed":true}');
     });
 
+    // SPEC §12.1: the toggle pressed end-state (aria-pressed=true, data-state=on) must stay
+    // axe-clean. Asserted before the keyboard toggle flips it back off.
+    await expectNoAxeViolations(root);
+
     button.focus();
     await userEvent.keyboard('{Enter}');
 
@@ -1248,6 +1297,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(input.indeterminate).toBe(true);
     expect(output.textContent).toBe('indeterminate');
 
+    // SPEC §12.1: the checkbox mixed/indeterminate state (aria-checked=mixed, .indeterminate=true)
+    // is an axe-stable end-state and must stay axe-clean.
+    await expectNoAxeViolations(root);
+
     input.click();
 
     await vi.waitFor(() => {
@@ -1255,6 +1308,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(input.checked).toBe(true);
       expect(input.indeterminate).toBe(false);
     });
+
+    // SPEC §12.1: the checkbox checked end-state (native checked=true) must stay axe-clean.
+    // Asserted before the Space keypress flips it back off.
+    await expectNoAxeViolations(root);
 
     input.focus();
     await userEvent.keyboard('{Space}');
@@ -1329,7 +1386,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).getAll('gallery-notifications')).toEqual(['updates', 'billing']);
     });
 
-    // SPEC §13.1 G3: the checkbox-group multi-checked/roving state after keyboard move and
+    // SPEC §12.1: the checkbox-group multi-checked/roving state after keyboard move and
     // toggle must stay axe-clean.
     await expectNoAxeViolations(root);
   });
@@ -1351,6 +1408,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
     });
+
+    // SPEC §12.1: the disclosure open end-state (trigger aria-expanded=true, panel revealed) must
+    // stay axe-clean. Asserted before the keyboard toggle collapses it.
+    await expectNoAxeViolations(root);
 
     button.focus();
     await userEvent.keyboard('{Enter}');
@@ -1403,7 +1464,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).get('gallery-seat-count')).toBe('4');
     });
 
-    // SPEC §13.1 G3: the number-field value/required/stepper state after input and stepper
+    // SPEC §12.1: the number-field value/required/stepper state after input and stepper
     // changes must stay axe-clean.
     await expectNoAxeViolations(root);
   });
@@ -1563,7 +1624,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).get('gallery-shipping-disabled')).toBeNull();
     });
 
-    // SPEC §13.1 G3: the field/fieldset valid + re-enabled state after clearing the error and
+    // SPEC §12.1: the field/fieldset valid + re-enabled state after clearing the error and
     // toggling fieldset disablement must stay axe-clean, complementing the initial error state.
     await expectNoAxeViolations(root);
   });
@@ -1623,6 +1684,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(fourth.getAttribute('data-complete')).toBe('');
       expect(output.textContent).toBe('1234');
     });
+
+    // SPEC §12.1: the OTP filled/complete aggregate end-state (all slots filled, group
+    // data-complete set, hidden aggregate input carrying the value) must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('keeps generated OTP delete and paste states accessible', async () => {
@@ -1720,6 +1785,11 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
 
+    // SPEC §12.1: the open modal dialog top-layer state (aria-labelledby/aria-describedby wired,
+    // focus trapped inside the promoted <dialog>) must stay axe-clean. axe.run(root) descends into
+    // the dialog because it remains a DOM child of root.
+    await expectNoAxeViolations(root);
+
     close.click();
 
     await vi.waitFor(() => {
@@ -1786,6 +1856,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).get('gallery-notifications')).toBe('enabled');
     });
 
+    // SPEC §12.1: the switch on end-state (role=switch, native checked=true) must stay axe-clean.
+    // Asserted before the Space keypress flips it back off.
+    await expectNoAxeViolations(root);
+
     input.focus();
     await userEvent.keyboard('{Space}');
 
@@ -1812,6 +1886,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
       expect(root.open).toBe(true);
     });
+
+    // SPEC §12.1: the collapsible open end-state (native <details open>, summary aria-expanded=true,
+    // content revealed) must stay axe-clean. Asserted before the keyboard toggle collapses it.
+    await expectNoAxeViolations(root);
 
     summary.focus();
     await userEvent.keyboard('{Enter}');
@@ -1847,6 +1925,11 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentContent.matches(':popover-open')).toBe(true);
       expect(currentOutput.textContent).toBe('open');
     });
+
+    // SPEC §12.1: the popover open top-layer state (content :popover-open, promoted to the top
+    // layer) must stay axe-clean. The popover content stays a DOM child of root, so axe.run(root)
+    // descends into it.
+    await expectNoAxeViolations(root);
 
     root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
 
@@ -1992,7 +2075,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(currentForm).get('gallery-contact-channel')).toBe('email');
     });
 
-    // SPEC §13.1 G3: the radio-group selected/roving state after keyboard and click changes
+    // SPEC §12.1: the radio-group selected/roving state after keyboard and click changes
     // must stay axe-clean, including the disabled item.
     await expectNoAxeViolations(root);
   });
@@ -2041,7 +2124,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('75');
     });
 
-    // SPEC §13.1 G3: the slider end-state after the native range moves to 75 (updated
+    // SPEC §12.1: the slider end-state after the native range moves to 75 (updated
     // aria-valuetext and range ratio) must stay axe-clean.
     await expectNoAxeViolations(root);
   });
@@ -2140,6 +2223,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('100%');
     });
 
+    // SPEC §12.1: the progress complete state (value=max=100, aria-valuetext describing it) must
+    // stay axe-clean.
+    await expectNoAxeViolations(root);
+
     pending.click();
 
     await vi.waitFor(() => {
@@ -2156,6 +2243,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentProgress.getAttribute('aria-valuetext')).toBe('Upload pending');
       expect(currentOutput.textContent).toBe('pending');
     });
+
+    // SPEC §12.1: the progress indeterminate end-state (no value attribute, data-state=indeterminate
+    // with an aria-valuetext) must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('renders pure markup styled surfaces and updates submit state through generated handlers', async () => {
@@ -2241,6 +2332,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentMeter.getAttribute('aria-valuetext')).toBe('92 percent capacity');
       expect(currentOutput.textContent).toBe('92');
     });
+
+    // SPEC §12.1: the meter optimum end-state (value in the optimum band, data-state=optimum with an
+    // aria-valuetext) must stay axe-clean.
+    await expectNoAxeViolations(root);
   });
 
   it('updates tabs stamped state from generated click and manual keyboard handlers', async () => {
@@ -2354,7 +2449,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentAuditPanel.hidden).toBe(true);
     });
 
-    // SPEC §13.1 G3: the active tab/panel state after keyboard roving and activation must
+    // SPEC §12.1: the active tab/panel state after keyboard roving and activation must
     // stay axe-clean, not only the initial render.
     await expectNoAxeViolations(root);
   });
@@ -2411,7 +2506,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(pressedOutput.textContent).toBe('link');
     });
 
-    // SPEC §13.1 G3: the toolbar roving/pressed state after keyboard move and press must stay
+    // SPEC §12.1: the toolbar roving/pressed state after keyboard move and press must stay
     // axe-clean, including the disabled toolbar button.
     await expectNoAxeViolations(root);
   });
@@ -2477,7 +2572,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('bold,italic');
     });
 
-    // SPEC §13.1 G3: the toggle-group multi-pressed/roving state after keyboard move and
+    // SPEC §12.1: the toggle-group multi-pressed/roving state after keyboard move and
     // press must stay axe-clean, including the disabled item.
     await expectNoAxeViolations(root);
   });
@@ -2525,7 +2620,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dropdownContent.hidden).toBe(false);
     });
 
-    // SPEC §13.1 G3: the dropdown-menu open state (expanded trigger, visible role="menu"
+    // SPEC §12.1: the dropdown-menu open state (expanded trigger, visible role="menu"
     // with a disabled item) must stay axe-clean.
     await expectNoAxeViolations(dropdownRoot);
 
@@ -2576,7 +2671,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(content.hidden).toBe(false);
     });
 
-    // SPEC §13.1 G3: the context-menu open state (anchored, visible role="menu" with a
+    // SPEC §12.1: the context-menu open state (anchored, visible role="menu" with a
     // disabled item) must stay axe-clean.
     await expectNoAxeViolations(contextRoot);
 
@@ -2640,7 +2735,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(openOutput.textContent).toBe('file');
     });
 
-    // SPEC §13.1 G3: the menubar open state (expanded top-level item, visible nested
+    // SPEC §12.1: the menubar open state (expanded top-level item, visible nested
     // role="menu" with a disabled item) must stay axe-clean.
     await expectNoAxeViolations(menubarDemo);
 
@@ -2694,7 +2789,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(viewport.hidden).toBe(false);
     });
 
-    // SPEC §13.1 G3: the navigation-menu open state (expanded trigger, visible content
+    // SPEC §12.1: the navigation-menu open state (expanded trigger, visible content
     // viewport) must stay axe-clean.
     await expectNoAxeViolations(navRoot);
 
@@ -2792,7 +2887,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(commandInput.textContent).toBe('invite');
     });
 
-    // SPEC §13.1 G3: the command open dialog state (filtered listbox with an active
+    // SPEC §12.1: the command open dialog state (filtered listbox with an active
     // descendant and a disabled item) must stay axe-clean.
     await expectNoAxeViolations(commandRoot);
 
@@ -2863,7 +2958,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(toastOutput.textContent).toBe('canceled');
     });
 
-    // SPEC §13.1 G3: the toast open state after a canceled dismiss (live region with a
+    // SPEC §12.1: the toast open state after a canceled dismiss (live region with a
     // disabled action that did not auto-dismiss) must stay axe-clean.
     await expectNoAxeViolations(toastRoot);
 
@@ -2910,6 +3005,11 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(content.matches(':popover-open')).toBe(true);
       expect(output.textContent).toBe('open');
     });
+
+    // SPEC §12.1: the tooltip open state (trigger aria-describedby pointing at the visible
+    // role=tooltip content, content :popover-open) must stay axe-clean. The tooltip content is a
+    // popover="manual" DOM child of root, so axe.run(root) descends into it.
+    await expectNoAxeViolations(root);
 
     button.dispatchEvent(new Event('pointerleave', { bubbles: true }));
 
@@ -3084,6 +3184,11 @@ async function expectGeneratedSideDialog(options: {
     expect(root.getAttribute('fw-state')).toBe('{"open":true}');
     expect(dialog.open).toBe(true);
   });
+
+  // SPEC §12.1: the open sheet/drawer side-dialog top-layer state (dialog.open, side anchored) must
+  // stay axe-clean. Covers both sheet and drawer via this shared helper, asserted while open before
+  // close. axe.run(root) descends into the promoted <dialog> (DOM child of root).
+  await expectNoAxeViolations(root);
 
   close.click();
 
