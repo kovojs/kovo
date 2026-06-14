@@ -8988,7 +8988,39 @@ function symbolicValueFromExpression(
   const paramPath = paramPathForExpression(expression, paramSymbolKeys);
   if (paramPath) return { kind: 'param', path: paramPath };
 
+  // Runtime-valid column arithmetic: `sql`${t.col} - ${quantity}`` (the way real
+  // drizzle expresses a self-referential SET, since JS `-` on a column is invalid).
+  const sqlArith = sqlTemplateArith(expression, paramSymbolKeys, selfColumn);
+  if (sqlArith) return sqlArith;
+
   return { kind: 'opaque', expr: expression.getText() };
+}
+
+/** Parse `sql`${A} <op> ${B}`` (a two-interpolation binary template) into an Arith value. */
+function sqlTemplateArith(
+  node: Node,
+  paramSymbolKeys: ReadonlySet<string>,
+  selfColumn?: SelfColumnResolver,
+): SymbolicValue | undefined {
+  if (!Node.isTaggedTemplateExpression(node)) return undefined;
+  const tag = node.getTag();
+  if (!Node.isIdentifier(tag) || tag.getText() !== 'sql') return undefined;
+  const template = node.getTemplate();
+  if (!Node.isTemplateExpression(template)) return undefined;
+  if (template.getHead().getLiteralText().trim() !== '') return undefined;
+
+  const spans = template.getTemplateSpans();
+  if (spans.length !== 2) return undefined;
+  const [first, second] = spans;
+  if (!first || !second) return undefined;
+  if (second.getLiteral().getLiteralText().trim() !== '') return undefined;
+
+  const op = arithOperator(first.getLiteral().getLiteralText().trim());
+  if (!op) return undefined;
+  const left = symbolicValueFromExpression(first.getExpression(), paramSymbolKeys, selfColumn);
+  const right = symbolicValueFromExpression(second.getExpression(), paramSymbolKeys, selfColumn);
+  if (left.kind === 'opaque' || right.kind === 'opaque') return undefined;
+  return { kind: 'arith', left, op, right };
 }
 
 /** Trace an identifier/property-access to a handler param and return its dot-path, else undefined. */
@@ -9026,7 +9058,17 @@ function callbackParameterSymbolKeys(fn: Node): Set<string> {
   const keys = new Set<string>();
   for (const parameter of queryCallbackParameterNodes(fn)) {
     if (isDrizzleDatabaseTypeAnnotation(parameter)) continue;
-    const symbolKey = resolvedSymbolKey(parameter.getNameNode().getSymbol());
+    const nameNode = parameter.getNameNode();
+    // Destructured input — `handler({ productId, quantity }, request)` — binds each
+    // field as a top-level $input param (path = the binding name, the $input field).
+    if (Node.isObjectBindingPattern(nameNode)) {
+      for (const element of nameNode.getElements()) {
+        const key = resolvedSymbolKey(element.getNameNode().getSymbol());
+        if (key) keys.add(key);
+      }
+      continue;
+    }
+    const symbolKey = resolvedSymbolKey(nameNode.getSymbol());
     if (symbolKey) keys.add(symbolKey);
   }
   return keys;

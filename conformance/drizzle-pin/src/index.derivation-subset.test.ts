@@ -155,6 +155,52 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       ]);
     });
 
+    it('destructured mutation input binds each field as a top-level $input param', () => {
+      expect(
+        effectsOf(
+          COMMON_IMPORTS,
+          ITEMS_TABLE,
+          'export async function add({ id, qty }: { id: string; qty: number }, db: PgDatabase<any, any, any>) {',
+          '  await db.insert(items).values({ id, qty });',
+          '}',
+        ),
+      ).toEqual([
+        {
+          op: 'insert',
+          table: 'items',
+          values: { id: { kind: 'param', path: 'id' }, qty: { kind: 'param', path: 'qty' } },
+        },
+      ]);
+    });
+
+    it('runtime-valid sql`${col} - ${param}` SET extracts as a self-referential Arith', () => {
+      expect(
+        effectsOf(
+          COMMON_IMPORTS,
+          ITEMS_TABLE,
+          'export const item = domain({',
+          '  decr: write(async (db: PgDatabase<any, any, any>, id: string, qty: number) => {',
+          '    await db.update(items).set({ stock: sql`${items.stock} - ${qty}` }).where(eq(items.id, id));',
+          '  }),',
+          '});',
+        ),
+      ).toEqual([
+        {
+          match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+          op: 'update',
+          sets: {
+            stock: {
+              kind: 'arith',
+              left: { kind: 'col', column: 'stock' },
+              op: '-',
+              right: { kind: 'param', path: 'qty' },
+            },
+          },
+          table: 'items',
+        },
+      ]);
+    });
+
     it('UPSERT (onConflictDoUpdate) carries both values and conflict SET', () => {
       expect(
         effectsOf(
