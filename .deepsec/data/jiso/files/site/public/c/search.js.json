@@ -4,43 +4,31 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        43,
-        66
-      ],
+      "lineNumbers": [43, 66],
       "snippet": "\nfunction renderResults(element, entries) {\n  element.innerHTML = entries\n    .map(\n      (entry) =>",
       "matchedPattern": "innerHTML assignment"
     },
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        46
-      ],
+      "lineNumbers": [46],
       "snippet": "    .map(\n      (entry) =>\n        `<li><a href=\"${entry.url}\"><span class=\"result-section\">${entry.section}</span><br>${entry.title}</a></li>`,\n    )\n    .join('');",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        35,
-        36
-      ],
+      "lineNumbers": [35, 36],
       "snippet": "  const text = entry.text.toLowerCase();\n  for (const term of terms) {\n    if (title.includes(term)) total += 10;\n    else if (text.includes(term)) total += 1;\n    else return 0;",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "dangerous-html",
-      "lineNumbers": [
-        43
-      ],
+      "lineNumbers": [43],
       "snippet": "}\n\nfunction renderResults(element, entries) {\n  element.innerHTML = entries\n    .map(\n      (entry) =>\n        `<li><a href=\"${entry.url}\"><span class=\"result-section\">${entry.section}</span><br>${entry.title}</a></li>`,\n    )",
       "matchedPattern": "dangerouslySetInnerHTML from props (trace source)"
     },
     {
       "vulnSlug": "dangerous-html",
-      "lineNumbers": [
-        66
-      ],
+      "lineNumbers": [66],
       "snippet": "  const results = document.getElementById('site-search-results');\n  if (!results) return;\n  if (terms.length === 0) {\n    results.innerHTML = '';\n    return;\n  }\n  const index = await loadIndex();\n  const matches = index",
       "matchedPattern": "dangerouslySetInnerHTML from fetched data (MEDIUM RISK)"
     }

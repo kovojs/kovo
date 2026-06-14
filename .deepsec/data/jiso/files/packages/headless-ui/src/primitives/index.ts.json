@@ -4,12 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        450,
-        472,
-        488,
-        810
-      ],
+      "lineNumbers": [450, 472, 488, 810],
       "snippet": "export {\n  fieldControlAttributes,\n  fieldDescriptionAttributes,\n  fieldErrorAttributes,\n  fieldLabelAttributes,",
       "matchedPattern": "weak cipher algorithm"
     }

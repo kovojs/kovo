@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "object-injection",
-      "lineNumbers": [
-        67
-      ],
+      "lineNumbers": [67],
       "snippet": "\n    const name = camelCase(attribute.name.slice('data-p-'.length));\n    params[name] = coerceElementParam(attribute.value, paramTypes[name]);\n  }\n",
       "matchedPattern": "Dynamic property assignment from user input"
     }

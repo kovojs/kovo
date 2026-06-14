@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        30,
-        102,
-        116
-      ],
+      "lineNumbers": [30, 102, 116],
       "snippet": "  children?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  id?: string;\n  label?: string;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -22,9 +18,7 @@
       "vulnSlug": "xss",
       "title": "MenubarItem renders itemLabel/itemValue as unescaped text (stored XSS sink)",
       "description": "In MenubarItem (line 168) the fallback chain `{props.children ?? props.itemLabel ?? props.itemValue}` emits a scalar string prop as a JSX text child. The @jiso/server JSX runtime does NOT escape text children (jsx-runtime.ts:83 returns `String(children)`; the L12-15 comment confirms child strings are 'inserted as written'). Unlike attribute values, which ARE escaped (jsx-runtime.ts:66), `itemLabel` and `itemValue` are written into the element body verbatim. `itemValue` is a required prop and is semantically a plain-text label/value, not pre-rendered HTML, so a developer would not expect to escape it. If an app populates a menubar from user/DB data (e.g. saved-search names, product categories), a value like `<img src=x onerror=alert(document.cookie)>` is emitted raw. Because Jiso mutation responses are server-rendered HTML fragments applied client-side via innerHTML/insertAdjacentHTML, and the initial SSR HTML is also raw, this is stored XSS (threat-model attack #3). NOTE: this is a framework-wide characteristic of the unescaped-text-children design (an open question per the runtime comment and the v1 cleanup ledger), not a defect unique to this file; the bare `{props.children}` composition slots elsewhere are by-design and not flagged. Confidence is low because exploitability depends on the consuming app routing user data into itemLabel/itemValue.",
-      "lineNumbers": [
-        168
-      ],
+      "lineNumbers": [168],
       "recommendation": "Escape scalar text props before emitting them as children — e.g. render `{props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}` (escapeHtml from @jiso/server), or resolve the framework's open JSX text-escaping decision so the runtime escapes string children by default while preserving an explicit raw-HTML opt-in for composition.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

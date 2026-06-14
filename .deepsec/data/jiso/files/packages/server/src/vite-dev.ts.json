@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "ssrf",
-      "lineNumbers": [
-        151,
-        174,
-        194
-      ],
+      "lineNumbers": [151, 174, 194],
       "snippet": "  if (!request.url) return false;\n\n  const url = new URL(request.url, 'http://jiso.local');\n  if (isUnversionedJisoAppShellClientModuleRequest(url)) return false;\n",
       "matchedPattern": "new URL from request data"
     }

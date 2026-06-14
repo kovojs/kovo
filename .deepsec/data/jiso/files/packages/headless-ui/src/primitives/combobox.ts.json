@@ -4,17 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        42,
-        162,
-        163,
-        174,
-        178,
-        483,
-        492,
-        493,
-        497
-      ],
+      "lineNumbers": [42, 162, 163, 174, 178, 483, 492, 493, 497],
       "snippet": "\nexport interface ComboboxInputAttributeOptions extends ComboboxState {\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        64,
-        218
-      ],
+      "lineNumbers": [64, 218],
       "snippet": "export function accordionItemOpen(options: AccordionItemOptions): boolean {\n  if (accordionType(options) === 'multiple') {\n    return Array.isArray(options.value) && options.value.includes(options.itemValue);\n  }\n",
       "matchedPattern": "weak cipher algorithm"
     }

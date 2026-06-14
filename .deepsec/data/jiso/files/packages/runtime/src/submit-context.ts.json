@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "untrusted-redirect-following",
-      "lineNumbers": [
-        59
-      ],
+      "lineNumbers": [59],
       "snippet": "        fetch: async (url, fetchOptions) => {\n          const result = await options.fetch(url, fetchOptions);\n          ok = result.ok;\n          status = result.status;",
       "matchedPattern": "fetch(url) — default redirect: follow + caller-style URL"
     }

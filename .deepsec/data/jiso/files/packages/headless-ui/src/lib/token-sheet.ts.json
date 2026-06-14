@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        36,
-        37,
-        96
-      ],
+      "lineNumbers": [36, 37, 96],
       "snippet": "  colorToken('accent', '210 40% 96.1%', '217.2 32.6% 17.5%'),\n  colorToken('accent-foreground', '222.2 47.4% 11.2%', '210 40% 98%'),\n  colorToken('destructive', '0 84.2% 60.2%', '0 62.8% 30.6%'),\n  colorToken('destructive-foreground', '210 40% 98%', '210 40% 98%'),\n  colorToken('border', '214.3 31.8% 91.4%', '217.2 32.6% 17.5%'),",
       "matchedPattern": "weak cipher algorithm"
     }

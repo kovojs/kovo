@@ -4,21 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        912,
-        917,
-        941,
-        944
-      ],
+      "lineNumbers": [912, 917, 941, 944],
       "snippet": "      .map(\n        (issue) =>\n          `<output role=\"alert\" data-error-path=\"${escapeAttribute(issue.path.join('.'))}\">${escapeHtml(issue.message)}</output>`,\n      )\n      .join('');",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        228,
-        521
-      ],
+      "lineNumbers": [228, 521],
       "snippet": "/**\n * Attach an error-boundary renderer to a fragment renderer, so a fragment that\n * throws while rendering degrades to boundary HTML instead of failing the whole\n * mutation response (SPEC §9.1).\n *",
       "matchedPattern": "weak cipher algorithm"
     }

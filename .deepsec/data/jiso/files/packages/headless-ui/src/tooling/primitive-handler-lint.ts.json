@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        121
-      ],
+      "lineNumbers": [121],
       "snippet": "  const fullText = sourceFile.getFullText();\n  const ranges = ts.getLeadingCommentRanges(fullText, statement.pos) ?? [];\n  return ranges.some((range) => fullText.slice(range.pos, range.end).includes(marker));\n}\n",
       "matchedPattern": "weak cipher algorithm"
     }

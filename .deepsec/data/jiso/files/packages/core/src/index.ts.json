@@ -4,34 +4,14 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        153,
-        340
-      ],
+      "lineNumbers": [153, 340],
       "snippet": " *   state: (): CounterState => ({ count: 0 }),\n *   render: (_queries: Record<string, never>, state: CounterState) =>\n *     `<button>${state.count}</button>`,\n * });\n */",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
       "lineNumbers": [
-        128,
-        144,
-        178,
-        202,
-        233,
-        276,
-        283,
-        324,
-        329,
-        335,
-        345,
-        357,
-        436,
-        437,
-        442,
-        448,
-        560,
-        619
+        128, 144, 178, 202, 233, 276, 283, 324, 329, 335, 345, 357, 436, 437, 442, 448, 560, 619
       ],
       "snippet": "}\n\n/** A named component descriptor returned by `component()`. */\nexport interface Component<Name extends string, Definition extends ComponentDefinitionInput> {\n  name: Name;",
       "matchedPattern": "weak cipher algorithm"

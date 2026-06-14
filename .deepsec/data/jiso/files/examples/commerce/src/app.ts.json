@@ -4,94 +4,67 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        594,
-        694,
-        754,
-        771,
-        804,
-        839
-      ],
+      "lineNumbers": [594, 694, 754, 771, 804, 839],
       "snippet": "    {},\n    request,\n    (value) => `<main>${value}</main>`,\n    {\n      loginPath: '/login',",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "secret-in-log",
-      "lineNumbers": [
-        213
-      ],
+      "lineNumbers": [213],
       "snippet": "        return commerceAuthResponse([\n          `${commerceAuthCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,\n        ]);",
       "matchedPattern": "Secret variable in log statement"
     },
     {
       "vulnSlug": "secret-in-log",
-      "lineNumbers": [
-        488
-      ],
+      "lineNumbers": [488],
       "snippet": "  path: '/webhooks/stripe',\n  verify: stripeSignature({ secret: commercePaymentWebhookSecret }),\n  input: s.object({",
       "matchedPattern": "Secret variable in log statement"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        279
-      ],
+      "lineNumbers": [279],
       "snippet": "      if (table === 'attachments') return db.attachments;\n      if (table === 'orders') return db.orders;\n      if (table === 'products') return [...db.products.values()];\n      return [];\n    },",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        294
-      ],
+      "lineNumbers": [294],
       "snippet": "    write(table, value) {\n      if (table === 'cart_items') {\n        db.cartItems.push(value as { productId: string; qty: number; unitPrice: number });\n      }\n      if (table === 'attachments') {",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        297
-      ],
+      "lineNumbers": [297],
       "snippet": "      }\n      if (table === 'attachments') {\n        db.attachments.push(value as CommerceDb['attachments'][number]);\n      }\n      if (table === 'orders') {",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        300
-      ],
+      "lineNumbers": [300],
       "snippet": "      }\n      if (table === 'orders') {\n        db.orders.push(\n          value as { id: string; productId: string; qty: number; total: number; userId: string },\n        );",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        306
-      ],
+      "lineNumbers": [306],
       "snippet": "      if (table === 'products') {\n        const product = value as { id: string; stock: number; unitPrice: number };\n        db.products.set(product.id, product);\n      }\n    },",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        407
-      ],
+      "lineNumbers": [407],
       "snippet": "  handler(input, request: CommerceRequest, context) {\n    const currentSession = commerceSession.parse(request);\n    const found = request.db.products.get(input.productId);\n    if (!found || found.stock < input.quantity) {\n      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        547
-      ],
+      "lineNumbers": [547],
       "snippet": "  guard: betterAuthAuthed<CommerceRequest>(),\n  page(context, request) {\n    const found = request.db.attachments.find(\n      (item) => item.id === context.params.id && item.userId === request.session.user.id,\n    );",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        929
-      ],
+      "lineNumbers": [929],
       "snippet": "): string {\n  const productId = productIdFromRawInput(rawInput);\n  const product = productId ? db.products.get(productId) : undefined;\n\n  if (!product) return renderAddToCartError(failure);",
       "matchedPattern": "db call without await"
     }
@@ -105,12 +78,7 @@
       "vulnSlug": "acl-check",
       "title": "Order history renders all users' orders (no per-user scoping)",
       "description": "renderOrderHistory(db) (lines 685-689) passes db.orders — the GLOBAL list of every user's orders — to the OrderHistory component, with no filter by the authenticated user. The same unscoped read exists in orderHistoryQuery (queries.ts:30-35: read('orders')). This fragment is embedded by renderCartPageBody (line 771) and served on the public '/' and '/cart' routes (app-shell.ts:84,96), which carry NO guard. As a result, any unauthenticated visitor sees every user's order records: id, productId, quantity, total, and the owning userId. This is a cross-tenant information disclosure. The app demonstrates the intended per-user scoping elsewhere: ordersCsvStream filters `order.userId === userId` (lines 707-708) and attachmentDownloadRoute filters `item.userId === request.session.user.id` (line 548) — the order-history path simply omits that filter. Severity could be argued higher given it is fully unauthenticated and exposes all tenants at once.",
-      "lineNumbers": [
-        685,
-        688,
-        689,
-        771
-      ],
+      "lineNumbers": [685, 688, 689, 771],
       "recommendation": "Scope order history to the authenticated user: filter db.orders by request.session.user.id (mirroring ordersCsvStream), and only render the order-history fragment for authenticated sessions. Apply the same filter in orderHistoryQuery's load().",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -120,11 +88,7 @@
       "vulnSlug": "open-redirect",
       "title": "Open redirect via login `next` param (backslash bypass of redirectPath)",
       "description": "The login form embeds a user-controlled `next` value (line 839, sourced from ?next= in app-shell.ts:107) and submitCommerceSignInNoJs returns redirectTo = result.value.redirectTo (line 870), which the no-JS handler emits as a literal HTTP `Location` header (server/mutation.ts:639-642). result.value.redirectTo is computed by redirectPath(input.next, '/cart') in @jiso/better-auth (index.ts:962). redirectPath only does: `if (!value.startsWith('/') || value.startsWith('//')) return fallback;` (index.ts:1204-1209). It rejects protocol-relative `//evil.com` but NOT backslash variants: `next=/\\evil.com` starts with '/' and does not start with '//', so it passes through unchanged. Browsers normalize backslashes to forward slashes per the WHATWG URL spec, so `Location: /\\evil.com` resolves to `https://evil.com` — an off-site redirect. A victim who clicks https://victim/login?next=/\\evil.com and signs in is bounced to the attacker's site (phishing). The existing test only covers the `https://...` case (better-auth index.test.ts:2462), missing the backslash bypass. The enhanced path is affected identically via authRedirectTo (app-shell.ts:342-349).",
-      "lineNumbers": [
-        839,
-        863,
-        870
-      ],
+      "lineNumbers": [839, 863, 870],
       "recommendation": "Harden redirectPath to accept only same-site path-absolute targets: reject any value whose second character is '/' or '\\\\', reject values containing ':' or '\\\\', or parse with `new URL(value, base)` and require the resolved origin to equal the app origin. Add a test for `next=/\\evil.com` and `next=/\\/evil.com`.",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -134,15 +98,7 @@
       "vulnSlug": "rate-limit-bypass",
       "title": "Sign-in mutation has no rate limiting (credential brute force)",
       "description": "commerceSignIn (lines 247-253) is created with only `csrf` and `defaultRedirectTo` — it has no `guard`, so no guards.rateLimit is applied to the credential check. Sibling state-changing mutations DO rate-limit: addToCart uses guards.rateLimit({max:10, per:'session'}) (line 396) and uploadReceipt uses {max:5} (line 456). Because auth is per-declaration with no global middleware (per project design), the sign-in endpoint accepts unlimited password attempts, enabling brute force / password spraying against the credential store. CSRF does not mitigate this: for the pre-session login the CSRF sessionId falls back to the constant authCsrfId 'commerce-shell-login' (app-shell.ts:289) HMAC'd with a hardcoded example secret, so the token is static and reusable across attempts (and an attacker can simply fetch a fresh token from /login per attempt).",
-      "lineNumbers": [
-        247,
-        248,
-        249,
-        250,
-        251,
-        252,
-        253
-      ],
+      "lineNumbers": [247, 248, 249, 250, 251, 252, 253],
       "recommendation": "Add a rate-limit guard to commerceSignIn keyed by IP and/or submitted email, e.g. guard: guards.rateLimit({ max: 5, per: 'ip' }) (composed via guards.all if other guards are added), plus account lockout/backoff on repeated failures.",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -152,11 +108,7 @@
       "vulnSlug": "xss",
       "title": "Stored XSS sink: order `productId` rendered into a fragment without HTML escaping",
       "description": "renderOrderHistory (lines 685-689) renders each order via the OrderHistory component, which emits `{item.productId}` as a JSX text child (generated/order-history.tsx:20-21). The server JSX runtime escapes ATTRIBUTES but NOT text children: renderJsxChildren returns `String(children)` verbatim (server/jsx-runtime.ts:79-84, with a comment acknowledging text-escaping is undefined), and the fragment wrapper inserts this HTML raw (server/wire-html.ts:64). Per the project threat model these fragments are applied client-side via innerHTML/insertAdjacentHTML, so an unescaped interpolation is stored XSS. addToCart cannot inject arbitrary productId (it is constrained to existing product keys by the `request.db.products.get` check at line 407), but the payment webhook handler writes orders with attacker-shaped data: `productId: paid.productId` straight from the event body (line 516, schema is just s.string()). Combined with the hardcoded webhook secret (line 355, see separate finding) an attacker can forge a valid Stripe signature, write an order whose productId is `<img src=x onerror=...>` for ANY userId (line 521), and have it executed when the victim loads the cart page or receives the order-history fragment after an add-to-cart. The webhook is also the project's #4 ranked threat surface.",
-      "lineNumbers": [
-        685,
-        688,
-        516
-      ],
+      "lineNumbers": [685, 688, 516],
       "recommendation": "HTML-escape all DB/user strings rendered as fragment text. Fix the JSX runtime to escape text children (renderJsxChildren) so components are safe by default, or have the order-history component wrap interpolations in escapeHtml. Defense-in-depth: validate webhook productId against known products before persisting.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -166,13 +118,7 @@
       "vulnSlug": "other-storage-key-collision",
       "title": "Receipt storage key derived from unscoped filename → cross-user overwrite/disclosure",
       "description": "uploadReceipt stores the file at key `receipts/${file.name}` (lines 448-452) — derived solely from the attacker-controlled upload filename, with no namespacing by user id or attachment id. createMemoryStorage.put overwrites any existing object at the same key (core/storage.ts put → objects.set). So if user A and user B both upload `receipt.pdf`, the second write overwrites the first's bytes, while both users' attachment records still point at the same storageKey. attachmentDownloadRoute authorizes by attachment.userId (line 548) but then streams found.storageKey — so after a collision, a user downloading their own attachment receives the OTHER user's file content. This is a cross-tenant content disclosure (opportunistic, on filename collision) plus a deterministic data-integrity bug (silent overwrite). NOTE: latent today — uploadReceipt is not registered in the app shell's mutations list (app-shell.ts:249) and is fail-closed on CSRF (no csrf config → default-on rejects it, mutation.ts:268), so it is not currently reachable over the wire; the flaw is in the handler/key design and would activate if wired.",
-      "lineNumbers": [
-        448,
-        449,
-        450,
-        451,
-        452
-      ],
+      "lineNumbers": [448, 449, 450, 451, 452],
       "recommendation": "Namespace storage keys with non-collidable, server-controlled components, e.g. `receipts/${userId}/${attachmentId}/${sanitize(file.name)}`, and sanitize file.name (strip path separators) to also prevent path traversal on filesystem-backed storage.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -182,11 +128,7 @@
       "vulnSlug": "cross-tenant-id",
       "title": "uploadReceipt trusts user-supplied orderId without ownership/existence check",
       "description": "uploadReceipt's handler writes an attachment with `orderId: input.orderId` (lines 466-474) taken directly from user input, with no verification that the order exists or that it belongs to the authenticated user (currentSession.user.id). An authenticated user can attach a receipt referencing any other user's orderId. Current impact is limited because attachments are read back filtered by userId (so cross-user READ is blocked) and no code authorizes anything off attachment.orderId — but it is a missing ownership check that violates the project's stated IDOR pattern (look up by id must also filter by session user) and would become exploitable if any feature later renders/acts on receipts by orderId. Latent for the same wiring reason as the storage-key finding (uploadReceipt not registered, fail-closed on CSRF).",
-      "lineNumbers": [
-        462,
-        466,
-        469
-      ],
+      "lineNumbers": [462, 466, 469],
       "recommendation": "Before writing the attachment, verify the order exists and is owned by the session user: `request.db.orders.find(o => o.id === input.orderId && o.userId === currentSession.user.id)`, returning a failure otherwise.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -196,9 +138,7 @@
       "vulnSlug": "secrets-exposure",
       "title": "Hardcoded Stripe webhook signing secret in source",
       "description": "commercePaymentWebhookSecret = 'whsec_commerce_reference_app' is hardcoded (line 355) and is the only thing protecting the payment webhook (line 488). Anyone with read access to this (public example) source can forge a valid signature and reach the webhook handler, which writes orders for arbitrary userId/total/productId (lines 516-522) — enabling order fraud and the stored-XSS chain described above. This appears to follow the same example-fixture convention as the documented EXAMPLE_ONLY_*_CSRF_SECRET / commerceAuthUsers stubs, so in the reference app it is likely intentional; however, unlike those, it is not in the documented false-positive allowlist, and the identical code shape in a real deployment is a HIGH-severity secret exposure that defeats webhook authentication.",
-      "lineNumbers": [
-        355
-      ],
+      "lineNumbers": [355],
       "recommendation": "Load the webhook secret from an environment variable / secret manager (e.g. process.env.STRIPE_WEBHOOK_SECRET) with no hardcoded fallback, and document it as example-only if it must remain in the reference app.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

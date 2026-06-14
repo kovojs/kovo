@@ -4,12 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        40,
-        136,
-        156,
-        159
-      ],
+      "lineNumbers": [40, 136, 156, 159],
       "snippet": "  autocomplete?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -23,10 +18,7 @@
       "vulnSlug": "xss",
       "title": "Stored XSS: autocomplete option/value text rendered unescaped into innerHTML sink",
       "description": "AutocompleteOption renders `{props.children ?? props.itemLabel ?? props.itemValue}` (line 254) and AutocompleteValue renders `{autocompleteValueText(props)}` (line 284). `autocompleteValueText` (packages/headless-ui/src/primitives/autocomplete.ts:164-169) returns raw item data (`selected.label ?? selected.textValue ?? selected.value`, or the current `value`/`placeholder`). These are scalar DATA props, not composition slots. The server JSX runtime does NOT escape child text — `renderJsxChildren` does `return String(children)` (packages/server/src/jsx-runtime.ts:83), with a comment acknowledging text-escaping is an unresolved open question. The rendered HTML string is sent in the initial document and in mutation/query wire fragments, which the client applies via `insertAdjacentHTML`/`innerHTML` (packages/runtime/src/response-fragment-apply.ts:58,62) — threat-model stored-XSS vector #3. Because autocomplete/combobox item lists are normally sourced from the database (e.g. usernames, product names, saved searches; the gallery demo uses people's names), an attacker who controls an item label/value (or the persisted selected value) injects markup such as `<img src=x onerror=...>` that executes in every viewer's browser. Proof that this is an oversight, not a 'caller pre-escapes' contract: the same `itemValue` is emitted as an auto-escaped attribute (`value={attrs.value}`, line 179) AND as an unescaped child — the caller cannot pre-escape without breaking the attribute, so the component must escape the child itself and currently does not. No UI component escapes child text (only table.tsx escapes, and only attributes via escapeAttribute).",
-      "lineNumbers": [
-        254,
-        284
-      ],
+      "lineNumbers": [254, 284],
       "recommendation": "Escape user/DB-derived text before placing it in child position. Either (a) fix the root cause by having the JSX runtime HTML-escape string children in renderJsxChildren (packages/server/src/jsx-runtime.ts) while keeping an explicit raw-HTML escape hatch for intentional composition, or (b) in these components wrap data-derived text with escapeHtml (from @jiso/server) before interpolating — e.g. `{props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}` and `{escapeHtml(autocompleteValueText(props))}`. Resolving the framework-level text-escaping open question is the durable fix.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

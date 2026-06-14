@@ -42,10 +42,7 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
         data-gallery-interactive="accordion"
       >
         <section {...accordionItemAttributes(shippingState)} class={ITEM_CLASS}>
-          <h3
-            {...accordionHeaderAttributes({ ...shippingState, level: 3 })}
-            class={HEADER_CLASS}
-          >
+          <h3 {...accordionHeaderAttributes({ ...shippingState, level: 3 })} class={HEADER_CLASS}>
             <button
               {...accordionTriggerAttributes({
                 ...shippingState,
@@ -104,10 +101,7 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
           </div>
         </section>
         <section {...accordionItemAttributes(billingState)} class={ITEM_CLASS}>
-          <h3
-            {...accordionHeaderAttributes({ ...billingState, level: 3 })}
-            class={HEADER_CLASS}
-          >
+          <h3 {...accordionHeaderAttributes({ ...billingState, level: 3 })} class={HEADER_CLASS}>
             <button
               {...accordionTriggerAttributes({
                 ...billingState,

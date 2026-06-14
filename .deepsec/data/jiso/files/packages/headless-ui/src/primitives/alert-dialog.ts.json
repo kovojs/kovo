@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        20,
-        29,
-        104
-      ],
+      "lineNumbers": [20, 29, 104],
       "snippet": "export type AlertDialogChangeDetail = PrimitiveChangeDetail<AlertDialogChangeReason, boolean>;\n\nexport type AlertDialogActionIntent = 'confirm' | 'destructive';\n\nexport interface AlertDialogState {",
       "matchedPattern": "weak cipher algorithm"
     }

@@ -4,12 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        22,
-        44,
-        53,
-        65
-      ],
+      "lineNumbers": [22, 44, 53, 65],
       "snippet": "    const contentId = 'gallery-interactive-alert-dialog-content';\n    const titleId = 'gallery-interactive-alert-dialog-title';\n    const descriptionId = 'gallery-interactive-alert-dialog-description';\n\n    return (",
       "matchedPattern": "weak cipher algorithm"
     }

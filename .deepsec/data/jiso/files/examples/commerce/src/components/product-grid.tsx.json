@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        74
-      ],
+      "lineNumbers": [74],
       "snippet": "      {cards}\n      {cursor ? (\n        <a href={`/products?after=${cursor}`} data-cursor={cursor}>\n          More\n        </a>",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        100
-      ],
+      "lineNumbers": [100],
       "snippet": "\n// SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation\n// endpoint; `enhance` upgrades it to the section 9.1 fragment wire. Rendered\n// standalone as the failure-rerender fragment (fw-fragment-target).\nexport function renderAddToCartForm(",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -28,10 +24,7 @@
       "vulnSlug": "xss",
       "title": "Latent stored XSS: DB-sourced product id rendered as unescaped JSX child in a fragment applied via innerHTML",
       "description": "The @jiso/server JSX runtime (packages/server/src/jsx-runtime.ts) escapes attribute values via escapeAttribute (renderJsxAttributes, L66) but inserts text CHILDREN raw via renderJsxChildren -> String(children) (L79-84), an explicitly-documented 'open question'. In product-grid.tsx, renderProductCard renders `<h2>{item.id}</h2>` (L92-93) where item.id is DB data from loadProductGrid -> db.read('products'). The product grid is a fragmentTarget; its markup is delivered as a server fragment and applied on the client via innerHTML/insertAdjacentHTML (per CLAUDE.md threat model item 3 and runtime/response-fragment-apply.ts / morph.ts). Per the framework's own contract (CLAUDE.md: 'Server fragment renderers must run user/DB strings through escapeHtml/escapeAttribute ... an unescaped interpolation is stored XSS'), DB strings are untrusted for XSS. NOTE ON EXPLOITABILITY: in the current reference app this is NOT exploitable because product ids are server-seeded ('p1'/'p2'/'p3' in createCommerceDb, app.ts L270) and the only product write path (addToCart, app.ts L424) decrements stock on an already-looked-up existing product, so no code path lets an attacker introduce a product id containing '<script>'/'<img onerror>'. The defect is the missing output encoding on DB data; the only thing preventing exploitation is an incidental data-source property, not a security control. The moment products become admin/user-creatable with arbitrary ids (the natural evolution of a commerce app, e.g. via a future seed/import/webhook path), this becomes immediate stored XSS. SCANNER FLAGS ON THIS FILE ARE FALSE POSITIVES: L74 ('href={`/products?after=${cursor}`}' and 'data-cursor={cursor}') are ATTRIBUTES and are escaped by escapeAttribute; the L100 'weak cipher' flag is a source comment. The same unescaped-child pattern also appears in the sibling order-history component ({item.productId}), which is fed by db.orders (also currently trusted but the same latent class).",
-      "lineNumbers": [
-        92,
-        93
-      ],
+      "lineNumbers": [92, 93],
       "recommendation": "Do not rely on the data source being benign — encode at the sink. Either (a) make the @jiso/server JSX runtime escape text children (renderJsxChildren should HTML-escape String(children) for non-pre-rendered nodes, with an explicit raw/unsafe opt-in for composed pre-rendered HTML), closing the framework-wide gap; or (b) until that lands, wrap DB/user string interpolations in escapeHtml() inside fragment renderers, e.g. `<h2>{escapeHtml(item.id)}</h2>`. Regenerate the lowered IR (src/generated/product-grid.tsx) after the fix and add a test asserting a product id containing HTML metacharacters is escaped in the rendered fragment.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        25
-      ],
+      "lineNumbers": [25],
       "snippet": " * @param app - An app aggregate from `createApp`.\n * @param options - Output directory and static-export options.\n * @returns A `StaticExportResult` describing the emitted files.\n */\nexport async function exportStaticApp(",
       "matchedPattern": "weak cipher algorithm"
     }

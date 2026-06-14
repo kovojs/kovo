@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        96
-      ],
+      "lineNumbers": [96],
       "snippet": "    name: 'jiso',\n    transform(source: string, id: string) {\n      if (!/\\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;\n\n      const fileName = viteComponentFileName(id, root);",
       "matchedPattern": "weak cipher algorithm"
     }

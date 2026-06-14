@@ -4,33 +4,25 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        75
-      ],
+      "lineNumbers": [75],
       "snippet": "            },\n            replaceWithHtml(html) {\n              element.innerHTML = html;\n            },\n          }",
       "matchedPattern": "innerHTML assignment"
     },
     {
       "vulnSlug": "dangerous-html",
-      "lineNumbers": [
-        75
-      ],
+      "lineNumbers": [75],
       "snippet": "              return element.innerHTML;\n            },\n            replaceWithHtml(html) {\n              element.innerHTML = html;\n            },\n          }\n        : null;\n    },",
       "matchedPattern": "dangerouslySetInnerHTML from props (trace source)"
     },
     {
       "vulnSlug": "unverified-lookup",
-      "lineNumbers": [
-        63
-      ],
+      "lineNumbers": [63],
       "snippet": "      const element =\n        documentRoot.getElementById(target) ??\n        documentRoot.querySelector('[fw-fragment-target=\"' + CSS.escape(target) + '\"]');\n\n      return element",
       "matchedPattern": "DB lookup by ID without ownership check in next 15 lines"
     },
     {
       "vulnSlug": "untrusted-redirect-following",
-      "lineNumbers": [
-        25
-      ],
+      "lineNumbers": [25],
       "snippet": "\n  return fetch(url, init);\n};\n",
       "matchedPattern": "fetch(url) — default redirect: follow + caller-style URL"
     }

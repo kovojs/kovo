@@ -4,18 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        12,
-        31,
-        60,
-        66,
-        81,
-        105,
-        109,
-        135,
-        136,
-        140
-      ],
+      "lineNumbers": [12, 31, 60, 66, 81, 105, 109, 135, 136, 140],
       "snippet": "export interface FieldControlAttributeOptions extends FieldAttributeOptions {\n  autoComplete?: string;\n  descriptionId?: string;\n  errorId?: string;\n  form?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

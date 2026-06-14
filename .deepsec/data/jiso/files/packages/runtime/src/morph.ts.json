@@ -4,43 +4,25 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        28,
-        34
-      ],
+      "lineNumbers": [28, 34],
       "snippet": "  appendHtml(html: string): void {\n    const template = document.createElement('template');\n    template.innerHTML = html.trim();\n    this.element.append(...Array.from(template.content.childNodes));\n  }",
       "matchedPattern": "innerHTML assignment"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        29,
-        347,
-        348,
-        351,
-        353,
-        357,
-        362,
-        363,
-        366,
-        367
-      ],
+      "lineNumbers": [29, 347, 348, 351, 353, 357, 362, 363, 366, 367],
       "snippet": "    const template = document.createElement('template');\n    template.innerHTML = html.trim();\n    this.element.append(...Array.from(template.content.childNodes));\n  }\n",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "dangerous-html",
-      "lineNumbers": [
-        28
-      ],
+      "lineNumbers": [28],
       "snippet": "\n  appendHtml(html: string): void {\n    const template = document.createElement('template');\n    template.innerHTML = html.trim();\n    this.element.append(...Array.from(template.content.childNodes));\n  }\n\n  replaceWithHtml(html: string): void {",
       "matchedPattern": "dangerouslySetInnerHTML from props (trace source)"
     },
     {
       "vulnSlug": "dangerous-html",
-      "lineNumbers": [
-        34
-      ],
+      "lineNumbers": [34],
       "snippet": "\n  replaceWithHtml(html: string): void {\n    const template = document.createElement('template');\n    template.innerHTML = html.trim();\n    const next = template.content.firstElementChild;\n    const activeState = captureActiveDomState(this.element);\n    const scrollStates = captureDomScrollStates(this.element);\n",
       "matchedPattern": "dangerouslySetInnerHTML from props (trace source)"
     }

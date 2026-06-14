@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        11,
-        42
-      ],
+      "lineNumbers": [11, 42],
       "snippet": "// Tutorial step 05 (chapter 5), unchanged from step 04: every product card carries a real form\n// posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS\n// fallback IS the output; `enhance` upgrades it to the section 9.1 fragment\n// wire. Failure state and the per-request CSRF token are request context,\n// not query data, so they arrive as an explicit second render argument (the",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -21,9 +18,7 @@
       "vulnSlug": "xss",
       "title": "Unescaped DB string ({item.name}) rendered as JSX child in an innerHTML-applied fragment",
       "description": "Identical pattern to step 04. ProductList.render (L28) interpolates the free-form DB string `{item.name}` as a JSX child. The @jiso/server JSX runtime does not escape text children (packages/server/src/jsx-runtime.ts renderJsxChildren L79-84 returns String(children); only attributes are escaped). ProductList is fragmentTarget:true and its output is wired into `<fw-fragment target=\"product-list\">` (app.ts renderShopPage / submitAddToCart fragmentRenderers), which the client applies via innerHTML / insertAdjacentHTML with no sanitization (packages/runtime/src/response-fragment-apply.ts L58, L62). Markup in a product name therefore becomes stored XSS. Not directly exploitable in the tutorial because names are static fixtures and addToCart never writes a name from input — MEDIUM/medium confidence; rises to HIGH if names become admin/vendor/user-controlled. The reference examples/commerce app avoids this by rendering only id/stock as children and escaping free-form data. The scanner's insecure-crypto flag on L11/L42 is a false positive (comment lines; the only crypto in the path is correct HMAC-SHA256 CSRF).",
-      "lineNumbers": [
-        28
-      ],
+      "lineNumbers": [28],
       "recommendation": "Escape DB/user strings rendered as children, e.g. `{escapeHtml(item.name)}`, or fix the JSX runtime to auto-escape string text children while keeping a raw type for pre-rendered HTML (component renders, csrfField).",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

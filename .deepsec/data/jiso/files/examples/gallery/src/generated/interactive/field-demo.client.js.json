@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        22,
-        23
-      ],
+      "lineNumbers": [22, 23],
       "snippet": "    Object(input)['setAttribute']?.call(\n      input,\n      'aria-describedby',\n      'gallery-interactive-field-email-description',\n    );",
       "matchedPattern": "weak cipher algorithm"
     }

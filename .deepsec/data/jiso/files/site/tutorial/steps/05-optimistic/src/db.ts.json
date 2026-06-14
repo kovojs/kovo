@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        50
-      ],
+      "lineNumbers": [50],
       "snippet": "    write(table, value) {\n      if (table === 'cart_items') {\n        db.cartItems.push(value as CartItem);\n      }\n      if (table === 'products') {",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        54
-      ],
+      "lineNumbers": [54],
       "snippet": "      if (table === 'products') {\n        const product = value as ShopProduct;\n        db.products.set(product.id, product);\n      }\n    },",
       "matchedPattern": "db call without await"
     }
@@ -28,13 +24,7 @@
       "vulnSlug": "other-race-condition",
       "title": "Non-atomic read-modify-write in transaction() can lose concurrent updates",
       "description": "transaction() clones the database (cloneShopDb(db)), `await`s the handler (run(draft)), then commits by wholesale-replacing db.cartItems and db.products with the draft's copies. The `await` is an event-loop yield point. If two mutations execute concurrently against the *same* ShopDb instance, both clone the same base snapshot, each mutates its own draft, and the later commit overwrites the earlier one entirely (last-writer-wins) — the classic lost-update race / non-atomic read-modify-write. Within this tutorial the impact is limited and the confidence is low because request.db is never shown to be a shared, persistent instance (renderShopPage defaults to a fresh createShopDb() and tests construct a fresh db per case), so the race is latent in the transaction primitive rather than active here. It is worth noting because learners may reuse this transaction shape against a persistent store. This is a correctness bug, not a security vulnerability — the cart/products are global demo state with no per-user scoping to violate.",
-      "lineNumbers": [
-        36,
-        37,
-        38,
-        42,
-        43
-      ],
+      "lineNumbers": [36, 37, 38, 42, 43],
       "recommendation": "If the in-memory db is ever shared across concurrent requests, serialize transactions (an async mutex/queue around clone+commit) or perform optimistic-version / per-row checks at commit so concurrent writers cannot clobber each other. The SPEC's blessed Drizzle adapter provides real transactional isolation; the tutorial could note that this in-memory primitive intentionally omits concurrency control.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

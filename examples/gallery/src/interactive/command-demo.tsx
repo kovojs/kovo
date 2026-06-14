@@ -171,7 +171,10 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               }
             }}
           />
-          <div {...commandListboxAttributes({ ...commandState, id: listboxId })} class={LISTBOX_CLASS}>
+          <div
+            {...commandListboxAttributes({ ...commandState, id: listboxId })}
+            class={LISTBOX_CLASS}
+          >
             <button
               {...commandItemAttributes({
                 ...commandState,

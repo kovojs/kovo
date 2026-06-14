@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "unverified-lookup",
-      "lineNumbers": [
-        131
-      ],
+      "lineNumbers": [131],
       "snippet": "    globalRecord.document = {\n      getElementById(id: string) {\n        if (id === 'cart-summary') return null;\n        return inlineTargets.get(id) ?? null;\n      },",
       "matchedPattern": "DB lookup by ID without ownership check in next 15 lines"
     }

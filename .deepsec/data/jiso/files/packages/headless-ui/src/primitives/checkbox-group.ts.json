@@ -4,18 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        36,
-        87,
-        115,
-        122,
-        184,
-        322,
-        343,
-        344,
-        348,
-        359
-      ],
+      "lineNumbers": [36, 87, 115, 122, 184, 322, 343, 344, 348, 359],
       "snippet": "\nexport interface CheckboxGroupRootAttributeOptions extends CheckboxGroupState {\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

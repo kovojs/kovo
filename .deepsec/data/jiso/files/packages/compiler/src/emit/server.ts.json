@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        76,
-        165
-      ],
+      "lineNumbers": [76, 165],
       "snippet": "\n  for (const handler of handlers) {\n    if (hostHandlers.includes(handler)) continue;\n    patches.push({\n      end: handler.attributeEnd,",
       "matchedPattern": "weak cipher algorithm"
     }

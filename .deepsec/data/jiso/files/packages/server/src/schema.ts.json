@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        79,
-        80,
-        334
-      ],
+      "lineNumbers": [79, 80, 334],
       "snippet": "        if (typeof input === 'string') {\n          const value = input.toLowerCase();\n          if (['1', 'on', 'true', 'yes'].includes(value)) return true;\n          if (['0', 'false', 'no', 'off'].includes(value)) return false;\n        }",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -22,11 +18,7 @@
       "vulnSlug": "other-file-upload-validation",
       "title": "File MIME allowlist trusts the client-declared content type",
       "description": "FileSchema.mime()/parseFileLike validate the upload against `input.type` (L334: `options.mime.includes(input.type)`), which is the MIME type declared by the client in the multipart part headers — fully attacker-controlled and unrelated to the actual bytes. An attacker can upload an HTML/SVG/script payload while setting `Content-Type: image/png` to pass a `mime(['image/png'])` allowlist. The size check (L331) is sound, but the type check provides a false sense of safety. The stored object's contentType is then derived from the same untrusted `file.type` (StoredFileSchemaImpl.parse L291 / parseAsync L308). If the application later serves uploads inline from a same-origin path (common for avatars/attachments) and trusts that stored content type, this enables stored XSS or content-sniffing attacks. This is a defense-in-depth gap inherent to client-declared MIME; the framework exposes mime() as if it were a security control.",
-      "lineNumbers": [
-        259,
-        331,
-        334
-      ],
+      "lineNumbers": [259, 331, 334],
       "recommendation": "Treat client-declared MIME as untrusted: sniff the actual content (magic-byte detection) and validate against the allowlist, or at minimum document that mime() only checks the claimed type. When serving uploads, force a safe Content-Type, send `X-Content-Type-Options: nosniff`, prefer `Content-Disposition: attachment` for non-image types, and serve user uploads from a separate origin/sandbox.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -36,11 +28,7 @@
       "vulnSlug": "other-logic-bug",
       "title": "Synchronous StoredFileSchema.parse returns a 'stored' upload without persisting the file",
       "description": "StoredFileSchemaImpl.parse (L277-299, the synchronous Schema.parse) computes the storage key and builds a StoredFileUpload with a populated `storage` StorageObjectInfo, but never calls storage.put — only the async parseAsync (L301-316) actually persists the bytes. If a stored-file schema is ever validated through the synchronous path (e.g. `s.object({...}).parse(...)`, which dispatches to nested `schema.parse`), the caller receives a result implying the file was stored when it was not, leading to silent data loss / dangling references (DB rows pointing at objects that don't exist). The mutation pipeline currently uses parseSchemaAsync (which prefers parseAsync), so the main path is safe, but the synchronous Schema interface makes the unsafe path reachable and easy to hit in app or test code.",
-      "lineNumbers": [
-        277,
-        279,
-        287
-      ],
+      "lineNumbers": [277, 279, 287],
       "recommendation": "Make synchronous parse of a storing schema fail fast (throw 'stored file requires async parsing') instead of returning an unstored StoredFileUpload, or have it not claim storage info it didn't create. Ensure all framework entry points that may receive stored-file schemas use parseSchemaAsync/parseAsync.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

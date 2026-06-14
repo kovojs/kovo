@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        299,
-        405,
-        409
-      ],
+      "lineNumbers": [299, 405, 409],
       "snippet": "  }\n\n  // SPEC §9.5: Vite build hints and static-export asset copies must describe the\n  // same static-host files, so hint hrefs use the shared dist-file boundary.\n  return `${base.replace(/\\/?$/, '/')}${normalizedDistFile(file)}`;",
       "matchedPattern": "weak cipher algorithm"
     }

@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        114
-      ],
+      "lineNumbers": [114],
       "snippet": " *     const product = catalog.get(params.id);\n *     if (!product) return notFound();\n *     return `<h1>${product.name}</h1>`;\n *   },\n * });",
       "matchedPattern": "template literal in HTML"
     }

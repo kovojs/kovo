@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        33,
-        117,
-        130
-      ],
+      "lineNumbers": [33, 117, 130],
       "snippet": "  children?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  id?: string;\n  label?: string;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -22,11 +18,7 @@
       "vulnSlug": "insecure-crypto",
       "title": "False positive: no cryptography present (substring match on \"des\")",
       "description": "The scanner flagged L33/117/130 for a weak cipher algorithm. These lines are `descriptionId` (L33), the `descriptionId` prop spread (L117), and `aria-describedby` (L130). The flag is a regex substring match on \"des\" inside description/describedby. There is no crypto, hashing, cipher, or random-number generation anywhere in this file — it is a purely presentational server component. Not a vulnerability.",
-      "lineNumbers": [
-        33,
-        117,
-        130
-      ],
+      "lineNumbers": [33, 117, 130],
       "recommendation": "No action required for the crypto flag. (Suppress the substring rule that matches 'des' inside 'description'/'describedby'.)",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

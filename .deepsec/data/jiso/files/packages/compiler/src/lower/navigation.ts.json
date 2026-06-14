@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        38
-      ],
+      "lineNumbers": [38],
       "snippet": "    },\n    ...link.attributes\n      .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))\n      .map((attribute) => ({\n        end: attribute.end,",
       "matchedPattern": "weak cipher algorithm"
     }

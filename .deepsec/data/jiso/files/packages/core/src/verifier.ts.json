@@ -4,54 +4,37 @@
   "candidates": [
     {
       "vulnSlug": "secrets-exposure",
-      "lineNumbers": [
-        114,
-        188,
-        219
-      ],
+      "lineNumbers": [114, 188, 219],
       "snippet": " *   header: 'x-signature',\n *   payload: (request) => request.payload,\n *   secret: 'whsec_test',\n * });\n */",
       "matchedPattern": "hardcoded credential"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        262,
-        408
-      ],
+      "lineNumbers": [262, 408],
       "snippet": "  const signedPayloadBytes = payloadToBytes(signedPayload);\n  const signatures = parseSignatures(options.multiSig, signatureHeader)\n    .map((signature) => decodeSignature(signature, options.encoding))\n    .filter((signature): signature is Uint8Array => signature !== undefined);\n  if (signatures.length === 0) return false;",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        263,
-        310
-      ],
+      "lineNumbers": [263, 310],
       "snippet": "  const signatures = parseSignatures(options.multiSig, signatureHeader)\n    .map((signature) => decodeSignature(signature, options.encoding))\n    .filter((signature): signature is Uint8Array => signature !== undefined);\n  if (signatures.length === 0) return false;\n",
       "matchedPattern": "Timing-unsafe signature comparison"
     },
     {
       "vulnSlug": "secret-in-log",
-      "lineNumbers": [
-        188
-      ],
+      "lineNumbers": [188],
       "snippet": " *\n * export const verifier = stripeSignature({ secret: 'whsec_test' });\n */",
       "matchedPattern": "Secret variable in log statement"
     },
     {
       "vulnSlug": "secret-in-log",
-      "lineNumbers": [
-        219
-      ],
+      "lineNumbers": [219],
       "snippet": " *\n * export const verifier = standardWebhooks({ secret: 'whsec_test' });\n */",
       "matchedPattern": "Secret variable in log statement"
     },
     {
       "vulnSlug": "crypto-usage",
-      "lineNumbers": [
-        448,
-        455
-      ],
+      "lineNumbers": [448, 455],
       "snippet": "  const secretBytes = copyBytes(secret);\n  const payloadBytes = copyBytes(payload);\n  const key = await globalThis.crypto.subtle.importKey(\n    'raw',\n    secretBytes,",
       "matchedPattern": "Web Crypto API (crypto.subtle.*)"
     }

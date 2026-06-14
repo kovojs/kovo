@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        21
-      ],
+      "lineNumbers": [21],
       "snippet": "    renderQueryScript({ name: 'products', value: products });\n\n  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${CartBadge.definition.render({ cart })}${ProductList.definition.render({ products })}</main></body></html>`;\n}\n// /snippet",
       "matchedPattern": "template literal in HTML"
     }

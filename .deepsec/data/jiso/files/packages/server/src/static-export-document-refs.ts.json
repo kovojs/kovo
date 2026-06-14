@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        77,
-        307
-      ],
+      "lineNumbers": [77, 307],
       "snippet": "    }\n\n    if (tag.name === 'link' && staticExportRelTokens(attrs.get('rel')).includes('modulepreload')) {\n      const href = attrs.get('href');\n      if (href !== undefined) collectStaticExportClientModuleHrefTokens(href, origin, hrefs);",
       "matchedPattern": "weak cipher algorithm"
     }

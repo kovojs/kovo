@@ -4,18 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        433,
-        442,
-        462,
-        467,
-        472,
-        730,
-        1289,
-        1699,
-        1776,
-        1780
-      ],
+      "lineNumbers": [433, 442, 462, 467, 472, 730, 1289, 1699, 1776, 1780],
       "snippet": "function listMcpTools(): {\n  tools: readonly {\n    description: string;\n    inputSchema: Record<string, unknown>;\n    name: FwMcpToolName;",
       "matchedPattern": "weak cipher algorithm"
     }

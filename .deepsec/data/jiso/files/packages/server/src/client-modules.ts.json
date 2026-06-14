@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        139
-      ],
+      "lineNumbers": [139],
       "snippet": "): void {\n  const versions = versionsByPath.get(path) ?? [];\n  if (!versions.includes(version)) versions.push(version);\n  versionsByPath.set(path, versions);\n",
       "matchedPattern": "weak cipher algorithm"
     }

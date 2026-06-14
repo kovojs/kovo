@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        125
-      ],
+      "lineNumbers": [125],
       "snippet": "    const invalidatedDomains = mutation.invalidates ?? mutation.writes ?? [];\n    const invalidatedQueries = queries\n      .filter((query) => query.domains.some((domain) => invalidatedDomains.includes(domain)))\n      .map((query) => query.query);\n",
       "matchedPattern": "weak cipher algorithm"
     }

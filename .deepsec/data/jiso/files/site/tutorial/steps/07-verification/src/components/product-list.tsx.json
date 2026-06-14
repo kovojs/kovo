@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        11,
-        42
-      ],
+      "lineNumbers": [11, 42],
       "snippet": "// Tutorial step 07 (chapter 7), unchanged from step 06: every product card carries a real form\n// posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS\n// fallback IS the output; `enhance` upgrades it to the section 9.1 fragment\n// wire. Failure state and the per-request CSRF token are request context,\n// not query data, so they arrive as an explicit second render argument (the",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -21,9 +18,7 @@
       "vulnSlug": "xss",
       "title": "Unescaped DB string {item.name} rendered as a JSX text child into an innerHTML-applied fragment (latent stored XSS)",
       "description": "The render function interpolates the product name as a JSX text child: `{item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)` (L28). The @jiso/server JSX runtime escapes ATTRIBUTE values (escapeAttribute in renderJsxAttributes) but does NOT escape text CHILDREN — renderJsxChildren returns `String(children)` verbatim (packages/server/src/jsx-runtime.ts L79-84, self-documented as an unresolved escaping question). The output of this component is wrapped in <fw-fragment target=\"product-list\"> (app.ts renderShopPage/submitAddToCart) and applied on the client via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts per the project threat model), so any HTML in item.name would execute as stored XSS. item.name is DB data (ShopProduct.name), and the project's own convention (CLAUDE.md) requires DB strings reaching a fragment to pass through escapeHtml/escapeAttribute. This file does neither. IMPORTANT — NOT CURRENTLY EXPLOITABLE: in this tutorial app product names are static seed values ('Pour-over kettle', etc., db.ts L46-48) and there is no attacker-reachable write path for a name — the only mutation (cart/add) writes products via `{ ...found, stock: ... }` (app.ts L145-148), preserving the existing name; there are no other mutations, endpoints, or webhooks. This is therefore a latent/defense-in-depth weakness: it becomes a real stored XSS the moment product names become user/admin-editable (the norm for a commerce app). Notably the reference examples/commerce/product-grid.tsx deliberately renders only {item.id} and {item.stock} (its card item type omits `name` entirely), which is the safer pattern this tutorial diverges from. As teaching material, it propagates an insecure rendering habit.",
-      "lineNumbers": [
-        28
-      ],
+      "lineNumbers": [28],
       "recommendation": "Escape DB/user free-text before it becomes a JSX text child, e.g. import escapeHtml from @jiso/server and render `{escapeHtml(item.name)}`, or mirror the reference commerce component by not rendering free-form text children. Longer term, resolve the framework-level open question by making the @jiso/server JSX runtime auto-escape text children (with an explicit raw/dangerous opt-in for pre-rendered HTML) so app authors are secure by default.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

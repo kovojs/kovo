@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        6
-      ],
+      "lineNumbers": [6],
       "snippet": "// and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section\n// 4.2 rendered output) — there is no virtual DOM and no client framework; the\n// rendered string IS the runtime form, self-describing through its stamps.\n//\n// Rendering rules:",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -20,12 +18,7 @@
       "vulnSlug": "xss",
       "title": "JSX runtime inserts text children unescaped (stored XSS by default)",
       "description": "The server JSX runtime escapes attribute values (renderJsxAttributes uses escapeAttribute, L66) but renders element/text children completely raw: renderJsxChildren (L79-84) returns `String(children)` (L83) and joins arrays (L81) with no HTML escaping. The header comment (L8-15) acknowledges this: 'Child strings are inserted as written ... SPEC.md section 4 does not yet define JSX text-escaping semantics.' This means any component that renders a user- or DB-derived string as a JSX child — `<h2>{product.name}</h2>`, `<p>{review.body}</p>`, `<span>{username}</span>` — emits that value verbatim into the HTML stream. I confirmed the compiler does NOT compensate: diffing the authored examples/commerce/src/components/product-grid.tsx against the lowered examples/commerce/src/generated/product-grid.tsx, the only injected change is the `fw-c`/`fw-deps` stamps; the dynamic text interpolations `<h2>{item.id}</h2>` and `<p>{item.stock} in stock</p>` are emitted identically and unescaped. The rendered fragment HTML is then delivered as `<fw-fragment>` (wire-html.ts renderFragmentWireHtml inserts options.html raw) and applied on the client via innerHTML (packages/runtime/src/morph.ts:28 `template.innerHTML = html.trim()`), so injected `<script>`/`<img onerror=...>` executes. This is precisely the stored-XSS sink the project threat model ranks third ('get unescaped user/DB data into a server fragment, which the client applies via innerHTML'). The unescaped behavior is certain; exploitability requires an app to pass untrusted data through children, which is the normal rendering pattern and is neither prevented nor escaped by the framework.",
-      "lineNumbers": [
-        52,
-        66,
-        81,
-        83
-      ],
+      "lineNumbers": [52, 66, 81, 83],
       "recommendation": "Escape text children by default. Introduce a distinct 'raw/trusted HTML' node type (or a `dangerouslySetInnerHTML`-style marker / a branded RawHtml string returned by framework helpers like csrfField and nested component renders), and run all other string children through escapeHtml in renderJsxChildren before concatenation. Pre-rendered framework HTML would opt into raw insertion explicitly; everything else (interpolated app data) is escaped. Alternatively have the compiler wrap every non-literal text expression in escapeHtml during lowering. Until then, document that JSX text is unescaped and require app authors to call escapeHtml manually.",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        6,
-        52
-      ],
+      "lineNumbers": [6, 52],
       "snippet": "\nexport interface SwitchProps {\n  describedBy?: string;\n  checked?: boolean;\n  children?: string;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -21,10 +18,7 @@
       "vulnSlug": "insecure-crypto",
       "title": "False positive: no cryptography present (substring match on \"des\")",
       "description": "L6/52 were flagged for a weak cipher; they are the `describedBy?: string` prop (L6) and `aria-describedby={props.describedBy}` (L52) — a substring match on 'des' in 'describedBy'. No crypto/cipher/random/hash exists in the file. `describedBy` flows only into the aria-describedby attribute, which the JSX runtime escapes via escapeAttribute, so no attribute injection. The only text interpolation is `{props.children}` (the framework's intended raw-HTML composition slot). Not a vulnerability.",
-      "lineNumbers": [
-        6,
-        52
-      ],
+      "lineNumbers": [6, 52],
       "recommendation": "No action required. Suppress the substring crypto rule.",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

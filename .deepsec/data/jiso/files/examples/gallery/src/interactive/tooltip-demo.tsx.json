@@ -4,13 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        44,
-        71,
-        100,
-        127,
-        154
-      ],
+      "lineNumbers": [44, 71, 100, 127, 154],
       "snippet": "            if (trigger) {\n              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');\n              Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');\n            }\n            if (content) {",
       "matchedPattern": "weak cipher algorithm"
     }

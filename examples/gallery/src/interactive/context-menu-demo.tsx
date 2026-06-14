@@ -91,7 +91,10 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
         >
           Right click target
         </div>
-        <div {...contextMenuContentAttributes({ ...menuState, id: contentId })} class={CONTENT_CLASS}>
+        <div
+          {...contextMenuContentAttributes({ ...menuState, id: contentId })}
+          class={CONTENT_CLASS}
+        >
           <button
             {...contextMenuItemAttributes({
               ...menuState,

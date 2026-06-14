@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        7
-      ],
+      "lineNumbers": [7],
       "snippet": "export function commerceCartPageMeta(cart: CommerceCartPageMetaInput) {\n  return {\n    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,\n    title: `Jiso Commerce (${cart.count})`,\n  };",
       "matchedPattern": "weak cipher algorithm"
     }

@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        50,
-        238,
-        239
-      ],
+      "lineNumbers": [50, 238, 239],
       "snippet": "export type HoverCardContentEvent = Event;\n\nexport type HoverCardEscapeEvent = Event & Readonly<{ key?: string }>;\n\nexport function hoverCardRootAttributes(state: HoverCardState): HoverCardPrimitiveAttributes {",
       "matchedPattern": "weak cipher algorithm"
     }

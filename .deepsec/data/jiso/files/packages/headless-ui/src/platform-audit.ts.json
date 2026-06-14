@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        271
-      ],
+      "lineNumbers": [271],
       "snippet": "): boolean {\n  return getPrimitivePlatformAudit(primitive).concerns.some((concern) =>\n    concern.nativeMechanisms.includes(mechanism),\n  );\n}",
       "matchedPattern": "weak cipher algorithm"
     }

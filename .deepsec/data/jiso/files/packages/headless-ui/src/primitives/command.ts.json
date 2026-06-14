@@ -4,16 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        48,
-        58,
-        197,
-        224,
-        236,
-        238,
-        639,
-        657
-      ],
+      "lineNumbers": [48, 58, 197, 224, 236, 238, 639, 657],
       "snippet": "export interface CommandDialogAttributeOptions extends CommandState {\n  contentId?: string;\n  descriptionId?: string;\n  titleId?: string;\n}",
       "matchedPattern": "weak cipher algorithm"
     }

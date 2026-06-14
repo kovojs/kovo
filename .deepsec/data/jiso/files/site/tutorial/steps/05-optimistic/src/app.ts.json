@@ -4,33 +4,25 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        146
-      ],
+      "lineNumbers": [146],
       "snippet": "  const list = `<fw-fragment target=\"product-list\">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</fw-fragment>`;\n\n  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${badge}${list}</main></body></html>`;\n}\n",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "secrets-exposure",
-      "lineNumbers": [
-        38
-      ],
+      "lineNumbers": [38],
       "snippet": "\nexport const shopCsrf = {\n  secret: 'tutorial-shop-secret',\n  sessionId(request: ShopRequest) {\n    return request.session?.id;",
       "matchedPattern": "hardcoded credential"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        94
-      ],
+      "lineNumbers": [94],
       "snippet": "  },\n  handler(input, request: ShopRequest, context) {\n    const found = request.db.products.get(input.productId);\n    if (!found || found.stock < input.quantity) {\n      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        197
-      ],
+      "lineNumbers": [197],
       "snippet": "): string {\n  const productId = productIdFromRawInput(rawInput);\n  const product = productId ? request.db.products.get(productId) : undefined;\n\n  if (!product) return renderAddToCartError(failure);",
       "matchedPattern": "db call without await"
     }

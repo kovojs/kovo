@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        71,
-        72,
-        73,
-        102,
-        103,
-        104
-      ],
+      "lineNumbers": [71, 72, 73, 102, 103, 104],
       "snippet": "\n      while (responses.size >= maxEntries) {\n        const oldest = responses.keys().next().value;\n        if (oldest === undefined) break;\n        responses.delete(oldest);",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -25,14 +18,7 @@
       "vulnSlug": "other-race-condition",
       "title": "Idempotency/replay reservation placed after the handler runs — concurrent duplicates double-execute",
       "description": "The replay store is designed to coalesce duplicate mutations (same FW-Idem + session scope): reserve() (L65-96) creates a pending record, get() (L50-64) returns `record.pending.then(...)` so in-flight duplicates wait for and reuse the first response instead of re-running. The defect is the ORDER in which the call-site uses it. In mutation.ts renderMutationResponse: (1) readMutationReplay (L409) does a NON-atomic get; (2) runMutation (L414) executes the handler WITH ALL ITS SIDE EFFECTS; (3) only then does withMutationReplay (L442/L453) call reserveMutationReplay → store.reserve, creating the pending record. So the pending/coalescing window does not cover the handler-execution phase, only the post-commit render phase. Two (or N) requests carrying the same FW-Idem and session that arrive while the first handler is still running both observe a get() miss (no record exists yet) and both proceed into runMutation — the handler executes multiple times. For a 'place order', 'charge', 'redeem single-use coupon', or 'transfer' mutation, that is duplicate orders / double charges / multi-redeem. An attacker controls FW-Idem and can deliberately fire simultaneous identical requests to defeat idempotency; it also fires on ordinary double-clicks and client retry storms. The replay.test.ts cases that 'replay duplicate requests while ... pending' only pass because they manually sequence the second call to start AFTER `await queryStarted/fragmentStarted` — i.e., after the handler finished and the reservation already exists — so they never exercise the handler-execution race. The reserve-returns-undefined fallback in commitMutationReplay (mutation path) also silently overwrites via set() rather than returning the in-flight result, compounding the issue.",
-      "lineNumbers": [
-        50,
-        65,
-        68,
-        139,
-        143,
-        175
-      ],
+      "lineNumbers": [50, 65, 68, 139, 143, 175],
       "recommendation": "Reserve the idempotency key atomically at the SPEC §9.4 'replay lookup' step, before running the handler. Replace the separate read-then-run with a single get-or-reserve: if a record already exists (pending or committed), await/return it without re-running the handler; otherwise atomically create the pending reservation, run the handler+render under it, and commit. This makes the pending-promise coalescing cover handler execution so concurrent duplicates collapse to a single execution. (In mutation.ts, move reserveMutationReplay ahead of runMutation and feed the pending result back to duplicates.)",
       "confidence": "high",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

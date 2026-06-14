@@ -4,27 +4,19 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        52
-      ],
+      "lineNumbers": [52],
       "snippet": "  options: CsrfOptions<Request> & { field?: string },\n): string {\n  return `<input type=\"hidden\" name=\"${escapeAttribute(options.field ?? 'fw-csrf')}\" value=\"${escapeAttribute(csrfToken(request, options))}\">`;\n}\n",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "secrets-exposure",
-      "lineNumbers": [
-        28
-      ],
+      "lineNumbers": [28],
       "snippet": " * interface Req { session: { id: string } }\n * const token: string = csrfToken({ session: { id: 's1' } } as Req, {\n *   secret: 'shop-secret',\n *   sessionId: (request: Req) => request.session.id,\n * });",
       "matchedPattern": "hardcoded credential"
     },
     {
       "vulnSlug": "crypto-usage",
-      "lineNumbers": [
-        1,
-        78,
-        86
-      ],
+      "lineNumbers": [1, 78, 86],
       "snippet": "import { createHmac, timingSafeEqual } from 'node:crypto';\n\nimport { escapeAttribute } from './html.js';",
       "matchedPattern": "Node crypto import, Node crypto.create*, Node timingSafeEqual"
     }

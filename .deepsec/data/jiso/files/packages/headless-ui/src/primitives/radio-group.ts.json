@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        35,
-        105,
-        112,
-        304,
-        305,
-        309
-      ],
+      "lineNumbers": [35, 105, 112, 304, 305, 309],
       "snippet": "\nexport interface RadioGroupRootAttributeOptions extends RadioGroupState {\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

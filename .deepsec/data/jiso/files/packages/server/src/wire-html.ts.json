@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        32,
-        50,
-        66
-      ],
+      "lineNumbers": [32, 50, 66],
       "snippet": "    options.version === undefined ? '' : ` version=\"${escapeAttribute(String(options.version))}\"`;\n\n  return `<fw-query name=\"${escapeAttribute(options.name)}\"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</fw-query>`;\n}\n",
       "matchedPattern": "template literal in HTML"
     }

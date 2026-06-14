@@ -167,7 +167,10 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
         >
           Ada Lovelace
         </a>
-        <aside {...hoverCardContentAttributes({ contentId, open: state.open })} class={CONTENT_CLASS}>
+        <aside
+          {...hoverCardContentAttributes({ contentId, open: state.open })}
+          class={CONTENT_CLASS}
+        >
           First programmer and analytical engine collaborator.
         </aside>
         <output data-demo-state="hover-card-open">{state.open ? 'open' : 'closed'}</output>

@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        104,
-        108
-      ],
+      "lineNumbers": [104, 108],
       "snippet": "function readVendoredSource(sourcePath: string): string {\n  const source = readFileSync(sourcePath, 'utf8');\n  if (source.includes('@jiso/ui')) {\n    throw new Error(`vendored @jiso/ui source must not import @jiso/ui: ${sourcePath}`);\n  }",
       "matchedPattern": "weak cipher algorithm"
     }

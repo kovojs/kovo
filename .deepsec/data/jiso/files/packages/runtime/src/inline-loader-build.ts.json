@@ -4,34 +4,25 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        607
-      ],
+      "lineNumbers": [607],
       "snippet": "      if (unsupportedTopLevelBindings.has(name) && !declarations.has(name) && !local) {\n        throw new Error(\n          `Inline Jiso loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,\n        );\n      }",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        879,
-        881
-      ],
+      "lineNumbers": [879, 881],
       "snippet": "\nif (process.argv[1] === fileURLToPath(import.meta.url)) {\n  const result = emitInlineJisoLoaderModule({ check: process.argv.includes('--check') });\n\n  if (!process.argv.includes('--check')) {",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "unverified-lookup",
-      "lineNumbers": [
-        92
-      ],
+      "lineNumbers": [92],
       "snippet": "    doc.querySelector('[fw-c=\"' + target + '\"]') ??\n    doc.getElementById(target) ??\n    doc.querySelector('[fw-fragment-target=\"' + target + '\"]');\n  ${wireParserReadableSource}\n  ${responseApplyReadableSource}",
       "matchedPattern": "DB lookup by ID without ownership check in next 15 lines"
     },
     {
       "vulnSlug": "object-injection",
-      "lineNumbers": [
-        164
-      ],
+      "lineNumbers": [164],
       "snippet": "      const type = paramTypes[name];\n      const value = attribute.value;\n      params[name] = type === 'number' ? Number(value) : type === 'boolean' ? value === 'true' : value;\n    }\n    for (const ref of refs.split(/\\s+/).filter(Boolean)) {",
       "matchedPattern": "Dynamic property assignment from user input"
     }

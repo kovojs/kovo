@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        34,
-        93
-      ],
+      "lineNumbers": [34, 93],
       "snippet": "        {...otpFieldRootAttributes({\n          ...fieldState,\n          descriptionId: 'gallery-interactive-otp-description',\n          id: 'gallery-interactive-otp',\n          labelledBy: 'gallery-interactive-otp-label',",
       "matchedPattern": "weak cipher algorithm"
     }

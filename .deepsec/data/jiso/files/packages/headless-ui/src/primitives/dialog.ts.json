@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        26,
-        89
-      ],
+      "lineNumbers": [26, 89],
       "snippet": "export interface DialogAttributeOptions extends DialogState {\n  contentId?: string;\n  descriptionId?: string;\n  titleId?: string;\n}",
       "matchedPattern": "weak cipher algorithm"
     }

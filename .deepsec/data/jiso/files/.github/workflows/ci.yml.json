@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "github-workflow-security",
-      "lineNumbers": [
-        13,
-        14
-      ],
+      "lineNumbers": [13, 14],
       "snippet": "    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: voidzero-dev/setup-vp@v1\n        with:",
       "matchedPattern": "unpinned action ref (branch/major-tag)"
     }
@@ -21,10 +18,7 @@
       "vulnSlug": "github-workflow-security",
       "title": "Unpinned third-party action and no least-privilege permissions block",
       "description": "The CI job pins actions to mutable tags rather than commit SHAs: `actions/checkout@v4` (L13) and the third-party `voidzero-dev/setup-vp@v1` (L14). A mutable tag can be re-pointed by a compromised maintainer to attacker code that then executes in CI; the third-party `voidzero-dev/setup-vp@v1` is the higher-risk one (first-party `actions/checkout` is lower risk). The workflow also declares no top-level `permissions:` block, so the GITHUB_TOKEN falls back to the repository default, which can be read-write depending on org/repo settings. The workflow triggers on `pull_request` and `push`; for fork PRs the token is read-only by default and no secrets are referenced, which limits blast radius — hence medium/low severity rather than high.",
-      "lineNumbers": [
-        13,
-        14
-      ],
+      "lineNumbers": [13, 14],
       "recommendation": "Pin actions to full commit SHAs (e.g. `voidzero-dev/setup-vp@<sha> # v1`) and add an explicit least-privilege `permissions: { contents: read }` block at the top of the workflow.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

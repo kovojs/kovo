@@ -4,12 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "object-injection",
-      "lineNumbers": [
-        77,
-        85,
-        86,
-        92
-      ],
+      "lineNumbers": [77, 85, 86, 92],
       "snippet": "    const markerStart = body.indexOf(marker, cursor);\n    if (markerStart === -1) return -1;\n    if (markerStart === 0 || body[markerStart - 1] === '\\n') return markerStart;\n    cursor = markerStart + marker.length;\n  }",
       "matchedPattern": "Dynamic property assignment from user input"
     }

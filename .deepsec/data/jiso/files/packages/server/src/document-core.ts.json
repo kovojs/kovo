@@ -4,20 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        162,
-        184,
-        205,
-        219
-      ],
+      "lineNumbers": [162, 184, 205, 219],
       "snippet": "  const message = options.message ?? title;\n  const document = renderDocument({\n    body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,\n    hints: {\n      ...options.hints,",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        135
-      ],
+      "lineNumbers": [135],
       "snippet": "    response.status !== 200 ||\n    typeof response.body !== 'string' ||\n    (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))\n  ) {\n    return response;",
       "matchedPattern": "weak cipher algorithm"
     }

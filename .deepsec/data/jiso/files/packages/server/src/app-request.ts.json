@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "ssrf",
-      "lineNumbers": [
-        9
-      ],
+      "lineNumbers": [9],
       "snippet": "\nexport async function handleAppRequest(app: JisoApp, request: Request): Promise<Response> {\n  const url = new URL(request.url);\n  const match = matchShellDispatch({\n    endpoints: app.endpoints,",
       "matchedPattern": "new URL from request data"
     }
@@ -20,12 +18,7 @@
       "vulnSlug": "open-redirect",
       "title": "Protocol-relative open redirect via trailing-slash path normalization",
       "description": "handleAppRequest() (the production dispatcher returned by createRequestHandler / app.ts:76, SPEC §9.5) builds a 308 redirect directly from the normalized request pathname with no validation that the target is a safe same-origin path: `url.pathname = match.normalization.redirect.pathname; ... headers: { Location: `${url.pathname}${url.search}${url.hash}` }`. The pathname is taken straight from `new URL(request.url).pathname` and normalized by normalizePathname() in match.ts, which removes a trailing slash but does NOT collapse or reject leading double-slashes. Attack: a victim is lured to `https://victim.com//evil.com/` (path = `//evil.com/`, host still victim.com). normalizePathname strips the trailing slash, yielding redirect target `//evil.com`; because it differs from the input it returns a 308. app-request.ts then emits `Location: //evil.com`. A `//host` Location is a protocol-relative URL, so the browser navigates to `https://evil.com`. (Backslash variants like `/\\evil.com/` are converted to `//evil.com/` by the URL parser and work identically.) This requires no auth, no CSRF token, and no session — purely a crafted link — enabling phishing, OAuth/redirect-flow token theft, and bypass of referer-based protections. Note: the trailing slash is what triggers the 308; `//evil.com` with no trailing slash does not redirect.",
-      "lineNumbers": [
-        9,
-        17,
-        18,
-        20
-      ],
+      "lineNumbers": [9, 17, 18, 20],
       "recommendation": "Before emitting the Location, guarantee the redirect target is a single-origin path: reject or collapse any pathname that begins with `//` (or `/\\`). E.g. normalize leading slashes to a single `/` in normalizePathname, or in app-request.ts assert `redirect.pathname.startsWith('/') && !redirect.pathname.startsWith('//')` and 404/400 otherwise. Building the Location via `new URL(path, requestOrigin)` and re-extracting only pathname+search+hash would also neutralize the protocol-relative form.",
       "confidence": "high",
       "producedByRunId": "20260614060249-90bbda84c6340348"

@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        11,
-        42
-      ],
+      "lineNumbers": [11, 42],
       "snippet": "// Tutorial step 06 (chapter 6), unchanged from step 05: every product card carries a real form\n// posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS\n// fallback IS the output; `enhance` upgrades it to the section 9.1 fragment\n// wire. Failure state and the per-request CSRF token are request context,\n// not query data, so they arrive as an explicit second render argument (the",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -21,9 +18,7 @@
       "vulnSlug": "xss",
       "title": "Unescaped DB string ({item.name}) rendered as JSX child in an innerHTML-applied fragment",
       "description": "Identical pattern to steps 04/05. ProductList.render (L28) interpolates the free-form DB string `{item.name}` as a JSX child; the @jiso/server JSX runtime does not escape text children (packages/server/src/jsx-runtime.ts L79-84), only attributes. ProductList is fragmentTarget:true and is emitted both via the mutation-response fragment and the deferred stream chunk (app.ts L145, L176, L208 — renderShopPageDeferredStream / submitAddToCart), all applied client-side via innerHTML / insertAdjacentHTML with no sanitization (packages/runtime/src/response-fragment-apply.ts L58, L62). Markup in a product name becomes stored XSS. Not directly exploitable here because names are static fixtures and addToCart never writes a name from input — MEDIUM/medium confidence; rises to HIGH once names are admin/vendor/user-controlled. Reference examples/commerce avoids this (renders only id/stock as children; escapeHtml on free-form data). The scanner's insecure-crypto flag on L11/L42 is a false positive (comments; CSRF crypto is correct HMAC-SHA256).",
-      "lineNumbers": [
-        28
-      ],
+      "lineNumbers": [28],
       "recommendation": "Escape DB/user strings rendered as children, e.g. `{escapeHtml(item.name)}`, or fix the JSX runtime to auto-escape string text children while preserving a raw type for pre-rendered HTML.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

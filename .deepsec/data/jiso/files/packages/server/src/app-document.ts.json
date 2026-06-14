@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "ssrf",
-      "lineNumbers": [
-        76
-      ],
+      "lineNumbers": [76],
       "snippet": "        request,\n        status,\n        url: appRequestUrl(new URL(request.url)),\n      });\n    }",
       "matchedPattern": "new URL from request data"
     }
@@ -20,13 +18,7 @@
       "vulnSlug": "object-injection",
       "title": "searchParamsToRecord assigns attacker-controlled query-param names as object keys (localized prototype reassignment)",
       "description": "searchParamsToRecord() builds the route/query `search` bag by doing `record[key] = value` / `record[key] = [existing, value]` where `key` is the raw query-parameter name (fully attacker-controlled) and `record` is a plain `{}`. A request like `?__proto__=x` makes `record['__proto__']` read back Object.prototype (truthy, non-array), so the code takes the else branch and assigns `record['__proto__'] = [Object.prototype, 'x']`, an object value — which invokes the inherited `__proto__` setter and REASSIGNS the prototype of the `search` object to that array. This is NOT global prototype pollution (single-level assignment cannot reach Object.prototype, and `?__proto__[x]=y` is parsed as a literal key), so impact is bounded to the per-request `search` object. However, that object is handed to route/query handlers: its prototype chain now includes Array.prototype/the array, so inherited reads (`search.length` === 2, `search[0]`, array methods) and `for..in` enumeration (yields '0','1') are corrupted, which can confuse handlers that inspect arbitrary/derived keys. It is a genuine tainted-key-assignment defect; I am classifying it BUG rather than a security severity because it does not achieve cross-object/global pollution.",
-      "lineNumbers": [
-        101,
-        104,
-        106,
-        108,
-        110
-      ],
+      "lineNumbers": [101, 104, 106, 108, 110],
       "recommendation": "Use a null-prototype accumulator (`const record = Object.create(null)`) or a Map so user-controlled keys cannot touch `__proto__`/`constructor` accessors. Alternatively guard against `key === '__proto__'` (and use Object.hasOwn for the existing-value check). A null-prototype object also removes spurious inherited properties from the `search` bag.",
       "confidence": "medium",
       "producedByRunId": "20260614060249-90bbda84c6340348"

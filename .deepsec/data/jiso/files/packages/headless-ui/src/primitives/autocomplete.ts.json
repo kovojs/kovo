@@ -4,17 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        44,
-        194,
-        195,
-        209,
-        213,
-        563,
-        578,
-        579,
-        583
-      ],
+      "lineNumbers": [44, 194, 195, 209, 213, 563, 578, 579, 583],
       "snippet": "export interface AutocompleteInputAttributeOptions extends AutocompleteState {\n  autocomplete?: string;\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

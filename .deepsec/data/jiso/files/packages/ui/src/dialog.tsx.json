@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        35,
-        127,
-        133
-      ],
+      "lineNumbers": [35, 127, 133],
       "snippet": "  class?: ClassValue;\n  contentId?: string;\n  descriptionId?: string;\n  titleId?: string;\n}",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -22,11 +18,7 @@
       "vulnSlug": "xss",
       "title": "Potential XSS: dialog content/trigger children rendered as unescaped HTML",
       "description": "DialogContent (L140), DialogTrigger (L116) and DialogClose (L164) interpolate `{props.children}` as element content. Because the @jiso/server JSX runtime inserts text children verbatim (packages/server/src/jsx-runtime.ts:79-84, no escaping; attributes only are escaped at line 66) and fragments are applied client-side via innerHTML/insertAdjacentHTML (packages/runtime/src/response-fragment-apply.ts:58,62), any raw dynamic string passed as a dialog body — e.g. `<DialogContent>{userMessage}</DialogContent>` — executes injected markup. `children` is typed `string` (DialogProps.children?: string), which invites passing dynamic data. This is the same systemic unescaped-text-children gap as the other components; confidence is lower than the scalar-prop cases because `children` is the framework's intended composition slot for pre-rendered HTML, so exploitability depends on the app passing an unescaped raw string rather than nested components. The scanner's insecure-crypto flags (L35/127/133) are false positives matching 'des' in descriptionId/aria-describedby.",
-      "lineNumbers": [
-        116,
-        140,
-        164
-      ],
+      "lineNumbers": [116, 140, 164],
       "recommendation": "Decide and document a text-escaping contract for JSX children. Either escape string children by default in the runtime (with an explicit opt-in for trusted pre-rendered HTML), or require callers to escape dynamic strings and document that DialogContent children are treated as raw HTML. Until then, treat any dynamic dialog body as an XSS sink.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

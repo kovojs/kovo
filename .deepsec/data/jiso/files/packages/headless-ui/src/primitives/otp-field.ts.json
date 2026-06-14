@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        32,
-        100,
-        107,
-        399,
-        400,
-        404
-      ],
+      "lineNumbers": [32, 100, 107, 399, 400, 404],
       "snippet": "\nexport interface OtpFieldRootAttributeOptions extends OtpFieldState {\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

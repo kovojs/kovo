@@ -59,11 +59,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
     };
 
     return (
-      <form
-        data-gallery-interactive="field"
-        id="gallery-interactive-field-form"
-        class="grid gap-4"
-      >
+      <form data-gallery-interactive="field" id="gallery-interactive-field-form" class="grid gap-4">
         <div
           {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           class={FIELD_CLASS}
@@ -142,7 +138,10 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           </output>
         </div>
 
-        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-profile' })} class={FIELD_CLASS}>
+        <div
+          {...fieldRootAttributes({ id: 'gallery-interactive-field-profile' })}
+          class={FIELD_CLASS}
+        >
           <label
             {...fieldLabelAttributes({
               controlId: 'gallery-interactive-field-bio',

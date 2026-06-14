@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        33,
-        131,
-        138
-      ],
+      "lineNumbers": [33, 131, 138],
       "snippet": "  children?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  id?: string;\n  label?: string;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -22,10 +18,7 @@
       "vulnSlug": "xss",
       "title": "NavigationMenuTrigger/Link render itemLabel/itemValue as unescaped text (stored XSS sink)",
       "description": "NavigationMenuTrigger (line 229) and NavigationMenuLink (line 284) both emit `{props.children ?? props.itemLabel ?? props.itemValue}`. As confirmed in jsx-runtime.ts:83, text children are NOT escaped (only attributes are, jsx-runtime.ts:66). `itemLabel`/`itemValue` are scalar string props meant as plain-text labels, so HTML metacharacters in user/DB-derived values are emitted raw into the `<button>`/`<a>` body. Rendered via the server fragment pipeline (applied client-side through innerHTML) or initial SSR, this is stored XSS when an app builds nav items from user-controlled data. Same framework-wide unescaped-text-children root cause as menubar.tsx; confidence low because it depends on app data flow.",
-      "lineNumbers": [
-        229,
-        284
-      ],
+      "lineNumbers": [229, 284],
       "recommendation": "Escape itemLabel/itemValue before emitting them as text children (e.g. escapeHtml from @jiso/server), or fix the runtime's default text-escaping so string children are HTML-escaped with an explicit opt-in for pre-rendered HTML composition.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"
@@ -35,10 +28,7 @@
       "vulnSlug": "xss",
       "title": "NavigationMenuLink passes href through without URL-scheme validation (javascript: URI XSS)",
       "description": "NavigationMenuLink renders `href={attrs.href}` (line 279), where `attrs.href` comes from `props.href` passed verbatim by navigationMenuLinkAttributes (headless-ui/src/primitives/navigation-menu.ts:232 — `{ href: options.href }`, no validation). The href is escaped as an attribute, but escapeAttribute (html.ts:5) only encodes `& < > \"` — it does NOT neutralize dangerous URL schemes. A user-controlled href of `javascript:alert(document.cookie)` (or a `data:`/`vbscript:` URI) therefore survives intact and executes on click. There is no allowlist or `http(s):`/relative-path check anywhere in the component or the headless helper. This is a classic href-injection XSS that lands whenever an app feeds user-controlled URLs into a navigation link. Confidence low because it requires the app to supply an attacker-influenced href.",
-      "lineNumbers": [
-        279,
-        265
-      ],
+      "lineNumbers": [279, 265],
       "recommendation": "Validate the href scheme before rendering — reject or neutralize anything that is not an allowlisted scheme (http, https, mailto, tel) or a relative/anchor path (e.g. starts with `/`, `#`, `./`). Implement the check in navigationMenuLinkAttributes (or the component) and drop/replace disallowed hrefs with `#` or omit the attribute.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

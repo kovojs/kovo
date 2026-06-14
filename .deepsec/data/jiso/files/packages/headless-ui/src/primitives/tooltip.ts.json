@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        62
-      ],
+      "lineNumbers": [62],
       "snippet": "    ...(enabledContentId === undefined || !options.open\n      ? {}\n      : { 'aria-describedby': enabledContentId }),\n  });\n}",
       "matchedPattern": "weak cipher algorithm"
     }

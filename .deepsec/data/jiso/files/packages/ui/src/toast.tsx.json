@@ -4,17 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        8,
-        30,
-        73,
-        91,
-        123,
-        135,
-        168,
-        170,
-        174
-      ],
+      "lineNumbers": [8, 30, 73, 91, 123, 135, 168, 170, 174],
       "snippet": "  toastActionAttributes,\n  toastCloseAttributes,\n  toastDescriptionAttributes,\n  toastRootAttributes,\n  toastTitleAttributes,",
       "matchedPattern": "weak cipher algorithm"
     }

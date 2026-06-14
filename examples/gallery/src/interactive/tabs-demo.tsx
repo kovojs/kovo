@@ -138,7 +138,10 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
           }
         }}
       >
-        <div {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })} class={LIST_CLASS}>
+        <div
+          {...tabsListAttributes({ ...rootState, label: 'Gallery sections' })}
+          class={LIST_CLASS}
+        >
           <button
             {...tabsTriggerAttributes({
               ...rootState,

@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        75
-      ],
+      "lineNumbers": [75],
       "snippet": "      {cards}\n      {cursor ? (\n        <a href={`/products?after=${cursor}`} data-cursor={cursor}>\n          More\n        </a>",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        101
-      ],
+      "lineNumbers": [101],
       "snippet": "\n// SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation\n// endpoint; `enhance` upgrades it to the section 9.1 fragment wire. Rendered\n// standalone as the failure-rerender fragment (fw-fragment-target).\nexport function renderAddToCartForm(",
       "matchedPattern": "weak cipher algorithm"
     }

@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        234
-      ],
+      "lineNumbers": [234],
       "snippet": "      <nav aria-label=\"Interactive demos\">\n        {interactiveGalleryDemos.map((demo) => (\n          <a href={`#${demo.name}`}>{demo.title}</a>\n        ))}\n      </nav>",
       "matchedPattern": "template literal in HTML"
     }

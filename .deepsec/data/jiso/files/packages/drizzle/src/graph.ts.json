@@ -4,25 +4,19 @@
   "candidates": [
     {
       "vulnSlug": "non-atomic-read-delete",
-      "lineNumbers": [
-        33
-      ],
+      "lineNumbers": [33],
       "snippet": "    | 'delete-predicate'\n    | 'insert-select'\n    | 'update-from'\n    | 'update-predicate'\n    | (string & {});\n  predicate?: 'eq' | 'non-eq';",
       "matchedPattern": "Read-then-modify without transaction — potential TOCTOU race"
     },
     {
       "vulnSlug": "non-atomic-read-delete",
-      "lineNumbers": [
-        109
-      ],
+      "lineNumbers": [109],
       "snippet": "  // their FW406 diagnostics explicit when the source table cannot be proven.\n  if (site.operation === 'insert-select') {\n    return `${diagnosticDefinitions.FW406.message} Insert-select read source could not be resolved to a Drizzle table.`;\n  }\n  if (site.operation === 'update-from') {\n    return `${diagnosticDefinitions.FW406.message} Update-from read source could not be resolved to a Drizzle table.`;",
       "matchedPattern": "Read-then-modify without transaction — potential TOCTOU race"
     },
     {
       "vulnSlug": "non-atomic-read-delete",
-      "lineNumbers": [
-        110
-      ],
+      "lineNumbers": [110],
       "snippet": "  if (site.operation === 'insert-select') {\n    return `${diagnosticDefinitions.FW406.message} Insert-select read source could not be resolved to a Drizzle table.`;\n  }\n  if (site.operation === 'update-from') {\n    return `${diagnosticDefinitions.FW406.message} Update-from read source could not be resolved to a Drizzle table.`;\n  }",
       "matchedPattern": "Read-then-modify without transaction — potential TOCTOU race"
     }

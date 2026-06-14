@@ -4,23 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        117
-      ],
+      "lineNumbers": [117],
       "snippet": "    if (blockTagsThatCloseParagraph.has(tag) && hasJsxAncestor(element, 'p')) {\n      diagnostics.push(\n        htmlContentModelDiagnostic(source, fileName, element, `<${tag}> cannot appear inside <p>`),\n      );\n    }",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        194,
-        196,
-        367,
-        369,
-        387,
-        450,
-        454
-      ],
+      "lineNumbers": [194, 196, 367, 369, 387, 450, 454],
       "snippet": "\nconst ambiguousRelationshipAttributes = new Set([\n  'aria-activedescendant',\n  'aria-controls',\n  'aria-describedby',",
       "matchedPattern": "weak cipher algorithm"
     }

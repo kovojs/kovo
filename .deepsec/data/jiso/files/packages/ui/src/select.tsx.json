@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        37,
-        128,
-        145
-      ],
+      "lineNumbers": [37, 128, 145],
       "snippet": "  children?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -22,10 +18,7 @@
       "vulnSlug": "xss",
       "title": "Unescaped text interpolation of item label/value into server fragment (conditional stored XSS sink)",
       "description": "The @jiso/server JSX runtime escapes attribute values but renders text children raw (jsx-runtime.ts: renderJsxChildren returns String(children) with no escaping; renderJsxAttributes uses escapeAttribute). In SelectItem, `{props.children ?? props.itemLabel ?? props.itemValue}` (L226) is emitted as the <option> text content unescaped, and SelectValue renders `{selectValueText(props)}` (L252) — which resolves to items[].label/textValue/value or placeholder (headless-ui/primitives/select.ts L81-86) — raw inside a <span>. itemLabel/itemValue and the select item set are semantically TEXT props, not an HTML composition slot. If an app populates them from user- or DB-derived data (e.g. category/product names) and the result is delivered as a mutation fragment, the client applies it via innerHTML/insertAdjacentHTML, so a payload such as `</option><img src=x onerror=...>` (or `</span><script>` for the value span) executes. The framework's own guidance (CLAUDE.md, SPEC) says fragment renderers must run user/DB strings through escapeHtml; this component does not. Exploitability is conditional on the caller passing untrusted data, and text-escaping is an unspecified framework-wide design (children are raw by design), hence MEDIUM/low-confidence rather than HIGH. Attribute interpolations here (value/label/name/id) are safe — the runtime escapes attributes. The insecure-crypto flag on L37/128/145 is a false positive: those are `descriptionId`/`aria-describedby` lines, no cipher.",
-      "lineNumbers": [
-        226,
-        252
-      ],
+      "lineNumbers": [226, 252],
       "recommendation": "Escape text props that originate from app/DB data before interpolation, e.g. wrap with escapeHtml from @jiso/server: `{escapeHtml(props.children ?? props.itemLabel ?? props.itemValue)}` and `{escapeHtml(selectValueText(props))}`. Better, resolve the framework-level question by having the JSX runtime escape string text nodes by default and provide an explicit raw/HTML wrapper for pre-rendered component output. Disregard the insecure-crypto flag.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

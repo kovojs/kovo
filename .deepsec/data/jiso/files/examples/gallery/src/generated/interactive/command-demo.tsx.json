@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        81,
-        86
-      ],
+      "lineNumbers": [81, 86],
       "snippet": "            ...commandState,\n            contentId,\n            descriptionId: 'gallery-command-description',\n            titleId: 'gallery-command-title',\n          })}",
       "matchedPattern": "weak cipher algorithm"
     }

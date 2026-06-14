@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        16
-      ],
+      "lineNumbers": [16],
       "snippet": "  | 'visible';\n\nexport type PrimitiveDataAttributes = Readonly<Record<`data-${string}`, string>>;\n\nexport function dataState(state: PrimitiveStateToken): PrimitiveDataAttributes {",
       "matchedPattern": "template literal in HTML"
     }

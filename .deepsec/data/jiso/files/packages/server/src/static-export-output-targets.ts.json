@@ -4,13 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        160,
-        198,
-        211,
-        232,
-        245
-      ],
+      "lineNumbers": [160, 198, 211, 232, 245],
       "snippet": "  }\n\n  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\\\')) {\n    throw new StaticExportError([\n      staticExportDiagnostic(",
       "matchedPattern": "weak cipher algorithm"
     }

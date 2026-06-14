@@ -4,29 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        79,
-        81,
-        96,
-        129,
-        132,
-        182,
-        185,
-        186,
-        190,
-        222
-      ],
+      "lineNumbers": [79, 81, 96, 129, 132, 182, 185, 186, 190, 222],
       "snippet": "    ...renderI18nCatalogs(options.i18n),\n    ...stylesheets.map(renderPageStylesheetHint),\n    ...modulepreloads.map((href) => `<link rel=\"modulepreload\" href=\"${escapeAttribute(href)}\">`),\n    options.bootstrapScript\n      ? `<script type=\"module\" src=\"${escapeAttribute(options.bootstrapScript)}\"></script>`",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        6,
-        183,
-        185,
-        186
-      ],
+      "lineNumbers": [6, 183, 185, 186],
       "snippet": "\nexport interface RouteMeta {\n  description?: string;\n  image?: string;\n  title?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

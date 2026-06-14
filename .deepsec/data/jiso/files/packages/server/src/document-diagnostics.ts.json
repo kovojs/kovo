@@ -4,15 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        109,
-        110,
-        112,
-        124,
-        132,
-        136,
-        168
-      ],
+      "lineNumbers": [109, 110, 112, 124, 132, 136, 168],
       "snippet": "    '<section class=\"jiso-diagnostic-panel\">',\n    '<header>',\n    `<p class=\"jiso-diagnostic-code\">${escapeHtml(diagnostic.code)}</p>`,\n    `<p class=\"jiso-diagnostic-severity\">${escapeHtml(severity)}</p>`,\n    '</header>',",
       "matchedPattern": "template literal in HTML"
     }

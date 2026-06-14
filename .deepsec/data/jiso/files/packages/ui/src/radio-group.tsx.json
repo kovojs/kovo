@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        17,
-        90,
-        108
-      ],
+      "lineNumbers": [17, 90, 108],
       "snippet": "\nexport interface RadioGroupStateProps {\n  descriptionId?: string;\n  dir?: TextDirection;\n  disabled?: boolean;",
       "matchedPattern": "weak cipher algorithm"
     }

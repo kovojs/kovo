@@ -4,41 +4,31 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        96
-      ],
+      "lineNumbers": [96],
       "snippet": "  const list = `<fw-fragment target=\"product-list\">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</fw-fragment>`;\n\n  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${badge}${list}</main></body></html>`;\n}\n// /snippet",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "secrets-exposure",
-      "lineNumbers": [
-        32
-      ],
+      "lineNumbers": [32],
       "snippet": "// into every emitted form and verified before input parsing on every POST.\nexport const shopCsrf = {\n  secret: 'tutorial-shop-secret',\n  sessionId(request: ShopRequest) {\n    return request.session?.id;",
       "matchedPattern": "hardcoded credential"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        18
-      ],
+      "lineNumbers": [18],
       "snippet": "\n// Tutorial step 04 (chapter 4): a typed write over a real form. One mutation\n// endpoint answers both response modes — POST-redirect-GET without\n// JavaScript, the section 9.1 fragment wire with it (SPEC.md sections 6.3,\n// 9.1, 10.3). CSRF is default-on (section 6.6): a mutation with no token",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        63
-      ],
+      "lineNumbers": [63],
       "snippet": "  },\n  handler(input, request: ShopRequest, context) {\n    const found = request.db.products.get(input.productId);\n    if (!found || found.stock < input.quantity) {\n      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        150
-      ],
+      "lineNumbers": [150],
       "snippet": "): string {\n  const productId = productIdFromRawInput(rawInput);\n  const product = productId ? request.db.products.get(productId) : undefined;\n\n  if (!product) return renderAddToCartError(failure);",
       "matchedPattern": "db call without await"
     }
@@ -52,10 +42,7 @@
       "vulnSlug": "secrets-exposure",
       "title": "Hardcoded CSRF HMAC secret in source (tutorial scaffolding)",
       "description": "`shopCsrf.secret` is the hardcoded literal 'tutorial-shop-secret' (L32). CSRF tokens are an HMAC over the session id keyed by this secret; a hardcoded/known secret lets an attacker forge valid CSRF tokens and defeat the default-on CSRF protection on the `cart/add` mutation. This is almost certainly intentional tutorial scaffolding (functionally identical to the documented `EXAMPLE_ONLY_*_CSRF_SECRET` known-false-positives, just not labeled that way) and is only a real risk if copied verbatim into a deployed app. Flagged at low confidence for that reason. The L96 'template literal in HTML' and L63/L150 'db call without await' flags are false positives: renderShopPage interpolates only fixed seed data and JSX-auto-escaped fragment output, and `request.db.products.get` is a synchronous Map.get, not an async DB call.",
-      "lineNumbers": [
-        31,
-        32
-      ],
+      "lineNumbers": [31, 32],
       "recommendation": "For production use, load the CSRF secret from an environment variable / secret manager rather than a source literal, and rename the tutorial constant to the documented EXAMPLE_ONLY_* convention so scanners and readers treat it as a fixture.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

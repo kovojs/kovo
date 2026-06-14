@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        62
-      ],
+      "lineNumbers": [62],
       "snippet": "function assertCookieOctets(value: string, label: string): void {\n  assertNoHeaderControlCharacters(value, label);\n  if (value.includes(';')) throw new Error(`${label} must not contain semicolons`);\n}\n",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "secret-in-log",
-      "lineNumbers": [
-        56
-      ],
+      "lineNumbers": [56],
       "snippet": "  if (!/^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$/.test(value)) {\n    throw new Error('Cookie name must be an HTTP token');\n  }",
       "matchedPattern": "Secret variable in error response"
     }

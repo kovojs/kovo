@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        20
-      ],
+      "lineNumbers": [20],
       "snippet": "export const galleryInteractiveRoute = route('/gallery/interactive', {\n  meta: {\n    description: 'Compiled Jiso UI primitive demos with generated client handlers.',\n    title: 'Jiso Interactive Gallery',\n  },",
       "matchedPattern": "weak cipher algorithm"
     }

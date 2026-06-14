@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        70
-      ],
+      "lineNumbers": [70],
       "snippet": "function hasFw211Justification(model: ComponentModuleModel, index: number): boolean {\n  return jsxComments(model).some(\n    (comment) => comment.attachedAttributeStart === index && comment.text.includes('FW211'),\n  );\n}",
       "matchedPattern": "weak cipher algorithm"
     }

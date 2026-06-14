@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        51,
-        191,
-        296
-      ],
+      "lineNumbers": [51, 191, 296],
       "snippet": "}\n\n/** Options controlling how `diagnosticDefinitionText` includes or prefers help text. */\nexport interface DiagnosticTextOptions {\n  includeHelp?: boolean;",
       "matchedPattern": "weak cipher algorithm"
     }

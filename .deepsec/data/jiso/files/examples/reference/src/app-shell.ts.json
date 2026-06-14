@@ -4,21 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        62,
-        76,
-        112,
-        132
-      ],
+      "lineNumbers": [62, 76, 112, 132],
       "snippet": "      '<h1>Jiso Reference App</h1>',\n      '<p>Public route exported by the shared request shell.</p>',\n      `<button type=\"button\" on:click=\"${referencePublicClientModuleHref}#Reference$markReady\">Check shell</button>`,\n      '<output id=\"reference-status\">Waiting for client module.</output>',\n      '</section>',",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        53,
-        71
-      ],
+      "lineNumbers": [53, 71],
       "snippet": "export const referencePublicRoute = route('/', {\n  meta: {\n    description: 'A public Jiso reference app shell exported through synthetic replay.',\n    title: 'Jiso Reference Public Shell',\n  },",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -32,11 +24,7 @@
       "vulnSlug": "open-redirect",
       "title": "Open redirect reachable through the enhanced shell sign-in flow",
       "description": "Same open-redirect class as in app.ts, via the shell's interactive path. The /login route reads `context.search.next` straight from the query string (L75) and seeds it into the login form, and createReferenceAppShell wires the sign-in mutation response with `redirectTo: (result) => authRedirectTo(result.value)` (L86, L106). authRedirectTo (L180-187) returns `result.value.redirectTo` verbatim, which is the better-auth `redirectPath(input.next, ...)` output. Because redirectPath (packages/better-auth/src/index.ts:1204-1209) blocks `//` but not a leading `/\\`, a link such as `/login?next=/\\evil.com` causes the shell's request handler to emit `Location: /\\evil.com`, which browsers normalize to `https://evil.com` after the victim authenticates. The scanner's xss flags (L62 controlled client-module href; L76 next is escapeAttribute-escaped in the form; L112/L132 routeValueToHtml wrapping) and insecure-crypto flags (L53/L71 are meta description/title strings) are all false positives.",
-      "lineNumbers": [
-        75,
-        86,
-        106
-      ],
+      "lineNumbers": [75, 86, 106],
       "recommendation": "Fix redirectPath upstream to reject backslash-prefixed and control-character values (see app.ts recommendation), and/or validate `context.search.next` against a same-origin path allowlist in the /login route before passing it into the form and redirect.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

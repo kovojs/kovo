@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        64
-      ],
+      "lineNumbers": [64],
       "snippet": "\nfunction isHtmlDocumentContentType(contentType: string | null): boolean {\n  return contentType?.toLowerCase().includes('text/html') ?? false;\n}\n",
       "matchedPattern": "weak cipher algorithm"
     }

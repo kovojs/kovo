@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        12,
-        57
-      ],
+      "lineNumbers": [12, 57],
       "snippet": "\nexport interface CheckboxProps {\n  describedBy?: string;\n  checked?: CheckboxCheckedState;\n  children?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

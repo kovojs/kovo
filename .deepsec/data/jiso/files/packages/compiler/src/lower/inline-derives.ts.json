@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        99
-      ],
+      "lineNumbers": [99],
       "snippet": "    replacements.push({\n      end: binding.end,\n      replacement: `<span data-bind=\"${escapeAttribute(binding.path)}\">{${binding.path}}</span>`,\n      start: binding.start,\n    });",
       "matchedPattern": "template literal in HTML"
     },
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        55
-      ],
+      "lineNumbers": [55],
       "snippet": "    if (\n      element.attributes.some((attribute) =>\n        ['data-derive', 'data-derive-attr'].includes(attribute.name),\n      )\n    ) {",
       "matchedPattern": "weak cipher algorithm"
     }

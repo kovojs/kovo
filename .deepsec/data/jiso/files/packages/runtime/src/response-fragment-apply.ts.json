@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        62
-      ],
+      "lineNumbers": [62],
       "snippet": "\nfunction replaceHtmlResponseFragment(element: HtmlResponseFragmentApplyTarget, html: string): void {\n  element.innerHTML = html;\n}\n",
       "matchedPattern": "innerHTML assignment"
     },
     {
       "vulnSlug": "dangerous-html",
-      "lineNumbers": [
-        62
-      ],
+      "lineNumbers": [62],
       "snippet": "}\n\nfunction replaceHtmlResponseFragment(element: HtmlResponseFragmentApplyTarget, html: string): void {\n  element.innerHTML = html;\n}\n",
       "matchedPattern": "dangerouslySetInnerHTML from props (trace source)"
     }

@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        137
-      ],
+      "lineNumbers": [137],
       "snippet": "  /**\n   * Reports mutation submit/apply failures. Direct submit callers still receive\n   * the thrown error; dispatchEnhancedFormSubmit decides whether a form-layer\n   * error has been handled.\n   */",
       "matchedPattern": "weak cipher algorithm"
     }

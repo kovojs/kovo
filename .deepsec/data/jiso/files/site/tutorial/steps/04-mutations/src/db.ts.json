@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        50
-      ],
+      "lineNumbers": [50],
       "snippet": "    write(table, value) {\n      if (table === 'cart_items') {\n        db.cartItems.push(value as CartItem);\n      }\n      if (table === 'products') {",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        54
-      ],
+      "lineNumbers": [54],
       "snippet": "      if (table === 'products') {\n        const product = value as ShopProduct;\n        db.products.set(product.id, product);\n      }\n    },",
       "matchedPattern": "db call without await"
     }

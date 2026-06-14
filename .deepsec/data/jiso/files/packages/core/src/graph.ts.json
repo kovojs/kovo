@@ -4,17 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        136,
-        297,
-        298,
-        299,
-        300,
-        301,
-        306,
-        319,
-        342
-      ],
+      "lineNumbers": [136, 297, 298, 299, 300, 301, 306, 319, 342],
       "snippet": "\nexport interface PageMetaExplain {\n  description?: string;\n  image?: string;\n  title?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

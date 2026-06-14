@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        21,
-        29,
-        82
-      ],
+      "lineNumbers": [21, 29, 82],
       "snippet": "\nconst tagOptions: readonly AutocompleteItem[] = Object.freeze([\n  { label: 'Design', value: 'design' },\n  { disabled: true, label: 'Deprecated', value: 'deprecated' },\n  { textValue: 'Development', value: 'development' },",
       "matchedPattern": "weak cipher algorithm"
     }

@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        78
-      ],
+      "lineNumbers": [78],
       "snippet": "async function readMutationRequestBody(request: Request): Promise<unknown> {\n  const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';\n  if (contentType.includes('application/json')) return request.json();\n  return request.formData();\n}",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -20,14 +18,7 @@
       "vulnSlug": "open-redirect",
       "title": "Default mutation redirect derives the 303 Location from an unvalidated Referer header",
       "description": "On the no-JS POST-redirect-GET path, a successful mutation returns a 303 whose `Location` is `endpointRequest.redirectTo`, which `handleAppMutationRequest` defaults to `defaultMutationRedirectTo(mutationRequest, currentUrl)` (L62-63). That helper reads the attacker-influenceable `Referer` request header and: (1) in its catch branch returns the **raw, unvalidated `referer` string** verbatim (L88-89) — if it is a protocol-relative value like `//evil.com` or `/\\evil.com` (which `new URL()` rejects, hitting the catch), it becomes the `Location` of the 303 redirect; and (2) in the happy path returns `appRequestUrl(url)` = `${pathname}${search}${hash}` (app-document.ts:90-92), which does NOT strip a `//host` pathname (`new URL('https://victim.com//evil.com').pathname === '//evil.com'`), so a `//host` value still passes through as a protocol-relative redirect. This is the same-origin redirect guard that the framework already implements correctly elsewhere — better-auth's `redirectPath` rejects any value that does not start with `/` or that starts with `//` (better-auth/src/index.ts:1204-1207) — so this default is inconsistent with the framework's own pattern. Practical exploitability is limited (hence low confidence): the `Location` is only emitted on the no-JS success path, which requires a valid session-bound CSRF token (so the form must be same-origin), and real browsers always send an absolute URL as `Referer`, which normalizes to a same-origin path — so the dangerous catch/`//host` cases are not reachable via an ordinary victim browser flow. It is nonetheless a real latent open-redirect defect: any caller, proxy/referrer-policy rewrite, or future reuse of `defaultMutationRedirectTo` that yields a malformed or `//`-prefixed value produces an attacker-controlled redirect target.",
-      "lineNumbers": [
-        62,
-        63,
-        82,
-        83,
-        86,
-        89
-      ],
+      "lineNumbers": [62, 63, 82, 83, 86, 89],
       "recommendation": "Do not return the raw `referer`. Reuse the framework's existing same-origin guard (as in better-auth `redirectPath`): require the resolved redirect to be a string that starts with a single '/' and not '//' (and not '/\\'), otherwise fall back to a safe default such as `currentUrl` or '/'. Apply the same check to the `appRequestUrl(url)` result so a `//host` pathname cannot pass through, and drop the catch-branch `return referer;` in favor of the fallback.",
       "confidence": "low",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        37,
-        78,
-        116,
-        160,
-        293,
-        322
-      ],
+      "lineNumbers": [37, 78, 116, 160, 293, 322],
       "snippet": "\nexport interface ToggleGroupRootAttributeOptions extends ToggleGroupState {\n  descriptionId?: string;\n  id?: string;\n  labelledBy?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

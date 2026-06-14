@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        35,
-        100,
-        111,
-        230,
-        231,
-        235
-      ],
+      "lineNumbers": [35, 100, 111, 230, 231, 235],
       "snippet": "\nexport interface SelectTriggerAttributeOptions extends SelectState {\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

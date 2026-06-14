@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        160,
-        235
-      ],
+      "lineNumbers": [160, 235],
       "snippet": "        },\n        {\n          attr: 'aria-describedby',\n          decision: 'primitive-wins',\n          diagnostics: [],",
       "matchedPattern": "weak cipher algorithm"
     }

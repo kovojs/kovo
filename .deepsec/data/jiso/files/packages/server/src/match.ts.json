@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "object-injection",
-      "lineNumbers": [
-        187
-      ],
+      "lineNumbers": [187],
       "snippet": "    }\n\n    params[routeSegment.name ?? routeSegment.value.slice(1)] = pathnameSegment;\n  }\n",
       "matchedPattern": "Dynamic property assignment from user input"
     }
@@ -20,11 +18,7 @@
       "vulnSlug": "open-redirect",
       "title": "normalizePathname() preserves leading '//', yielding a protocol-relative redirect target (root cause of the app-request.ts open redirect)",
       "description": "normalizePathname() ensures a leading slash and strips trailing slashes (`absolutePathname.replace(/\\/+$/, '')`) but never collapses or rejects leading double-slashes. For input `//evil.com/` it returns `{ pathname: '//evil.com', redirect: { pathname: '//evil.com', status: 308 } }`. This redirect struct is consumed by handleAppRequest (app-request.ts:18-20), which places `//evil.com` directly into the Location header — a protocol-relative URL the browser resolves to https://evil.com (open redirect). This file is the natural fix site: the normalized pathname is treated as a trusted same-origin redirect target downstream, but it can encode an arbitrary host. Same chain as the app-request.ts finding; reported here because the unsanitized value originates in this function.",
-      "lineNumbers": [
-        54,
-        55,
-        68
-      ],
+      "lineNumbers": [54, 55, 68],
       "recommendation": "Collapse leading slashes to a single '/' (e.g. `absolutePathname.replace(/^\\/+/, '/')`) or reject pathnames matching `^//` so that no normalized/redirect pathname can ever be protocol-relative. Add a regression test for `//evil.com/` and `/\\evil.com/`.",
       "confidence": "medium",
       "producedByRunId": "20260614060249-90bbda84c6340348"

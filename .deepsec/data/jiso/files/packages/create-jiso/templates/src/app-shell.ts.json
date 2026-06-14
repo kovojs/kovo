@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        29
-      ],
+      "lineNumbers": [29],
       "snippet": "export const homeRoute = route('/', {\n  meta: {\n    description: 'A routed Jiso starter served through the app shell.',\n    title: 'Jiso Starter',\n  },",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "process-env-access",
-      "lineNumbers": [
-        7
-      ],
+      "lineNumbers": [7],
       "snippet": "const clientModules = createMemoryVersionedClientModuleRegistry();\nconst starterStylesheetHref = process.env.JISO_STARTER_STYLESHEET_HREF ?? '/src/styles.css';\n",
       "matchedPattern": "process.env.JISO_STARTER_STYLESHEET_HREF"
     }

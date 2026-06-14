@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "crypto-usage",
-      "lineNumbers": [
-        2,
-        273
-      ],
+      "lineNumbers": [2, 273],
       "snippet": "import { existsSync, readdirSync, readFileSync } from 'node:fs';\nimport { createHash } from 'node:crypto';\nimport path from 'node:path';\nimport { fileURLToPath, pathToFileURL } from 'node:url';",
       "matchedPattern": "Node crypto import, Node crypto.create*"
     }

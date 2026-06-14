@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        99
-      ],
+      "lineNumbers": [99],
       "snippet": "\n  // SPEC.md §4.4/§9.4: typed reads are query-only transport. A visible-return\n  // refetch pass decodes successful response bodies first, then enters the same\n  // batched runtime query apply primitive as script hydration, mutation bodies,\n  // deferred streams, and inline query events.",
       "matchedPattern": "weak cipher algorithm"
     },
     {
       "vulnSlug": "untrusted-redirect-following",
-      "lineNumbers": [
-        77
-      ],
+      "lineNumbers": [77],
       "snippet": "    try {\n      const response = await options.fetch(url, {\n        headers: {\n          Accept: 'text/html',",
       "matchedPattern": "fetch(url) — default redirect: follow + caller-style URL"
     }

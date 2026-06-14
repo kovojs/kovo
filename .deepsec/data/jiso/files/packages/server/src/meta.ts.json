@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        5,
-        15
-      ],
+      "lineNumbers": [5, 15],
       "snippet": "\n/**\n * Declare static document metadata (title, description, image) for a route's\n * head. Pass the result as a route's `meta` (SPEC §6.4).\n *",
       "matchedPattern": "weak cipher algorithm"
     }

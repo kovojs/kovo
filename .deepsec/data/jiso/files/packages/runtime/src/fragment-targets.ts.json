@@ -4,12 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        13,
-        15,
-        16,
-        20
-      ],
+      "lineNumbers": [13, 15, 16, 20],
       "snippet": "  // FW-Targets collection and inline-loader apply path.\n  return (\n    findRootOrDescendant(root, `[fw-c=\"${escapeCssString(target)}\"]`) ??\n    root.getElementById?.(target) ??\n    findRootOrDescendant(root, `[id=\"${escapeCssString(target)}\"]`) ??",
       "matchedPattern": "weak cipher algorithm"
     }

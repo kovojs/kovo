@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        88
-      ],
+      "lineNumbers": [88],
       "snippet": "    return (\n      <button\n        aria-describedby={attrs['aria-describedby']}\n        class={cn(tooltipTriggerClassNames(), props.class)}\n        data-disabled={attrs['data-disabled']}",
       "matchedPattern": "weak cipher algorithm"
     }

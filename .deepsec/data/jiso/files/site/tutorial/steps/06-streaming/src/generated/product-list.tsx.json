@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        12,
-        43
-      ],
+      "lineNumbers": [12, 43],
       "snippet": "// Tutorial step 06 (chapter 6), unchanged from step 05: every product card carries a real form\n// posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS\n// fallback IS the output; `enhance` upgrades it to the section 9.1 fragment\n// wire. Failure state and the per-request CSRF token are request context,\n// not query data, so they arrive as an explicit second render argument (the",
       "matchedPattern": "weak cipher algorithm"
     }

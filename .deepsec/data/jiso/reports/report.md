@@ -1,22 +1,22 @@
 # Vulnerability Scan Report
 
-| Field | Value |
-|-------|-------|
-| Project | jiso |
-| Date | 2026-06-14T06:17:42.059Z |
-| Files tracked | 183 |
-| Files analyzed | 183 |
-| Total findings | 58 |
+| Field          | Value                    |
+| -------------- | ------------------------ |
+| Project        | jiso                     |
+| Date           | 2026-06-14T06:17:42.059Z |
+| Files tracked  | 183                      |
+| Files analyzed | 183                      |
+| Total findings | 58                       |
 
 ## Summary
 
 | Severity | Count |
-|----------|-------|
-| CRITICAL | 0 |
-| HIGH | 6 |
-| MEDIUM | 43 |
-| HIGH_BUG | 1 |
-| BUG | 7 |
+| -------- | ----- |
+| CRITICAL | 0     |
+| HIGH     | 6     |
+| MEDIUM   | 43    |
+| HIGH_BUG | 1     |
+| BUG      | 7     |
 
 ## HIGH (6)
 
@@ -283,8 +283,8 @@ Same open-redirect class as in app.ts, via the shell's interactive path. The /lo
 - **Confidence:** medium
 
 The login `next` value flows from the URL into the sign-in mutation and back out as the post-login `Location` header. In submitReferenceSignInNoJs the response sets `Location: result.value.redirectTo` (L342), where redirectTo = `redirectPath(input.next, '/account')` from @jiso/better-auth. That validator (packages/better-auth/src/index.ts:1204-1209) only rejects values that don't start with '/' or that start with '//':
-  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
-It does NOT reject a leading '/\'. A value like `next=/\evil.com` starts with a single '/' and not with '//', so it passes through unchanged. Browsers normalize backslashes to forward slashes in HTTP(S) URLs, so `Location: /\evil.com` resolves to `//evil.com` => `https://evil.com` — a classic open redirect. An attacker crafts `/login?next=/\evil.com`; after the victim signs in with their own valid credentials they are bounced to the attacker's site (phishing / referer-based token leakage). The form-side escapeAttribute (L278/L424) prevents XSS in the reflected hidden field but does nothing to stop the redirect. Note: `secrets-exposure` L75 (EXAMPLE_ONLY_* secret) and `secret-in-log` L83/L140 are false positives — L83 is a user-map literal and L140 builds a Set-Cookie header, not a log; neither is a logging sink.
+if (!value.startsWith('/') || value.startsWith('//')) return fallback;
+It does NOT reject a leading '/\'. A value like `next=/\evil.com` starts with a single '/' and not with '//', so it passes through unchanged. Browsers normalize backslashes to forward slashes in HTTP(S) URLs, so `Location: /\evil.com` resolves to `//evil.com` => `https://evil.com` — a classic open redirect. An attacker crafts `/login?next=/\evil.com`; after the victim signs in with their own valid credentials they are bounced to the attacker's site (phishing / referer-based token leakage). The form-side escapeAttribute (L278/L424) prevents XSS in the reflected hidden field but does nothing to stop the redirect. Note: `secrets-exposure` L75 (EXAMPLE*ONLY*\* secret) and `secret-in-log` L83/L140 are false positives — L83 is a user-map literal and L140 builds a Set-Cookie header, not a log; neither is a logging sink.
 
 **Recommendation:** Harden redirectPath to require an exact single leading slash and reject backslashes and control characters, e.g. reject when `!/^\/[^/\\]/.test(value)` (also normalize/parse with a strict same-origin check). Alternatively, validate `next` against an explicit allowlist of known internal paths before using it as a redirect target.
 
@@ -550,7 +550,7 @@ The @jiso/server JSX runtime escapes attribute values but renders text children 
 - **Slug:** xss
 - **Confidence:** medium
 
-renderDialogPanel interpolates several named TEXT props as raw children: `{props.title}` inside <h2> (L112, required prop), `{props.description}` inside <p> (L117), `{props.trigger ?? 'Open'}` in the trigger <button> (L99), and `{props.closeLabel ?? 'Close'}` in the close <button> (L131); `{props.children}` (L121) is the body slot. The @jiso/server JSX runtime does NOT escape text children (jsx-runtime.ts renderJsxChildren -> String(children)), only attributes. Unlike a `children` HTML-composition slot, `title` and `description` are plainly text props (rendered into heading/paragraph text), so an app passing user/DB content — e.g. `<Sheet title={product.name} description={review.body}>` — emits that value unescaped into a server-rendered fragment. Because mutation fragments are applied client-side via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts), a value like `<img src=x onerror=alert(document.cookie)>` in title/description yields stored XSS. This matches the project's #3 ranked threat (unescaped interpolation = stored XSS). Mitigations present: contentId and all attribute interpolations (id, titleId/descriptionId used as id=, command/commandfor/aria-controls from the dialog* headless builders) are escaped by the runtime's escapeAttribute, so attribute injection is not exploitable. Severity is MEDIUM (not HIGH) because exploitability depends on the caller supplying untrusted data and text-escaping is an unspecified, deliberate framework-wide design; the reference app does not currently use Sheet/Drawer. The insecure-crypto flags (L22/56/57/59/67/102/113/116/117) are false positives — every cited line is a `description`/`descriptionId`/`describedby` token, no cipher or crypto exists in the file.
+renderDialogPanel interpolates several named TEXT props as raw children: `{props.title}` inside <h2> (L112, required prop), `{props.description}` inside <p> (L117), `{props.trigger ?? 'Open'}` in the trigger <button> (L99), and `{props.closeLabel ?? 'Close'}` in the close <button> (L131); `{props.children}` (L121) is the body slot. The @jiso/server JSX runtime does NOT escape text children (jsx-runtime.ts renderJsxChildren -> String(children)), only attributes. Unlike a `children` HTML-composition slot, `title` and `description` are plainly text props (rendered into heading/paragraph text), so an app passing user/DB content — e.g. `<Sheet title={product.name} description={review.body}>` — emits that value unescaped into a server-rendered fragment. Because mutation fragments are applied client-side via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts), a value like `<img src=x onerror=alert(document.cookie)>` in title/description yields stored XSS. This matches the project's #3 ranked threat (unescaped interpolation = stored XSS). Mitigations present: contentId and all attribute interpolations (id, titleId/descriptionId used as id=, command/commandfor/aria-controls from the dialog\* headless builders) are escaped by the runtime's escapeAttribute, so attribute injection is not exploitable. Severity is MEDIUM (not HIGH) because exploitability depends on the caller supplying untrusted data and text-escaping is an unspecified, deliberate framework-wide design; the reference app does not currently use Sheet/Drawer. The insecure-crypto flags (L22/56/57/59/67/102/113/116/117) are false positives — every cited line is a `description`/`descriptionId`/`describedby` token, no cipher or crypto exists in the file.
 
 **Recommendation:** Run the text props through escapeHtml from @jiso/server before rendering, e.g. `<h2 ...>{escapeHtml(props.title)}</h2>` and `<p ...>{escapeHtml(props.description)}</p>` (and trigger/closeLabel). Preferred long-term fix: make the JSX runtime escape string text nodes by default and require an explicit raw-HTML marker for pre-rendered component output, closing the open SPEC §4 text-escaping question. Ignore the insecure-crypto flag.
 
@@ -594,7 +594,7 @@ L6/52 were flagged for a weak cipher; they are the `describedBy?: string` prop (
 
 `shopCsrf.secret` is the hardcoded literal 'tutorial-shop-secret' (L32). CSRF tokens are an HMAC over the session id keyed by this secret; a hardcoded/known secret lets an attacker forge valid CSRF tokens and defeat the default-on CSRF protection on the `cart/add` mutation. This is almost certainly intentional tutorial scaffolding (functionally identical to the documented `EXAMPLE_ONLY_*_CSRF_SECRET` known-false-positives, just not labeled that way) and is only a real risk if copied verbatim into a deployed app. Flagged at low confidence for that reason. The L96 'template literal in HTML' and L63/L150 'db call without await' flags are false positives: renderShopPage interpolates only fixed seed data and JSX-auto-escaped fragment output, and `request.db.products.get` is a synchronous Map.get, not an async DB call.
 
-**Recommendation:** For production use, load the CSRF secret from an environment variable / secret manager rather than a source literal, and rename the tutorial constant to the documented EXAMPLE_ONLY_* convention so scanners and readers treat it as a fixture.
+**Recommendation:** For production use, load the CSRF secret from an environment variable / secret manager rather than a source literal, and rename the tutorial constant to the documented EXAMPLE*ONLY*\* convention so scanners and readers treat it as a fixture.
 
 ---
 
@@ -634,7 +634,7 @@ Identical pattern to step 04. ProductList.render (L28) interpolates the free-for
 - **Slug:** xss
 - **Confidence:** low
 
-renderShopPage (L141-147), renderShopPageDeferredStream (L166-186), and submitAddToCart (L207-209) all build the 'product-list' fragment by calling ProductList.definition.render({ products }, ...). That component (src/components/product-list.tsx L28, and its generated twin) interpolates the DB string `{item.name}` in a JSX *text* position: `{item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)`. The @jiso/server JSX runtime escapes attribute values via escapeAttribute (jsx-runtime.ts L66) but does NOT escape text children — renderJsxChildren (jsx-runtime.ts L79-84) emits a bare `String(children)`, and the runtime comment (L12-15) explicitly notes JSX text-escaping is an unresolved open question. The resulting HTML is wrapped in `<fw-fragment target="product-list">` (app.ts L145) and, per the project threat model, applied client-side via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts). A product name containing markup (e.g. `<img src=x onerror=...>`) would therefore execute — the exact 'unescaped fragment HTML => stored XSS' pattern CLAUDE.md calls out. The reference app examples/commerce avoids this by manually running every dynamic string through escapeHtml/escapeAttribute before interpolation (examples/commerce/src/app.ts L694, L804). IMPORTANT (why this is latent, not currently exploitable): in this tutorial step product names come only from the static seed in createShopDb (db.ts L30-34); the only write path, the addToCart handler (app.ts L100-108), preserves the existing `found.name` via spread and never lets an attacker set a name, so item.name is trusted/internal data today. The risk is realized the moment a derived app makes product names (or any string rendered as a JSX child in a fragment) user/merchant-controlled, which is a natural extension of this exact pattern.
+renderShopPage (L141-147), renderShopPageDeferredStream (L166-186), and submitAddToCart (L207-209) all build the 'product-list' fragment by calling ProductList.definition.render({ products }, ...). That component (src/components/product-list.tsx L28, and its generated twin) interpolates the DB string `{item.name}` in a JSX _text_ position: `{item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)`. The @jiso/server JSX runtime escapes attribute values via escapeAttribute (jsx-runtime.ts L66) but does NOT escape text children — renderJsxChildren (jsx-runtime.ts L79-84) emits a bare `String(children)`, and the runtime comment (L12-15) explicitly notes JSX text-escaping is an unresolved open question. The resulting HTML is wrapped in `<fw-fragment target="product-list">` (app.ts L145) and, per the project threat model, applied client-side via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts). A product name containing markup (e.g. `<img src=x onerror=...>`) would therefore execute — the exact 'unescaped fragment HTML => stored XSS' pattern CLAUDE.md calls out. The reference app examples/commerce avoids this by manually running every dynamic string through escapeHtml/escapeAttribute before interpolation (examples/commerce/src/app.ts L694, L804). IMPORTANT (why this is latent, not currently exploitable): in this tutorial step product names come only from the static seed in createShopDb (db.ts L30-34); the only write path, the addToCart handler (app.ts L100-108), preserves the existing `found.name` via spread and never lets an attacker set a name, so item.name is trusted/internal data today. The risk is realized the moment a derived app makes product names (or any string rendered as a JSX child in a fragment) user/merchant-controlled, which is a natural extension of this exact pattern.
 
 **Recommendation:** Treat DB/user strings rendered as JSX children as untrusted: either (a) make the @jiso/server JSX runtime escape text children by default (renderJsxChildren should escapeHtml string children, with an explicit raw/dangerous wrapper for pre-rendered HTML), or (b) until the runtime escapes text, follow the examples/commerce convention and wrap dynamic strings in escapeHtml() at the interpolation site, e.g. render `{escapeHtml(item.name)}`. Add a regression test that a product name containing `<script>`/`<img onerror>` is emitted escaped in the product-list fragment.
 
@@ -678,7 +678,7 @@ renderShopPage assembles server fragments (L223-227) from component renders that
 
 shopCsrf.secret = 'tutorial-shop-secret' (L62) is a hardcoded secret used as the HMAC-SHA256 key for CSRF tokens over the session id. A hardcoded, source-committed CSRF secret means tokens are forgeable by anyone who can read the repo. This is almost certainly an intentional tutorial fixture analogous to the documented known-false-positives (`EXAMPLE_ONLY_*_CSRF_SECRET`), so I rate it low confidence and likely a non-issue in context — flagging only so the value is never lifted into a real deployment.
 
-**Recommendation:** If this pattern is ever copied to production, source the CSRF secret from an environment variable/secret store, not a literal. Consider renaming to an EXAMPLE_ONLY_* convention to mark it unmistakably as a fixture.
+**Recommendation:** If this pattern is ever copied to production, source the CSRF secret from an environment variable/secret store, not a literal. Consider renaming to an EXAMPLE*ONLY*\* convention to mark it unmistakably as a fixture.
 
 ---
 
@@ -792,7 +792,7 @@ StoredFileSchemaImpl.parse (L277-299, the synchronous Schema.parse) computes the
 - **Slug:** other-logic-bug
 - **Confidence:** low
 
-NOT a security issue (fails safe — it over-skips, never over-exposes). staticExportParamRouteTargets emits both diagnostics and targets keyed by the route *pattern* (route.path) rather than by the concrete target path: a malformed/duplicate/unsafe staticPath pushes staticExportDiagnostic(route.path, ...), while a valid sibling staticPath pushes a target with { routePath: route.path }. In replayStaticExportApp (static-export-replay.ts) under onNonExportable:'skip', the per-target filter is `diagnostics.some(d => d.routePath === routeTarget.routePath)`. Because the diagnostic and the valid target share the same routePath (the pattern), a single bad staticPath causes ALL valid concrete URLs of that route to be skipped. Example: route '/products/:id' with staticPaths ['/products/p1', '/products/%2f'] — '/products/%2f' is correctly rejected as unsafe, but '/products/p1' (valid, safe, exportable) is then also silently omitted from the export, defeating the purpose of 'skip' mode. The root enabler (pattern-keyed diagnostics) lives in this file; the faulty filter line is in static-export-replay.ts. In the default (non-skip) mode this is harmless because any diagnostic aborts the whole export.
+NOT a security issue (fails safe — it over-skips, never over-exposes). staticExportParamRouteTargets emits both diagnostics and targets keyed by the route _pattern_ (route.path) rather than by the concrete target path: a malformed/duplicate/unsafe staticPath pushes staticExportDiagnostic(route.path, ...), while a valid sibling staticPath pushes a target with { routePath: route.path }. In replayStaticExportApp (static-export-replay.ts) under onNonExportable:'skip', the per-target filter is `diagnostics.some(d => d.routePath === routeTarget.routePath)`. Because the diagnostic and the valid target share the same routePath (the pattern), a single bad staticPath causes ALL valid concrete URLs of that route to be skipped. Example: route '/products/:id' with staticPaths ['/products/p1', '/products/%2f'] — '/products/%2f' is correctly rejected as unsafe, but '/products/p1' (valid, safe, exportable) is then also silently omitted from the export, defeating the purpose of 'skip' mode. The root enabler (pattern-keyed diagnostics) lives in this file; the faulty filter line is in static-export-replay.ts. In the default (non-skip) mode this is harmless because any diagnostic aborts the whole export.
 
 **Recommendation:** Key the skip decision by concrete target path, not route pattern: either have route-plan associate diagnostics with the specific concrete path (e.g. add a targetPath field), or change the replay filter to skip only targets whose concrete path failed (track failed concrete paths in a Set) rather than excluding every target that shares a route pattern with any diagnostic. Add a test for a param route with mixed valid/invalid staticPaths under onNonExportable:'skip' asserting the valid URL is still exported.
 
@@ -806,7 +806,7 @@ NOT a security issue (fails safe — it over-skips, never over-exposes). staticE
 - **Slug:** other-race-condition
 - **Confidence:** low
 
-transaction() clones the database (cloneShopDb(db)), `await`s the handler (run(draft)), then commits by wholesale-replacing db.cartItems and db.products with the draft's copies. The `await` is an event-loop yield point. If two mutations execute concurrently against the *same* ShopDb instance, both clone the same base snapshot, each mutates its own draft, and the later commit overwrites the earlier one entirely (last-writer-wins) — the classic lost-update race / non-atomic read-modify-write. Within this tutorial the impact is limited and the confidence is low because request.db is never shown to be a shared, persistent instance (renderShopPage defaults to a fresh createShopDb() and tests construct a fresh db per case), so the race is latent in the transaction primitive rather than active here. It is worth noting because learners may reuse this transaction shape against a persistent store. This is a correctness bug, not a security vulnerability — the cart/products are global demo state with no per-user scoping to violate.
+transaction() clones the database (cloneShopDb(db)), `await`s the handler (run(draft)), then commits by wholesale-replacing db.cartItems and db.products with the draft's copies. The `await` is an event-loop yield point. If two mutations execute concurrently against the _same_ ShopDb instance, both clone the same base snapshot, each mutates its own draft, and the later commit overwrites the earlier one entirely (last-writer-wins) — the classic lost-update race / non-atomic read-modify-write. Within this tutorial the impact is limited and the confidence is low because request.db is never shown to be a shared, persistent instance (renderShopPage defaults to a fresh createShopDb() and tests construct a fresh db per case), so the race is latent in the transaction primitive rather than active here. It is worth noting because learners may reuse this transaction shape against a persistent store. This is a correctness bug, not a security vulnerability — the cart/products are global demo state with no per-user scoping to violate.
 
 **Recommendation:** If the in-memory db is ever shared across concurrent requests, serialize transactions (an async mutex/queue around clone+commit) or perform optimistic-version / per-row checks at commit so concurrent writers cannot clobber each other. The SPEC's blessed Drizzle adapter provides real transactional isolation; the tutorial could note that this in-memory primitive intentionally omits concurrency control.
 
@@ -825,4 +825,3 @@ The in-memory transaction clones the db, runs the handler on the draft, then com
 **Recommendation:** For any persistence behind this interface, use real transactional isolation (or row/version-level merge) rather than swapping whole table references on commit. No action needed for the in-memory tutorial stub.
 
 ---
-

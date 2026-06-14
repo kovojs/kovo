@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        21
-      ],
+      "lineNumbers": [21],
       "snippet": "): Promise<JisoAppShellViteStaticExportWithManifestResult> {\n  // SPEC §9.5: Vite export tasks that publish files must prove the dry-run\n  // manifest and written static-host bytes describe the same replay.\n  const manifest = staticExportManifest(await replay.dryRun());\n  const result = await replay.write();",
       "matchedPattern": "weak cipher algorithm"
     }

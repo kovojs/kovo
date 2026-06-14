@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        86
-      ],
+      "lineNumbers": [86],
       "snippet": "              Object(input)['setAttribute']?.call(\n                input,\n                'aria-activedescendant',\n                'gallery-combobox-listbox-option-2',\n              );",
       "matchedPattern": "weak cipher algorithm"
     }

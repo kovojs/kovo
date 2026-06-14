@@ -42,7 +42,10 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
         >
           Release notes
         </summary>
-        <div {...collapsibleContentAttributes({ contentId, open: state.open })} class={CONTENT_CLASS}>
+        <div
+          {...collapsibleContentAttributes({ contentId, open: state.open })}
+          class={CONTENT_CLASS}
+        >
           Added browser-backed compiled coverage.
         </div>
       </details>

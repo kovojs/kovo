@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "postmessage-origin",
-      "lineNumbers": [
-        84
-      ],
+      "lineNumbers": [84],
       "snippet": "): MutationBroadcast {\n  options.channel.onmessage = (event) => {\n    if (!isMutationBroadcastMessage(event.data)) return;\n    const changes = event.data.changes.flatMap((change) => {\n      const sanitized = sanitizeMutationChangeRecord(change);\n      return sanitized ? [sanitized] : [];",
       "matchedPattern": "postMessage handler WITHOUT origin validation"
     },
     {
       "vulnSlug": "postmessage-origin",
-      "lineNumbers": [
-        112
-      ],
+      "lineNumbers": [112],
       "snippet": "    close() {\n      options.channel.onmessage = null;\n      options.channel.close?.();\n    },\n    publish(body: string, changes: readonly MutationChangeRecord[] = []) {\n      options.channel.postMessage({",
       "matchedPattern": "postMessage handler WITHOUT origin validation"
     }

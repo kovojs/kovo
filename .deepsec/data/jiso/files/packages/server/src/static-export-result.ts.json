@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        73
-      ],
+      "lineNumbers": [73],
       "snippet": "}\n\n// SPEC §9.5: manifest/inventory task evidence must describe the same static\n// host surface that a write export publishes.\nexport function assertStaticExportManifestMatchesResult(",
       "matchedPattern": "weak cipher algorithm"
     }

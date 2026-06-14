@@ -4,11 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "xss",
-      "lineNumbers": [
-        49,
-        52,
-        57
-      ],
+      "lineNumbers": [49, 52, 57],
       "snippet": "    .map(\n      (product) =>\n        `<li><a href=\"/products/${product.id}\">${product.name}</a> — ${formatPrice(product.unitPrice)}</li>`,\n    )\n    .join('');",
       "matchedPattern": "template literal in HTML"
     }

@@ -4,17 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        22,
-        56,
-        57,
-        59,
-        67,
-        102,
-        113,
-        116,
-        117
-      ],
+      "lineNumbers": [22, 56, 57, 59, 67, 102, 113, 116, 117],
       "snippet": "  contentClass?: ClassValue;\n  contentId: string;\n  description?: string;\n  disabled?: boolean;\n  open?: boolean;",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -28,13 +18,7 @@
       "vulnSlug": "xss",
       "title": "Unescaped title/description/label text props rendered raw into dialog fragment (conditional stored XSS sink)",
       "description": "renderDialogPanel interpolates several named TEXT props as raw children: `{props.title}` inside <h2> (L112, required prop), `{props.description}` inside <p> (L117), `{props.trigger ?? 'Open'}` in the trigger <button> (L99), and `{props.closeLabel ?? 'Close'}` in the close <button> (L131); `{props.children}` (L121) is the body slot. The @jiso/server JSX runtime does NOT escape text children (jsx-runtime.ts renderJsxChildren -> String(children)), only attributes. Unlike a `children` HTML-composition slot, `title` and `description` are plainly text props (rendered into heading/paragraph text), so an app passing user/DB content — e.g. `<Sheet title={product.name} description={review.body}>` — emits that value unescaped into a server-rendered fragment. Because mutation fragments are applied client-side via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts), a value like `<img src=x onerror=alert(document.cookie)>` in title/description yields stored XSS. This matches the project's #3 ranked threat (unescaped interpolation = stored XSS). Mitigations present: contentId and all attribute interpolations (id, titleId/descriptionId used as id=, command/commandfor/aria-controls from the dialog* headless builders) are escaped by the runtime's escapeAttribute, so attribute injection is not exploitable. Severity is MEDIUM (not HIGH) because exploitability depends on the caller supplying untrusted data and text-escaping is an unspecified, deliberate framework-wide design; the reference app does not currently use Sheet/Drawer. The insecure-crypto flags (L22/56/57/59/67/102/113/116/117) are false positives — every cited line is a `description`/`descriptionId`/`describedby` token, no cipher or crypto exists in the file.",
-      "lineNumbers": [
-        99,
-        112,
-        117,
-        121,
-        131
-      ],
+      "lineNumbers": [99, 112, 117, 121, 131],
       "recommendation": "Run the text props through escapeHtml from @jiso/server before rendering, e.g. `<h2 ...>{escapeHtml(props.title)}</h2>` and `<p ...>{escapeHtml(props.description)}</p>` (and trigger/closeLabel). Preferred long-term fix: make the JSX runtime escape string text nodes by default and require an explicit raw-HTML marker for pre-rendered component output, closing the open SPEC §4 text-escaping question. Ignore the insecure-crypto flag.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

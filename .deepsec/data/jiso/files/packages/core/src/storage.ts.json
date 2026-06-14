@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        302
-      ],
+      "lineNumbers": [302],
       "snippet": "export function normalizeStorageKey(key: string): string {\n  if (key.length === 0) throw new Error('Storage key must not be empty.');\n  if (key.includes('\\0')) throw new Error('Storage key must not contain null bytes.');\n  if (key.startsWith('/')) throw new Error('Storage key must be relative.');\n",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -20,14 +18,7 @@
       "vulnSlug": "other-key-namespace-collision",
       "title": "Filesystem storage sidecar suffix collides with the object-key namespace, corrupting another object's metadata",
       "description": "createFileSystemStorage persists each object's metadata to a sidecar file at `${blobPath}.jiso-storage.json` (metadataFilePath, L418-420; sidecarSuffix L103). The suffix is not reserved: a key ending in `.jiso-storage.json` passes normalizeStorageKey unchanged (it contains no empty/'.'/'..' segments and no null byte/leading slash), so it resolves to a real blob path. Consequence: writing object `a` (put('a')) creates `<root>/a` and `<root>/a.jiso-storage.json`; later writing object `a.jiso-storage.json` (put('a.jiso-storage.json')) writes its blob bytes straight onto `<root>/a.jiso-storage.json` — which IS object `a`'s metadata sidecar. The two keys interfere bidirectionally. After such a write, fileSystemStat('a') (L389-394) reads the clobbered sidecar and runs JSON.parse on attacker-supplied blob bytes; the surrounding .catch only swallows ENOENT and rethrows everything else, so a JSON parse error propagates and get('a')/stat('a')/stream('a') all reject — a read denial-of-service plus metadata (contentType/etag/metadata) corruption for a different key than the one written. This is deterministic (I traced the path construction), not a heuristic guess. Security relevance is conditional on the app exposing user-controlled, non-namespaced storage keys: in that configuration one tenant can break another tenant's object reads by uploading to the colliding `<victimKey>.jiso-storage.json` key. The memory and S3 adapters do not use sidecars and are unaffected.",
-      "lineNumbers": [
-        103,
-        204,
-        389,
-        418,
-        419,
-        420
-      ],
+      "lineNumbers": [103, 204, 389, 418, 419, 420],
       "recommendation": "Remove the overlap between the metadata namespace and the object namespace. Options: (1) store metadata out-of-band (a separate sibling directory tree, e.g. `<root>/.meta/<key>.json`, or a single index file) rather than as an in-tree sidecar; (2) reject keys whose final segment ends with the reserved sidecar suffix inside normalizeStorageKey (or a storage-specific guard); and/or (3) make fileSystemStat tolerate an unparseable/foreign sidecar by treating JSON.parse failures the same as a missing record (fall back to filesystem stat) instead of rethrowing, so a corrupt sidecar cannot turn into a hard read failure.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        16,
-        47
-      ],
+      "lineNumbers": [16, 47],
       "snippet": "// Tutorial step 04 (chapter 4): every product card carries a real form\n// posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS\n// fallback IS the output; `enhance` upgrades it to the section 9.1 fragment\n// wire. Failure state and the per-request CSRF token are request context,\n// not query data, so they arrive as an explicit second render argument (the",
       "matchedPattern": "weak cipher algorithm"
     }
@@ -21,9 +18,7 @@
       "vulnSlug": "xss",
       "title": "Unescaped DB string ({item.name}) rendered as JSX child in an innerHTML-applied fragment",
       "description": "The @jiso/server JSX runtime escapes attribute values but NOT text children: renderJsxChildren() returns String(children) with no escaping (packages/server/src/jsx-runtime.ts L79-84; the L12-15 comment notes text-escaping is undefined). In ProductList.render (L33) the free-form DB string `{item.name}` (ShopProduct.name) is interpolated as a child, so it is emitted raw. ProductList is fragmentTarget:true and is rendered into `<fw-fragment target=\"product-list\">` for mutation responses and the deferred stream (app.ts L94, L130, L176, L208); the client applies that fragment HTML via element.innerHTML / insertAdjacentHTML with no sanitization (packages/runtime/src/response-fragment-apply.ts L58, L62). Any markup in a product name (e.g. `<img src=x onerror=...>`) therefore becomes stored XSS executed in the victim's browser. This is the exact 'unescaped fragment HTML' pattern called out in the project threat model. It is NOT directly exploitable in this tutorial because product names are static fixtures and the addToCart mutation never writes a name from user input (it spreads ...found), so the data is not currently attacker-controlled — hence MEDIUM/medium confidence. It rises to HIGH the moment `name` is sourced from admin/vendor/user input (the normal case for a real catalog). Note the reference app examples/commerce/product-grid.tsx deliberately avoids this: it renders only {item.id}/{item.stock} as children and uses escapeHtml/escapeAttribute for free-form data (examples/commerce/src/app.ts L694, L804, L839). The scanner's insecure-crypto flag on L16/L47 is a false positive: those are comment lines, and the only crypto reachable here is HMAC-SHA256 + timingSafeEqual in csrf.ts, which is correct.",
-      "lineNumbers": [
-        33
-      ],
+      "lineNumbers": [33],
       "recommendation": "Escape user/DB strings rendered as JSX children, e.g. `{escapeHtml(item.name)}` (packages/server/src/html.ts), matching the examples/commerce pattern. Better, fix the framework root cause so the JSX runtime auto-escapes string text children (renderJsxChildren) while preserving a branded/raw type for pre-rendered HTML such as component renders and csrfField output; this closes the footgun for all components rather than relying on every author to remember.",
       "confidence": "medium",
       "producedByRunId": "20260614053853-41cbf55110df05d3"

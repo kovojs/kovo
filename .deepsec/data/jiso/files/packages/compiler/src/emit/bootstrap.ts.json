@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "untrusted-redirect-following",
-      "lineNumbers": [
-        47
-      ],
+      "lineNumbers": [47],
       "snippet": "  enhancedMutations: {\n    fetch: (url, options) => fetch(url, options),\n    queryPlans,\n    root: document,",
       "matchedPattern": "fetch(url) — default redirect: follow + caller-style URL"
     }

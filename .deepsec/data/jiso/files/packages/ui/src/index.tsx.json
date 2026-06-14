@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        231,
-        243,
-        244,
-        513,
-        522,
-        523
-      ],
+      "lineNumbers": [231, 243, 244, 513, 522, 523],
       "snippet": "  Field,\n  FieldControl,\n  FieldDescription,\n  FieldError,\n  FieldLabel,",
       "matchedPattern": "weak cipher algorithm"
     }

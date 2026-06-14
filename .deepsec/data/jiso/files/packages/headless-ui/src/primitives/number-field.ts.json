@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        27,
-        78,
-        84,
-        337,
-        338,
-        342
-      ],
+      "lineNumbers": [27, 78, 84, 337, 338, 342],
       "snippet": "\nexport interface NumberFieldInputAttributeOptions extends NumberFieldState {\n  descriptionId?: string;\n  errorId?: string;\n  form?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

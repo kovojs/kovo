@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        39,
-        132
-      ],
+      "lineNumbers": [39, 132],
       "snippet": "\nexport interface TabsListAttributeOptions extends TabsState {\n  descriptionId?: string;\n  id?: string;\n  label?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

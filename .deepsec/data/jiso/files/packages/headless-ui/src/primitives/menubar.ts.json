@@ -4,10 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        39,
-        141
-      ],
+      "lineNumbers": [39, 141],
       "snippet": "\nexport interface MenubarRootAttributeOptions extends MenubarState {\n  descriptionId?: string;\n  id?: string;\n  label?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

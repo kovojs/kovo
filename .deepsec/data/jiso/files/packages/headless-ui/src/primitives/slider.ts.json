@@ -4,14 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        29,
-        101,
-        107,
-        273,
-        274,
-        278
-      ],
+      "lineNumbers": [29, 101, 107, 273, 274, 278],
       "snippet": "\nexport interface SliderInputAttributeOptions extends SliderState {\n  descriptionId?: string;\n  errorId?: string;\n  form?: string;",
       "matchedPattern": "weak cipher algorithm"
     }

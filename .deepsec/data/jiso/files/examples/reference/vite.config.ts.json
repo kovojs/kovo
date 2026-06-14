@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "ssrf",
-      "lineNumbers": [
-        74
-      ],
+      "lineNumbers": [74],
       "snippet": "  if (!request.url) return false;\n\n  const pathname = new URL(request.url, 'http://jiso.local').pathname;\n\n  if (request.method === 'GET' || request.method === 'HEAD') {",
       "matchedPattern": "new URL from request data"
     }

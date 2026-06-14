@@ -4,9 +4,7 @@
   "candidates": [
     {
       "vulnSlug": "insecure-crypto",
-      "lineNumbers": [
-        10
-      ],
+      "lineNumbers": [10],
       "snippet": "  EndpointMount,\n  JsonValue,\n  LinkDescriptor,\n  Redirect,\n  Route,",
       "matchedPattern": "weak cipher algorithm"
     }

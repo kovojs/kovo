@@ -4,17 +4,13 @@
   "candidates": [
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        19
-      ],
+      "lineNumbers": [19],
       "snippet": "\nexport function loadCart(db: ShopDb): CartResult {\n  return { count: db.cartItems.reduce((total, item) => total + item.qty, 0) };\n}\n",
       "matchedPattern": "db call without await"
     },
     {
       "vulnSlug": "missing-await",
-      "lineNumbers": [
-        24
-      ],
+      "lineNumbers": [24],
       "snippet": "export function loadProducts(db: ShopDb): ProductsResult {\n  return {\n    items: [...db.products.values()].sort((left, right) => left.id.localeCompare(right.id)),\n  };\n}",
       "matchedPattern": "db call without await"
     }
