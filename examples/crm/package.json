@@ -1,0 +1,24 @@
+{
+  "name": "@jiso/example-crm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "emit-graph": "node scripts/emit-graph.mjs",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "@jiso/core": "workspace:*",
+    "@jiso/drizzle": "workspace:*",
+    "@jiso/runtime": "workspace:*",
+    "@jiso/server": "workspace:*",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@jiso/compiler": "workspace:*",
+    "@jiso/test": "workspace:*",
+    "fw": "workspace:*",
+    "vitest": "4.1.8"
+  }
+}
