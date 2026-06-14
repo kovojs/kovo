@@ -104,8 +104,7 @@ The grammar is consistent: `key: value` lines, `-` for empty, comma-separated se
 ## Run the gates with fw check
 
 `fw check graph.json` runs the semantic checks that don't belong in `vp check`: optimistic
-exhaustiveness (FW310), update coverage (FW311), touch-graph consistency, and the audits. Healthy
-output is short:
+exhaustiveness, update coverage, touch-graph consistency, and the audits. Healthy output is short:
 
 ```txt
 fw-check/v1
@@ -211,7 +210,7 @@ framework internals.
 ## Next
 
 - [Testing with @jiso/test](/guides/testing/) — the runtime half: observed ⊆ static ∪ declared.
-- [Optimistic updates](/guides/optimistic/) — the coverage FW310 enforces.
+- [Optimistic updates](/guides/optimistic/) — the coverage these checks enforce.
 
 <details>
 <summary>Spec & diagnostics</summary>

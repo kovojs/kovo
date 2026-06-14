@@ -50,8 +50,8 @@ Three derivations did the work:
 - The query dependency became **`fw-deps="cart"`** and the island state a serialized **`fw-state`**
   stamp, which is how mutations later know this element wants fresh fragments.
 
-You never write these stamps. Hand-writing one that duplicates what the compiler derives is FW223; one
-that drifts from the derivation is FW222.
+You never write these stamps. Hand-writing one that duplicates the derivation, or drifts from it, is
+a compile error.
 
 **The client module.** Named handler exports plus the compiled update plan for each query this
 component consumes:
@@ -59,8 +59,8 @@ component consumes:
 {{capture:lowering-client}}
 
 The closure's capture channels are checked here: a handler may reach component/query state via `ctx`,
-element params via `data-p-*`, and module scope. Anything else is compile error FW201, whose message
-shows what the closure would have compiled to and the fixes.
+element params via `data-p-*`, and module scope. Anything else is a compile error whose message shows
+what the closure would have compiled to and how to fix it.
 
 ## Emitted output is valid source
 
