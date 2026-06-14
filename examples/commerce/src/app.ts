@@ -36,6 +36,9 @@ import {
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
 } from '@jiso/better-auth';
+import { and, count, eq, sql } from 'drizzle-orm';
+
+import { createCommerceDb, type CommerceDb } from './db.js';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
 import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
@@ -44,39 +47,31 @@ import * as productGridComponent from './generated/product-grid.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
 import { commerceStylesheets, createCommerceGraph } from './graph.js';
 import { commerceCartPageMeta } from './page-meta.js';
-import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
+import {
+  cartQuery,
+  loadCartQuery,
+  loadOrderHistory,
+  loadProductGrid,
+  orderHistoryQuery,
+  productGridQuery,
+  type CartQueryResult,
+  type OrderHistoryResult,
+  type ProductGridInput,
+  type ProductGridResult,
+} from './queries.js';
+import { attachments, cartItems, orders, products } from './schema.js';
 
 export { commerceTouchGraph } from './generated/touch-graph.js';
 export { commerceStylesheets } from './graph.js';
 export { commerceCartPageMeta } from './page-meta.js';
-
-export interface CommerceDb {
-  attachments: {
-    contentType: string;
-    filename: string;
-    id: string;
-    orderId: string;
-    size: number;
-    storageKey: string;
-    userId: string;
-  }[];
-  cartItems: { productId: string; qty: number; unitPrice: number }[];
-  orders: { id: string; productId: string; qty: number; total: number; userId: string }[];
-  products: Map<string, { id: string; stock: number; unitPrice: number }>;
-  read(table: string): unknown[];
-  transaction<Result>(run: (db: CommerceDb) => Promise<Result>): Promise<Result>;
-  write(table: string, value: unknown): void;
-}
-
-export interface ProductGridInput {
-  after?: string;
-  limit?: number;
-}
-
-export interface ProductGridResult {
-  items: { id: string; stock: number; unitPrice: number }[];
-  nextCursor: string | null;
-}
+export { createCommerceDb, type CommerceDb } from './db.js';
+export { loadCartQuery, loadProductGrid, loadOrderHistory } from './queries.js';
+export type {
+  CartQueryResult,
+  OrderHistoryResult,
+  ProductGridInput,
+  ProductGridResult,
+} from './queries.js';
 
 export type CommerceRole = 'admin' | 'member';
 
@@ -262,67 +257,6 @@ export const commerceSignOut = betterAuthSignOutMutation<
   guard: betterAuthAuthed<CommerceAuthRequest>(),
 });
 
-export function createCommerceDb(): CommerceDb {
-  const db: CommerceDb = {
-    attachments: [],
-    cartItems: [],
-    orders: [],
-    products: new Map([
-      ['p1', { id: 'p1', stock: 5, unitPrice: 1499 }],
-      ['p2', { id: 'p2', stock: 2, unitPrice: 2599 }],
-      ['p3', { id: 'p3', stock: 8, unitPrice: 399 }],
-    ]),
-    read(table) {
-      if (table === 'cart_items') return db.cartItems;
-      if (table === 'attachments') return db.attachments;
-      if (table === 'orders') return db.orders;
-      if (table === 'products') return [...db.products.values()];
-      return [];
-    },
-    async transaction(run) {
-      const draft = cloneCommerceDb(db);
-      const result = await run(draft);
-
-      db.cartItems = draft.cartItems;
-      db.orders = draft.orders;
-      db.products = draft.products;
-
-      return result;
-    },
-    write(table, value) {
-      if (table === 'cart_items') {
-        db.cartItems.push(value as { productId: string; qty: number; unitPrice: number });
-      }
-      if (table === 'attachments') {
-        db.attachments.push(value as CommerceDb['attachments'][number]);
-      }
-      if (table === 'orders') {
-        db.orders.push(
-          value as { id: string; productId: string; qty: number; total: number; userId: string },
-        );
-      }
-      if (table === 'products') {
-        const product = value as { id: string; stock: number; unitPrice: number };
-        db.products.set(product.id, product);
-      }
-    },
-  };
-  return db;
-}
-
-function cloneCommerceDb(source: CommerceDb): CommerceDb {
-  const clone = createCommerceDb();
-
-  clone.attachments = source.attachments.map((item) => ({ ...item }));
-  clone.cartItems = source.cartItems.map((item) => ({ ...item }));
-  clone.orders = source.orders.map((item) => ({ ...item }));
-  clone.products = new Map(
-    [...source.products.entries()].map(([key, value]) => [key, { ...value }]),
-  );
-
-  return clone;
-}
-
 export { attachment, cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 
 export type AddToCartInput = {
@@ -355,31 +289,10 @@ export const commerceAttachmentStorage = createMemoryStorage();
 export const commercePaymentWebhookSecret = 'whsec_commerce_reference_app';
 export const commercePaymentReplayStore = createMemoryMutationReplayStore();
 
-export interface CartQueryResult {
-  count: number;
-}
-
 export type AddToCartFailure = MutationFail<string, unknown>;
 export interface AddToCartFailureState {
   failure: AddToCartFailure;
   productId?: string;
-}
-
-export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
-  const limit = input.limit ?? 2;
-  const products = [...(db.read('products') as ProductGridResult['items'])].sort((left, right) =>
-    left.id.localeCompare(right.id),
-  );
-  const start = input.after
-    ? Math.max(products.findIndex((item) => item.id === input.after) + 1, 0)
-    : 0;
-  const items = products.slice(start, start + limit);
-  const next = products[start + limit];
-
-  return {
-    items,
-    nextCursor: next ? (items.at(-1)?.id ?? null) : null,
-  };
 }
 
 export const addToCart = mutation('cart/add', {
@@ -400,32 +313,41 @@ export const addToCart = mutation('cart/add', {
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
   },
   transaction(request: CommerceRequest, run) {
-    return request.db.transaction((db) => run({ ...request, db }));
+    return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));
   },
-  handler(input, request: CommerceRequest, context) {
+  // SPEC.md §10.5 Stage 1: the static extractor lowers these real Drizzle writes
+  // into the symbolic effect IR (insert cart_items{qty}, insert orders{…}, update
+  // products SET stock = stock - quantity WHERE id = productId). Destructuring the
+  // input binds `productId`/`quantity` to `$input` paths; `const db = request.db`
+  // is the proven Drizzle receiver the write extractor follows.
+  async handler({ productId, quantity }, request: CommerceRequest, context) {
     const currentSession = commerceSession.parse(request);
-    const found = request.db.products.get(input.productId);
-    if (!found || found.stock < input.quantity) {
+    const db = request.db;
+    const found = (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0];
+    if (!found || found.stock < quantity) {
       return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
     }
 
-    request.db.write('cart_items', {
-      productId: input.productId,
-      qty: input.quantity,
+    const existingOrders = await db.select({ value: count() }).from(orders);
+    const orderId = `order-${Number(existingOrders[0]?.value ?? 0) + 1}`;
+
+    await db.insert(cartItems).values({
+      productId: productId,
+      qty: quantity,
       unitPrice: found.unitPrice,
     });
-    request.db.write('orders', {
-      id: `order-${request.db.orders.length + 1}`,
-      productId: input.productId,
-      qty: input.quantity,
-      total: found.unitPrice * input.quantity,
+    await db.insert(orders).values({
+      id: orderId,
+      productId: productId,
+      qty: quantity,
+      total: found.unitPrice * quantity,
       userId: currentSession.user.id,
     });
-    request.db.write('products', {
-      ...found,
-      stock: found.stock - input.quantity,
-    });
-    return { productId: input.productId, quantity: input.quantity };
+    await db
+      .update(products)
+      .set({ stock: sql`${products.stock} - ${quantity}` })
+      .where(eq(products.id, productId));
+    return { productId: productId, quantity: quantity };
   },
 });
 
@@ -454,11 +376,13 @@ export const uploadReceipt = mutation('order/receipt', {
     inferredTouches: commerceTouchGraph['order.receipt'].touches,
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
   },
-  handler(input: UploadReceiptInput, request: CommerceRequest) {
+  async handler(input: UploadReceiptInput, request: CommerceRequest) {
     const currentSession = commerceSession.parse(request);
-    const attachmentId = `attachment-${request.db.attachments.length + 1}`;
+    const db = request.db;
+    const existing = await db.select({ value: count() }).from(attachments);
+    const attachmentId = `attachment-${Number(existing[0]?.value ?? 0) + 1}`;
 
-    request.db.write('attachments', {
+    await db.insert(attachments).values({
       contentType: input.receipt.storage.contentType ?? input.receipt.file.type,
       filename: input.receipt.file.name,
       id: attachmentId,
@@ -499,16 +423,16 @@ export const paymentWebhook = webhook('payment/stripe', {
   transaction(context, run) {
     const request = context.request as Request & { db?: CommerceDb };
     if (!request.db) throw new Error('commerce payment webhook requires db on request');
-    return request.db.transaction((db) => run(db));
+    return request.db.transaction((tx) => run(tx as unknown as CommerceDb));
   },
-  handler(input: PaymentWebhookInput, context) {
+  async handler(input: PaymentWebhookInput, context) {
     if (input.type !== 'checkout.session.completed') {
       return context.fail('IGNORED_EVENT', { type: input.type }, { status: 422 });
     }
 
     const paid = input.data.object;
     const tx = context.tx as CommerceDb;
-    tx.write('orders', {
+    await tx.insert(orders).values({
       id: paid.id,
       productId: paid.productId,
       qty: paid.quantity,
@@ -527,10 +451,11 @@ export const paymentWebhook = webhook('payment/stripe', {
 
 export const orderCsvRoute = route('/exports/orders.csv', {
   guard: betterAuthAuthed<CommerceRequest>(),
-  page(_context, request) {
-    return respond.stream(ordersCsvStream(request.db.orders, request.session.user.id), {
+  async page(_context, request) {
+    const allOrders = await loadOrdersForCsv(request.db);
+    return respond.stream(ordersCsvStream(allOrders, request.session.user.id), {
       contentType: 'text/csv; charset=utf-8',
-      etag: `"orders-${request.db.orders.length}"`,
+      etag: `"orders-${allOrders.length}"`,
       filename: 'orders.csv',
     });
   },
@@ -538,21 +463,30 @@ export const orderCsvRoute = route('/exports/orders.csv', {
 
 export const attachmentDownloadRoute = route('/attachments/:id', {
   guard: betterAuthAuthed<CommerceRequest>(),
-  page(context, request) {
-    const found = request.db.attachments.find(
-      (item) => item.id === context.params.id && item.userId === request.session.user.id,
-    );
+  async page(context, request) {
+    const db = request.db;
+    const found = (
+      await db
+        .select()
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.id, context.params.id),
+            eq(attachments.userId, request.session.user.id),
+          ),
+        )
+        .limit(1)
+    )[0];
     if (!found) return notFound();
 
-    return commerceAttachmentStorage.stream(found.storageKey).then((stored) => {
-      if (!stored) return notFound();
+    const stored = await commerceAttachmentStorage.stream(found.storageKey);
+    if (!stored) return notFound();
 
-      return respond.stream(stored.body, {
-        contentType: found.contentType,
-        disposition: 'inline',
-        filename: found.filename,
-        ...(stored.etag ? { etag: stored.etag } : {}),
-      });
+    return respond.stream(stored.body, {
+      contentType: found.contentType,
+      disposition: 'inline',
+      filename: found.filename,
+      ...(stored.etag ? { etag: stored.etag } : {}),
     });
   },
 });
@@ -604,14 +538,6 @@ export const commerceMessages = i18n('en-US', commerceMessageCatalog);
 
 export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 
-export function loadCartQuery(db: CommerceDb): CartQueryResult {
-  const cartItems = db.read('cart_items') as CommerceDb['cartItems'];
-
-  return {
-    count: cartItems.reduce((total, item) => total + item.qty, 0),
-  };
-}
-
 // The product grid (cards, no-JS add-to-cart forms, failure output) is
 // authored as a TSX component in src/components/product-grid.tsx and compiled
 // through @jiso/compiler (SPEC.md sections 3, 4.1, 5.2); the app imports its
@@ -648,15 +574,18 @@ export function renderProductGridAppend(
   return renderProductGridItems(result, undefined, request);
 }
 
-export function renderProductGridPageFragment(
+export async function renderProductGridPageFragment(
   db: CommerceDb,
   input: ProductGridInput = {},
-): string {
-  return `<fw-fragment target="product-grid" mode="append">${renderProductGridAppend(loadProductGrid(db, input))}</fw-fragment>`;
+): Promise<string> {
+  return `<fw-fragment target="product-grid" mode="append">${renderProductGridAppend(await loadProductGrid(db, input))}</fw-fragment>`;
 }
 
-export function renderProductGridDeferredStream(db: CommerceDb, input: ProductGridInput = {}) {
-  const productGrid = loadProductGrid(db, input);
+export async function renderProductGridDeferredStream(
+  db: CommerceDb,
+  input: ProductGridInput = {},
+) {
+  const productGrid = await loadProductGrid(db, input);
 
   return renderDeferredStream({
     closeHtml: '</main></body></html>',
@@ -677,10 +606,11 @@ export function renderProductGridDeferredStream(db: CommerceDb, input: ProductGr
   });
 }
 
-export function renderOrderHistory(db: CommerceDb): string {
+export async function renderOrderHistory(db: CommerceDb): Promise<string> {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component
   // (src/components/order-history.tsx); fw-c and fw-deps are compiler-derived.
-  return OrderHistory.definition.render({ orderHistory: { items: db.orders } });
+  const history = await loadOrderHistory(db);
+  return OrderHistory.definition.render({ orderHistory: history });
 }
 
 export function renderReceiptUploadForm(orderId = 'order-1'): string {
@@ -696,7 +626,14 @@ export function renderReceiptUploadForm(orderId = 'order-1'): string {
   ].join('');
 }
 
-function ordersCsvStream(orders: CommerceDb['orders'], userId: string): ReadableStream<Uint8Array> {
+async function loadOrdersForCsv(db: CommerceDb): Promise<OrderHistoryResult['items']> {
+  return (await loadOrderHistory(db)).items;
+}
+
+function ordersCsvStream(
+  orders: OrderHistoryResult['items'],
+  userId: string,
+): ReadableStream<Uint8Array> {
   const lines = [
     'id,productId,qty,total,userId',
     ...orders
@@ -727,7 +664,7 @@ function csvCell(value: string): string {
 // 4.1, 5.2); the app imports their committed lowered IR from src/generated/.
 export { CartBadge, OrderHistory };
 
-export function renderCommercePageHints(cart: CartQueryResult = loadCartQuery(createCommerceDb())) {
+export function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
   return renderPageHints(
     {
       i18n: commerceMessages,
@@ -740,30 +677,30 @@ export function renderCommercePageHints(cart: CartQueryResult = loadCartQuery(cr
 
 export const commercePageHints = renderCommercePageHints();
 
-export function renderCartPage(
+export async function renderCartPage(
   db = createCommerceDb(),
   addToCartFailure?: AddToCartFailureState,
   request?: CommerceRequest,
-): string {
-  const pageHints = renderCommercePageHints(loadCartQuery(db));
-  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6">${renderCartPageBody(db, addToCartFailure, request)}</body></html>`;
+): Promise<string> {
+  const pageHints = renderCommercePageHints(await loadCartQuery(db));
+  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6">${await renderCartPageBody(db, addToCartFailure, request)}</body></html>`;
 }
 
-export function renderCartPageBody(
+export async function renderCartPageBody(
   db = createCommerceDb(),
   addToCartFailure?: AddToCartFailureState,
   request?: CommerceRequest,
   options: { readOnly?: boolean | undefined } = {},
-): string {
-  const cartBadge = CartBadge.definition.render({ cart: loadCartQuery(db) });
+): Promise<string> {
+  const cartBadge = CartBadge.definition.render({ cart: await loadCartQuery(db) });
   const productGrid = renderProductGrid(
-    loadProductGridForRequest(db, undefined, request),
+    await loadProductGridForRequest(db, undefined, request),
     request,
     addToCartFailure,
     { readOnly: options.readOnly },
   );
   const receiptForm = options.readOnly ? '' : renderReceiptUploadForm();
-  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${receiptForm}</fw-fragment></main>`;
+  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${await renderOrderHistory(db)}${receiptForm}</fw-fragment></main>`;
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
@@ -783,14 +720,17 @@ export function submitAddToCart(
     failureStylesheets: commerceStylesheets,
     fragmentRenderers: [
       {
-        render: () => CartBadge.definition.render({ cart: loadCartQuery(request.db) }),
+        render: async () => CartBadge.definition.render({ cart: await loadCartQuery(request.db) }),
         stylesheets: commerceStylesheets,
         target: 'cart-badge',
       },
       errorBoundary(
         {
-          render: () =>
-            renderProductGrid(loadProductGridForRequest(request.db, undefined, request), request),
+          render: async () =>
+            renderProductGrid(
+              await loadProductGridForRequest(request.db, undefined, request),
+              request,
+            ),
           stylesheets: commerceStylesheets,
           target: 'product-grid',
         },
@@ -822,6 +762,13 @@ export function submitAddToCart(
       ),
     request,
   });
+}
+
+async function loadProductForFailure(
+  db: CommerceDb,
+  productId: string,
+): Promise<{ id: string; stock: number; unitPrice: number } | undefined> {
+  return (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0];
 }
 
 export function renderCommerceLoginForm(
@@ -903,25 +850,25 @@ function appendCommerceCsrf(rawInput: unknown, request: CommerceRequest): unknow
   };
 }
 
-function loadProductGridForRequest(
+async function loadProductGridForRequest(
   db: CommerceDb,
   input?: ProductGridInput,
   request?: CommerceRequest,
-): ProductGridResult {
+): Promise<ProductGridResult> {
   const productGridError = request?.renderFaults?.productGrid?.();
   if (productGridError) throw productGridError;
 
   return loadProductGrid(db, input);
 }
 
-function renderAddToCartFailureFragment(
+async function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
   failure: AddToCartFailure,
   request: CommerceRequest,
-): string {
+): Promise<string> {
   const productId = productIdFromRawInput(rawInput);
-  const product = productId ? db.products.get(productId) : undefined;
+  const product = productId ? await loadProductForFailure(db, productId) : undefined;
 
   if (!product) return renderAddToCartError(failure);
 
@@ -966,7 +913,6 @@ function commerceAuthResponse(cookies: readonly string[], status = 204): BetterA
   return { headers, status };
 }
 
-export const commerceGraph = createCommerceGraph(
-  loadCartQuery(createCommerceDb()),
-  commerceTouchGraph,
-);
+// A fresh, unmodified database has an empty cart (count 0); the demo graph is a
+// module-load static, so it uses that starter value rather than awaiting a read.
+export const commerceGraph = createCommerceGraph({ count: 0 }, commerceTouchGraph);

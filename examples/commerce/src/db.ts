@@ -7,6 +7,10 @@ import * as schema from './schema.js';
 // via the in-process PGlite driver wrapped by Drizzle (the same engine the pglite
 // test harness uses). `createCommerceDb()` returns a fresh, seeded instance — used
 // per request for the stateless demo and fresh per test for isolation.
+//
+// It is synchronous: PGlite processes operations FIFO, so firing the DDL + seed
+// `exec`s without awaiting (they enqueue before any later query) lets module-level
+// app/shell construction stay synchronous while reads/writes remain async.
 
 /** The commerce runtime database: Drizzle over PGlite, typed by the schema. */
 export type CommerceDb = PgliteDatabase<typeof schema>;
@@ -22,10 +26,11 @@ const SEED_PRODUCTS =
   "INSERT INTO products (id, stock, unit_price) VALUES ('p1', 5, 1499), ('p2', 2, 2599), ('p3', 8, 399);";
 
 /** Create a fresh, seeded commerce database (DDL + the starter product catalog). */
-export async function createCommerceDb(): Promise<CommerceDb> {
+export function createCommerceDb(): CommerceDb {
   const client = new PGlite();
-  await client.waitReady;
-  await client.exec(SCHEMA_DDL);
-  await client.exec(SEED_PRODUCTS);
+  // Fire-and-queue: PGlite runs operations in submission order, so these land
+  // before any later select/insert without blocking construction.
+  void client.exec(SCHEMA_DDL);
+  void client.exec(SEED_PRODUCTS);
   return drizzle(client, { schema });
 }

@@ -7,6 +7,7 @@ import {
 import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
 import { createApp, createRequestHandler, type RequestHandler } from '@jiso/server/app-shell/core';
 import { toNodeHandler } from '@jiso/server/app-shell/node';
+import { eq } from 'drizzle-orm';
 
 import {
   addToCart,
@@ -40,6 +41,7 @@ import {
   type CommerceSession,
 } from './app.js';
 import { CartBadge } from './generated/cart-badge.js';
+import { products } from './schema.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;
 
@@ -80,8 +82,8 @@ export const commerceHomeRoute = route('/', {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Jiso Commerce',
   },
-  page(_context, request: CommerceShellRequest) {
-    return `<div data-commerce-shell="cart">${renderCartPageBody(request.db, undefined, request)}</div>`;
+  async page(_context, request: CommerceShellRequest) {
+    return `<div data-commerce-shell="cart">${await renderCartPageBody(request.db, undefined, request)}</div>`;
   },
   stylesheets: commerceStylesheets,
 });
@@ -92,8 +94,8 @@ export const commerceCartRoute = route('/cart', {
     description: 'Browse products and checkout with verifiable cart state.',
     title: 'Jiso Commerce',
   },
-  page(_context, request: CommerceShellRequest) {
-    return `<div data-commerce-shell="cart">${renderCartPageBody(request.db, undefined, request)}</div>`;
+  async page(_context, request: CommerceShellRequest) {
+    return `<div data-commerce-shell="cart">${await renderCartPageBody(request.db, undefined, request)}</div>`;
   },
   stylesheets: commerceStylesheets,
 });
@@ -123,8 +125,8 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Jiso Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        page() {
-          return `<div data-commerce-shell="cart">${renderCartPageBody(
+        async page() {
+          return `<div data-commerce-shell="cart">${await renderCartPageBody(
             db,
             undefined,
             {
@@ -142,8 +144,8 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
           title: 'Jiso Commerce',
         },
         modulepreloads: [commerceClientModuleHref],
-        page() {
-          return `<div data-commerce-shell="cart">${renderCartPageBody(
+        async page() {
+          return `<div data-commerce-shell="cart">${await renderCartPageBody(
             db,
             undefined,
             {
@@ -210,13 +212,13 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
         failureStylesheets: commerceStylesheets,
         fragmentRenderers: [
           {
-            render: () => CartBadge.definition.render({ cart: loadCartQuery(db) }),
+            render: async () => CartBadge.definition.render({ cart: await loadCartQuery(db) }),
             stylesheets: commerceStylesheets,
             target: 'cart-badge',
           },
           errorBoundary(
             {
-              render: () => renderProductGrid(loadProductGrid(db), commerceRequest),
+              render: async () => renderProductGrid(await loadProductGrid(db), commerceRequest),
               stylesheets: commerceStylesheets,
               target: 'product-grid',
             },
@@ -298,14 +300,16 @@ function attachCommerceRequestContext(request: Request, db: CommerceDb): Commerc
   return request as CommerceShellRequest;
 }
 
-function renderAddToCartFailureFragment(
+async function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
   failure: Parameters<typeof renderAddToCartError>[0],
   request: CommerceRequest,
-): string {
+): Promise<string> {
   const productId = productIdFromRawInput(rawInput);
-  const product = productId ? db.products.get(productId) : undefined;
+  const product = productId
+    ? (await db.select().from(products).where(eq(products.id, productId)).limit(1))[0]
+    : undefined;
 
   if (!product) return renderAddToCartError(failure);
   return renderAddToCartForm(product, failure, request);

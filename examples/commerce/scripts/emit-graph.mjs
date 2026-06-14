@@ -16,8 +16,12 @@ registerHooks({
 });
 
 const { deriveAppGraph } = await import('@jiso/compiler/graph');
-const { deriveInvalidationRegistry, serializeInvalidationRegistry } =
-  await import('@jiso/drizzle/static');
+const {
+  deriveInvalidationRegistry,
+  serializeInvalidationRegistry,
+  extractSymbolicEffectsFromProject,
+  extractAlgebraicShapesFromProject,
+} = await import('@jiso/drizzle/static');
 const { deriveOptimistic, serializeDerivedOptimistic } = await import('@jiso/drizzle/derive');
 const ts = await import('typescript');
 const { createCommerceGraph } = await import('../src/graph.js');
@@ -51,54 +55,57 @@ const formatJson = (value, indent = 0) => {
   return JSON.stringify(value);
 };
 
-const writeReceiverName = (expression) => {
-  if (ts.isIdentifier(expression)) return expression.text;
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === 'request' &&
-    expression.name.text === 'db'
-  ) {
-    return 'request.db';
+// SPEC.md §10.5 / §11.1: run the real Drizzle static extractor over the
+// commerce source. Stage-1 symbolic effects (write → effect IR) and Stage-2
+// algebraic query shapes (loader → shape IR) are read directly from the
+// loaders/handlers; nothing here is hand-authored. The deriver turns each
+// (mutation effects × query shape) pair into a committed optimistic transform
+// or a named §10.5 punt.
+const extractionFiles = ['app.ts', 'queries.ts', 'schema.ts', 'db.ts', 'domains.ts'].map((rel) => ({
+  fileName: `examples/commerce/src/${rel}`,
+  source: readFileSync(resolve(commerceRoot, `src/${rel}`), 'utf8'),
+}));
+
+const allEffectFacts = extractSymbolicEffectsFromProject({ files: extractionFiles });
+const algebraicShapes = extractAlgebraicShapesFromProject({ files: extractionFiles });
+const shapeByQuery = new Map(algebraicShapes.map((shape) => [shape.query, shape]));
+
+// Map each exported mutation/webhook variable to the line span of its
+// definition, so extracted write sites can be attributed to the right handler.
+const appSourceFile = ts.createSourceFile('app.ts', source, ts.ScriptTarget.Latest, true);
+const handlerSpans = new Map();
+const collectSpans = (node) => {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+    handlerSpans.set(node.name.text, [
+      appSourceFile.getLineAndCharacterOfPosition(node.getStart(appSourceFile)).line + 1,
+      appSourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
+    ]);
   }
-  return undefined;
+  ts.forEachChild(node, collectSpans);
+};
+collectSpans(appSourceFile);
+
+const siteLine = (site) => Number(site.split(':').pop());
+const effectsInHandler = (name) => {
+  const span = handlerSpans.get(name);
+  assert.ok(span, `commerce app.ts must define a ${name} handler`);
+  return allEffectFacts.filter((fact) => {
+    const line = siteLine(fact.site);
+    return line >= span[0] && line <= span[1];
+  });
 };
 
-const collectCommerceWriteSites = (fileName, fileSource) => {
-  const sourceFile = ts.createSourceFile(fileName, fileSource, ts.ScriptTarget.Latest, true);
-  const sites = new Map();
-
-  const visit = (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'write'
-    ) {
-      const receiver = writeReceiverName(node.expression.expression);
-      const tableArg = node.arguments[0];
-      if (receiver && tableArg && ts.isStringLiteralLike(tableArg)) {
-        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-        const key = `${receiver}:${tableArg.text}`;
-        const existing = sites.get(key) ?? [];
-        sites.set(key, [...existing, `${fileName}:${line + 1}`]);
-      }
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return sites;
-};
-
-const commerceWriteSites = collectCommerceWriteSites('examples/commerce/src/app.ts', source);
-
-const siteFor = (receiver, table) => {
-  const key = `${receiver}:${table}`;
-  const sites = commerceWriteSites.get(key) ?? [];
-  assert.equal(sites.length, 1, `commerce source has one structured write site for ${key}`);
-  const [site] = sites;
-  return site;
+// Extraction-driven write sites: the touch graph keeps the app's declared
+// invalidation semantics (domains/keys), but each site is the real extracted
+// write location for that (handler, table) pair.
+const siteFor = (handler, table) => {
+  const matches = effectsInHandler(handler).filter((fact) => fact.effect.table === table);
+  assert.equal(
+    matches.length,
+    1,
+    `expected one ${table} write in ${handler}, got ${matches.length}`,
+  );
+  return matches[0].site;
 };
 
 const commerceTouchGraph = {
@@ -107,20 +114,20 @@ const commerceTouchGraph = {
       {
         domain: 'cart',
         keys: null,
-        site: siteFor('request.db', 'cart_items'),
+        site: siteFor('addToCart', 'cart_items'),
         via: 'cart_items',
       },
       {
         domain: 'order',
         keys: null,
-        site: siteFor('request.db', 'orders'),
+        site: siteFor('addToCart', 'orders'),
         via: 'orders',
       },
       {
         domain: 'product',
         keys: 'arg:productId',
         predicate: 'eq',
-        site: siteFor('request.db', 'products'),
+        site: siteFor('addToCart', 'products'),
         via: 'products',
       },
     ],
@@ -133,7 +140,7 @@ const commerceTouchGraph = {
         domain: 'order',
         keys: 'arg:data.object.id',
         predicate: 'eq',
-        site: siteFor('tx', 'orders'),
+        site: siteFor('paymentWebhook', 'orders'),
         via: 'orders',
       },
     ],
@@ -146,7 +153,7 @@ const commerceTouchGraph = {
         domain: 'attachment',
         keys: 'arg:orderId',
         predicate: 'eq',
-        site: siteFor('request.db', 'attachments'),
+        site: siteFor('uploadReceipt', 'attachments'),
         via: 'attachments',
       },
     ],
@@ -177,7 +184,7 @@ const commerceInvalidationRegistrySource = serializeInvalidationRegistry(
     typeName: 'CommerceInvalidationSets',
   },
 );
-const touchGraphSource = `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
+const touchGraphSource = `import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../app.js';
 
 export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;
 
@@ -186,111 +193,26 @@ declare module '@jiso/core' {
   interface QueryRegistry {
     cart: CartQueryResult;
     productGrid: ProductGridResult;
-    orderHistory: { items: CommerceDb['orders'] };
+    orderHistory: OrderHistoryResult;
   }
 
   interface InvalidationSets extends CommerceInvalidationSets {}
 }
 `;
 
-// SPEC.md §10.5 (derived optimism): the commerce reference app declares its
-// cart/add symbolic effects + query shapes the same way it declares the touch
-// graph (commerce is not Drizzle-backed; the Drizzle extractor proves the same
-// IR in conformance/drizzle-pin). The source-agnostic deriver turns these into
-// committed transforms — deleting a hand-written transform lets derivation take
-// the pair over (SPEC.md §10.4).
-const param = (path) => ({ kind: 'param', path });
-const productsRowset = {
-  filters: [],
-  key: 'id',
-  orderBy: [{ column: 'id', direction: 'asc' }],
-  table: 'products',
-};
-const ordersRowset = { filters: [], key: 'id', orderBy: [], table: 'orders' };
-const cartAddEffects = [
-  {
-    op: 'insert',
-    table: 'cart_items',
-    values: {
-      productId: param('productId'),
-      qty: param('quantity'),
-      unitPrice: { expr: 'found.unitPrice', kind: 'opaque' },
-    },
-  },
-  {
-    op: 'insert',
-    table: 'orders',
-    values: {
-      id: { expr: 'order-${db.orders.length + 1}', kind: 'opaque' },
-      productId: param('productId'),
-      qty: param('quantity'),
-      total: { expr: 'found.unitPrice * quantity', kind: 'opaque' },
-      userId: { expr: 'session.user.id', kind: 'opaque' },
-    },
-  },
-  {
-    match: { eq: [{ column: 'id', value: param('productId') }], kind: 'keys' },
-    op: 'update',
-    sets: {
-      stock: {
-        kind: 'arith',
-        left: { column: 'stock', kind: 'col' },
-        op: '-',
-        right: param('quantity'),
-      },
-    },
-    table: 'products',
-  },
-];
-const cartAddShapes = {
-  cart: {
-    fields: {
-      count: {
-        arith: { column: 'qty', kind: 'col' },
-        kind: 'sum',
-        rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
-      },
-    },
-    query: 'cart',
-  },
-  orderHistory: {
-    fields: {
-      items: {
-        columnTypes: {
-          id: 'string',
-          productId: 'string',
-          qty: 'number',
-          total: 'number',
-          userId: 'string',
-        },
-        kind: 'agg',
-        projection: ['id', 'productId', 'qty', 'total', 'userId'],
-        rowKey: 'id',
-        rowset: ordersRowset,
-      },
-    },
-    query: 'orderHistory',
-    rowsByTable: {
-      orders: { columns: ['id', 'productId', 'qty', 'total', 'userId'], rowsPath: 'items' },
-    },
-  },
-  productGrid: {
-    fields: {
-      items: {
-        kind: 'agg',
-        projection: ['id', 'stock', 'unitPrice'],
-        rowKey: 'id',
-        rowset: productsRowset,
-      },
-      nextCursor: { kind: 'cursor', rowset: productsRowset },
-    },
-    query: 'productGrid',
-    rowsByTable: { products: { columns: ['id', 'stock', 'unitPrice'], rowsPath: 'items' } },
-  },
-};
+// SPEC.md §10.5 (derived optimism): the cart/add symbolic effects come straight
+// from the extracted Drizzle handler writes (Stage 1) and each query shape from
+// the extracted loader (Stage 2). The deriver pairs the effects with every query
+// shape — every pair derives here (cart += quantity, productGrid update-row of
+// the matched product's stock, orderHistory push-row of the new order). Deleting
+// a transform from generated/optimistic/ lets you hand-write an override;
+// regenerating restores derivation (the §10.4 pair-by-pair contract).
+const cartAddEffects = effectsInHandler('addToCart').map((fact) => fact.effect);
 const cartAddOptimisticEntries = [];
-for (const query of Object.keys(cartAddShapes)) {
-  const result = deriveOptimistic(cartAddEffects, cartAddShapes[query]);
+for (const query of ['cart', 'orderHistory', 'productGrid']) {
+  const shape = shapeByQuery.get(query);
+  assert.ok(shape, `commerce extractor must produce a ${query} query shape`);
+  const result = deriveOptimistic(cartAddEffects, shape);
   assert.equal(result.kind, 'derived', `commerce ${query} must derive: ${JSON.stringify(result)}`);
   cartAddOptimisticEntries.push({ program: result.program, query });
 }

@@ -2,8 +2,105 @@ import { createHmac } from 'node:crypto';
 
 import { headerValues, setCookieValues } from '@jiso/test/headers';
 import { type StructuralMorphNode } from '@jiso/runtime';
+import { eq } from 'drizzle-orm';
 
-import { createCommerceDb, type AddToCartInput, type ProductGridInput } from './app.js';
+import {
+  createCommerceDb,
+  type AddToCartInput,
+  type CommerceDb,
+  type ProductGridInput,
+} from './app.js';
+import { attachments, cartItems, orders, products } from './schema.js';
+
+// SPEC.md §14: the test DB is real Drizzle/PGlite, so tests seed and read rows
+// with Drizzle statements (the old in-memory array/Map accessors are gone).
+// These helpers keep the per-test seeding/assertion churn small.
+
+export type ProductRow = { id: string; stock: number; unitPrice: number };
+export type CartItemRow = { productId: string; qty: number; unitPrice: number };
+export type OrderRow = {
+  id: string;
+  productId: string;
+  qty: number;
+  total: number;
+  userId: string;
+};
+export type AttachmentRow = {
+  contentType: string;
+  filename: string;
+  id: string;
+  orderId: string;
+  size: number;
+  storageKey: string;
+  userId: string;
+};
+
+/** Replace the entire product catalog with `rows` (clears the p1/p2/p3 seed). */
+export async function resetProducts(db: CommerceDb, rows: readonly ProductRow[]): Promise<void> {
+  await db.delete(products);
+  for (const row of rows) await db.insert(products).values(row);
+}
+
+export async function seedCartItems(db: CommerceDb, rows: readonly CartItemRow[]): Promise<void> {
+  for (const row of rows) await db.insert(cartItems).values(row);
+}
+
+export async function seedOrders(db: CommerceDb, rows: readonly OrderRow[]): Promise<void> {
+  for (const row of rows) await db.insert(orders).values(row);
+}
+
+export async function seedAttachments(
+  db: CommerceDb,
+  rows: readonly AttachmentRow[],
+): Promise<void> {
+  for (const row of rows) await db.insert(attachments).values(row);
+}
+
+export async function readProducts(db: CommerceDb): Promise<ProductRow[]> {
+  return db
+    .select({ id: products.id, stock: products.stock, unitPrice: products.unitPrice })
+    .from(products)
+    .orderBy(products.id);
+}
+
+export async function readCartItems(db: CommerceDb): Promise<CartItemRow[]> {
+  return db
+    .select({ productId: cartItems.productId, qty: cartItems.qty, unitPrice: cartItems.unitPrice })
+    .from(cartItems)
+    .orderBy(cartItems.id);
+}
+
+export async function readOrders(db: CommerceDb): Promise<OrderRow[]> {
+  return db
+    .select({
+      id: orders.id,
+      productId: orders.productId,
+      qty: orders.qty,
+      total: orders.total,
+      userId: orders.userId,
+    })
+    .from(orders)
+    .orderBy(orders.id);
+}
+
+export async function readAttachments(db: CommerceDb): Promise<AttachmentRow[]> {
+  return db
+    .select({
+      contentType: attachments.contentType,
+      filename: attachments.filename,
+      id: attachments.id,
+      orderId: attachments.orderId,
+      size: attachments.size,
+      storageKey: attachments.storageKey,
+      userId: attachments.userId,
+    })
+    .from(attachments)
+    .orderBy(attachments.id);
+}
+
+export async function readProduct(db: CommerceDb, id: string): Promise<ProductRow | undefined> {
+  return (await db.select().from(products).where(eq(products.id, id)).limit(1))[0];
+}
 
 export function commerceFile(name: string, type: string, size: number) {
   return {

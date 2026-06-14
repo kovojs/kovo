@@ -1,4 +1,4 @@
-import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
+import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../app.js';
 
 export const commerceTouchGraph = {
   "cart.addItem": {
@@ -6,20 +6,20 @@ export const commerceTouchGraph = {
       {
         "domain": "cart",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:412",
+        "site": "examples/commerce/src/app.ts:336",
         "via": "cart_items"
       },
       {
         "domain": "order",
         "keys": null,
-        "site": "examples/commerce/src/app.ts:417",
+        "site": "examples/commerce/src/app.ts:341",
         "via": "orders"
       },
       {
         "domain": "product",
         "keys": "arg:productId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:424",
+        "site": "examples/commerce/src/app.ts:348",
         "via": "products"
       }
     ],
@@ -32,7 +32,7 @@ export const commerceTouchGraph = {
         "domain": "order",
         "keys": "arg:data.object.id",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:511",
+        "site": "examples/commerce/src/app.ts:437",
         "via": "orders"
       }
     ],
@@ -45,7 +45,7 @@ export const commerceTouchGraph = {
         "domain": "attachment",
         "keys": "arg:orderId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:461",
+        "site": "examples/commerce/src/app.ts:387",
         "via": "attachments"
       }
     ],
@@ -70,7 +70,7 @@ declare module '@jiso/core' {
   interface QueryRegistry {
     cart: CartQueryResult;
     productGrid: ProductGridResult;
-    orderHistory: { items: CommerceDb['orders'] };
+    orderHistory: OrderHistoryResult;
   }
 
   interface InvalidationSets extends CommerceInvalidationSets {}

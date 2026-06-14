@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 
-import type { CommerceDb } from '../app.js';
+import type { OrderHistoryResult } from '../app.js';
 import { orderHistoryQuery } from '../queries.js';
 
 // SPEC.md section 4.1/4.2: authored sugar carries no stamps. The native <ol>
@@ -14,7 +14,7 @@ import { orderHistoryQuery } from '../queries.js';
 export const OrderHistory = component('order-history', {
   fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
-  render: ({ orderHistory }: { orderHistory: { items: CommerceDb['orders'] } }) => (
+  render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
     <ol fw-c="order-history" fw-deps="orderHistory">
       {orderHistory.items.map((item) => (
         <li fw-key={item.id}>
