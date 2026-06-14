@@ -186,6 +186,13 @@ export const derivationContractFixtures: readonly DerivationContractFixture[] = 
     shape: {
       fields: {
         items: {
+          columnTypes: {
+            id: 'string',
+            productId: 'string',
+            qty: 'number',
+            total: 'number',
+            userId: 'string',
+          },
           kind: 'agg',
           projection: ['id', 'productId', 'qty', 'total', 'userId'],
           rowKey: 'id',
@@ -217,7 +224,9 @@ export const derivationContractFixtures: readonly DerivationContractFixture[] = 
           op: 'remove-row',
           path: 'items',
         },
-        { by: { kind: 'const', value: -1 }, op: 'inc', path: 'total' },
+        // COUNT recomputed from the fully-shipped rows so the guarded no-op case
+        // (deleted row absent from the client set) stays sound (SPEC.md §10.5).
+        { from: 'items', op: 'recount', path: 'total' },
       ],
       query: 'todoCount',
     },

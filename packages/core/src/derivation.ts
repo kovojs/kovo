@@ -118,7 +118,14 @@ export interface RowWitness {
 export type AlgebraicField =
   | { arith: SymbolicValue; kind: 'sum'; rowset: Rowset; witness?: RowWitness }
   | { column: string; kind: 'scalar'; rowset: Rowset }
-  | { kind: 'agg'; projection: readonly string[]; rowKey?: string; rowset: Rowset }
+  | {
+      /** JSON type per projected column, so Opaque INSERT cols get type-correct placeholders. */
+      columnTypes?: Readonly<Record<string, 'boolean' | 'number' | 'string'>>;
+      kind: 'agg';
+      projection: readonly string[];
+      rowKey?: string;
+      rowset: Rowset;
+    }
   | { kind: 'count'; pred?: RowsetFilter; rowset: Rowset; witness?: RowWitness }
   | { kind: 'cursor'; rowset: Rowset }
   | { kind: 'opaque'; reason: PuntReason };
@@ -155,6 +162,22 @@ export type PatchOp =
       path: string;
     }
   | {
+      /** column summed over each row of `from`. */
+      column: string;
+      /** dot-path to the row array supplying the contributions. */
+      from: string;
+      op: 'resum';
+      /** dot-path to the SUM scalar field. */
+      path: string;
+    }
+  | {
+      /** dot-path to the (fully-shipped) row array to count. */
+      from: string;
+      op: 'recount';
+      /** dot-path to the COUNT scalar field. */
+      path: string;
+    }
+  | {
       guard: 'find-or-noop';
       match: readonly RowMatch[];
       op: 'remove-row';
@@ -175,7 +198,8 @@ export type PatchOp =
       path: string;
       /** Placeholder columns (opaque INSERT cols) excluded from soundness equality. */
       placeholderColumns: readonly string[];
-      position: 'end' | 'start';
+      /** Insertion point: list end/start, or an orderBy-driven sorted insert (SPEC.md §10.5). */
+      position: PushPosition;
       row: Readonly<Record<string, SymbolicValue>>;
     }
   | {
@@ -184,6 +208,9 @@ export type PatchOp =
       path: string;
       value: SymbolicValue;
     };
+
+/** Insertion point for a pushed row: list end/start, or a sorted insert by an orderBy column. */
+export type PushPosition = 'end' | 'start' | { column: string; direction: 'asc' | 'desc' };
 
 /** §10.5 Stage-3 result: a patch program over one query's client value. */
 export interface PatchProgram {
@@ -322,8 +349,14 @@ function applyPatchOp(
       for (const [column, columnValue] of Object.entries(op.row)) {
         row[column] = evalSymbolicValue(columnValue, ctx);
       }
-      if (op.position === 'start') list.unshift(row);
-      else list.push(row);
+      insertRow(list, row, op.position);
+      return;
+    }
+    case 'recount': {
+      const target = parentRecordForPath(value, op.path);
+      const list = listAtPath(value, op.from);
+      if (!target || !list) return;
+      target.record[target.leaf] = list.length;
       return;
     }
     case 'remove-row': {
@@ -331,6 +364,16 @@ function applyPatchOp(
       if (!list) return;
       const index = list.findIndex((row) => rowMatches(row, op.match, ctx));
       if (index >= 0) list.splice(index, 1);
+      return;
+    }
+    case 'resum': {
+      const target = parentRecordForPath(value, op.path);
+      const list = listAtPath(value, op.from);
+      if (!target || !list) return;
+      target.record[target.leaf] = list.reduce<number>((total, row) => {
+        if (row === null || typeof row !== 'object' || Array.isArray(row)) return total;
+        return total + asNumber((row as Record<string, JsonValue>)[op.column] ?? 0);
+      }, 0);
       return;
     }
     case 'set-field': {
@@ -352,6 +395,29 @@ function applyPatchOp(
       return;
     }
   }
+}
+
+function insertRow(
+  list: JsonValue[],
+  row: Record<string, JsonValue>,
+  position: PushPosition,
+): void {
+  if (position === 'start') {
+    list.unshift(row);
+    return;
+  }
+  if (position === 'end') {
+    list.push(row);
+    return;
+  }
+  const target = asNumber(row[position.column] ?? 0);
+  const index = list.findIndex((existing) => {
+    if (existing === null || typeof existing !== 'object' || Array.isArray(existing)) return false;
+    const candidate = asNumber((existing as Record<string, JsonValue>)[position.column] ?? 0);
+    return position.direction === 'asc' ? candidate > target : candidate < target;
+  });
+  if (index < 0) list.push(row);
+  else list.splice(index, 0, row);
 }
 
 function rowMatches(row: JsonValue, match: readonly RowMatch[], ctx: EvalContext): boolean {

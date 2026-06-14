@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/runtime.ts",
+    "./derive": "./src/derive.ts",
     "./static": "./src/static.ts"
   },
   "dependencies": {

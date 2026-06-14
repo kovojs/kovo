@@ -1,4 +1,5 @@
 import type { JsonValue } from '@jiso/core';
+import { deriveOptimistic } from '@jiso/drizzle/derive';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -50,6 +51,15 @@ describe('derivation contract fixtures', () => {
     it(`every program op targets the declared query for ${fixture.name}`, () => {
       expect(fixture.program.query).toBe(fixture.query);
       expect(fixture.shape.query).toBe(fixture.query);
+    });
+
+    it(`deriveOptimistic reproduces the contract program for ${fixture.name}`, () => {
+      // SPEC.md §10.5: the deriver and the shared contract are one source — the
+      // deriver must produce exactly the fixture's program from its effect+shape.
+      expect(deriveOptimistic([fixture.effect], fixture.shape)).toEqual({
+        kind: 'derived',
+        program: fixture.program,
+      });
     });
   }
 });

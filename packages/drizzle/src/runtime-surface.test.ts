@@ -23,6 +23,10 @@ function drizzleStaticSource(): string {
   return readFileSync(fileURLToPath(new URL('./static.ts', import.meta.url)), 'utf8');
 }
 
+function drizzleDeriveSource(): string {
+  return readFileSync(fileURLToPath(new URL('./derive.ts', import.meta.url)), 'utf8');
+}
+
 function drizzleCompatibilityBarrelSource(): string {
   return readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8');
 }
@@ -49,8 +53,12 @@ describe('@jiso/drizzle runtime surface', () => {
     expect(staticExtraction.extractQueryFactsFromProject).toBeTypeOf('function');
     expect(packageJson.exports).toEqual({
       '.': './src/runtime.ts',
+      // SPEC.md §10.5: the source-agnostic derivation algebra is a ts-morph-free
+      // entrypoint (it consumes the shared IR, not Drizzle source).
+      './derive': './src/derive.ts',
       './static': './src/static.ts',
     });
+    expect(drizzleDeriveSource()).not.toContain('ts-morph');
     expect(packageJson.dependencies?.['ts-morph']).toBeUndefined();
     expect(packageJson.devDependencies?.['ts-morph']).toBe('^28.0.0');
     expect(runtimeSource).not.toContain('ts-morph');

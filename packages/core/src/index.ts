@@ -21,6 +21,7 @@ export type {
   PatchProgram,
   PlaceholderKind,
   PuntReason,
+  PushPosition,
   RowMatch,
   Rowset,
   RowsetFilter,
