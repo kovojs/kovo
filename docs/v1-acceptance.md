@@ -84,8 +84,7 @@ command log path and commit SHA in the Acceptance Command Set table above.
 
 ## Freeze Rule
 
-Do not mark `IMPLEMENT_v1.md` P10 complete until every SPEC §16 row above has
-passing dated evidence, `docs/legibility-study.md` contains five dated outside
-developer result rows, `docs/prelaunch-checklist.md` contains dated completion
-evidence for every external launch check, and the full acceptance command set has
-passed from a clean checkout.
+Do not close the active v1 cleanup ledger until every SPEC §16 row above has passing dated
+evidence, `docs/legibility-study.md` contains five dated outside developer result rows,
+`docs/prelaunch-checklist.md` contains dated completion evidence for every external launch check,
+and the full acceptance command set has passed from a clean checkout.

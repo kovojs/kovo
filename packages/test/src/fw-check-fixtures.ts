@@ -138,7 +138,7 @@ export function fwCheckOkAssertionFact(result: FwCheckResultLike): FwCheckOkAsse
 export function fwCheckUnguardedAuditBehaviorFact(options: {
   fwCheck: FwCheckCommand;
 }): FwCheckUnguardedAuditBehaviorFact {
-  // SPEC.md section 6.4 and IMPLEMENT_v1.md P3 require route/query guards to surface
+  // SPEC.md section 6.4 and the archived v1 roadmap require route/query guards to surface
   // through the unguarded audit when removed.
   const fact = fwCheckAssertionFact(
     options.fwCheck({

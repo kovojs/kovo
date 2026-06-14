@@ -1,7 +1,7 @@
 # Pre-launch Checklist
 
-This file tracks the launch-readiness checks required before v1 freeze by
-`IMPLEMENT_v1.md` Phase 10. It tracks work; it does not claim completion.
+This file tracks the launch-readiness checks required before v1 freeze by the active v1 cleanup
+ledger. It tracks work; it does not claim completion.
 
 Name decision, for the record: "Jiso" - short and pronounceable. No external
 screening evidence is recorded in this repo yet.

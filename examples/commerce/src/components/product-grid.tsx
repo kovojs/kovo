@@ -22,7 +22,7 @@ import { productGridQuery } from '../queries.js';
 // failure state) is mutation-form infrastructure, not query data; SPEC.md
 // Appendix A assigns form rendering to <f.Form>, which @jiso/server does not
 // provide yet, so app.ts passes the context as an explicit second render
-// argument alongside the declared queries (recorded in IMPLEMENT_v1.md).
+// argument alongside the declared queries (recorded in the archived v1 roadmap).
 // The lowered IR is committed at src/generated/product-grid.tsx and is what
 // the app imports at runtime.
 

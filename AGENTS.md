@@ -3,7 +3,10 @@
 ## Framework Source of Truth
 
 - Treat `SPEC.md` as the normative source of truth for how the Jiso framework should behave.
-- Use `IMPLEMENT_v1.md` as the implementation roadmap and sequencing plan. If it conflicts with `SPEC.md`, follow `SPEC.md` for behavior and update the implementation plan or ask before coding through the conflict.
+- Use active files under `plans/` as the implementation roadmap and sequencing plan. The v1
+  closeout roadmap is archived; `plans/v1-cleanup.md` is the active v1 follow-up ledger. If a plan
+  conflicts with `SPEC.md`, follow `SPEC.md` for behavior and update the plan or ask before coding
+  through the conflict.
 - When implementing or reviewing framework behavior, cite the relevant `SPEC.md` section in comments, tests, diagnostics, or handoff notes where that context would prevent ambiguity.
 - Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR FW235.
 
@@ -11,7 +14,7 @@
 
 - For GitHub Actions workflow edits, follow `rules/github-workflows.md`.
 - Make commits at meaningful checkpoints instead of accumulating a large uncommitted diff.
-- Default to a parallel fan-out when the open plans expose multiple independent, non-overlapping implementation, audit, or verification slices that can move `IMPLEMENT_v1.md` forward concurrently. Keep one immediate critical-path task in the main worktree, and delegate bounded sidecar slices to up to five sub-agents at a time unless the work is tightly coupled.
+- Default to a parallel fan-out when the open plans expose multiple independent, non-overlapping implementation, audit, or verification slices that can move the active plan ledger forward concurrently. Keep one immediate critical-path task in the main worktree, and delegate bounded sidecar slices to up to five sub-agents at a time unless the work is tightly coupled.
 - Prefer large, closure-oriented sub-agent slices that push an open plan item materially toward completion over tiny incremental edits. A delegated slice should usually own a coherent module, primitive family, runtime path, conformance gap, or plan phase and should include the production changes, tests, and evidence needed to integrate that slice.
 - Match model choice to task risk when assigning main-thread or sub-agent work. Use `gpt-5.5`
   with medium reasoning for harder tasks: high-conflict implementation, cross-package behavior

@@ -12,7 +12,7 @@ import { escapeAttribute } from './html.js';
 // - Child strings are inserted as written so pre-rendered HTML (component
 //   renders, framework helpers such as csrfField) composes without a wrapper
 //   type. SPEC.md section 4 does not yet define JSX text-escaping semantics;
-//   the open question is recorded in IMPLEMENT_v1.md.
+//   the open question is tracked by the active v1 cleanup/docs ledgers.
 
 const voidElements = new Set([
   'area',

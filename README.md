@@ -13,7 +13,7 @@ One organizing constraint governs everything: every artifact the system produces
 | Document                                                     | Role                                                               |
 | ------------------------------------------------------------ | ------------------------------------------------------------------ |
 | [`SPEC.md`](SPEC.md)                                         | The normative source of truth for framework behavior               |
-| [`IMPLEMENT_v1.md`](IMPLEMENT_v1.md)                         | Implementation roadmap and sequencing for v1                       |
+| [`plans/v1-cleanup.md`](plans/v1-cleanup.md)                 | Active v1 cleanup ledger after the v1 closeout roadmap was archived |
 | [`docs/constitution.md`](docs/constitution.md)               | The five design tests every feature must pass (summary of SPEC §2) |
 | [`docs/compiler-hard-rules.md`](docs/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                      |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)          | Instructions for coding agents working in this repo                |
