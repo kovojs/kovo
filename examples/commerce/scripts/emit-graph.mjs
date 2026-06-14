@@ -95,6 +95,22 @@ const effectsInHandler = (name) => {
   });
 };
 
+// A chained `db.update(table).set(...).where(...)` reports its call-start at the
+// `await db` line; re-point the recorded site to the line that actually names
+// the Drizzle write call (`.insert(table)` / `.update(table)` / `.delete(table)`)
+// so the touch-graph provenance honesty check resolves it to a real write line.
+const sourceLines = source.split('\n');
+const writeCallPattern = /\.(?:insert|update|delete)\(/;
+const repointSite = (site) => {
+  const separator = site.lastIndexOf(':');
+  const path = site.slice(0, separator);
+  const startLine = Number(site.slice(separator + 1));
+  for (let line = startLine; line < startLine + 4 && line <= sourceLines.length; line += 1) {
+    if (writeCallPattern.test(sourceLines[line - 1] ?? '')) return `${path}:${line}`;
+  }
+  return site;
+};
+
 // Extraction-driven write sites: the touch graph keeps the app's declared
 // invalidation semantics (domains/keys), but each site is the real extracted
 // write location for that (handler, table) pair.
@@ -105,7 +121,7 @@ const siteFor = (handler, table) => {
     1,
     `expected one ${table} write in ${handler}, got ${matches.length}`,
   );
-  return matches[0].site;
+  return repointSite(matches[0].site);
 };
 
 const commerceTouchGraph = {

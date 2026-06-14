@@ -126,6 +126,19 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
             );
           }
 
+          // Real Drizzle write seam: `db.insert(table)` / `db.update(table)` /
+          // `db.delete(table)` take the table as the first argument, so the same
+          // table-method observer records the write (table resolved via the
+          // Drizzle name symbol). SPEC.md §11.2/§14.
+          if (
+            (prop === 'insert' || prop === 'update' || prop === 'delete') &&
+            typeof value === 'function'
+          ) {
+            return cachedMethod(target, prop, value, methodCache, () =>
+              observableTableMethod('write', target, value, config, recorder),
+            );
+          }
+
           if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
             return cachedMethod(target, prop, value, methodCache, () =>
               observableSqlMethod(target, value, config, recorder),

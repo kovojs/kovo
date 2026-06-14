@@ -55,7 +55,14 @@ export const productGridQuery = query('productGrid', {
       .where(after ? gt(products.id, after) : undefined)
       .orderBy(products.id)
       .limit(pageSize);
-    const nextCursor = items.length === pageSize ? (items.at(-1)?.id ?? null) : null;
+    // `items` is the directly-returned select (the extractor reads it as the
+    // page rowset). The cursor is a separate existence probe so an exact-fit
+    // last page reports no next page (rather than a dangling cursor).
+    const last = items.at(-1);
+    const more = last
+      ? await db.select({ id: products.id }).from(products).where(gt(products.id, last.id)).limit(1)
+      : [];
+    const nextCursor = more.length > 0 ? (last?.id ?? null) : null;
     return { items: items, nextCursor: nextCursor };
   },
   reads: [product],

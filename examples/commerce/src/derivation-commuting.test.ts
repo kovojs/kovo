@@ -1,20 +1,24 @@
-import { propertyTest } from '@jiso/test/assertions';
 import { describe, expect, it } from 'vitest';
 
 import {
   addToCartOptimistic,
+  createCommerceDb,
   loadCartQuery,
+  loadOrderHistory,
   loadProductGrid,
   type AddToCartInput,
   type CommerceDb,
+  type OrderHistoryResult,
   type ProductGridResult,
 } from './app.js';
+import { seedCommerceState } from './app-test-helpers.js';
 
 // SPEC.md §10.5 / §11.4 point 4: the commuting diagram is the deriver's test
 // suite — patch(clientShape(s), i) ≡ clientShape(apply(effect, s, i)) for every
-// derivable pair. Here we prove it for all three commerce cart/add derived
-// transforms against the real query loaders and the real cart/add write effect
-// (mirrored from the handler), modulo content-matched placeholder columns.
+// derivable pair. We prove it for all three commerce cart/add derived transforms
+// against the REAL async query loaders (run over a real Drizzle/PGlite database
+// seeded from the case state) and the real cart/add write effect, modulo
+// content-matched placeholder columns (the server-computed order id/total/userId).
 
 interface CommerceState {
   cartItems: { productId: string; qty: number; unitPrice: number }[];
@@ -23,16 +27,16 @@ interface CommerceState {
   userId: string;
 }
 
-// A minimal read-only db shim so the REAL loaders run over plain (cloneable) state.
-function dbFor(state: CommerceState): CommerceDb {
-  return {
-    read(table: string) {
-      if (table === 'cart_items') return state.cartItems;
-      if (table === 'orders') return state.orders;
-      if (table === 'products') return Object.values(state.products);
-      return [];
-    },
-  } as unknown as CommerceDb;
+// Seed a real Drizzle/PGlite db from `state` so the REAL loaders run over
+// genuine Postgres semantics (not a hand-rolled shim). One db is reused across
+// cases (truncate + reseed) — creating a fresh PGlite per case is far slower.
+async function seedFrom(db: CommerceDb, state: CommerceState): Promise<CommerceDb> {
+  await seedCommerceState(db, {
+    cartItems: state.cartItems,
+    orders: state.orders,
+    products: Object.values(state.products),
+  });
+  return db;
 }
 
 // The real cart/add write effect (app.ts handler): append cart item + order row,
@@ -66,9 +70,9 @@ function applyAddToCart(state: CommerceState, input: AddToCartInput): CommerceSt
   };
 }
 
-function orderHistoryShape(state: CommerceState): { items: { productId: string; qty: number }[] } {
-  // Drop the placeholder columns (id/total/userId) — content-matched on reconcile.
-  return { items: state.orders.map((order) => ({ productId: order.productId, qty: order.qty })) };
+// Drop the placeholder columns (id/total/userId) — content-matched on reconcile.
+function orderHistoryProjection(shape: OrderHistoryResult): { productId: string; qty: number }[] {
+  return shape.items.map((order) => ({ productId: order.productId, qty: order.qty }));
 }
 
 function commerceCases(): { input: AddToCartInput; state: CommerceState }[] {
@@ -110,54 +114,51 @@ const cartTransform = addToCartOptimistic.transforms.cart;
 const productGridTransform = addToCartOptimistic.transforms.productGrid;
 const orderHistoryTransform = addToCartOptimistic.transforms.orderHistory;
 
+// patch(clientShape(s), i) ≡ project(clientShape(apply(s, i))) for each case.
+async function assertCommutes<Shape>(
+  loadShape: (db: CommerceDb) => Promise<Shape>,
+  transform: (shape: Shape, input: AddToCartInput) => Shape,
+  project: (shape: Shape) => unknown = (shape) => shape,
+): Promise<number> {
+  const db = createCommerceDb();
+  let count = 0;
+  for (const { input, state } of commerceCases()) {
+    const predicted = project(transform(await loadShape(await seedFrom(db, state)), input));
+    const eventual = project(await loadShape(await seedFrom(db, applyAddToCart(state, input))));
+    expect(predicted).toEqual(eventual);
+    count += 1;
+  }
+  return count;
+}
+
 describe('commerce derived optimism — commuting diagrams (SPEC §10.5)', () => {
-  it('cart (INSERT × SUM): patch(clientShape(s)) ≡ clientShape(apply)', () => {
-    expect(
-      propertyTest<CommerceState, AddToCartInput, { count: number }>({
-        apply: applyAddToCart,
-        cases: commerceCases(),
-        predict: (state, input) => cartTransform(loadCartQuery(dbFor(state)), input),
-        shape: (state) => loadCartQuery(dbFor(state)),
-      }),
-    ).toEqual({ cases: 18 });
+  it('cart (INSERT × SUM): patch(clientShape(s)) ≡ clientShape(apply)', async () => {
+    expect(await assertCommutes(loadCartQuery, cartTransform)).toBe(18);
   });
 
-  it('productGrid (UPDATE keyed scalar, guarded + paginated): commutes on- and off-page', () => {
+  it('productGrid (UPDATE keyed scalar, guarded + paginated): commutes on- and off-page', async () => {
     expect(
-      propertyTest<CommerceState, AddToCartInput, ProductGridResult>({
-        apply: applyAddToCart,
-        cases: commerceCases(),
-        predict: (state, input) => productGridTransform(loadProductGrid(dbFor(state)), input),
-        shape: (state) => loadProductGrid(dbFor(state)),
-      }),
-    ).toEqual({ cases: 18 });
+      await assertCommutes(
+        (db) => loadProductGrid(db),
+        productGridTransform as (
+          shape: ProductGridResult,
+          input: AddToCartInput,
+        ) => ProductGridResult,
+      ),
+    ).toBe(18);
   });
 
-  it('orderHistory (INSERT × AGG push): commutes modulo placeholder columns', () => {
+  it('orderHistory (INSERT × AGG push): commutes modulo placeholder columns', async () => {
     expect(
-      propertyTest<CommerceState, AddToCartInput, { items: { productId: string; qty: number }[] }>({
-        apply: applyAddToCart,
-        cases: commerceCases(),
-        predict: (state, input) => {
-          const predicted = orderHistoryTransform({ items: state.orders }, input);
-          return orderHistoryShape({ ...state, orders: predicted.items });
-        },
-        shape: orderHistoryShape,
-      }),
-    ).toEqual({ cases: 18 });
+      await assertCommutes(loadOrderHistory, orderHistoryTransform, orderHistoryProjection),
+    ).toBe(18);
   });
 
-  it('fails loudly on a deliberately-broken derivation', () => {
-    expect(() =>
-      propertyTest<CommerceState, AddToCartInput, { count: number }>({
-        apply: applyAddToCart,
-        cases: commerceCases(),
-        // Wrong: doubles the contribution — must NOT commute.
-        predict: (state, input) => ({
-          count: loadCartQuery(dbFor(state)).count + input.quantity * 2,
-        }),
-        shape: (state) => loadCartQuery(dbFor(state)),
-      }),
-    ).toThrow(/Optimistic property failed/);
+  it('fails loudly on a deliberately-broken derivation', async () => {
+    // Wrong: doubles the contribution — must NOT commute.
+    const brokenCartTransform = (shape: { count: number }, input: AddToCartInput) => ({
+      count: shape.count + input.quantity * 2,
+    });
+    await expect(assertCommutes(loadCartQuery, brokenCartTransform)).rejects.toThrow();
   });
 });

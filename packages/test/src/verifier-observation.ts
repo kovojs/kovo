@@ -106,6 +106,21 @@ export function observableSqlMethod(
   };
 }
 
+// Drizzle stores a table's SQL name on a well-known symbol; resolving it here
+// lets the verifier observe real Drizzle `insert(table)`/`update(table)`/
+// `delete(table)` calls (the table is the first argument) the same way it
+// observes the legacy string-keyed `write('table', …)` seam.
+const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
+
+function tableNameOf(table: unknown): string | undefined {
+  if (typeof table === 'string') return table;
+  if (typeof table === 'object' && table !== null) {
+    const name = (table as Record<symbol, unknown>)[DRIZZLE_TABLE_NAME];
+    if (typeof name === 'string') return name;
+  }
+  return undefined;
+}
+
 function observeTableIfString(
   kind: ObservedDbOperation['kind'],
   table: unknown,
@@ -113,8 +128,9 @@ function observeTableIfString(
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
 ): void {
-  if (typeof table !== 'string') return;
-  observe(kind, table, args, config, recorder);
+  const name = tableNameOf(table);
+  if (name === undefined) return;
+  observe(kind, name, args, config, recorder);
 }
 
 function observe(

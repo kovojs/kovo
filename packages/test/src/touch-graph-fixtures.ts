@@ -169,6 +169,16 @@ export async function touchGraphSourceFacts(
   });
 }
 
+// A touch's `via` is the SQL table name (snake_case). The write site honestly
+// names it either literally (the legacy `write('cart_items', …)` seam) or via
+// the Drizzle table binding, whose identifier is the camelCase of that name
+// (`db.insert(cartItems)` writes `cart_items`). Accept both spellings.
+function sourceLineNamesTable(sourceLine: string, via: string): boolean {
+  if (sourceLine.includes(via)) return true;
+  const camel = via.replace(/_([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
+  return sourceLine.includes(camel);
+}
+
 export async function touchGraphSummaryFacts(
   rootPath: string,
   touchGraph: TouchGraphFixture,
@@ -203,7 +213,7 @@ export async function touchGraphSummaryFacts(
               keys: touch.keys,
               predicate: touch.predicate,
               sitePath: sourceFact.path,
-              sourceLineIncludesVia: sourceFact.sourceLine.includes(touch.via),
+              sourceLineIncludesVia: sourceLineNamesTable(sourceFact.sourceLine, touch.via),
               via: touch.via,
             };
           }),

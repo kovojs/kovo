@@ -102,6 +102,28 @@ export async function readProduct(db: CommerceDb, id: string): Promise<ProductRo
   return (await db.select().from(products).where(eq(products.id, id)).limit(1))[0];
 }
 
+/**
+ * Replace ALL commerce rows with the given state in a single pass. Lets a test
+ * reuse one PGlite instance across many property cases (creating a fresh db per
+ * case is far slower than truncate + reseed).
+ */
+export async function seedCommerceState(
+  db: CommerceDb,
+  state: {
+    cartItems?: readonly CartItemRow[];
+    orders?: readonly OrderRow[];
+    products?: readonly ProductRow[];
+  },
+): Promise<void> {
+  await db.delete(attachments);
+  await db.delete(cartItems);
+  await db.delete(orders);
+  await db.delete(products);
+  for (const row of state.products ?? []) await db.insert(products).values(row);
+  for (const row of state.cartItems ?? []) await db.insert(cartItems).values(row);
+  for (const row of state.orders ?? []) await db.insert(orders).values(row);
+}
+
 export function commerceFile(name: string, type: string, size: number) {
   return {
     async arrayBuffer() {

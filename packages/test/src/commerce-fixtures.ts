@@ -106,7 +106,7 @@ export interface CommerceDeclaredQueriesHarnessOptions<Db, QueryName extends str
   inputs?: Partial<Record<QueryName, unknown>>;
   queries: Record<QueryName, QueryDefinition>;
   request?: Record<string, unknown>;
-  setupDb?: (db: Db) => void;
+  setupDb?: (db: Db) => void | Promise<void>;
   verification?: {
     domainByTable: Record<string, string>;
   };
@@ -117,7 +117,7 @@ export interface CommerceHarnessQueryOptions<Db> {
   input?: unknown;
   query: QueryDefinition;
   request?: Record<string, unknown>;
-  setupDb?: (db: Db) => void;
+  setupDb?: (db: Db) => void | Promise<void>;
   verification?: {
     domainByTable: Record<string, string>;
   };
@@ -129,7 +129,7 @@ export async function commerceDeclaredQueriesHarnessFact<Db, QueryName extends s
   // SPEC.md §11.2: declared commerce query acceptance runs through the public
   // harness DB seam and keeps verifier diagnostics attached to each observed query.
   const db = options.createDb();
-  options.setupDb?.(db);
+  await options.setupDb?.(db);
   const harness = createJisoTestHarness({
     db,
     touchGraph: {},
@@ -220,7 +220,7 @@ export async function commerceHarnessQueryFact<Db>(
   // SPEC.md §11.2: query source-truth tests exercise loaders through the public
   // harness DB seam so runtime read verification remains observable.
   const db = options.createDb();
-  options.setupDb?.(db);
+  await options.setupDb?.(db);
   const harnessOptions = {
     db,
     touchGraph: {},

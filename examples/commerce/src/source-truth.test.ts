@@ -42,6 +42,7 @@ import {
   submitAddToCart,
   uploadReceipt,
 } from './app.js';
+import { resetProducts } from './app-test-helpers.js';
 import { createCommerceGraph } from './graph.js';
 
 const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
@@ -62,7 +63,7 @@ describe('commerce source-truth graph acceptance', () => {
         rootPath: projectRootPath,
       },
     );
-    const starterCart = loadCartQuery(createCommerceDb());
+    const starterCart = await loadCartQuery(createCommerceDb());
     const cartMeta = commerceCartPageMeta(starterCart);
     const pageHints = htmlDocumentFacts(renderCommercePageHints(starterCart).html);
 
@@ -337,11 +338,11 @@ describe('commerce source-truth graph acceptance', () => {
         createDb: createCommerceDb,
         input: { after: 'custom-a', limit: 2 },
         query: productGridQuery,
-        setupDb(db) {
-          db.products = new Map([
-            ['custom-a', { id: 'custom-a', stock: 3, unitPrice: 100 }],
-            ['custom-b', { id: 'custom-b', stock: 4, unitPrice: 200 }],
-            ['custom-c', { id: 'custom-c', stock: 5, unitPrice: 300 }],
+        async setupDb(db) {
+          await resetProducts(db, [
+            { id: 'custom-a', stock: 3, unitPrice: 100 },
+            { id: 'custom-b', stock: 4, unitPrice: 200 },
+            { id: 'custom-c', stock: 5, unitPrice: 300 },
           ]);
         },
         verification: {
