@@ -64,7 +64,10 @@ describe('compiled interactive gallery demos', () => {
 
       expect(output).toContain('gallery-interactive-export/v1');
       expect(output).toContain('html=1');
-      expect(output).toContain(`client-modules=${interactiveGalleryDemos.length}`);
+      // One module per demo plus the shared jiso-runtime module the demos import (SPEC §4.4: the
+      // server serves @jiso/runtime at a resolvable URL instead of a bare specifier).
+      expect(output).toContain(`client-modules=${interactiveGalleryDemos.length + 1}`);
+      expect(output).toContain('assets=1');
       expect(output).toContain('diagnostics=0');
 
       const html = readFileSync(join(distDir, 'gallery/interactive/index.html'), 'utf8');

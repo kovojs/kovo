@@ -11,8 +11,36 @@ describe('runtime barrel loader smoke', () => {
 
     const loader = installJisoLoader({ importModule, root });
 
-    expect(loader.events).toEqual(['click', 'submit', 'input', 'change']);
-    expect([...root.listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
+    // SPEC.md §4.4: delegate every on:* event, plus pointerover/pointerout to synthesize
+    // pointerenter/pointerleave.
+    expect(loader.events).toEqual([
+      'click',
+      'submit',
+      'input',
+      'change',
+      'keydown',
+      'keyup',
+      'contextmenu',
+      'paste',
+      'cancel',
+      'focus',
+      'blur',
+    ]);
+    expect([...root.listeners.keys()]).toEqual([
+      'click',
+      'submit',
+      'input',
+      'change',
+      'keydown',
+      'keyup',
+      'contextmenu',
+      'paste',
+      'cancel',
+      'focus',
+      'blur',
+      'pointerover',
+      'pointerout',
+    ]);
     expect(importModule).not.toHaveBeenCalled();
   });
 });

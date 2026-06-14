@@ -46,7 +46,22 @@ export interface JisoLoader {
   events: readonly string[];
 }
 
-const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
+// SPEC.md §4.4: delegate (capture phase) every on:* event the app may use. focus/blur
+// have no bubble phase but run a capture phase at ancestors, so capture delegation reaches
+// them; pointerenter/pointerleave are synthesized from pointerover/out in the lifecycle.
+const defaultDelegatedEvents = [
+  'click',
+  'submit',
+  'input',
+  'change',
+  'keydown',
+  'keyup',
+  'contextmenu',
+  'paste',
+  'cancel',
+  'focus',
+  'blur',
+] as const;
 
 /**
  * Install the Jiso client loader on a root element: wire delegated events,

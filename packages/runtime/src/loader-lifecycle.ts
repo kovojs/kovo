@@ -4,7 +4,12 @@ import type {
   VisibilityStateLike,
 } from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
-import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
+import type {
+  DelegatedEvent,
+  EventElementLike,
+  EventTargetLike,
+  RuntimeErrorContext,
+} from './events.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import type { IslandSignalScope } from './handler-context.js';
 import type { ImportHandlerModule } from './handlers.js';
@@ -107,9 +112,43 @@ export function installDelegatedEventLifecycle(
     );
   }
 
+  // SPEC.md §4.4: pointerenter/pointerleave have no capture phase at ancestors, so
+  // delegation synthesizes them from the bubbling pointerover/pointerout pair, firing
+  // only when the pointer crosses the on:* element's boundary (relatedTarget outside it).
+  for (const [overType, enterType] of [
+    ['pointerover', 'pointerenter'],
+    ['pointerout', 'pointerleave'],
+  ] as const) {
+    addLoaderListener(
+      options.root,
+      overType,
+      (event) => {
+        const crossing = event as DelegatedEvent & { relatedTarget?: PointerCrossingNode | null };
+        const element = crossing.target?.closest?.(`[on\\:${enterType}]`) as
+          | PointerCrossingNode
+          | null
+          | undefined;
+        if (!element || element.contains?.(crossing.relatedTarget ?? null) === true) return;
+        void dispatchDelegatedEvent(
+          { target: element, type: enterType },
+          options.importModule,
+          options.islandSignalScope,
+        ).catch((error) => {
+          reportRuntimeContextError(options.onError, error, { event, phase: 'delegated-event' });
+        });
+      },
+      disposers,
+      { capture: true },
+    );
+  }
+
   return () => {
     for (const dispose of disposers.splice(0).reverse()) dispose();
   };
+}
+
+interface PointerCrossingNode extends EventTargetLike {
+  contains?: (node: PointerCrossingNode | null) => boolean;
 }
 
 export function installExecutionTriggers(

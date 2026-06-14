@@ -1,0 +1,453 @@
+# Fix UI: make gallery components behave like their base-ui / shadcn models
+
+Status: **open — diagnosis complete, no fixes landed yet.** Created 2026-06-14. `SPEC.md` is the
+source of truth for framework behavior; this file is the active remediation ledger for the
+`@jiso/headless-ui` (modeled on **Base UI**) and `@jiso/ui` (modeled on **shadcn/ui**, i.e. Radix)
+component layers as exercised by `examples/gallery`.
+
+## Goal
+
+**Every interactive component in the Jiso gallery behaves like its Base UI / shadcn model when the
+_shipped_ static export is driven in a real browser — proven by a no-shim Playwright gate that asserts
+each model's keyboard, ARIA, focus, and pointer contract — achieved by fixing the framework gaps
+(runtime resolution, full `on:*` delegation, island-local state→DOM reactivity) and rewriting the
+demos to drive the existing headless-ui primitives declaratively, rather than hand-scripting DOM.**
+
+Done when:
+
+- [x] **Loads & runs:** `node examples/gallery/scripts/export-static.mjs` produces an export that,
+      served as-is (no import-map shim, no custom loader), runs every client handler — zero
+      `Failed to resolve module specifier` errors, and `keydown`/`contextmenu`/`paste`/`cancel`/
+      `focus`/`blur`/hover intent all fire (SPEC §4.4). Gallery renders styled. _(Phase 0 done +
+      verified via `scratch/gallery-verify-noshim.mjs`.)_
+- [ ] **Reactive by default:** a handler that only mutates `ctx.state` reflects to the DOM
+      (aria/`data-state`/text/`hidden`) with no hand-authored `setAttribute` — the §4.8 update plan runs
+      for island-local state, and FW311 coverage flags unstamped state reads at compile time.
+- [ ] **Primitive-driven:** no demo contains hand-rolled `Reflect['get'](globalThis,'document')`
+      keyboard logic or hardcoded element-id/state-value scripts; each reads `event.key` via the chained
+      primitive reducer (`tabsKeyDown`, `comboboxKeyDown`, `radioGroupKeyDown`, …).
+- [ ] **Per-component parity:** all 35 components reach their committed status — the 15 `broken` become
+      functional; the locked-scope items land (custom `select`/`slider`, imperative `toast`,
+      directional-sheet `drawer`, documented-native `progress`/`meter`); `partial` items close their
+      listed gaps.
+- [ ] **Regression-proof:** the no-shim static-export Playwright harness is a CI gate asserting the
+      **model contracts** (ArrowRight roving, Home/End, typeahead, Escape, focus-into-menu, hover-open,
+      …) — not the old canned behavior — with axe clean on real interactive end-states; `vp check` and
+      the gzip-budget/fixpoint parity gates stay green.
+
+**Success metric:** re-run `scratch/gallery-probe3.mjs` semantics against the **unmodified** export —
+every component that is `broken`/`wrong-primitive`/`partial` today returns the model-correct result
+(keyboard navigates, state reflects, hover opens, no console errors), i.e. the probe that surfaced the
+bugs passes without the shim or full-delegation crutches it needed to see them.
+
+## TL;DR
+
+Almost every interactive gallery component fails to behave like its Base UI / shadcn model, for
+**four layered reasons** (bottom three are framework-level; the top one is per-demo authoring):
+
+1. **The shipped gallery loads no client JS at all** — generated modules `import { handler } from
+'@jiso/runtime'` (a bare specifier) and the exported HTML has no resolution, so the browser throws
+   `Failed to resolve module specifier "@jiso/runtime"` and every handler module fails. Native-only
+   widgets (`<dialog command>`, `<details>`) are the only things that move.
+2. **The loader delegates only 4 events** (`click/submit/input/change`); `keydown` (25 handlers),
+   `contextmenu`, `paste`, `cancel`, `focus`, `blur` never fire — SPEC §4.4 requires delegation of
+   **all** `on:*`. `pointerenter/leave` (tooltip, hover-card) are non-delegable even if added.
+3. **Local island-state has no state→DOM reactivity.** The §4.8 update plan (bindings/derives/stamps)
+   is wired only for **queries**, not island-local `state` — despite SPEC §4.8 explicitly saying
+   "island-local state; same machinery, two data sources." The compiler emits no state-driven stamps
+   and the loader applies no state update plan after writing `fw-state`.
+4. **The demos bypass the (correct) primitives.** The headless-ui primitives are real, tested,
+   Base-UI-faithful reducers (`tabsKeyDown`, `comboboxKeyDown`, `dropdownMenuMove`, `toggleCheckbox`,
+   …) but 27/35 demos hand-write imperative DOM with **hardcoded element ids and hardcoded state
+   values** (only 2 demos even read `event.key`). They are scripted single-path mockups — e.g. the
+   tabs `onKeyDown` ignores the key, the combobox only reacts to `'chicago'`, ArrowDown closes it.
+
+Because of #3, the demos that DO work only do so by hand-authoring imperative DOM in the demo source
+(verbose, duplicated, often wrong); the demos that author clean declarative TSX (switch, toggle,
+disclosure) are visibly inert. Fixing #1–#3 lets demos be authored declaratively against the
+primitives; #4 is then the per-component rewrite.
+
+## How this was diagnosed (methodology, so it's reproducible)
+
+- Built the static gallery: `cd examples/gallery && node scripts/export-static.mjs --out dist`
+  (`html=1 client-modules=35 assets=0 diagnostics=0`).
+- Served `dist/` and drove it in real headless Chromium via Playwright (scripts in `scratch/`:
+  `gallery-drive.mjs`, `gallery-probe2.mjs`, `gallery-probe3.mjs`). Two passes:
+  - **Pass A — as shipped:** only the native `<dialog command>` opened; everything else dead
+    (`PAGEERROR: Failed to resolve module specifier "@jiso/runtime"`).
+  - **Pass B — with an import-map shim (`@jiso/runtime`→identity `handler`) and all `on:*` delegated:**
+    observed the true component-logic behavior, isolating framework infra (#1/#2) from component
+    logic (#3/#4).
+- Cross-checked every component against the live Base UI (`base-ui.com/react/components/*`) and shadcn
+  (`ui.shadcn.com/docs/components/*`) docs and against the headless-ui primitive source + tests.
+- Raw evidence digest: `scratch/fix-ui-evidence.md`; full per-component audit: `scratch/family-detail.txt`.
+
+## Per-component verdict (Pass B — handlers actually running)
+
+| status                                                                | components                                                                                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **broken** (non-functional or actively wrong)                         | disclosure, switch, toggle, checkbox, radio-group, tabs, combobox, autocomplete, command, dropdown-menu, context-menu, menubar, navigation-menu, otp-field, scroll-area |
+| **wrong-primitive** (native/other element, not the modeled component) | select, slider\*, progress, meter, drawer                                                                                                                               |
+| **partial** (core works, model gaps remain)                           | accordion, collapsible, toggle-group, checkbox-group, toolbar, number-field, field, tooltip, hover-card, popover, dialog, alert-dialog, sheet, toast                    |
+
+\* slider is functional via a native `<input type=range>` but is not the Base UI/Radix custom thumb.
+
+---
+
+## Phase 0 — Make interactivity reach the browser (P0 infra; unblocks everything)
+
+**Status: DONE + verified (commit on `agent/fix-ui-impl`).** No-shim acceptance
+(`scratch/gallery-verify-noshim.mjs`) against the unmodified export: click/keydown/contextmenu/hover
+handlers all fire; **0** `@jiso/runtime` resolution errors; `assets=1` (site.css 58KB). Runtime suite
+311/311, gallery suite 86/86 green.
+
+- [x] **Stop emitting a bare `@jiso/runtime` specifier in generated client modules.** SPEC §4.4
+      makes load-bearing import maps a non-goal ("the compiler and server emit full module URLs with
+      cache-busting they control; import maps remain an optional deployment strategy"), so the fix is
+      server/compiler-side, not an import map in the gallery.
+  - **Done:** `examples/gallery/src/app-shell.ts` registers a minimal runtime module
+    (`export const handler = (fn) => fn;`) at a versioned `/c/.../jiso-runtime.client.js` URL and
+    rewrites each demo module's `import { handler } from '@jiso/runtime'` to that URL at registration
+    (option (a)). Added to `modulepreloads` so the static export writes it (`client-modules=36`).
+    Verified: served modules contain no bare `@jiso/runtime`; no resolution error in the browser.
+  - **Follow-up (open):** promote this into `@jiso/server` so every static export (docs site,
+    `examples/reference`) gets it, not just the gallery app-shell. Tracked under Phase 4.
+  - Every generated module begins `import { handler } from '@jiso/runtime';` and `handler` is the
+    identity wrapper `(fn) => fn` (`packages/runtime/src/handlers.ts:38`). Confirmed it is the **only**
+    `@jiso/runtime` import across all 35 modules.
+  - Options to evaluate (pick one, cite SPEC): (a) the server registers `@jiso/runtime` as a versioned
+    client module at a resolvable `/c/...` URL and rewrites the import at emit (mirrors how demo
+    modules are served via `createMemoryVersionedClientModuleRegistry`); (b) the client emit inlines
+    the identity `handler` (drop the import) since it is type-only sugar; (c) document an import map as
+    the optional deployment strategy SPEC permits, but not as the framework default.
+  - **Note:** this is NOT gallery-specific — the docs-site export path uses the same `exportStaticApp`
+    - loader (`jisoLoaderSource`) and emits the same bare specifier, so any Jiso app deployed statically
+      is affected. Fix in `@jiso/server`/`@jiso/compiler`, then re-verify the gallery.
+- [x] **Delegate all `on:*` events in both loaders (SPEC §4.4: "Event delegation (capture phase) for
+      all `on:*` events").**
+  - **Done:** both the inline 4KB loader (`packages/runtime/src/inline-loader-build.ts`, regenerated
+    into `inline-loader.ts`) and the full bootstrap loader
+    (`loader.ts` `defaultDelegatedEvents` + `loader-lifecycle.ts`) now delegate
+    `click/submit/input/change/keydown/keyup/contextmenu/paste/cancel/focus/blur` (capture phase
+    reaches non-bubbling `focus`/`blur`).
+  - **Non-bubbling pointer intent:** `pointerenter`/`pointerleave` are synthesized from the bubbling
+    `pointerover`/`pointerout` pair, firing only when the pointer crosses the `on:*` element's boundary
+    (`relatedTarget` outside it) — so demos keep authoring `on:pointerenter`/`on:pointerleave` with no
+    change. Verified: tooltip opens on hover in the no-shim acceptance.
+  - Stayed within the 4KB gzip budget (build emitted no budget error; ~3.1KB→still under 4KB). Parity
+    `--check` passes; loader event-list test assertions updated across runtime test files. (`scroll`
+    for scroll-area still needs direct attachment — deferred to the scroll-area item.)
+- [x] **Copy the stylesheet into the standalone export so the gallery is styled.**
+  - **Done:** `examples/gallery/scripts/export-static.mjs` passes the prebuilt
+    `site/dist-css/assets/site.css` as a `StaticExportAssetInput` (filesystem-path `source`, per FW229)
+    so the export ships `/assets/site.css` (`assets=1`, 58KB), gracefully skipping with a warning if
+    the docs CSS isn't built. (Web-font `.woff2` files still 404 — cosmetic; fonts fall back. Optional
+    follow-up to copy `/fonts/*`.)
+  - **Follow-up (open):** apply the same to `examples/reference`.
+
+## Phase 1 — Local-state reactivity: implement the §4.8 update plan for island state (P0 framework)
+
+This is the central gap. SPEC §4.8: "When a query value — **or island-local state; same machinery,
+two data sources** — changes, the loader runs, in order: bindings → derives → stamps." Today this is
+implemented only for **queries** (the compiler's query-update analysis keys off known query names; the
+loader's `dispatch` writes `fw-state` and applies no state plan — verified in
+`inline-loader-build.ts` dispatch, lines ~141–175). So local-state JSX reads
+(`aria-checked={…}`, `{state.x ? 'on':'off'}`, `hidden={!state.open}`, `data-state={…}`) are never
+reflected to the DOM after a handler mutates `state`.
+
+- [ ] **Compiler: derive client state→DOM stamps/binds from local-`state` JSX reads**, the same way it
+      does for query reads — emit `data-bind`/`data-bind:<attr>`/named-derive/`fw-stamp` attributes (or
+      equivalent imperative stamps) for attributes and text that read island `state`. Cover the direct
+      forms (`{state.x}`, `aria-checked={…}`) AND the `{...primitiveAttrs(state)}` spread form the
+      primitives use (so `switchRootAttributes({checked: state.checked})` stays reactive).
+- [ ] **Loader: apply the §4.8 update plan after writing `fw-state`** — walk the island's binding
+      attributes (bindings → derives → stamps) on local-state change, mirroring the query path, within
+      the gzip budget.
+- [ ] **§4.9 update coverage (FW311) should fire for state-driven JSX too**, not only queries, so
+      unstamped state reads are caught at compile time instead of silently going stale.
+  - Until this lands, the **interim** is per-demo hand-authored stamps (what accordion/tabs already do).
+    Phases 3–4 assume Phase 1; if Phase 1 is deferred, each demo fix must hand-author the stamps and
+    that should be called out per item.
+
+## Phase 2 — Wire the chained primitive handlers (SPEC §4.6) so demos stop hand-rolling behavior (P1)
+
+The primitives export real reducers tagged `@jisoPrimitiveHandler` (SPEC §4.6): `tabsKeyDown`,
+`comboboxKeyDown/Move/Typeahead`, `dropdownMenuKeyDown/Move`, `menubarKeyDown/Move`, `toolbarKeyDown`,
+`radioGroupKeyDown`, `otpFieldKeyDown/Paste`, `toggleCheckbox`, etc. SPEC §4.6 says a primitive merges
+its `on:*` refs into the author element and the loader **chains** them (author first, then primitive).
+The demos use the low-level `*Attributes()` plain-function spelling, which yields static ARIA but does
+**not** wire the behavior handlers — so authors hand-rolled keyboard, badly.
+
+- [ ] **Confirm/implement primitive `on:*` chaining for the gallery's authoring spelling.** Decide the
+      supported idiom: the §4.6 attrs-function / `asChild` / behavior-attribute form that merges chained
+      handlers, vs. demos explicitly calling the reducer in their own handler. Document the chosen
+      pattern and make the merge wire the primitive `on:keydown`/`on:click` refs.
+- [ ] **Establish the canonical demo pattern** (one worked example, e.g. tabs or dropdown-menu) that
+      other demos copy: declarative state-bound attributes (Phase 1) + chained primitive handlers
+      (Phase 2), no `Reflect['get'](globalThis,'document')` hand-rolling.
+
+## Phase 3 — Per-component demo rewrites (use the primitives + declarative state)
+
+Each item: rewrite the demo to drive behavior from the existing primitive reducer and bind state
+declaratively. Grouped by family; severity is the worst gap. Primitives are correct unless noted.
+
+### Menus (all keyboard-first; all currently broken)
+
+- [ ] **dropdown-menu** [P1]: trigger has no `onKeyDown` (Enter/Space/ArrowDown/Up should open + move
+      focus into menu); once open, ArrowDown/Up/Home/End/typeahead don't move highlight/focus (stays on
+      trigger). Wire `dropdownMenuKeyDown`/`dropdownMenuMove`/`dropdownMenuTypeahead`,
+      `dropdownMenuItemKeyDown`; move focus into `role=menu` on open and highlight first enabled item;
+      Escape/Tab close + restore focus. Styled `@jiso/ui/dropdown-menu.tsx` is stateless SSR — all
+      behavior is demo-authored.
+- [ ] **context-menu** [P1]: `onContextMenu` open never fires (loader #2) and the menu has **no
+      arrow/typeahead nav and no Escape handler at all**; anchoring is static `data-anchor-x/y=24/40`.
+      Wire `contextMenuKeyDown/Move/Typeahead`, read `event.clientX/Y` via `contextMenuPointFromEvent`
+      to anchor at the cursor, add Escape + focus-into-menu.
+- [ ] **menubar** [P1]: section `onKeyDown` is a stub that ignores the key and hardcodes File→Edit;
+      Edit is fully inert (no handler); no ArrowLeft/Right roving, no ArrowDown-to-open, no Escape, no
+      "switch open menu while arrowing the bar." Wire `menubarMove`/`menubarKeyDown`/`menubarItemKeyDown`
+      across both menus.
+- [ ] **navigation-menu** [P1]: no hover-open (signature interaction); ArrowRight is one-way
+      Products→Docs with no ArrowLeft/loop; **Escape is actively wrong** — it sets
+      `value='escape-canceled'` and leaves the panel open. Wire `navigationMenuMove`,
+      `navigationMenuKeyDown` (Escape closes + restores focus), hover-open via `pointerover`/`focusin`.
+- [ ] **toolbar** [P2]: root `onKeyDown` hardcodes a bold↔link flip ignoring the key (ArrowLeft==Right,
+      no Home/End, disabled 'italic' skipped only incidentally). Wire `toolbarKeyDown`/`toolbarMoveFocus`
+      (auto-skips disabled). Click-toggle already works (imperative stamps present).
+
+### Typeahead / listbox
+
+- [ ] **combobox** [P0]: ArrowDown/Up don't move highlight — any non-Enter key runs
+      `state.open = !state.open`, so ArrowDown **closes** the listbox; Home/End/Escape unimplemented;
+      typing rewrites the committed `value`. Wire `comboboxKeyDown`/`comboboxMove`; on input update
+      query/highlight only (commit on Enter/click via `comboboxOptionClick`); drive option
+      visibility/highlight from the typed text.
+- [ ] **autocomplete** [P1]: popup is a native `<datalist>` with a single hardcoded `<option>` (not a
+      navigable `role=listbox`); typing always scripts `'dev'→development`; arrows toggle open instead
+      of navigating. Render a real `role=listbox`/`role=option` list from `autocompleteSuggestions`,
+      wire `autocompleteKeyDown`/`autocompleteMove`, filter on real input.
+- [ ] **command** [P0]: input `onKeyDown` early-returns on any non-Enter key, so Arrow nav does nothing
+      and `aria-activedescendant`/`data-highlighted` never move. Wire `commandKeyDown`/`commandMove`,
+      live filter + reset-highlight-to-first-match (cmdk model), Escape closes dialog.
+- [ ] **select** [P1]: demo is a **native `<select>`** (and the primitive itself targets a native
+      `<select>`/`<optgroup>`), not the shadcn button+`role=listbox` popup. Even as native, the
+      `onChange` hardcodes three outcomes and collapses anything but `'express'` to `'standard'`.
+      **Decision (locked 2026-06-14): build the custom listbox** — re-author as a button trigger
+      (`aria-haspopup=listbox`) + `role=listbox` popup of `role=option` items, backed by a new
+      `select.ts` primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` machinery for
+      keyboard + typeahead + highlight). See Phase 4 `select.ts`.
+
+### Selection controls
+
+- [ ] **switch** [P0]: click sets `fw-state {checked:true}` but `aria-checked`/`data-state`/native
+      `checked`/`<output>` all stay stale — no visible toggle (no native backstop). Fixed by Phase 1
+      (state→DOM stamps); interim: bind `aria-checked`/`data-state`/output via direct state expressions
+      and route through `switchTriggerClick`. Add Enter-to-toggle to match shadcn.
+- [ ] **toggle** [P0]: identical to switch — `aria-pressed`/`data-state`/output never update; a
+      `<button>` has no native backstop so it is fully inert. Phase 1 + `toggleTriggerClick`.
+- [ ] **checkbox** [P1]: starts indeterminate; click clears the native `indeterminate` property but
+      `aria-checked` stays `'mixed'`, `data-state` and `<output>` stay stale (handler only hand-cleared
+      the native property). Phase 1 stamps + `checkboxTriggerClick`/`applyCheckboxIndeterminate`
+      (primitive already maps indeterminate→true on first click).
+- [ ] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
+      every key (Tab/typing flip it) and never wraps/skips disabled; per-item `onClick` is hardcoded
+      one-directional and native `checked` desyncs from stamped `aria-checked`. Wire `radioGroupKeyDown` + `radioGroupItemClick`; maintain roving `tabindex` via `radioGroupItemTabIndex`.
+- [ ] **checkbox-group** [P2]: click-toggle works (imperative stamps), but the `onKeyDown` invents
+      arrow-roving (wrong model — checkboxes are each Tab-focusable + Space) and is a blind 2-state flip.
+      Drop the arrow-roving (or route through `checkboxGroupKeyDown`); refactor clicks to
+      `checkboxGroupItemClick`. Demonstrate the indeterminate parent affordance.
+- [ ] **toggle-group** [P1]: click-toggle works; `onKeyDown` hardcodes bold↔italic ignoring the key and
+      the disabled 'strike' middle item. Wire `toggleGroupKeyDown`/`toggleGroupMoveFocus`; route clicks
+      through `toggleGroupItemClick`.
+
+### Expandables
+
+- [ ] **disclosure** [P0]: clicking the trigger does nothing — panel `hidden`/`data-state` and
+      `aria-expanded` never update (cleanest reproduction of the Phase-1 gap; no native backstop).
+      Fixed by Phase 1; interim: bind `hidden={!state.open}`/`aria-expanded`/`data-state` directly.
+- [ ] **tabs** [P1]: `onKeyDown` is a stub that **never reads `event.key`** (any key flips
+      overview→details); no ArrowRight/Left roving, no Home/End, no manual Enter/Space activation, no
+      disabled-skip. Replace with `tabsKeyDown` + `tabsMoveFocus`; re-stamp roving `tabIndex`,
+      `aria-selected`, `data-state`, panel `hidden`. Click selection already works.
+- [ ] **accordion** [P1, needs primitive work]: no `onKeyDown` at all → no Arrow/Home/End roving between
+      triggers; the primitive has **no** `accordionKeyDown`/roving-`tabindex` helper (unlike tabs). Add
+      `accordionKeyDown` + roving `tabindex` to `accordion.ts` (mirror `tabsKeyDown`/`tabsMoveFocus`),
+      then wire it. Click-toggle works but also stamp `data-state` (currently only `aria-expanded` +
+      `hidden`, so `data-[state=open]` trigger styling goes stale).
+- [ ] **collapsible** [P2]: native `<details>/<summary>` toggles fine, but `aria-expanded`/`data-state`
+      on the summary never update (Phase-1 gap) and `data-[state=closed]:hidden` is dead on native
+      `<details>`. Either sync `aria-expanded`/`data-state` from the native toggle, or move to the
+      button+panel model; drop the inert `data-state` CSS hook.
+
+### Inputs
+
+- [ ] **otp-field** [P0]: typing `123` yields slot values `['1212','1','2','','']` — handlers are canned
+      per-slot scripts that ignore real keystrokes and stamp literal characters; focus-advance,
+      Backspace/Delete, Arrow/Home/End, and paste-distribute are all unmodeled. Rewrite to drive every
+      slot from `otpFieldInput`/`otpFieldKeyDown`/`otpFieldPaste`/`otpFieldMoveFocus` (primitive is
+      correct and unit-tested). Also needs loader keydown+paste delegation (Phase 0).
+- [ ] **slider** [P1]: native `<input type=range>` with decorative `aria-hidden` track/thumb — neither
+      Base UI's per-thumb nested input nor shadcn/Radix's `role=slider` thumb. No `role=slider`/
+      `aria-valuemin/now/max`, no track-click, no drag, no large-step, no multi-thumb.
+      **Decision (locked 2026-06-14): build the custom thumb** — add a `role=slider` thumb primitive
+      (`aria-valuemin/now/max/valuetext/orientation`, keydown Arrow/Page/Home/End + Shift-large-step,
+      pointer drag, track-click) matching shadcn/Radix; drop the native range as the primary control.
+      Replace the demo's hardcoded threshold quantizer with `sliderInput`. See Phase 4 `slider.ts`.
+- [ ] **number-field** [P1]: functional via native `<input type=number>` + `+/-` buttons, but stepping
+      is the browser's (not the primitive's aligned-step/clamp), and there's no PageUp/Down, Shift/Meta
+      step, press-and-hold repeat, or `Intl` formatting. Add `numberFieldKeyDown` + `largeStep`/
+      `smallStep` to the primitive; route demo handlers through `numberFieldInput`/`increment`/`decrement`.
+- [ ] **field** [P2]: ARIA/`data-*` wiring is correct, but handlers are one-way scripted transitions
+      (email always becomes valid; plan `<select>` toggles instead of reading the chosen value) and
+      `aria-describedby` is only recomputed valid→invalid one direction. Drive from real constraint
+      validation via `fieldControlAttributes`; read `event.target.value` for the select.
+
+### Overlays — hover
+
+- [ ] **tooltip** [P0 hover]: opens on focus (works) but **never on hover** — wired to
+      `pointerenter/leave` (non-delegable, Phase 0). Re-author hover on `pointerover/pointerout` (or
+      `mouseover/mouseout`). Also: no open delay (Base UI 600ms), not positioned/hoverable, and
+      `showPopover()`/`hidePopover()` are called unguarded (can throw `InvalidStateError`) while also
+      toggling `hidden` + a `data-[state]` class — pick **one** visibility mechanism.
+- [ ] **hover-card** [P0 hover + P1 ARIA]: same hover gap; additionally the trigger exposes
+      `aria-expanded`/`aria-controls`, but Radix/Base UI do **not** treat a hover card as a disclosure —
+      drop them from `hoverCardTriggerAttributes`. Wire the existing `hoverCardContentPointerEnter/Leave`
+      so the card is hoverable; add a close-delay grace period.
+
+### Overlays — native dialog family (open/close work via native `<dialog command>`; gaps are dismissal/state/fallback)
+
+- [ ] **dialog** [P1]: no outside/backdrop dismissal (native `showModal()` defaults to
+      `closedby='closerequest'`) — shadcn/Base UI dismiss on overlay click; emit `closedby='any'` (or a
+      backdrop handler). Root `onKeyDown` closes on **any** key (no Escape guard) — remove it (native
+      `cancel` already handles Escape). `data-state` never flips client-side (Phase 1). Add a
+      `showModal()`/`requestClose()` JS fallback for browsers without `command`/`commandfor`.
+- [ ] **alert-dialog** [P2]: correct `role=alertdialog`/`aria-modal`, correct no-backdrop-dismiss
+      (must **not** add `closedby='any'`). Remove the unguarded root `onKeyDown`; add the invoker JS
+      fallback; `data-state` stamps via Phase 1.
+- [ ] **sheet** [P1]: native modal `<dialog>` + side variant (closest to its Radix model), but no
+      overlay-click dismissal — emit `closedby='any'`. Remove unguarded `onKeyDown`; `data-side`/
+      `data-state` slide animation won't run client-side until Phase 1; optional explicit `aria-modal`.
+- [ ] **drawer** [P2]: shadcn Drawer is **Vaul** (drag-to-dismiss, snap points, background scale, drag
+      handle) — Jiso's drawer is the dialog primitive with a side class (a Sheet, identical render to
+      `sheet`). **Decision (locked 2026-06-14): re-scope "drawer" as a directional sheet and document
+      that Vaul drag/snap/scale gestures are not modeled.** No drag primitive. Add overlay dismissal
+      (`closedby='any'`) + the `showModal()` invoker fallback like the rest of the dialog family, add a
+      visible (decorative) handle for affordance, and note the deviation in the gallery copy. Downgraded
+      P1→P2.
+- [ ] **popover** [P2]: best-behaved (native Popover API: open/close, outside light-dismiss, Escape all
+      native). Trigger `data-state`/`aria-expanded` styling goes stale (Phase 1); the hand-rolled
+      Escape/`<output>` imperative block duplicates `popoverEscapeKeyDown` and is dead under loader #2 —
+      rely on native `popover='auto'` + chained primitive instead.
+
+### Feedback / display
+
+- [ ] **progress** [P2]: renders native `<progress>` instead of `<div role=progressbar>` with a
+      transform-translated indicator. **Decision (locked 2026-06-14): keep native `<progress>`, document
+      the deviation.** No primitive rewrite — but (a) document that the gallery progress is the native
+      element (not the Radix/Base UI `role=progressbar` div, so cross-browser fill styling and the
+      `data-progressing/complete` attribute surface are intentionally not provided), and (b) fix the demo
+      to derive `data-state`/`aria-valuetext` from the value rather than hardcoding. Downgraded P1→P2.
+- [ ] **meter** [P2]: renders native `<meter>` instead of Base UI `<div role=meter>` + indicator; demo
+      hardcodes the `data-state` region (`value===92?optimum:suboptimum`). **Decision (locked 2026-06-14):
+      keep native `<meter>`, document the deviation** (and note Jiso's native high/low/optimum is a
+      superset of Base UI's plain gauge). No primitive rewrite — fix the demo to derive `data-state`/
+      `aria-valuetext` from `meterValueState` instead of the hardcoded literal. Downgraded P1→P2.
+- [ ] **scroll-area** [P0]: the custom thumb does **not** track real scrolling — no `on:scroll` handler
+      on the viewport (and `scroll` doesn't bubble, so the loader needs direct attachment); thumb has no
+      proportional size/transform; no thumb-drag or track-click; no `data-has-overflow-*`/auto-hide.
+      Wire `scrollAreaViewportScroll` + add a thumb-geometry helper (size = clientH/scrollH, offset =
+      ratio) + drag/track-click handlers (Radix `getThumbSize`/`getThumbOffset` math).
+- [ ] **toast** [P1]: a single static always-open toast — not the imperative push/stack/auto-dismiss
+      (timeout 5000ms)/swipe/pause-on-hover/F6-viewport model of Base UI/Sonner; Escape-dismiss is dead
+      (loader #2); live-region announcement is degraded (content pre-rendered). **Decision (locked
+      2026-06-14): build the imperative model** — a "show toast" trigger that pushes into an (initially
+      empty) `Toast.Viewport` landmark, with `normalizeToastDuration` auto-dismiss timeout,
+      `setToastOpen`/`dismissToast`, pause-on-hover, and F6-into-viewport. May need a primitive/loader
+      timer affordance — flag during implementation.
+
+## Phase 4 — Primitive / styled-layer changes called out above (consolidated)
+
+These are framework changes the demo rewrites depend on (not just demo edits):
+
+- [ ] `accordion.ts`: add `accordionKeyDown` + roving-`tabindex` helper (parity with `tabs.ts`).
+- [ ] `hover-card.ts`: remove `aria-expanded`/`aria-controls` from the trigger (model divergence);
+      update `hover-card.test.ts`.
+- [ ] `number-field.ts`: add `numberFieldKeyDown`, `largeStep`/`smallStep`; optional hold-repeat + `Intl`.
+- [ ] `slider.ts`: `role=slider` thumb + `aria-valuemin/now/max/valuetext/orientation` + keydown
+      (Arrow/Page/Home/End/Shift-large-step) + pointer drag + track-click + `largeStep` (custom-thumb
+      chosen; native range dropped as primary).
+- [ ] `select.ts`: custom button-trigger (`aria-haspopup=listbox`) + `role=listbox`/`role=option` popup
+      primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` for keyboard + highlight).
+- [ ] `scroll-area.ts`: thumb-geometry helper + `data-has-overflow-*`/`data-scrolling`/`data-hovering` +
+      thumb-drag/track-click handlers.
+- [ ] dialog/sheet/drawer: `closedby='any'` for light-dismissable variants (NOT alert-dialog) + a
+      `showModal()`/`requestClose()` JS fallback for the `command`/`commandfor` invoker dependency.
+- [ ] toast: imperative push/stack/auto-dismiss demo + viewport landmark; add a timer affordance if the
+      primitive/loader lacks one.
+- [ ] _Not doing (locked):_ `progress.ts`/`meter.ts` stay native `<progress>`/`<meter>` (documented
+      deviation, demo-only `data-state` derivation fix); no Vaul drag primitive for `drawer`.
+
+## Phase 5 — Verification (make the contracts regression-proof)
+
+- [ ] **Promote the static-export Playwright harness to a CI gate.** The existing browser tests
+      (`examples/gallery/src/interactive-gallery.*.browser.test.ts`) mount the generated server modules
+      with their own loader + explicit event list + working module resolution — so they pass while the
+      _shipped_ export is dead. Add a test that builds `dist/` via `export-static.mjs`, serves it, and
+      drives it (no shim) to assert real interactivity end-to-end (this is what surfaced #1/#2). Seed
+      from `scratch/gallery-probe2.mjs`/`probe3.mjs`.
+- [ ] **Rewrite the interaction assertions to the model contracts, not the canned paths.** Current
+      tests assert the hardcoded demo behavior (e.g. tabs flipping on any key), which is why broken
+      keyboard passed. Assert the Base UI/shadcn keyboard map per component (ArrowRight roving, Home/End,
+      typeahead, Escape, focus-into-menu, etc.).
+- [ ] **Keep axe coverage on the real interactive end-states** (open menu with focus moved, expanded
+      accordion via keyboard, etc.) — extend `interactive-gallery.axe.browser.test.ts`.
+- [ ] **Primitive unit tests already exist and pass** — they are not the gap; the gap is the demos and
+      the framework wiring. Add tests that the demos actually call the primitives (or that the chained
+      `on:*` refs are present in emitted HTML).
+
+## Sequencing & ownership
+
+1. **Phase 0** (3 infra items) is the unlock — without it the gallery is dead regardless of component
+   logic. Land first; re-run the Playwright harness to confirm click-driven components come alive.
+2. **Phase 1** (state→DOM reactivity) is the highest-leverage framework change: it fixes
+   switch/toggle/disclosure outright and lets every other demo be authored declaratively instead of
+   hand-rolling imperative DOM. Largest/riskiest (compiler + loader + SPEC §4.8/§4.9).
+3. **Phase 2** then the **Phase 3** per-component rewrites can fan out by family (menus, typeahead,
+   selection-controls, expandables, inputs, overlays, feedback) — each is a coherent, mostly-independent
+   slice suitable for delegation, pulling in the Phase 4 primitive changes it needs.
+4. **Phase 5** lands alongside each family so fixes can't regress.
+
+## Decisions (locked 2026-06-14)
+
+- **Scope: framework changes are in scope.** Phases 0/1/2/4 may change `@jiso/server`,
+  `@jiso/compiler`, `@jiso/runtime`, and `@jiso/headless-ui`, not just `examples/gallery`. Re-verify
+  the docs site + `examples/reference` for any framework-wide emit/loader change.
+- **State→DOM reactivity: do the framework fix (Phase 1), not per-demo hand-patches.** Implement the
+  §4.8 update plan for island-local state so demos can be authored declaratively. (If Phase 1 must be
+  staged later, individual Phase 3 items fall back to hand-authored stamps and must say so.)
+- **Parity bar — split native vs custom:**
+  - **select → custom** `role=listbox` popup (shadcn parity).
+  - **slider → custom** `role=slider` thumb (Base UI/shadcn parity); native range dropped as primary.
+  - **progress → keep native `<progress>`**, document the deviation (no `role=progressbar` div).
+  - **meter → keep native `<meter>`**, document the deviation (superset of Base UI's gauge).
+- **drawer → re-scope as a directional sheet**; document that Vaul drag/snap/scale gestures are not
+  modeled (no drag primitive).
+- **toast → build the imperative push/stack/auto-dismiss model** (not a static single notification).
+
+## Risks
+
+- Phase 1 touches the compiler's update-plan/coverage passes and the 4KB-budget inline loader — high
+  blast radius across every island, not just the gallery; needs the fixpoint/IR gates (Constitution
+  #3) and the gzip-budget parity tests to stay green.
+- Phase 0's runtime-specifier fix changes emitted client modules framework-wide (docs site + every
+  static export), so re-verify `examples/reference` and the docs site, not only the gallery.
+- The native-invoker overlays depend on `command`/`commandfor` (Baseline 2025); the JS fallback must
+  not double-fire with the native invoker.
+
+## Artifacts / evidence
+
+- `scratch/fix-ui-evidence.md` — hands-on Playwright evidence + infra root-cause writeup.
+- `scratch/family-detail.txt` — full per-component audit (contracts, gaps, root cause, layer, fix) for
+  all 35 components, doc-grounded against Base UI + shadcn.
+- `scratch/gallery-drive.mjs`, `gallery-probe2.mjs`, `gallery-probe3.mjs` — the Playwright drivers
+  (seed for the Phase 5 CI gate).

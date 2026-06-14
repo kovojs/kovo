@@ -56,7 +56,14 @@ export function buildInlineJisoLoaderInstallerReadableSource(
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
 function installInlineJisoLoader(importModule) {
-  const events = ['click', 'submit', 'input', 'change'];
+  // SPEC.md §4.4: delegate (capture phase) every on:* event the document uses.
+  // focus/blur have no bubble phase but DO run a capture phase at ancestors, so
+  // capture-phase delegation reaches them; pointerenter/pointerleave never run a
+  // capture phase at ancestors, so they are synthesized below from pointerover/out.
+  const events = [
+    'click', 'submit', 'input', 'change', 'keydown', 'keyup',
+    'contextmenu', 'paste', 'cancel', 'focus', 'blur',
+  ];
   const doc = document;
   let idemCounter = 0;
   const createInlineIdem = () =>
@@ -177,6 +184,21 @@ function installInlineJisoLoader(importModule) {
     void dispatch({ target, type });
   };
   for (const event of events) addEventListener(event, dispatch, { capture: true });
+  // SPEC.md §4.4: synthesize delegated pointerenter/pointerleave from the bubbling
+  // pointerover/pointerout pair, firing only when the pointer crosses the on:* element's
+  // boundary (relatedTarget outside it) so child movement does not re-fire enter/leave.
+  const crossing = (overType, enterType) =>
+    addEventListener(
+      overType,
+      (event) => {
+        const element = event.target?.closest?.('[on\\:' + enterType + ']');
+        if (!element || element.contains?.(event.relatedTarget)) return;
+        void dispatch({ relatedTarget: event.relatedTarget, target: element, type: enterType });
+      },
+      { capture: true },
+    );
+  crossing('pointerover', 'pointerenter');
+  crossing('pointerout', 'pointerleave');
   doc.querySelectorAll('[on\\:load]').forEach((element) => trigger('load', element));
   doc
     .querySelectorAll('[on\\:idle]')

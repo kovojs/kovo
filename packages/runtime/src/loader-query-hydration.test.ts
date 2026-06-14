@@ -48,6 +48,15 @@ describe('loader query hydration', () => {
       'submit',
       'input',
       'change',
+      'keydown',
+      'keyup',
+      'contextmenu',
+      'paste',
+      'cancel',
+      'focus',
+      'blur',
+      'pointerover',
+      'pointerout',
       'jiso:query',
     ]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });

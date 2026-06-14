@@ -63,7 +63,21 @@ describe('inline loader execution triggers', () => {
 
         installSource(importModule, globalRecord);
 
-        expect([...listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
+        expect([...listeners.keys()]).toEqual([
+          'click',
+          'submit',
+          'input',
+          'change',
+          'keydown',
+          'keyup',
+          'contextmenu',
+          'paste',
+          'cancel',
+          'focus',
+          'blur',
+          'pointerover',
+          'pointerout',
+        ]);
         await vi.waitFor(() => expect(handlers.start).toHaveBeenCalledTimes(1));
         expect(handlers.warm).not.toHaveBeenCalled();
         expect(handlers.mount).not.toHaveBeenCalled();

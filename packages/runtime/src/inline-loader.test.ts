@@ -27,7 +27,21 @@ describe('inline loader source', () => {
 
       runInThisContext(createInlineJisoLoaderSource(' globalThis.__jisoInlineImport '));
 
-      expect([...listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
+      expect([...listeners.keys()]).toEqual([
+        'click',
+        'submit',
+        'input',
+        'change',
+        'keydown',
+        'keyup',
+        'contextmenu',
+        'paste',
+        'cancel',
+        'focus',
+        'blur',
+        'pointerover',
+        'pointerout',
+      ]);
       expect(importModule).not.toHaveBeenCalled();
     } finally {
       Object.assign(globalRecord, {

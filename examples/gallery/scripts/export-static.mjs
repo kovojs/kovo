@@ -1,10 +1,16 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer } from 'vite-plus';
 
 const galleryRoot = fileURLToPath(new URL('../', import.meta.url));
+const repoRoot = path.resolve(galleryRoot, '../..');
 const defaultDistDir = path.join(galleryRoot, 'dist');
+// SPEC §13.1: the document head links /assets/site.css. The standalone export ships it as a static
+// asset (the Tailwind build `@source`s examples/gallery/src) so the demos render styled instead of
+// 404-ing the stylesheet. Built by the docs `vite build` into site/dist-css/assets/site.css.
+const galleryStylesheetSource = path.join(repoRoot, 'site/dist-css/assets/site.css');
 
 export async function exportGalleryInteractiveStatic({
   createViteServer = createServer,
@@ -35,9 +41,30 @@ export async function exportGalleryInteractiveStatic({
       );
     }
 
-    return await exportStaticApp(app, { outDir });
+    const assets = await readGalleryStylesheetAssets();
+    return await exportStaticApp(app, { assets, outDir });
   } finally {
     await viteServer.close();
+  }
+}
+
+async function readGalleryStylesheetAssets() {
+  // StaticExportAssetInput.source is a filesystem path the export reads + copies (FW229 requires a
+  // readable file path, not inline content).
+  try {
+    await readFile(galleryStylesheetSource);
+    return [
+      {
+        contentType: 'text/css; charset=utf-8',
+        path: '/assets/site.css',
+        source: galleryStylesheetSource,
+      },
+    ];
+  } catch {
+    process.stderr.write(
+      `gallery export: ${galleryStylesheetSource} not found; run the docs \`vite build\` first to ship styles. Exporting unstyled.\n`,
+    );
+    return [];
   }
 }
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,18 @@ import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './intera
 const galleryGeneratedRoot = fileURLToPath(new URL('./generated/interactive/', import.meta.url));
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
 
+// SPEC.md §4.4: load-bearing import maps are a non-goal — "the compiler and server emit full module
+// URLs". Generated client modules `import { handler } from '@jiso/runtime'` (an identity wrapper), a
+// bare specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/ URL
+// and rewrite the bare import to it so the static export is interactive without an import map.
+const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/jiso-runtime.client.js';
+const galleryRuntimeModuleSource = 'export const handler = (fn) => fn;\n';
+const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
+  path: galleryRuntimeModulePath,
+  source: galleryRuntimeModuleSource,
+  version: createHash('sha256').update(galleryRuntimeModuleSource).digest('hex').slice(0, 8),
+});
+
 export const galleryInteractiveClientModuleHrefs = Object.freeze(
   interactiveGalleryDemos.map((demo) => registerGalleryInteractiveClientModule(demo.name)),
 );
@@ -20,7 +33,9 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
     description: 'Compiled Jiso UI primitive demos with generated client handlers.',
     title: 'Jiso Interactive Gallery',
   },
-  modulepreloads: galleryInteractiveClientModuleHrefs,
+  // Include the shared runtime module first so the static export writes it (the demo modules
+  // import it) and the browser preloads it before the handler modules.
+  modulepreloads: [galleryRuntimeModuleHref, ...galleryInteractiveClientModuleHrefs],
   page() {
     return renderInteractiveGalleryRoute();
   },
@@ -57,7 +72,9 @@ export default galleryInteractiveAppShell.app;
 function registerGalleryInteractiveClientModule(demoName: string): string {
   const modulePath = `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`;
   const generatedServerTsx = readGeneratedInteractiveArtifact(`${demoName}.tsx`);
-  const generatedClientSource = readGeneratedInteractiveArtifact(`${demoName}.client.js`);
+  const generatedClientSource = rewriteRuntimeImport(
+    readGeneratedInteractiveArtifact(`${demoName}.client.js`),
+  );
   const version = generatedClientModuleVersion(generatedServerTsx, modulePath, demoName);
   const href = galleryInteractiveClientModules.put({
     path: modulePath,
@@ -74,6 +91,12 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
 
 function readGeneratedInteractiveArtifact(fileName: string): string {
   return readFileSync(new URL(fileName, `file://${galleryGeneratedRoot}`), 'utf8');
+}
+
+// SPEC.md §4.4: rewrite the bare `@jiso/runtime` specifier to the served runtime module URL so the
+// browser can resolve it without an import map.
+function rewriteRuntimeImport(source: string): string {
+  return source.replaceAll("from '@jiso/runtime';", `from '${galleryRuntimeModuleHref}';`);
 }
 
 function generatedClientModuleVersion(
