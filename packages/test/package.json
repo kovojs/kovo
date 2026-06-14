@@ -8,6 +8,7 @@
     "./compiler-fixtures": "./src/compiler-fixtures.ts",
     "./command-fixtures": "./src/command-fixtures.ts",
     "./commerce-fixtures": "./src/commerce-fixtures.ts",
+    "./derivation-fixtures": "./src/derivation-fixtures.ts",
     "./diagnostic-output-fixtures": "./src/diagnostic-output-fixtures.ts",
     "./fw-check-fixtures": "./src/fw-check-fixtures.ts",
     "./fw-explain-fixtures": "./src/fw-explain-fixtures.ts",

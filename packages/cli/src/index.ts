@@ -1930,9 +1930,13 @@ function endpointCsrf(endpoint: EndpointExplain): string {
 }
 
 function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {
+  // SPEC.md §10.6: v2 adds `derived` to the status set. The rich summary surface
+  // (derived=/PUNTED= columns) lands with the Phase 5 explain redesign; the
+  // record stays exhaustive so a future status is a compile error here.
   const counts: Record<OptimisticCoverage['status'], number> = {
     UNHANDLED: 0,
     'await-fragment': 0,
+    derived: 0,
     'hand-written': 0,
   };
 

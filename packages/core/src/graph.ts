@@ -1,3 +1,5 @@
+import type { DerivationStatus } from './derivation.js';
+
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 
 export interface TouchSite {
@@ -163,9 +165,14 @@ export interface EndpointExplain {
 }
 
 export interface OptimisticCoverage {
+  // SPEC.md §10.5/§10.6: v2 adds `derived` to the status set. `derivation` is
+  // separate metadata (derived ✓ or a named PUNTED reason) — a PUNTED derivation
+  // does NOT count as coverage; the pair stays UNHANDLED unless a hand-written
+  // transform or `'await-fragment'` covers it.
+  derivation?: DerivationStatus;
   mutation: string;
   query: string;
-  status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+  status: 'UNHANDLED' | 'await-fragment' | 'derived' | 'hand-written';
 }
 
 export interface OwnerDomainFact {

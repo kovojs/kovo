@@ -10,6 +10,28 @@ export {
   isDiagnosticCode,
 } from './diagnostics.js';
 export type {
+  AlgebraicField,
+  AlgebraicQueryShape,
+  ApplyPatchOptions,
+  ArithOp,
+  DerivationResult,
+  DerivationStatus,
+  OrderByColumn,
+  PatchOp,
+  PatchProgram,
+  PlaceholderKind,
+  PuntReason,
+  RowMatch,
+  Rowset,
+  RowsetFilter,
+  RowWitness,
+  SymbolicEffect,
+  SymbolicKeyEq,
+  SymbolicMatch,
+  SymbolicValue,
+} from './derivation.js';
+export { applyPatchProgram, derived, punt, puntReasonLabel } from './derivation.js';
+export type {
   AttributeMergeExplain,
   CaptureChannel,
   ComponentExplain,
