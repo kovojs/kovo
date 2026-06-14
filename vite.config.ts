@@ -87,13 +87,19 @@ export default defineConfig({
       },
       'typecheck-examples': {
         command:
-          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p examples/reference/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/better-auth-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
+          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p examples/stackoverflow/tsconfig.json --noEmit && tsc -p examples/crm/tsconfig.json --noEmit && tsc -p examples/reference/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/better-auth-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
         input: [
           { auto: true },
           { pattern: 'examples/commerce/package.json', base: 'workspace' },
           { pattern: 'examples/commerce/tsconfig.json', base: 'workspace' },
           { pattern: 'examples/commerce/vite.config.ts', base: 'workspace' },
           { pattern: 'examples/commerce/src/**/*.ts', base: 'workspace' },
+          { pattern: 'examples/stackoverflow/package.json', base: 'workspace' },
+          { pattern: 'examples/stackoverflow/tsconfig.json', base: 'workspace' },
+          { pattern: 'examples/stackoverflow/src/**/*.ts', base: 'workspace' },
+          { pattern: 'examples/crm/package.json', base: 'workspace' },
+          { pattern: 'examples/crm/tsconfig.json', base: 'workspace' },
+          { pattern: 'examples/crm/src/**/*.ts', base: 'workspace' },
           { pattern: 'examples/reference/package.json', base: 'workspace' },
           { pattern: 'examples/reference/tsconfig.json', base: 'workspace' },
           { pattern: 'examples/reference/src/**/*.ts', base: 'workspace' },
