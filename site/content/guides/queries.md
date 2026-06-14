@@ -1,74 +1,76 @@
 ---
 title: Queries & invalidation
-description: Declare what a query reads once, and let the framework work out which mutations refresh it and which islands update.
+description: Declare what a component reads, and the framework figures out which writes refresh it — no invalidate() calls, no client cache.
 order: 1
 ---
 
 # Queries & invalidation
 
-A query is a typed, named read. You declare what it reads; the framework derives everything
-downstream — which mutations refresh it, which islands depend on it, and what the server must
-re-render after a write. There is no `invalidate()` call in the happy path and no client cache
-lifecycle to manage. This guide walks the whole chain, from declaring a query to watching its
-data update in the DOM. SPEC §10.2, §10.3
+Your cart badge shows an item count. When someone adds an item, the badge should update — but you
+never want to be the one wiring "add to cart" to "refresh the badge." In Jiso you aren't.
+
+You write two things: a query that loads the cart, and a component that says it reads that query.
+That's the whole connection. Add an item anywhere in the app and this badge refreshes, because Jiso
+traced the path from the write back to the badge for you. This guide shows how that tracing works,
+and how to check it.
 
 ## Declare a query
 
-A query couples a key, a loader, and a read set of domains:
+A query couples a name, a loader, and the domains it reads:
 
 ```ts
-// app.ts — the commerce reference app's shape
 import { domain, query } from '@jiso/server';
 
 export const cart = domain('cart');
 export const product = domain('product');
-export const order = domain('order');
 
 export const cartQuery = query('cart', {
-  load: (_input: unknown) => loadCartQuery(db),
+  load: (_input) => loadCart(db),
   reads: [cart],
 });
 
 export const productGridQuery = query('productGrid', {
-  load: (input: unknown) => loadProductGrid(db, input as ProductGridInput),
+  load: (input) => loadProductGrid(db, input),
   reads: [product],
 });
 ```
 
-The `reads` list names the domains this query depends on. Any committed write that touches the
-`cart` domain invalidates `cartQuery` — the server re-runs it post-commit and ships the fresh
-value back in the same mutation response. Components consume queries by declaring them. SPEC §10.3
+The `reads` list is the dependency declaration. Any committed write that touches the `cart` domain
+refreshes `cartQuery` — the server re-runs it after the write and sends the fresh value back in the
+same response. You don't list those writes anywhere.
+
+## Read it from a component
+
+A component declares the queries it uses and renders with their values:
 
 ```tsx
 import { component } from '@jiso/core';
 
 export const CartBadge = component('cart-badge', {
-  fragmentTarget: true,
   queries: { cart: cartQuery },
-  state: () => ({}),
-  render: () => (
-    <button class="badge">
-      Cart <span>{cart.count}</span>
-    </button>
+  render: ({ cart }) => (
+    <cart-badge>
+      Cart: <span>{cart.count}</span>
+    </cart-badge>
   ),
 });
 ```
 
-You write the JSX; the compiler derives the wiring and stamps it into the rendered HTML. SPEC §4.8
+You write the JSX. The compiler derives the wiring and stamps it into the rendered HTML:
 
 ```html
-<button class="badge" fw-deps="cart">Cart <span data-bind="cart.count">2</span></button>
+<cart-badge fw-deps="cart">Cart: <span data-bind="cart.count">2</span></cart-badge>
 ```
 
-Two derived attributes carry the whole dependency story into the HTML itself:
+Two attributes carry the whole dependency story:
 
-- **`fw-deps="cart"`** — this island depends on the `cart` query. Mutations read these stamps off
-  the live DOM to decide which fragments to ask for. SPEC §9.1
-- **`data-bind="cart.count"`** — when the `cart` query value changes, the loader writes the new
-  `count` into this element. The path is typed against the query's result shape; a binding path
-  that traverses a nullable segment must mark it `?.` or it is compile error FW227. SPEC §4.8
+- `fw-deps="cart"` — this element depends on the `cart` query. Mutations read these stamps off the
+  live DOM to decide which fragments to refresh.
+- `data-bind="cart.count"` — when the `cart` value changes, the loader writes the new `count` here.
+  The path is checked against the query's result type, so binding a field that doesn't exist is a
+  compile error.
 
-The page ships the query value once, as shared client data:
+The value itself ships once per page, as JSON:
 
 ```html
 <script type="application/json" fw-query="cart">
@@ -76,28 +78,24 @@ The page ships the query value once, as shared client data:
 </script>
 ```
 
-Open view-source on any Jiso page and you can read its complete data-dependency story — that is
-the point ([the mental model](/docs/mental-model/) covers why).
+Open View Source on any Jiso page and its complete data-dependency story is right there.
 
-## Where invalidation comes from: the touch graph
+## Where invalidation comes from
 
-Mutations never list the queries they invalidate. Instead, the framework maintains a touch graph —
-a derived map from each write to the tables it touches, and from there to the queries that go
-stale. Writes flow through `domain` writes, and the static pass extracts which tables each write
-touches — on the Drizzle-blessed path, directly from the Drizzle call ASTs. The chain is:
-SPEC §11.1
+You never tell a mutation which queries to refresh. Instead, the framework keeps a touch graph — a
+derived map from each write to the tables it touches, and from there to the queries that go stale.
+The chain is:
 
 ```
-write body          →  touched tables       (extracted from insert/update/delete ASTs)
-touched tables      →  domains              (schema annotations, SPEC §10.1)
-domains             →  invalidated queries  (each query's read set)
-invalidated queries →  consumers            (every island with that query declared)
+write body          →  touched tables       (read from the insert/update/delete code)
+touched tables      →  domains              (a one-time annotation on each table)
+domains             →  invalidated queries  (each query's reads list)
+invalidated queries →  components           (every element that declared that query)
 ```
 
-On the schema side, tables are annotated once:
+You annotate each table's domain once:
 
 ```ts
-// schema.ts — Drizzle-blessed path (SPEC §10.1)
 export const cartItems = pgTable(
   'cart_items',
   {
@@ -105,54 +103,47 @@ export const cartItems = pgTable(
   },
   jiso({ domain: 'cart' }),
 );
+
 export const products = pgTable(
   'products',
   { id: text('id').primaryKey(), stock: integer('stock').notNull() },
-  jiso({ domain: 'product', key: (t) => t.id }), // row-level invalidation key
+  jiso({ domain: 'product', key: (t) => t.id }), // row-level granularity
 );
 ```
 
-Tables default to a same-named domain; the `key` annotation declares row-level granularity, so a
-write to product `p1` invalidates `product:p1`, not every product on the site. A table can opt
-out with `jiso({ exempt: true })`, but exemption is write-side only — a query reading an exempt
-table is error FW411, because nothing could ever invalidate it. SPEC §10.1
+A table defaults to a same-named domain. The `key` annotation makes invalidation row-level, so a
+write to product `p1` refreshes `product:p1`, not every product on the site.
 
-The extraction output is a committed, reviewable artifact, so invalidation-graph changes appear
-as diffs in code review. SPEC §11.1
+On the Drizzle-on-Postgres path, the framework reads which tables a write touches straight from the
+write's code, and writes the result to a committed file you can review:
 
 ```ts
-// generated/touch-graph.ts — DO NOT EDIT
+// generated/touch-graph.ts — generated, do not edit
 export const touchGraph = {
   'cart.addItem': {
     touches: [
-      { domain: 'cart', via: 'cart_items', site: 'cart.domain.ts:8', keys: null },
-      { domain: 'product', via: 'products', site: 'cart.domain.ts:12', keys: 'arg:productId' },
+      { domain: 'cart', via: 'cart_items', keys: null },
+      { domain: 'product', via: 'products', keys: 'arg:productId' },
     ],
-    unresolved: [],
   },
 } as const;
 ```
 
-For SQL the analyzer cannot see through (raw SQL, helpers in `node_modules` receiving a `db`),
-manual `touches` are required at the write site and runtime-verified — that is diagnostic FW406,
-and the verification invariant `observed ⊆ static ∪ declared` is enforced in tests
-(see the [testing guide](/guides/testing/)). SPEC §11.2
+Because the join _is_ the declaration, the classic staleness bug — forgetting that a query also
+reads a joined table — can't happen here. The read set comes from the query expression, not from
+memory. When the analyzer genuinely can't see through a write (raw SQL, a helper buried in
+`node_modules`), you declare the touches by hand at the write site, and a runtime check confirms
+they're complete.
 
-Because the JOIN _is_ the declaration, the classic staleness bug — forgetting that a query also
-reads a joined table — is unrepresentable on the blessed path: the read set is derived from the
-query expression, not recalled from memory. SPEC §10.2
+## Ask the graph instead of tracing the code
 
-## Ask the graph, don't trace the code
-
-The derived graph is queryable as stable text. This is real output from the commerce reference
-app's committed graph:
+The derived graph is queryable as plain text. This is real output from the commerce reference app:
 
 ```sh
 fw explain query cart graph.json
 ```
 
 ```txt
-fw-explain/v1
 QUERY cart
 reads: cart
 consumers: component:CartBadge,page:/cart
@@ -160,42 +151,36 @@ invalidated-by: cart/add
 domain-writes: cart.addItem
 ```
 
-Four lines answer the questions that need a debugger in other stacks: what this query reads,
-who consumes it, which mutations refresh it, and which domain writes are behind that. The
-[fw explain guide](/guides/fw-explain/) covers asserting these facts in CI.
+Four lines answer what usually needs a debugger: what this query reads, who shows it, which mutations
+refresh it, and which write is behind that. When a product rule matters — "every component showing
+cart data must refresh when the cart changes" — you assert it in a graph query and CI holds the line.
 
-## Instance keys: many instances of one query
+## One query, many instances
 
-A parameterized query declares its args once, schema-style; the same coercion serves props, route
-params, and the read endpoint:
+A parameterized query declares its arguments once:
 
 ```ts
 export const productQuery = query('product', {
   args: s.object({ id: s.string() }),
-  guard: authed, // checked at page render AND at every typed read
+  guard: authed,
   load: (input) => loadProduct(db, input.id),
   reads: [product],
 });
 ```
 
-The instance key has one canonical encoding — `name:keyValue`, like `product:p1` — and that one
-string keys everything: the client store (`<script fw-query="product:p1">`), `fw-deps` stamps,
-the `FW-Targets` mutation header, optimistic transform keys, and (v2) live-push routing. Two
-instances of one query coexist on a page; `data-bind` inside an island resolves against that
-island's instance. SPEC §10.2
+Each instance has one canonical key — `name:value`, like `product:p1` — and that one string keys
+everything: the client store, the `fw-deps` stamps, the mutation's refresh targets, and optimistic
+transforms. A component binds its arguments from its own props, so any page that renders it satisfies
+the dependency without the page knowing anything about it. No call site ever enumerates query
+dependencies.
 
-Components bind args from their own props — `productQuery.args((p) => ({ id: p.productId }))` —
-so any page that renders the component satisfies the dependency without call-site knowledge. No
-call site enumerates query dependencies, ever; that rule killed manual fragment targets and
-RTK-style mutation registration. SPEC §10.2, §2
+## Reading a query over the network
 
-## Every query is addressable over GET
-
-The typed read endpoint serves refetch-on-focus, GET-form fragment responses, and async reads.
-SPEC §9.4
+Every query is addressable over GET. The loader uses this for refetch-on-focus (re-running a query
+when a stale tab comes back), and GET forms use it for fragment responses:
 
 ```http
-GET /_q/product?id=p1 HTTP/1.1
+GET /_q/product?id=p1
 FW-Fragment: true
 ```
 
@@ -206,39 +191,44 @@ Content-Type: text/html; charset=utf-8
 <fw-query name="product:p1">{ "name": "Mug", "stock": 4 }</fw-query>
 ```
 
-Args arrive as search params through the query's `args` schema; the query's `guard` runs on every
-read, and reads participate in the `--unguarded` audit. The loader uses this endpoint for
-refetch-on-focus/visibility — a per-query opt-out behavior that re-runs queries when a stale tab
-returns. SPEC §9.4, §9.3
+Arguments arrive as search params through the query's `args` schema, and the query's `guard` runs on
+every read.
 
 ## How an update reaches the DOM
 
-When a mutation response (or a refetch) delivers a new query value, the loader runs that query's
-update plan: path bindings, then named derives, then keyed template stamps — by walking the
-self-describing attributes under each `fw-deps` island. There is no runtime dependency tracking
-and no separate plan artifact; the DOM is the plan. Positions that exceed the plan grammar flip
-to server fragments, and every query-dependent position must have a declared update status or it
-is FW311. SPEC §4.8, §4.9
+When a fresh query value arrives — from a mutation response or a refetch — the loader walks the
+self-describing attributes under each `fw-deps` element and applies the update: path bindings first,
+then derived values, then keyed list stamps. There's no separate plan to keep in sync; the DOM is the
+plan. Anything too complex for that grammar falls back to a server-rendered fragment.
 
 ## What you never write
 
-Worth stating as a checklist, because each item is a bug class elsewhere:
+Each of these is a bug class in other stacks:
 
-- **No `invalidate()` calls** — derived from write ASTs; the call survives only as a linted escape
-  hatch for external-system effects. SPEC §10.3
-- **No tag lists on queries** — the read set is the domains behind the query expression.
-  SPEC §10.2
-- **No fragment-target enumeration at mutation sites** — `FW-Targets` is read off the live DOM's
-  `fw-deps` stamps at request time, so islands added to a page later participate automatically.
-  SPEC §9.1
-- **No client cache to evict** — server truth is morphed in; there is no consistency protocol.
-  SPEC §2
+- **No `invalidate()` calls.** Refreshes are derived from the write code; the manual call survives
+  only as a linted escape hatch for external systems.
+- **No tag lists on queries.** The read set is the domains behind the query.
+- **No refresh targets at mutation sites.** Targets are read off the live DOM's `fw-deps` stamps at
+  request time, so a component added later participates automatically.
+- **No client cache to evict.** Server truth is morphed in; there's no consistency protocol.
 
 A teammate who ships a new component with `queries: { cart: cartQuery }` next month gets correct
-refresh behavior from every cart mutation ever written. Nothing to remember. SPEC Appendix A
+refresh behavior from every cart mutation ever written, with nothing to remember.
 
 ## Next
 
 - [Mutations & forms](/guides/mutations/) — the write side of this graph.
-- [Optimistic updates](/guides/optimistic/) — instant predictions over query values.
-- [Reading fw check & fw explain](/guides/fw-explain/) — auditing the graph in CI.
+- [Optimistic updates](/guides/optimistic/) — predicting results before the server confirms.
+- [Reading fw check & fw explain](/guides/fw-explain/) — asserting these facts in CI.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+Queries and the touch graph: SPEC §10.1–10.3, §11.1. Derived stamps (`fw-deps`, `data-bind`):
+SPEC §4.8. Binding a path through a nullable segment without `?.` is **FW227**. A query reading an
+`exempt` table is **FW411** (nothing could invalidate it). Manual touches at an opaque write are
+**FW406**, verified by `observed ⊆ static ∪ declared` in tests. Update-status coverage on every
+query-dependent position is **FW311**. The typed read endpoint: SPEC §9.4. Reconciliation by morph:
+SPEC §2 (design test 5).
+
+</details>

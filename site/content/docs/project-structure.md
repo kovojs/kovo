@@ -1,7 +1,7 @@
 ---
 title: Project structure
 description: Tour the files in a scaffolded project and see how the graph-verification workflow plugs into your CI.
-order: 3
+order: 5
 ---
 
 # Project structure

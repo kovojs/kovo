@@ -1,14 +1,14 @@
 ---
 title: Installation
-description: Get a Jiso project on your machine and learn the handful of commands you'll run every day.
-order: 1
+description: Prerequisites, what the scaffold sets up, and why Jiso asks for strict TypeScript.
+order: 4
 ---
 
 # Installation
 
-Jiso is a compiler-first framework: you write TSX components, and the build turns them into
-self-describing HTML that needs almost no client runtime. This page gets a project running and
-introduces the commands you'll live in.
+If you just want to get a page on screen fast, start with the [Quickstart](/docs/quickstart/). This
+page covers the prerequisites, what the scaffold gives you, and why Jiso insists on strict
+TypeScript.
 
 ## Prerequisites
 
@@ -27,11 +27,9 @@ cd my-app
 pnpm install
 ```
 
-> **One caveat before you copy-paste.** Jiso is pre-v1 and not yet published to npm. These
-> commands describe the intended flow, and they work today inside the
-> [jiso repository](https://github.com/jiso-sh/jiso) as workspace packages. Until packages are
-> published, clone the repo and work in a workspace member — the [Tutorial](/tutorial/) does
-> exactly that.
+> **Pre-v1:** not on npm yet. These commands describe the intended flow and work today inside the
+> [Jiso repository](https://github.com/jiso-sh/jiso) as workspace packages — clone the repo and work
+> in a workspace member, as the [Tutorial](/tutorial/) does.
 
 The starter is deliberately small: one component, one route's worth of HTML, Tailwind wired
 through Vite+, and the graph-verification scripts that make the framework's checks part of your
