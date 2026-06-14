@@ -19,9 +19,7 @@ import {
   toastTitleAttributes,
   toastViewportAttributes,
 } from '@jiso/headless-ui/primitives';
-import {
-  mergePrimitiveAttrs,
-} from './merge-fixtures-oracle';
+import { mergePrimitiveAttrs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden toast merge with live-region roles and action buttons', () => {

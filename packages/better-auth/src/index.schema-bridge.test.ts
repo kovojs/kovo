@@ -218,7 +218,6 @@ describe('schema bridge', () => {
     }
   });
 
-
   it('reports Better Auth table metadata that is missing or outside the bridge', () => {
     expect(
       validateBetterAuthSchemaBridge({
@@ -251,7 +250,6 @@ describe('schema bridge', () => {
       unbridgedTables: ['webauthnCredential'],
     });
   });
-
 
   it('suggests ownership annotations for unsupported plugin-table diagnostics', () => {
     expect(
@@ -314,7 +312,6 @@ describe('schema bridge', () => {
     ]);
   });
 
-
   it('reports unsupported plugin-table physical aliases in FW406 diagnostics', () => {
     expect(
       validateBetterAuthSchemaBridge({
@@ -343,7 +340,6 @@ describe('schema bridge', () => {
     ]);
   });
 
-
   it('reports absent successor OAuth-provider metadata as an FW406 degradation', () => {
     expect(betterAuthOAuthProviderSuccessorMetadataDegradation()).toEqual({
       attemptedImports: betterAuthOAuthProviderSuccessorImportPaths,
@@ -362,7 +358,6 @@ describe('schema bridge', () => {
       tableMetadata: null,
     });
   });
-
 
   it('reports unavailable plugin metadata without fabricating schema mappings', () => {
     expect(
@@ -396,7 +391,6 @@ describe('schema bridge', () => {
     ).toBe(null);
   });
 
-
   it('reports bridged domain keys that drift from Better Auth table metadata', () => {
     expect(
       validateBetterAuthSchemaBridge({
@@ -416,7 +410,6 @@ describe('schema bridge', () => {
       unbridgedTables: [],
     });
   });
-
 
   it('reports bridged domain-key drift with Better Auth modelName aliases', () => {
     expect(
@@ -438,7 +431,6 @@ describe('schema bridge', () => {
       unbridgedTables: [],
     });
   });
-
 
   it('reports mutation registry touches that drift from declared table touches', () => {
     expect(
@@ -466,7 +458,6 @@ describe('schema bridge', () => {
       unbridgedTables: [],
     });
   });
-
 
   it('reports declared plugin table touches when plugin metadata is absent', () => {
     expect(
@@ -497,7 +488,6 @@ describe('schema bridge', () => {
       unbridgedTables: [],
     });
   });
-
 
   it('reports declared plugin table touches that are outside the schema bridge', () => {
     expect(
@@ -545,7 +535,6 @@ describe('schema bridge', () => {
     });
   });
 
-
   it('accepts explicit schema bridge extensions for unsupported plugin tables', () => {
     const tables = {
       account: authTable(['userId']),
@@ -579,7 +568,6 @@ describe('schema bridge', () => {
     expect(betterAuthTableDomain('webauthnCredential')).toBe(null);
     expect(betterAuthTableDomain('webauthnCredential', schemaBridge)).toBe('auth');
   });
-
 
   it('keeps recognized future plugin tables unbridged with FW406 degradation facts', () => {
     const tables = {
@@ -640,7 +628,6 @@ describe('schema bridge', () => {
     expect(result.source).not.toContain('jiso(');
   });
 
-
   it('reports aliased future plugin source declarations without fabricating mappings', () => {
     const tables = {
       account: authTable(['userId']),
@@ -692,7 +679,6 @@ describe('schema bridge', () => {
     );
   });
 
-
   it('rejects schema bridge extensions that collide with blessed built-in tables', () => {
     const tables = {
       account: authTable(['userId']),
@@ -737,7 +723,6 @@ describe('schema bridge', () => {
       "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
     );
   });
-
 
   it('materializes explicit plugin-table extensions into P9 verifier facts', () => {
     const tables = {
@@ -817,7 +802,6 @@ describe('schema bridge', () => {
     });
   });
 
-
   it('reports explicit plugin-table bridge declarations through unrecognized factories', () => {
     const tables = {
       account: authTable(['userId']),
@@ -870,7 +854,6 @@ describe('schema bridge', () => {
       ].join('\n'),
     );
   });
-
 
   it('uses Better Auth modelName aliases for schema.ts and P9 verifier table facts', () => {
     const tables = {
@@ -969,7 +952,6 @@ describe('schema bridge', () => {
     expect(staleLogicalSource.missingSourceTables).toEqual(['auth_users']);
   });
 
-
   it('rejects Better Auth modelName aliases that collide across logical tables', () => {
     const tables = {
       account: authTable(['userId']),
@@ -1007,5 +989,4 @@ describe('schema bridge', () => {
     expect(verifierConfig.domainByTable).not.toHaveProperty('auth_session_state');
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_session_state');
   });
-
 });

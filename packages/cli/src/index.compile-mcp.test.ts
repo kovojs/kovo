@@ -8,8 +8,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   compileComponentV1,
-  fwCheck,
-  fwExplain,
   handleFwMcpRequest,
   runMcpFallbackStdio,
   runMcpSdkServer,

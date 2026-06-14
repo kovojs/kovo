@@ -1,30 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { eq, gt, inArray, sql } from 'drizzle-orm';
-import {
-  alias,
-  boolean,
-  customType,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core';
-import * as pg from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { customType, text } from 'drizzle-orm/pg-core';
 
 import {
-  createTouchGraphEntry,
   diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
   extractQueryFactsFromProject,
   extractTouchGraphFromProject,
-  jiso,
-  serializeDomainRegistry,
-  serializeTouchGraph,
 } from '../../../packages/drizzle/src/static.js';
-
-import { annotatedTable, drizzleSymbol } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('pins real Drizzle project read sources from write call AST', () => {

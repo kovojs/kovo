@@ -72,7 +72,6 @@ describe('schema.ts materialization', () => {
     });
   });
 
-
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {
     const source = [
       "import { jiso } from '@jiso/drizzle';",
@@ -141,7 +140,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('materializes explicit plugin-table bridge extensions into app schema.ts source', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -185,7 +183,6 @@ describe('schema.ts materialization', () => {
         "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
-
 
   it('keeps token-only plugin metadata under the exempt verification bridge', () => {
     const result = annotateBetterAuthSchemaSource(
@@ -242,7 +239,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('materializes a bridged two-factor plugin table into an app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -275,7 +271,6 @@ describe('schema.ts materialization', () => {
         "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
-
 
   it('materializes the device-authorization code table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
@@ -334,7 +329,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('materializes bridged OIDC provider plugin tables into app schema.ts source fixtures', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -382,7 +376,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('materializes a bridged SIWE wallet table into an app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -415,7 +408,6 @@ describe('schema.ts materialization', () => {
         "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
-
 
   it('keeps plugin-added user fields under the bridged user domain', () => {
     const result = annotateBetterAuthSchemaSource(
@@ -474,7 +466,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('materializes the JWT signing-key table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -509,7 +500,6 @@ describe('schema.ts materialization', () => {
         '}, jiso({ exempt: true }));',
     );
   });
-
 
   it('materializes the database-backed rate-limit table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
@@ -546,7 +536,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('reports schema.ts tables it cannot safely annotate', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -576,7 +565,6 @@ describe('schema.ts materialization', () => {
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
   });
-
 
   it('bounds schema.ts annotations to imported or explicit Drizzle table factories', () => {
     const metadata = {
@@ -621,7 +609,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('does not report column builders as unrecognized schema table declarations', () => {
     const result = annotateBetterAuthSchemaSource(
       [
@@ -643,7 +630,6 @@ describe('schema.ts materialization', () => {
     expect(result.missingSourceTables).toEqual(['session', 'user', 'verification']);
     expect(result.unrecognizedSourceTables).toEqual([]);
   });
-
 
   it('reports duplicate schema.ts table declarations without annotating ambiguous tables', () => {
     const result = annotateBetterAuthSchemaSource(
@@ -680,7 +666,6 @@ describe('schema.ts materialization', () => {
       "export const primaryUser = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
     );
   });
-
 
   it('reports generated schema.ts import notes for default and aliased annotation callees', () => {
     const metadata = {
@@ -758,7 +743,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('infers aliased and namespace Drizzle table factories when annotating schema.ts', () => {
     const metadata = {
       account: authTable(['userId']),
@@ -798,7 +782,6 @@ describe('schema.ts materialization', () => {
       "export const verification = sqlite.sqliteTable('verification', {}, jiso({ exempt: true }));",
     );
   });
-
 
   it('generates bounded app schema.ts declarations from Better Auth metadata', () => {
     const result = generateBetterAuthSchemaSource({
@@ -868,7 +851,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('generates explicit Better Auth id field aliases and types', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),
@@ -908,7 +890,6 @@ describe('schema.ts materialization', () => {
     );
   });
 
-
   it('degrades generated schema.ts when explicit id metadata has an unsupported type', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),
@@ -936,7 +917,6 @@ describe('schema.ts materialization', () => {
       table: 'user',
     });
   });
-
 
   it('keeps unsupported plugin tables out of generated schema.ts with FW406 facts', () => {
     const result = generateBetterAuthSchemaSource({
@@ -973,7 +953,6 @@ describe('schema.ts materialization', () => {
     ]);
   });
 
-
   it('degrades generated schema.ts tables when field metadata is unavailable', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),
@@ -1003,7 +982,6 @@ describe('schema.ts materialization', () => {
     });
   });
 
-
   it('degrades generated schema.ts tables with unsupported Better Auth field types', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),
@@ -1032,5 +1010,4 @@ describe('schema.ts materialization', () => {
       table: 'user',
     });
   });
-
 });

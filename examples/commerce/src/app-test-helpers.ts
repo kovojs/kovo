@@ -3,11 +3,7 @@ import { createHmac } from 'node:crypto';
 import { headerValues, setCookieValues } from '@jiso/test/headers';
 import { type StructuralMorphNode } from '@jiso/runtime';
 
-import {
-  createCommerceDb,
-  type AddToCartInput,
-  type ProductGridInput,
-} from './app.js';
+import { createCommerceDb, type AddToCartInput, type ProductGridInput } from './app.js';
 
 export function commerceFile(name: string, type: string, size: number) {
   return {

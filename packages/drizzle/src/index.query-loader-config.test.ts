@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { eq } from 'drizzle-orm';
-import { boolean, integer, pgTable, text } from 'drizzle-orm/pg-core';
-
 import {
   diagnosticsForQueryFacts,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject,
-  jiso,
 } from '@jiso/drizzle/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
@@ -1192,5 +1188,4 @@ describe('@jiso/drizzle touch graph helpers', () => {
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
-
 });

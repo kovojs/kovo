@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { eq, sql } from 'drizzle-orm';
-import { pgTable } from 'drizzle-orm/pg-core';
-
-import {
-  extractTouchGraphFromProject,
-  jiso,
-} from '@jiso/drizzle/static';
+import { extractTouchGraphFromProject } from '@jiso/drizzle/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@jiso/drizzle touch graph helpers', () => {

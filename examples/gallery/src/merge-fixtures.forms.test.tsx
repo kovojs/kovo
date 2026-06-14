@@ -41,10 +41,7 @@ import {
   toolbarItemAttributes,
   toolbarRootAttributes,
 } from '@jiso/headless-ui/primitives';
-import {
-  mergePrimitiveAttrs,
-  rewriteIdrefs,
-} from './merge-fixtures-oracle';
+import { mergePrimitiveAttrs, rewriteIdrefs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden combobox merge with active descendant and option conflicts', () => {

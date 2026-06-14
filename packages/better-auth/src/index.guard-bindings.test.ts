@@ -1,14 +1,6 @@
-import {
-  type Guard,
-  guards as serverGuards,
-} from '@jiso/server';
+import { type Guard, guards as serverGuards } from '@jiso/server';
 import { describe, expect, it } from 'vitest';
-import {
-  type ActiveOrganizationRequest,
-  activeOrganization,
-  authed,
-  role,
-} from './index.js';
+import { type ActiveOrganizationRequest, activeOrganization, authed, role } from './index.js';
 import { type AppRequest } from './test-fakes.js';
 
 describe('guard bindings', () => {
@@ -47,7 +39,6 @@ describe('guard bindings', () => {
     );
   });
 
-
   it('uses the core authed guard contract over the mapped session', async () => {
     const guard = authed<AppRequest>();
 
@@ -71,7 +62,6 @@ describe('guard bindings', () => {
       }),
     ).toBe(true);
   });
-
 
   it('binds role checks to typed session role names', async () => {
     const admin = role<AppRequest>('admin');
@@ -111,7 +101,6 @@ describe('guard bindings', () => {
     const staleGuard = role<AppRequest>('billing');
     expect(staleGuard).toBeTypeOf('function');
   });
-
 
   it('guards organization-scoped surfaces with activeOrganizationId', async () => {
     const scoped = activeOrganization<AppRequest>();

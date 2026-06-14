@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  Autocomplete,
   AutocompleteInput,
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  Combobox,
   ComboboxInput,
   ComboboxListbox,
   ComboboxOption,

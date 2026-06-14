@@ -60,7 +60,6 @@ import {
   toastCloseClasses,
   toastDescriptionClasses,
   toastTitleClasses,
-  toastViewportClasses,
 } from './index.js';
 
 describe('@jiso/ui styled package foundation', () => {

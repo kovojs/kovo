@@ -11,7 +11,7 @@ import {
   tooltipTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 import {
-  AttributeRecord,
+  type AttributeRecord,
   authorStressAttrs,
   idrefAttributes,
   mergePrimitiveAttrs,
@@ -20,7 +20,7 @@ import {
   renderMergedBuilder,
   rewriteIdrefs,
   samplePrimitiveAttributes,
-} from './merge-fixtures-oracle';
+} from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('rewires dialog trigger IDREFs when an authored dialog content id wins', () => {

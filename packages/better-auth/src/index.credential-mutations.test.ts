@@ -53,7 +53,6 @@ describe('credential mutation helpers', () => {
     });
   });
 
-
   it('maps invalid sign-in credentials to the declared mutation failure path', async () => {
     const auth = new FakeCredentialAuth();
     const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
@@ -76,7 +75,6 @@ describe('credential mutation helpers', () => {
       status: 422,
     });
   });
-
 
   it('wraps signUpEmail with a typed body and typed credential failure', async () => {
     const auth = new FakeCredentialAuth();
@@ -136,7 +134,6 @@ describe('credential mutation helpers', () => {
     });
   });
 
-
   it('wraps signOut and forwards clearing cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders('jiso_session=session-1');
@@ -163,7 +160,6 @@ describe('credential mutation helpers', () => {
     });
   });
 
-
   it('keeps redirect targets on same-origin paths', async () => {
     const auth = new FakeCredentialAuth();
     const signIn = betterAuthSignInEmailMutation(auth, {
@@ -188,7 +184,6 @@ describe('credential mutation helpers', () => {
       },
     });
   });
-
 
   it('exposes small helpers for Better Auth response quirks', () => {
     const headers = responseWithCookies([

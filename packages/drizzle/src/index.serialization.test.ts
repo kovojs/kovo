@@ -454,5 +454,4 @@ export interface CommerceInvalidationSets {
 } as const;
 `);
   });
-
 });

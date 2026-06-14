@@ -155,7 +155,10 @@ export function requestHeaders(cookie?: string): Headers {
   return headers;
 }
 
-export function responseWithCookies(cookies: readonly string[], status = 204): BetterAuthResponseLike {
+export function responseWithCookies(
+  cookies: readonly string[],
+  status = 204,
+): BetterAuthResponseLike {
   const headers = new Headers();
 
   Object.defineProperty(headers, 'getSetCookie', {

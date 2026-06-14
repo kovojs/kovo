@@ -5,10 +5,7 @@ import {
   runEndpoint,
 } from '@jiso/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import {
-  betterAuthSession,
-  mount,
-} from './index.js';
+import { betterAuthSession, mount } from './index.js';
 import {
   type AppSession,
   type AuthSession,
@@ -37,14 +34,12 @@ describe('betterAuthSession', () => {
     expect(auth.lastHeaders).toBe(headers);
   });
 
-
   it('treats a missing Better Auth session as anonymous', async () => {
     const auth = new FakeBetterAuth();
     const provider = betterAuthSession(auth, mapSession);
 
     await expect(provider({ headers: new Headers() })).resolves.toBe(null);
   });
-
 
   it('keeps the mapper total against the declared app session type', () => {
     const auth = new FakeBetterAuth();
@@ -108,7 +103,6 @@ describe('browser redirect protocol mount', () => {
     expect(auth.lastRequest).toBeDefined();
     expect(auth.sawSession).toBe(false);
   });
-
 
   it('accepts a direct handler and explicit audit metadata', async () => {
     const magicLink = mount('/auth/magic-link', (request) => new Response(request.method), {

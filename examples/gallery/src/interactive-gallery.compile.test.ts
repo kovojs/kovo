@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  readGenerated,
-} from './interactive-gallery-harness.js';
+import { readGenerated } from './interactive-gallery-harness.js';
 
 describe('compiled interactive gallery demos', () => {
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
