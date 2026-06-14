@@ -32,7 +32,7 @@ export const commerceTouchGraph = {
         "domain": "order",
         "keys": "arg:data.object.id",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:516",
+        "site": "examples/commerce/src/app.ts:511",
         "via": "orders"
       }
     ],
@@ -45,7 +45,7 @@ export const commerceTouchGraph = {
         "domain": "attachment",
         "keys": "arg:orderId",
         "predicate": "eq",
-        "site": "examples/commerce/src/app.ts:466",
+        "site": "examples/commerce/src/app.ts:461",
         "via": "attachments"
       }
     ],
