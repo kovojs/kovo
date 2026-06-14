@@ -91,11 +91,13 @@ ${planBody}
  * codegen↔interpreter parity test (it must agree with `applyPatchProgram`).
  */
 export function lowerTransform(program: PatchProgram): string {
+  // Indent relative to the arrow's own start (body +2, close +0); the caller
+  // re-indents the whole arrow to its nesting depth, keeping braces aligned.
   const statements = program.ops.flatMap((op) => lowerOp(op));
   const body = ['const next = structuredClone(current);', ...statements, 'return next;']
-    .map((line) => indent(line, 6))
+    .map((line) => indent(line, 2))
     .join('\n');
-  return `(current, $input) => {\n${body}\n${' '.repeat(4)}}`;
+  return `(current, $input) => {\n${body}\n}`;
 }
 
 function lowerOp(op: PatchOp): string[] {

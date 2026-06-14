@@ -29,7 +29,7 @@ import {
 } from './app-test-helpers.js';
 
 describe('commerce example', () => {
-  it('predicts cart count with the hand-written addToCart optimistic transform', () => {
+  it('predicts cart count with the compiler-derived addToCart optimistic transform', () => {
     expect(addToCartOptimistic.queue).toBe('cart');
     expect(
       addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),

@@ -69,19 +69,28 @@
   ],
   "optimistic": [
     {
+      "derivation": {
+        "status": "derived"
+      },
       "mutation": "cart/add",
       "query": "cart",
-      "status": "hand-written"
+      "status": "derived"
     },
     {
+      "derivation": {
+        "status": "derived"
+      },
       "mutation": "cart/add",
       "query": "productGrid",
-      "status": "await-fragment"
+      "status": "derived"
     },
     {
+      "derivation": {
+        "status": "derived"
+      },
       "mutation": "cart/add",
       "query": "orderHistory",
-      "status": "await-fragment"
+      "status": "derived"
     }
   ],
   "ownerDomains": [
@@ -168,7 +177,7 @@
           "domain": "order",
           "keys": "arg:data.object.id",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:516",
+          "site": "examples/commerce/src/app.ts:511",
           "via": "orders"
         }
       ],
@@ -181,7 +190,7 @@
           "domain": "attachment",
           "keys": "arg:orderId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:466",
+          "site": "examples/commerce/src/app.ts:461",
           "via": "attachments"
         }
       ],

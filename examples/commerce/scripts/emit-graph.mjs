@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -18,6 +18,7 @@ registerHooks({
 const { deriveAppGraph } = await import('@jiso/compiler/graph');
 const { deriveInvalidationRegistry, serializeInvalidationRegistry } =
   await import('@jiso/drizzle/static');
+const { deriveOptimistic, serializeDerivedOptimistic } = await import('@jiso/drizzle/derive');
 const ts = await import('typescript');
 const { createCommerceGraph } = await import('../src/graph.js');
 
@@ -26,6 +27,7 @@ const commerceRoot = resolve(scriptDir, '..');
 const sourcePath = resolve(commerceRoot, 'src/app.ts');
 const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
+const optimisticPath = resolve(commerceRoot, 'src/generated/optimistic/cart-add.ts');
 const source = readFileSync(sourcePath, 'utf8');
 const starterCart = { count: 0 };
 
@@ -191,6 +193,115 @@ declare module '@jiso/core' {
 }
 `;
 
+// SPEC.md §10.5 (derived optimism): the commerce reference app declares its
+// cart/add symbolic effects + query shapes the same way it declares the touch
+// graph (commerce is not Drizzle-backed; the Drizzle extractor proves the same
+// IR in conformance/drizzle-pin). The source-agnostic deriver turns these into
+// committed transforms — deleting a hand-written transform lets derivation take
+// the pair over (SPEC.md §10.4).
+const param = (path) => ({ kind: 'param', path });
+const productsRowset = {
+  filters: [],
+  key: 'id',
+  orderBy: [{ column: 'id', direction: 'asc' }],
+  table: 'products',
+};
+const ordersRowset = { filters: [], key: 'id', orderBy: [], table: 'orders' };
+const cartAddEffects = [
+  {
+    op: 'insert',
+    table: 'cart_items',
+    values: {
+      productId: param('productId'),
+      qty: param('quantity'),
+      unitPrice: { expr: 'found.unitPrice', kind: 'opaque' },
+    },
+  },
+  {
+    op: 'insert',
+    table: 'orders',
+    values: {
+      id: { expr: 'order-${db.orders.length + 1}', kind: 'opaque' },
+      productId: param('productId'),
+      qty: param('quantity'),
+      total: { expr: 'found.unitPrice * quantity', kind: 'opaque' },
+      userId: { expr: 'session.user.id', kind: 'opaque' },
+    },
+  },
+  {
+    match: { eq: [{ column: 'id', value: param('productId') }], kind: 'keys' },
+    op: 'update',
+    sets: {
+      stock: {
+        kind: 'arith',
+        left: { column: 'stock', kind: 'col' },
+        op: '-',
+        right: param('quantity'),
+      },
+    },
+    table: 'products',
+  },
+];
+const cartAddShapes = {
+  cart: {
+    fields: {
+      count: {
+        arith: { column: 'qty', kind: 'col' },
+        kind: 'sum',
+        rowset: { filters: [], key: null, orderBy: [], table: 'cart_items' },
+      },
+    },
+    query: 'cart',
+  },
+  orderHistory: {
+    fields: {
+      items: {
+        columnTypes: {
+          id: 'string',
+          productId: 'string',
+          qty: 'number',
+          total: 'number',
+          userId: 'string',
+        },
+        kind: 'agg',
+        projection: ['id', 'productId', 'qty', 'total', 'userId'],
+        rowKey: 'id',
+        rowset: ordersRowset,
+      },
+    },
+    query: 'orderHistory',
+    rowsByTable: {
+      orders: { columns: ['id', 'productId', 'qty', 'total', 'userId'], rowsPath: 'items' },
+    },
+  },
+  productGrid: {
+    fields: {
+      items: {
+        kind: 'agg',
+        projection: ['id', 'stock', 'unitPrice'],
+        rowKey: 'id',
+        rowset: productsRowset,
+      },
+      nextCursor: { kind: 'cursor', rowset: productsRowset },
+    },
+    query: 'productGrid',
+    rowsByTable: { products: { columns: ['id', 'stock', 'unitPrice'], rowsPath: 'items' } },
+  },
+};
+const cartAddOptimisticEntries = [];
+for (const query of Object.keys(cartAddShapes)) {
+  const result = deriveOptimistic(cartAddEffects, cartAddShapes[query]);
+  assert.equal(result.kind, 'derived', `commerce ${query} must derive: ${JSON.stringify(result)}`);
+  cartAddOptimisticEntries.push({ program: result.program, query });
+}
+const optimisticSource = serializeDerivedOptimistic({
+  complete: true,
+  constName: 'cartAddDerivedOptimistic',
+  entries: cartAddOptimisticEntries,
+  formImport: { name: 'addToCartForm', path: '../../app.js' },
+  queue: 'cart',
+});
+
 if (process.argv.includes('--check')) {
   assert.equal(readFileSync(graphPath, 'utf8'), graphJson, 'generated graph.json is stale');
   assert.equal(
@@ -198,7 +309,14 @@ if (process.argv.includes('--check')) {
     touchGraphSource,
     'generated touch-graph.ts is stale',
   );
+  assert.equal(
+    readFileSync(optimisticPath, 'utf8'),
+    optimisticSource,
+    'generated optimistic/cart-add.ts is stale',
+  );
 } else {
   writeFileSync(graphPath, graphJson);
   writeFileSync(touchGraphPath, touchGraphSource);
+  mkdirSync(resolve(commerceRoot, 'src/generated/optimistic'), { recursive: true });
+  writeFileSync(optimisticPath, optimisticSource);
 }

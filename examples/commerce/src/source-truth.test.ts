@@ -130,14 +130,16 @@ describe('commerce source-truth graph acceptance', () => {
       invalidates: ['cart', 'product', 'order'],
       manualInvalidates: [],
       optimisticStatuses: {
-        cart: 'hand-written',
-        orderHistory: 'await-fragment',
-        productGrid: 'await-fragment',
+        cart: 'derived',
+        orderHistory: 'derived',
+        productGrid: 'derived',
       },
       optimisticSummary: {
+        PUNTED: '0',
         UNHANDLED: '0',
-        'await-fragment': '2',
-        'hand-written': '1',
+        'await-fragment': '0',
+        derived: '3',
+        'hand-written': '0',
         total: '3',
       },
       session: 'commerceSession',
@@ -162,8 +164,10 @@ describe('commerce source-truth graph acceptance', () => {
       writes: ['attachment'],
     });
     expect(fwExplainMutationAssertionFact(receiptOptimisticExplain).optimisticSummary).toEqual({
+      PUNTED: '0',
       UNHANDLED: '0',
       'await-fragment': '0',
+      derived: '0',
       'hand-written': '0',
       total: '0',
     });
@@ -379,9 +383,9 @@ describe('commerce source-truth graph acceptance', () => {
         productGrid: 'no-invalidation',
       },
       'cart/add': {
-        cart: 'hand-written',
-        orderHistory: 'await-fragment',
-        productGrid: 'await-fragment',
+        cart: 'derived',
+        orderHistory: 'derived',
+        productGrid: 'derived',
       },
       'order/receipt': {
         cart: 'no-invalidation',
@@ -409,9 +413,9 @@ describe('commerce source-truth graph acceptance', () => {
     // SPEC.md §10.4/§11.2: every invalidated query pair must have an explicit
     // optimistic status, and executed writes must stay within the static graph.
     expect(fact.optimisticStatuses).toEqual({
-      cart: 'hand-written',
-      orderHistory: 'await-fragment',
-      productGrid: 'await-fragment',
+      cart: 'derived',
+      orderHistory: 'derived',
+      productGrid: 'derived',
     });
     expect(fact.uploadReceipt.updateQueries).toEqual([]);
     expect(fact.uploadReceipt.invalidates).toEqual([]);

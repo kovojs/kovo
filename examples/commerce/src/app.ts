@@ -1,5 +1,4 @@
 import { createMemoryStorage, form, stripeSignature } from '@jiso/core';
-import type { OptimisticFor } from '@jiso/runtime';
 import {
   createMemoryMutationReplayStore,
   errorBoundary,
@@ -39,6 +38,7 @@ import {
 } from '@jiso/better-auth';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
+import { cartAddDerivedOptimistic } from './generated/optimistic/cart-add.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
@@ -429,18 +429,13 @@ export const addToCart = mutation('cart/add', {
   },
 });
 
-export const addToCartOptimistic = {
-  queue: 'cart',
-  transforms: {
-    cart(current, input) {
-      return {
-        count: (current?.count ?? 0) + input.quantity,
-      };
-    },
-    orderHistory: 'await-fragment',
-    productGrid: 'await-fragment',
-  },
-} satisfies OptimisticFor<typeof addToCartForm>;
+// SPEC.md §10.4/§10.5: optimism for cart/add is now compiler-DERIVED. The
+// generated/optimistic/cart-add.ts transforms (count += quantity, push the new
+// order row with placeholders, decrement the matched product's stock) supersede
+// the previously hand-written `cart` transform and the `await-fragment` punts on
+// orderHistory/productGrid. Deleting a transform there lets you hand-write an
+// override; regenerating restores derivation (the §10.4 pair-by-pair contract).
+export const addToCartOptimistic = cartAddDerivedOptimistic;
 
 export const uploadReceipt = mutation('order/receipt', {
   input: s.object({

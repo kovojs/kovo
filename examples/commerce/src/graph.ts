@@ -80,10 +80,23 @@ export function commerceGraphDeclarations(cart: CommerceGraphCartSummary) {
         writes: ['auth'],
       },
     ],
+    // SPEC.md §10.5: cart/add is fully compiler-derived (see generated/optimistic/
+    // cart-add.ts). All three invalidated queries are `derived` with derivation
+    // metadata; zero unhandled FW310, zero punts.
     optimistic: [
-      { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-      { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
-      { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+      { derivation: { status: 'derived' }, mutation: 'cart/add', query: 'cart', status: 'derived' },
+      {
+        derivation: { status: 'derived' },
+        mutation: 'cart/add',
+        query: 'productGrid',
+        status: 'derived',
+      },
+      {
+        derivation: { status: 'derived' },
+        mutation: 'cart/add',
+        query: 'orderHistory',
+        status: 'derived',
+      },
     ],
     ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
     pages: [
