@@ -9242,6 +9242,12 @@ function classifyField(
   const cursorRowset = object ? cursorRowsetForExpression(valueNode, object, context) : undefined;
   if (cursorRowset) return { field: { kind: 'cursor', rowset: cursorRowset } };
 
+  // Real-loader scalar: a single-row scalar projection of an aggregate select,
+  // e.g. `Number(rows[0]?.value ?? 0)` / `(await db.select({ value: sum(t.c) }))[0].value`,
+  // where the runtime loader awaits + projects the [{ value }] aggregate result.
+  const scalar = scalarProjectionField(valueNode, context);
+  if (scalar) return scalar;
+
   const select = selectChainForExpression(valueNode);
   if (!select) return undefined;
 
@@ -9534,6 +9540,72 @@ function aggregateField(
   }
 
   return undefined;
+}
+
+/**
+ * Classify a real-loader scalar field: a single-row scalar projection of an
+ * aggregate `db.select({ <col>: sum/count(…) })` result. Handles the runtime
+ * shapes `(await select)[0].col`, `rows[0].col`, `rows[0]?.col`, optionally
+ * wrapped in `Number(...)` / `... ?? default` / `!`. Returns the SUM/COUNT (or
+ * keyed-row Scalar) field the projected column computes.
+ */
+function scalarProjectionField(
+  valueNode: Node,
+  context: QueryShapeContextForTable,
+): ClassifiedField | undefined {
+  const access = scalarProjectionAccess(valueNode);
+  if (!access) return undefined;
+
+  const select = selectChainForExpression(access.base);
+  if (!select) return undefined;
+  const table = tableForSelect(select, context.resolveTable);
+  if (!table) return undefined;
+  const projection = selectProjectionArgument(select.selectCall);
+  if (!projection || !Node.isObjectLiteralExpression(projection)) return undefined;
+
+  const rowset = rowsetForSelect(select, table, context);
+  for (const property of projection.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== access.column) continue;
+    const initializer = property.getInitializer();
+    const field = initializer ? aggregateField(initializer, rowset, table, context) : undefined;
+    if (field) return { field };
+  }
+  return undefined;
+}
+
+/** Match a `<base>[0](?.|.)<col>` first-row scalar projection (await/Number/?? wrappers stripped). */
+function scalarProjectionAccess(node: Node): { base: Node; column: string } | undefined {
+  const expression = unwrapScalarProjection(node);
+  if (!Node.isPropertyAccessExpression(expression)) return undefined;
+  const column = expression.getName();
+  const element = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isElementAccessExpression(element)) return undefined;
+  const index = unwrappedStaticExpressionNode(element.getArgumentExpression() ?? element);
+  if (!Node.isNumericLiteral(index) || index.getLiteralText() !== '0') return undefined;
+  return { base: element.getExpression(), column };
+}
+
+/** Strip `Number(...)` / `String(...)` / `x ?? default` / `x!` / parens around a scalar projection. */
+function unwrapScalarProjection(node: Node): Node {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isNonNullExpression(expression))
+    return unwrapScalarProjection(expression.getExpression());
+  if (Node.isCallExpression(expression)) {
+    const callee = expression.getExpression();
+    const name = Node.isIdentifier(callee) ? callee.getText() : undefined;
+    const argument = expression.getArguments()[0];
+    if (argument && (name === 'Number' || name === 'String' || name === 'Boolean')) {
+      return unwrapScalarProjection(argument);
+    }
+  }
+  if (
+    Node.isBinaryExpression(expression) &&
+    expression.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken
+  ) {
+    return unwrapScalarProjection(expression.getLeft());
+  }
+  return expression;
 }
 
 /** True when the rowset's filter chain pins its instance key to one row (`eq(key, …)`). */

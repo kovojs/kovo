@@ -423,6 +423,40 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         reason: { code: 'opaque-projection', expr: 'sql<number>`sum(qty)`' },
       });
     });
+
+    // Real runtime loaders await the query and project the scalar out of the
+    // `[{ value }]` aggregate result; the extractor must see through that.
+    it('SUM via a real async loader (const row = await select; Number(rows[0]?.value ?? 0))', () => {
+      expect(
+        singleField(
+          COMMON_IMPORTS,
+          ITEMS_TABLE,
+          "export const q = query('q', {",
+          '  load: async (_input: unknown, db: PgDatabase<any, any, any>) => {',
+          '    const rows = await db.select({ value: sum(items.qty) }).from(items);',
+          '    return { f: Number(rows[0]?.value ?? 0) };',
+          '  },',
+          '});',
+        ),
+      ).toEqual({
+        arith: { column: 'qty', kind: 'col' },
+        kind: 'sum',
+        rowset: { filters: [], key: 'id', orderBy: [], table: 'items' },
+      });
+    });
+
+    it('AGG via a real async loader (f: await select().orderBy())', () => {
+      expect(
+        singleField(
+          COMMON_IMPORTS,
+          ITEMS_TABLE,
+          "export const q = query('q', {",
+          '  load: async (_input: unknown, db: PgDatabase<any, any, any>) =>',
+          '    ({ f: await db.select({ id: items.id, stock: items.stock }).from(items).orderBy(items.id) }),',
+          '});',
+        ),
+      ).toMatchObject({ kind: 'agg', projection: ['id', 'stock'], rowKey: 'id' });
+    });
   });
 
   // ─────────────── End-to-end: deriveOptimistic(matrix pairs) ────────────────
