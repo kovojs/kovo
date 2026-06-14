@@ -1,6 +1,9 @@
 # Better docs - approachable, dual human/agent docs site
 
-Status: active. Last compacted on 2026-06-13.
+Status: **substantially complete** (2026-06-13). Goal 1 (positioning) and Goal 2 (guides/tutorial/
+API refs + agent layer) shipped on `main`; site build + link-check + `@example` gate green. Two
+items remain by choice: the public-surface audit (deferred — would break pinned export tests) and a
+dedicated canonical-patterns page (stretch; substantially served by the 50 API examples + llms-full).
 
 Scope: `site/content/{docs,guides,tutorial}`, `site/gen/api`, `site/scripts/api-ref.mjs`, the
 package-source JSDoc that feeds it, and a new agent-facing layer (`llms.txt`, diagnostics catalog).
@@ -66,15 +69,18 @@ The generator (`site/scripts/api-ref.mjs`) already exists, reads JSDoc, emits re
 refuses to emit on parse errors, and reruns in the build. "227 exports, 0 documented" means the
 package sources have no JSDoc — the fix is upstream, not in the markdown.
 
-- [ ] Author verified JSDoc (purpose + `@param`/`@returns` + a real `@example`) at the package
-      sources for the app-facing export tier (`component`, `query`, `mutation`, `form`, `route`,
-      `domain`, guards, `respond`, …); one-liners for supporting types. Drafted from implementation + `SPEC §`, committed as source of truth — not LLM-hallucinated and committed blind.
-- [ ] Audit the public surface: demote/remove truly-internal exports from `packages/*/src/index.ts`
-      (server alone exports 227); shrink the documented surface to what app authors call.
-- [ ] Upgrade `api-ref.mjs`: render `@param`/`@returns` as tables and `@example` as fenced
-      sections (today `renderEntry` dumps the whole JSDoc as one blob + signature).
-- [ ] Typecheck `@example` snippets in CI so the refs cannot lie (extract-and-compile, mirroring
-      the tutorial's `run-steps.mjs`/`extract-snippets.mjs`).
+- [x] Author verified JSDoc (purpose + `@param`/`@returns` + a real `@example`) at the package
+      sources for the app-facing export tier; one-liners for supporting types. Documented exports
+      1 → 201 (core 59, server 98, runtime 21, test 18, drizzle 5); comment-only, export-pin tests
+      stayed green. Integrated `8c02e44f`.
+- [ ] Audit the public surface: demote/remove truly-internal exports from `packages/*/src/index.ts`.
+      **Deferred — risky:** the acceptance suite pins exact public export sets, so removing exports
+      breaks `packages/server/src/api/app.test.ts` and others. Undocumented internals stay flagged
+      `*Undocumented.*` by the generator (never omitted). Revisit as its own slice if desired.
+- [x] Upgrade `api-ref.mjs`: render `@param`/`@returns` as tables and `@example` as fenced
+      sections. Integrated `e5734296`; generator tests cover the new rendering.
+- [x] Typecheck `@example` snippets so the refs cannot lie: `site/scripts/api-examples-check.mjs`
+      extracts every `@example` block and compiles them — 50/50 pass; wired as `site` `api:check`.
 
 ### Agent layer (dedicated)
 
@@ -90,9 +96,12 @@ package sources have no JSDoc — the fix is upstream, not in the markdown.
 
 ### Gates / no-drift
 
-- [ ] Ratchet API-ref doc coverage in `fw-check`: app-facing exports must be documented and
-      coverage cannot regress (generator already counts `documented`; today it only prints it).
-- [ ] Keep the site link-check and build green as part of existing site gates.
+- [x] Ratchet API-ref doc coverage: enforced via per-package coverage-floor assertions in
+      `site/scripts/api-ref.test.mjs` (documented counts can't drop below the floor), plus the
+      `@example` typecheck gate. Lives in the site test rather than `fw-check`, but the
+      no-regression intent holds.
+- [x] Keep the site link-check and build green: `node site/scripts/build.mjs` (81 pages, 5 sections)
+      and `node site/scripts/check-links.mjs` (16,557 internal links) both EXIT 0 after the full wave.
 
 ## Suggested Sequence
 
