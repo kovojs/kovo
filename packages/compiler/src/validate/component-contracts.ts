@@ -125,11 +125,7 @@ export function validateDirectDbAccess(
     const params = handler.paramNames;
     const dbParamIndex = params.indexOf('db');
     const receivesDb = dbParamIndex !== -1;
-    const requestParam = params.find(
-      (param) =>
-        param !== undefined &&
-        (param === 'request' || /request$/i.test(param) || param === 'ctx' || param === 'context'),
-    );
+    const requestParam = params.find(isRequestLikeParamName);
     const requestDb =
       requestParam === undefined
         ? undefined
@@ -161,6 +157,20 @@ export function validateDirectDbAccess(
   }
 
   return diagnostics;
+}
+
+// SPEC §5.2 (FW330): explicit typed predicate over the parsed handler parameter NAME (a
+// model-derived identifier, not a raw source slice). Decides whether a parameter is a
+// request/context object that could own a `.db` handle. This replaces the inline `/request$/i`
+// regex that previously made this decision, while preserving its exact match set: the literal
+// names `ctx`/`context`, plus any name whose lower-cased spelling ends in "request".
+const requestLikeContextParamNames = new Set(['context', 'ctx']);
+
+function isRequestLikeParamName(param: string | undefined): param is string {
+  if (param === undefined) return false;
+  if (requestLikeContextParamNames.has(param)) return true;
+
+  return param.toLowerCase().endsWith('request');
 }
 
 export function unhandledUpdateCoverageDiagnostics(

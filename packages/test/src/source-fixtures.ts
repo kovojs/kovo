@@ -48,6 +48,20 @@ export interface ForbiddenBrowserArchitectureProjectFact {
   violations: ForbiddenBrowserArchitectureFact[];
 }
 
+export interface PostParseSourceStringFact {
+  column: number;
+  fileName: string;
+  label: string;
+  line: number;
+  site: string;
+}
+
+export interface PostParseSourceStringProjectFact {
+  checkedFileCount: number;
+  clean: boolean;
+  violations: PostParseSourceStringFact[];
+}
+
 export interface ProjectSourceFixture {
   fileName: string;
   source: string;
@@ -539,6 +553,231 @@ export function forbiddenBrowserArchitectureFacts(
 
   visit(sourceFile);
   return facts;
+}
+
+// SPEC §5.2: after parsing, compiler post-parse phases (lower/validate/analyze/emit + graph.ts)
+// must make decisions from typed model facts and spans, never from raw source snippets, regexes,
+// getText(), or ad hoc string slicing. This globs only those zones and flags decision-shaped
+// operations whose operand is a known raw-source carrier. Span-based source-patch application,
+// generated-artifact body carry, IR-header provenance, binding-path grammar on `.path`, URL/route
+// parsing of literal attribute values, and name-formatting of model-derived identifiers are
+// intentionally NOT flagged.
+export async function postParseSourceStringProjectFact(options: {
+  rootPath: string;
+  ts: TypeScriptModule;
+}): Promise<PostParseSourceStringProjectFact> {
+  const sources = await projectFileSources({
+    rootPath: options.rootPath,
+    directory: 'packages/compiler/src',
+    include: (path) => isPostParseGuardedFile(path),
+  });
+  const violations = sources.flatMap(({ path, source }) =>
+    postParseSourceStringFacts(options.ts, path, source),
+  );
+
+  return {
+    checkedFileCount: sources.length,
+    clean: violations.length === 0,
+    violations,
+  };
+}
+
+function isPostParseGuardedFile(path: string): boolean {
+  if (!path.endsWith('.ts') || path.endsWith('.test.ts')) return false;
+  return (
+    path === 'packages/compiler/src/graph.ts' ||
+    /^packages\/compiler\/src\/(lower|validate|analyze|emit)\//.test(path)
+  );
+}
+
+// Property names that, when accessed on a model object, carry a verbatim slice of app source code
+// (i.e. a decision over them post-parse would be a source-string decision).
+const rawSourcePropertyNames = new Set(['expression', 'body', 'text', 'callArguments']);
+
+// Methods that normalize a string while preserving whether it is raw app source.
+const stringNormalizerMethods = new Set([
+  'trim',
+  'trimEnd',
+  'trimStart',
+  'toLowerCase',
+  'toUpperCase',
+]);
+
+// Bare local identifiers that hold a raw source snippet inside the guarded zones.
+const rawSourceIdentifierNames = new Set([
+  'arg',
+  'argument',
+  'callArguments',
+  'expression',
+  'rawSource',
+  'snippet',
+  'source',
+]);
+
+// Base receiver names whose `.expression`/`.body` are model-COMPUTED facts (not raw carriers); an
+// access like `candidate.expression` or `derive.expression` is allowed even though the final name
+// matches a raw-source property name.
+const computedFactReceiverNames = new Set([
+  'access',
+  'binding',
+  'candidate',
+  'derive',
+  'entry',
+  'fact',
+  'input',
+  'item',
+  'link',
+  'lowering',
+  'param',
+  'placeholder',
+  'plan',
+  'segment',
+  'stamp',
+  'value',
+]);
+
+export function postParseSourceStringFacts(
+  ts: TypeScriptModule,
+  fileName: string,
+  source: string,
+): PostParseSourceStringFact[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const facts: PostParseSourceStringFact[] = [];
+  const record = (node: import('typescript').Node, label: string) => {
+    const { character, line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+    facts.push({
+      column: character + 1,
+      fileName,
+      label,
+      line: line + 1,
+      site: `${fileName}:${line + 1}:${character + 1}`,
+    });
+  };
+
+  // The base receiver of a property/element access, walking through chained accesses to the root.
+  const accessRootName = (expression: import('typescript').Expression): string | undefined => {
+    let current: import('typescript').Expression = expression;
+    while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      current = current.expression;
+    }
+    return ts.isIdentifier(current) ? current.text : undefined;
+  };
+
+  // True when an expression resolves to a verbatim slice of app source code (a "raw-source
+  // carrier"), and is therefore not a permitted basis for a post-parse decision.
+  const isRawSourceExpression = (expression: import('typescript').Expression): boolean => {
+    const node = unwrapParens(ts, expression);
+    // See through whitespace/case normalizers (`x.trim()`, `x.toLowerCase()`…) that preserve the
+    // raw-source-ness of their receiver, so `arg.trim() === 'state'` is still flagged.
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      stringNormalizerMethods.has(node.expression.name.text)
+    ) {
+      return isRawSourceExpression(node.expression.expression);
+    }
+    if (ts.isIdentifier(node)) return rawSourceIdentifierNames.has(node.text);
+    if (ts.isElementAccessExpression(node)) {
+      // An indexed element of a raw-source carrier is itself raw, e.g. `callArguments[index]` or
+      // `zeroArgArrow.callArguments[index]`.
+      return isRawSourceExpression(node.expression);
+    }
+    if (ts.isPropertyAccessExpression(node)) {
+      const propertyName = node.name.text;
+      if (!rawSourcePropertyNames.has(propertyName)) return false;
+      // Allow model-computed `.expression`/`.body` facts (candidate.expression, derive.expression…).
+      const baseName = accessRootName(node.expression);
+      return baseName === undefined || !computedFactReceiverNames.has(baseName);
+    }
+    return false;
+  };
+
+  // Allow IR-header provenance checks like `source.startsWith(compilerIrHeader)` — the argument is a
+  // compiler-defined header constant, not a string-literal decision over app source.
+  const isProvenanceHeaderArgument = (argument: import('typescript').Expression | undefined) =>
+    argument !== undefined && ts.isIdentifier(argument) && argument.text.endsWith('IrHeader');
+
+  const stringLiteralSide = (node: import('typescript').Expression) =>
+    ts.isStringLiteralLike(node) || ts.isTemplateExpression(node);
+
+  const visit = (node: import('typescript').Node) => {
+    // getText()/getFullText() on any node post-parse re-derives raw source.
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const method = node.expression.name.text;
+      const receiver = node.expression.expression;
+
+      if (method === 'getText' || method === 'getFullText') {
+        record(node, `post-parse ${method}() re-derives raw source`);
+      }
+
+      // Substring/prefix/suffix/equality decisions on a raw-source carrier.
+      if (
+        (method === 'includes' ||
+          method === 'startsWith' ||
+          method === 'endsWith' ||
+          method === 'indexOf' ||
+          method === 'search') &&
+        isRawSourceExpression(receiver) &&
+        !isProvenanceHeaderArgument(node.arguments[0])
+      ) {
+        record(node, `post-parse ${method}() decision over raw source`);
+      }
+    }
+
+    // RegExp.test(<raw source>) and <raw source>.match(regExp).
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const method = node.expression.name.text;
+      const receiver = node.expression.expression;
+      if (method === 'test' && node.arguments.some((argument) => isRawSourceExpression(argument))) {
+        record(node, 'post-parse regex .test() over raw source');
+      }
+      if (
+        method === 'match' &&
+        isRawSourceExpression(receiver) &&
+        node.arguments.some((argument) => ts.isRegularExpressionLiteral(argument))
+      ) {
+        record(node, 'post-parse .match() over raw source');
+      }
+    }
+
+    // Equality of a raw-source carrier against a string literal/template.
+    if (
+      ts.isBinaryExpression(node) &&
+      (node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+        node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+        node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken ||
+        node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken)
+    ) {
+      const leftRaw = isRawSourceExpression(node.left);
+      const rightRaw = isRawSourceExpression(node.right);
+      if (
+        (leftRaw && stringLiteralSide(node.right)) ||
+        (rightRaw && stringLiteralSide(node.left))
+      ) {
+        record(node, 'post-parse equality of raw source against string literal');
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return facts;
+}
+
+function unwrapParens(
+  ts: TypeScriptModule,
+  expression: import('typescript').Expression,
+): import('typescript').Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
 }
 
 async function projectFileTreeEntries(options: ProjectFileTreeOptions): Promise<string[]> {

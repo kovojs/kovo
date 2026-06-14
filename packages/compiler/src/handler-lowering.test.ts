@@ -540,3 +540,116 @@ export const CartActions = component('cart-actions', {
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
   });
 });
+
+// SPEC §5.2: handler lowering must decide named-vs-anonymous and emit the client body from typed
+// model facts, never from the raw attribute snippet. These fixtures vary whitespace,
+// parenthesization, and comments around an otherwise identical handler and assert the lowering
+// decision (named export name / element params) and the emitted client output are byte-identical.
+describe('handler lowering is formatting-resistant', () => {
+  function lowerSingle(handlerAttribute: string) {
+    const fileName = 'components/cart/cart-actions.tsx';
+    const source = `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (<button ${handlerAttribute}>Act</button>),
+});
+`;
+    const [handler] = lowerEventHandlers(
+      { fileName, source },
+      'CartActions',
+      parseComponentModule(fileName, source),
+    );
+    return handler;
+  }
+
+  function clientHandlerSource(handlerAttribute: string): string {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (<button ${handlerAttribute}>Act</button>),
+});
+`,
+    });
+    return result.files.find((file) => file.kind === 'client')?.source ?? '';
+  }
+
+  it('lowers a bare-named handler identically across whitespace, parentheses, and comments', () => {
+    const variants = [
+      'onClick={handleClick}',
+      'onClick={ handleClick }',
+      'onClick={(handleClick)}',
+      'onClick={((handleClick))}',
+      'onClick={/* keep stable */ handleClick}',
+    ];
+
+    const canonical = lowerSingle(variants[0]!);
+    expect(canonical?.isBareNamedHandler).toBe(true);
+    expect(canonical?.exportName).toBe('CartActions$handleClick');
+    expect(canonical?.params).toEqual([]);
+
+    for (const variant of variants) {
+      const handler = lowerSingle(variant);
+      expect(handler?.isBareNamedHandler).toBe(true);
+      expect(handler?.exportName).toBe(canonical?.exportName);
+      expect(handler?.params).toEqual(canonical?.params);
+      expect(clientHandlerSource(variant)).toBe(clientHandlerSource(variants[0]!));
+    }
+  });
+
+  it('lowers an anonymous member-capturing handler with identical decision facts across formatting', () => {
+    // The arrow body is carried verbatim and rewritten by span (SPEC §5.2 allowed source-patch
+    // boundary), so author whitespace inside the body is intentionally preserved. What must be
+    // formatting-invariant is the lowering DECISION: named-vs-anonymous, export name, and the typed
+    // element-param facts derived from the parsed call arguments.
+    const variants = [
+      'onClick={() => add(item.id, item.quantity)}',
+      'onClick={ () => add( item.id , item.quantity ) }',
+      'onClick={() => add((item.id), (item.quantity))}',
+      'onClick={() => /* capture */ add(item.id, item.quantity)}',
+    ];
+
+    const expectedParams = [
+      {
+        attributeName: 'data-p-id',
+        expression: 'item.id',
+        type: 'string',
+        value: '{item.id}',
+      },
+      {
+        attributeName: 'data-p-quantity',
+        expression: 'item.quantity',
+        type: 'string',
+        value: '{item.quantity}',
+      },
+    ];
+
+    for (const variant of variants) {
+      const handler = lowerSingle(variant);
+      expect(handler?.isBareNamedHandler).toBe(false);
+      expect(handler?.exportName).toBe('CartActions$button_click');
+      expect(handler?.params).toEqual(expectedParams);
+      // Captured paths are rewritten to ctx.params regardless of surrounding formatting.
+      const client = clientHandlerSource(variant);
+      expect(client).toContain('ctx.params.id');
+      expect(client).toContain('ctx.params.quantity');
+      expect(client).not.toContain('item.id');
+      expect(client).not.toContain('item.quantity');
+    }
+  });
+
+  it('does not promote a wrapped nested call argument to an element param across formatting', () => {
+    for (const variant of [
+      'onClick={() => track(getQuantity())}',
+      'onClick={() => track( getQuantity() )}',
+      'onClick={() => track((getQuantity)())}',
+    ]) {
+      const handler = lowerSingle(variant);
+      expect(handler?.isBareNamedHandler).toBe(false);
+      expect(handler?.params).toEqual([]);
+    }
+  });
+});

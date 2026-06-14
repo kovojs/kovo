@@ -83,6 +83,9 @@ export interface JsxExpressionModel {
 export interface JsxCommentModel {
   attachedAttributeStart?: number;
   end: number;
+  // SPEC §5.2: typed parser fact for the diagnostic codes a comment justifies, so post-parse
+  // phases consume model facts instead of re-scanning the raw comment text.
+  justifiedDiagnostics?: readonly string[];
   start: number;
   text: string;
 }
@@ -93,6 +96,11 @@ export interface JsxAttributeModel {
   executionTriggerName?: string;
   expression?: string;
   expressionEnd?: number;
+  // SPEC §5.2: typed parser facts recording whether the attribute expression is a bare identifier
+  // (e.g. `onClick={handleClick}`, including parenthesized/commented forms) and that identifier's
+  // name, so lowering/emit never re-derive either from the raw snippet.
+  expressionIsBareIdentifier?: boolean;
+  expressionBareIdentifierName?: string;
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionReferences?: readonly string[];
   expressionStart?: number;
@@ -126,6 +134,14 @@ export interface JsxElementChildBody {
   source: string;
 }
 
+export type ZeroArgArrowCallArgumentKind =
+  | 'state'
+  | 'empty'
+  | 'reference'
+  | 'member'
+  | 'static'
+  | 'other';
+
 export interface ZeroArgArrowModel {
   body: string;
   bodyEnd: number;
@@ -133,6 +149,9 @@ export interface ZeroArgArrowModel {
   callArgumentReferences?: readonly (readonly IdentifierReferenceModel[])[];
   callArgumentPropertyAccesses?: readonly (readonly PropertyAccessPathModel[])[];
   callArgumentStaticValues?: readonly (StaticLiteralValue | undefined)[];
+  // SPEC §5.2: per-call-argument typed kind computed from the ts arg nodes, so handler lowering
+  // never re-derives element-param eligibility by comparing the raw argument source string.
+  callArgumentKinds?: readonly ZeroArgArrowCallArgumentKind[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyReferences: readonly IdentifierReferenceModel[];
   bodyStart: number;
@@ -1462,11 +1481,23 @@ function jsxCommentModel(
   const text = source.slice(start, end);
   if (!/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(text)) return null;
 
+  // SPEC §5.2: the parser is the source-text boundary, so the FW codes a comment justifies are
+  // extracted here into a typed fact (`justifiedDiagnostics`). Post-parse validators consume that
+  // fact instead of re-scanning the raw comment text for diagnostic codes.
+  const justifiedDiagnostics = parseJustifiedDiagnostics(text);
+
   return {
     end,
+    ...(justifiedDiagnostics.length === 0 ? {} : { justifiedDiagnostics }),
     start,
     text,
   };
+}
+
+function parseJustifiedDiagnostics(commentText: string): string[] {
+  const codes = new Set<string>();
+  for (const match of commentText.matchAll(/FW\d{3}/g)) codes.add(match[0]);
+  return [...codes];
 }
 
 function attachJsxCommentsToAttributes(
@@ -1503,6 +1534,8 @@ function jsxAttributeExpression(
 ): {
   expression: string;
   expressionEnd: number;
+  expressionIsBareIdentifier: boolean;
+  expressionBareIdentifierName?: string;
   expressionPropertyAccesses: readonly PropertyAccessPathModel[];
   expressionReferences: readonly string[];
   expressionStart: number;
@@ -1514,9 +1547,19 @@ function jsxAttributeExpression(
 
   const expressionStart = initializer.expression.getStart(sourceFile);
   const expressionEnd = initializer.expression.getEnd();
+  // SPEC §5.2: decide bare-identifier-ness from the ts node (formatting-resistant), not by
+  // regex-matching the raw snippet. Parentheses/whitespace/comments around the identifier are
+  // unwrapped so `onClick={(handleClick)}` lowers identically to `onClick={handleClick}`, and the
+  // identifier's name is carried as a typed fact for the lowered export name / call-through.
+  const unwrapped = unwrapExpression(initializer.expression);
+  const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
   return {
     expression: source.slice(expressionStart, expressionEnd).trim(),
     expressionEnd,
+    expressionIsBareIdentifier: bareIdentifierName !== undefined,
+    ...(bareIdentifierName === undefined
+      ? {}
+      : { expressionBareIdentifierName: bareIdentifierName }),
     expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
     expressionReferences: referenceIdentifiers(initializer.expression),
     expressionStart,
@@ -1568,6 +1611,10 @@ function zeroArgArrowModel(
     !ts.isBlock(body) && ts.isCallExpression(body)
       ? body.arguments.map((argument) => staticLiteralValue(argument))
       : undefined;
+  const callArgumentKinds =
+    !ts.isBlock(body) && ts.isCallExpression(body)
+      ? body.arguments.map((argument) => zeroArgArrowCallArgumentKind(argument))
+      : undefined;
 
   return {
     zeroArgArrow: {
@@ -1577,6 +1624,7 @@ function zeroArgArrowModel(
       ...(callArgumentReferences === undefined ? {} : { callArgumentReferences }),
       ...(callArgumentPropertyAccesses === undefined ? {} : { callArgumentPropertyAccesses }),
       ...(callArgumentStaticValues === undefined ? {} : { callArgumentStaticValues }),
+      ...(callArgumentKinds === undefined ? {} : { callArgumentKinds }),
       bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
       bodyReferences: referenceIdentifierModels(sourceFile, body),
       bodyStart,
@@ -1586,6 +1634,20 @@ function zeroArgArrowModel(
       references: referenceIdentifiers(body),
     },
   };
+}
+
+// SPEC §5.2: classify a zero-arg-arrow call argument from its ts node so handler lowering can
+// decide element-param eligibility from a typed kind instead of comparing the raw argument source.
+function zeroArgArrowCallArgumentKind(argument: ts.Expression): ZeroArgArrowCallArgumentKind {
+  if (staticLiteralValue(argument) !== undefined) return 'static';
+
+  const unwrapped = unwrapExpression(argument);
+  if (ts.isIdentifier(unwrapped)) return unwrapped.text === 'state' ? 'state' : 'reference';
+  if (ts.isPropertyAccessExpression(unwrapped) || ts.isElementAccessExpression(unwrapped)) {
+    return 'member';
+  }
+
+  return 'other';
 }
 
 function documentElementActionModel(

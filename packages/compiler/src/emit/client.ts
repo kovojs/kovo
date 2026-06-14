@@ -44,8 +44,9 @@ ${importLine}${exports || '// no client handlers emitted'}
 }
 
 function emitHandlerBody(handler: HandlerLowering): string {
-  const namedHandler = /^[A-Za-z_$][\w$]*$/.test(handler.expression);
-  if (namedHandler) {
+  // SPEC §5.2: reuse the typed lowering fact instead of re-deciding bare-named-ness from the raw
+  // `expression` snippet at emit time.
+  if (handler.isBareNamedHandler) {
     return `return ${handler.expression}(event, ctx);`;
   }
 

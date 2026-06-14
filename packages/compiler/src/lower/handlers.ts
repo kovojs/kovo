@@ -26,12 +26,17 @@ export function lowerEventHandlers(
   const anonymousNameCounts = new Map<string, number>();
 
   for (const eventAttribute of eventAttributes(model)) {
-    const { attributeEnd, attributeStart, eventName, expression, tag } = eventAttribute;
-    const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
+    const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
+    // SPEC §5.2: branch on the typed parser fact, not a regex over the raw attribute snippet, and
+    // use the typed bare-identifier NAME (parenthesization-resistant) for the lowered export name
+    // and the emitted call-through. The raw `expression` is reserved for diagnostic help text.
+    const namedHandler = eventAttribute.expressionIsBareIdentifier === true;
+    const namedHandlerName = eventAttribute.expressionBareIdentifierName;
+    const expression =
+      namedHandler && namedHandlerName !== undefined ? namedHandlerName : eventAttribute.expression;
     const params = namedHandler
       ? []
       : extractElementParams(
-          expression,
           eventAttribute.zeroArgArrow,
           eventAttribute.expressionPropertyAccesses,
         );
@@ -89,6 +94,7 @@ export function lowerEventHandlers(
       ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
       exportName,
+      isBareNamedHandler: namedHandler,
       params,
     });
   }
@@ -153,6 +159,8 @@ function eventAttributes(model: ComponentModuleModel): Array<{
   attributeStart: number;
   eventName: string;
   expression: string;
+  expressionIsBareIdentifier?: boolean;
+  expressionBareIdentifierName?: string;
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionReferences?: readonly string[];
   tag: string;
@@ -163,6 +171,8 @@ function eventAttributes(model: ComponentModuleModel): Array<{
     attributeStart: number;
     eventName: string;
     expression: string;
+    expressionIsBareIdentifier?: boolean;
+    expressionBareIdentifierName?: string;
     expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
     expressionReferences?: readonly string[];
     tag: string;
@@ -178,6 +188,12 @@ function eventAttributes(model: ComponentModuleModel): Array<{
         attributeStart: attribute.start,
         eventName,
         expression: attribute.expression,
+        ...(attribute.expressionIsBareIdentifier === undefined
+          ? {}
+          : { expressionIsBareIdentifier: attribute.expressionIsBareIdentifier }),
+        ...(attribute.expressionBareIdentifierName === undefined
+          ? {}
+          : { expressionBareIdentifierName: attribute.expressionBareIdentifierName }),
         ...(attribute.expressionPropertyAccesses
           ? { expressionPropertyAccesses: attribute.expressionPropertyAccesses }
           : {}),
@@ -243,29 +259,39 @@ function fw201Diagnostic(
   };
 }
 
+// SPEC §5.2: element-param eligibility is decided from typed per-argument kinds and the parsed
+// reference/property-access facts, never by trimming or string-comparing the raw argument source.
 function extractElementParams(
-  expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): ElementParam[] {
-  const callArguments = zeroArgArrow?.callArguments;
-  const candidates = callArguments
-    ? callArguments
-        .map((arg) => arg.trim())
-        .flatMap((arg, index) => {
-          if (arg.length === 0 || arg === 'state') return [];
-          if (zeroArgArrow?.callArgumentStaticValues?.[index] !== undefined) return [];
-          const members =
-            zeroArgArrow?.callArgumentPropertyAccesses?.[index]
-              ?.filter((access) => serializableMemberExpression(access.path))
-              .map(elementParamCandidateFromAccess) ?? [];
-          const simpleReference = simpleCallArgumentReference(
-            arg,
+  const callArgumentKinds = zeroArgArrow?.callArgumentKinds;
+  const candidates = callArgumentKinds
+    ? callArgumentKinds.flatMap((kind, index) => {
+        // 'empty'/'state'/'static' arguments never become element params (these typed kinds replace
+        // the old `arg.length === 0`, `arg === 'state'`, and static-value source comparisons).
+        if (kind === 'empty' || kind === 'state' || kind === 'static') return [];
+
+        // Any remaining argument (a bare member, or an object/expression that embeds serializable
+        // member accesses such as `{ id: item.id }`) contributes its parsed property accesses.
+        const members =
+          zeroArgArrow?.callArgumentPropertyAccesses?.[index]
+            ?.filter((access) => serializableMemberExpression(access.path))
+            .map(elementParamCandidateFromAccess) ?? [];
+        if (members.length > 0) return members;
+
+        // Otherwise, only a bare-identifier argument (`kind === 'reference'`) becomes a param, using
+        // its parsed reference name. A nested call like `getQuantity()` is 'other' with no accesses
+        // and is correctly dropped.
+        if (kind === 'reference') {
+          const reference = simpleCallArgumentReference(
             zeroArgArrow?.callArgumentReferences?.[index] ?? [],
           );
-          if (members.length > 0) return members;
-          return simpleReference ? [{ expression: arg, terminalName: simpleReference }] : [];
-        })
+          return reference ? [{ expression: reference, terminalName: reference }] : [];
+        }
+
+        return [];
+      })
     : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
   return dedupeElementParamCandidates(candidates).map((candidate) => ({
@@ -286,14 +312,13 @@ function elementParamCandidateFromAccess(access: PropertyAccessPathModel): Eleme
   };
 }
 
+// SPEC §5.2: a bare-reference call argument yields exactly one parsed identifier reference; use its
+// typed name as the element-param expression instead of slicing the raw argument source.
 function simpleCallArgumentReference(
-  expression: string,
   references: readonly IdentifierReferenceModel[],
 ): string | null {
   const [reference] = references;
-  return reference && references.length === 1 && reference.name === expression.trim()
-    ? reference.name
-    : null;
+  return reference && references.length === 1 ? reference.name : null;
 }
 
 function inferElementParamType(

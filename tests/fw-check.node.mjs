@@ -116,6 +116,7 @@ import {
   projectQueryDiagnosticFacts,
   projectTouchGraphBehaviorFacts,
   forbiddenBrowserArchitectureProjectFact,
+  postParseSourceStringProjectFact,
   projectJsonFile,
   projectPackageManifestFacts,
 } from '../packages/test/src/source-fixtures.ts';
@@ -459,6 +460,18 @@ void test('P10 constitution rejects forbidden browser architecture in framework 
   assert.equal(fact.clean, true);
   assert.equal(fact.checkedFileCount > 100, true);
   assert.deepEqual(fact.violations, []);
+});
+
+// SPEC §5.2: post-parse compiler phases must decide from typed model facts/spans, not raw source.
+void test('post-parse compiler phases consume model facts, not source strings', async () => {
+  const ts = await import('typescript');
+  const fact = await postParseSourceStringProjectFact({
+    rootPath: projectRootPath,
+    ts,
+  });
+  assert.deepEqual(fact.violations, []);
+  assert.equal(fact.clean, true);
+  assert.equal(fact.checkedFileCount > 0, true);
 });
 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {

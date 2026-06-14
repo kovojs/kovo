@@ -66,8 +66,12 @@ function isKnownEventOrTrigger(name: string): boolean {
 }
 
 function hasFw211Justification(model: ComponentModuleModel, index: number): boolean {
+  // SPEC §5.2: consume the typed `justifiedDiagnostics` parser fact rather than re-scanning the raw
+  // comment text for the FW211 code at validation time.
   return jsxComments(model).some(
-    (comment) => comment.attachedAttributeStart === index && comment.text.includes('FW211'),
+    (comment) =>
+      comment.attachedAttributeStart === index &&
+      (comment.justifiedDiagnostics?.includes('FW211') ?? false),
   );
 }
 

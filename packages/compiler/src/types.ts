@@ -90,6 +90,10 @@ export interface HandlerLowering {
   attributeValue: string;
   arrowBody?: HandlerArrowBody;
   expression: string;
+  // SPEC §5.2: typed fact (threaded from the parser) marking a bare-named-reference handler such as
+  // `onClick={handleClick}`, so client emit chooses the call-through body without re-deciding from
+  // the raw `expression` snippet.
+  isBareNamedHandler: boolean;
   params: ElementParam[];
   diagnostic?: CompilerDiagnostic;
   diagnostics?: readonly CompilerDiagnostic[];
