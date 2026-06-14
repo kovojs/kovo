@@ -1,11 +1,27 @@
 # v1 Cleanup Plan
 
-Status: active. Created on 2026-06-13.
+Status: active. Created on 2026-06-13. Scope decisions locked 2026-06-13 (see below).
 
 `SPEC.md` remains the source of truth for framework behavior. The v1 implementation gates are green,
 and the completed closeout ledgers have been archived. This file is now the standalone active ledger
 for cleanup discovered during final verification. Prefer code cleanup over wording cleanup: only
 reword old claims when the claim is historical or when code cleanup is explicitly out of v1 scope.
+
+## Scope Decisions (locked 2026-06-13)
+
+- Disposition: **release-blocking**. Every checklist item must be closed with cited evidence before
+  this plan closes; "reasonable stopping point" is not acceptable — scope each item to completion.
+- Item 1 (test seams): in scope is **all oversized test files**, not only the two originally named.
+  The genuinely largest surfaces — `packages/drizzle/src/index.test.ts` (~14,967 lines),
+  `conformance/drizzle-pin/src/index.test.ts` (~9,924), and
+  `examples/gallery/src/interactive-gallery.browser.test.ts` (~3,331) — are explicitly included.
+- Item 2 (axe): resolve by **expanding axe coverage broadly** across every claimed primitive
+  family/state tier. Only trim a claim where a state genuinely cannot be represented in an
+  axe-stable DOM, and write the surviving accessibility claim down normatively (it currently lives
+  only in this plan and test comments).
+- Items 3 and 4 (remove-vs-reduce forks): **full removal preferred**. Delete duplicated
+  parser/apply logic and Drizzle source-mode paths even when more invasive; accept the added test
+  churn rather than stopping at fail-closed diagnostics.
 
 ## Archived Context
 
@@ -40,7 +56,11 @@ reword old claims when the claim is historical or when code cleanup is explicitl
 ## Cleanup Checklist
 
 - [ ] Split remaining large test seams into focused executable surfaces.
+      - Scope (locked): all oversized test files, not only the two originally cited.
+      - Current evidence: `packages/drizzle/src/index.test.ts` is ~14,967 lines.
+      - Current evidence: `conformance/drizzle-pin/src/index.test.ts` is ~9,924 lines.
       - Current evidence: `tests/fw-check.node.mjs` is 3919 lines.
+      - Current evidence: `examples/gallery/src/interactive-gallery.browser.test.ts` is ~3,331 lines.
       - Current evidence: `packages/runtime/src/inline-loader-parser-parity.test.ts` is 397 lines.
       - Do not close this by wording cleanup alone. Done when reusable mechanics are extracted into
         focused fixtures/tests and any remaining large file has a narrow, documented reason to stay
@@ -50,6 +70,10 @@ reword old claims when the claim is historical or when code cleanup is explicitl
         full-route axe test and one representative generated-state axe test.
       - Current evidence: the same browser file has 39 total tests covering generated interactions,
         native state, form ownership, visual baselines, and representative accessibility checks.
+      - Resolution (locked): expand axe broadly. Trimming a claim is allowed only where a state
+        genuinely cannot be represented in an axe-stable DOM. The surviving accessibility claim must
+        be recorded normatively (currently it lives only in this plan and test comments, not SPEC.md
+        or docs).
       - Do not close this by wording cleanup alone. Done when browser tests run axe across every
         claimed primitive family/state tier, or the explicit accessibility claim is reduced only
         because a state cannot be meaningfully represented in an axe-stable DOM.
@@ -59,6 +83,8 @@ reword old claims when the claim is historical or when code cleanup is explicitl
       - Current evidence: mutation bodies, deferred streams, broadcast replay, query events, script
         hydration, and typed reads converge through shared query/apply seams, and inline output is
         parity-tested against canonical helpers.
+      - Resolution (locked): full removal preferred — collapse duplicated parser/apply logic behind
+        canonical helpers rather than merely adding indirection.
       - Do not close this by wording cleanup alone. Done when duplicated parser/apply logic is
         actually removed or further centralized behind canonical helpers, with parity tests proving
         generated inline output still matches canonical runtime behavior.
@@ -68,6 +94,9 @@ reword old claims when the claim is historical or when code cleanup is explicitl
       - Current evidence: v1 blesses Postgres; SQLite/MySQL conformance is deferred.
       - Current evidence: `packages/drizzle/src/static.ts` still contains source-mode FW406
         degradation paths alongside project-mode ts-morph extraction.
+      - Resolution (locked): full removal preferred — delete source-mode compatibility paths rather
+        than leaving them as fail-closed shims, except where a path must remain as a fail-closed
+        diagnostic to preserve a real FW406 signal.
       - Do not close this by wording cleanup alone. Done when production Drizzle extraction requires
         project-mode proof for Postgres read/write facts, source-mode compatibility paths are deleted
         or reduced to fail-closed diagnostics only, and conformance proves real `drizzle-orm`
