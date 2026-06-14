@@ -76,7 +76,8 @@ describe('serializeDerivedOptimistic', () => {
     // Suppressed pairs are not emitted; the const is a partial the app merges.
     expect(source).not.toContain('cart: (current');
     expect(source).not.toContain('productGrid: (current');
-    expect(source).toContain('orderHistory: (current, $input) =>');
+    // The empty (no-op) program reads no input, so the param lowers to `_$input`.
+    expect(source).toContain('orderHistory: (current, _$input) =>');
     expect(source).not.toContain('satisfies OptimisticFor');
     expect(source).toContain(
       'Overridden in the mutation module (derivation suppressed): cart, productGrid.',

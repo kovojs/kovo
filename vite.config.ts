@@ -143,6 +143,12 @@ export default defineConfig({
     '*.{js,jsx,ts,tsx,json,md,yml,yaml}': 'vp check --fix',
   },
   test: {
+    // Several example suites spawn real builds / dev + HTTP servers or run the
+    // ts-morph project extractor (Drizzle examples). Under the full suite's
+    // parallelism these run well past Vitest's 5s default; give them headroom.
+    // (Per-test overrides still apply for the heaviest cold-build cases.)
+    hookTimeout: 30_000,
+    testTimeout: 30_000,
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
