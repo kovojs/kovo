@@ -125,6 +125,15 @@ function deriveAgg(
     const position = insertPosition(field.rowset);
     if (position.reason) return fail(position.reason);
     const built = buildInsertRow(field, effect.values);
+    // A sorted insert needs the new row's orderBy value; if that column is a
+    // placeholder (the inserted value is Opaque, e.g. an auto-increment id), the
+    // insertion point is undecidable ⇒ punt (SPEC.md §10.5 Opaque orderBy).
+    if (
+      typeof position.value === 'object' &&
+      built.placeholderColumns.includes(position.value.column)
+    ) {
+      return fail({ code: 'opaque-orderby', column: position.value.column });
+    }
     return rows({
       op: 'push-row',
       path,
