@@ -13,12 +13,14 @@
     "test": "vp test"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@jiso/better-auth": "workspace:*",
     "@jiso/core": "workspace:*",
     "@jiso/drizzle": "workspace:*",
     "@jiso/runtime": "workspace:*",
     "@jiso/server": "workspace:*",
-    "@jiso/test": "workspace:*"
+    "@jiso/test": "workspace:*",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@jiso/compiler": "workspace:*",

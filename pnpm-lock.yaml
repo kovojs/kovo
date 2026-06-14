@@ -92,6 +92,9 @@ importers:
 
   examples/commerce:
     dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
       '@jiso/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
@@ -110,6 +113,9 @@ importers:
       '@jiso/test':
         specifier: workspace:*
         version: link:../../packages/test
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
       '@jiso/compiler':
         specifier: workspace:*
