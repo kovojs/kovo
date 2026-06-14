@@ -1,0 +1,134 @@
+{
+  "mutations": [
+    {
+      "guards": ["authed"],
+      "invalidates": ["question"],
+      "inputFields": ["id", "title", "body", "authorId"],
+      "key": "postQuestion",
+      "session": "soSession",
+      "writes": ["question"]
+    },
+    {
+      "guards": ["authed"],
+      "invalidates": ["answer", "question"],
+      "inputFields": ["id", "questionId", "body", "authorId"],
+      "key": "postAnswer",
+      "session": "soSession",
+      "writes": ["answer", "question"]
+    },
+    {
+      "guards": ["authed"],
+      "invalidates": ["vote", "question"],
+      "inputFields": ["id", "targetId", "userId"],
+      "key": "voteUp",
+      "session": "soSession",
+      "writes": ["vote", "question"]
+    }
+  ],
+  "optimistic": [
+    {
+      "derivation": {
+        "status": "derived"
+      },
+      "mutation": "postQuestion",
+      "query": "questionList",
+      "status": "derived"
+    },
+    {
+      "derivation": {
+        "status": "derived"
+      },
+      "mutation": "postAnswer",
+      "query": "answerList",
+      "status": "derived"
+    },
+    {
+      "derivation": {
+        "status": "derived"
+      },
+      "mutation": "postAnswer",
+      "query": "questionList",
+      "status": "derived"
+    },
+    {
+      "derivation": {
+        "status": "derived"
+      },
+      "mutation": "voteUp",
+      "query": "questionList",
+      "status": "derived"
+    },
+    {
+      "derivation": {
+        "status": "derived"
+      },
+      "mutation": "voteUp",
+      "query": "questionScore",
+      "status": "derived"
+    }
+  ],
+  "queries": [
+    {
+      "domains": ["question"],
+      "query": "questionList"
+    },
+    {
+      "domains": ["answer"],
+      "query": "answerList"
+    },
+    {
+      "domains": ["vote"],
+      "query": "questionScore"
+    }
+  ],
+  "touchGraph": {
+    "postQuestion": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "question",
+          "keys": null,
+          "site": "examples/stackoverflow/src/mutations.ts:24",
+          "via": "questions"
+        }
+      ],
+      "unresolved": []
+    },
+    "postAnswer": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "answer",
+          "keys": null,
+          "site": "examples/stackoverflow/src/mutations.ts:39",
+          "via": "answers"
+        },
+        {
+          "domain": "question",
+          "keys": "arg:questionId",
+          "site": "examples/stackoverflow/src/mutations.ts:40",
+          "via": "questions"
+        }
+      ],
+      "unresolved": []
+    },
+    "voteUp": {
+      "reads": [],
+      "touches": [
+        {
+          "domain": "question",
+          "keys": "arg:targetId",
+          "site": "examples/stackoverflow/src/mutations.ts:54",
+          "via": "questions"
+        },
+        {
+          "domain": "vote",
+          "keys": null,
+          "site": "examples/stackoverflow/src/mutations.ts:53",
+          "via": "votes"
+        }
+      ],
+      "unresolved": []
+    }
+  }
+}
