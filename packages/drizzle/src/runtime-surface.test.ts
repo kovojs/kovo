@@ -41,7 +41,12 @@ describe('@jiso/drizzle runtime surface', () => {
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
     expect(compatibilityBarrel.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);
-    expect(staticExtraction.extractTouchGraphFromSource).toBeTypeOf('function');
+    // SPEC §11.1 (v1 scope): source-mode extraction was removed in v1-cleanup item 4; only the
+    // project-mode ts-morph entry points remain on the static surface.
+    expect('extractTouchGraphFromSource' in staticExtraction).toBe(false);
+    expect('extractQueryFactsFromSource' in staticExtraction).toBe(false);
+    expect(staticExtraction.extractTouchGraphFromProject).toBeTypeOf('function');
+    expect(staticExtraction.extractQueryFactsFromProject).toBeTypeOf('function');
     expect(packageJson.exports).toEqual({
       '.': './src/runtime.ts',
       './static': './src/static.ts',

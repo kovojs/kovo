@@ -9,9 +9,7 @@ import {
   diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
-  extractTouchGraphFromSource,
   extractQueryFactsFromProject,
-  extractQueryFactsFromSource,
   jiso,
   serializeInvalidationRegistry,
   serializeDomainRegistry,
@@ -212,7 +210,6 @@ describe('@jiso/drizzle touch graph helpers', () => {
       },
     ];
 
-    expect(extractQueryFactsFromSource([sourceFile])).toEqual(expected);
     expect(
       extractQueryFactsFromProject({
         files: [
@@ -224,35 +221,6 @@ describe('@jiso/drizzle touch graph helpers', () => {
         ],
       }),
     ).toEqual(expected);
-  });
-
-  it('degrades deferred SQLite table factories instead of extracting exact v1 source writes', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'user.domain.ts',
-        source: [
-          'export const users = sqliteTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db) {',
-          '  await db.update(users).set({ active: true });',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'user.domain.ts:4',
-          },
-        ],
-      },
-    });
   });
 
   it('creates deterministic touch graph entries from annotated tables and read domains', () => {
@@ -527,547 +495,279 @@ export interface CommerceInvalidationSets {
 `);
   });
 
-  it('extracts direct Drizzle write calls from annotated source tables', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function addItem(db) {
-            await db.insert(cartItems).values({ productId: "p1" });
-            await db.update(products).set({ reserved: true });
-          }
-        `,
-      },
-    ]);
+  it('extracts project-mode direct Drizzle write calls from typed function declarations', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(cartItems).values({ productId: "p1" });',
+            '  await db.update(products).set({ reserved: true });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       addItem: {
         reads: [],
         touches: [
-          { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
-          { domain: 'product', keys: null, site: 'cart.domain.ts:7', via: 'products' },
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:8', via: 'products' },
         ],
         unresolved: [],
       },
     });
   });
 
-  it('does not leak source extraction state between repeated source calls', () => {
-    const first = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
-
-          export function save(db) {
-            return db.insert(items).values({ id: "cart-1" });
-          }
-        `,
-      },
-    ]);
-    const second = extractTouchGraphFromSource([
-      {
-        fileName: 'order.domain.ts',
-        source: `
-          export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
-
-          export function save(db) {
-            return db.insert(items).values({ id: "order-1" });
-          }
-        `,
-      },
-    ]);
-    const third = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
-
-          export function save(db) {
-            return db.insert(items).values({ id: "cart-2" });
-          }
-        `,
-      },
-    ]);
-
-    expect(first).toEqual({
-      save: {
-        reads: [],
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
-        unresolved: [],
-      },
+  it('extracts project-mode direct Drizzle write calls from typed arrow handlers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const addItem = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.insert(cartItems).values({ productId: "p1" });',
+            '  await db.update(products).set({ reserved: true });',
+            '};',
+          ].join('\n'),
+        },
+      ],
     });
-    expect(second).toEqual({
-      save: {
-        reads: [],
-        touches: [{ domain: 'order', keys: null, site: 'order.domain.ts:5', via: 'order_items' }],
-        unresolved: [],
-      },
-    });
-    expect(third).toEqual({
-      save: {
-        reads: [],
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts direct Drizzle write calls from exported arrow handlers', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export const addItem = async (db) => {
-            await db.insert(cartItems).values({ productId: "p1" });
-            await db.update(products).set({ reserved: true });
-          };
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       addItem: {
         reads: [],
         touches: [
-          { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
-          { domain: 'product', keys: null, site: 'cart.domain.ts:7', via: 'products' },
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:8', via: 'products' },
         ],
         unresolved: [],
       },
     });
   });
 
-  it('extracts direct Drizzle write calls from functions with parenthesized parameter initializers', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-
-          export function addItem(db = makeDb()) {
-            return db.insert(cartItems).values({ productId: "p1" });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
-        unresolved: [],
-      },
+  it('extracts project-mode writes from typed functions with parenthesized parameter initializers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'declare function makeDb(): PgDatabase<any, any, any>;',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            '',
+            'export function addItem(db: PgDatabase<any, any, any> = makeDb()) {',
+            '  return db.insert(cartItems).values({ productId: "p1" });',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('marks source destructured receiver parameters as FW406 instead of extracting table facts', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'export async function addItem({ db: writer } = makeContext(), productId) {',
-          '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:4',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks quoted source destructured receiver parameters as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'export async function addItem({ "db": writer } = makeContext(), productId) {',
-          '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:4',
-          },
-        ],
-      },
-    });
-  });
-
-  it('does not mark shadowed source destructured receiver names as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'export async function addItem({ db: writer } = makeContext(), productId) {',
-          '  {',
-          '  const writer = fakeDb();',
-          '  await writer.update(cartItems).set({ productId });',
-          '  }',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('extracts source writes through static element-access write methods', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'export async function addItem(db, productId) {',
-          '  await db["insert"](cartItems).values({ productId });',
-          '  await db["update"](cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          { domain: 'cart', keys: null, site: 'cart.domain.ts:4', via: 'cart_items' },
-          {
-            domain: 'cart',
-            keys: 'arg:productId',
-            site: 'cart.domain.ts:5',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts Drizzle writes through transaction callback receiver aliases', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          export async function addItem(db, productId) {
-            await db.transaction(async (writer) => {
-              await writer.insert(cartItems).values({ productId });
-              await writeAudit(writer, productId);
-            });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:6',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-        ],
-      },
-    });
-  });
-
-  it('does not leak transaction callback receiver aliases into unrelated or shadowed callbacks', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'export async function addItem(db, productId, queue) {',
-          '  await db.transaction(async (writer) => {',
-          '    await writer.insert(cartItems).values({ productId });',
-          '    await queue.forEach(async (writer) => {',
-          '      await writer.update(cartItems).set({ productId });',
-          '      await writeAudit(writer, productId);',
-          '    });',
-          '  });',
-          '  await queue.forEach(async (writer) => {',
-          '    await writer.delete(cartItems).where(eq(cartItems.productId, productId));',
-          '  });',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:5',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts expression-bodied arrow write handlers', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-
-          export const addItem = (db) => db.insert(cartItems).values({ productId: "p1" });
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:4', via: 'cart_items' }],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('marks expression-bodied external helpers receiving a Drizzle receiver as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const addItem = (db) => writeAudit(db);
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:2',
-          },
-        ],
-      },
-    });
-  });
-
-  it('does not fabricate source-mode writes from comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function describeWrite(db) {
-            const fixture = "await db.update(products).set({ reserved: true })";
-            // await db.delete(products);
-            return fixture;
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('omits write-side-only exempt table writes from the touch graph', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function restockProduct(db) {
-            await db.insert(auditLog).values({ event: "restock" });
-            await db.update(products).set({ stock: 10 });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      restockProduct: {
-        reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' }],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts writes from exported variable-assigned mutation handlers', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export const restockProduct = async function (db) {
-            await db.update(products).set({ stock: 10 });
-          };
-          export let addItem = (db) => {
-            await db.insert(cartItems).values({ productId: "p1" });
-          };
-          export var removeProduct = function removeProduct(db) {
-            await db.delete(products);
-          };
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:9', via: 'cart_items' }],
-        unresolved: [],
-      },
-      removeProduct: {
-        reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:12', via: 'products' }],
-        unresolved: [],
-      },
-      restockProduct: {
-        reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:6', via: 'products' }],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('does not treat arbitrary domain objects as source tables', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartConfig = { domain: "cart", key: "cartId", name: "cart_items" };
-
-          export async function addItem(db) {
-            await db.insert(cartConfig).values({ productId: "p1" });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
-          },
-        ],
-      },
-    });
-  });
-
-  it('does not treat source consts with domain and key properties as tables', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartConfig = {
-            domain: "cart",
-            key: "cartId",
-            pgTable: "cart_items",
-            jiso: true,
-          };
-
-          export async function addItem(db) {
-            await db.insert(cartConfig).values({ productId: "p1" });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
-        ],
-      },
-    });
-  });
-
-  it('recognizes source-mode pgTable initializers with jiso annotations as tables', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {
-            cartId: text("cart_id"),
-          }, jiso({ domain: "cart", key: "cartId" }));
-
-          export async function addItem(db) {
-            await db.insert(cartItems).values({ productId: "p1" });
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       addItem: {
         reads: [],
         touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks project-mode typed destructured receiver writes as real table touches', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'interface Ctx { db: PgDatabase }',
+            'declare function makeContext(): Ctx;',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export async function addItem({ db: writer }: Ctx = makeContext(), productId: string) {',
+            '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:8',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts project-mode expression-bodied arrow write handlers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            '',
+            'export const addItem = (db: PgDatabase<any, any, any>) => db.insert(cartItems).values({ productId: "p1" });',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('omits write-side-only exempt table writes from the project touch graph', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function restockProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(auditLog).values({ event: "restock" });',
+            '  await db.update(products).set({ stock: 10 });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      restockProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:8', via: 'products' }],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts project-mode writes from typed variable-assigned mutation handlers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+          'delete(table: unknown): Promise<void>;',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const restockProduct = async function (db: PgDatabase<any, any, any>) {',
+            '  await db.update(products).set({ stock: 10 });',
+            '};',
+            'export let addItem = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.insert(cartItems).values({ productId: "p1" });',
+            '};',
+            'export var removeProduct = async function removeProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.delete(products);',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:10', via: 'cart_items' }],
+        unresolved: [],
+      },
+      removeProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:13', via: 'products' }],
+        unresolved: [],
+      },
+      restockProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:7', via: 'products' }],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('recognizes project-mode pgTable initializers with jiso annotations as tables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {',
+            '  cartId: text("cart_id"),',
+            '}, jiso({ domain: "cart", key: "cartId" }));',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(cartItems).values({ productId: "p1" });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' }],
         unresolved: [],
       },
     });
@@ -1094,19 +794,6 @@ export interface CommerceInvalidationSets {
       '});',
     ].join('\n');
 
-    expect(extractTouchGraphFromSource([{ fileName: 'product.domain.ts', source }])).toEqual({
-      restock: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'product.domain.ts:10',
-          },
-        ],
-      },
-    });
     expect(
       extractTouchGraphFromProject({ files: [{ fileName: 'product.domain.ts', source }] }),
     ).toEqual({
@@ -1142,58 +829,28 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
-  it('ignores source-mode table declarations inside comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          const fixture = "export const ghost = pgTable(\\"ghost\\", {}, jiso({ domain: \\"ghost\\", key: \\"id\\" }))";
-          // export const commented = pgTable("commented", {}, jiso({ domain: "commented", key: "id" }));
-
-          export async function addItem(db) {
-            await db.insert(ghost).values({ id: "g1" });
-            await db.insert(commented).values({ id: "c1" });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:6',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-        ],
-      },
+  it('extracts project-mode writes through real Drizzle table receivers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {',
+            '  cartId: text("cart_id"),',
+            '}, jiso({ domain: "cart", key: "cartId" }));',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, cartId: string) {',
+            '  await db.update(cartItems).set({ touched: true }).where(eq(cartItems.cartId, cartId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('recognizes semicolonless source-mode table and alias declarations', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {
-            cartId: text("cart_id"),
-          }, jiso({ domain: "cart", key: "cartId" }))
-          const writeTarget = cartItems
-
-          export async function addItem(db, cartId) {
-            await db.update(writeTarget).set({ touched: true }).where(eq(writeTarget.cartId, cartId))
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       addItem: {
@@ -1211,29 +868,36 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('extracts query result shapes, read domains, and instance keys from Drizzle selects', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.queries.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, jiso({ domain: "cart", key: "cartId" }));
-          export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));
-
-          export const cartQuery = query("cart", {
-            output: s.object({ count: s.number() }),
-            async load(input, db: PgDatabase) {
-              return db.select({
-                count: sql<number>\`count(*)\`,
-                productId: products.id,
-                item: {
-                  qty: cartItems.qty,
-                },
-              }).from(cartItems).innerJoin(products, eq(products.id, cartItems.productId)).where(eq(cartItems.cartId, input.cartId));
-            },
-          });
-        `,
-      },
-    ]);
+  it('extracts project query result shapes, read domains, and instance keys from joined Drizzle selects', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { innerJoin(table: unknown, on: unknown): { where(value: unknown): Promise<unknown[]> } } };',
+        ]),
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, jiso({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const cartQuery = query("cart", {',
+            '  output: s.object({ count: s.number() }),',
+            '  async load(input, db: PgDatabase<any, any, any>) {',
+            '    return db.select({',
+            '      count: sql<number>`count(*)`,',
+            '      productId: products.id,',
+            '      item: {',
+            '        qty: cartItems.qty,',
+            '      },',
+            '    }).from(cartItems).innerJoin(products, eq(products.id, cartItems.productId)).where(eq(cartItems.cartId, input.cartId));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -1250,35 +914,43 @@ export interface CommerceInvalidationSets {
           },
           productId: 'string',
         },
-        site: 'cart.queries.ts:5',
+        site: 'cart.queries.ts:6',
       },
     ]);
   });
 
-  it('extracts query facts from Drizzle distinct selects', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
-          export const products = pgTable("products", {
-            id: text("id").primaryKey(),
-            name: text("name").notNull(),
-          }, jiso({ domain: "product", key: "id" }));
-
-          export const distinctProducts = query("products/distinct", {
-            load(_input, db: PgDatabase) {
-              return db.selectDistinct({ name: products.name }).from(products);
-            },
-          });
-
-          export const firstProductNames = query("products/distinct-on", {
-            load(_input, db: PgDatabase) {
-              return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
-            },
-          });
-        `,
-      },
-    ]);
+  it('extracts project query facts from Drizzle distinct selects', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'selectDistinct(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          'selectDistinctOn(on: unknown, value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  name: text("name").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const distinctProducts = query("products/distinct", {',
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    return db.selectDistinct({ name: products.name }).from(products);',
+            '  },',
+            '});',
+            '',
+            'export const firstProductNames = query("products/distinct-on", {',
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -1287,7 +959,7 @@ export interface CommerceInvalidationSets {
         shape: {
           name: 'string',
         },
-        site: 'product.queries.ts:7',
+        site: 'product.queries.ts:8',
       },
       {
         query: 'products/distinct-on',
@@ -1296,31 +968,38 @@ export interface CommerceInvalidationSets {
           id: 'string',
           name: 'string',
         },
-        site: 'product.queries.ts:13',
+        site: 'product.queries.ts:14',
       },
     ]);
   });
 
-  it('extracts query instance keys from static element access predicates', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.queries.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {
-            cartId: text("cart_id").notNull(),
-            qty: integer("qty").notNull(),
-          }, jiso({ domain: "cart", key: "cartId" }));
-
-          export const cartQuery = query("cart", {
-            load(input, db: PgDatabase) {
-              return db.select({
-                qty: cartItems.qty,
-              }).from(cartItems).where(eq(cartItems["cartId"], input["cartId"]));
-            },
-          });
-        `,
-      },
-    ]);
+  it('extracts project query instance keys from static element access predicates', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        ]),
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {',
+            '  cartId: text("cart_id").notNull(),',
+            '  qty: integer("qty").notNull(),',
+            '}, jiso({ domain: "cart", key: "cartId" }));',
+            '',
+            'export const cartQuery = query("cart", {',
+            '  load(input, db: PgDatabase<any, any, any>) {',
+            '    return db.select({',
+            '      qty: cartItems.qty,',
+            '    }).from(cartItems).where(eq(cartItems["cartId"], input["cartId"]));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -1333,94 +1012,7 @@ export interface CommerceInvalidationSets {
         shape: {
           qty: 'number',
         },
-        site: 'cart.queries.ts:7',
-      },
-    ]);
-  });
-
-  it('marks computed query read sources as FW406 instead of dropping them', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
-          export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));
-
-          export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
-              return db.select({ id: products.id }).from((() => products)());
-            },
-          });
-        `,
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
-            severity: 'warn',
-            site: 'product.queries.ts:4',
-          },
-        ],
-        query: 'product',
-        reads: [],
-        shape: {
-          id: 'string',
-        },
-        site: 'product.queries.ts:4',
-      },
-    ]);
-  });
-
-  it('scopes namespace-imported query tables to the referenced source module', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.schema.ts',
-        source: `
-          export const products = pgTable("cart_products", {
-            id: text("id").primaryKey(),
-          }, jiso({ domain: "cart", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'order.schema.ts',
-        source: `
-          export const products = pgTable("order_products", {
-            id: integer("id").primaryKey(),
-          }, jiso({ domain: "order", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'cart.queries.ts',
-        source: `
-          import * as cartSchema from "./cart.schema";
-
-          export const cartProductQuery = query("cart/product", {
-            load(input, db: PgDatabase) {
-              return db.select({
-                id: cartSchema.products.id,
-              }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
-            },
-          });
-        `,
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        instanceKey: {
-          domain: 'cart',
-          key: 'arg:id',
-        },
-        query: 'cart/product',
-        reads: ['cart'],
-        shape: {
-          id: 'string',
-        },
-        site: 'cart.queries.ts:4',
+        site: 'cart.queries.ts:8',
       },
     ]);
   });
@@ -1578,10 +1170,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('reports FW411 when a query read set includes an exempt table', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const auditLog = pgTable("audit_log", { message: text("message").notNull(), productId: text("product_id").notNull() }, jiso({ exempt: true }));
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
@@ -1594,8 +1187,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -1625,56 +1219,6 @@ export interface CommerceInvalidationSets {
         message: 'Query read set includes an exempt table. Tables: audit_log.',
         severity: 'error',
         site: 'product.queries.ts:5',
-      },
-    ]);
-  });
-
-  it('derives source query shapes from Drizzle column builders instead of selected aliases', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
-          export const products = pgTable("products", {
-            archived: boolean("archived").notNull(),
-            id: text("id").primaryKey(),
-            metadata: json("metadata"),
-            name: text("name"),
-            stock: integer("stock").notNull(),
-          }, jiso({ domain: "product", key: "id" }));
-
-          export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
-              return db.select({
-                archived: products.archived,
-                discount: products.name,
-                id: products.id,
-                metadata: products.metadata,
-                stock: products.stock,
-              }).from(products);
-            },
-          });
-        `,
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        query: 'product',
-        reads: ['product'],
-        shape: {
-          archived: 'boolean',
-          discount: {
-            kind: 'nullable',
-            shape: 'string',
-          },
-          id: 'string',
-          metadata: {
-            kind: 'nullable',
-            shape: 'object',
-          },
-          stock: 'number',
-        },
-        site: 'product.queries.ts:10',
       },
     ]);
   });
@@ -1712,10 +1256,7 @@ export interface CommerceInvalidationSets {
       },
     };
 
-    for (const facts of [
-      extractQueryFactsFromSource(files),
-      extractQueryFactsFromProject({ files }),
-    ]) {
+    for (const facts of [extractQueryFactsFromProject({ files })]) {
       expect(facts).toHaveLength(1);
       expect(facts[0]?.shape).toEqual(expectedShape);
     }
@@ -1748,10 +1289,7 @@ export interface CommerceInvalidationSets {
       },
     ];
 
-    for (const facts of [
-      extractQueryFactsFromSource(files),
-      extractQueryFactsFromProject({ files }),
-    ]) {
+    for (const facts of [extractQueryFactsFromProject({ files })]) {
       expect(facts).toEqual([
         {
           diagnostics: [
@@ -1774,47 +1312,12 @@ export interface CommerceInvalidationSets {
     }
   });
 
-  it('derives source query result shape from the returned select', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
-          export const auditLog = pgTable("audit_log", {
-            id: text("id").primaryKey(),
-            message: text("message").notNull(),
-          }, jiso({ domain: "audit", key: "id" }));
-          export const products = pgTable("products", {
-            id: text("id").primaryKey(),
-            name: text("name").notNull(),
-          }, jiso({ domain: "product", key: "id" }));
-
-          export const productQuery = query("product", {
-            async load(_input, db: PgDatabase) {
-              await db.select({ message: auditLog.message }).from(auditLog);
-              return db.select({ name: products.name }).from(products);
-            },
-          });
-        `,
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        query: 'product',
-        reads: ['audit', 'product'],
-        shape: {
-          name: 'string',
-        },
-        site: 'product.queries.ts:11',
-      },
-    ]);
-  });
-
   it('does not derive returned select shape from comments or strings', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const auditLog = pgTable("audit_log", {
             id: text("id").primaryKey(),
             message: text("message").notNull(),
@@ -1833,8 +1336,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -1849,10 +1353,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('reports FW410 for opaque query projections without declared output schemas', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
 
           export const cartQuery = query("cart", {
@@ -1863,8 +1368,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -1901,10 +1407,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('recognizes static AST output schema properties for opaque projections', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
 
           export const literalOutputQuery = query("cart/literal", {
@@ -1921,18 +1428,20 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
     expect(facts.map((fact) => fact.query)).toEqual(['cart/computed', 'cart/literal']);
   });
 
   it('does not treat comments or strings as declared query output schemas', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
 
           export const cartQuery = query("cart", {
@@ -1945,8 +1454,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(diagnosticsForQueryFacts(facts)).toEqual([
       {
@@ -1960,10 +1470,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not treat dynamic output keys or spread contents as declared query output schemas', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'cart.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
           const outputKey = "output";
           const sharedQueryConfig = { output: s.object({ count: s.number() }) };
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
@@ -1982,8 +1493,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(
       diagnosticsForQueryFacts(facts).map(({ code, message, severity }) => ({
@@ -2008,10 +1520,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('omits instance keys when Drizzle query predicates do not target an annotated table key', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", { sku: text("sku").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
@@ -2020,8 +1533,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2036,10 +1550,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not infer query instance keys from comments and strings', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
@@ -2050,8 +1565,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2066,10 +1582,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('marks unresolved computed projections as FW406 instead of guessing from selected aliases', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
             name: text("name").notNull(),
@@ -2085,8 +1602,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2117,10 +1635,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not fabricate projection facts from punctuation inside string-literal keys', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
             name: text("name").notNull(),
@@ -2136,8 +1655,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2162,10 +1682,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('resolves static element-access projection columns from AST facts', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
             name: text("name").notNull(),
@@ -2180,8 +1701,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2197,10 +1719,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not infer typed sql projections from string contents', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
           }, jiso({ domain: "product", key: "id" }));
@@ -2214,8 +1737,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2239,10 +1763,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('marks shorthand projections as FW406 instead of dropping them', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
           }, jiso({ domain: "product", key: "id" }));
@@ -2254,8 +1779,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2277,10 +1803,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('keeps projection-less selects visible as FW406 query facts', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
@@ -2289,8 +1816,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2321,10 +1849,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('keeps raw query receiver calls visible as FW406 query facts', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product/raw", {
@@ -2333,8 +1862,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2397,10 +1927,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('keeps relational query API reads visible as FW406 query facts', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
           export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
 
           export const usersQuery = query("users", {
@@ -2409,8 +1940,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -2441,10 +1973,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('keeps static element-access relational API reads visible as FW406 query facts', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
           export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
 
           export const usersQuery = query("users", {
@@ -2453,8 +1986,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -4840,10 +4374,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
@@ -4855,8 +4390,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -4872,23 +4408,25 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not fabricate relational query facts from non-receiver objects', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, reader) {
+            load(_input, reader: PgDatabase) {
               const fixture = { query: { auditLog: { findMany() { return []; } } } };
               fixture.query.auditLog.findMany();
               return reader.select({ name: products.name }).from(products);
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -4904,15 +4442,16 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not fabricate select reads or instance keys from non-receiver builders', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const auditLog = pgTable("audit_log", { productId: text("product_id").notNull() }, jiso({ exempt: true }));
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(input, reader) {
+            load(input, reader: PgDatabase) {
               const fixture = {
                 select() { return this; },
                 from() { return this; },
@@ -4931,8 +4470,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -4948,10 +4488,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not fabricate source query facts from arbitrary destructured loader bindings', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
           }, jiso({ domain: "product", key: "id" }));
@@ -4962,17 +4503,19 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([]);
   });
 
   it('marks source query-loader db destructuring as FW406 instead of deriving reads', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id").primaryKey(),
           }, jiso({ domain: "product", key: "id" }));
@@ -4983,8 +4526,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -4992,7 +4536,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode destructured Drizzle receiver surface select() without project type proof.',
+              'Statically un-analyzable write site; manual touches required. Query uses an un-provable destructured Drizzle receiver surface select() without project type proof.',
             severity: 'warn',
             site: 'product.queries.ts:6',
           },
@@ -5006,22 +4550,24 @@ export interface CommerceInvalidationSets {
   });
 
   it('marks quoted source query-loader db destructuring as FW406 instead of deriving reads', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: [
-          'export const products = pgTable("products", {',
-          '  id: text("id").primaryKey(),',
-          '}, jiso({ domain: "product", key: "id" }));',
-          '',
-          'export const productQuery = query("product/quoted-destructured-db", {',
-          '  load(_input, { "db": reader }) {',
-          '    return reader.select({ id: products.id }).from(products);',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/quoted-destructured-db", {',
+            '  load(_input, { "db": reader }) {',
+            '    return reader.select({ id: products.id }).from(products);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -5029,7 +4575,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode destructured Drizzle receiver surface select() without project type proof.',
+              'Statically un-analyzable write site; manual touches required. Query uses an un-provable destructured Drizzle receiver surface select() without project type proof.',
             severity: 'warn',
             site: 'product.queries.ts:5',
           },
@@ -5070,10 +4616,7 @@ export interface CommerceInvalidationSets {
       },
     ];
 
-    for (const facts of [
-      extractQueryFactsFromSource(files),
-      extractQueryFactsFromProject({ files }),
-    ]) {
+    for (const facts of [extractQueryFactsFromProject({ files })]) {
       expect(facts).toEqual([
         {
           query: 'product/non-loader-callback',
@@ -5089,20 +4632,22 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not discover query definitions from comments strings or templates', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'audit.queries.ts',
-        source: [
-          'export const auditLog = pgTable("audit_log", { message: text("message").notNull() }, jiso({ domain: "audit", key: "id" }));',
-          '',
-          '// export const commentedQuery = query("commented", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });',
-          'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
-          'const templated = `export const templatedQuery = query("templated", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
-          'export const keepModule = { quoted, templated };',
-          '',
-        ].join('\n'),
-      },
-    ]);
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'audit.queries.ts',
+          source: [
+            'export const auditLog = pgTable("audit_log", { message: text("message").notNull() }, jiso({ domain: "audit", key: "id" }));',
+            '',
+            '// export const commentedQuery = query("commented", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });',
+            'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
+            'const templated = `export const templatedQuery = query("templated", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
+            'export const keepModule = { quoted, templated };',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(facts).toEqual([]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
@@ -5499,10 +5044,11 @@ export interface CommerceInvalidationSets {
   });
 
   it('wraps selected right-joined source table columns as nullable query shapes', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: `
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
           export const products = pgTable("products", {
             id: text("id"),
             name: text("name").notNull(),
@@ -5521,8 +5067,9 @@ export interface CommerceInvalidationSets {
             },
           });
         `,
-      },
-    ]);
+        },
+      ],
+    });
 
     expect(facts).toEqual([
       {
@@ -5598,22 +5145,32 @@ export interface CommerceInvalidationSets {
   });
 
   it('extracts direct insert-select and update-from read source tables', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
-          export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));
-          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
-
-          export async function importSnapshots(db) {
-            await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));
-            await db.update(products).set({ price: prices.amount }).from(prices).where(eq(prices.productId, products.id));
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { select(value: unknown): Promise<void> };',
+          'select(): { from(table: unknown): { innerJoin(table: unknown, on: unknown): Promise<void> } };',
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'export async function importSnapshots(db: PgDatabase) {',
+            '  await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));',
+            '  await db.update(products).set({ price: prices.amount }).from(prices).where(eq(prices.productId, products.id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       importSnapshots: {
@@ -5621,125 +5178,31 @@ export interface CommerceInvalidationSets {
           {
             domain: 'price',
             keys: null,
-            site: 'product.domain.ts:9',
+            site: 'product.domain.ts:11',
             source: 'update-from',
             via: 'prices',
           },
           {
             domain: 'product',
             keys: null,
-            site: 'product.domain.ts:8',
+            site: 'product.domain.ts:10',
             source: 'insert-select',
             via: 'products',
           },
           {
             domain: 'vendor',
             keys: null,
-            site: 'product.domain.ts:8',
+            site: 'product.domain.ts:10',
             source: 'insert-select',
             via: 'vendors',
           },
         ],
         touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
-          { domain: 'snapshot', keys: null, site: 'product.domain.ts:8', via: 'product_snapshots' },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts source delete predicate subquery read source tables', () => {
-    // SPEC §11.1: a `delete().where(subquery.from(R))` reads R as a `delete-predicate` source.
-    // drizzle Postgres delete has no `.from()`/`.using()` chain, so the read is not silently dropped.
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'export async function pruneOrphanedItems(db) {',
-          '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select({ id: products.id }).from(products)));',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      pruneOrphanedItems: {
-        reads: [
-          {
-            domain: 'product',
-            keys: null,
-            predicate: 'non-eq',
-            site: 'cart.domain.ts:5',
-            source: 'delete-predicate',
-            via: 'products',
-          },
-        ],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            predicate: 'non-eq',
-            site: 'cart.domain.ts:5',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts read source tables from write call AST without reparsing statement text', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: [
-          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-          'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
-          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
-          '',
-          'export async function syncSnapshots(db, productId) {',
-          '  await db["insert"](snapshots).select(db.select().from(products).where(gt(sql.raw(".from(prices)"), 0)));',
-          '  await db["update"](products).set({ price: prices.amount }).from(prices).where(eq(products.id, productId));',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncSnapshots: {
-        reads: [
-          {
-            domain: 'price',
-            keys: null,
-            site: 'product.domain.ts:7',
-            source: 'update-from',
-            via: 'prices',
-          },
-          {
-            domain: 'product',
-            keys: null,
-            site: 'product.domain.ts:6',
-            source: 'insert-select',
-            via: 'products',
-          },
-        ],
-        touches: [
-          {
-            domain: 'product',
-            keys: 'arg:productId',
-            site: 'product.domain.ts:7',
-            via: 'products',
-          },
+          { domain: 'product', keys: null, site: 'product.domain.ts:11', via: 'products' },
           {
             domain: 'snapshot',
             keys: null,
-            site: 'product.domain.ts:6',
+            site: 'product.domain.ts:10',
             via: 'product_snapshots',
           },
         ],
@@ -5748,58 +5211,126 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('folds local helper writes and reads into caller summaries', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));
-          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
+  it('extracts read source tables from write call AST without reparsing statement text', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { select(value: unknown): Promise<void> };',
+          'select(): { from(table: unknown): { where(value: unknown): Promise<void> } };',
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq, gt, sql } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'export async function syncSnapshots(db: PgDatabase, productId: string) {',
+            '  await db["insert"](snapshots).select(db.select().from(products).where(gt(sql.raw(".from(prices)"), 0)));',
+            '  await db["update"](products).set({ price: prices.amount }).from(prices).where(eq(products.id, productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
-          async function insertCartItem(db, input) {
-            await db.insert(cartItems).values({ productId: input.productId });
-          }
-
-          async function snapshotProducts(db) {
-            await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));
-          }
-
-          export async function addItem(db, input) {
-            await insertCartItem(db, input);
-            await snapshotProducts(db);
-          }
-        `,
+    expect(graph).toEqual({
+      syncSnapshots: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:10',
+            source: 'update-from',
+            via: 'prices',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'insert-select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:10',
+            via: 'products',
+          },
+          { domain: 'snapshot', keys: null, site: 'product.domain.ts:9', via: 'product_snapshots' },
+        ],
+        unresolved: [],
       },
-    ]);
+    });
+  });
+
+  it('folds local helper writes and reads into caller summaries', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void>; select(value: unknown): Promise<void> };',
+          'select(): { from(table: unknown): { innerJoin(table: unknown, on: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'async function insertCartItem(db: PgDatabase, input: { productId: string }) {',
+            '  await db.insert(cartItems).values({ productId: input.productId });',
+            '}',
+            '',
+            'async function snapshotProducts(db: PgDatabase) {',
+            '  await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase, input: { productId: string }) {',
+            '  await insertCartItem(db, input);',
+            '  await snapshotProducts(db);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph.addItem).toEqual({
       reads: [
         {
           domain: 'product',
           keys: null,
-          site: 'cart.domain.ts:12',
+          site: 'cart.domain.ts:14',
           source: 'insert-select',
           via: 'products',
         },
         {
           domain: 'vendor',
           keys: null,
-          site: 'cart.domain.ts:12',
+          site: 'cart.domain.ts:14',
           source: 'insert-select',
           via: 'vendors',
         },
       ],
       touches: [
-        { domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' },
-        { domain: 'snapshot', keys: null, site: 'cart.domain.ts:12', via: 'product_snapshots' },
+        { domain: 'cart', keys: null, site: 'cart.domain.ts:10', via: 'cart_items' },
+        { domain: 'snapshot', keys: null, site: 'cart.domain.ts:14', via: 'product_snapshots' },
       ],
       unresolved: [],
     });
     expect(graph.insertCartItem).toEqual({
       reads: [],
-      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' }],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:10', via: 'cart_items' }],
       unresolved: [],
     });
     expect(graph.snapshotProducts).toEqual({
@@ -5807,45 +5338,50 @@ export interface CommerceInvalidationSets {
         {
           domain: 'product',
           keys: null,
-          site: 'cart.domain.ts:12',
+          site: 'cart.domain.ts:14',
           source: 'insert-select',
           via: 'products',
         },
         {
           domain: 'vendor',
           keys: null,
-          site: 'cart.domain.ts:12',
+          site: 'cart.domain.ts:14',
           source: 'insert-select',
           via: 'vendors',
         },
       ],
       touches: [
-        { domain: 'snapshot', keys: null, site: 'cart.domain.ts:12', via: 'product_snapshots' },
+        { domain: 'snapshot', keys: null, site: 'cart.domain.ts:14', via: 'product_snapshots' },
       ],
       unresolved: [],
     });
   });
 
   it('does not fold local helper summaries from comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
-
-          async function writeAudit(db, productId) {
-            await db.insert(auditLog).values({ productId });
-          }
-
-          export async function addItem(db, productId) {
-            // await writeAudit(db, productId);
-            const fixture = "writeAudit(db, productId)";
-            const templated = \`writeAudit(db, \${productId})\`;
-            return { fixture, templated };
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            '',
+            'async function writeAudit(db: PgDatabase, productId: string) {',
+            '  await db.insert(auditLog).values({ productId });',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase, productId: string) {',
+            '  // await writeAudit(db, productId);',
+            '  const fixture = "writeAudit(db, productId)";',
+            '  const templated = `writeAudit(db, ${productId})`;',
+            '  return { fixture, templated };',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       writeAudit: {
@@ -5854,7 +5390,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'audit',
             keys: null,
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:6',
             via: 'audit_log',
           },
         ],
@@ -5864,68 +5400,34 @@ export interface CommerceInvalidationSets {
   });
 
   it('folds local helper summaries for domain-like helper names', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          async function insert(db, productId) {
-            await db.insert(cartItems).values({ productId });
-          }
-
-          export async function addItem(db, productId) {
-            await insert(db, productId);
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'async function insert(db: PgDatabase, productId: string) {',
+            '  await db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase, productId: string) {',
+            '  await insert(db, productId);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph.addItem?.touches).toEqual([
-      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
     ]);
     expect(graph.insert?.touches).toEqual([
-      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
     ]);
-  });
-
-  it('keeps closure-local helper summaries scoped by symbol instead of helper name', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-          export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
-
-          export async function addItem(db, productId) {
-            async function apply(db) {
-              await db.insert(cartItems).values({ productId });
-            }
-
-            await apply(db);
-          }
-
-          export async function auditItem(db, productId) {
-            async function apply(db) {
-              await db.insert(auditLog).values({ productId });
-            }
-
-            await apply(db);
-          }
-        `,
-      },
-    ]);
-
-    expect(graph.addItem).toEqual({
-      reads: [],
-      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' }],
-      unresolved: [],
-    });
-    expect(graph.auditItem).toEqual({
-      reads: [],
-      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:15', via: 'audit_log' }],
-      unresolved: [],
-    });
   });
 
   it('keeps project closure-local helper summaries scoped by symbol instead of helper name', () => {
@@ -6011,72 +5513,44 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not fold uncalled closure-local helper bodies into parent summaries', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
-          '',
-          'export async function addItem(db, productId) {',
-          '  async function writeAudit(db) {',
-          '    await db.insert(auditLog).values({ productId });',
-          '  }',
-          '  return productId;',
-          '}',
-          '',
-          'export async function calledItem(db, productId) {',
-          '  async function writeCart(db) {',
-          '    await db.insert(cartItems).values({ productId });',
-          '  }',
-          '  await writeCart(db);',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            '',
+            'export async function addItem(db: PgDatabase, productId: string) {',
+            '  async function writeAudit(db: PgDatabase) {',
+            '    await db.insert(auditLog).values({ productId });',
+            '  }',
+            '  return productId;',
+            '}',
+            '',
+            'export async function calledItem(db: PgDatabase, productId: string) {',
+            '  async function writeCart(db: PgDatabase) {',
+            '    await db.insert(cartItems).values({ productId });',
+            '  }',
+            '  await writeCart(db);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph.addItem).toBeUndefined();
     expect(graph.writeAudit).toEqual({
       reads: [],
-      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:6', via: 'audit_log' }],
+      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:8', via: 'audit_log' }],
       unresolved: [],
     });
     expect(graph.calledItem).toEqual({
       reads: [],
-      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:13', via: 'cart_items' }],
-      unresolved: [],
-    });
-  });
-
-  it('does not fold closure-local helper summaries when the call omits a source receiver', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
-          '',
-          'export async function addItem(db, fake, productId) {',
-          '  async function writeAudit(db) {',
-          '    await db.insert(auditLog).values({ productId });',
-          '  }',
-          '  await writeAudit(fake);',
-          '  await db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph.addItem).toEqual({
-      reads: [],
-      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:9', via: 'cart_items' }],
-      unresolved: [],
-    });
-    expect(graph.writeAudit).toEqual({
-      reads: [],
-      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:6', via: 'audit_log' }],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:15', via: 'cart_items' }],
       unresolved: [],
     });
   });
@@ -6122,47 +5596,61 @@ export interface CommerceInvalidationSets {
   });
 
   it('dedupes recursive helper summaries at a fixed point', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          async function insertCartItem(db) {
-            await db.insert(cartItems).values({ productId: "p1" });
-            await retryInsert(db);
-          }
-
-          async function retryInsert(db) {
-            await insertCartItem(db);
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'async function insertCartItem(db: PgDatabase) {',
+            '  await db.insert(cartItems).values({ productId: "p1" });',
+            '  await retryInsert(db);',
+            '}',
+            '',
+            'async function retryInsert(db: PgDatabase) {',
+            '  await insertCartItem(db);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph.insertCartItem?.touches).toEqual([
-      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
     ]);
     expect(graph.retryInsert?.touches).toEqual([
-      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
     ]);
   });
 
   it('extracts direct parameterized keys from update and delete eq predicates', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function updateProduct(db, input, productId) {
-            await db.update(products).set({ reserved: true }).where(eq(products.id, input.id));
-            await db.delete(cartItems).where(eq(cartItems.cartId, productId));
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+          'delete(table: unknown): { where(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function updateProduct(db: PgDatabase, input: { id: string }, productId: string) {',
+            '  await db.update(products).set({ reserved: true }).where(eq(products.id, input.id));',
+            '  await db.delete(cartItems).where(eq(cartItems.cartId, productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       updateProduct: {
@@ -6171,10 +5659,10 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: 'arg:productId',
-            site: 'product.domain.ts:7',
+            site: 'product.domain.ts:9',
             via: 'cart_items',
           },
-          { domain: 'product', keys: 'arg:id', site: 'product.domain.ts:6', via: 'products' },
+          { domain: 'product', keys: 'arg:id', site: 'product.domain.ts:8', via: 'products' },
         ],
         unresolved: [],
       },
@@ -6182,44 +5670,57 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not infer parameterized keys from predicate text inside comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function scrubPredicates(db, id) {
-            await db.update(products).set({ note: ".where(eq(products.id, id))" });
-            await db.update(products).set({ /* .where(eq(products.id, id)) */ reserved: true });
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function scrubPredicates(db: PgDatabase, id: string) {',
+            '  await db.update(products).set({ note: ".where(eq(products.id, id))" });',
+            '  await db.update(products).set({ /* .where(eq(products.id, id)) */ reserved: true });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph.scrubPredicates?.touches).toEqual([
-      { domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' },
       { domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' },
+      { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
     ]);
   });
 
   it('does not fabricate non-eq predicate facts from string-contained column names', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function scrubPredicate(db, productId) {
-            await db.update(products).set({ reserved: true }).where(gt(sql.raw("products.id"), productId));
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { gt, sql } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function scrubPredicate(db: PgDatabase, productId: string) {',
+            '  await db.update(products).set({ reserved: true }).where(gt(sql.raw("products.id"), productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       scrubPredicate: {
         reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' }],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' }],
         unresolved: [],
       },
     });
@@ -6227,29 +5728,37 @@ export interface CommerceInvalidationSets {
   });
 
   it('does not borrow predicates from following semicolonless write statements', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function syncProducts(db, productId) {
-            await db.update(products).set({ reserved: true })
-            await db.update(products).set({ synced: true }).where(eq(products.id, productId))
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function syncProducts(db: PgDatabase, productId: string) {',
+            '  await db.update(products).set({ reserved: true })',
+            '  await db.update(products).set({ synced: true }).where(eq(products.id, productId))',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProducts: {
         reads: [],
         touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
           {
             domain: 'product',
             keys: 'arg:productId',
-            site: 'product.domain.ts:6',
+            site: 'product.domain.ts:8',
             via: 'products',
           },
         ],
@@ -6259,22 +5768,30 @@ export interface CommerceInvalidationSets {
   });
 
   it('keeps non-key and table-column predicates at table-level', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
-          export const auditLog = pgTable("audit_log", {});
-
-          export async function syncProduct(db, productId) {
-            await db.update(products).set({ reserved: true }).where(eq(products.sku, productId));
-            await db.update(products).set({ price: prices.amount }).from(prices).where(eq(products.id, prices.productId));
-            await db.update(products).set({ audited: true }).where(eq(products.id, auditLog.id));
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void>; from(table: unknown): { where(value: unknown): Promise<void> } } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {});',
+            '',
+            'export async function syncProduct(db: PgDatabase, productId: string) {',
+            '  await db.update(products).set({ reserved: true }).where(eq(products.sku, productId));',
+            '  await db.update(products).set({ price: prices.amount }).from(prices).where(eq(products.id, prices.productId));',
+            '  await db.update(products).set({ audited: true }).where(eq(products.id, auditLog.id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProduct: {
@@ -6282,14 +5799,14 @@ export interface CommerceInvalidationSets {
           {
             domain: 'price',
             keys: null,
-            site: 'product.domain.ts:8',
+            site: 'product.domain.ts:10',
             source: 'update-from',
             via: 'prices',
           },
         ],
         touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
-          { domain: 'product', keys: null, site: 'product.domain.ts:8', via: 'products' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:10', via: 'products' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:11', via: 'products' },
           { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
         ],
         unresolved: [],
@@ -6298,18 +5815,26 @@ export interface CommerceInvalidationSets {
   });
 
   it('degrades compound key predicates to table-level invalidation', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function syncProducts(db, primaryId, fallbackId) {
-            await db.update(products).set({ reserved: true }).where(or(eq(products.id, primaryId), eq(products.id, fallbackId)));
-          }
-        `,
-      },
-    ]);
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq, or } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function syncProducts(db: PgDatabase, primaryId: string, fallbackId: string) {',
+            '  await db.update(products).set({ reserved: true }).where(or(eq(products.id, primaryId), eq(products.id, fallbackId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProducts: {
@@ -6319,58 +5844,7 @@ export interface CommerceInvalidationSets {
             domain: 'product',
             keys: null,
             predicate: 'non-eq',
-            site: 'product.domain.ts:5',
-            via: 'products',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-    expect(diagnosticsForTouchGraph(graph)).toEqual([
-      {
-        code: 'FW409',
-        message: 'Non-eq predicate degraded to table-level invalidation.',
-        severity: 'notice',
-        site: 'product.domain.ts:5',
-      },
-    ]);
-  });
-
-  it('marks direct non-equality predicates as FW409 degraded table-level invalidation', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
-
-          export async function syncProduct(db, productId) {
-            await db.update(products).set({ reserved: true }).where(gt(products.id, productId));
-            await db.update(products).set({ price: prices.amount }).from(prices).where(gt(prices.productId, productId));
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncProduct: {
-        reads: [
-          {
-            domain: 'price',
-            keys: null,
-            predicate: 'non-eq',
             site: 'product.domain.ts:7',
-            source: 'update-from',
-            via: 'prices',
-          },
-        ],
-        touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
-          {
-            domain: 'product',
-            keys: null,
-            predicate: 'non-eq',
-            site: 'product.domain.ts:6',
             via: 'products',
           },
         ],
@@ -6378,12 +5852,6 @@ export interface CommerceInvalidationSets {
       },
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([
-      {
-        code: 'FW409',
-        message: 'Non-eq predicate degraded to table-level invalidation.',
-        severity: 'notice',
-        site: 'product.domain.ts:6',
-      },
       {
         code: 'FW409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
@@ -6393,23 +5861,29 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
-  it('resolves local Drizzle table aliases for writes, reads, and predicates', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          const priceAlias = alias(prices, "pr");
-          const productAlias = alias(products, "p");
-
-          export async function syncProduct(db, productId) {
-            await db.update(productAlias).set({ reserved: true }).where(eq(productAlias.id, productId));
-            await db.update(products).set({ price: priceAlias.amount }).from(priceAlias).where(gt(priceAlias.productId, productId));
-          }
-        `,
-      },
-    ]);
+  it('marks direct non-equality predicates as FW409 degraded table-level invalidation', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void>; from(table: unknown): { where(value: unknown): Promise<void> } } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { gt } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            '',
+            'export async function syncProduct(db: PgDatabase, productId: string) {',
+            '  await db.update(products).set({ reserved: true }).where(gt(products.id, productId));',
+            '  await db.update(products).set({ price: prices.amount }).from(prices).where(gt(prices.productId, productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProduct: {
@@ -6424,13 +5898,14 @@ export interface CommerceInvalidationSets {
           },
         ],
         touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
           {
             domain: 'product',
-            keys: 'arg:productId',
+            keys: null,
+            predicate: 'non-eq',
             site: 'product.domain.ts:8',
             via: 'products',
           },
-          { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
         ],
         unresolved: [],
       },
@@ -6440,109 +5915,112 @@ export interface CommerceInvalidationSets {
         code: 'FW409',
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
+        site: 'product.domain.ts:8',
+      },
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
         site: 'product.domain.ts:9',
       },
     ]);
   });
 
-  it('resolves namespace-imported Drizzle schema identifiers', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'schema.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          import * as schema from "./schema";
-
-          export async function syncProduct(db, productId) {
-            await db.update(schema.products).set({ reserved: true }).where(eq(schema.products.id, productId));
-          }
-        `,
-      },
-    ]);
+  it('resolves local Drizzle table aliases for writes, reads, and predicates', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'packages/drizzle/src/product.domain.ts',
+          source: [
+            'import { eq, gt } from "drizzle-orm";',
+            'import { alias, integer, pgTable, text, type PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const prices = pgTable("prices", {',
+            '  amount: integer("amount").notNull(),',
+            '  productId: text("product_id").notNull(),',
+            '}, jiso({ domain: "price", key: "productId" }));',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            'const priceAlias = alias(prices, "pr");',
+            'const productAlias = alias(products, "p");',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db.update(productAlias).set({ reserved: true }).where(eq(productAlias.id, productId));',
+            '  await db.update(products).set({ price: priceAlias.amount }).from(priceAlias).where(gt(priceAlias.productId, productId));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProduct: {
-        reads: [],
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'packages/drizzle/src/product.domain.ts:16',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
         touches: [
           {
             domain: 'product',
             keys: 'arg:productId',
-            site: 'product.domain.ts:5',
+            site: 'packages/drizzle/src/product.domain.ts:15',
+            via: 'products',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'packages/drizzle/src/product.domain.ts:16',
             via: 'products',
           },
         ],
         unresolved: [],
       },
     });
-  });
-
-  it('does not resolve namespace-imported table identifiers from unrelated source modules', () => {
-    const graph = extractTouchGraphFromSource([
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
       {
-        fileName: 'cart.schema.ts',
-        source: `
-          export const products = pgTable("cart_products", {}, jiso({ domain: "cart", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'order.schema.ts',
-        source: `
-          export const products = pgTable("order_products", {}, jiso({ domain: "order", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          import * as cartSchema from "./cart.schema";
-
-          export async function syncProduct(db, productId) {
-            await db.update(cartSchema.products).set({ reserved: true }).where(eq(cartSchema.products.id, productId));
-          }
-        `,
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'packages/drizzle/src/product.domain.ts:16',
       },
     ]);
-
-    expect(graph).toEqual({
-      syncProduct: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: 'arg:productId',
-            site: 'cart.domain.ts:5',
-            via: 'cart_products',
-          },
-        ],
-        unresolved: [],
-      },
-    });
   });
 
   it('does not resolve private table declarations through namespace imports', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.schema.ts',
-        source: `
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.schema.ts',
+          source: `
           const hiddenProducts = pgTable("hidden_products", {}, jiso({ domain: "hidden", key: "id" }));
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
         `,
-      },
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          import * as schema from "./cart.schema";
-
-          export async function syncProduct(db, productId) {
-            await db.update(schema.hiddenProducts).set({ reserved: true }).where(eq(schema.hiddenProducts.id, productId));
-          }
-        `,
-      },
-    ]);
+        },
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import * as schema from "./cart.schema";',
+            '',
+            'export async function syncProduct(db: PgDatabase, productId: string) {',
+            '  await db.update(schema.hiddenProducts).set({ reserved: true }).where(eq(schema.hiddenProducts.id, productId));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProduct: {
@@ -6552,40 +6030,47 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'product.domain.ts:5',
+            site: 'product.domain.ts:6',
           },
         ],
       },
     });
   });
 
-  it('resolves named import and re-export Drizzle schema aliases', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'schema.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'tables.ts',
-        source: `
-          export { products as productTable } from "./schema";
-        `,
-      },
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          import { products as importedProducts } from "./schema";
-          import { productTable } from "./tables";
+  it('resolves project named import and re-export Drizzle schema aliases', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+          'delete(table: unknown): { where(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'tables.ts',
+          source: `
+            export { products as productTable } from "./schema";
+          `,
+        },
+        {
+          fileName: 'product.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import { products as importedProducts } from "./schema";
+            import { productTable } from "./tables";
 
-          export async function syncProduct(db, productId) {
-            await db.update(importedProducts).set({ reserved: true }).where(eq(importedProducts.id, productId));
-            await db.delete(productTable).where(eq(productTable.id, productId));
-          }
-        `,
-      },
-    ]);
+            export async function syncProduct(db: PgDatabase, productId: string) {
+              await db.update(importedProducts).set({ reserved: true }).where(eq(importedProducts.id, productId));
+              await db.delete(productTable).where(eq(productTable.id, productId));
+            }
+          `,
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProduct: {
@@ -6594,13 +6079,13 @@ export interface CommerceInvalidationSets {
           {
             domain: 'product',
             keys: 'arg:productId',
-            site: 'product.domain.ts:6',
+            site: 'product.domain.ts:7',
             via: 'products',
           },
           {
             domain: 'product',
             keys: 'arg:productId',
-            site: 'product.domain.ts:7',
+            site: 'product.domain.ts:8',
             via: 'products',
           },
         ],
@@ -6609,268 +6094,85 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('does not resolve Drizzle schema aliases from comments, strings, or templates', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'schema.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-        `,
-      },
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          const quoted = "import { products as importedProducts } from './schema';";
-          // import * as schema from "./schema";
+  it('does not resolve project Drizzle schema aliases from comments, strings, or templates', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'product.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+            const quoted = "import { products as importedProducts } from './schema';";
+            // import * as schema from "./schema";
 
-          export async function syncProduct(db, productId) {
-            const templated = \`import * as schema from "./schema";\`;
-            await db.update(schema.products).set({ reserved: true }).where(eq(schema.products.id, productId));
-            await db.update(importedProducts).set({ reserved: false }).where(eq(importedProducts.id, productId));
-            return { quoted, templated };
-          }
-        `,
-      },
-    ]);
+            export async function syncProduct(db: PgDatabase, productId: string) {
+              const templated = \`import * as schema from "./schema";\`;
+              await db.update(schema.products).set({ reserved: true }).where(eq(schema.products.id, productId));
+              await db.update(importedProducts).set({ reserved: false }).where(eq(importedProducts.id, productId));
+              return { quoted, templated };
+            }
+          `,
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncProduct: {
         reads: [],
         touches: [],
         unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'product.domain.ts:7',
-          },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'product.domain.ts:8',
           },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:9',
+          },
         ],
       },
     });
   });
 
-  it('does not infer renamed Drizzle receiver parameters from broad source-mode names', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+  it('extracts project configured write callbacks and folds local helper summaries', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
 
-          export async function addItem(client, database, writer, productId) {
-            await client.insert(cartItems).values({ productId });
-            await database.insert(cartItems).values({ productId });
-            await writer.insert(cartItems).values({ productId });
-          }
-        `,
-      },
-    ]);
+            export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
+            export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
 
-    expect(graph).toEqual({});
-  });
+            const writeAudit = async (db: PgDatabase<any, any, any>, productId: string) => {
+              await db.insert(auditLog).values({ productId });
+            };
 
-  it('extracts write callback bodies from domain authoring surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          export const cart = domain({
-            addItem: write(async (db, productId) => {
-              await db.insert(cartItems).values({ productId });
-            }),
-          });
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addItem': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:6',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
+            export const cart = domain({
+              addItem: write({ touches: [cartItems] }, async (db: PgDatabase<any, any, any>, productId: string) => {
+                await db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));
+                await writeAudit(db, productId);
+              }),
+            });
+          `,
+        },
+      ],
     });
-  });
-
-  it('extracts referenced source write callbacks from domain authoring surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'async function addItem(db, productId) {',
-          '  await db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'export const cart = domain({',
-          '  addItem: write(addItem),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addItem': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts member-referenced source write callbacks from domain authoring surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'const callbacks = {',
-          '  addItem(db, productId) {',
-          '    return db.insert(cartItems).values({ productId });',
-          '  },',
-          '};',
-          '',
-          'export const cart = domain({',
-          '  addItem: write(callbacks.addItem),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addItem': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:5',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts source member write callback aliases from domain authoring surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'const callbacks = {',
-          '  aliased: addItem,',
-          '  addItem,',
-          '};',
-          '',
-          'export const cart = domain({',
-          '  addAliased: write(callbacks.aliased),',
-          '  addShorthand: write(callbacks.addItem),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addAliased': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addShorthand': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts configured write callbacks and folds local helper summaries', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          const writeAudit = async (db, productId) => {
-            await db.insert(auditLog).values({ productId });
-          };
-
-          export const cart = domain({
-            addItem: write({ touches: [cartItems] }, async (db, productId) => {
-              await db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));
-              await writeAudit(db, productId);
-            }),
-          });
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       'cart.addItem': {
@@ -6879,13 +6181,13 @@ export interface CommerceInvalidationSets {
           {
             domain: 'audit',
             keys: null,
-            site: 'cart.domain.ts:6',
+            site: 'cart.domain.ts:8',
             via: 'audit_log',
           },
           {
             domain: 'cart',
             keys: 'arg:productId',
-            site: 'cart.domain.ts:11',
+            site: 'cart.domain.ts:13',
             via: 'cart_items',
           },
         ],
@@ -6897,7 +6199,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'audit',
             keys: null,
-            site: 'cart.domain.ts:6',
+            site: 'cart.domain.ts:8',
             via: 'audit_log',
           },
         ],
@@ -8217,437 +7519,32 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('marks unresolved source domain write callback references as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'declare const actionName: string;',
-          'const callbacks = { addItem };',
-          '',
-          'export const cart = domain({',
-          '  addItem: write(callbacks[actionName]),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addItem': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:11',
-          },
-        ],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
+  it('marks opaque project domain action spreads as FW406 instead of dropping mutation surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'declare const dynamicActions: any;',
+            'const staticActions = { addItem: write(addItem) };',
+            '',
+            'export const cart = domain({',
+            '  ...staticActions,',
+            '  ...dynamicActions,',
+            '});',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('extracts source static element-access write callback aliases from domain authoring surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'const callbacks = {',
-          '  aliased: addItem,',
-          '  addItem,',
-          '};',
-          '',
-          'export const cart = domain({',
-          '  addAliased: write(callbacks["aliased"]),',
-          '  addShorthand: write(callbacks["addItem"]),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addAliased': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addShorthand': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts source write callbacks through static object aliases and spreads', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          'function noop() {',
-          '  return undefined;',
-          '}',
-          '',
-          'const base = { addItem };',
-          'const alias = base;',
-          'const spread = { ...base };',
-          'const overridden = { ...base, addItem: noop };',
-          '',
-          'export const cart = domain({',
-          '  addAliased: write(alias.addItem),',
-          '  addSpread: write(spread["addItem"]),',
-          '  addOverridden: write(overridden.addItem),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addAliased': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addSpread': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts source domain actions from static config spreads and degrades unresolved callbacks', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          'function noop() {',
-          '  return undefined;',
-          '}',
-          '',
-          'declare const actionName: string;',
-          'const callbacks = { addItem };',
-          'const base = {',
-          '  addItem: write(addItem),',
-          '  unresolved: write(callbacks[actionName]),',
-          '};',
-          'const spread = { ...base };',
-          'const overridden = { ...base, addItem: write(noop) };',
-          '',
-          'export const cart = domain({',
-          '  ...spread,',
-          '  addDirect: write(addItem),',
-          '  ...overridden,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addDirect': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.unresolved': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:14',
-          },
-        ],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('extracts source domain actions from static object aliases and degrades opaque aliases', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'declare const dynamicActions: any;',
-          'const actions = { addItem: write(addItem) };',
-          '',
-          'export const cart = domain(actions);',
-          'export const dynamicCart = domain(dynamicActions);',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addItem': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'dynamicCart.<spread>': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:11',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks direct opaque source domain action members as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'const addAction = write(addItem);',
-          'declare const dynamicAction: unknown;',
-          'const aliasActions = { aliased: addAction, opaque: dynamicAction };',
-          '',
-          'export const cart = domain({',
-          '  addItem: addAction,',
-          '  dynamic: dynamicAction,',
-          '  method(db) {',
-          '    return db.insert(cartItems).values({});',
-          '  },',
-          '  ...aliasActions,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addItem': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.aliased': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.dynamic': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:13',
-          },
-        ],
-      },
-      'cart.method': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:14',
-          },
-        ],
-      },
-      'cart.opaque': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:9',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks opaque source domain action spreads as FW406 instead of dropping mutation surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'declare const dynamicActions: any;',
-          'const staticActions = { addItem: write(addItem) };',
-          '',
-          'export const cart = domain({',
-          '  ...staticActions,',
-          '  ...dynamicActions,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
 
     expect(graph).toEqual({
       'cart.<spread>': {
@@ -8657,7 +7554,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:12',
+            site: 'cart.domain.ts:14',
           },
         ],
       },
@@ -8667,7 +7564,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: null,
-            site: 'cart.domain.ts:4',
+            site: 'cart.domain.ts:6',
             via: 'cart_items',
           },
         ],
@@ -8679,122 +7576,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
-  });
-
-  it('marks typed source domain action spread members as FW406 when no write callback is proven', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'const typedActions: { addItem: typeof addItem } = { addItem };',
-          '',
-          'export const cart = domain({',
-          '  ...typedActions,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addItem': {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-        ],
-      },
-    });
-  });
-
-  it('extracts source write callbacks through nested static object aliases', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          'function noop() {',
-          '  return undefined;',
-          '}',
-          '',
-          'const base = { nested: { addItem } };',
-          'const alias = base;',
-          'const spread = { ...base };',
-          'const overridden = { ...base, nested: { addItem: noop } };',
-          '',
-          'export const cart = domain({',
-          '  addAliased: write(alias.nested.addItem),',
-          '  addSpread: write(spread["nested"]["addItem"]),',
-          '  addOverridden: write(overridden.nested.addItem),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      'cart.addAliased': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      'cart.addSpread': {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:4',
+            site: 'cart.domain.ts:6',
             via: 'cart_items',
           },
         ],
@@ -9340,27 +8122,32 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('marks opaque conditional source domain action spread branches as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-          '',
-          'function addItem(db, productId) {',
-          '  return db.insert(cartItems).values({ productId });',
-          '}',
-          '',
-          'declare const useDynamic: boolean;',
-          'declare const dynamicActions: any;',
-          'const staticActions = { addItem: write(addItem) };',
-          '',
-          'export const cart = domain({',
-          '  ...(useDynamic ? dynamicActions : staticActions),',
-          '});',
-        ].join('\n'),
-      },
-    ]);
+  it('marks opaque conditional project domain action spread branches as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  return db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'declare const useDynamic: boolean;',
+            'declare const dynamicActions: any;',
+            'const staticActions = { addItem: write(addItem) };',
+            '',
+            'export const cart = domain({',
+            '  ...(useDynamic ? dynamicActions : staticActions),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       'cart.<spread>': {
@@ -9370,7 +8157,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:12',
+            site: 'cart.domain.ts:14',
           },
         ],
       },
@@ -9380,7 +8167,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: null,
-            site: 'cart.domain.ts:4',
+            site: 'cart.domain.ts:6',
             via: 'cart_items',
           },
         ],
@@ -9392,7 +8179,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: null,
-            site: 'cart.domain.ts:4',
+            site: 'cart.domain.ts:6',
             via: 'cart_items',
           },
         ],
@@ -11048,1274 +9835,27 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('does not infer source body-local destructured receiver aliases', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          export async function addItem(ctx, productId) {
-            const { db: database } = ctx;
-            await database.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('does not recognize destructured Drizzle receiver aliases from comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export async function addItem(ctx) {',
-          '  // const { db: database } = ctx;',
-          '  const raw = "const { tx: writer } = ctx";',
-          '  await database.execute(sql`delete from cart_items`);',
-          '  await writer.query.cartItems.findMany();',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('does not recognize transaction receiver aliases from comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export async function addItem(db) {',
-          '  // await db.transaction(async (writer) => writer.insert(cartItems).values({}));',
-          '  const raw = "db.transaction(async (writer) => writer.update(cartItems).set({}))";',
-          '  await writer.execute(sql`delete from cart_items`);',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('marks ambient source-mode receiver calls as FW406 instead of extracting table facts', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers() {',
-          '  await db.update(users).set({});',
-          '  await db.select().from(users);',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:4',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
-          },
-        ],
-      },
+  it('marks project external helpers receiving a Drizzle receiver as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'declare function writeAudit(db: unknown, productId: string): Promise<void>;',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db.insert(cartItems).values({ productId });',
+            '  await writeAudit(db, productId);',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('marks ambient source-mode query receivers as FW406 instead of deriving reads', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/ambient", {',
-          '  load() {',
-          '    return db.select({ id: users.id }).from(users);',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode ambient Drizzle receiver surface select() without a declared loader receiver.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/ambient',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source parameter member receiver calls as FW406 instead of extracting table facts', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(context) {',
-          '  await context.db.update(users).set({});',
-          '  await context.tx.execute("select 1");',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:4',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks source query-loader member receivers as FW406 instead of deriving reads', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-member-receiver", {',
-          '  load(_input, context) {',
-          '    runReport(context.db);',
-          '    context.tx.execute("select 1");',
-          '    return context.db.select({ id: users.id }).from(users);',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface runReport() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver member surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/source-member-receiver',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source body-local receiver aliases as FW406 instead of extracting table facts', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const writer = db;',
-          '  let executor;',
-          '  executor = writer;',
-          '  const context = { writer, reader: db, fake };',
-          '  const { reader: destructuredReader } = context;',
-          '  const fakeContext = { reader: fake };',
-          '  const { reader: fakeReader } = fakeContext;',
-          '  await writer.update(users).set({});',
-          '  await executor.execute("select 1");',
-          '  await context.reader.select().from(users);',
-          '  await destructuredReader.execute("select 1");',
-          '  await fakeReader.update(users).set({});',
-          '  await context.fake.update(users).set({});',
-          '  await sendAudit(writer);',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:17',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:11',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:12',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:13',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:14',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks source destructuring assignment receiver aliases from carriers as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const context = { db, fake };',
-          '  let writer;',
-          '  ({ db: writer } = context);',
-          '  let fakeWriter;',
-          '  ({ fake: fakeWriter } = context);',
-          '  await writer.execute("select 1");',
-          '  await writer.update(users).set({});',
-          '  await fakeWriter.update(users).set({});',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:9',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks source nested carrier destructuring aliases as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const carrier = { db, fake };',
-          '  const nested = { inner: carrier };',
-          '  const { inner: { db: declaredWriter } } = nested;',
-          '  let assignedWriter;',
-          '  ({ inner: { db: assignedWriter } } = nested);',
-          '  const { inner: { fake: fakeWriter } } = nested;',
-          '  await declaredWriter.execute("select 1");',
-          '  await assignedWriter.update(users).set({});',
-          '  await fakeWriter.update(users).set({});',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/nested-source-destructuring", {',
-          '  load(_input, db, fake) {',
-          '    const carrier = { db, fake };',
-          '    const nested = { inner: carrier };',
-          '    const { inner: { db: declaredReader } } = nested;',
-          '    let assignedReader;',
-          '    ({ inner: { db: assignedReader } } = nested);',
-          '    const { inner: { fake: fakeReader } } = nested;',
-          '    fakeReader.select({ id: users.id }).from(users);',
-          '    declaredReader.execute("select 1");',
-          '    return assignedReader.select({ id: users.id }).from(users);',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:11',
-          },
-        ],
-      },
-    });
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/nested-source-destructuring',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source array carrier destructuring aliases as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const carrier = [db, fake];',
-          '  const nested = [[fake, db]];',
-          '  const [writer, fakeWriter] = carrier;',
-          '  let assignedWriter;',
-          '  [assignedWriter] = carrier;',
-          '  const [[ignoredFake, nestedWriter]] = nested;',
-          '  await writer.update(users).set({});',
-          '  await assignedWriter.select().from(users);',
-          '  await nestedWriter.execute("select 1");',
-          '  await fakeWriter.update(users).set({});',
-          '  await ignoredFake.execute("select 1");',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:11',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:12',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks source array rest carrier member aliases as FW406 without direct receiver fabrication', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const carrier = [fake, db];',
-          '  const [, ...writerRest] = carrier;',
-          '  await writerRest.update(users).set({});',
-          '  await writerRest[0].update(users).set({});',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'users.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-rest-carrier", {',
-          '  load(_input, db, fake) {',
-          '    const carrier = [fake, db];',
-          '    const [, ...readerRest] = carrier;',
-          '    readerRest.select({ id: users.id }).from(users);',
-          '    return readerRest[0].select({ id: users.id }).from(users);',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-        ],
-      },
-    });
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'users.queries.ts:3',
-          },
-        ],
-        query: 'users/source-rest-carrier',
-        reads: [],
-        shape: {},
-        site: 'users.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source spread-copied receiver carriers as FW406 without overridden fake facts', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const carrier = { db, fake };',
-          '  const spread = { ...carrier };',
-          '  const overwritten = { ...carrier, db: fake };',
-          '  await spread.db.execute("select 1");',
-          '  await spread.db.update(users).set({});',
-          '  await sendAudit(spread);',
-          '  await overwritten.db.execute("select 1");',
-          '  await overwritten.db.update(users).set({});',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:9',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:8',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks source nested receiver carrier members as FW406 without nested fake overrides', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake) {',
-          '  const carrier = { db, fake };',
-          '  const nested = { inner: carrier };',
-          '  const { inner } = nested;',
-          '  const overwritten = { ...nested, inner: { db: fake } };',
-          '  const execute = nested.inner.db.execute;',
-          '  await nested.inner.db.execute("select 1");',
-          '  await inner.db.update(users).set({});',
-          '  await execute("select 1");',
-          '  await sendAudit(nested);',
-          '  await sendAudit(nested.inner.db);',
-          '  await overwritten.inner.db.execute("select 1");',
-          '  await overwritten.inner.db.update(users).set({});',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:12',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:13',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:9',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:11',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks source query-loader receiver aliases as FW406 instead of deriving reads', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-alias", {',
-          '  load(_input, db, fake) {',
-          '    const reader = db;',
-          '    let executor;',
-          '    executor = reader;',
-          '    const context = { reader, runner: db, fake };',
-          '    const { runner } = context;',
-          '    const fakeContext = { runner: fake };',
-          '    const { runner: fakeRunner } = fakeContext;',
-          '    reader.select({ id: users.id }).from(users);',
-          '    executor.execute("select 1");',
-          '    context.runner.select().from(users);',
-          '    runner.execute("select 1");',
-          '    fakeRunner.execute("select 1");',
-          '    fake.select({ id: users.id }).from(users);',
-          '    return [];',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/source-alias',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source shorthand query-loader functions as FW406 instead of following untyped symbols', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function load(_input, db) {',
-          '  return db.select({ id: users.id }).from(users);',
-          '}',
-          '',
-          'export const usersQuery = query("users/source-shorthand-loader", {',
-          '  load,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-shorthand-loader', 'user.queries.ts:7'),
-    ]);
-  });
-
-  it('marks source member query-loader aliases as FW406 instead of following untyped symbols', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id }).from(users);',
-          '}',
-          '',
-          'const loaders = {',
-          '  aliased: loadUsers,',
-          '  loadUsers,',
-          '};',
-          '',
-          'export const aliasedQuery = query("users/source-member-aliased-loader", {',
-          '  load: loaders.aliased,',
-          '});',
-          '',
-          'export const shorthandQuery = query("users/source-member-shorthand-loader", {',
-          '  load: loaders.loadUsers,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-member-aliased-loader', 'user.queries.ts:12'),
-      unresolvedQueryLoadFact('users/source-member-shorthand-loader', 'user.queries.ts:16'),
-    ]);
-  });
-
-  it('marks source element-access query-loader aliases as FW406 without static symbol fallback', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id }).from(users);',
-          '}',
-          '',
-          'const loaders = {',
-          '  aliased: loadUsers,',
-          '  loadUsers,',
-          '};',
-          '',
-          'export const aliasedQuery = query("users/source-static-member-aliased-loader", {',
-          '  load: loaders["aliased"],',
-          '});',
-          '',
-          'export const shorthandQuery = query("users/source-static-member-shorthand-loader", {',
-          '  load: loaders["loadUsers"],',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-static-member-aliased-loader', 'user.queries.ts:12'),
-      unresolvedQueryLoadFact('users/source-static-member-shorthand-loader', 'user.queries.ts:16'),
-    ]);
-  });
-
-  it('marks source query-loader callbacks through object aliases and spreads as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id }).from(users);',
-          '}',
-          'function emptyLoad() {',
-          '  return [];',
-          '}',
-          '',
-          'const base = { loadUsers };',
-          'const alias = base;',
-          'const spread = { ...base };',
-          'const overridden = { ...base, loadUsers: emptyLoad };',
-          '',
-          'export const aliasedQuery = query("users/source-object-alias-loader", {',
-          '  load: alias.loadUsers,',
-          '});',
-          '',
-          'export const spreadQuery = query("users/source-object-spread-loader", {',
-          '  load: spread["loadUsers"],',
-          '});',
-          '',
-          'export const overriddenQuery = query("users/source-overridden-object-spread-loader", {',
-          '  load: overridden.loadUsers,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-object-alias-loader', 'user.queries.ts:15'),
-      unresolvedQueryLoadFact('users/source-object-spread-loader', 'user.queries.ts:19'),
-      unresolvedQueryLoadFact('users/source-overridden-object-spread-loader', 'user.queries.ts:23'),
-    ]);
-  });
-
-  it('marks source query-loader getter callbacks as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'product.queries.ts',
-        source: [
-          'function loadProducts(_input, db) {',
-          '  return db.select({}).from(products);',
-          '}',
-          '',
-          'export const productQuery = query("product/source-getter-loader", {',
-          '  get load() {',
-          '    return loadProducts;',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('product/source-getter-loader', 'product.queries.ts:5'),
-    ]);
-  });
-
-  it('marks source query loaders from config spreads as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id }).from(users);',
-          '}',
-          '',
-          'declare const dynamicConfig: any;',
-          'const base = { load: loadUsers };',
-          'const spread = { ...base };',
-          '',
-          'export const spreadQuery = query("users/source-config-spread-loader", {',
-          '  ...spread,',
-          '});',
-          '',
-          'export const obscuredQuery = query("users/source-config-obscured-loader", {',
-          '  load: loadUsers,',
-          '  ...dynamicConfig,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-config-obscured-loader', 'user.queries.ts:15'),
-      unresolvedQueryLoadFact('users/source-config-spread-loader', 'user.queries.ts:11'),
-    ]);
-  });
-
-  it('marks source query loaders from external config objects as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey(), stock: integer("stock").notNull() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id, stock: users.stock }).from(users);',
-          '}',
-          '',
-          'declare const dynamicConfig: any;',
-          'const baseConfig = { load: loadUsers };',
-          'const configAlias = baseConfig;',
-          'export const configQuery = query("users/source-external-config-loader", configAlias);',
-          'export const dynamicQuery = query("users/source-dynamic-config-loader", dynamicConfig);',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-dynamic-config-loader', 'user.queries.ts:11'),
-      unresolvedQueryLoadFact('users/source-external-config-loader', 'user.queries.ts:10'),
-    ]);
-  });
-
-  it('marks unresolved source query-loader callback references as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id }).from(users);',
-          '}',
-          '',
-          'declare const loaderName: string;',
-          'const loaders = { loadUsers };',
-          '',
-          'export const usersQuery = query("users/unresolved-source-loader", {',
-          '  load: loaders[loaderName],',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
-            site: 'user.queries.ts:10',
-          },
-        ],
-        query: 'users/unresolved-source-loader',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:10',
-      },
-    ]);
-  });
-
-  it('marks source query-loader callbacks through nested object aliases as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey(), stock: integer("stock").notNull() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'function loadUsers(_input, db) {',
-          '  return db.select({ id: users.id, stock: users.stock }).from(users);',
-          '}',
-          'function emptyLoad() {',
-          '  return [];',
-          '}',
-          '',
-          'const base = { nested: { loadUsers } };',
-          'const alias = base;',
-          'const spread = { ...base };',
-          'const overridden = { ...base, nested: { loadUsers: emptyLoad } };',
-          '',
-          'export const aliasedQuery = query("users/source-nested-object-alias-loader", {',
-          '  load: alias.nested.loadUsers,',
-          '});',
-          '',
-          'export const spreadQuery = query("users/source-nested-object-spread-loader", {',
-          '  load: spread["nested"]["loadUsers"],',
-          '});',
-          '',
-          'export const overriddenQuery = query("users/source-overridden-nested-object-loader", {',
-          '  load: overridden.nested.loadUsers,',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      unresolvedQueryLoadFact('users/source-nested-object-alias-loader', 'user.queries.ts:15'),
-      unresolvedQueryLoadFact('users/source-nested-object-spread-loader', 'user.queries.ts:19'),
-      unresolvedQueryLoadFact('users/source-overridden-nested-object-loader', 'user.queries.ts:23'),
-    ]);
-  });
-
-  it('marks source query-loader destructuring assignment receiver aliases as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-destructuring-assignment", {',
-          '  load(_input, db, fake) {',
-          '    const context = { db, fake };',
-          '    let reader;',
-          '    ({ db: reader } = context);',
-          '    let fakeReader;',
-          '    ({ fake: fakeReader } = context);',
-          '    reader.select({ id: users.id }).from(users);',
-          '    reader.execute("select 1");',
-          '    fakeReader.select({ id: users.id }).from(users);',
-          '    return [];',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/source-destructuring-assignment',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source query-loader spread-copied receiver carriers as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-spread-carrier", {',
-          '  load(_input, db, fake) {',
-          '    const carrier = { db, fake };',
-          '    const spread = { ...carrier };',
-          '    const overwritten = { ...carrier, db: fake };',
-          '    spread.db.select({ id: users.id }).from(users);',
-          '    spread.db.execute("select 1");',
-          '    overwritten.db.select({ id: users.id }).from(users);',
-          '    fake.select({ id: users.id }).from(users);',
-          '    return [];',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/source-spread-carrier',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source query-loader nested receiver carriers as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-nested-carrier", {',
-          '  load(_input, db, fake) {',
-          '    const carrier = { db, fake };',
-          '    const nested = { inner: carrier };',
-          '    const { inner } = nested;',
-          '    const overwritten = { ...nested, inner: { db: fake } };',
-          '    const execute = nested.inner.db.execute;',
-          '    nested.inner.db.select({ id: users.id }).from(users);',
-          '    inner.db.execute("select 1");',
-          '    execute("select 1");',
-          '    runReport(nested.inner.db);',
-          '    runReport(nested);',
-          '    overwritten.inner.db.select({ id: users.id }).from(users);',
-          '    return [];',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested.inner.db to helper runReport().',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested to helper runReport().',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/source-nested-carrier',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source query-loader array receiver carriers as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export const usersQuery = query("users/source-array-carrier", {',
-          '  load(_input, db, fake) {',
-          '    const carrier = [db, fake];',
-          '    const nested = [[fake, db]];',
-          '    const [reader, fakeReader] = carrier;',
-          '    let assignedReader;',
-          '    [assignedReader] = carrier;',
-          '    const [[ignoredFake, nestedReader]] = nested;',
-          '    reader.select({ id: users.id }).from(users);',
-          '    assignedReader.execute("select 1");',
-          '    nestedReader.select({ id: users.id }).from(users);',
-          '    fakeReader.select({ id: users.id }).from(users);',
-          '    ignoredFake.execute("select 1");',
-          '    return [];',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
-            severity: 'warn',
-            site: 'user.queries.ts:3',
-          },
-        ],
-        query: 'users/source-array-carrier',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:3',
-      },
-    ]);
-  });
-
-  it('marks source query-loader helpers receiving assigned carrier aliases as FW406', () => {
-    const facts = extractQueryFactsFromSource([
-      {
-        fileName: 'user.queries.ts',
-        source: [
-          'export const usersQuery = query("users/source-assigned-carrier-helper", {',
-          '  load(_input, db, fake) {',
-          '    let context;',
-          '    context = { db };',
-          '    let fakeContext;',
-          '    fakeContext = { db: fake };',
-          '    runReport(fakeContext);',
-          '    return runReport(context);',
-          '  },',
-          '});',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(facts).toEqual([
-      {
-        diagnostics: [
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to helper runReport().',
-            severity: 'warn',
-            site: 'user.queries.ts:1',
-          },
-        ],
-        query: 'users/source-assigned-carrier-helper',
-        reads: [],
-        shape: {},
-        site: 'user.queries.ts:1',
-      },
-    ]);
-  });
-
-  it('marks external helpers receiving a Drizzle receiver as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          export async function addItem(db, productId) {
-            await db.insert(cartItems).values({ productId });
-            await writeAudit(db, productId);
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       addItem: {
@@ -12324,7 +9864,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: null,
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:8',
             via: 'cart_items',
           },
         ],
@@ -12332,34 +9872,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:6',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks external helpers receiving a Drizzle receiver through containers as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export async function addItem(db, productId) {
-            await writeAudit({ db, productId });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:3',
+            site: 'cart.domain.ts:9',
           },
         ],
       },
@@ -12406,129 +9919,24 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('marks external helpers receiving assigned Drizzle carrier aliases as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export async function addItem(db, fake) {',
-          '  let context;',
-          '  context = { db };',
-          '  let fakeContext;',
-          '  fakeContext = { db: fake };',
-          '  await writeAudit(fakeContext);',
-          '  await writeAudit(context);',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-        ],
-      },
+  it('marks project materialized-view refresh calls as FW406 instead of dropping the surface', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['refreshMaterializedView(view: unknown): Promise<void>;']),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const productSearch = pgMaterializedView("product_search", {});',
+            '',
+            'export async function refreshCatalog(db: PgDatabase<any, any, any>) {',
+            '  await db.refreshMaterializedView(productSearch);',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('marks source local helpers receiving ambiguous receiver parameters as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'async function writeAudit(client, productId) {',
-          '  return Promise.resolve({ client, productId });',
-          '}',
-          '',
-          'export async function addItem(db, productId) {',
-          '  await writeAudit(db, productId);',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:6',
-          },
-        ],
-      },
-    });
-  });
-
-  it('does not mark external helper calls from comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export async function addItem(db, productId) {',
-          '  // await writeAudit(db, productId);',
-          '  const raw = "writeAudit(db, productId)";',
-          '  const templated = `writeAudit(db, ${productId})`;',
-          '  return { raw, templated };',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('marks raw db.execute calls as FW406 instead of dropping the surface', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
-
-          export async function reconcileCart(db, productId) {
-            await db.execute(sql\`update cart_items set synced = true where product_id = \${productId}\`);
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      reconcileCart: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks materialized-view refresh calls as FW406 instead of dropping the surface', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'catalog.domain.ts',
-        source: `
-          export const productSearch = pgMaterializedView("product_search", {});
-
-          export async function refreshCatalog(db) {
-            await db.refreshMaterializedView(productSearch);
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       refreshCatalog: {
@@ -12538,57 +9946,38 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'catalog.domain.ts:5',
+            site: 'catalog.domain.ts:6',
           },
         ],
       },
     });
   });
 
-  it('marks Drizzle count helper calls as FW406 instead of dropping the surface', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
-
-          export async function countUsers(db) {
-            return db.$count(users, eq(users.active, true));
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      countUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
-          },
-        ],
-      },
+  it('marks project unknown direct Drizzle receiver methods as FW406 instead of dropping them', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          '$with(name: string): unknown;',
+          'batch(queries: unknown[]): Promise<unknown[]>;',
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'export async function syncUsers(db: PgDatabase<any, any, any>) {',
+            '  await db.batch([db.select().from(users)]);',
+            '  await db["$with"]("active_users");',
+            '  await db.insert(users).values({});',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('marks unknown direct Drizzle receiver methods as FW406 instead of dropping them', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
-
-          export async function syncUsers(db) {
-            await db.batch([db.select().from(users)]);
-            await db["$with"]("active_users");
-            await db.insert(users).values({});
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       syncUsers: {
@@ -12596,7 +9985,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'user',
             keys: null,
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:6',
             source: 'select',
             via: 'users',
           },
@@ -12605,7 +9994,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'user',
             keys: null,
-            site: 'cart.domain.ts:7',
+            site: 'cart.domain.ts:8',
             via: 'users',
           },
         ],
@@ -12613,135 +10002,47 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:6',
           },
-        ],
-      },
-    });
-  });
-
-  it('marks source detached Drizzle receiver method aliases as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake, method) {',
-          '  const { execute, update: write, query } = db;',
-          '  const fakeExecute = fake.execute;',
-          '  const countUsers = db["$count"];',
-          '  let assignedExecute;',
-          '  assignedExecute = db.execute;',
-          '  let assignedWrite;',
-          '  assignedWrite = db.update;',
-          '  let assignedComputed;',
-          '  assignedComputed = db[method];',
-          '  await execute("select 1");',
-          '  await write(users).set({});',
-          '  await fakeExecute("select 1");',
-          '  await countUsers(users);',
-          '  await query.users.findMany();',
-          '  await assignedExecute("select 1");',
-          '  await assignedWrite(users).set({});',
-          '  await assignedComputed("select 1");',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:13',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:14',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:16',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:17',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:18',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:19',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:20',
+            site: 'cart.domain.ts:7',
           },
         ],
       },
     });
   });
 
-  it('marks source array-destructured detached receiver method aliases as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake, method) {',
-          '  const [execute, write, computed] = [db.execute, db.update, db[method]];',
-          '  const [fakeExecute] = [fake.execute];',
-          '  let assignedExecute;',
-          '  [assignedExecute] = [db.execute];',
-          '  await execute("select 1");',
-          '  await write(users).set({});',
-          '  await computed("select 1");',
-          '  await assignedExecute("select 1");',
-          '  await fakeExecute("select 1");',
-          '}',
-        ].join('\n'),
-      },
-    ]);
+  it('does not mark shadowed project detached receiver method aliases', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb { execute(query: unknown): Promise<void>; }',
+            '',
+            'export async function syncUsers(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            '  const { execute } = db;',
+            '  {',
+            '    const execute = fake.execute;',
+            '    await execute("select 1");',
+            '  }',
+            '  await execute("select 1");',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncUsers: {
         reads: [],
         touches: [],
         unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:8',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:9',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
@@ -12752,106 +10053,33 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('does not mark shadowed source detached receiver method aliases', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export async function syncUsers(db, fake) {',
-          '  const { execute } = db;',
-          '  {',
-          '    const execute = fake.execute;',
-          '    await execute("select 1");',
-          '  }',
-          '  await execute("select 1");',
-          '}',
-        ].join('\n'),
-      },
-    ]);
+  it('marks project static element-access raw and relational receiver calls as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;', 'query: any;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'export async function loadUsers(db: PgDatabase<any, any, any>) {',
+            "  await db['execute'](sql`update users set active = true`);",
+            "  return db.query['users']['findFirst']({ where: eq(users.active, true) });",
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
+      loadUsers: {
+        reads: [
           {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
+            domain: 'user',
+            keys: null,
             site: 'cart.domain.ts:7',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks bound detached Drizzle receiver methods as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
-          '',
-          'export async function syncUsers(db, fake, method) {',
-          '  const execute = db.execute.bind(db);',
-          '  const write = db.update.bind(db);',
-          '  const computed = db[method].bind(db);',
-          '  const fakeExecute = fake.execute.bind(fake);',
-          '  await execute("select 1");',
-          '  await write(users).set({});',
-          '  await computed("select 1");',
-          '  await fakeExecute("select 1");',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncUsers: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:8',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:9',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:10',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks static element-access raw and relational receiver calls as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
-
-          export async function loadUsers(db) {
-            await db['execute'](sql\`update users set active = true\`);
-            return db.query['users']['findFirst']({ where: eq(users.active, true) });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      loadUsers: {
-        reads: [
-          {
-            domain: 'user',
-            keys: null,
-            site: 'cart.domain.ts:6',
             source: 'relational-query',
             via: 'users',
           },
@@ -12861,27 +10089,32 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:6',
           },
         ],
       },
     });
   });
 
-  it('marks template-literal element-access raw and relational receiver calls as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
-
-          export async function loadUsers(db) {
-            await db[\`execute\`](sql\`update users set active = true\`);
-            return db.query[\`users\`][\`findFirst\`]({ where: eq(users.active, true) });
-          }
-        `,
-      },
-    ]);
+  it('marks project template-literal element-access raw and relational receiver calls as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;', 'query: any;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'export async function loadUsers(db: PgDatabase<any, any, any>) {',
+            '  await db[`execute`](sql`update users set active = true`);',
+            '  return db.query[`users`][`findFirst`]({ where: eq(users.active, true) });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       loadUsers: {
@@ -12889,7 +10122,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'user',
             keys: null,
-            site: 'cart.domain.ts:6',
+            site: 'cart.domain.ts:7',
             source: 'relational-query',
             via: 'users',
           },
@@ -12899,105 +10132,29 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:6',
           },
         ],
       },
     });
   });
 
-  it('extracts standalone direct select chains as touch-graph reads', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'catalog.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));
-
-          export async function loadCatalog(db) {
-            await db.select({ id: products.id }).from(products).leftJoin(vendors, eq(vendors.id, products.vendorId));
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      loadCatalog: {
-        reads: [
-          {
-            domain: 'product',
-            keys: null,
-            site: 'catalog.domain.ts:6',
-            source: 'select',
-            via: 'products',
-          },
-          {
-            domain: 'vendor',
-            keys: null,
-            site: 'catalog.domain.ts:6',
-            source: 'select',
-            via: 'vendors',
-          },
-        ],
-        touches: [],
-        unresolved: [],
-      },
+  it('marks project standalone direct select chains with unresolved tables as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<void> };']),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export async function loadCatalog(db: PgDatabase<any, any, any>, tableName: string) {',
+            '  await db.select().from(tableFor(tableName));',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('resolves wrapped source direct-select and write read-source tables', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'catalog.domain.ts',
-        source: [
-          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-          'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
-          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
-          '',
-          'export async function syncCatalog(db) {',
-          '  await db.select().from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));',
-          '  await db.insert(snapshots).select(db.select().from((products as any)));',
-          '  await db.update(snapshots).set({ refreshed: true }).from(vendors!);',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(serializeTouchGraph(graph)).toBe(
-      [
-        'export const touchGraph = {',
-        '  "syncCatalog": {',
-        '    touches: [',
-        '      { domain: "snapshot", via: "product_snapshots", site: "catalog.domain.ts:7", keys: null },',
-        '      { domain: "snapshot", via: "product_snapshots", site: "catalog.domain.ts:8", keys: null },',
-        '    ],',
-        '    reads: [',
-        '      { domain: "product", via: "products", site: "catalog.domain.ts:7", keys: null, source: "insert-select" },',
-        '      { domain: "product", via: "products", site: "catalog.domain.ts:6", keys: null, source: "select" },',
-        '      { domain: "vendor", via: "vendors", site: "catalog.domain.ts:6", keys: null, source: "select" },',
-        '      { domain: "vendor", via: "vendors", site: "catalog.domain.ts:8", keys: null, source: "update-from" },',
-        '    ],',
-        '    unresolved: [',
-        '    ],',
-        '  },',
-        '} as const;',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('marks standalone direct select chains with unresolved tables as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'catalog.domain.ts',
-        source: `
-          export async function loadCatalog(db, tableName) {
-            await db.select().from(tableFor(tableName));
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       loadCatalog: {
@@ -13007,7 +10164,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'catalog.domain.ts:3',
+            site: 'catalog.domain.ts:4',
           },
         ],
       },
@@ -14353,17 +11510,19 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
-  it('keeps wrapped opaque domain actions visible as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: [
-          'declare const dynamicActions: any;',
-          '',
-          'export const productDomain = (domain(dynamicActions) satisfies unknown);',
-        ].join('\n'),
-      },
-    ]);
+  it('keeps wrapped opaque project domain actions visible as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'declare const dynamicActions: any;',
+            '',
+            'export const productDomain = (domain(dynamicActions) satisfies unknown);',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       'productDomain.<spread>': {
@@ -14380,58 +11539,24 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('keeps insert-select nested reads classified as insert-select only', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'catalog.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
-
-          export async function syncSnapshots(db) {
-            await db.insert(snapshots).select(db.select().from(products));
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncSnapshots: {
-        reads: [
-          {
-            domain: 'product',
-            keys: null,
-            site: 'catalog.domain.ts:6',
-            source: 'insert-select',
-            via: 'products',
-          },
-        ],
-        touches: [
-          {
-            domain: 'snapshot',
-            keys: null,
-            site: 'catalog.domain.ts:6',
-            via: 'product_snapshots',
-          },
-        ],
-        unresolved: [],
-      },
+  it('extracts project relational query API calls on Drizzle receivers as reads', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['query: any;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+            '',
+            'export async function loadUsers(db: PgDatabase<any, any, any>) {',
+            '  return db.query.users.findMany({ where: eq(users.active, true) });',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('extracts relational query API calls on Drizzle receivers as reads', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
-
-          export async function loadUsers(db) {
-            return db.query.users.findMany({ where: eq(users.active, true) });
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       loadUsers: {
@@ -14439,7 +11564,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'user',
             keys: null,
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:6',
             source: 'relational-query',
             via: 'users',
           },
@@ -14450,17 +11575,22 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('marks unresolved relational query API table names as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export async function loadUsers(db, tableName) {
-            return db.query[tableName].findMany();
-          }
-        `,
-      },
-    ]);
+  it('marks project unresolved relational query API table names as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['query: any;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export async function loadUsers(db: PgDatabase<any, any, any>, tableName: string) {',
+            '  return db.query[tableName].findMany();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       loadUsers: {
@@ -14470,163 +11600,31 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:3',
+            site: 'cart.domain.ts:4',
           },
         ],
       },
     });
   });
 
-  it('does not mark unclassified Drizzle receiver calls from comments and strings', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: [
-          'export async function loadUsers(db) {',
-          '  // db.execute(sql`delete from users`);',
-          '  // db.refreshMaterializedView(usersView);',
-          '  // db.$count(users);',
-          '  const raw = "db.execute(sql`delete from users`)";',
-          '  const refresh = "db.refreshMaterializedView(usersView)";',
-          '  const count = "db.$count(users)";',
-          '  const relational = `db.query.users.findMany()`;',
-          '  return { raw, refresh, count, relational };',
-          '}',
-        ].join('\n'),
-      },
-    ]);
-
-    expect(graph).toEqual({});
-  });
-
-  it('over-approximates local conditional table initializers', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const archivedProducts = pgTable("archived_products", {}, jiso({ domain: "archive", key: "id" }));
-          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          const priceSource = useArchive ? archivedProducts : prices;
-          const writeTarget = useArchive ? archivedProducts : products;
-
-          export async function syncProduct(db, productId) {
-            await db.update(writeTarget).set({ reserved: true }).from(priceSource).where(eq(writeTarget.id, productId));
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncProduct: {
-        reads: [
-          {
-            domain: 'archive',
-            keys: null,
-            site: 'product.domain.ts:9',
-            source: 'update-from',
-            via: 'archived_products',
-          },
-          {
-            domain: 'price',
-            keys: null,
-            site: 'product.domain.ts:9',
-            source: 'update-from',
-            via: 'prices',
-          },
-        ],
-        touches: [
-          {
-            domain: 'archive',
-            keys: 'arg:productId',
-            site: 'product.domain.ts:9',
-            via: 'archived_products',
-          },
-          {
-            domain: 'product',
-            keys: 'arg:productId',
-            site: 'product.domain.ts:9',
-            via: 'products',
-          },
-        ],
-        unresolved: [],
-      },
+  it('marks project aliases with unresolved bases as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'const productAlias = alias(tableFor("products"), "p");',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.update(productAlias).set({ reserved: true });',
+            '}',
+          ].join('\n'),
+        },
+      ],
     });
-  });
-
-  it('keeps resolved conditional branches when another branch is unresolved', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          const writeTarget = useDynamic ? tableFor("archive") : products;
-
-          export async function syncProduct(db) {
-            await db.update(writeTarget).set({ reserved: true });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncProduct: {
-        reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' }],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'product.domain.ts:6',
-          },
-        ],
-      },
-    });
-  });
-
-  it('keeps resolved conditional branches when opaque branch strings contain colons', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-          const writeTarget = useDynamic ? tableFor("archive:products") : products;
-
-          export async function syncProduct(db) {
-            await db.update(writeTarget).set({ reserved: true });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncProduct: {
-        reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' }],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'product.domain.ts:6',
-          },
-        ],
-      },
-    });
-  });
-
-  it('marks aliases with unresolved bases as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          const productAlias = alias(tableFor("products"), "p");
-
-          export async function syncProduct(db) {
-            await db.update(productAlias).set({ reserved: true });
-          }
-        `,
-      },
-    ]);
 
     expect(graph).toEqual({
       syncProduct: {
@@ -14636,46 +11634,11 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'product.domain.ts:5',
+            site: 'product.domain.ts:6',
           },
         ],
       },
     });
-  });
-
-  it('marks non-identifier Drizzle table expressions as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'cart.domain.ts',
-        source: `
-          export async function syncAudit(db) {
-            await db.insert(tableFor("audit")).values({ productId: "p1" });
-          }
-        `,
-      },
-    ]);
-
-    expect(graph).toEqual({
-      syncAudit: {
-        reads: [],
-        touches: [],
-        unresolved: [
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:3',
-          },
-        ],
-      },
-    });
-    expect(diagnosticsForTouchGraph(graph)).toEqual([
-      {
-        code: 'FW406',
-        message: 'Statically un-analyzable write site; manual touches required.',
-        severity: 'warn',
-        site: 'cart.domain.ts:3',
-      },
-    ]);
   });
 
   it('marks project-mode computed table expressions as FW406 instead of resolving descendant tables', () => {
@@ -14817,22 +11780,30 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('keeps resolved write read sources when the source-mode write target is opaque', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'catalog.domain.ts',
-        source: [
-          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-          'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
-          '',
-          'export async function syncCatalog(db) {',
-          '  await db.insert(tableFor("snapshots")).select(db.select().from(products));',
-          '  await db.update(tableFor("snapshots")).set({ refreshed: true }).from(vendors);',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
+  it('keeps resolved write read sources when the project-mode write target is opaque', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { select(value: unknown): Promise<void> };',
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+            '',
+            'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(tableFor("snapshots")).select(db.select().from(products));',
+            '  await db.update(tableFor("snapshots")).set({ refreshed: true }).from(vendors);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       syncCatalog: {
@@ -14840,14 +11811,14 @@ export interface CommerceInvalidationSets {
           {
             domain: 'product',
             keys: null,
-            site: 'catalog.domain.ts:5',
+            site: 'catalog.domain.ts:7',
             source: 'insert-select',
             via: 'products',
           },
           {
             domain: 'vendor',
             keys: null,
-            site: 'catalog.domain.ts:6',
+            site: 'catalog.domain.ts:8',
             source: 'update-from',
             via: 'vendors',
           },
@@ -14857,108 +11828,127 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'catalog.domain.ts:5',
+            site: 'catalog.domain.ts:7',
           },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'catalog.domain.ts:6',
+            site: 'catalog.domain.ts:8',
           },
         ],
       },
     });
   });
 
-  it('marks unresolved insert-select source tables as FW406', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
-
-          export async function importSnapshots(db) {
-            await db.insert(snapshots).select(db.select().from(tableFor("products")));
-          }
-        `,
-      },
-    ]);
+  it('marks project unresolved insert-select source tables as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { select(value: unknown): Promise<void> };',
+          'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'export async function importSnapshots(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(snapshots).select(db.select().from(tableFor("products")));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       importSnapshots: {
         reads: [],
         touches: [
-          { domain: 'snapshot', keys: null, site: 'product.domain.ts:5', via: 'product_snapshots' },
+          { domain: 'snapshot', keys: null, site: 'product.domain.ts:6', via: 'product_snapshots' },
         ],
         unresolved: [
           {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
-            site: 'product.domain.ts:5',
+            site: 'product.domain.ts:6',
           },
         ],
       },
     });
   });
 
-  it('marks unresolved update-from source tables as explicit FW406 read-source surfaces', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
-
-          export async function importSnapshots(db) {
-            await db.update(products).set({ reserved: true }).from(tableFor("prices"));
-          }
-        `,
-      },
-    ]);
+  it('marks project unresolved update-from source tables as explicit FW406 read-source surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function importSnapshots(db: PgDatabase<any, any, any>) {',
+            '  await db.update(products).set({ reserved: true }).from(tableFor("prices"));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       importSnapshots: {
         reads: [],
-        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' }],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' }],
         unresolved: [
           {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
-            site: 'product.domain.ts:5',
+            site: 'product.domain.ts:6',
           },
         ],
       },
     });
   });
 
-  it('does not fabricate insert-select read tables from string contents', () => {
-    const graph = extractTouchGraphFromSource([
-      {
-        fileName: 'product.domain.ts',
-        source: [
-          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
-          '',
-          'export async function importSnapshots(db) {',
-          '  await db.insert(snapshots).select(sql`select * from products where marker = ".from(products)"`);',
-          '}',
-          '',
-        ].join('\n'),
-      },
-    ]);
+  it('does not fabricate project insert-select read tables from string contents', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { select(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'export async function importSnapshots(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(snapshots).select(sql`select * from products where marker = ".from(products)"`);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
 
     expect(graph).toEqual({
       importSnapshots: {
         reads: [],
         touches: [
-          { domain: 'snapshot', keys: null, site: 'product.domain.ts:5', via: 'product_snapshots' },
+          { domain: 'snapshot', keys: null, site: 'product.domain.ts:7', via: 'product_snapshots' },
         ],
         unresolved: [
           {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
-            site: 'product.domain.ts:5',
+            site: 'product.domain.ts:7',
           },
         ],
       },

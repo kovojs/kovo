@@ -165,14 +165,15 @@ export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGrap
   return facts.flatMap((fact) => [...(fact.diagnostics ?? [])]);
 }
 
-export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): TouchGraph {
-  return extractTouchGraphFromPreparedFiles(files, extractFunctions);
-}
-
+// SPEC.md §11.1 (v1 scope): touch-graph facts require project-mode ts-morph type proof.
+// The source-mode entry points and their name/shape heuristics were removed in
+// v1-cleanup item 4; callers must supply a project SourceModuleContext and
+// project-derived ExtractedFunction[] so receivers/tables are proven by TypeScript
+// symbols/types, never by parameter names or pgTable("...") string literals.
 function extractTouchGraphFromPreparedFiles(
   files: readonly SourceFileInput[],
   functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
-  sourceContext: SourceModuleContext = sourceModuleContext(files),
+  sourceContext: SourceModuleContext,
   extraUnresolvedIdentifiers: ReadonlySet<string> = new Set(),
 ): TouchGraph {
   const unresolvedIdentifiers = new Set<string>(extraUnresolvedIdentifiers);
@@ -1794,18 +1795,16 @@ function projectNamespaceAccessTableName(
   return tableName ? `${base.getText()}.${tableName}` : undefined;
 }
 
-export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
-  return extractQueryFactsFromPreparedFiles(files, (file) =>
-    extractQueryDefinitions(file, file.columnShapes),
-  );
-}
-
+// SPEC.md §11.1 (v1 scope): query-fact extraction requires project-mode ts-morph type
+// proof. The source-mode entry point and its heuristic query/function/table producers
+// were removed in v1-cleanup item 4; callers must supply project-derived queries,
+// context files, SourceModuleContext, and ExtractedFunction[].
 function extractQueryFactsFromPreparedFiles(
   files: readonly SourceFileInput[],
   queriesForFile: (file: SourceFileInput) => readonly ExtractedQueryDefinition[],
-  contextFiles: readonly SourceFileInput[] = files,
-  sourceContext: SourceModuleContext = sourceModuleContext(contextFiles),
-  functionsForFile: (file: SourceFileInput) => ExtractedFunction[] = extractFunctions,
+  contextFiles: readonly SourceFileInput[],
+  sourceContext: SourceModuleContext,
+  functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
 ): QueryFact[] {
   const facts: QueryFact[] = [];
   const unresolvedIdentifiers = unresolvedConditionalIdentifiersForFiles(
@@ -1995,7 +1994,7 @@ function isDrizzleReceiver(receiver: Node): boolean {
     return true;
   }
 
-  // SPEC §11.1 and IMPLEMENT_v1 v1 scope: project receiver proof is restricted to known
+  // SPEC §11.1 (v1 scope): project receiver proof is restricted to known
   // Postgres Drizzle database types. SQLite/MySQL conformance is deferred to late hardening.
   return false;
 }
@@ -2641,13 +2640,6 @@ function tableNameArgument(initializer: Node): string | undefined {
   return name.getLiteralText();
 }
 
-type ExtractedTableDeclaration = JisoTableAnnotation & {
-  columns: Readonly<Record<string, QueryShape>>;
-  exported: boolean;
-  identifier: string;
-  name: string;
-};
-
 interface ExtractedFunction {
   bodyStart: number;
   key: string;
@@ -2660,14 +2652,6 @@ interface ExtractedFunction {
   unresolvedCalls: readonly ExternalDbArgumentCall[];
   writeCalls: readonly ExtractedWriteCall[];
 }
-
-type ParsedExtractedFunction = Omit<
-  ExtractedFunction,
-  'localCalls' | 'readCalls' | 'unresolvedCalls' | 'writeCalls'
-> & {
-  bodyNode: Node;
-  callback: Node;
-};
 
 interface ReceiverParameterRequirement {
   index: number;
@@ -2741,15 +2725,6 @@ interface FunctionTouchSummary {
   writes: WriteSummaryInput[];
 }
 
-function extractQueryDefinitions(
-  file: SourceFileInput,
-  columnShapes: Readonly<Record<string, QueryShape>> = {},
-): ExtractedQueryDefinition[] {
-  return withParsedSourceFile(file, (sourceFile) =>
-    extractQueryDefinitionsFromSourceFile(sourceFile, { columnShapes }),
-  );
-}
-
 interface ProjectQueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   localFunctionReceiverParameters?: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>;
@@ -2789,7 +2764,12 @@ function extractQueryDefinitionsFromSourceFile(
   options: QueryDefinitionOptions = {},
 ): ExtractedQueryDefinition[] {
   const definitions: ExtractedQueryDefinition[] = [];
-  const sourceLocalFunctionKeys = localFunctionKeysFromSourceFile(sourceFile);
+  // SPEC §11.1 (v1 scope): local query-helper receiver requirements are supplied by the project
+  // pipeline (functionReceiverParametersByKey); there is no source-mode fallback. When a caller
+  // omits them (e.g. a query with no local helpers), an empty map is the correct project view.
+  const localFunctionsByKey: ReadonlyMap<string, readonly ReceiverParameterRequirement[]> =
+    options.localFunctionReceiverParameters ?? new Map();
+  const localFunctionKeys = new Set(localFunctionsByKey.keys());
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const statement = declaration.getVariableStatement();
@@ -2809,7 +2789,9 @@ function extractQueryDefinitionsFromSourceFile(
     }
 
     const query = queryArgument.getLiteralText();
-    const receiverMode = options.receiverMode ?? 'source';
+    // SPEC §11.1 (v1 scope): query facts require project-mode ts-morph type proof; the
+    // source-mode receiver/table heuristics were removed in v1-cleanup item 4.
+    const receiverMode = options.receiverMode ?? 'project';
     const bodyResolution = queryBodyObjectLiteral(bodyArgument, receiverMode);
     if (!bodyResolution.body) {
       if (bodyResolution.unresolved) {
@@ -2831,18 +2813,17 @@ function extractQueryDefinitionsFromSourceFile(
     }
 
     const bodyObject = bodyResolution.body;
-    const sourceDestructuredReceiverReferences =
-      (options.receiverMode ?? 'source') === 'source'
-        ? sourceQueryDestructuredReceiverNames(bodyObject)
-        : { names: new Set<string>(), projectContainers: false, symbolKeys: new Set<string>() };
     const receiverReferences = queryCallbackReceiverReferences(bodyObject, receiverMode);
-    const localFunctionsByKey =
-      options.localFunctionReceiverParameters ??
-      localFunctionReceiverParametersFromSourceFile(sourceFile);
-    const localFunctionKeys =
-      options.receiverMode === 'project' && options.localFunctionReceiverParameters
-        ? new Set(options.localFunctionReceiverParameters.keys())
-        : sourceLocalFunctionKeys;
+    // SPEC §11.1 (v1 scope): a destructured loader receiver slot (e.g. `{ db: reader }`) is not
+    // type proof. When project mode cannot prove the destructured receiver via TypeScript symbols
+    // (it is absent from the proven receiverReferences), it remains a fail-closed FW406 surface
+    // rather than feeding read/write extraction. Drop the names project mode already proved so a
+    // genuinely-typed destructured receiver (resolved into receiverReferences) does not double-fire.
+    const destructuredCandidates = sourceQueryDestructuredReceiverNames(bodyObject);
+    const sourceDestructuredReceiverReferences = unprovenDestructuredReceiverReferences(
+      destructuredCandidates,
+      receiverReferences,
+    );
     const selection = selectShapeFromQueryBody(
       bodyObject,
       receiverReferences,
@@ -2863,15 +2844,9 @@ function extractQueryDefinitionsFromSourceFile(
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyObject, receiverReferences, readResolutionOptions),
-      ...(receiverMode === 'source'
-        ? ambientSourceQueryReceiverDiagnostics(bodyObject, localFunctionKeys)
-        : []),
-      ...(receiverMode === 'source'
-        ? sourceQueryReceiverAliasDiagnostics(bodyObject, receiverReferences, localFunctionKeys)
-        : []),
-      ...(receiverMode === 'source'
-        ? sourceQueryReceiverMemberDiagnostics(bodyObject, receiverReferences, localFunctionKeys)
-        : []),
+      // SPEC §11.1 (v1 scope): fail-closed FW406 for a destructured loader receiver slot that
+      // project mode could not type-prove. This DETECTOR never produces a positive read/write
+      // fact; it flags an un-analyzable Drizzle receiver surface so manual touches are required.
       ...sourceDestructuredQueryReceiverDiagnostics(
         bodyObject,
         localFunctionKeys,
@@ -3335,61 +3310,10 @@ function receiverMethodAliasQueryDiagnostics(
   );
 }
 
-function ambientSourceQueryReceiverDiagnostics(
-  body: ObjectLiteralExpression,
-  localFunctionKeys: ReadonlySet<string>,
-): TouchGraphDiagnostic[] {
-  return queryCallbackBodies(body).flatMap((callbackBody) =>
-    extractAmbientSourceReceiverCallsFromBody(callbackBody, localFunctionKeys).map((call) => ({
-      code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode ambient Drizzle receiver surface ${call.name}() without a declared loader receiver.`,
-      severity: diagnosticDefinitions.FW406.severity,
-      site: '',
-    })),
-  );
-}
-
-function sourceQueryReceiverAliasDiagnostics(
-  body: ObjectLiteralExpression,
-  receiverReferences: QueryReceiverReferences,
-  localFunctionKeys: ReadonlySet<string>,
-): TouchGraphDiagnostic[] {
-  return queryCallbackBodies(body).flatMap((callbackBody) =>
-    extractSourceReceiverAliasSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
-      isQueryReceiverIdentifier(node, receiverReferences),
-    ).map((call) => ({
-      code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode Drizzle receiver alias surface ${call.name}() without project type proof.`,
-      severity: diagnosticDefinitions.FW406.severity,
-      site: '',
-    })),
-  );
-}
-
-function sourceQueryReceiverMemberDiagnostics(
-  body: ObjectLiteralExpression,
-  receiverReferences: QueryReceiverReferences,
-  localFunctionKeys: ReadonlySet<string>,
-): TouchGraphDiagnostic[] {
-  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
-
-  return queryCallbackBodies(body).flatMap((callbackBody) =>
-    extractSourceReceiverSurfaceCallsFromBody(
-      callbackBody,
-      localFunctionKeys,
-      (node) => isSourceQueryReceiverMemberExpression(node, receiverReferences),
-      undefined,
-      true,
-      (node) => isSourceQueryReceiverMemberExpression(node, receiverReferences),
-    ).map((call) => ({
-      code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode Drizzle receiver member surface ${call.name}() without project type proof.`,
-      severity: diagnosticDefinitions.FW406.severity,
-      site: '',
-    })),
-  );
-}
-
+// SPEC §11.1 (v1 scope): fail-closed FW406 DETECTOR for destructured loader receiver slots that
+// project mode could not type-prove. `receiverReferences` here are the unproven destructured
+// bindings (see unprovenDestructuredReceiverReferences); this never produces a positive
+// read/write fact, it only flags an un-analyzable Drizzle receiver surface.
 function sourceDestructuredQueryReceiverDiagnostics(
   body: ObjectLiteralExpression,
   localFunctionKeys: ReadonlySet<string>,
@@ -3397,12 +3321,12 @@ function sourceDestructuredQueryReceiverDiagnostics(
 ): TouchGraphDiagnostic[] {
   if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
 
-  return queryCallbackBodies(body).flatMap((callbackBody) =>
+  return queryCallbackBodies(body, 'project').flatMap((callbackBody) =>
     extractSourceReceiverSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
       isSourceDestructuredReceiverIdentifier(node, receiverReferences),
     ).map((call) => ({
       code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses source-mode destructured Drizzle receiver surface ${call.name}() without project type proof.`,
+      message: `${diagnosticDefinitions.FW406.message} Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
       severity: diagnosticDefinitions.FW406.severity,
       site: '',
     })),
@@ -4345,16 +4269,40 @@ function appendUntypedQueryReceiverBinding(
   // as FW406 surfaces via sourceDestructuredQueryReceiverDiagnostics instead of fabricating reads.
 }
 
+// SPEC §11.1 (v1 scope): collect destructured loader receiver bindings (e.g. `{ db: reader }`).
+// These are name/property heuristics that never prove a receiver; they only seed the fail-closed
+// FW406 detector below for receivers project mode could not prove via TypeScript symbols.
 function sourceQueryDestructuredReceiverNames(
   body: ObjectLiteralExpression,
 ): QueryReceiverReferences {
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
 
-  for (const callback of queryLoadCallbackFunctions(body)) {
+  for (const callback of queryLoadCallbackFunctions(body, 'project')) {
     const receiverParameter = queryCallbackParameterNodes(callback)[1];
     const receiver = receiverParameter?.getNameNode();
     if (receiver) appendSourceDestructuredReceiverBinding(receiver, names, symbolKeys);
+  }
+
+  return { names, symbolKeys };
+}
+
+// SPEC §11.1 (v1 scope): keep only the destructured receiver bindings that project mode did NOT
+// type-prove. A genuinely-typed destructured receiver (e.g. `{ db }: Context` where Context.db is
+// a Drizzle database) is already in the proven receiverReferences and must not also fail closed.
+function unprovenDestructuredReceiverReferences(
+  candidates: QueryReceiverReferences,
+  proven: QueryReceiverReferences,
+): QueryReceiverReferences {
+  const names = new Set<string>();
+  const symbolKeys = new Set<string>();
+
+  for (const symbolKey of candidates.symbolKeys) {
+    if (!proven.symbolKeys.has(symbolKey)) symbolKeys.add(symbolKey);
+  }
+  for (const name of candidates.names) {
+    if (proven.names.has(name)) continue;
+    names.add(name);
   }
 
   return { names, symbolKeys };
@@ -4899,16 +4847,6 @@ function staticExpressionRootIdentifier(node: Node): Node | undefined {
   return undefined;
 }
 
-function staticTableExpressionPath(
-  node: Node | undefined,
-  resolveIdentifier?: (node: Node) => string | undefined,
-): string | undefined {
-  if (!node) return undefined;
-  // SPEC §10-§11: syntactic wrappers around a table are not new facts; unwrap them before
-  // deciding whether the read/write source is resolved or must degrade to FW406.
-  return staticExpressionPath(node, resolveIdentifier);
-}
-
 function unwrappedStaticExpressionNode(node: Node): Node {
   let current = node;
 
@@ -5258,45 +5196,6 @@ function writeSummaryKey(write: WriteSummaryInput): string {
   ].join('\0');
 }
 
-function extractTables(file: SourceFileInput): ExtractedTableDeclaration[] {
-  const tables: ExtractedTableDeclaration[] = [];
-  const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
-  const declarations = variableDeclarationsFromSource(file);
-
-  for (const { exported, identifier, table: extractedTable } of declarations) {
-    if (!extractedTable) continue;
-    const table = {
-      identifier,
-      columns: extractedTable.columns,
-      exported,
-      name: extractedTable.name,
-      ...extractedTable.annotation,
-    };
-    tables.push(table);
-    appendTable(byIdentifier, identifier, table);
-  }
-
-  for (const declaration of declarations) {
-    if ((byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
-
-    for (const target of declaration.aliasTargets) {
-      for (const table of byIdentifier.get(target) ?? []) {
-        const alias = {
-          identifier: declaration.identifier,
-          columns: table.columns,
-          exported: declaration.exported,
-          name: table.name,
-          ...copyTableAnnotation(table),
-        };
-        tables.push(alias);
-        appendTable(byIdentifier, alias.identifier, alias);
-      }
-    }
-  }
-
-  return tables;
-}
-
 function tableAnnotation(initializer: Node): JisoTableAnnotation | null {
   if (!Node.isCallExpression(initializer)) return null;
   const annotationCall = initializer.getArguments().find(isJisoAnnotationCall);
@@ -5309,11 +5208,6 @@ function tableAnnotation(initializer: Node): JisoTableAnnotation | null {
   if (!domain) return null;
   const key = stringPropertyFromObject(annotationObject, 'key');
   return { domain, ...(key ? { key } : {}) };
-}
-
-function copyTableAnnotation(table: ExtractedTableDeclaration): JisoTableAnnotation {
-  if (isExemptTableAnnotation(table)) return { exempt: true };
-  return { domain: table.domain, ...(table.key ? { key: table.key } : {}) };
 }
 
 function stringPropertyFromObject(object: Node, name: string): string | undefined {
@@ -5597,28 +5491,6 @@ function appendProjectNamespaceTableAccess(
   const syntheticName = tablePath?.split('.').at(-1);
   const table = syntheticName ? tablesBySyntheticName.get(syntheticName) : undefined;
   if (tablePath && table) appendTableEntries(tables, tablePath, [table]);
-}
-
-function sourceModuleContext(files: readonly SourceFileInput[]): SourceModuleContext {
-  const tablesByFileName = new Map<string, Map<string, ExtractedTable[]>>();
-
-  for (const file of files) {
-    const tables = new Map<string, ExtractedTable[]>();
-    for (const table of extractTables(file)) {
-      appendTable(tables, table.identifier, {
-        annotation: table,
-        columns: table.columns,
-        exported: table.exported,
-      });
-    }
-    tablesByFileName.set(file.fileName, tables);
-  }
-
-  return {
-    fileNames: new Set(files.map((file) => file.fileName)),
-    filesByName: new Map(files.map((file) => [file.fileName, file])),
-    tablesByFileName,
-  };
 }
 
 function tablesForFile(
@@ -5956,213 +5828,10 @@ function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
   return expression;
 }
 
-function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
-  return withParsedSourceFile(file, (sourceFile) => {
-    const functions = [
-      ...extractFunctionDeclarations(sourceFile),
-      ...extractVariableAssignedFunctions(sourceFile),
-      ...extractObjectLiteralCallbackFunctions(sourceFile),
-      ...extractDomainWriteCallbacks(sourceFile),
-    ];
-    const localFunctionKeys = new Set(functions.map((fn) => fn.key));
-    const functionsByKey = new Map(functions.map((fn) => [fn.key, fn]));
-
-    return functions.map((fn): ExtractedFunction => {
-      const receiverNames = new Set(fn.receiverNames ?? sourceDrizzleReceiverNames(fn.callback));
-      const ambiguousReceiverReferences = sourceDestructuredReceiverReferences(fn.callback);
-      const { bodyNode, callback: _callback, ...extracted } = fn;
-      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(bodyNode, (node) =>
-        isSourceDrizzleReceiverIdentifier(node, receiverNames),
-      );
-
-      return {
-        ...extracted,
-        localCalls: extractLocalFunctionCallsFromBody(
-          bodyNode,
-          localFunctionKeys,
-          functionsByKey,
-          (argument) => isSourceDrizzleReceiverIdentifier(argument, receiverNames),
-        ).concat(
-          extractTransactionCallbackLocalFunctionCallsFromBody(
-            bodyNode,
-            localFunctionKeys,
-            functionsByKey,
-            (node) => isSourceDrizzleReceiverIdentifier(node, receiverNames),
-          ),
-        ),
-        readCalls: [
-          ...extractSelectReadCallsFromBody(bodyNode, receiverNames),
-          ...extractRelationalReadCallsFromBody(bodyNode, receiverNames),
-        ],
-        receiverNames: [...receiverNames],
-        unresolvedCalls: [
-          ...extractExternalDbArgumentCallsFromBody(
-            bodyNode,
-            receiverNames,
-            localFunctionKeys,
-            carrierSymbolKeys,
-          ),
-          ...extractSourceParameterReceiverMemberSurfaceCallsFromBody(
-            bodyNode,
-            localFunctionKeys,
-            fn.callback,
-          ),
-          ...extractOpaqueLocalHelperReceiverCallsFromBody(
-            bodyNode,
-            localFunctionKeys,
-            functionsByKey,
-            (argument) => isSourceDrizzleReceiverIdentifier(argument, receiverNames),
-            (argument) =>
-              sourceReceiverReferenceInArgument(argument, receiverNames, carrierSymbolKeys),
-          ),
-          ...extractReceiverMethodAliasCallsFromBody(bodyNode, (node) =>
-            isSourceDrizzleReceiverIdentifier(node, receiverNames),
-          ),
-          ...extractUnresolvedTransactionCallbackCallsFromBody(
-            bodyNode,
-            localFunctionKeys,
-            functionsByKey,
-            (node) => isSourceDrizzleReceiverIdentifier(node, receiverNames),
-          ),
-          ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
-          ...extractAmbientSourceReceiverCallsFromBody(bodyNode, localFunctionKeys),
-          ...extractSourceReceiverAliasSurfaceCallsFromBody(bodyNode, localFunctionKeys, (node) =>
-            isSourceDrizzleReceiverIdentifier(node, receiverNames),
-          ),
-          ...extractSourceReceiverSurfaceCallsFromBody(bodyNode, localFunctionKeys, (node) =>
-            isSourceDestructuredReceiverIdentifier(node, ambiguousReceiverReferences),
-          ),
-        ],
-        writeCalls: extractDrizzleWriteCallsFromBody(bodyNode, receiverNames),
-      };
-    });
-  });
-}
-
-function localFunctionKeysFromSourceFile(sourceFile: SourceFile): ReadonlySet<string> {
-  const functions = [
-    ...extractFunctionDeclarations(sourceFile),
-    ...extractVariableAssignedFunctions(sourceFile),
-    ...extractObjectLiteralCallbackFunctions(sourceFile),
-  ];
-  return new Set(functions.map((fn) => fn.key));
-}
-
-function localFunctionReceiverParametersFromSourceFile(
-  sourceFile: SourceFile,
-): ReadonlyMap<string, readonly ReceiverParameterRequirement[]> {
-  return functionReceiverParametersByKey([
-    ...extractFunctionDeclarations(sourceFile),
-    ...extractVariableAssignedFunctions(sourceFile),
-    ...extractObjectLiteralCallbackFunctions(sourceFile),
-  ]);
-}
-
 function functionReceiverParametersByKey(
   functions: Iterable<Pick<ExtractedFunction, 'key' | 'receiverParameters'>>,
 ): ReadonlyMap<string, readonly ReceiverParameterRequirement[]> {
   return new Map([...functions].map((fn) => [fn.key, fn.receiverParameters]));
-}
-
-function extractFunctionDeclarations(sourceFile: SourceFile): ParsedExtractedFunction[] {
-  const functions: ParsedExtractedFunction[] = [];
-
-  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
-    const name = declaration.getName();
-    if (!name || !declaration.getBody()) continue;
-
-    functions.push(extractedFunctionFromCallback(name, declaration, declaration.getNameNode()));
-  }
-
-  return functions;
-}
-
-function extractVariableAssignedFunctions(sourceFile: SourceFile): ParsedExtractedFunction[] {
-  const functions: ParsedExtractedFunction[] = [];
-
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const name = declaration.getNameNode();
-    if (!Node.isIdentifier(name)) continue;
-
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    const callback = unwrappedFunctionExpression(initializer);
-    if (!callback) continue;
-
-    functions.push(extractedFunctionFromCallback(name.getText(), callback, name));
-  }
-
-  return functions;
-}
-
-function extractObjectLiteralCallbackFunctions(sourceFile: SourceFile): ParsedExtractedFunction[] {
-  const functions: ParsedExtractedFunction[] = [];
-
-  for (const object of sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
-    for (const property of object.getProperties()) {
-      if (Node.isMethodDeclaration(property)) {
-        const name = propertyNameText(property.getNameNode());
-        if (!name) continue;
-
-        functions.push(
-          extractedFunctionFromCallback(name, property, property.getNameNode(), {
-            summaryOnly: true,
-          }),
-        );
-        continue;
-      }
-
-      if (!Node.isPropertyAssignment(property)) continue;
-      const name = propertyNameText(property.getNameNode());
-      const initializer = property.getInitializer();
-      if (!name || !initializer) continue;
-
-      const expression = unwrappedStaticExpressionNode(initializer);
-      if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
-
-      functions.push(
-        extractedFunctionFromCallback(name, expression, property.getNameNode(), {
-          summaryOnly: true,
-        }),
-      );
-    }
-  }
-
-  return functions;
-}
-
-function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFunction[] {
-  const callbacks: ParsedExtractedFunction[] = [];
-
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const domainName = declaration.getNameNode();
-    const initializer = declaration.getInitializer();
-    if (!Node.isIdentifier(domainName) || !initializer) continue;
-    const domainCall = unwrappedStaticExpressionNode(initializer);
-    if (!Node.isCallExpression(domainCall)) continue;
-    const expression = domainCall.getExpression();
-    if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
-
-    const domainObject = domainWriteObject(domainCall.getArguments()[0]);
-    if (!domainObject.body) continue;
-
-    for (const property of domainWriteProperties(domainObject.body)) {
-      const callbackResolution = writeActionCallbackResolution(property.initializer);
-      if (callbackResolution.callbacks.length === 0) continue;
-
-      for (const callback of callbackResolution.callbacks) {
-        callbacks.push(
-          extractedFunctionFromCallback(
-            `${domainName.getText()}.${property.memberName}`,
-            callback,
-            property.keyNode,
-          ),
-        );
-      }
-    }
-  }
-
-  return callbacks;
 }
 
 function unresolvedDomainWriteCallbacks(
@@ -6816,28 +6485,6 @@ function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
   return callbackFunctionFromReference(identifier, new Set());
 }
 
-function extractedFunctionFromCallback(
-  name: string,
-  callback: Node,
-  keyNode: Node = callback,
-  options: { summaryOnly?: boolean } = {},
-): ParsedExtractedFunction {
-  const body = functionBody(callback);
-  const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
-  const key = extractedFunctionKey(name, callback, keyNode);
-
-  return {
-    bodyNode: body,
-    bodyStart,
-    callback,
-    key,
-    name,
-    receiverNames: sourceDrizzleReceiverNames(callback),
-    receiverParameters: sourceReceiverParameterRequirements(callback),
-    ...(options.summaryOnly ? { summaryOnly: true } : {}),
-  };
-}
-
 function extractedFunctionKey(name: string, callback: Node, keyNode: Node = callback): string {
   return (
     resolvedSymbolKey(keyNode.getSymbol()) ??
@@ -6995,99 +6642,9 @@ function transactionCallbackSatisfiesReceiverRequirements(
   return requirements.length > 0 && requirements.every((requirement) => requirement.index === 0);
 }
 
-function extractDrizzleWriteCallsFromBody(
-  body: Node,
-  receiverNames: ReadonlySet<string>,
-  bodyOffset = bodySourceStart(body),
-): ExtractedWriteCall[] {
-  const calls: ExtractedWriteCall[] = [];
-
-  for (const call of touchBodyCallExpressions(body)) {
-    if (!isDrizzleWriteCall(call)) continue;
-
-    const expression = call.getExpression();
-    const operation = staticAccessName(expression);
-    const receiver = staticAccessExpression(expression);
-    if (!operation || !receiver) continue;
-    if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
-
-    const chain = drizzleWriteChainRoot(call);
-    const start = call.getStart() - bodyOffset;
-    const tableArgument = call.getArguments()[0];
-    if (start < 0 || !tableArgument) continue;
-    const tableExpression =
-      staticTableExpressionPath(tableArgument) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
-
-    calls.push({
-      index: start,
-      operation,
-      predicateFacts: extractPredicateFactsFromWriteChain(chain),
-      readSources: extractReadSourcesFromWriteChain(
-        chain,
-        operation,
-        (node) => staticTableExpressionPath(node) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
-      ),
-      tableExpression,
-    });
-  }
-
-  return calls;
-}
-
 interface ExternalDbArgumentCall {
   index: number;
   name: string;
-}
-
-function extractExternalDbArgumentCallsFromBody(
-  body: Node,
-  receiverNames: ReadonlySet<string>,
-  localFunctionKeys: ReadonlySet<string>,
-  carrierSymbolKeys: ReadonlySet<string> = new Set(),
-  bodyOffset = bodySourceStart(body),
-): ExternalDbArgumentCall[] {
-  const calls: ExternalDbArgumentCall[] = [];
-  const carrierReferences = sourceReceiverAliasReferencesForBody(body, (node) =>
-    isSourceDrizzleReceiverIdentifier(node, receiverNames),
-  );
-
-  for (const call of touchBodyCallExpressions(body)) {
-    if (
-      boundReceiverMethodAccessName(call, (node) =>
-        isSourceDrizzleReceiverIdentifier(node, receiverNames),
-      )
-    ) {
-      continue;
-    }
-
-    const surface = externalHelperCallSurface(call);
-    if (!surface) continue;
-
-    const { name } = surface;
-    if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
-    const key = localFunctionKeyForReference(surface.reference, localFunctionKeys);
-    if (key && localFunctionKeys.has(key)) continue;
-
-    if (
-      !call
-        .getArguments()
-        .some((arg) =>
-          sourceReceiverReferenceInArgument(
-            arg,
-            receiverNames,
-            carrierSymbolKeys,
-            carrierReferences,
-          ),
-        )
-    ) {
-      continue;
-    }
-
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name });
-  }
-
-  return calls;
 }
 
 function extractOpaqueLocalHelperReceiverCallsFromBody(
@@ -7256,70 +6813,6 @@ function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
   }
 
   return undefined;
-}
-
-function extractReceiverMutationCallsFromBody(
-  body: Node,
-  receiverNames: ReadonlySet<string>,
-  bodyOffset = bodySourceStart(body),
-): ExternalDbArgumentCall[] {
-  const calls: ExternalDbArgumentCall[] = [];
-
-  for (const call of touchBodyCallExpressions(body)) {
-    const surface = directDrizzleReceiverCallSurface(call);
-    if (!surface || !isUnclassifiedDirectDrizzleReceiverMethod(surface.name)) continue;
-
-    if (!isSourceDrizzleReceiverIdentifier(surface.receiver, receiverNames)) continue;
-
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name: surface.name });
-  }
-
-  return calls;
-}
-
-function extractAmbientSourceReceiverCallsFromBody(
-  body: Node,
-  localFunctionKeys: ReadonlySet<string>,
-  bodyOffset = bodySourceStart(body),
-): ExternalDbArgumentCall[] {
-  // SPEC §11.1: source-mode `db`/`tx` globals are ambiguous; keep the surface visible as FW406
-  // instead of deriving table facts from an undeclared compatibility receiver.
-  return extractSourceReceiverSurfaceCallsFromBody(
-    body,
-    localFunctionKeys,
-    isUnboundSourceReceiverName,
-    bodyOffset,
-  );
-}
-
-function extractSourceReceiverAliasSurfaceCallsFromBody(
-  body: Node,
-  localFunctionKeys: ReadonlySet<string>,
-  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
-  bodyOffset = bodySourceStart(body),
-): ExternalDbArgumentCall[] {
-  // SPEC §11.1: source-mode body-local aliases of db/tx are visible surfaces, but they are not
-  // enough proof to derive exact read/write facts. Degrade those alias/carrying-member calls to
-  // FW406 until project types prove the receiver.
-  const references = sourceReceiverAliasReferencesForBody(body, isBaseReceiverIdentifier);
-  if (
-    references.names.size === 0 &&
-    references.symbolKeys.size === 0 &&
-    references.carrierProperties.size === 0
-  ) {
-    return [];
-  }
-
-  return extractSourceReceiverSurfaceCallsFromBody(
-    body,
-    localFunctionKeys,
-    (node) =>
-      isSourceReceiverAliasIdentifier(node, references) ||
-      isSourceReceiverCarrierMemberExpression(node, references),
-    bodyOffset,
-    false,
-  );
 }
 
 function extractSourceReceiverSurfaceCallsFromBody(
@@ -8158,84 +7651,6 @@ function isSourceReceiverCarrierMemberExpression(
   return carriedProperties.has(path.slice(rootPath.length + 1));
 }
 
-function extractSourceParameterReceiverMemberSurfaceCallsFromBody(
-  body: Node,
-  localFunctionKeys: ReadonlySet<string>,
-  callback: Node,
-): ExternalDbArgumentCall[] {
-  const receiverReferences = sourceCallbackParameterReferences(callback);
-  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
-
-  return extractSourceReceiverSurfaceCallsFromBody(
-    body,
-    localFunctionKeys,
-    (node) => isSourceParameterReceiverMemberExpression(node, receiverReferences),
-    undefined,
-    true,
-    (node) => isSourceParameterReceiverMemberExpression(node, receiverReferences),
-  );
-}
-
-function sourceCallbackParameterReferences(callback: Node): QueryReceiverReferences {
-  const names = new Set<string>();
-  const symbolKeys = new Set<string>();
-  if (
-    !Node.isArrowFunction(callback) &&
-    !Node.isFunctionDeclaration(callback) &&
-    !Node.isFunctionExpression(callback) &&
-    !Node.isMethodDeclaration(callback)
-  ) {
-    return { names, symbolKeys };
-  }
-
-  for (const parameter of callback.getParameters()) {
-    const name = parameter.getNameNode();
-    if (!Node.isIdentifier(name)) continue;
-
-    names.add(name.getText());
-    const symbolKey = resolvedSymbolKey(name.getSymbol());
-    if (symbolKey) symbolKeys.add(symbolKey);
-  }
-
-  return { names, symbolKeys };
-}
-
-function isSourceQueryReceiverMemberExpression(
-  node: Node | undefined,
-  receiverReferences: QueryReceiverReferences,
-): boolean {
-  return isSourceReceiverMemberExpression(node, (root) =>
-    isQueryReceiverIdentifier(root, receiverReferences),
-  );
-}
-
-function isSourceParameterReceiverMemberExpression(
-  node: Node | undefined,
-  receiverReferences: QueryReceiverReferences,
-): boolean {
-  return isSourceReceiverMemberExpression(node, (root) =>
-    isSourceDestructuredReceiverIdentifier(root, receiverReferences),
-  );
-}
-
-function isSourceReceiverMemberExpression(
-  node: Node | undefined,
-  isRootReceiver: (root: Node) => boolean,
-): boolean {
-  if (!node || (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node))) {
-    return false;
-  }
-
-  const root = staticExpressionRootIdentifier(node);
-  if (!root || !Node.isIdentifier(root) || !isRootReceiver(root)) return false;
-
-  const path = staticExpressionPath(node);
-  if (!path || path === root.getText()) return false;
-
-  const firstMember = path.slice(root.getText().length + 1).split('.')[0];
-  return firstMember === 'db' || firstMember === 'tx';
-}
-
 interface DirectDrizzleReceiverCallSurface {
   displayName?: string;
   name: string;
@@ -8572,22 +7987,6 @@ function queryReceiverReferenceInArgument(
   );
 }
 
-function sourceReceiverReferenceInArgument(
-  argument: Node,
-  receiverNames: ReadonlySet<string>,
-  carrierSymbolKeys: ReadonlySet<string> = new Set(),
-  carrierReferences?: SourceReceiverAliasReferences,
-): Node | undefined {
-  return receiverReferenceInArgument(
-    argument,
-    (node) => isSourceDrizzleReceiverIdentifier(node, receiverNames),
-    carrierSymbolKeys,
-    carrierReferences
-      ? (node) => isSourceReceiverCarrierMemberExpression(node, carrierReferences)
-      : undefined,
-  );
-}
-
 function receiverReferenceInArgument(
   argument: Node,
   isReceiverIdentifier: (node: Node) => boolean,
@@ -8834,132 +8233,6 @@ function isInsideNestedFunction(node: Node, boundary: Node): boolean {
   return false;
 }
 
-function extractUnclassifiedDrizzleReceiverCallsFromBody(
-  body: Node,
-  receiverNames: ReadonlySet<string>,
-): ExternalDbArgumentCall[] {
-  return extractReceiverMutationCallsFromBody(body, receiverNames);
-}
-
-function extractSelectReadCallsFromBody(
-  body: Node,
-  receiverNames: ReadonlySet<string>,
-  bodyOffset = bodySourceStart(body),
-): ExtractedReadCall[] {
-  const calls: ExtractedReadCall[] = [];
-
-  for (const call of touchBodyCallExpressions(body)) {
-    const read = selectReadCall(call);
-    if (!read || !isSourceDrizzleReceiverIdentifier(read.receiver, receiverNames)) continue;
-
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) {
-      calls.push({
-        index,
-        operation: 'select',
-        tableExpression: staticTableExpressionPath(read.table) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
-      });
-    }
-  }
-
-  return calls;
-}
-
-function extractRelationalReadCallsFromBody(
-  body: Node,
-  receiverNames: ReadonlySet<string>,
-  bodyOffset = bodySourceStart(body),
-): ExtractedReadCall[] {
-  const calls: ExtractedReadCall[] = [];
-
-  for (const call of touchBodyCallExpressions(body)) {
-    const read = relationalReadCall(call);
-    if (!read || !isSourceDrizzleReceiverIdentifier(read.receiver, receiverNames)) continue;
-
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) {
-      calls.push({
-        index,
-        operation: 'relational-query',
-        tableExpression: read.tableExpression,
-      });
-    }
-  }
-
-  return calls;
-}
-
-function isSourceDrizzleReceiverIdentifier(
-  node: Node | undefined,
-  receiverNames: ReadonlySet<string>,
-  seen: Set<Node> = new Set(),
-): boolean {
-  if (!node || !Node.isIdentifier(node)) return false;
-
-  const symbol = symbolForIdentifierReference(node);
-  const declarations = symbol?.getDeclarations() ?? [];
-  if (declarations.length === 0) return receiverNames.has(node.getText());
-
-  if (declarations.some((declaration) => isSourceReceiverBindingDeclaration(declaration))) {
-    return receiverNames.has(node.getText());
-  }
-
-  if (declarations.some((declaration) => isSourceReceiverParameterDeclaration(declaration))) {
-    return receiverNames.has(node.getText());
-  }
-
-  for (const declaration of declarations) {
-    const parameter = receiverParameterDeclaration(declaration);
-    if (!parameter || seen.has(parameter)) continue;
-    seen.add(parameter);
-
-    const callback = parameter.getParent();
-    if (
-      !Node.isArrowFunction(callback) &&
-      !Node.isFunctionExpression(callback) &&
-      !Node.isFunctionDeclaration(callback)
-    ) {
-      continue;
-    }
-    if (callback.getParameters()[0] !== parameter) continue;
-
-    const call = callback.getParent();
-    if (!Node.isCallExpression(call)) continue;
-
-    const expression = call.getExpression();
-    if (staticAccessName(expression) !== 'transaction') continue;
-
-    if (
-      isSourceDrizzleReceiverIdentifier(staticAccessExpression(expression), receiverNames, seen)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function isUnboundSourceReceiverName(node: Node | undefined): boolean {
-  if (!node || !Node.isIdentifier(node)) return false;
-  if (!isLikelyDrizzleReceiver(node.getText())) return false;
-  const parent = node.getParent();
-  if (
-    Node.isShorthandPropertyAssignment(parent) &&
-    parent.getNameNode() === node &&
-    !parent.getValueSymbol()
-  ) {
-    return true;
-  }
-  const declarations = symbolForIdentifierReference(node)?.getDeclarations() ?? [];
-  return declarations.every(isSelfShorthandPropertyDeclaration);
-}
-
-function isSelfShorthandPropertyDeclaration(declaration: Node): boolean {
-  if (!Node.isIdentifier(declaration)) return false;
-  const parent = declaration.getParent();
-  return Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration;
-}
-
 function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
   if (Node.isIdentifier(node)) {
     const parent = node.getParent();
@@ -8969,35 +8242,6 @@ function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
   }
 
   return aliasedSymbol(node.getSymbol());
-}
-
-function isSourceReceiverBindingDeclaration(declaration: Node): boolean {
-  let binding: BindingElement | null = null;
-  if (Node.isBindingElement(declaration)) {
-    binding = declaration;
-  } else if (Node.isIdentifier(declaration)) {
-    const parent = declaration.getParent();
-    if (Node.isBindingElement(parent)) binding = parent;
-  }
-  if (!binding) return false;
-  if (isRestBindingElement(binding)) return false;
-
-  const bindingName = binding.getNameNode();
-  const propertyNameNode = binding.getPropertyNameNode();
-  const propertyName = propertyNameNode ? propertyNameText(propertyNameNode) : undefined;
-  if (!propertyName && Node.isIdentifier(bindingName)) {
-    return isLikelyDrizzleReceiver(bindingName.getText());
-  }
-
-  return propertyName === 'db' || propertyName === 'tx';
-}
-
-function isSourceReceiverParameterDeclaration(declaration: Node): boolean {
-  const parameter = receiverParameterDeclaration(declaration);
-  if (!parameter) return false;
-
-  const name = parameter.getNameNode();
-  return Node.isIdentifier(name) && isLikelyDrizzleReceiver(name.getText());
 }
 
 function receiverParameterDeclaration(declaration: Node): ParameterDeclaration | null {
@@ -9010,66 +8254,10 @@ function receiverParameterDeclaration(declaration: Node): ParameterDeclaration |
   return null;
 }
 
-function sourceDrizzleReceiverNames(callback: Node): string[] {
-  const names = new Set<string>();
-  if (
-    Node.isArrowFunction(callback) ||
-    Node.isFunctionDeclaration(callback) ||
-    Node.isFunctionExpression(callback) ||
-    Node.isMethodDeclaration(callback)
-  ) {
-    for (const param of callback.getParameters()) {
-      appendSourceReceiverBindingNames(param.getNameNode(), names);
-    }
-  }
-
-  return [...names];
-}
-
-function sourceDestructuredReceiverReferences(callback: Node): QueryReceiverReferences {
-  const names = new Set<string>();
-  const symbolKeys = new Set<string>();
-  if (
-    Node.isArrowFunction(callback) ||
-    Node.isFunctionDeclaration(callback) ||
-    Node.isFunctionExpression(callback) ||
-    Node.isMethodDeclaration(callback)
-  ) {
-    for (const param of callback.getParameters()) {
-      appendSourceDestructuredReceiverBinding(param.getNameNode(), names, symbolKeys);
-    }
-  }
-
-  return { names, symbolKeys };
-}
-
-function sourceReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
-  if (
-    !Node.isArrowFunction(callback) &&
-    !Node.isFunctionDeclaration(callback) &&
-    !Node.isFunctionExpression(callback) &&
-    !Node.isMethodDeclaration(callback)
-  ) {
-    return [];
-  }
-
-  return callback.getParameters().flatMap((parameter, index) => {
-    const names = new Set<string>();
-    appendSourceReceiverBindingNames(parameter.getNameNode(), names);
-    return names.size > 0 ? [{ index, names: [...names], symbolKeys: [] }] : [];
-  });
-}
-
-function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void {
-  if (Node.isIdentifier(name)) {
-    if (isLikelyDrizzleReceiver(name.getText())) names.add(name.getText());
-    return;
-  }
-
-  // SPEC §11.1: destructured source-mode receiver slots are not precise receiver proof. They are
-  // tracked separately as FW406 surfaces instead of feeding read/write extraction.
-}
-
+// SPEC §11.1 (v1 scope): collect destructured receiver bindings for the FAIL-CLOSED FW406
+// detector only. The db/tx name/property heuristic here never proves a receiver or produces a
+// read/write fact; unprovenDestructuredReceiverReferences later drops any binding project mode
+// already type-proved, so only un-analyzable destructured receivers reach the FW406 surface.
 function appendSourceDestructuredReceiverBinding(
   name: Node,
   names: Set<string>,
@@ -9116,7 +8304,9 @@ function isSourceDestructuredReceiverIdentifier(
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {
-  // SPEC §10-§11: source-mode names beyond the canonical db/tx surface are not proof.
+  // SPEC §11.1 (v1 scope): this canonical db/tx name heuristic is NOT receiver proof and never
+  // produces a read/write fact. It only seeds the fail-closed FW406 detector for destructured
+  // loader receiver slots that project-mode ts-morph could not type-prove.
   return /^(db|tx)$/.test(name);
 }
 
@@ -9360,10 +8550,6 @@ function argumentKey(expression: Node): string | undefined {
   if (!Node.isIdentifier(base) || base.getText() !== 'input') return undefined;
 
   return `arg:${expression.getName()}`;
-}
-
-function appendTable<Table>(tables: Map<string, Table[]>, identifier: string, table: Table): void {
-  tables.set(identifier, [...(tables.get(identifier) ?? []), table]);
 }
 
 function appendTableEntries<Table>(
