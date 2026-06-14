@@ -286,7 +286,7 @@ const starterTemplateFwOutputs = [
   {
     args: ['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json'],
     output:
-      'fw-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId,quantity\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\n',
+      'fw-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId,quantity\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=1 UNHANDLED=0 PUNTED=0\n',
   },
   {
     args: ['explain', 'page', '/cart', 'graph.json'],
@@ -511,9 +511,9 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
       productGrid: 'no-invalidation',
     },
     'cart/add': {
-      cart: 'hand-written',
-      orderHistory: 'await-fragment',
-      productGrid: 'await-fragment',
+      cart: 'derived',
+      orderHistory: 'derived',
+      productGrid: 'derived',
     },
     'order/receipt': {
       cart: 'no-invalidation',
@@ -558,6 +558,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'Platform-behavior emission',
     'Teaching errors',
     'TSX-only authoring',
+    'Post-parse decisions use typed facts, not source strings',
   ]);
   assert.deepEqual(fact.compilerRuleTitles, fact.hardRuleTitlesCovered);
   assert.equal(
@@ -1584,9 +1585,9 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
         { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
       ],
       optimistic: [
-        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+        { mutation: 'cart/add', query: 'cart', status: 'derived' },
+        { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
       ],
     },
     keyedMorph: {
@@ -1879,14 +1880,16 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     invalidates: ['cart', 'product', 'order'],
     manualInvalidates: [],
     optimisticStatuses: {
-      cart: 'hand-written',
-      orderHistory: 'await-fragment',
-      productGrid: 'await-fragment',
+      cart: 'derived',
+      orderHistory: 'derived',
+      productGrid: 'derived',
     },
     optimisticSummary: {
+      PUNTED: '0',
       UNHANDLED: '0',
-      'await-fragment': '2',
-      'hand-written': '1',
+      'await-fragment': '0',
+      derived: '3',
+      'hand-written': '0',
       total: '3',
     },
     session: 'commerceSession',
@@ -1908,8 +1911,10 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     invalidates: [],
     manualInvalidates: [],
     optimisticSummary: {
+      PUNTED: '0',
       UNHANDLED: '0',
       'await-fragment': '0',
+      derived: '0',
       'hand-written': '0',
       total: '0',
     },
@@ -1976,9 +1981,9 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     },
     mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
     optimistic: [
-      { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-      { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-      { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+      { mutation: 'cart/add', query: 'cart', status: 'derived' },
+      { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
+      { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
     ],
     routes: ['/admin', '/cart'],
     touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],
@@ -2109,8 +2114,10 @@ void test('P10 starter wires graph assertions into CI', async () => {
     manualInvalidates: [],
     optimisticStatuses: { cart: 'await-fragment' },
     optimisticSummary: {
+      PUNTED: '0',
       UNHANDLED: '0',
       'await-fragment': '1',
+      derived: '0',
       'hand-written': '0',
       total: '1',
     },
@@ -3356,9 +3363,9 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
       },
       mutations: ['auth/sign-out', 'cart/add', 'order/receipt'],
       optimistic: [
-        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-        { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-        { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+        { mutation: 'cart/add', query: 'cart', status: 'derived' },
+        { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
+        { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
       ],
       routes: ['/admin', '/cart'],
       touchGraphKeys: ['cart.addItem', 'order.receipt', 'payment.webhook'],

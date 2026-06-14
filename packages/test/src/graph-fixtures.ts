@@ -390,9 +390,14 @@ export function graphOptimisticStatusMatrix(graph: JisoGraphFixture): GraphInval
 }
 
 export function graphOptimisticFacts(graph: JisoGraphFixture): JisoGraphOptimisticFact[] {
-  return [...(graph.optimistic ?? [])].sort((left, right) =>
-    `${left.mutation}\0${left.query}`.localeCompare(`${right.mutation}\0${right.query}`),
-  );
+  // Project to the declared coverage shape (mutation/query/status). v2 derivation
+  // metadata lives in graph.json for `fw explain --optimistic`; this fact is the
+  // status-only coverage snapshot, so it stays stable across v1/v2 (SPEC.md §10.6).
+  return [...(graph.optimistic ?? [])]
+    .map((entry) => ({ mutation: entry.mutation, query: entry.query, status: entry.status }))
+    .sort((left, right) =>
+      `${left.mutation}\0${left.query}`.localeCompare(`${right.mutation}\0${right.query}`),
+    );
 }
 
 export function graphInvalidationFacts(graph: JisoGraphFixture): Record<string, string[]> {

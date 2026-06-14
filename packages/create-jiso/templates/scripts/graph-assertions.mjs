@@ -29,7 +29,7 @@ assert.equal(explainLine(cartAdd, 'session: '), 'starterSession');
 assert.deepEqual(explainList(explainLine(cartAdd, 'input-fields: ')), ['productId', 'quantity']);
 assert.match(cartAdd, /^updates: cart->component:CartBadge,component:CartPanel,page:\/cart$/m);
 assert.match(cartAdd, /^OPTIMISTIC cart await-fragment$/m);
-assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*\bUNHANDLED=0\b/m);
 
 const cartPage = fwExplain(['page', '/cart']);
 assert.equal(explainLine(cartPage, 'prefetch: '), 'false');
