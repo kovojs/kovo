@@ -11,13 +11,7 @@ export const addContactDerivedOptimistic = {
     contactList: (current, $input) => {
       const next = structuredClone(current);
       {
-        const row = {
-          id: $input.id,
-          name: $input.name,
-          email: $input.email,
-          ownerId: $input.ownerId,
-          dealCount: 0,
-        };
+        const row = { id: $input.id, name: $input.name, email: $input.email, ownerId: $input.ownerId, dealCount: 0 };
         const index = next.items.findIndex((entry) => entry.id > row.id);
         if (index < 0) next.items.push(row);
         else next.items.splice(index, 0, row);

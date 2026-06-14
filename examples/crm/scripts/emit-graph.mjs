@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,18 +40,11 @@ const { createCrmGraph } = await import('../src/graph.js');
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');
 
-// Format a generated source string through the repo formatter (oxfmt) so the
-// committed artifact is byte-identical to what `vp check` expects — the same
-// pipeline the rest of the repo's committed generated code passes. Keeps
-// `emit-graph --check` and `vp check` in agreement on whitespace. The binary
-// resolves from the workspace-root node_modules (oxfmt ships with vite-plus).
-const OXFMT_BIN = resolve(crmRoot, '../../node_modules/.bin/oxfmt');
-function formatSource(source, virtualPath) {
-  return execFileSync(OXFMT_BIN, [`--stdin-filepath=${virtualPath}`], {
-    cwd: crmRoot,
-    encoding: 'utf8',
-    input: source,
-  });
+// The generated dir is fmt-ignored in the root vite.config (like commerce's), so
+// the IR serializers' raw valid-TypeScript output is committed verbatim. Skipping
+// an external formatter keeps `emit-graph --check` deterministic across machines.
+function formatSource(source) {
+  return source;
 }
 
 const SOURCE_FILES = [

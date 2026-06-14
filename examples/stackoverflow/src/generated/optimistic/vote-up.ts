@@ -13,12 +13,12 @@ export const voteUpDerivedOptimistic = {
       {
         const target = next.items.find((entry) => entry.id === $input.targetId);
         if (target) {
-          target.score = target.score + 1;
+          target.score = (target.score + 1);
         }
       }
       return next;
     },
-    questionScore: (current, $input) => {
+    questionScore: (current, _$input) => {
       const next = structuredClone(current);
       next.score = (next.score ?? 0) + 1;
       return next;

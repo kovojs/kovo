@@ -7,78 +7,80 @@ import type {
 } from '../queries.js';
 
 export const crmTouchGraph = {
-  addContact: {
-    reads: [],
-    touches: [
+  "addContact": {
+    "reads": [],
+    "touches": [
       {
-        domain: 'contact',
-        keys: null,
-        site: 'examples/crm/src/mutations.ts:58',
-        via: 'contacts',
-      },
+        "domain": "contact",
+        "keys": null,
+        "site": "examples/crm/src/mutations.ts:58",
+        "via": "contacts"
+      }
     ],
-    unresolved: [],
+    "unresolved": []
   },
-  createDeal: {
-    reads: [],
-    touches: [
+  "createDeal": {
+    "reads": [],
+    "touches": [
       {
-        domain: 'contact',
-        keys: 'arg:contactId',
-        site: 'examples/crm/src/mutations.ts:89',
-        via: 'contacts',
+        "domain": "contact",
+        "keys": "arg:contactId",
+        "site": "examples/crm/src/mutations.ts:89",
+        "via": "contacts"
       },
       {
-        domain: 'deal',
-        keys: null,
-        site: 'examples/crm/src/mutations.ts:88',
-        via: 'deals',
-      },
+        "domain": "deal",
+        "keys": null,
+        "site": "examples/crm/src/mutations.ts:88",
+        "via": "deals"
+      }
     ],
-    unresolved: [],
+    "unresolved": []
   },
-  moveDeal: {
-    reads: [],
-    touches: [
+  "moveDeal": {
+    "reads": [],
+    "touches": [
       {
-        domain: 'deal',
-        keys: 'arg:dealId',
-        site: 'examples/crm/src/mutations.ts:147',
-        via: 'deals',
-      },
+        "domain": "deal",
+        "keys": "arg:dealId",
+        "site": "examples/crm/src/mutations.ts:147",
+        "via": "deals"
+      }
     ],
-    unresolved: [],
+    "unresolved": []
   },
-  closeDeal: {
-    reads: [],
-    touches: [
+  "closeDeal": {
+    "reads": [],
+    "touches": [
       {
-        domain: 'deal',
-        keys: 'arg:dealId',
-        site: 'examples/crm/src/mutations.ts:213',
-        via: 'deals',
-      },
+        "domain": "deal",
+        "keys": "arg:dealId",
+        "site": "examples/crm/src/mutations.ts:213",
+        "via": "deals"
+      }
     ],
-    unresolved: [],
-  },
+    "unresolved": []
+  }
 } as const;
 
 export const crmInvalidationSets = {
-  addContact: [{ query: 'contactList', domains: ['contact'], keys: null }],
-  closeDeal: [
+  'addContact': [
+    { query: 'contactList', domains: ['contact'], keys: null },
+  ],
+  'closeDeal': [
     { query: 'contactDealCount', domains: ['deal'], keys: null },
     { query: 'dealList', domains: ['deal'], keys: null },
     { query: 'openDeals', domains: ['deal'], keys: null },
     { query: 'pipelineByStage', domains: ['deal'], keys: null },
   ],
-  createDeal: [
+  'createDeal': [
     { query: 'contactDealCount', domains: ['deal'], keys: null },
     { query: 'contactList', domains: ['contact'], keys: null },
     { query: 'dealList', domains: ['deal'], keys: null },
     { query: 'openDeals', domains: ['deal'], keys: null },
     { query: 'pipelineByStage', domains: ['deal'], keys: null },
   ],
-  moveDeal: [
+  'moveDeal': [
     { query: 'contactDealCount', domains: ['deal'], keys: null },
     { query: 'dealList', domains: ['deal'], keys: null },
     { query: 'openDeals', domains: ['deal'], keys: null },
@@ -87,10 +89,10 @@ export const crmInvalidationSets = {
 } as const;
 
 export interface CrmInvalidationSets {
-  addContact: 'contactList';
-  closeDeal: 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
-  createDeal: 'contactDealCount' | 'contactList' | 'dealList' | 'openDeals' | 'pipelineByStage';
-  moveDeal: 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+  'addContact': 'contactList';
+  'closeDeal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+  'createDeal': 'contactDealCount' | 'contactList' | 'dealList' | 'openDeals' | 'pipelineByStage';
+  'moveDeal': 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
 }
 
 declare module '@jiso/core' {

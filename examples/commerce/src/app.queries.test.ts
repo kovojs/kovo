@@ -191,7 +191,10 @@ describe('commerce example', () => {
           // (the same pattern createCommerceDb uses for its DDL + product seed).
           void db.delete(products).execute();
           void db.insert(products).values({ id: 'custom', stock: 42, unitPrice: 777 }).execute();
-          void db.insert(cartItems).values({ productId: 'custom', qty: 3, unitPrice: 777 }).execute();
+          void db
+            .insert(cartItems)
+            .values({ productId: 'custom', qty: 3, unitPrice: 777 })
+            .execute();
           void db
             .insert(orders)
             .values({

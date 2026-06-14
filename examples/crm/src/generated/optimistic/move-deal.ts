@@ -9,7 +9,7 @@ import type { moveDealForm } from '../../forms.js';
 export const moveDealDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactDealCount: (current, $input) => {
+    contactDealCount: (current, _$input) => {
       const next = structuredClone(current);
       return next;
     },
@@ -24,4 +24,4 @@ export const moveDealDerivedOptimistic = {
       return next;
     },
   },
-} satisfies CrmDerivedSubset<typeof moveDealForm, 'contactDealCount' | 'dealList'>;
+} satisfies CrmDerivedSubset<typeof moveDealForm, "contactDealCount" | "dealList">;

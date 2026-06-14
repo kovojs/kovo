@@ -23,7 +23,7 @@ export const postAnswerDerivedOptimistic = {
       {
         const target = next.items.find((entry) => entry.id === $input.questionId);
         if (target) {
-          target.answerCount = target.answerCount + 1;
+          target.answerCount = (target.answerCount + 1);
         }
       }
       return next;

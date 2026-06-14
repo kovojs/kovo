@@ -20,6 +20,8 @@ export default defineConfig({
       'coverage/**',
       'node_modules/**',
       'examples/commerce/src/generated/**',
+      'examples/stackoverflow/src/generated/**',
+      'examples/crm/src/generated/**',
       'site/tutorial/steps/*/src/generated/**',
     ],
     semi: true,

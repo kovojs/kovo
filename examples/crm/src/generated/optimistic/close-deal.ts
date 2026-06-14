@@ -9,9 +9,9 @@ import type { closeDealForm } from '../../forms.js';
 export const closeDealDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactDealCount: (current, $input) => {
+    contactDealCount: (current, _$input) => {
       const next = structuredClone(current);
       return next;
     },
   },
-} satisfies CrmDerivedSubset<typeof closeDealForm, 'contactDealCount'>;
+} satisfies CrmDerivedSubset<typeof closeDealForm, "contactDealCount">;

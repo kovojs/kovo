@@ -2,72 +2,55 @@
 import type { AnswerListResult, QuestionListResult, QuestionScoreResult } from '../types.js';
 
 export const soTouchGraph = {
-  postAnswer: {
+  "postAnswer": {
     touches: [
-      {
-        domain: 'answer',
-        via: 'answers',
-        site: 'examples/stackoverflow/src/mutations.ts:39',
-        keys: null,
-      },
-      {
-        domain: 'question',
-        via: 'questions',
-        site: 'examples/stackoverflow/src/mutations.ts:40',
-        keys: 'arg:questionId',
-      },
+      { domain: "answer", via: "answers", site: "examples/stackoverflow/src/mutations.ts:39", keys: null },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:40", keys: "arg:questionId" },
     ],
-    reads: [],
-    unresolved: [],
+    reads: [
+    ],
+    unresolved: [
+    ],
   },
-  postQuestion: {
+  "postQuestion": {
     touches: [
-      {
-        domain: 'question',
-        via: 'questions',
-        site: 'examples/stackoverflow/src/mutations.ts:24',
-        keys: null,
-      },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:24", keys: null },
     ],
-    reads: [],
-    unresolved: [],
+    reads: [
+    ],
+    unresolved: [
+    ],
   },
-  voteUp: {
+  "voteUp": {
     touches: [
-      {
-        domain: 'question',
-        via: 'questions',
-        site: 'examples/stackoverflow/src/mutations.ts:54',
-        keys: 'arg:targetId',
-      },
-      {
-        domain: 'vote',
-        via: 'votes',
-        site: 'examples/stackoverflow/src/mutations.ts:53',
-        keys: null,
-      },
+      { domain: "question", via: "questions", site: "examples/stackoverflow/src/mutations.ts:54", keys: "arg:targetId" },
+      { domain: "vote", via: "votes", site: "examples/stackoverflow/src/mutations.ts:53", keys: null },
     ],
-    reads: [],
-    unresolved: [],
+    reads: [
+    ],
+    unresolved: [
+    ],
   },
 } as const;
 
 export const soInvalidationSets = {
-  postAnswer: [
+  'postAnswer': [
     { query: 'answerList', domains: ['answer'], keys: null },
     { query: 'questionList', domains: ['question'], keys: null },
   ],
-  postQuestion: [{ query: 'questionList', domains: ['question'], keys: null }],
-  voteUp: [
+  'postQuestion': [
+    { query: 'questionList', domains: ['question'], keys: null },
+  ],
+  'voteUp': [
     { query: 'questionList', domains: ['question'], keys: null },
     { query: 'questionScore', domains: ['vote'], keys: null },
   ],
 } as const;
 
 export interface SoInvalidationSets {
-  postAnswer: 'answerList' | 'questionList';
-  postQuestion: 'questionList';
-  voteUp: 'questionList' | 'questionScore';
+  'postAnswer': 'answerList' | 'questionList';
+  'postQuestion': 'questionList';
+  'voteUp': 'questionList' | 'questionScore';
 }
 
 declare module '@jiso/core' {

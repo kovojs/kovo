@@ -1,6 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -77,17 +76,11 @@ function canonicalizeSite(site, dir) {
   return typeof site === 'string' ? site.replace(`${dir}/`, `${CANONICAL_DIR}/`) : site;
 }
 
-// The committed generated *.ts must satisfy `vp check` (oxfmt). The IR serializers
-// emit valid-but-unformatted TypeScript, so run each generated source through the
-// workspace's oxfmt (the same formatter `vp check` uses) before write/check.
-const workspaceRoot = resolve(soRoot, '..', '..');
-const oxfmtBin = resolve(workspaceRoot, 'node_modules/.bin/oxfmt');
-function formatTs(source, filepath) {
-  return execFileSync(oxfmtBin, ['--stdin-filepath', filepath], {
-    cwd: workspaceRoot,
-    input: source,
-    encoding: 'utf8',
-  });
+// The generated dir is fmt-ignored in the root vite.config (like commerce's), so
+// the IR serializers' raw valid-TypeScript output is committed verbatim. Skipping
+// an external formatter keeps `emit-graph --check` deterministic across machines.
+function formatTs(source) {
+  return source;
 }
 
 const formatJson = (value, indent = 0) => {

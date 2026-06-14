@@ -9,7 +9,7 @@ import type { createDealForm } from '../../forms.js';
 export const createDealDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactDealCount: (current, $input) => {
+    contactDealCount: (current, _$input) => {
       const next = structuredClone(current);
       next.count = (next.count ?? 0) + 1;
       return next;
@@ -17,13 +17,7 @@ export const createDealDerivedOptimistic = {
     dealList: (current, $input) => {
       const next = structuredClone(current);
       {
-        const row = {
-          id: $input.id,
-          contactId: $input.contactId,
-          stage: $input.stage,
-          amount: $input.amount,
-          ownerId: $input.ownerId,
-        };
+        const row = { id: $input.id, contactId: $input.contactId, stage: $input.stage, amount: $input.amount, ownerId: $input.ownerId };
         const index = next.items.findIndex((entry) => entry.id > row.id);
         if (index < 0) next.items.push(row);
         else next.items.splice(index, 0, row);
@@ -33,13 +27,7 @@ export const createDealDerivedOptimistic = {
     openDeals: (current, $input) => {
       const next = structuredClone(current);
       {
-        const row = {
-          id: $input.id,
-          contactId: $input.contactId,
-          stage: $input.stage,
-          amount: $input.amount,
-          ownerId: $input.ownerId,
-        };
+        const row = { id: $input.id, contactId: $input.contactId, stage: $input.stage, amount: $input.amount, ownerId: $input.ownerId };
         const index = next.items.findIndex((entry) => entry.id > row.id);
         if (index < 0) next.items.push(row);
         else next.items.splice(index, 0, row);
@@ -47,4 +35,4 @@ export const createDealDerivedOptimistic = {
       return next;
     },
   },
-} satisfies CrmDerivedSubset<typeof createDealForm, 'contactDealCount' | 'dealList' | 'openDeals'>;
+} satisfies CrmDerivedSubset<typeof createDealForm, "contactDealCount" | "dealList" | "openDeals">;

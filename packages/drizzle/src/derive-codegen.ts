@@ -1,4 +1,4 @@
-import type { PatchOp, PatchProgram, PushPosition, SymbolicValue } from '@jiso/core';
+import type { PatchOp, PatchProgram, SymbolicValue } from '@jiso/core';
 
 // SPEC.md §10.4/§10.5 Phase 3 — lower a Stage-3 PatchProgram into a committed,
 // reviewable, overridable transform module (`generated/optimistic/*.ts`). This is
@@ -97,7 +97,12 @@ export function lowerTransform(program: PatchProgram): string {
   const body = ['const next = structuredClone(current);', ...statements, 'return next;']
     .map((line) => indent(line, 2))
     .join('\n');
-  return `(current, $input) => {\n${body}\n}`;
+  // Some sound transforms never read the mutation input (e.g. a +1 count inc or a
+  // provably no-op program). `$input` is only ever lowered as `$input.<path>`, so
+  // name the parameter `_$input` when the body never references it — keeping the
+  // committed codegen lint-clean (no-unused-vars).
+  const inputParam = body.includes('$input.') ? '$input' : '_$input';
+  return `(current, ${inputParam}) => {\n${body}\n}`;
 }
 
 function lowerOp(op: PatchOp): string[] {
