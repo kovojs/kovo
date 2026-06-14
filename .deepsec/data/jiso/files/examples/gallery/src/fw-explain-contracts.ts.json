@@ -1,0 +1,59 @@
+{
+  "filePath": "examples/gallery/src/fw-explain-contracts.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        160,
+        235
+      ],
+      "snippet": "        },\n        {\n          attr: 'aria-describedby',\n          decision: 'primitive-wins',\n          diagnostics: [],",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.416Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "f4ede2c83d917ed57b2337d079feeacc577ef2c83d3fd048c8e9cbaf8e0a5fa6",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:53:56.812Z",
+      "durationMs": 68565.4,
+      "durationApiMs": 68682,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "351a8ceb-9709-473f-aab2-695743841f17",
+      "findingCount": 0,
+      "numTurns": 4.2,
+      "phase": "process",
+      "costUsd": 0.36868309999999993,
+      "usage": {
+        "inputTokens": 583,
+        "outputTokens": 4587.6,
+        "cacheReadInputTokens": 226064.6,
+        "cacheCreationInputTokens": 13719
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T14:54:02-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:53:56.835Z"
+  }
+}

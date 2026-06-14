@@ -1,0 +1,82 @@
+{
+  "filePath": "packages/create-jiso/templates/src/client.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        75
+      ],
+      "snippet": "            },\n            replaceWithHtml(html) {\n              element.innerHTML = html;\n            },\n          }",
+      "matchedPattern": "innerHTML assignment"
+    },
+    {
+      "vulnSlug": "dangerous-html",
+      "lineNumbers": [
+        75
+      ],
+      "snippet": "              return element.innerHTML;\n            },\n            replaceWithHtml(html) {\n              element.innerHTML = html;\n            },\n          }\n        : null;\n    },",
+      "matchedPattern": "dangerouslySetInnerHTML from props (trace source)"
+    },
+    {
+      "vulnSlug": "unverified-lookup",
+      "lineNumbers": [
+        63
+      ],
+      "snippet": "      const element =\n        documentRoot.getElementById(target) ??\n        documentRoot.querySelector('[fw-fragment-target=\"' + CSS.escape(target) + '\"]');\n\n      return element",
+      "matchedPattern": "DB lookup by ID without ownership check in next 15 lines"
+    },
+    {
+      "vulnSlug": "untrusted-redirect-following",
+      "lineNumbers": [
+        25
+      ],
+      "snippet": "\n  return fetch(url, init);\n};\n",
+      "matchedPattern": "fetch(url) — default redirect: follow + caller-style URL"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.803Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "c5b7a8ab40df838aff69b236c14fed88e1e6ee4143d1b4df654644d7708db981",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:45:22.227Z",
+      "durationMs": 128279.66666666667,
+      "durationApiMs": 128238.66666666667,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "1d6107d7-75b5-4da0-815b-23ce4ece5f37",
+      "findingCount": 0,
+      "numTurns": 7.666666666666667,
+      "phase": "process",
+      "costUsd": 0.6624789999999999,
+      "usage": {
+        "inputTokens": 922.6666666666666,
+        "outputTokens": 9222.666666666666,
+        "cacheReadInputTokens": 235116,
+        "cacheCreationInputTokens": 30835.333333333332
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-11T11:39:08-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:45:22.255Z"
+  }
+}

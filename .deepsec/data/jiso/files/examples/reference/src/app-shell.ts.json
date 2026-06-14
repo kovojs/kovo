@@ -1,0 +1,85 @@
+{
+  "filePath": "examples/reference/src/app-shell.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        62,
+        76,
+        112,
+        132
+      ],
+      "snippet": "      '<h1>Jiso Reference App</h1>',\n      '<p>Public route exported by the shared request shell.</p>',\n      `<button type=\"button\" on:click=\"${referencePublicClientModuleHref}#Reference$markReady\">Check shell</button>`,\n      '<output id=\"reference-status\">Waiting for client module.</output>',\n      '</section>',",
+      "matchedPattern": "template literal in HTML"
+    },
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        53,
+        71
+      ],
+      "snippet": "export const referencePublicRoute = route('/', {\n  meta: {\n    description: 'A public Jiso reference app shell exported through synthetic replay.',\n    title: 'Jiso Reference Public Shell',\n  },",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.416Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "6b66d805c8a3ffa52c40663088e3cc18f6aa39adec82d4a16a784cdcf0333641",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "open-redirect",
+      "title": "Open redirect reachable through the enhanced shell sign-in flow",
+      "description": "Same open-redirect class as in app.ts, via the shell's interactive path. The /login route reads `context.search.next` straight from the query string (L75) and seeds it into the login form, and createReferenceAppShell wires the sign-in mutation response with `redirectTo: (result) => authRedirectTo(result.value)` (L86, L106). authRedirectTo (L180-187) returns `result.value.redirectTo` verbatim, which is the better-auth `redirectPath(input.next, ...)` output. Because redirectPath (packages/better-auth/src/index.ts:1204-1209) blocks `//` but not a leading `/\\`, a link such as `/login?next=/\\evil.com` causes the shell's request handler to emit `Location: /\\evil.com`, which browsers normalize to `https://evil.com` after the victim authenticates. The scanner's xss flags (L62 controlled client-module href; L76 next is escapeAttribute-escaped in the form; L112/L132 routeValueToHtml wrapping) and insecure-crypto flags (L53/L71 are meta description/title strings) are all false positives.",
+      "lineNumbers": [
+        75,
+        86,
+        106
+      ],
+      "recommendation": "Fix redirectPath upstream to reject backslash-prefixed and control-character values (see app.ts recommendation), and/or validate `context.search.next` against a same-origin path allowlist in the /login route before passing it into the form and redirect.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:46:12.172Z",
+      "durationMs": 87060.6,
+      "durationApiMs": 86736,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "c0652109-e86e-4f98-86d7-a96b7b147829",
+      "findingCount": 1,
+      "numTurns": 2.4,
+      "phase": "process",
+      "costUsd": 0.35997439999999997,
+      "usage": {
+        "inputTokens": 538.6,
+        "outputTokens": 6343.2,
+        "cacheReadInputTokens": 77306,
+        "cacheCreationInputTokens": 15919.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T02:07:23-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:46:12.196Z"
+  }
+}

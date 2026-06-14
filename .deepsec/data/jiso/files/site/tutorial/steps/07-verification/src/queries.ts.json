@@ -1,0 +1,80 @@
+{
+  "filePath": "site/tutorial/steps/07-verification/src/queries.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "missing-await",
+      "lineNumbers": [
+        29
+      ],
+      "snippet": "\nexport function loadCart(db: ShopDb): CartResult {\n  return { count: db.cartItems.reduce((total, item) => total + item.qty, 0) };\n}\n",
+      "matchedPattern": "db call without await"
+    },
+    {
+      "vulnSlug": "missing-await",
+      "lineNumbers": [
+        34
+      ],
+      "snippet": "export function loadProducts(db: ShopDb): ProductsResult {\n  return {\n    items: [...db.products.values()].sort((left, right) => left.id.localeCompare(right.id)),\n  };\n}",
+      "matchedPattern": "db call without await"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.657Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "f77a8f673ecef1082c8a91fc54ba10b2d93d40e47da913436fc043fad43cc9c7",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "cross-tenant-id",
+      "title": "Order-history query returns all users' orders with no per-user scoping or guard",
+      "description": "loadOrderHistory returns `db.orders` in full (L38-40) and orderHistoryQuery (L57-61) declares no guard and no filter by the session user. Orders are written with a per-user `userId` (app.ts L143), and the session schema carries `user.id` (app.ts L51-58), so order history is user-scoped data — but the read returns every order regardless of who is asking. CLAUDE.md's IDOR guidance requires handlers/queries that read user-scoped rows to filter by `request.session.user.id`; this query does not. In the tutorial this does not leak because the home route builds a fresh per-call in-memory db (app.ts L212, L232) so orders are empty there, and tests use a single user — hence low confidence. But against a shared/persistent `request.db` (as the mutation response path uses, app.ts L286), every authenticated user would see all users' order history (userId, productId, qty, total). This is the broken-access-control / cross-tenant pattern, deviating from the user-scoped intent the data model implies. Scanner missing-await flags on L29/L34 are false positives (Array.reduce / Array.sort are synchronous).",
+      "lineNumbers": [
+        38,
+        57
+      ],
+      "recommendation": "Scope order history to the authenticated user: pass the session into the query load context and filter `db.orders.filter(o => o.userId === context.request.session.user.id)`, and attach an `authed`/session guard to orderHistoryQuery so it cannot be read unauthenticated.",
+      "confidence": "low",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:53:30.942Z",
+      "durationMs": 86913.6,
+      "durationApiMs": 87077,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "eb850fd9-7aed-4a1b-b5fc-dcb4f30464ed",
+      "findingCount": 1,
+      "numTurns": 5.4,
+      "phase": "process",
+      "costUsd": 0.345236,
+      "usage": {
+        "inputTokens": 552.4,
+        "outputTokens": 6821.2,
+        "cacheReadInputTokens": 81497.6,
+        "cacheCreationInputTokens": 13035.8
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-11T14:49:33-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:53:30.964Z"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "filePath": "packages/headless-ui/src/primitives/toggle-group.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        37,
+        78,
+        116,
+        160,
+        293,
+        322
+      ],
+      "snippet": "\nexport interface ToggleGroupRootAttributeOptions extends ToggleGroupState {\n  descriptionId?: string;\n  id?: string;\n  labelledBy?: string;",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.418Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "48dbd7a1a5c001c74a1d415f9e87c64e6adfc6627a639ca0e1e5a19383cb4d6e",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:56:11.825Z",
+      "durationMs": 33787.333333333336,
+      "durationApiMs": 34467,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "036172e9-c4bf-4c31-a109-645191b94769",
+      "findingCount": 0,
+      "numTurns": 2.6666666666666665,
+      "phase": "process",
+      "costUsd": 0.19187516666666668,
+      "usage": {
+        "inputTokens": 874.3333333333334,
+        "outputTokens": 2689,
+        "cacheReadInputTokens": 42287,
+        "cacheCreationInputTokens": 9781.666666666666
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T02:43:21-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:56:11.860Z"
+  }
+}

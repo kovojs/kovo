@@ -1,0 +1,73 @@
+{
+  "filePath": "packages/ui/src/menubar.tsx",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        30,
+        102,
+        116
+      ],
+      "snippet": "  children?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  id?: string;\n  label?: string;",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.401Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "64b1f39bd8fe1c631ccedfc1a417869a7e0c9286251e7c6d391e20bfc7d1d1d2",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "xss",
+      "title": "MenubarItem renders itemLabel/itemValue as unescaped text (stored XSS sink)",
+      "description": "In MenubarItem (line 168) the fallback chain `{props.children ?? props.itemLabel ?? props.itemValue}` emits a scalar string prop as a JSX text child. The @jiso/server JSX runtime does NOT escape text children (jsx-runtime.ts:83 returns `String(children)`; the L12-15 comment confirms child strings are 'inserted as written'). Unlike attribute values, which ARE escaped (jsx-runtime.ts:66), `itemLabel` and `itemValue` are written into the element body verbatim. `itemValue` is a required prop and is semantically a plain-text label/value, not pre-rendered HTML, so a developer would not expect to escape it. If an app populates a menubar from user/DB data (e.g. saved-search names, product categories), a value like `<img src=x onerror=alert(document.cookie)>` is emitted raw. Because Jiso mutation responses are server-rendered HTML fragments applied client-side via innerHTML/insertAdjacentHTML, and the initial SSR HTML is also raw, this is stored XSS (threat-model attack #3). NOTE: this is a framework-wide characteristic of the unescaped-text-children design (an open question per the runtime comment and the v1 cleanup ledger), not a defect unique to this file; the bare `{props.children}` composition slots elsewhere are by-design and not flagged. Confidence is low because exploitability depends on the consuming app routing user data into itemLabel/itemValue.",
+      "lineNumbers": [
+        168
+      ],
+      "recommendation": "Escape scalar text props before emitting them as children — e.g. render `{props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}` (escapeHtml from @jiso/server), or resolve the framework's open JSX text-escaping decision so the runtime escapes string children by default while preserving an explicit raw-HTML opt-in for composition.",
+      "confidence": "low",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:59:34.639Z",
+      "durationMs": 55650.4,
+      "durationApiMs": 55776.4,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "7f0b5097-04f3-47b6-995f-13cc22bad234",
+      "findingCount": 1,
+      "numTurns": 3.8,
+      "phase": "process",
+      "costUsd": 0.2604707,
+      "usage": {
+        "inputTokens": 552,
+        "outputTokens": 4164.2,
+        "cacheReadInputTokens": 81177.4,
+        "cacheCreationInputTokens": 11221.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T15:08:38-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:59:34.692Z"
+  }
+}

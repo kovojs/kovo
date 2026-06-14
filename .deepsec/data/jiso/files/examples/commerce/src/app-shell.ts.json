@@ -1,0 +1,115 @@
+{
+  "filePath": "examples/commerce/src/app-shell.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        84,
+        96,
+        108,
+        225,
+        253
+      ],
+      "snippet": "  },\n  page(_context, request: CommerceShellRequest) {\n    return `<div data-commerce-shell=\"cart\">${renderCartPageBody(request.db, undefined, request)}</div>`;\n  },\n  stylesheets: commerceStylesheets,",
+      "matchedPattern": "template literal in HTML"
+    },
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        80,
+        92,
+        103,
+        122,
+        141,
+        159
+      ],
+      "snippet": "  i18n: commerceMessages,\n  meta: {\n    description: 'Browse products and checkout with verifiable cart state.',\n    title: 'Jiso Commerce',\n  },",
+      "matchedPattern": "weak cipher algorithm"
+    },
+    {
+      "vulnSlug": "missing-await",
+      "lineNumbers": [
+        308
+      ],
+      "snippet": "): string {\n  const productId = productIdFromRawInput(rawInput);\n  const product = productId ? db.products.get(productId) : undefined;\n\n  if (!product) return renderAddToCartError(failure);",
+      "matchedPattern": "db call without await"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.652Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "f6069c2a074873d0dbcfecc008e27aa6f7a99ce94a79d99057733d4c7762d133",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "public-endpoint",
+      "title": "Public '/' and '/cart' routes expose all users' order history (no guard)",
+      "description": "commerceHomeRoute ('/') and commerceCartRoute ('/cart') (lines 77-99) have no `guard` and render renderCartPageBody(request.db, ...) (lines 84, 96), which embeds renderOrderHistory(db) — the unscoped list of every user's orders (see app.ts finding). Because the app uses per-declaration auth with no front-of-handler middleware, these routes are fully public, so any unauthenticated request to '/' or '/cart' returns all tenants' order records (productId, qty, total, userId). The same routes are also the delivery surface for the unescaped order-history fragment (stored-XSS sink). The static-export shell renders the same order-history fragment (lines 127-153), though against a build-time db. Contrast with the guarded orderCsvRoute/attachmentDownloadRoute (app.ts:534,545), which both require auth and filter by session user.",
+      "lineNumbers": [
+        83,
+        84,
+        95,
+        96
+      ],
+      "recommendation": "Either gate the cart/home routes' order-history section behind betterAuthAuthed and render only the session user's orders, or remove order history from the public storefront page entirely. Ensure renderCartPageBody only emits order history for an authenticated, scoped session.",
+      "confidence": "high",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    },
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "open-redirect",
+      "title": "Enhanced sign-in redirect uses unvalidated `next` target",
+      "description": "The app-shell's mutationResponse for commerceSignIn returns redirectTo = authRedirectTo(result.value) (lines 184, 342-349), and result.value.redirectTo is the output of @jiso/better-auth redirectPath(input.next, '/cart'). As detailed in the app.ts open-redirect finding, redirectPath rejects '//evil.com' but not the backslash form '/\\evil.com', which browsers normalize to '//evil.com' → cross-origin redirect. Because the production commerce server wires sign-in through this mutationResponse, the open redirect is reachable on the live login flow, not just the no-JS helper. nextFromRawInput (lines 328-340) likewise reflects the raw `next` into the failure-page login form.",
+      "lineNumbers": [
+        184,
+        342,
+        343,
+        344,
+        345
+      ],
+      "recommendation": "Fix the shared root cause in better-auth's redirectPath (reject backslashes / require same-origin). Do not rely on escapeAttribute in the form — it does not neutralize the redirect payload.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:51:45.666Z",
+      "durationMs": 254986.66666666666,
+      "durationApiMs": 254103.33333333334,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "d359dd44-561c-4fcc-a05f-63fa01b24c78",
+      "findingCount": 2,
+      "numTurns": 9.333333333333334,
+      "phase": "process",
+      "costUsd": 1.022743,
+      "usage": {
+        "inputTokens": 965.6666666666666,
+        "outputTokens": 19535.666666666668,
+        "cacheReadInputTokens": 264480.6666666667,
+        "cacheCreationInputTokens": 39587.666666666664
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\n  \"refused\": false,\n  \"reason\": null,\n  \"skipped\": []\n}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T01:17:33-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:51:45.692Z"
+  }
+}

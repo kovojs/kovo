@@ -1,0 +1,75 @@
+{
+  "filePath": "packages/ui/src/combobox.tsx",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        38,
+        132,
+        151,
+        154
+      ],
+      "snippet": "export interface ComboboxInputProps extends ComboboxStateProps {\n  class?: ClassValue;\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.402Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "14e54bf5c7e35cbbe6e8463a7228388237451c585e4f6e02bd7e23117a02bfb6",
+  "findings": [
+    {
+      "severity": "HIGH",
+      "vulnSlug": "xss",
+      "title": "Stored XSS: combobox option/value text rendered unescaped into innerHTML sink",
+      "description": "ComboboxOption renders `{props.children ?? props.itemLabel ?? props.itemValue}` (line 248) and ComboboxValue renders `{comboboxValueText(props)}` (line 277). `comboboxValueText` (packages/headless-ui/src/primitives/combobox.ts:143-148) returns raw item data (`selected.label ?? selected.textValue ?? selected.value`, or the current `value`/`placeholder`). These scalar DATA props are placed in child position, and the server JSX runtime does not escape child text (`return String(children)`, packages/server/src/jsx-runtime.ts:83). The resulting HTML is delivered in the initial document and in wire fragments applied client-side via `insertAdjacentHTML`/`innerHTML` (packages/runtime/src/response-fragment-apply.ts:58,62), matching threat-model stored-XSS #3. Combobox item lists are typically DB-sourced (the gallery demo binds them to people's names); an attacker controlling a label/value (e.g. a chosen display name or product title) injects executing markup like `<svg onload=...>` into every viewer's page. The bug is an oversight, not a contract: `itemValue` is emitted as an auto-escaped attribute (`value={attrs.value}`, line 246) AND as an unescaped child, so the caller cannot pre-escape it without corrupting the attribute — the component must escape the child and does not. Note the option element here is a `<div role=option>` (line 237), so injected markup renders directly (unlike a native `<option>`).",
+      "lineNumbers": [
+        248,
+        277
+      ],
+      "recommendation": "Escape DB/user-derived text in child position. Preferred: fix renderJsxChildren in packages/server/src/jsx-runtime.ts to HTML-escape string children with an explicit raw-HTML opt-out for composition. Otherwise, in this component wrap data text with escapeHtml (from @jiso/server): `{props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}` and `{escapeHtml(comboboxValueText(props))}`. Resolve the framework's tracked text-escaping open question to fix this class of bug everywhere.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T06:00:19.366Z",
+      "durationMs": 68581.6,
+      "durationApiMs": 69056.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "261012fe-9cdb-4f41-b582-41b2205c21b6",
+      "findingCount": 1,
+      "numTurns": 5.2,
+      "phase": "process",
+      "costUsd": 0.38303300000000007,
+      "usage": {
+        "inputTokens": 579,
+        "outputTokens": 4732.4,
+        "cacheReadInputTokens": 152624.8,
+        "cacheCreationInputTokens": 18471.4
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T04:58:55-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T06:00:19.392Z"
+  }
+}

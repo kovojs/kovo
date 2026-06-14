@@ -1,0 +1,64 @@
+{
+  "filePath": "packages/server/src/document-diagnostics.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        109,
+        110,
+        112,
+        124,
+        132,
+        136,
+        168
+      ],
+      "snippet": "    '<section class=\"jiso-diagnostic-panel\">',\n    '<header>',\n    `<p class=\"jiso-diagnostic-code\">${escapeHtml(diagnostic.code)}</p>`,\n    `<p class=\"jiso-diagnostic-severity\">${escapeHtml(severity)}</p>`,\n    '</header>',",
+      "matchedPattern": "template literal in HTML"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.292Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "dd4f83b099db5278853fda3e1a8f94cfac6c5f66137d9533fd5a08e672bcc236",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614060249-90bbda84c6340348",
+      "investigatedAt": "2026-06-14T06:12:58.940Z",
+      "durationMs": 121184.6,
+      "durationApiMs": 121315.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "b5c82b1a-78b9-4d77-af36-433345f1c9fe",
+      "findingCount": 0,
+      "numTurns": 4.6,
+      "phase": "process",
+      "costUsd": 0.49099819999999994,
+      "usage": {
+        "inputTokens": 552,
+        "outputTokens": 9708.2,
+        "cacheReadInputTokens": 112464.4,
+        "cacheCreationInputTokens": 18847.4
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-12T13:03:51-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T06:12:58.966Z"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "filePath": "packages/server/src/cookies.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        62
+      ],
+      "snippet": "function assertCookieOctets(value: string, label: string): void {\n  assertNoHeaderControlCharacters(value, label);\n  if (value.includes(';')) throw new Error(`${label} must not contain semicolons`);\n}\n",
+      "matchedPattern": "weak cipher algorithm"
+    },
+    {
+      "vulnSlug": "secret-in-log",
+      "lineNumbers": [
+        56
+      ],
+      "snippet": "  if (!/^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$/.test(value)) {\n    throw new Error('Cookie name must be an HTTP token');\n  }",
+      "matchedPattern": "Secret variable in error response"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.474Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "2ecd2899fc35125105ed5d1cfc78e13358aaa17901652855943dabf3b0dee5c6",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:50:40.450Z",
+      "durationMs": 120568.6,
+      "durationApiMs": 120699.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "2b1440de-9465-401f-acd9-e764f9d31126",
+      "findingCount": 0,
+      "numTurns": 3,
+      "phase": "process",
+      "costUsd": 0.4163935,
+      "usage": {
+        "inputTokens": 525.4,
+        "outputTokens": 9595,
+        "cacheReadInputTokens": 60097.8,
+        "cacheCreationInputTokens": 14298.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-11T23:49:36-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:50:40.477Z"
+  }
+}

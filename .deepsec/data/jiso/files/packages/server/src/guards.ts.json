@@ -1,0 +1,121 @@
+{
+  "filePath": "packages/server/src/guards.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        167,
+        168,
+        169,
+        182,
+        192,
+        327,
+        337,
+        344
+      ],
+      "snippet": "      const maxKeys = options.maxKeys ?? defaultRateLimitMaxKeys;\n      while (counts.size >= maxKeys) {\n        const oldest = counts.keys().next().value;\n        if (oldest === undefined) break;\n        counts.delete(oldest);",
+      "matchedPattern": "weak cipher algorithm"
+    },
+    {
+      "vulnSlug": "open-redirect",
+      "lineNumbers": [
+        246
+      ],
+      "snippet": "\n  if (guardFailureIsUnauthenticated(result, request)) {\n    const next = options.currentUrl ?? '/';\n    const context = { next, request };\n    const redirectResult = await (options.onUnauthenticated",
+      "matchedPattern": "redirect URL parameter"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.431Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "95742ff20e0fc308ea1827630f3c71932e9fd20f0c553e96c40fe9163768e590",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "auth-bypass",
+      "title": "Guard returning null is treated as 'allow' (fail-open asymmetry)",
+      "description": "runGuard() and guards.all() use the sentinel `null` to mean 'no failure / allowed' (runGuard returns `GuardFailure | null`). When a guard returns a non-`true` value, it is normalized via guardFailureFromResult() (L266-274): `if (typeof result === 'object') return result;`. Because `typeof null === 'object'`, a guard result of `null` is returned unchanged, and that `null` is then interpreted downstream as 'allowed'. Trace: guards.all() (L132-134) does `if (result !== true) return guardFailureFromResult(result)` so a member guard returning null makes the whole composed guard resolve to null; runGuard() (L219-220) does `result === true ? null : guardFailureFromResult(result)` so a guard returning null makes runGuard return null = pass. This is asymmetric and dangerous: a guard that returns `undefined` fails CLOSED (typeof undefined !== 'object', so it becomes the generic UNAUTHORIZED 422), but a guard that returns `null` fails OPEN. A custom app guard that yields null on a deny path (e.g. `return lookup() // null on miss`, or a loosely/any-typed guard `req => req.session?.user ? true : null`) would silently bypass authorization. Built-in guards never return null, so this is a latent footgun rather than a live bypass, but the consequence when triggered is a full auth/authorization bypass on the protected declaration.",
+      "lineNumbers": [
+        134,
+        220,
+        266,
+        267
+      ],
+      "recommendation": "Treat ONLY `true` as allow and coerce everything else (including null and non-GuardFailure objects) to a denial. In guardFailureFromResult, gate on a positive shape check, e.g. `if (result && typeof result === 'object' && 'code' in result) return result as GuardFailure;` and fall through to the generic UNAUTHORIZED failure for null/undefined/malformed values.",
+      "confidence": "low",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    },
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "rate-limit-bypass",
+      "title": "FIFO eviction of the bounded rate-limit map allows counter reset",
+      "description": "guards.rateLimit keeps an in-memory `counts` Map bounded by maxKeys (default 10,000). When a new key is inserted and the map is full, it evicts the OLDEST entry by insertion order (L166-170: `counts.keys().next().value` then delete), i.e. FIFO, not LRU. Crucially, an existing key's counter is incremented in place (`existing.count += 1`, L161) which does NOT move it to the back of the Map's insertion order. Therefore an actively rate-limited victim's counter is among the OLDEST and is the first to be evicted. An attacker who can generate maxKeys distinct keys within the window flushes existing counters out of the map; on the next request for an evicted key, `counts.get(key)` is undefined and a fresh `{count: 1}` window is created (L172-176), resetting the limit. Exploitability depends on key controllability: with the default/`per:'session'` keying it requires many distinct sessions (e.g. ~10k accounts), but for any endpoint using a custom `key` derived from request data (e.g. an IP/header), an attacker can cheaply mint distinct keys and reset their own throttle. The example app relies on guards.rateLimit for abuse protection on state-changing mutations (addToCart max:10, uploadReceipt max:5), so a reset undermines that protection.",
+      "lineNumbers": [
+        161,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170
+      ],
+      "recommendation": "Avoid eviction strategies that can be flushed by an attacker: shard/limit keyspace per identity, evict by soonest-resetAt rather than insertion order, or move to a durable/atomic store (e.g. Redis with per-key TTL) for rate limiting. At minimum, do not allow new-key insertion to evict unexpired counters belonging to other identities.",
+      "confidence": "low",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    },
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "other-rate-limit-shared-bucket",
+      "title": "All unauthenticated clients collapse into a single global 'anonymous' rate-limit bucket",
+      "description": "rateLimitKey() (L389-397) falls back to `request.session?.id ?? request.session?.user?.id ?? 'anonymous'` when no custom `key` is supplied and `per` is not 'global'. For any endpoint that applies guards.rateLimit WITHOUT also requiring authentication (and without a custom key), every unauthenticated client shares the single literal key 'anonymous'. Consequences: (1) Availability/DoS — one client can exhaust the shared bucket (e.g. send the first `max` requests), locking out all other anonymous users for the window; on a public, sensitive, or expensive (LLM/paid-API) endpoint this is an easy denial-of-service / collateral lockout. (2) No per-client throttling exists for anonymous traffic, so the limit cannot distinguish abusers from legitimate users. This is a default-behavior footgun rather than a code defect, but it is easy to misuse because the rate limiter appears to provide per-client protection.",
+      "lineNumbers": [
+        394,
+        395,
+        396
+      ],
+      "recommendation": "Require an explicit `key` (or refuse to apply per-client semantics) when the request is unauthenticated, or default the anonymous key to a connection identifier the app explicitly designates (validated client IP) rather than a single shared constant. Document that guards.rateLimit on unauthenticated endpoints needs a custom key.",
+      "confidence": "low",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:50:40.503Z",
+      "durationMs": 120568.6,
+      "durationApiMs": 120699.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "2b1440de-9465-401f-acd9-e764f9d31126",
+      "findingCount": 3,
+      "numTurns": 3,
+      "phase": "process",
+      "costUsd": 0.4163935,
+      "usage": {
+        "inputTokens": 525.4,
+        "outputTokens": 9595,
+        "cacheReadInputTokens": 60097.8,
+        "cacheCreationInputTokens": 14298.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T18:07:31-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:50:40.530Z"
+  }
+}

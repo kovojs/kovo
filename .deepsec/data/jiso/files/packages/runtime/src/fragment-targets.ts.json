@@ -1,0 +1,61 @@
+{
+  "filePath": "packages/runtime/src/fragment-targets.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        13,
+        15,
+        16,
+        20
+      ],
+      "snippet": "  // FW-Targets collection and inline-loader apply path.\n  return (\n    findRootOrDescendant(root, `[fw-c=\"${escapeCssString(target)}\"]`) ??\n    root.getElementById?.(target) ??\n    findRootOrDescendant(root, `[id=\"${escapeCssString(target)}\"]`) ??",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.412Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "c1d45ace4f20ef6dd19170e2b0f6cd6627486ee8462e1a321d1ee2bcf7bbec56",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:40:30.326Z",
+      "durationMs": 46987.5,
+      "durationApiMs": 45893.5,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "ddc2050c-8422-49fa-95ad-ddfb82e07d5b",
+      "findingCount": 0,
+      "numTurns": 2.5,
+      "phase": "process",
+      "costUsd": 0.31583325000000007,
+      "usage": {
+        "inputTokens": 1248,
+        "outputTokens": 3132,
+        "cacheReadInputTokens": 59300.5,
+        "cacheCreationInputTokens": 19969.5
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-12T18:08:57-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:40:30.391Z"
+  }
+}

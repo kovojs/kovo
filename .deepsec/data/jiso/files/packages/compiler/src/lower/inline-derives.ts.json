@@ -1,0 +1,66 @@
+{
+  "filePath": "packages/compiler/src/lower/inline-derives.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        99
+      ],
+      "snippet": "    replacements.push({\n      end: binding.end,\n      replacement: `<span data-bind=\"${escapeAttribute(binding.path)}\">{${binding.path}}</span>`,\n      start: binding.start,\n    });",
+      "matchedPattern": "template literal in HTML"
+    },
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        55
+      ],
+      "snippet": "    if (\n      element.attributes.some((attribute) =>\n        ['data-derive', 'data-derive-attr'].includes(attribute.name),\n      )\n    ) {",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.423Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "6c12e929a4fc48250adce5da12d408e9bbd8635089981f11399d331b7f8c9327",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:54:31.667Z",
+      "durationMs": 60068.2,
+      "durationApiMs": 60201.6,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "b77042b8-353b-4934-aa00-e0165e013651",
+      "findingCount": 0,
+      "numTurns": 3.8,
+      "phase": "process",
+      "costUsd": 0.3915508,
+      "usage": {
+        "inputTokens": 1277.8,
+        "outputTokens": 4325,
+        "cacheReadInputTokens": 153138.8,
+        "cacheCreationInputTokens": 19963.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\n  \"refused\": false,\n  \"reason\": null,\n  \"skipped\": []\n}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T11:39:45-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:54:31.693Z"
+  }
+}

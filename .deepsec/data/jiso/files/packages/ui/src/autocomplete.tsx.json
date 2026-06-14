@@ -1,0 +1,75 @@
+{
+  "filePath": "packages/ui/src/autocomplete.tsx",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        40,
+        136,
+        156,
+        159
+      ],
+      "snippet": "  autocomplete?: string;\n  class?: ClassValue;\n  descriptionId?: string;\n  errorId?: string;\n  id?: string;",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.402Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "874d89af695790de13610cbcfcfc55b546e0791187410eebfee80675a873e12b",
+  "findings": [
+    {
+      "severity": "HIGH",
+      "vulnSlug": "xss",
+      "title": "Stored XSS: autocomplete option/value text rendered unescaped into innerHTML sink",
+      "description": "AutocompleteOption renders `{props.children ?? props.itemLabel ?? props.itemValue}` (line 254) and AutocompleteValue renders `{autocompleteValueText(props)}` (line 284). `autocompleteValueText` (packages/headless-ui/src/primitives/autocomplete.ts:164-169) returns raw item data (`selected.label ?? selected.textValue ?? selected.value`, or the current `value`/`placeholder`). These are scalar DATA props, not composition slots. The server JSX runtime does NOT escape child text — `renderJsxChildren` does `return String(children)` (packages/server/src/jsx-runtime.ts:83), with a comment acknowledging text-escaping is an unresolved open question. The rendered HTML string is sent in the initial document and in mutation/query wire fragments, which the client applies via `insertAdjacentHTML`/`innerHTML` (packages/runtime/src/response-fragment-apply.ts:58,62) — threat-model stored-XSS vector #3. Because autocomplete/combobox item lists are normally sourced from the database (e.g. usernames, product names, saved searches; the gallery demo uses people's names), an attacker who controls an item label/value (or the persisted selected value) injects markup such as `<img src=x onerror=...>` that executes in every viewer's browser. Proof that this is an oversight, not a 'caller pre-escapes' contract: the same `itemValue` is emitted as an auto-escaped attribute (`value={attrs.value}`, line 179) AND as an unescaped child — the caller cannot pre-escape without breaking the attribute, so the component must escape the child itself and currently does not. No UI component escapes child text (only table.tsx escapes, and only attributes via escapeAttribute).",
+      "lineNumbers": [
+        254,
+        284
+      ],
+      "recommendation": "Escape user/DB-derived text before placing it in child position. Either (a) fix the root cause by having the JSX runtime HTML-escape string children in renderJsxChildren (packages/server/src/jsx-runtime.ts) while keeping an explicit raw-HTML escape hatch for intentional composition, or (b) in these components wrap data-derived text with escapeHtml (from @jiso/server) before interpolating — e.g. `{props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}` and `{escapeHtml(autocompleteValueText(props))}`. Resolving the framework-level text-escaping open question is the durable fix.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T06:00:19.287Z",
+      "durationMs": 68581.6,
+      "durationApiMs": 69056.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "261012fe-9cdb-4f41-b582-41b2205c21b6",
+      "findingCount": 1,
+      "numTurns": 5.2,
+      "phase": "process",
+      "costUsd": 0.38303300000000007,
+      "usage": {
+        "inputTokens": 579,
+        "outputTokens": 4732.4,
+        "cacheReadInputTokens": 152624.8,
+        "cacheCreationInputTokens": 18471.4
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T04:58:55-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T06:00:19.315Z"
+  }
+}

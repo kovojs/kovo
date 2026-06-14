@@ -1,0 +1,58 @@
+{
+  "filePath": "packages/server/src/static-export-result.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        73
+      ],
+      "snippet": "}\n\n// SPEC §9.5: manifest/inventory task evidence must describe the same static\n// host surface that a write export publishes.\nexport function assertStaticExportManifestMatchesResult(",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.404Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "e767eb6b85022a1fa99a774e16e34d11d5c92940f99c0c32ad35041803eff2ed",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:51:35.207Z",
+      "durationMs": 73886,
+      "durationApiMs": 74023.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "d0db39ce-40aa-44ab-ae20-fb61b99bc37b",
+      "findingCount": 0,
+      "numTurns": 3.4,
+      "phase": "process",
+      "costUsd": 0.3046014,
+      "usage": {
+        "inputTokens": 551.2,
+        "outputTokens": 5892,
+        "cacheReadInputTokens": 55599.2,
+        "cacheCreationInputTokens": 12594.4
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T10:01:00-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:51:35.234Z"
+  }
+}

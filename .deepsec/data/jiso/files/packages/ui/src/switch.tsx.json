@@ -1,0 +1,73 @@
+{
+  "filePath": "packages/ui/src/switch.tsx",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        6,
+        52
+      ],
+      "snippet": "\nexport interface SwitchProps {\n  describedBy?: string;\n  checked?: boolean;\n  children?: string;",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.400Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "5ac931c81703d6a39f131d00632602d3f66250e88693d2a3bb05ee2fc8732122",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "insecure-crypto",
+      "title": "False positive: no cryptography present (substring match on \"des\")",
+      "description": "L6/52 were flagged for a weak cipher; they are the `describedBy?: string` prop (L6) and `aria-describedby={props.describedBy}` (L52) — a substring match on 'des' in 'describedBy'. No crypto/cipher/random/hash exists in the file. `describedBy` flows only into the aria-describedby attribute, which the JSX runtime escapes via escapeAttribute, so no attribute injection. The only text interpolation is `{props.children}` (the framework's intended raw-HTML composition slot). Not a vulnerability.",
+      "lineNumbers": [
+        6,
+        52
+      ],
+      "recommendation": "No action required. Suppress the substring crypto rule.",
+      "confidence": "high",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T06:00:03.599Z",
+      "durationMs": 56556,
+      "durationApiMs": 56673.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "4e40ae3e-086e-4388-8861-38cbfe1d56d9",
+      "findingCount": 1,
+      "numTurns": 4.2,
+      "phase": "process",
+      "costUsd": 0.27388450000000003,
+      "usage": {
+        "inputTokens": 552.8,
+        "outputTokens": 4308,
+        "cacheReadInputTokens": 101944.2,
+        "cacheCreationInputTokens": 11164.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T10:35:25-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T06:00:03.625Z"
+  }
+}

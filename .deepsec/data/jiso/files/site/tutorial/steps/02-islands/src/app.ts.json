@@ -1,0 +1,60 @@
+{
+  "filePath": "site/tutorial/steps/02-islands/src/app.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        46,
+        49,
+        55
+      ],
+      "snippet": "    .map(\n      (product) =>\n        `<li><a href=\"/products/${product.id}\">${product.name}</a> — ${formatPrice(product.unitPrice)}</li>`,\n    )\n    .join('');",
+      "matchedPattern": "template literal in HTML"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.302Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "a1a5f57674cc0b92081b8502d53af3033f7ecf60c5bcd2589928d88057badbbf",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:56:56.512Z",
+      "durationMs": 41645.8,
+      "durationApiMs": 42903.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "c426fd4a-ace2-423a-9870-9d26238f8d5d",
+      "findingCount": 0,
+      "numTurns": 2.4,
+      "phase": "process",
+      "costUsd": 0.2528692,
+      "usage": {
+        "inputTokens": 525.4,
+        "outputTokens": 3262.2,
+        "cacheReadInputTokens": 59684.4,
+        "cacheCreationInputTokens": 13803.2
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-11T14:18:46-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:56:56.562Z"
+  }
+}

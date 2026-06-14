@@ -1,0 +1,98 @@
+{
+  "filePath": "site/tutorial/steps/06-streaming/src/app.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "xss",
+      "lineNumbers": [
+        147
+      ],
+      "snippet": "  const list = `<fw-fragment target=\"product-list\">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</fw-fragment>`;\n\n  return `<!doctype html><html><head><title>Jiso Shop</title></head><body><main><h1>Jiso Shop</h1>${queryData}${badge}${list}</main></body></html>`;\n}\n",
+      "matchedPattern": "template literal in HTML"
+    },
+    {
+      "vulnSlug": "secrets-exposure",
+      "lineNumbers": [
+        39
+      ],
+      "snippet": "\nexport const shopCsrf = {\n  secret: 'tutorial-shop-secret',\n  sessionId(request: ShopRequest) {\n    return request.session?.id;",
+      "matchedPattern": "hardcoded credential"
+    },
+    {
+      "vulnSlug": "missing-await",
+      "lineNumbers": [
+        95
+      ],
+      "snippet": "  },\n  handler(input, request: ShopRequest, context) {\n    const found = request.db.products.get(input.productId);\n    if (!found || found.stock < input.quantity) {\n      return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });",
+      "matchedPattern": "db call without await"
+    },
+    {
+      "vulnSlug": "missing-await",
+      "lineNumbers": [
+        227
+      ],
+      "snippet": "): string {\n  const productId = productIdFromRawInput(rawInput);\n  const product = productId ? request.db.products.get(productId) : undefined;\n\n  if (!product) return renderAddToCartError(failure);",
+      "matchedPattern": "db call without await"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.657Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "3a8be8dd9a791948282b6a85da033f0120f92c6b12dde4c289e9969fd4952b92",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "xss",
+      "title": "DB-sourced product name rendered unescaped into innerHTML-applied fragment (latent stored XSS)",
+      "description": "renderShopPage (L141-147), renderShopPageDeferredStream (L166-186), and submitAddToCart (L207-209) all build the 'product-list' fragment by calling ProductList.definition.render({ products }, ...). That component (src/components/product-list.tsx L28, and its generated twin) interpolates the DB string `{item.name}` in a JSX *text* position: `{item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)`. The @jiso/server JSX runtime escapes attribute values via escapeAttribute (jsx-runtime.ts L66) but does NOT escape text children — renderJsxChildren (jsx-runtime.ts L79-84) emits a bare `String(children)`, and the runtime comment (L12-15) explicitly notes JSX text-escaping is an unresolved open question. The resulting HTML is wrapped in `<fw-fragment target=\"product-list\">` (app.ts L145) and, per the project threat model, applied client-side via innerHTML/insertAdjacentHTML (runtime/response-fragment-apply.ts, morph.ts). A product name containing markup (e.g. `<img src=x onerror=...>`) would therefore execute — the exact 'unescaped fragment HTML => stored XSS' pattern CLAUDE.md calls out. The reference app examples/commerce avoids this by manually running every dynamic string through escapeHtml/escapeAttribute before interpolation (examples/commerce/src/app.ts L694, L804). IMPORTANT (why this is latent, not currently exploitable): in this tutorial step product names come only from the static seed in createShopDb (db.ts L30-34); the only write path, the addToCart handler (app.ts L100-108), preserves the existing `found.name` via spread and never lets an attacker set a name, so item.name is trusted/internal data today. The risk is realized the moment a derived app makes product names (or any string rendered as a JSX child in a fragment) user/merchant-controlled, which is a natural extension of this exact pattern.",
+      "lineNumbers": [
+        145,
+        147,
+        176,
+        208
+      ],
+      "recommendation": "Treat DB/user strings rendered as JSX children as untrusted: either (a) make the @jiso/server JSX runtime escape text children by default (renderJsxChildren should escapeHtml string children, with an explicit raw/dangerous wrapper for pre-rendered HTML), or (b) until the runtime escapes text, follow the examples/commerce convention and wrap dynamic strings in escapeHtml() at the interpolation site, e.g. render `{escapeHtml(item.name)}`. Add a regression test that a product name containing `<script>`/`<img onerror>` is emitted escaped in the product-list fragment.",
+      "confidence": "low",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:44:25.092Z",
+      "durationMs": 109614.33333333333,
+      "durationApiMs": 108927,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "1b2c4f65-5854-4b1f-9edd-bb331430ed4d",
+      "findingCount": 1,
+      "numTurns": 8.666666666666666,
+      "phase": "process",
+      "costUsd": 0.5122523333333333,
+      "usage": {
+        "inputTokens": 922.6666666666666,
+        "outputTokens": 8174.333333333333,
+        "cacheReadInputTokens": 169487.33333333334,
+        "cacheCreationInputTokens": 21718
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-11T14:32:32-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:44:25.140Z"
+  }
+}

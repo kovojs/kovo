@@ -1,0 +1,73 @@
+{
+  "filePath": ".github/workflows/ci.yml",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "github-workflow-security",
+      "lineNumbers": [
+        13,
+        14
+      ],
+      "snippet": "    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: voidzero-dev/setup-vp@v1\n        with:",
+      "matchedPattern": "unpinned action ref (branch/major-tag)"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.785Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "bba8494b8be84073ed227e7940c56485b3d02fc615ff3d6e959b83392f8c54d7",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "github-workflow-security",
+      "title": "Unpinned third-party action and no least-privilege permissions block",
+      "description": "The CI job pins actions to mutable tags rather than commit SHAs: `actions/checkout@v4` (L13) and the third-party `voidzero-dev/setup-vp@v1` (L14). A mutable tag can be re-pointed by a compromised maintainer to attacker code that then executes in CI; the third-party `voidzero-dev/setup-vp@v1` is the higher-risk one (first-party `actions/checkout` is lower risk). The workflow also declares no top-level `permissions:` block, so the GITHUB_TOKEN falls back to the repository default, which can be read-write depending on org/repo settings. The workflow triggers on `pull_request` and `push`; for fork PRs the token is read-only by default and no secrets are referenced, which limits blast radius — hence medium/low severity rather than high.",
+      "lineNumbers": [
+        13,
+        14
+      ],
+      "recommendation": "Pin actions to full commit SHAs (e.g. `voidzero-dev/setup-vp@<sha> # v1`) and add an explicit least-privilege `permissions: { contents: read }` block at the top of the workflow.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:53:30.964Z",
+      "durationMs": 86913.6,
+      "durationApiMs": 87077,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "eb850fd9-7aed-4a1b-b5fc-dcb4f30464ed",
+      "findingCount": 1,
+      "numTurns": 5.4,
+      "phase": "process",
+      "costUsd": 0.345236,
+      "usage": {
+        "inputTokens": 552.4,
+        "outputTokens": 6821.2,
+        "cacheReadInputTokens": 81497.6,
+        "cacheCreationInputTokens": 13035.8
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-11T10:56:47-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:53:30.986Z"
+  }
+}

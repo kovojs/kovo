@@ -1,0 +1,89 @@
+{
+  "filePath": "packages/server/src/schema.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        79,
+        80,
+        334
+      ],
+      "snippet": "        if (typeof input === 'string') {\n          const value = input.toLowerCase();\n          if (['1', 'on', 'true', 'yes'].includes(value)) return true;\n          if (['0', 'false', 'no', 'off'].includes(value)) return false;\n        }",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.405Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "7b5d54a07e986d95612f6284685ebbaf1156edbb3445ed148f4dcc71448eb8e9",
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "vulnSlug": "other-file-upload-validation",
+      "title": "File MIME allowlist trusts the client-declared content type",
+      "description": "FileSchema.mime()/parseFileLike validate the upload against `input.type` (L334: `options.mime.includes(input.type)`), which is the MIME type declared by the client in the multipart part headers — fully attacker-controlled and unrelated to the actual bytes. An attacker can upload an HTML/SVG/script payload while setting `Content-Type: image/png` to pass a `mime(['image/png'])` allowlist. The size check (L331) is sound, but the type check provides a false sense of safety. The stored object's contentType is then derived from the same untrusted `file.type` (StoredFileSchemaImpl.parse L291 / parseAsync L308). If the application later serves uploads inline from a same-origin path (common for avatars/attachments) and trusts that stored content type, this enables stored XSS or content-sniffing attacks. This is a defense-in-depth gap inherent to client-declared MIME; the framework exposes mime() as if it were a security control.",
+      "lineNumbers": [
+        259,
+        331,
+        334
+      ],
+      "recommendation": "Treat client-declared MIME as untrusted: sniff the actual content (magic-byte detection) and validate against the allowlist, or at minimum document that mime() only checks the claimed type. When serving uploads, force a safe Content-Type, send `X-Content-Type-Options: nosniff`, prefer `Content-Disposition: attachment` for non-image types, and serve user uploads from a separate origin/sandbox.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    },
+    {
+      "severity": "BUG",
+      "vulnSlug": "other-logic-bug",
+      "title": "Synchronous StoredFileSchema.parse returns a 'stored' upload without persisting the file",
+      "description": "StoredFileSchemaImpl.parse (L277-299, the synchronous Schema.parse) computes the storage key and builds a StoredFileUpload with a populated `storage` StorageObjectInfo, but never calls storage.put — only the async parseAsync (L301-316) actually persists the bytes. If a stored-file schema is ever validated through the synchronous path (e.g. `s.object({...}).parse(...)`, which dispatches to nested `schema.parse`), the caller receives a result implying the file was stored when it was not, leading to silent data loss / dangling references (DB rows pointing at objects that don't exist). The mutation pipeline currently uses parseSchemaAsync (which prefers parseAsync), so the main path is safe, but the synchronous Schema interface makes the unsafe path reachable and easy to hit in app or test code.",
+      "lineNumbers": [
+        277,
+        279,
+        287
+      ],
+      "recommendation": "Make synchronous parse of a storing schema fail fast (throw 'stored file requires async parsing') instead of returning an unstored StoredFileUpload, or have it not claim storage info it didn't create. Ensure all framework entry points that may receive stored-file schemas use parseSchemaAsync/parseAsync.",
+      "confidence": "medium",
+      "producedByRunId": "20260614053853-41cbf55110df05d3"
+    }
+  ],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:52:10.922Z",
+      "durationMs": 92398,
+      "durationApiMs": 92497.8,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "af77fbd2-4f2b-4c4a-830c-47c0af412ec3",
+      "findingCount": 2,
+      "numTurns": 5.2,
+      "phase": "process",
+      "costUsd": 0.4217581999999999,
+      "usage": {
+        "inputTokens": 843.4,
+        "outputTokens": 6786,
+        "cacheReadInputTokens": 127433.2,
+        "cacheCreationInputTokens": 18337.6
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-13T18:07:31-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:52:10.948Z"
+  }
+}

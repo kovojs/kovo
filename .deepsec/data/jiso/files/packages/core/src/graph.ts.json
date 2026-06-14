@@ -1,0 +1,66 @@
+{
+  "filePath": "packages/core/src/graph.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "insecure-crypto",
+      "lineNumbers": [
+        136,
+        297,
+        298,
+        299,
+        300,
+        301,
+        306,
+        319,
+        342
+      ],
+      "snippet": "\nexport interface PageMetaExplain {\n  description?: string;\n  image?: string;\n  title?: string;",
+      "matchedPattern": "weak cipher algorithm"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.413Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "8d4fc0ebd8d656a306301d00df84789959fa1786424d4c2f6c4c4b3be00f15be",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:43:38.397Z",
+      "durationMs": 55667,
+      "durationApiMs": 55171.8,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "d54e2eeb-96b0-426c-8cce-c7abb109214f",
+      "findingCount": 0,
+      "numTurns": 1.8,
+      "phase": "process",
+      "costUsd": 0.3128902,
+      "usage": {
+        "inputTokens": 525.4,
+        "outputTokens": 4482.4,
+        "cacheReadInputTokens": 54254.4,
+        "cacheCreationInputTokens": 17022.2
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-12T04:46:15-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:43:38.423Z"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "runId": "20260614053853-41cbf55110df05d3",
+  "projectId": "jiso",
+  "rootPath": "/Users/mini/jiso",
+  "createdAt": "2026-06-14T05:38:53.422Z",
+  "type": "process",
+  "phase": "done",
+  "pid": 88431,
+  "hostname": "mac.lan",
+  "processorConfig": {
+    "agentType": "claude-agent-sdk",
+    "model": "claude-opus-4-8",
+    "modelConfig": {
+      "model": "claude-opus-4-8"
+    },
+    "invocationMode": "scan"
+  },
+  "stats": {
+    "filesProcessed": 178,
+    "findingsCount": 55,
+    "totalCostUsd": 51.657759999999996,
+    "totalInputTokens": 112428,
+    "totalOutputTokens": 782731,
+    "totalDurationMs": 10486632
+  },
+  "completedAt": "2026-06-14T06:01:35.281Z"
+}

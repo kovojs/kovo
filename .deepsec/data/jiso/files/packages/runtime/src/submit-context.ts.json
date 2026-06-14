@@ -1,0 +1,58 @@
+{
+  "filePath": "packages/runtime/src/submit-context.ts",
+  "projectId": "jiso",
+  "candidates": [
+    {
+      "vulnSlug": "untrusted-redirect-following",
+      "lineNumbers": [
+        59
+      ],
+      "snippet": "        fetch: async (url, fetchOptions) => {\n          const result = await options.fetch(url, fetchOptions);\n          ok = result.ok;\n          status = result.status;",
+      "matchedPattern": "fetch(url) — default redirect: follow + caller-style URL"
+    }
+  ],
+  "lastScannedAt": "2026-06-14T05:38:42.800Z",
+  "lastScannedRunId": "20260614053841-358cb3413e9326e8",
+  "fileHash": "09fc0263b25f89107caf88f83681bbd0bcaa87eff834eed5af3e9449ee9a39ee",
+  "findings": [],
+  "analysisHistory": [
+    {
+      "runId": "20260614053853-41cbf55110df05d3",
+      "investigatedAt": "2026-06-14T05:48:08.792Z",
+      "durationMs": 110493.6,
+      "durationApiMs": 109972.2,
+      "agentType": "claude-agent-sdk",
+      "model": "claude-opus-4-8",
+      "modelConfig": {
+        "model": "claude-opus-4-8"
+      },
+      "agentSessionId": "6895cade-426a-4136-a6b3-058220e220cf",
+      "findingCount": 0,
+      "numTurns": 5,
+      "phase": "process",
+      "costUsd": 0.5496814000000001,
+      "usage": {
+        "inputTokens": 584.6,
+        "outputTokens": 7457.8,
+        "cacheReadInputTokens": 295079.6,
+        "cacheCreationInputTokens": 21193.8
+      },
+      "refusal": {
+        "refused": false,
+        "skipped": [],
+        "raw": "```json\n{\"refused\": false, \"reason\": null, \"skipped\": []}\n```"
+      }
+    }
+  ],
+  "status": "analyzed",
+  "gitInfo": {
+    "recentCommitters": [
+      {
+        "name": "Will Chen",
+        "email": "7344640+wwwillchen@users.noreply.github.com",
+        "date": "2026-06-12T18:23:16-07:00"
+      }
+    ],
+    "enrichedAt": "2026-06-14T05:48:08.821Z"
+  }
+}
