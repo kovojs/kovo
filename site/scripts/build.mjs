@@ -6,7 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
 import { renderDocument, renderDocsPage, renderSectionIndex } from './chrome.mjs';
+import { generateDiagnosticsReference } from './diagnostics-ref.mjs';
 import { renderLanding } from './landing.mjs';
+import { buildLlmsFull, buildLlmsIndex } from './llms.mjs';
 import { parseFrontmatter, renderMarkdown } from './md.mjs';
 import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-snippets.mjs';
 
@@ -26,6 +28,7 @@ const SECTIONS = [
   { dir: 'content/tutorial', key: 'tutorial', title: 'Tutorial' },
   { dir: 'content/guides', key: 'guides', title: 'Guides' },
   { dir: 'gen/api', key: 'api', title: 'API Reference' },
+  { dir: 'gen/reference', key: 'reference', title: 'Reference' },
 ];
 
 // docs/prelaunch-checklist.md tracks jiso.dev confirmation; mirrors stay
@@ -188,6 +191,7 @@ function textFromHtml(html) {
 
 async function main() {
   await generateApiReference(); // W6: emit gen/api before sections load.
+  await generateDiagnosticsReference(); // Agent layer: emit gen/reference/diagnostics.md before sections load.
   await rm(outDir, { force: true, recursive: true });
   await mkdir(outDir, { recursive: true });
 
@@ -444,29 +448,25 @@ async function main() {
   // W8 search index.
   await writeFile(path.join(outDir, 'search-index.json'), JSON.stringify(searchIndex), 'utf8');
 
-  // Agent surface: llms.txt over the md mirrors.
-  const llms = [
-    '# Jiso',
-    '',
-    '> The TypeScript web framework where agents get build-time errors and users get instant pages.',
-    '> Server-rendered MPA, zero hydration, statically verifiable end-to-end.',
-    '',
-    'Every documentation page is available as raw markdown at the URLs below.',
-    `The normative specification is at ${SITE_ORIGIN}/spec.md`,
-    '',
-    ...sections
-      .filter((section) => section.pages.length > 0)
-      .flatMap((section) => [
-        `## ${section.title}`,
-        '',
-        ...section.pages.map(
-          (page) =>
-            `- [${page.title}](${SITE_ORIGIN}${page.mirror})${page.description ? `: ${page.description}` : ''}`,
-        ),
-        '',
-      ]),
-  ].join('\n');
-  await writeFile(path.join(outDir, 'llms.txt'), llms, 'utf8');
+  // Agent surface: llms.txt index over the md mirrors, plus llms-full.txt — the
+  // whole corpus concatenated for ingestion. Both come from the same loaded
+  // sections (incl. the generated API + diagnostics pages) so they cannot drift
+  // from the human pages. Bodies get the same snippet/capture substitution the
+  // pages and mirrors do, so the full text carries real code, not placeholders.
+  await writeFile(
+    path.join(outDir, 'llms.txt'),
+    buildLlmsIndex(sections, { origin: SITE_ORIGIN, specMirror: '/spec.md' }),
+    'utf8',
+  );
+  await writeFile(
+    path.join(outDir, 'llms-full.txt'),
+    buildLlmsFull(sections, {
+      origin: SITE_ORIGIN,
+      renderBody: (page) => substituteSnippets(substituteCaptures(page.body, captures), snippets),
+      spec: { body: specSource, title: 'Jiso Specification', url: '/spec/' },
+    }),
+    'utf8',
+  );
 
   // 404 for static hosts.
   await writeFile(
