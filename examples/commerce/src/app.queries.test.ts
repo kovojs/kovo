@@ -1,0 +1,371 @@
+import { describe, expect, it } from 'vitest';
+
+import { commerceDeclaredQueriesHarnessFact } from '@jiso/test/commerce-fixtures';
+import { createJisoTestHarness } from '@jiso/test/harness';
+import {
+  fwFragmentFacts,
+  fwResponseBodyFact,
+  htmlElementFacts,
+  htmlKeyTextMap,
+  htmlKeyValues,
+} from '@jiso/test/html-fragment';
+import type { TouchGraph } from '@jiso/drizzle';
+import { morphStructuralTree } from '@jiso/runtime';
+
+import {
+  addToCart,
+  commerceCsrf,
+  commerceCsrfInput,
+  commerceAuthCsrf,
+  commerceTouchGraph,
+  createCommerceDb,
+  cartQuery,
+  loadProductGrid,
+  orderHistoryQuery,
+  productGridQuery,
+  EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
+  EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
+  renderOrderHistory,
+  renderCartPage,
+  renderProductGrid,
+  renderProductGridDeferredStream,
+  renderProductGridPageFragment,
+} from './app.js';
+import { keyedListNode, productGridInput, queryContext } from './app-test-helpers.js';
+
+describe('commerce example', () => {
+  it('marks demo-only CSRF secrets as example-only source', () => {
+    expect(commerceCsrf.secret).toBe(EXAMPLE_ONLY_COMMERCE_CSRF_SECRET);
+    expect(commerceAuthCsrf.secret).toBe(EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET);
+    expect(commerceCsrf.secret).toMatch(/^EXAMPLE_ONLY_/);
+    expect(commerceAuthCsrf.secret).toMatch(/^EXAMPLE_ONLY_/);
+  });
+
+  it('commits and rolls back commerce database transactions', async () => {
+    const db = createCommerceDb();
+
+    await expect(
+      db.transaction(async (tx) => {
+        tx.write('cart_items', { productId: 'p1', qty: 1, unitPrice: 1499 });
+        return 'committed';
+      }),
+    ).resolves.toBe('committed');
+    expect(db.cartItems).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
+
+    await expect(
+      db.transaction(async (tx) => {
+        tx.write('cart_items', { productId: 'p2', qty: 1, unitPrice: 2599 });
+        throw new Error('rollback');
+      }),
+    ).rejects.toThrow('rollback');
+    expect(db.cartItems).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
+  });
+
+  it('executes addToCart and verifies rendered cart badge without a browser', async () => {
+    const harness = createJisoTestHarness({
+      db: createCommerceDb(),
+      pages: {
+        '/cart': renderCartPage,
+      },
+      request: {
+        session: { id: 's1', user: { id: 'u1' } },
+      },
+      touchGraph: { 'cart.addItem': commerceTouchGraph['cart.addItem'] } as unknown as TouchGraph,
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          orders: 'order',
+          products: 'product',
+        },
+      },
+    });
+
+    await expect(
+      harness.exec(
+        addToCart,
+        commerceCsrfInput(
+          { productId: 'p1', quantity: 2 },
+          { db: harness.dbHandle(), session: { id: 's1', user: { id: 'u1' } } },
+        ),
+      ),
+    ).resolves.toMatchObject({
+      changes: [
+        { domain: 'cart', input: { productId: 'p1', quantity: 2 } },
+        { domain: 'order', input: { productId: 'p1', quantity: 2 } },
+        { domain: 'product', input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
+      ],
+      ok: true,
+      rerunQueries: ['cart', 'productGrid', 'orderHistory'],
+    });
+    const cartBadge = await harness.page('/cart').then((page) => page.fragment('cart-badge'));
+    expect(htmlElementFacts(cartBadge, { attrs: { 'data-bind': 'cart.count' } })).toHaveLength(1);
+  });
+
+  it('loads declared commerce queries from the request database', async () => {
+    const db = createCommerceDb();
+    const context = queryContext(db);
+
+    await addToCart.handler({ productId: 'p1', quantity: 2 }, context.request, {
+      fail(code, payload) {
+        return { error: { code, payload }, ok: false, status: 422 };
+      },
+      invalidate(domain, options) {
+        return { domain: domain.key, ...options, manual: true };
+      },
+    });
+
+    await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 2 });
+    await expect(Promise.resolve(productGridQuery.load({ limit: 1 }, context))).resolves.toEqual({
+      items: [{ id: 'p1', stock: 3, unitPrice: 1499 }],
+      nextCursor: 'p1',
+    });
+    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
+      items: [
+        {
+          id: 'order-1',
+          productId: 'p1',
+          qty: 2,
+          total: 2998,
+          userId: 'u-query',
+        },
+      ],
+    });
+
+    expect(() => productGridQuery.load({ limit: 1 })).toThrow(
+      'commerce query loaders require context.db or request.db',
+    );
+  });
+
+  it('loads every declared query from a custom request database instead of starter data', async () => {
+    const db = createCommerceDb();
+    db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
+    db.cartItems = [
+      { productId: 'custom', qty: 4, unitPrice: 777 },
+      { productId: 'custom', qty: 6, unitPrice: 777 },
+    ];
+    db.orders = [
+      {
+        id: 'custom-order',
+        productId: 'custom',
+        qty: 10,
+        total: 7770,
+        userId: 'u-custom-query',
+      },
+    ];
+    const context = queryContext(db);
+
+    await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 10 });
+    await expect(Promise.resolve(productGridQuery.load({}, context))).resolves.toEqual({
+      items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+      nextCursor: null,
+    });
+    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
+      items: db.orders,
+    });
+  });
+
+  it('verifies every declared query through the harness db read seam', async () => {
+    await expect(
+      commerceDeclaredQueriesHarnessFact({
+        createDb: createCommerceDb,
+        queries: {
+          cart: cartQuery,
+          orderHistory: orderHistoryQuery,
+          productGrid: productGridQuery,
+        },
+        setupDb(db) {
+          db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
+          db.cartItems = [{ productId: 'custom', qty: 3, unitPrice: 777 }];
+          db.orders = [
+            {
+              id: 'custom-order',
+              productId: 'custom',
+              qty: 3,
+              total: 2331,
+              userId: 'u-custom-query',
+            },
+          ];
+        },
+        verification: {
+          domainByTable: {
+            cart_items: 'cart',
+            orders: 'order',
+            products: 'product',
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      cart: {
+        diagnostics: [],
+        result: { count: 3 },
+      },
+      orderHistory: {
+        diagnostics: [],
+        result: {
+          items: [
+            {
+              id: 'custom-order',
+              productId: 'custom',
+              qty: 3,
+              total: 2331,
+              userId: 'u-custom-query',
+            },
+          ],
+        },
+      },
+      productGrid: {
+        diagnostics: [],
+        result: {
+          items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+          nextCursor: null,
+        },
+      },
+    });
+  });
+
+  it('renders cursor-paged product grid and order history with stable list keys', async () => {
+    const db = createCommerceDb();
+    const firstPage = loadProductGrid(db, { limit: 2 });
+    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
+
+    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(
+      htmlElementFacts(renderProductGrid(firstPage), {
+        attrs: { href: '/products?after=p2' },
+        tag: 'a',
+      }),
+    ).toHaveLength(1);
+    expect(htmlKeyValues(renderProductGrid(secondPage))).toEqual(['p3']);
+
+    const appendFragment = renderProductGridPageFragment(
+      db,
+      productGridInput(firstPage.nextCursor, 2),
+    );
+
+    expect(fwFragmentFacts(appendFragment, 'product-grid')).toMatchObject([
+      { attrs: { mode: 'append', target: 'product-grid' } },
+    ]);
+    expect(htmlKeyValues(appendFragment)).toEqual(['p3']);
+    expect(htmlElementFacts(appendFragment, { attrs: { 'fw-c': 'product-grid' } })).toHaveLength(0);
+
+    await addToCart.handler(
+      { productId: 'p1', quantity: 2 },
+      { db, session: { id: 's-direct', user: { id: 'u-direct' } } },
+      {
+        fail(code, payload) {
+          return { error: { code, payload }, ok: false, status: 422 };
+        },
+        invalidate(domain, options) {
+          return { domain: domain.key, ...options, manual: true };
+        },
+      },
+    );
+
+    expect(htmlKeyTextMap(renderOrderHistory(db))).toMatchObject({
+      'order-1': 'p1 x 2 - 2998',
+    });
+  });
+
+  it('preserves commerce list identity through append and simultaneous optimistic reorder', async () => {
+    const db = createCommerceDb();
+    const firstPage = loadProductGrid(db, { limit: 2 });
+    const firstPageKeys = firstPage.items.map((item) => item.id);
+    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
+    const currentGrid = keyedListNode('product-grid', firstPageKeys, {
+      p1: { islandState: { pendingMutation: 'cart/add' } },
+    });
+    const firstProduct = currentGrid.children?.[0];
+    const secondProduct = currentGrid.children?.[1];
+    const appendedGrid = morphStructuralTree(
+      currentGrid,
+      keyedListNode('product-grid', [...firstPageKeys, ...secondPage.items.map((item) => item.id)]),
+    );
+    const thirdProduct = appendedGrid.children?.[2];
+
+    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(
+      fwFragmentFacts(
+        renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),
+        'product-grid',
+      ),
+    ).toMatchObject([{ attrs: { mode: 'append', target: 'product-grid' } }]);
+    expect(appendedGrid.children?.[0]).toBe(firstProduct);
+    expect(appendedGrid.children?.[1]).toBe(secondProduct);
+    expect(thirdProduct).not.toBeUndefined();
+
+    const reorderedGrid = morphStructuralTree(
+      appendedGrid,
+      keyedListNode('product-grid', ['p2', 'p3', 'p1']),
+    );
+
+    expect(reorderedGrid.children?.map((item) => item.key)).toEqual(['p2', 'p3', 'p1']);
+    expect(reorderedGrid.children?.[0]).toBe(secondProduct);
+    expect(reorderedGrid.children?.[1]).toBe(thirdProduct);
+    expect(reorderedGrid.children?.[2]).toBe(firstProduct);
+    expect(reorderedGrid.children?.[2]?.browserState).toEqual({
+      islandState: { pendingMutation: 'cart/add' },
+    });
+
+    await addToCart.handler(
+      { productId: 'p1', quantity: 1 },
+      { db, session: { id: 's-direct', user: { id: 'u-direct' } } },
+      {
+        fail(code, payload) {
+          return { error: { code, payload }, ok: false, status: 422 };
+        },
+        invalidate(domain, options) {
+          return { domain: domain.key, ...options, manual: true };
+        },
+      },
+    );
+
+    const currentHistory = keyedListNode('order-history', ['order-draft'], {
+      'order-draft': { islandState: { pendingMutation: 'cart/add' } },
+    });
+    const optimisticOrder = currentHistory.children?.[0];
+    const reconciledHistory = morphStructuralTree(
+      currentHistory,
+      keyedListNode('order-history', ['order-1', 'order-draft']),
+    );
+
+    expect(htmlKeyValues(renderOrderHistory(db))).toContain('order-1');
+    expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
+    expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
+    expect(reconciledHistory.children?.[1]?.browserState).toEqual({
+      islandState: { pendingMutation: 'cart/add' },
+    });
+  });
+
+  it('streams deferred product grid fragments with Tailwind stylesheet hints', () => {
+    const response = renderProductGridDeferredStream(createCommerceDb());
+
+    expect(response).toMatchObject({
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+      status: 200,
+    });
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { class: 'min-h-dvh bg-slate-50 p-6' },
+        tag: 'main',
+      }),
+    ).toHaveLength(1);
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { state: 'pending', target: 'product-grid' },
+        tag: 'fw-defer',
+      }),
+    ).toHaveLength(1);
+    const responseFact = fwResponseBodyFact(response.body);
+    expect(responseFact.queryNames).toEqual(['productGrid']);
+    expect(
+      responseFact.fragments.filter((fragment) => fragment.target === 'product-grid'),
+    ).toMatchObject([{ stylesheetHrefs: ['/assets/tailwind.css'] }]);
+    expect(
+      htmlElementFacts(response.body, {
+        attrs: { class: 'rounded border border-slate-200 bg-white p-4' },
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+});
