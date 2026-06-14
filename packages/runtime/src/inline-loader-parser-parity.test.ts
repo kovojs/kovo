@@ -1,3 +1,8 @@
+// v1-cleanup item 1: kept whole intentionally (below the split threshold).
+// This is the canonical inline-loader parser/apply parity surface — its
+// assertions pin that the generated inline bootstrap stays byte-identical to the
+// canonical wire-parser/response-apply helpers (SPEC.md §4.4). Splitting would
+// scatter a single coherent parity contract across files.
 import { describe, expect, it } from 'vitest';
 
 import {

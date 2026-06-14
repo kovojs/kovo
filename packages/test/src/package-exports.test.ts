@@ -1,3 +1,9 @@
+// v1-cleanup item 1: kept whole intentionally. This is a single cohesive
+// public-API acceptance surface — its assertions all depend on one full-surface
+// import manifest of every @jiso/test root + subpath export, so splitting would
+// only duplicate that manifest and fragment a deliberately holistic "every
+// subpath resolves and type-matches the root barrel" check into pieces that
+// individually assert nothing meaningful.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   assertMutationError as rootAssertMutationError,
