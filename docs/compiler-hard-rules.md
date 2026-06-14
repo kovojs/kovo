@@ -10,5 +10,6 @@ The compiler must preserve these rules:
 4. Platform behavior emission. Proven platform equivalents should lower to declarative HTML behavior and be reported by `fw explain`.
 5. Teaching errors. Diagnostics must show the intended lowering, why it failed, and the available fixes.
 6. TSX-only authoring. App source is TSX. Lowered IR is compiler output for fixpoint, render-equivalence, and devtools verification; hand-authored string-rendered or lowered IR in app source is FW235.
+7. Post-parse decisions use typed facts, not source strings. After parsing, compiler post-parse phases (`lower`, `validate`, `analyze`, `emit`, `graph`) decide from typed model facts and spans, never from raw source snippets, regexes, `getText()`, or ad hoc string slicing; the scanner/parser is the sole boundary that reads source text into typed facts. A mechanical fw-check guard enforces this.
 
 These rules are release gates, not style preferences.

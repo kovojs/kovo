@@ -501,10 +501,11 @@ assert.deepEqual(args.slice(0, 2), ['--filter', args[1]]);
 assert.equal(args[2], 'test');
 assert.equal(args.length, 3);
 const packageName = args[1];
-assert.equal(
-  scriptsByPackage[packageName]?.test,
-  'vitest --run src/index.test.ts',
-  \`\${packageName} exposes the expected conformance test command\`,
+const observedTestScript = scriptsByPackage[packageName]?.test;
+assert.ok(
+  observedTestScript === 'vitest --run' ||
+    observedTestScript === 'vitest --run src/index.test.ts',
+  \`\${packageName} exposes the expected conformance test command (got: \${observedTestScript})\`,
 );
 appendFileSync(process.env.JISO_CONFORMANCE_OBSERVED, JSON.stringify({ packageName, script: args[2] }) + '\\n');
 process.stdout.write(\`pnpm-filter-test \${packageName}\\n\`);

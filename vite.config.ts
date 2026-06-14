@@ -140,6 +140,10 @@ export default defineConfig({
       '**/dist/**',
       '**/*.browser.test.ts',
       'packages/create-jiso/templates/**/*.test.ts',
+      // Conformance suites run in their own gate (`test:conformance` → `vp run conformance`,
+      // per-package cwd). The root unit pool runs from the repo root, where project-mode ts-morph
+      // type resolution differs; conformance is covered by its dedicated gate, not double-run here.
+      'conformance/**',
     ],
   },
   pack: {

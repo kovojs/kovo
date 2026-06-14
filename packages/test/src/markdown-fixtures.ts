@@ -270,7 +270,7 @@ export function normativeDocsGateFact<T extends NormativeDocsCompileResult>(opti
   );
   const compilerRuleItems = markdownNumberedListItems(options.compilerRules);
   const cssContractHeadings = markdownBoldSectionHeadings(
-    markdownSection(options.spec, '13. Open Design Areas (named, not hand-waved)'),
+    markdownSection(options.spec, '13. Open Design Areas'),
   );
   const behaviorFixture = options.compileComponentModule({
     fileName: 'components/docs/doc-card.tsx',
