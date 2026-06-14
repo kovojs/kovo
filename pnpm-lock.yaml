@@ -195,6 +195,37 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
 
+  examples/stackoverflow:
+    dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.1
+        version: 0.5.1
+      '@jiso/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@jiso/drizzle':
+        specifier: workspace:*
+        version: link:../../packages/drizzle
+      '@jiso/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@jiso/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
+    devDependencies:
+      '@jiso/test':
+        specifier: workspace:*
+        version: link:../../packages/test
+      fw:
+        specifier: workspace:*
+        version: link:../../packages/cli
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
+
   packages/better-auth:
     dependencies:
       '@jiso/server':
