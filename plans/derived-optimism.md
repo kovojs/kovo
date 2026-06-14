@@ -69,156 +69,115 @@ change record or query addressing, it must not regress their forward-compatibili
 
 - [ ] Define the shared derivation contract before implementation fan-out:
       `AlgebraicQueryShape`, `SymbolicEffect`, `PatchProgram`, `DerivationResult`, and
-      `PuntReason`.
-      - `PuntReason` is derivation metadata, not optimistic coverage. A punt never satisfies
-        `OptimisticFor` and never suppresses FW310 by itself; it explains why the pair still needs a
-        hand-written transform or `'await-fragment'`.
-      - Serialize these IRs in formatting-resistant fixtures so shape, effect, derivation, codegen,
-        diagnostics, and property-suite slices share one contract instead of inventing local enums.
-      - Done when the exported types and fixture helpers are covered by unit tests and consumed by
-        at least one existing fixture path without changing runtime behavior.
+      `PuntReason`. - `PuntReason` is derivation metadata, not optimistic coverage. A punt never satisfies
+      `OptimisticFor` and never suppresses FW310 by itself; it explains why the pair still needs a
+      hand-written transform or `'await-fragment'`. - Serialize these IRs in formatting-resistant fixtures so shape, effect, derivation, codegen,
+      diagnostics, and property-suite slices share one contract instead of inventing local enums. - Done when the exported types and fixture helpers are covered by unit tests and consumed by
+      at least one existing fixture path without changing runtime behavior.
 
 - [ ] Classify each invalidated query's result shape into the §10.5 algebra:
       `field ::= Scalar(keyed-row col) | COUNT(R[, pred]) | SUM(R, arith) | AGG(R, projection)`
-      where `R = rowset(filter chain, key, orderBy)`.
-      - Build on / extend the existing shape extraction in `packages/drizzle/src/static.ts`
-        (`QueryShape`, `QueryFact`) and `packages/compiler/src/analyze/query-shapes.ts`; do not
-        replace the raw shapes the binding-path validators already depend on — add the algebraic
-        classification as a derived layer over them.
-      - Record the rowset's filter chain, instance key, and `orderBy` (with per-column opacity) so
-        Stage 3 can decide insertion points and membership transitions.
-      - Record a **client-data availability witness** for aggregate derivation: the concrete result
-        path(s) proving that a `COUNT`/`SUM` field's contributing rows and contribution columns are
-        already shipped by the same query instance. If no witness exists, aggregate deletions/updates
-        punt rather than guessing.
-      - Shapes outside the grammar (window functions, `GROUP BY`+`HAVING`, `DISTINCT`, opaque
-        `sql<T>` projections / FW410 sites) classify as `Opaque` and carry their punt reason.
-      - Done when a fixture suite asserts the algebraic class (and punt reason for out-of-grammar
-        shapes) for every commerce query plus a grammar-coverage fixture set, against project-mode
-        ts-morph facts only.
+      where `R = rowset(filter chain, key, orderBy)`. - Build on / extend the existing shape extraction in `packages/drizzle/src/static.ts`
+      (`QueryShape`, `QueryFact`) and `packages/compiler/src/analyze/query-shapes.ts`; do not
+      replace the raw shapes the binding-path validators already depend on — add the algebraic
+      classification as a derived layer over them. - Record the rowset's filter chain, instance key, and `orderBy` (with per-column opacity) so
+      Stage 3 can decide insertion points and membership transitions. - Record a **client-data availability witness** for aggregate derivation: the concrete result
+      path(s) proving that a `COUNT`/`SUM` field's contributing rows and contribution columns are
+      already shipped by the same query instance. If no witness exists, aggregate deletions/updates
+      punt rather than guessing. - Shapes outside the grammar (window functions, `GROUP BY`+`HAVING`, `DISTINCT`, opaque
+      `sql<T>` projections / FW410 sites) classify as `Opaque` and carry their punt reason. - Done when a fixture suite asserts the algebraic class (and punt reason for out-of-grammar
+      shapes) for every commerce query plus a grammar-coverage fixture set, against project-mode
+      ts-morph facts only.
 
 ## Phase 1 — Write → symbolic row-effects (Stage 1)
 
 - [ ] Lower each write body to the symbolic effect IR over the existing project-mode extraction:
       `value ::= Param(path) | Const | ColRef(t.c) | Arith(op,v,v) | Opaque`;
-      `effect ::= INSERT{vals} | UPDATE{match, sets} | DELETE{match} | UPSERT{…}`.
-      - Reuse the ts-morph write-site resolution already in `packages/drizzle/src/static.ts`
-        (`db.insert/update/delete`, table-identifier resolution, `eq()` key extraction, FW406
-        interprocedural summaries). Effect IR is a typed projection of those facts, not a new parse.
-      - `match` is eq-predicates on keys; range / `IN` / server-time predicates ⇒ `Opaque match`
-        ⇒ punt (consistent with the existing FW409 table-level degradation).
-      - Params must be traceable to mutation input or session key (the §11.1 predicate extractor);
-        untraceable ⇒ `Opaque` value.
-      - Done when the effect IR is emitted for every commerce mutation and a grammar-coverage write
-        fixture set, with punts named for each Opaque value/match.
+      `effect ::= INSERT{vals} | UPDATE{match, sets} | DELETE{match} | UPSERT{…}`. - Reuse the ts-morph write-site resolution already in `packages/drizzle/src/static.ts`
+      (`db.insert/update/delete`, table-identifier resolution, `eq()` key extraction, FW406
+      interprocedural summaries). Effect IR is a typed projection of those facts, not a new parse. - `match` is eq-predicates on keys; range / `IN` / server-time predicates ⇒ `Opaque match`
+      ⇒ punt (consistent with the existing FW409 table-level degradation). - Params must be traceable to mutation input or session key (the §11.1 predicate extractor);
+      untraceable ⇒ `Opaque` value. - Done when the effect IR is emitted for every commerce mutation and a grammar-coverage write
+      fixture set, with punts named for each Opaque value/match.
 
 ## Phase 2 — Effect-through-shape derivation (Stage 3)
 
 - [ ] Push each effect through each invalidated query's algebraic shape to produce a JSON-patch
-      program over client data, implementing the §10.5 Stage-3 rules:
-      - `INSERT × AGG` ⇒ push (schema defaults; Opaque cols ⇒ `tempId()`/`now()` placeholders,
-        pending-styled, content-matched on reconcile; `orderBy` decides insertion point — Opaque
-        orderBy col ⇒ punt).
-      - `UPSERT × AGG` ⇒ find-then-update-else-push (branchiness reproduced client-side).
-      - `DELETE × COUNT` ⇒ −(matched count), computable iff the client holds the rows.
-      - `DELETE × SUM` ⇒ −Σ contribution iff the query also ships the rows; else punt.
-      - `SET on filtered col` ⇒ membership transition: exit derivable (Const vs filter), entry
-        punts (client lacks the row's other columns).
-      - Row possibly outside the client's rowset ⇒ emit a find-or-no-op **guard**, not a punt.
-      - **All-or-nothing per field**: any Opaque component punts the whole field with its named
-        reason; never a best-effort patch.
-      - Done when the deriver emits a patch program or a named punt for every pair in the
-        grammar-coverage matrix and every commerce pair, with punt reasons matching the §10.5 list.
+      program over client data, implementing the §10.5 Stage-3 rules: - `INSERT × AGG` ⇒ push (schema defaults; Opaque cols ⇒ `tempId()`/`now()` placeholders,
+      pending-styled, content-matched on reconcile; `orderBy` decides insertion point — Opaque
+      orderBy col ⇒ punt). - `UPSERT × AGG` ⇒ find-then-update-else-push (branchiness reproduced client-side). - `DELETE × COUNT` ⇒ −(matched count), computable iff the client holds the rows. - `DELETE × SUM` ⇒ −Σ contribution iff the query also ships the rows; else punt. - `SET on filtered col` ⇒ membership transition: exit derivable (Const vs filter), entry
+      punts (client lacks the row's other columns). - Row possibly outside the client's rowset ⇒ emit a find-or-no-op **guard**, not a punt. - **All-or-nothing per field**: any Opaque component punts the whole field with its named
+      reason; never a best-effort patch. - Done when the deriver emits a patch program or a named punt for every pair in the
+      grammar-coverage matrix and every commerce pair, with punt reasons matching the §10.5 list.
 
-- [ ] Keep patch synthesis separate from TypeScript transform emission.
-      - The derivation core returns `DerivationResult = derived(PatchProgram) | punt(PuntReason)`;
-        Phase 3 is the only place that lowers `PatchProgram` into TS source.
-      - Add negative fixtures for every "must not derive" surface: Opaque SET, non-key match,
-        window/GROUP BY+HAVING/DISTINCT shape, FW406 interprocedural opacity, FW410/raw SQL
-        projection, params untraceable to input/session-key, and Opaque orderBy/insertion point.
-      - Done when negative fixtures prove no transform artifact is emitted for punted pairs and the
-        punt is surfaced as metadata rather than silently skipped.
+- [ ] Keep patch synthesis separate from TypeScript transform emission. - The derivation core returns `DerivationResult = derived(PatchProgram) | punt(PuntReason)`;
+      Phase 3 is the only place that lowers `PatchProgram` into TS source. - Add negative fixtures for every "must not derive" surface: Opaque SET, non-key match,
+      window/GROUP BY+HAVING/DISTINCT shape, FW406 interprocedural opacity, FW410/raw SQL
+      projection, params untraceable to input/session-key, and Opaque orderBy/insertion point. - Done when negative fixtures prove no transform artifact is emitted for punted pairs and the
+      punt is surfaced as metadata rather than silently skipped.
 
 ## Phase 3 — Codegen: `generated/optimistic/*.ts`
 
 - [ ] Emit derived transforms as committed, reviewable, overridable artifacts (`SPEC.md:331`,
       §10.4 example):
       `export const derived = { keys: { … }, transforms: { [query.key]: (data, $input) => { … } } }
-      satisfies OptimisticFor<…>`,
-      `// DO NOT EDIT (override in *.mutations.ts)`.
-      - Emit alongside the existing committed `generated/touch-graph.ts` path
-        (`packages/compiler/src/emit/registry.ts`); invalidation-graph + derivation changes appear
-        as code-review diffs, not opaque runtime behavior.
-      - **Override precedence mechanism**: codegen suppresses the derived transform entry for any
-        pair already covered by a hand-written transform or `'await-fragment'`; deleting the
-        hand-written entry lets the next generation emit the derived entry (the §10.4 incremental-
-        adoption contract). The emitted `satisfies OptimisticFor<…>` must resolve FW310 for the
-        pairs it covers so editor + `fw check` agree.
-      - Done when commerce emits `generated/optimistic/*.ts`, the files typecheck against
-        `OptimisticFor`, and override precedence is unit-tested (hand-written present ⇒ derived
-        suppressed; hand-written deleted ⇒ derived active).
+satisfies OptimisticFor<…>`,
+      `// DO NOT EDIT (override in *.mutations.ts)`. - Emit alongside the existing committed `generated/touch-graph.ts` path
+      (`packages/compiler/src/emit/registry.ts`); invalidation-graph + derivation changes appear
+      as code-review diffs, not opaque runtime behavior. - **Override precedence mechanism**: codegen suppresses the derived transform entry for any
+      pair already covered by a hand-written transform or `'await-fragment'`; deleting the
+      hand-written entry lets the next generation emit the derived entry (the §10.4 incremental-
+      adoption contract). The emitted `satisfies OptimisticFor<…>` must resolve FW310 for the
+      pairs it covers so editor + `fw check` agree. - Done when commerce emits `generated/optimistic/*.ts`, the files typecheck against
+      `OptimisticFor`, and override precedence is unit-tested (hand-written present ⇒ derived
+      suppressed; hand-written deleted ⇒ derived active).
 
 ## Phase 4 — Runtime integration
 
 - [ ] Derived transforms flow through the **existing** `OptimisticRebaser` exactly like hand-written
-      ones — they share the IR (the whole point of the v1 design, §10.4 / `SPEC.md:847`).
-      - Verify no rebase/queue/placeholder path needs a parallel implementation; if the v1 IR cannot
-        carry a derivation construct (e.g. tempId placeholders, content-matched reconcile, orderBy
-        insertion), record it as a "v1 painted v2 into a corner" finding and fix at the IR seam, not
-        with a fork.
-      - Pending-styling (`fw-pending` + `aria-busy`), `structuredClone` snapshot, morph-over-
-        prediction reconcile, and the per-query pending-transform log must behave identically for
-        derived and hand-written transforms.
-      - Done when a runtime/browser test exercises a derived transform end-to-end (snapshot → apply →
-        server-truth morph/rebase → settle) and asserts parity with the hand-written path it replaces.
+      ones — they share the IR (the whole point of the v1 design, §10.4 / `SPEC.md:847`). - Verify no rebase/queue/placeholder path needs a parallel implementation; if the v1 IR cannot
+      carry a derivation construct (e.g. tempId placeholders, content-matched reconcile, orderBy
+      insertion), record it as a "v1 painted v2 into a corner" finding and fix at the IR seam, not
+      with a fork. - Pending-styling (`fw-pending` + `aria-busy`), `structuredClone` snapshot, morph-over-
+      prediction reconcile, and the per-query pending-transform log must behave identically for
+      derived and hand-written transforms. - Done when a runtime/browser test exercises a derived transform end-to-end (snapshot → apply →
+      server-truth morph/rebase → settle) and asserts parity with the hand-written path it replaces.
 
 ## Phase 5 — Diagnostics & explain surface
 
-- [ ] Extend the coverage status set and the `fw` surfaces (§10.5, §10.6, `SPEC.md:353`, `:891`):
-      - Add `derived` to `OptimisticCoverage.status`
-        (`packages/core/src/graph.ts:165-168`); update producers/consumers in `packages/cli`,
-        `packages/test/src/fw-*-fixtures.ts`.
-      - Add derivation metadata separately from coverage, e.g. `derivation:
-        { status: 'derived' } | { status: 'PUNTED'; reason: PuntReason }`. A `PUNTED` derivation
-        leaves optimistic coverage `UNHANDLED` unless a hand-written transform or `'await-fragment'`
-        covers the pair.
-      - `fw check optimistic` shows `derived ✓` per covered pair; `fw explain --optimistic` and
-        `fw explain mutation <m> --optimistic` report transform coverage **plus derivation traces +
-        named punts** inline (e.g. `PUNTED (Opaque: compute_discount)`).
-      - FW310 stays a `warn`/editor-visible type error but its meaning becomes "write/defer;
-        **derive**" (`diagnostics.ts` FW310, `SPEC.md:969`) — only fires when no hand-written
-        transform, emitted derivation, or `'await-fragment'` covers the pair. A derivation punt does
-        not count as coverage.
-      - MCP exposes the same structured status (§11.3 — MCP is a rendering surface, not a second
-        diagnostic channel).
-      - Done when explain/check fixtures show `derived ✓`, at least one named `PUNTED` reason for
-        commerce, and a punted-uncovered pair still emits FW310; severities are unchanged, and the
-        output stays snapshot-stable for graph-query asserts.
+- [ ] Extend the coverage status set and the `fw` surfaces (§10.5, §10.6, `SPEC.md:353`, `:891`): - Add `derived` to `OptimisticCoverage.status`
+      (`packages/core/src/graph.ts:165-168`); update producers/consumers in `packages/cli`,
+      `packages/test/src/fw-*-fixtures.ts`. - Add derivation metadata separately from coverage, e.g. `derivation:
+{ status: 'derived' } | { status: 'PUNTED'; reason: PuntReason }`. A `PUNTED` derivation
+      leaves optimistic coverage `UNHANDLED` unless a hand-written transform or `'await-fragment'`
+      covers the pair. - `fw check optimistic` shows `derived ✓` per covered pair; `fw explain --optimistic` and
+      `fw explain mutation <m> --optimistic` report transform coverage **plus derivation traces +
+      named punts** inline (e.g. `PUNTED (Opaque: compute_discount)`). - FW310 stays a `warn`/editor-visible type error but its meaning becomes "write/defer;
+      **derive**" (`diagnostics.ts` FW310, `SPEC.md:969`) — only fires when no hand-written
+      transform, emitted derivation, or `'await-fragment'` covers the pair. A derivation punt does
+      not count as coverage. - MCP exposes the same structured status (§11.3 — MCP is a rendering surface, not a second
+      diagnostic channel). - Done when explain/check fixtures show `derived ✓`, at least one named `PUNTED` reason for
+      commerce, and a punted-uncovered pair still emits FW310; severities are unchanged, and the
+      output stays snapshot-stable for graph-query asserts.
 
 ## Phase 6 — Soundness property suite (commuting diagrams)
 
 - [ ] Property-test derivation soundness (§10.5 closing, §11.4 point 4, `SPEC.md:1002`/`:1035`):
       for every derivable pair, generated-state tests assert the commuting diagram
-      `patch(clientShape(s), i) ≡ clientShape(apply(effect, s, i))`.
-      - Run over the pinned Drizzle Postgres subset against the pglite harness
-        (`packages/test/src/pglite.ts`) so `apply(effect, …)` uses real Postgres semantics.
-      - Generated alongside derived transforms as the commuting-diagram suite (`SPEC.md:1035`);
-        wire it into `pnpm run acceptance`.
-      - Done when the suite covers every commerce derived pair and the grammar-coverage matrix, fails
-        loudly on a deliberately-broken derivation, and is green in acceptance.
+      `patch(clientShape(s), i) ≡ clientShape(apply(effect, s, i))`. - Run over the pinned Drizzle Postgres subset against the pglite harness
+      (`packages/test/src/pglite.ts`) so `apply(effect, …)` uses real Postgres semantics. - Generated alongside derived transforms as the commuting-diagram suite (`SPEC.md:1035`);
+      wire it into `pnpm run acceptance`. - Done when the suite covers every commerce derived pair and the grammar-coverage matrix, fails
+      loudly on a deliberately-broken derivation, and is green in acceptance.
 
 ## Phase 7 — Commerce migration (delete & let derivation take over)
 
 - [ ] Delete hand-written transforms in `examples/commerce/src/app.ts` (e.g. the `addToCart`
       `transforms` block, `app.ts:434`) for every pair derivation covers; regenerate
-      `generated/optimistic/*.ts` and refresh `generated/touch-graph.ts`.
-      - Hand-written transforms survive **only** for out-of-grammar punts (the sanctioned override);
-        `'await-fragment'` declarations stay where 1-RTT latency is explicitly accepted.
-      - Verify the migration is behavior-preserving via the Phase 6 commuting suite + existing
-        commerce app tests (`examples/commerce/src/app.test.ts`).
-      - Done when commerce reaches **full shape-grammar coverage**: every (mutation × invalidated-
-        query) pair is `derived`, hand-written-override (out-of-grammar punt), or `'await-fragment'`,
-        with **zero unhandled FW310** and every punt naming its reason in `fw explain --optimistic`.
+      `generated/optimistic/*.ts` and refresh `generated/touch-graph.ts`. - Hand-written transforms survive **only** for out-of-grammar punts (the sanctioned override);
+      `'await-fragment'` declarations stay where 1-RTT latency is explicitly accepted. - Verify the migration is behavior-preserving via the Phase 6 commuting suite + existing
+      commerce app tests (`examples/commerce/src/app.test.ts`). - Done when commerce reaches **full shape-grammar coverage**: every (mutation × invalidated-
+      query) pair is `derived`, hand-written-override (out-of-grammar punt), or `'await-fragment'`,
+      with **zero unhandled FW310** and every punt naming its reason in `fw explain --optimistic`.
 
 ## Phase 8 — Conformance & acceptance
 

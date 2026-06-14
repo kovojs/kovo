@@ -40,7 +40,7 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 | 2   | **No global knowledge at local sites.** Any API requiring the author to enumerate distant call sites from memory is a bug factory and is rejected. | Killed manual fragment targets, manual per-island optimism, query-side mutation registration. |
 | 3   | **Sugar must lower to authorable IR.** Every compiler feature emits valid Jiso source. Compiling the output is a no-op (CI-enforced fixpoint).     | Output is auditable in devtools and mechanically checked; app authors still write TSX.        |
 | 4   | **The wire is the documentation.** Named POSTs, schema-shaped JSON, readable HTML fragments.                                                       | An app's behavior surface is auditable from the Network panel or `tcpdump`.                   |
-| 5   | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in."                                           | Optimistic predictions are disposable; there is no consistency protocol.              |
+| 5   | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in."                                           | Optimistic predictions are disposable; there is no consistency protocol.                      |
 
 ---
 
@@ -376,10 +376,19 @@ interface HandlerModules {
   '#cart': typeof import('../components/cart/cart.client.js'); /* … */
 }
 // '#cart' is a compile-time alias only — emission resolves it to a full URL (§4.3)
-interface FragmentTargets { 'cart-badge': CartBadgeProps; /* … */ }
-interface QueryRegistry { cart: typeof cartQuery; product: typeof productQuery; }
-interface MutationRegistry { 'cart/add': typeof addToCart; }
-interface RouteRegistry { '/products/:id': typeof productRoute; /* … */ }
+interface FragmentTargets {
+  'cart-badge': CartBadgeProps; /* … */
+}
+interface QueryRegistry {
+  cart: typeof cartQuery;
+  product: typeof productQuery;
+}
+interface MutationRegistry {
+  'cart/add': typeof addToCart;
+}
+interface RouteRegistry {
+  '/products/:id': typeof productRoute; /* … */
+}
 interface InvalidationSets {
   'cart/add': 'cart' | 'product'; // from the touch graph (§11.1); OptimisticFor demands a
   // transform (or 'await-fragment') per invalidated query in tsc (§10.6)
@@ -1046,7 +1055,7 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
 | **v1**           | Core model: domain layer with declared `touches` (#3) + flat tags as low-ceremony on-ramp (#2) + `invalidate()` escape hatch (#1, linted)                                                                                                                                                                                                                                                                                                                                                                    | Works with ANY data access                                                         |
 | **v1 (blessed)** | `@jiso/drizzle`: touches **inferred** from ASTs, schema-as-registry, query shapes/keys derived; optimism hand-written against the transform IR (§10.4)                                                                                                                                                                                                                                                                                                                                                       | Postgres-first via Drizzle; MySQL/SQLite conformance deferred to late hardening    |
-| **v1.5**         | Verification layer: runtime instrumentation as CI cross-check (FW402–409); unified typed change record `{domain, keys, input}` feeding optimism now and the v2 live bus later                                                                                                                                                                                                                                                                                    | pglite harness                                                                     |
+| **v1.5**         | Verification layer: runtime instrumentation as CI cross-check (FW402–409); unified typed change record `{domain, keys, input}` feeding optimism now and the v2 live bus later                                                                                                                                                                                                                                                                                                                                | pglite harness                                                                     |
 | **v2**           | **Derived optimism**: compiler-generated transforms via the §10.5 algebra, property-tested soundness, named punts; supersedes hand-written transforms pair by pair. **Live queries (L4)**: `<fw-live>` over SSE, guard-recheck-per-push, in-process/Redis bus — the design's first stateful infrastructure, deferred until something needs it. CDC adapter (Postgres logical replication / Supabase Realtime) as live-query transport + the answer to out-of-band writes (cron, admin tools, other services) | Derivation over the pinned Drizzle subset; live/CDC opt-in, per `live: true` query |
 | **v3**           | Full runtime read/write tracking (Convex-style precision) **only if** a managed data product exists; never the default — it trades static printability away                                                                                                                                                                                                                                                                                                                                                  | Conditional                                                                        |
 
