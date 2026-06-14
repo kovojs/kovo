@@ -1,3 +1,9 @@
+// v1-cleanup item 1: kept whole intentionally. This is the framework's single
+// node:test acceptance surface (`check:fw`): it runs against built `../dist/**`
+// artifacts and drives cross-package behavior end-to-end, so its tests share
+// build/setup context and a coherent pass/fail story. Splitting would fragment a
+// deliberately holistic acceptance gate. Reusable mechanics already live in
+// @jiso/test (source-fixtures, harness); this file is the executable surface.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -3087,7 +3093,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
         'exec',
         'vitest',
         '--run',
-        'packages/drizzle/src/index.test.ts',
+        'packages/drizzle/src/index',
         '-t',
         [
           'extracts query result shapes, read domains, and instance keys from Drizzle selects',
@@ -3453,7 +3459,7 @@ void test('Conformance suites are an explicit gate', async () => {
     /conformance task executes every discovered conformance package test/,
   );
 
-  await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index.test.ts'], {
+  await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index'], {
     cwd: new URL('..', import.meta.url),
     maxBuffer: 1024 * 1024 * 10,
   });
