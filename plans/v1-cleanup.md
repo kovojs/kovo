@@ -1,131 +1,85 @@
 # v1 Cleanup Plan
 
-Status: active. Created on 2026-06-13. Scope decisions locked 2026-06-13 (see below).
+Status: closing 2026-06-14 — all six cleanup items implemented and verified on `main`; final
+`pnpm run acceptance` pending (see Closeout). Created 2026-06-13; scope decisions locked 2026-06-13.
 
-`SPEC.md` remains the source of truth for framework behavior. The v1 implementation gates are green,
-and the completed closeout ledgers have been archived. This file is now the standalone active ledger
-for cleanup discovered during final verification. Prefer code cleanup over wording cleanup: only
-reword old claims when the claim is historical or when code cleanup is explicitly out of v1 scope.
+`SPEC.md` remains the source of truth for framework behavior. This file is the standalone ledger for
+cleanup discovered during final v1 verification; all six items are now complete.
 
 ## Scope Decisions (locked 2026-06-13)
 
-- Disposition: **release-blocking**. Every checklist item must be closed with cited evidence before
-  this plan closes; "reasonable stopping point" is not acceptable — scope each item to completion.
-- Item 1 (test seams): in scope is **all oversized test files**, not only the two originally named.
-  The genuinely largest surfaces — `packages/drizzle/src/index.test.ts` (~14,967 lines),
-  `conformance/drizzle-pin/src/index.test.ts` (~9,924), and
-  `examples/gallery/src/interactive-gallery.browser.test.ts` (~3,331) — are explicitly included.
-- Item 2 (axe): resolve by **expanding axe coverage broadly** across every claimed primitive
-  family/state tier. Only trim a claim where a state genuinely cannot be represented in an
-  axe-stable DOM, and write the surviving accessibility claim down normatively (it currently lives
-  only in this plan and test comments).
-- Items 3 and 4 (remove-vs-reduce forks): **full removal preferred**. Delete duplicated
-  parser/apply logic and Drizzle source-mode paths even when more invasive; accept the added test
-  churn rather than stopping at fail-closed diagnostics.
+- Disposition: **release-blocking**. Every item is closed with cited evidence.
+- Item 1 (test seams): **all oversized test files** are in scope, not only the originally named two.
+- Item 2 (axe): **expand axe coverage broadly** across every claimed primitive family/state tier, and
+  record the surviving accessibility claim normatively.
+- Items 3 and 4: **full removal preferred** for duplicated parser/apply logic and Drizzle source-mode
+  paths, accepting the added test churn rather than stopping at fail-closed shims.
 
 ## Archived Context
 
-- `IMPLEMENT_v1.md` was the top-level v1 closeout checklist. It reached green acceptance, but some
-  checked prose used broad phrases such as "remaining monoliths are split" and "source-string
-  lowerers/validators retired." Treat its status as historical: v1 gates passed, not every possible
-  cleanup is done forever.
-- `plans/codebase-quality-round2.md` closed Phases 0-7 for compiler, Drizzle, runtime, server,
-  harness, commerce, and test restructuring. Its durable result is the passing acceptance chain; its
-  broad qualitative cleanup claims are the source of several items below.
-- `plans/ui.md` closed the UI primitive/gallery workstream with focused unit and gallery browser
-  coverage. Its durable result is the passing UI gates; its axe and "per-state" wording needs to be
-  kept precise.
-- Deferred work remains outside this plan: `plans/better-docs.md` and `plans/react-interop.md`.
-
-## Verified Baseline
-
-- [x] Full v1 acceptance is green: `pnpm run acceptance` EXIT=0.
-      - Covered `check`, `test` (262 files / 2508 tests), `test:browser` (5 runtime browser files /
-        16 tests), `check:build`, `test:p10-perf`, `test:conformance`, and `check:fw` (49 tests).
-- [x] Focused UI gates are green.
-      - `pnpm exec vitest --run packages/headless-ui packages/ui examples/gallery`: 52 files /
-        530 tests.
-      - `pnpm --filter @jiso/example-gallery run test:browser`: 1 file / 39 tests.
-- [x] UI generated/gallery inventory is present.
-      - 35 compiled interactive demos listed in `examples/gallery/package.json`; each has matching
-        generated `.tsx` and `.client.js` files.
-      - 44 static visual fixture HTML files exist under `examples/gallery/src/visual-fixtures`.
-      - 49 `visualBaselineHash` assertions exist in `interactive-gallery.browser.test.ts`.
-- [x] Current checkout is clean and `git diff --check` passed after plan archival.
+- `IMPLEMENT_v1.md`, `plans/codebase-quality-round2.md`, and `plans/ui.md` are archived v1 ledgers
+  (registry in `plans/archive.md`). Their broad qualitative cleanup claims seeded the items below.
+- Deferred work outside this plan: `plans/better-docs.md` and `plans/react-interop.md`.
 
 ## Cleanup Checklist
 
-- [ ] Split remaining large test seams into focused executable surfaces.
-      - Scope (locked): all oversized test files, not only the two originally cited.
-      - Current evidence: `packages/drizzle/src/index.test.ts` is ~14,967 lines.
-      - Current evidence: `conformance/drizzle-pin/src/index.test.ts` is ~9,924 lines.
-      - Current evidence: `tests/fw-check.node.mjs` is 3919 lines.
-      - Current evidence: `examples/gallery/src/interactive-gallery.browser.test.ts` is ~3,331 lines.
-      - Current evidence: `packages/runtime/src/inline-loader-parser-parity.test.ts` is 397 lines.
-      - Do not close this by wording cleanup alone. Done when reusable mechanics are extracted into
-        focused fixtures/tests and any remaining large file has a narrow, documented reason to stay
-        whole as an executable acceptance/parity surface.
-- [ ] Expand UI axe coverage to match the strongest accessibility claim.
-      - Current evidence: `examples/gallery/src/interactive-gallery.browser.test.ts` has one
-        full-route axe test and one representative generated-state axe test.
-      - Current evidence: the same browser file has 39 total tests covering generated interactions,
-        native state, form ownership, visual baselines, and representative accessibility checks.
-      - Resolution (locked): expand axe broadly. Trimming a claim is allowed only where a state
-        genuinely cannot be represented in an axe-stable DOM. The surviving accessibility claim must
-        be recorded normatively (currently it lives only in this plan and test comments, not SPEC.md
-        or docs).
-      - Do not close this by wording cleanup alone. Done when browser tests run axe across every
-        claimed primitive family/state tier, or the explicit accessibility claim is reduced only
-        because a state cannot be meaningfully represented in an axe-stable DOM.
-- [ ] Reduce runtime parser/apply duplication in code.
-      - Current evidence: runtime still has `wire-parser.ts`, `wire-response-scanner.ts`, generated
-        inline-loader parser code, and generated inline apply code.
-      - Current evidence: mutation bodies, deferred streams, broadcast replay, query events, script
-        hydration, and typed reads converge through shared query/apply seams, and inline output is
-        parity-tested against canonical helpers.
-      - Resolution (locked): full removal preferred — collapse duplicated parser/apply logic behind
-        canonical helpers rather than merely adding indirection.
-      - Do not close this by wording cleanup alone. Done when duplicated parser/apply logic is
-        actually removed or further centralized behind canonical helpers, with parity tests proving
-        generated inline output still matches canonical runtime behavior.
-- [ ] Remove Drizzle source-mode dependency; require project-mode extraction.
-      - Policy: v1 Drizzle extraction must use TypeScript project symbols/types through ts-morph.
-        Source-mode name/shape heuristics are not acceptable as a dependency for read/write facts.
-      - Current evidence: v1 blesses Postgres; SQLite/MySQL conformance is deferred.
-      - Current evidence: `packages/drizzle/src/static.ts` still contains source-mode FW406
-        degradation paths alongside project-mode ts-morph extraction.
-      - Resolution (locked): full removal preferred — delete source-mode compatibility paths rather
-        than leaving them as fail-closed shims, except where a path must remain as a fail-closed
-        diagnostic to preserve a real FW406 signal.
-      - Do not close this by wording cleanup alone. Done when production Drizzle extraction requires
-        project-mode proof for Postgres read/write facts, source-mode compatibility paths are deleted
-        or reduced to fail-closed diagnostics only, and conformance proves real `drizzle-orm`
-        Postgres surfaces through project-mode.
-- [ ] Remove source-string decision-making from compiler post-parse phases.
-      - Policy: after parsing, compiler decisions must use typed model facts and spans, not raw
-        source snippets, regexes, `getText()`, or ad hoc string slicing.
-      - Allowed source-text boundaries: parser/scanner input, diagnostic source-frame rendering,
-        shared source-patch application by known spans, and generated-artifact verification.
-      - Disallowed decision-making zones: `lower/**`, `validate/**`, `analyze/**`, `graph.ts`, and
-        `emit/**` must consume model facts/spans instead of source strings.
-      - Current evidence: compile passes use `SourceReplacement` and offset maps; the old
-        `componentOptionSource` and `componentStateReturnObject()` compatibility helpers are gone.
-      - Current evidence: parser/scanner/diagnostic source slicing and generated `renderSource()`
-        remain by design.
-      - Do not close this by wording cleanup alone. Done when remaining violations are replaced with
-        parser/model facts, formatting-resistant fixtures cover the migrated behavior, and a
-        mechanical guard prevents new post-parse source-string decision-making.
-- [ ] Replace stale references to archived v1 ledgers when touching nearby files.
-      - Current targets to watch: comments or docs that say an open question/work item is recorded in
-        `IMPLEMENT_v1.md`, historical command transcripts in `plans/app-shell.md`, and any future
-        roadmap reference that should point to this cleanup plan instead.
-      - Done when `rg "IMPLEMENT_v1.md|codebase-quality-round2.md|plans/ui.md"` only finds
-        historical archive entries or intentionally preserved historical evidence.
+- [x] Split oversized test seams into focused executable surfaces.
+  - 10 oversized files split into per-concern siblings + co-located non-test helper modules, with
+    `it()` counts preserved verbatim per file: drizzle index 228→13 (cfc39802), drizzle-pin 160→8
+    (0aae6b63), gallery browser 40→5 (55c6f7be), better-auth-pin 38→6 (5b12fcf7), better-auth 57→5
+    (15eb4d76), cli 90→6 (7fefe2da), ui 24→4 (307cfc8b), commerce 28→5 (8f1a3c71), server 66→10
+    (bbd0b0f7), gallery node 48→9 (bce49344); import cleanup (298f3ae2).
+  - Kept whole with documented reasons: `tests/fw-check.node.mjs` (node:test acceptance harness),
+    `packages/test/src/package-exports.test.ts` (single full-surface public-API manifest), and
+    `packages/runtime/src/inline-loader-parser-parity.test.ts` (cohesive parity surface) — ccf450d2,
+    0978153a. The fw-check drizzle test path was globbed to the split files (0978153a).
+  - Proof: `vp check --no-fmt` reports 0 errors / 0 warnings; per-package vitest totals unchanged.
+- [x] Expand UI axe coverage to match the strongest accessibility claim (commit 67e5d644).
+  - axe now runs on every claimed interactive end-state (open/expanded, checked/indeterminate,
+    pressed, value end-states, error) plus a static-styled-fixtures block; `expectNoAxeViolations`
+    call sites rose 26→43. The fabricated "SPEC §13.1 G3" citations now point to the real normative
+    SPEC §12.1 (commit 7a946fa3); the claim is also documented in
+    `site/content/guides/accessibility.md`. Native top-layer descent verified empirically.
+- [x] Reduce runtime parser/apply duplication (commit 0be49bae).
+  - Both mutation-response body readers delegate to one shared `readMutationResponseBodyCore`; the
+    inline reader stays a thin wrapper so its AST-extracted closure regenerates within the 4 KB gzip
+    budget (3111 ≤ 4096). The intentional inline-defers-JSON round-trip is kept and documented (SPEC
+    §4.4) since it is required by the budget, not duplication. Proof: `check:inline-loader` passes;
+    parity/scanner/parser tests 53→56; runtime suite 309 green; malformed-reporting order preserved.
+- [x] Remove Drizzle source-mode dependency; require project-mode extraction (commit 93901580).
+  - Deleted the source-mode fact pipeline (`extractTouchGraphFromSource`, `extractQueryFactsFromSource`,
+    the source function/table chains, `isLikelyDrizzleReceiver`, the source receiver/fact extractors);
+    `static.ts` 9391→8577. Kept the unconditional fail-closed FW406 destructured-receiver path and the
+    shared parser infra. Positive source-fact tests migrated to typed `PgDatabase`/`pgDatabaseTypes`
+    receivers; deleted-as-duplicate tests each cite a named project twin (cross-walk verified no silent
+    Postgres coverage loss). Proof: conformance drizzle-pin 160 passed (real drizzle-orm 0.45.2 via
+    project mode); drizzle package+surface 229; `vp check` 0 errors / 769 files.
+- [x] Remove source-string decision-making from compiler post-parse phases (commit 7b4f2acc).
+  - Replaced the named-vs-anonymous handler regex (`lower/handlers.ts`, `emit/client.ts`), the raw
+    call-argument trimming/`=== 'state'` element-param extraction, the FW211 `comment.text.includes`
+    scan, and `/request$/i` with typed parser facts (`expressionIsBareIdentifier`, `callArgumentKinds`,
+    `JsxCommentModel.justifiedDiagnostics`, a typed request predicate) threaded to emit via
+    `HandlerLowering.isBareNamedHandler`. Added an AST guard `postParseSourceStringProjectFact` over
+    `lower/validate/analyze/emit/**` + `graph.ts`, asserted in fw-check with a passing negative-control.
+    Rule recorded as SPEC §5.2 rule 8 (commit e1a130fe). Proof: compiler suite 217; fw-check 50.
+- [x] Replace stale references to archived v1 ledgers (folded into commit 93901580).
+  - Removed the one live stale work-pointer — the `IMPLEMENT_v1` citation in `static.ts`
+    `isDrizzleReceiver` now reads `SPEC §11.1 (v1 scope)` (`rg IMPLEMENT_v1 packages/drizzle/src/static.ts`
+    returns 0). Remaining ledger-name matches are intentionally-preserved history (the `plans/archive.md`
+    registry, this file's Archived Context, and `plans/app-shell.md` RoundNNN transcripts).
 
 ## Verification Rules
 
-- [ ] For wording-only cleanup, run `git diff --check` and a narrow docs/plan formatting check if
-      available.
-- [ ] For compiler, runtime, Drizzle, server, or UI code changes, run the focused package tests plus
-      `pnpm run check`.
-- [ ] Before closing this plan, rerun `pnpm run acceptance`.
+- [x] Wording-only cleanup: `git diff --check` clean; repo formatter applied.
+- [x] Code changes: focused package tests + `vp check --no-fmt` → 0 errors / 0 warnings across 838 files.
+- [ ] Before closing this plan, rerun `pnpm run acceptance` (pending — see Closeout).
+
+## Closeout
+
+- Each item was implemented in an isolated git worktree and re-verified on `main` before integration.
+- Items surfaced during final verification that are **not** v1-cleanup work (pre-existing on `main`):
+  - Markdown formatting drift in `README.md`, `SPEC.md`, and `plans/*` from earlier un-formatted
+    commits, normalized via `vp check --fix` to unblock the acceptance formatting gate.
+  - `examples/gallery/src/interactive-gallery.visual.browser.test.ts` shows environment-dependent
+    screenshot-hash variance (the recorded allow-list lacks this dev machine's render). It is flaky,
+    not a split regression — the gallery browser suite was 40/40 at split time on the same machine.
