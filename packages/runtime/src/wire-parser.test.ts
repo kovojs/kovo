@@ -185,6 +185,30 @@ describe('wire parser HTML entity handling', () => {
     ]);
   });
 
+  it('preserves malformed query-then-fragment reporting order through the shared core', () => {
+    const onError = vi.fn();
+
+    // SPEC.md §4.4/§9.1 (v1-cleanup item 3): readMutationResponseBodyChunks now
+    // consumes readMutationResponseBodyCore for scan + fragment decode, but the
+    // observable onError sequence must stay: malformed fw-query reasons reported
+    // during the shared scan / decode pass, then buffered fw-fragment reasons
+    // replayed afterwards. Malformed query MARKUP (not just JSON) must still come
+    // before malformed fragment markup.
+    expect(
+      readMutationResponseBodyChunks(
+        [
+          '<fw-query name="cart">{"count":1}',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge>',
+        ].join(''),
+        onError,
+      ),
+    ).toEqual({ fragments: [], queries: [] });
+    expect(onError.mock.calls.map(([error]) => String(error.message))).toEqual([
+      expect.stringContaining('Malformed fw-query chunk: missing closing tag'),
+      expect.stringContaining('Malformed fw-fragment chunk: missing closing tag'),
+    ]);
+  });
+
   it('extracts CRLF deferred stream parts before the shared mutation parser', () => {
     // SPEC.md §9.1: deferred streams carry the same fw-query/fw-fragment
     // mutation vocabulary; multipart boundary framing must not create a

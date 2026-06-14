@@ -33,18 +33,33 @@ export interface ReadElementChunksOptions {
   onMalformed?: (reason: string) => void;
 }
 
-export function readInlineMutationResponseBodyChunks(
+export function readMutationResponseBodyCore(
   body: string,
+  options: ReadMutationResponseElementChunksOptions = {},
 ): InlineMutationResponseBodyChunks {
-  // SPEC.md §4.4/§9.1: the inline bootstrap may defer fw-query JSON decoding
-  // to the modular runtime, but fragment decoding still follows this canonical
-  // response body projection instead of an inline-only apply parser.
-  const chunks = readMutationResponseElementChunks(body);
+  // SPEC.md §4.4/§9.1: the inline bootstrap and the modular runtime share this
+  // single scan+fragment-decode skeleton; both project the wire body through the
+  // canonical element scanner and the shared fragment decoder. Queries are kept
+  // as raw element chunks here so the inline reader can defer fw-query JSON
+  // decoding to the modular runtime to stay under the SPEC.md §4.4 4KB gzip
+  // budget, while wire-parser.ts JSON-decodes the same raw chunks itself.
+  const chunks = readMutationResponseElementChunks(body, options);
 
   return {
     fragments: readFragmentChunksFromElements(chunks.fragments),
     queries: chunks.queries,
   };
+}
+
+export function readInlineMutationResponseBodyChunks(
+  body: string,
+): InlineMutationResponseBodyChunks {
+  // SPEC.md §4.4/§9.1: thin inline wrapper over the shared scan+fragment core.
+  // The inline bootstrap intentionally returns fw-query chunks UNDECODED and
+  // defers JSON decode to the modular runtime, keeping the always-loaded loader
+  // under the SPEC.md §4.4 4KB gzip budget; wire-parser.ts decodes the same
+  // chunks via readQueryElementChunk.
+  return readMutationResponseBodyCore(body);
 }
 
 export function readMutationResponseElementChunks(

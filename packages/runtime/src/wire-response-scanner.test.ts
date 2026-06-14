@@ -5,6 +5,7 @@ import {
   readElementChunks,
   readFragmentChunksFromElements,
   readInlineMutationResponseBodyChunks,
+  readMutationResponseBodyCore,
   readMutationResponseElementChunks,
 } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
@@ -128,6 +129,63 @@ describe('wire response scanner', () => {
         },
       ],
     });
+  });
+
+  it('shares one scan+fragment core between the inline and modular body readers', () => {
+    // SPEC.md §4.4/§9.1 (v1-cleanup item 3): the inline bootstrap and the
+    // modular runtime collapse their scan + fragment-decode skeleton onto
+    // readMutationResponseBodyCore. The core decodes fragments once and returns
+    // fw-query chunks UNDECODED so the inline reader can defer JSON decode to the
+    // modular runtime under the SPEC.md §4.4 4KB gzip budget.
+    const body = [
+      '<fw-query name="cart">{"count":1}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+      '<fw-fragment mode="append"><li>missing target</li></fw-fragment>',
+    ].join('');
+
+    const core = readMutationResponseBodyCore(body);
+
+    expect(core).toEqual({
+      fragments: [{ html: '<cart-badge>1</cart-badge>', target: 'cart-badge' }],
+      queries: [
+        {
+          attrs: ' name="cart"',
+          content: '{"count":1}',
+          end: expect.any(Number),
+          start: expect.any(Number),
+        },
+      ],
+    });
+    // The inline reader is a thin wrapper over the same core, so its output is
+    // structurally identical to the core called without malformed callbacks.
+    expect(readInlineMutationResponseBodyChunks(body)).toEqual(core);
+    expect(core.fragments).toEqual(
+      readFragmentChunksFromElements(readMutationResponseElementChunks(body).fragments),
+    );
+  });
+
+  it('forwards malformed scan callbacks through the shared body core', () => {
+    const malformedQuery = vi.fn();
+    const malformedFragment = vi.fn();
+
+    // SPEC.md §4.4/§9.1: the modular runtime reuses the shared core with
+    // malformed callbacks (the inline bootstrap omits them); the core threads
+    // options straight to the canonical element scanner.
+    const core = readMutationResponseBodyCore(
+      [
+        '<fw-query name="cart">{"count":1}',
+        '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge>',
+      ].join(''),
+      {
+        onMalformedFragment: malformedFragment,
+        onMalformedQuery: malformedQuery,
+      },
+    );
+
+    expect(core.fragments).toEqual([]);
+    expect(core.queries).toEqual([]);
+    expect(malformedQuery).toHaveBeenCalledWith('missing closing tag');
+    expect(malformedFragment).toHaveBeenCalledWith('missing closing tag');
   });
 
   it('shares fragment element projection across modular and inline response readers', () => {

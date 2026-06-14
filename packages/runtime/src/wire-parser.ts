@@ -3,7 +3,7 @@ import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import {
   readElementChunks,
-  readFragmentChunksFromElements,
+  readMutationResponseBodyCore,
   readMutationResponseElementChunks,
 } from './wire-response-scanner.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
@@ -204,8 +204,17 @@ export function readMutationResponseBodyChunks(
 ): MutationResponseBodyChunks {
   // SPEC.md §9.1: mutation responses carry fw-query truth and fw-fragment DOM
   // patches in one wire body, so runtime apply paths consume one decoded shape.
+  // SPEC.md §4.4/§9.1: the scan + fragment-decode skeleton is shared with the
+  // inline bootstrap via readMutationResponseBodyCore; this modular reader keeps
+  // raw fw-query chunks (deferred by the inline loader for its 4KB gzip budget)
+  // and JSON-decodes them here via readQueryElementChunk.
+  //
+  // Malformed-reporting ORDER is observable (see wire-parser.test.ts): fw-query
+  // errors are reported during decode below, then fw-fragment errors after, so
+  // fragment malformed reasons are buffered during the shared scan and replayed
+  // only once the query decode loop has finished.
   const malformedFragments: string[] = [];
-  const chunks = readMutationResponseElementChunks(body, {
+  const chunks = readMutationResponseBodyCore(body, {
     onMalformedFragment(reason) {
       malformedFragments.push(reason);
     },
@@ -223,7 +232,7 @@ export function readMutationResponseBodyChunks(
     reportRuntimeError(onError, malformedFragmentError(reason));
   }
 
-  return { fragments: readFragmentChunksFromElements(chunks.fragments), queries };
+  return { fragments: chunks.fragments, queries };
 }
 
 function malformedQueryError(reason: string): Error {
