@@ -1,5 +1,5 @@
-import type { JsonValue } from '@jiso/core';
-import { deriveOptimistic } from '@jiso/drizzle/derive';
+import { applyPatchProgram, type JsonValue } from '@jiso/core';
+import { deriveOptimistic, lowerTransform } from '@jiso/drizzle/derive';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -60,6 +60,31 @@ describe('derivation contract fixtures', () => {
         kind: 'derived',
         program: fixture.program,
       });
+    });
+
+    it(`codegen ≡ interpreter for ${fixture.name}`, () => {
+      // SPEC.md §10.4: the committed transform source must behave identically to the
+      // reference interpreter — executing it is exactly what proves codegen ≡ interpreter.
+      // eslint-disable-next-line no-implied-eval, @typescript-eslint/no-implied-eval -- see above
+      const factory = new Function(
+        'tempId',
+        'now',
+        `return ${lowerTransform(fixture.program)};`,
+      ) as (
+        t: () => JsonValue,
+        n: () => JsonValue,
+      ) => (current: JsonValue, input: JsonValue) => JsonValue;
+      const transform = factory(
+        () => '__tempId__',
+        () => 0,
+      );
+      const generated = transform(structuredClone(fixture.before), fixture.input);
+      const interpreted = applyPatchProgram(fixture.before, fixture.input, fixture.program, {
+        now: () => 0,
+        tempId: () => '__tempId__',
+      });
+      expect(generated).toEqual(interpreted);
+      expect(generated).toEqual(fixture.after);
     });
   }
 });

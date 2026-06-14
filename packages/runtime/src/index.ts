@@ -82,7 +82,9 @@ export type { TargetCollectorRoot } from './mutation-targets.js';
 export {
   applyOptimisticTransforms,
   installPagehideOptimismCleanup,
+  now,
   OptimisticRebaser,
+  tempId,
 } from './optimism.js';
 export type {
   MutationChangeRecord,

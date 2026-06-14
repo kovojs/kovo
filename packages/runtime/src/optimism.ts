@@ -264,6 +264,25 @@ export function optimisticChangeFromInput<Input>(
   return change ?? { domain: 'mutation', input };
 }
 
+let derivedTempIdCounter = 0;
+
+/**
+ * Fresh client-only id for a row inserted by a derived optimistic transform
+ * (SPEC.md §10.5 INSERT × AGG): a tempId placeholder, pending-styled and
+ * content-matched against server truth on reconcile. Re-running the transform
+ * during rebase mints a new id — safe because the row is a prediction until the
+ * server's `<fw-query>` truth replaces it.
+ */
+export function tempId(): string {
+  derivedTempIdCounter += 1;
+  return `fw-tmp-${derivedTempIdCounter}`;
+}
+
+/** Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5). */
+export function now(): number {
+  return Date.now();
+}
+
 export function resolveOptimisticKeys<Input>(
   plan: OptimisticPlan<Input>,
   change: OptimisticChange<Input>,
