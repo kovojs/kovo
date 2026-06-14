@@ -40,24 +40,24 @@ reference-grade precision injected mid-lesson; self-congratulation. Rewrite rule
 
 ### Positioning & concept pages (Goal 1)
 
-- [ ] Write `docs/why-jiso.md`: problem, who it's for, honest trade-offs + "when not to use it",
-      head-to-head comparison table (Next/Remix/htmx/Qwik/Astro). Pull the landing "break it"
-      cascade (rename a column → typed errors across DB/query/binding/route) in as prose.
-- [ ] Add a `docs/quickstart.md`: fastest path to a running page; lead with a visible win. Sharpen
-      the deflating "pre-v1, clone the repo" framing in `installation.md`.
-- [ ] Reframe `docs/mental-model.md` → "Thinking in Jiso": build the model through one worked
-      example; demote the AUTHORING→IR→RUNTIME artifact diagram to a "what the compiler emits"
-      subsection.
+- [x] Write `docs/why-jiso.md`: problem, who it's for, honest trade-offs + "when not to use it",
+      head-to-head comparison table (Next/Remix/htmx/Qwik/Astro), landing "break it" cascade as
+      prose. (Committed `271ceb86`; build + link-check green.)
+- [x] Add a `docs/quickstart.md`: fastest path to a running page; status note demoted to a callout.
+      Sharpened `installation.md` to prerequisites + scaffold + strict-TS rationale (reordered).
+- [x] Reframe `docs/mental-model.md` → "Thinking in Jiso": built through the cart-badge example;
+      AUTHORING→IR→RUNTIME diagram demoted to a "What the compiler emits" subsection.
 
 ### Voice rewrite (guides + tutorial)
 
-- [ ] Establish the voice template by rewriting 2-3 guides, starting with `guides/queries.md`, per
-      the Voice Rules above.
+- [x] Establish the voice template by rewriting `guides/queries.md` per the Voice Rules (scenario
+      opener, plain headings, second person, citations in a `<details>` footer). It is the exemplar
+      the rewrite lanes copy.
 - [ ] Rewrite remaining guides to lead with a goal and footer the citations: `mutations`,
       `optimistic`, `styling`, `deployment`, `testing`, `fw-explain`, `streaming`,
-      `compiler-internals`.
+      `compiler-internals`. (In progress — lane `agent/docs-guides`.)
 - [ ] De-preach the 8 tutorial chapters: keep the tested extracted snippets, strip aphoristic
-      headers and triads. (Snippets stay sourced from `site/tutorial/steps/` via `run-steps.mjs`.)
+      headers and triads. (In progress — lane `agent/docs-tutorial`; `{{snippet}}` markers preserved.)
 
 ### API reference (Goal 2)
 
