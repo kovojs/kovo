@@ -303,7 +303,9 @@ describe('commerce app shell HTTP entry', () => {
     } finally {
       await vite.close();
     }
-  });
+    // The dev server SSR-loads the app, whose Drizzle/PGlite (WASM) data layer
+    // takes a few seconds to initialize — past Vitest's 5s default.
+  }, 30_000);
 
   for (const serveCommand of commerceServeCommands()) {
     it(`serves the app-shell surface through ${serveCommand.label}`, async () => {

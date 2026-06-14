@@ -16,6 +16,13 @@ export const commerceViteConfig = defineConfig({
     },
   },
   plugins: [tailwindcss(), commerceSharedAppShellDevPlugin()],
+  // The Drizzle/PGlite (WASM) data layer makes the build/dev/export tests (which
+  // spawn real vite builds and a dev server) run well past Vitest's 5s default,
+  // especially under the suite's parallelism. Give them room.
+  test: {
+    hookTimeout: 60_000,
+    testTimeout: 60_000,
+  },
   run: {
     tasks: {
       export: {
