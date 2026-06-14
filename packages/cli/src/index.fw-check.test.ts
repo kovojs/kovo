@@ -965,6 +965,7 @@ describe('fw check', () => {
           'export const diagnosticDefinitions = {};',
           'export function diagnosticDefinitionText() { return ""; }',
           'export function isDiagnosticCode() { return false; }',
+          'export function puntReasonLabel() { return ""; }',
           'export function validateFwExplainInput() { return []; }',
           '',
         ].join('\n'),

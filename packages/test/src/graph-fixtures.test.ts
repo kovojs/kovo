@@ -195,7 +195,7 @@ describe('@jiso/test graph fixture seam', () => {
             'OPTIMISTIC cart hand-written',
             'OPTIMISTIC orderHistory await-fragment',
             'OPTIMISTIC productGrid await-fragment',
-            'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0',
+            'OPTIMISTIC-SUMMARY total=3 derived=0 hand-written=1 await-fragment=2 UNHANDLED=0 PUNTED=0',
           ].join('\n'),
         };
       }
@@ -214,7 +214,7 @@ describe('@jiso/test graph fixture seam', () => {
           'guards: authed, rateLimit:session',
           'session: commerceSession',
           'updates: -',
-          'OPTIMISTIC-SUMMARY total=0 hand-written=0 await-fragment=0 UNHANDLED=0',
+          'OPTIMISTIC-SUMMARY total=0 derived=0 hand-written=0 await-fragment=0 UNHANDLED=0 PUNTED=0',
         ].join('\n'),
       };
     };

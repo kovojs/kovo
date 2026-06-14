@@ -133,7 +133,7 @@ const fwExplain = (
         'updates: cart->component:CartBadge,page:/cart; productGrid->component:ProductGrid,page:/cart',
         'OPTIMISTIC cart hand-written',
         'OPTIMISTIC productGrid await-fragment',
-        'OPTIMISTIC-SUMMARY total=2 hand-written=1 await-fragment=1 UNHANDLED=0',
+        'OPTIMISTIC-SUMMARY total=2 derived=0 hand-written=1 await-fragment=1 UNHANDLED=0 PUNTED=0',
       ].join('\n'),
     };
   }
@@ -145,7 +145,7 @@ const fwExplain = (
       'MUTATION order/receipt',
       'invalidates: -',
       'updates: -',
-      'OPTIMISTIC-SUMMARY total=0 hand-written=0 await-fragment=0 UNHANDLED=0',
+      'OPTIMISTIC-SUMMARY total=0 derived=0 hand-written=0 await-fragment=0 UNHANDLED=0 PUNTED=0',
     ].join('\n'),
   };
 };

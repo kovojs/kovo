@@ -11,6 +11,7 @@ import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
   isDiagnosticCode,
+  puntReasonLabel,
   validateFwExplainInput,
   type ComponentExplain,
   type DiagnosticCode,
@@ -1252,7 +1253,18 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
       const coverages = optimisticCoverageForMutation(mutation, input);
 
       for (const coverage of coverages) {
+        // SPEC.md §10.5/§10.6: report transform coverage (status, incl. `derived`)
+        // plus the derivation trace. A PUNTED derivation is metadata, not coverage,
+        // so it renders as a separate OPTIMISTIC-PUNT line with its named reason and
+        // the pair keeps its real status (UNHANDLED still shows the fix line).
         lines.push(`OPTIMISTIC ${coverage.query} ${coverage.status}`);
+        if (coverage.derivation?.status === 'PUNTED') {
+          // Field form (`<key>: <value>`) so the named reason's own colons stay in
+          // the value; the key carries the query.
+          lines.push(
+            `OPTIMISTIC-PUNT ${coverage.query}: ${puntReasonLabel(coverage.derivation.reason)}`,
+          );
+        }
         if (coverage.status === 'UNHANDLED') {
           lines.push(optimisticUnhandledFixLine());
         }
@@ -1930,26 +1942,30 @@ function endpointCsrf(endpoint: EndpointExplain): string {
 }
 
 function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {
-  // SPEC.md §10.6: v2 adds `derived` to the status set. The rich summary surface
-  // (derived=/PUNTED= columns) lands with the Phase 5 explain redesign; the
-  // record stays exhaustive so a future status is a compile error here.
+  // SPEC.md §10.6: v2 adds `derived` to the status partition. PUNTED is a separate
+  // dimension (derivation metadata that never counts as coverage), reported
+  // alongside the status counts.
   const counts: Record<OptimisticCoverage['status'], number> = {
     UNHANDLED: 0,
     'await-fragment': 0,
     derived: 0,
     'hand-written': 0,
   };
+  let punted = 0;
 
   for (const coverage of coverages) {
     counts[coverage.status] += 1;
+    if (coverage.derivation?.status === 'PUNTED') punted += 1;
   }
 
   return [
     'OPTIMISTIC-SUMMARY',
     `total=${coverages.length}`,
+    `derived=${counts.derived}`,
     `hand-written=${counts['hand-written']}`,
     `await-fragment=${counts['await-fragment']}`,
     `UNHANDLED=${counts.UNHANDLED}`,
+    `PUNTED=${punted}`,
   ].join(' ');
 }
 

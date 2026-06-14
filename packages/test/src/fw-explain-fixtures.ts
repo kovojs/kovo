@@ -391,6 +391,18 @@ export function fwExplainOptimisticStatuses(output: string): Record<string, stri
   );
 }
 
+// SPEC.md §10.5: derivation punts render as a separate field line
+// (`OPTIMISTIC-PUNT <query>: <reason label>`) so the OPTIMISTIC status records stay
+// a clean `<query> <status>` and the named reason's own colons survive in the value.
+export function fwExplainOptimisticPunts(output: string): Record<string, string> {
+  const prefix = 'OPTIMISTIC-PUNT ';
+  return Object.fromEntries(
+    parseFwExplainOutput(output)
+      .fields.filter((field) => field.key.startsWith(prefix))
+      .map((field) => [field.key.slice(prefix.length), field.value]),
+  );
+}
+
 export function fwExplainSummary(output: string, key: string): FwExplainSummary {
   const [summary] = fwExplainRecords(output, key);
   if (summary === undefined) {

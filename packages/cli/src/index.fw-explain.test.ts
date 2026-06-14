@@ -173,7 +173,7 @@ describe('fw explain', () => {
         'updates: cart->component:CartBadge,page:/cart; recommendations->component:Recommendations',
         'OPTIMISTIC cart hand-written',
         'OPTIMISTIC recommendations await-fragment',
-        'OPTIMISTIC-SUMMARY total=2 hand-written=1 await-fragment=1 UNHANDLED=0',
+        'OPTIMISTIC-SUMMARY total=2 derived=0 hand-written=1 await-fragment=1 UNHANDLED=0 PUNTED=0',
         '',
       ].join('\n'),
     });
@@ -206,7 +206,65 @@ describe('fw explain', () => {
         'updates: -',
         'OPTIMISTIC cart UNHANDLED',
         "  -> hand-write in the mutation module, or declare 'await-fragment'",
-        'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=0 UNHANDLED=1',
+        'OPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=0 UNHANDLED=1 PUNTED=0',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('reports derived coverage and named PUNTED derivations inline (SPEC §10.5/§10.6)', () => {
+    expect(
+      fwExplain(
+        {
+          mutations: [
+            {
+              guards: ['authed'],
+              invalidates: ['cart', 'order'],
+              key: 'cart/add',
+              writes: ['cart', 'order'],
+            },
+          ],
+          optimistic: [
+            {
+              derivation: { status: 'derived' },
+              mutation: 'cart/add',
+              query: 'cart',
+              status: 'derived',
+            },
+            {
+              derivation: {
+                reason: { code: 'opaque-set', expr: 'compute_total' },
+                status: 'PUNTED',
+              },
+              mutation: 'cart/add',
+              query: 'orders',
+              status: 'UNHANDLED',
+            },
+          ],
+          queries: [
+            { domains: ['cart'], query: 'cart' },
+            { domains: ['order'], query: 'orders' },
+          ],
+        },
+        { kind: 'mutation', optimistic: true, target: 'cart/add' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION cart/add',
+        'guards: authed',
+        'writes: cart,order',
+        'invalidates: cart,order',
+        'manual-invalidates: -',
+        'updates: -',
+        'OPTIMISTIC cart derived',
+        'OPTIMISTIC orders UNHANDLED',
+        // A PUNTED derivation is metadata, not coverage: the pair stays UNHANDLED,
+        // shows its named reason, and still gets the fix line.
+        'OPTIMISTIC-PUNT orders: Opaque: compute_total',
+        "  -> hand-write in the mutation module, or declare 'await-fragment'",
+        'OPTIMISTIC-SUMMARY total=2 derived=1 hand-written=0 await-fragment=0 UNHANDLED=1 PUNTED=1',
         '',
       ].join('\n'),
     });
