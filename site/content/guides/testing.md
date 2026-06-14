@@ -6,12 +6,13 @@ order: 6
 
 # Testing with @jiso/test
 
-Most SPA testing exists to compensate for unverifiable wiring — does this button reach that
-handler, does that mutation refresh this view. Jiso moves those questions into the type system
-and the graph checks, so your tests concentrate on what's left: handler logic, error paths,
-rendered HTML, and the honesty of the invalidation graph itself. SPEC §11.4, §12
+Most SPA test suites exist to compensate for wiring you can't otherwise trust — does this button
+reach that handler, does that mutation refresh this view. Jiso moves those questions into the type
+system and the graph checks, so your tests concentrate on what's left: handler logic, error paths,
+rendered HTML, and whether the invalidation graph is honest. `@jiso/test` runs all of that without a
+browser.
 
-## The harness
+## Run mutations as functions
 
 `@jiso/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
 
@@ -46,10 +47,10 @@ const page = await harness.page('/cart');
 expect(page.fragment('cart-badge')).toContain('data-bind="cart.count"');
 ```
 
-This is the commerce reference app's own test shape. Note what `exec` returns beyond the
-handler's value: the **change records** (`{domain, keys, input}` — SPEC §14's unified record) and
-the **rerun query list**. Invalidation behavior is part of every mutation assertion, not a
-separate integration suite. The `jisoTest` wrapper packages the same thing as named cases:
+This is the commerce reference app's own test shape. Notice what `exec` returns beyond the handler's
+value: the **change records** (`{domain, keys, input}`) and the **rerun query list**. Invalidation
+behavior is part of every mutation assertion, so you don't need a separate integration suite for it.
+The `jisoTest` wrapper packages the same thing as named cases:
 
 ```ts
 import { jisoTest } from '@jiso/test';
@@ -66,9 +67,9 @@ const cartMutations = jisoTest(
 it(cartMutations.name, cartMutations.run);
 ```
 
-## Typed error paths
+## Assert typed error paths
 
-Declared error codes are part of the mutation's type, and `assertMutationError` checks code and
+Declared error codes are part of the mutation's type, and `assertMutationError` checks the code and
 payload while narrowing the payload type:
 
 ```ts
@@ -79,13 +80,12 @@ const payload = assertMutationError(addToCart, fail, {
   code: 'OUT_OF_STOCK',
   payload: { availableQuantity: 5 },
 });
-// payload: { availableQuantity: number } — inferred from the declared error schema (SPEC §6.3)
+// payload: { availableQuantity: number } — inferred from the declared error schema
 ```
 
-## pglite: real Postgres semantics, in-memory
+## Test against real Postgres with pglite
 
-HTTP-level and data-layer tests run against pglite — actual Postgres, in-process, no container.
-SPEC §11.4
+HTTP-level and data-layer tests run against pglite — actual Postgres, in-process, no container:
 
 ```ts
 import { createPgliteTestDb } from '@jiso/test';
@@ -103,18 +103,18 @@ await db.close();
 Because it's real Postgres, the SQL your domain writes execute in tests is the SQL that runs in
 production — `onConflictDoUpdate`, CTEs, constraint behavior and all.
 
-## The verifier: observed ⊆ static ∪ declared
+## Verify the invalidation graph: observed ⊆ static ∪ declared
 
-The invalidation graph is derived from static analysis, so the obvious question is: what if the
-analysis is wrong? The verifier answers it at test time. The static pass _over-approximates_ a
-write's touch set (it unions all branches); runtime execution _under-approximates_ (only executed
-branches). The verifier wraps `db`, parses every executed statement with a SQL AST parser, and
-enforces the invariant that makes the whole invalidation story honest: SPEC §11.2
+The invalidation graph is derived from static analysis, which raises the obvious question: what if
+the analysis is wrong? The verifier answers it at test time. The static pass over-approximates a
+write's touch set (it unions every branch); runtime execution under-approximates it (only the
+branches that ran). The verifier wraps `db`, parses every executed statement with a SQL AST parser,
+and enforces the invariant that makes the invalidation story honest:
 
-> **observed ⊆ static ∪ FW406-declared.** A violation means an analyzer bug or smuggled SQL;
-> either is a CI failure.
+> **observed ⊆ static ∪ FW406-declared.** A violation means an analyzer bug or smuggled SQL; either
+> is a CI failure.
 
-You enable it by giving the harness the committed touch graph and the table→domain mapping (the
+You turn it on by giving the harness the committed touch graph and the table→domain mapping (the
 `touchGraph` and `verification` options above). Every `exec` is then touch-checked: a write to a
 table whose domain the static graph doesn't list for that mutation fails the test. After a run:
 
@@ -122,20 +122,20 @@ table whose domain the static graph doesn't list for that mutation fails the tes
 expect(harness.verificationDiagnostics()).toEqual([]);
 ```
 
-Read-side gets identical treatment: the tables a query's SQL actually selects from are checked
+The read side gets the same treatment: the tables a query's SQL actually selects from are checked
 against its declared read set, and observed result shapes are checked against declared output
-schemas — the runtime half of FW410, which you'll meet in the table below. SPEC §11.2
+schemas.
 
 ## The FW402–FW410 family
 
-These are the diagnostic codes the verification layer produces. The pattern: **4xx codes police
-the boundary between declared dataflow and actual dataflow**, from both sides. SPEC §11.3
+These are the diagnostic codes the verification layer produces. The pattern is that 4xx codes police
+the boundary between declared dataflow and actual dataflow, from both sides:
 
 | Code  | Severity   | What it catches                                                                                |
 | ----- | ---------- | ---------------------------------------------------------------------------------------------- |
 | FW402 | error      | Write touched an undeclared domain — the silent-stale-UI bug                                   |
 | FW403 | warn       | Declared domain never observed written — stale claim or untested branch                        |
-| FW404 | error      | Write to an unmapped table — map it or mark `exempt` (write-side only, SPEC §10.1)             |
+| FW404 | error      | Write to an unmapped table — map it or mark `exempt` (write-side only)                         |
 | FW405 | warn       | Conditional writes on branches never executed under instrumentation                            |
 | FW406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified              |
 | FW407 | error      | Query read from an undeclared domain — missed invalidations                                    |
@@ -143,18 +143,18 @@ the boundary between declared dataflow and actual dataflow**, from both sides. S
 | FW409 | notice     | Non-eq predicate — degraded to table-level invalidation                                        |
 | FW410 | error      | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
 
-Adjacent and worth knowing: FW411 (a query reads an `exempt` table — caught statically _and_ by
-the verifier when raw SQL smuggles the read, SPEC §10.1).
+Worth knowing alongside these: FW411 fires when a query reads an `exempt` table — caught statically,
+and by the verifier when raw SQL smuggles the read.
 
-The asymmetric severities are deliberate. Excess declaration (FW403, FW409) degrades to warnings
-and over-invalidation — wasteful but correct. Missing declaration (FW402, FW404, FW407) means a
-query somewhere renders stale data with no error anywhere — the bug class this whole layer exists
-to kill, so those are errors.
+The severities are deliberately asymmetric. Excess declaration (FW403, FW409) degrades to a warning
+and to over-invalidation — wasteful but correct. Missing declaration (FW402, FW404, FW407) means a
+query somewhere renders stale data with no error anywhere, which is the bug class this whole layer
+exists to kill, so those are errors.
 
-## Property-testing optimistic transforms
+## Property-test optimistic transforms
 
-For every hand-written transform, assert prediction ⊆ eventual truth over generated states — the
-commuting diagram as a test. SPEC §12
+For every hand-written transform, assert that the prediction is contained in eventual truth over
+generated states — the commuting diagram as a test:
 
 ```ts
 import { propertyTest } from '@jiso/test';
@@ -176,10 +176,9 @@ inputs. See the [optimistic guide](/guides/optimistic/) for the transforms thems
 
 The framework's own suite owns the irreducibly browser-bound parts — morph's survival contract
 (focus, caret, scroll), L0 platform behaviors. Application wiring is proof-carrying: handler refs,
-form fields, binding paths, fragment targets, and coverage are checked by `vp check` and
-`fw check`, so apps need few or no browser tests of their own. The reference commerce app's
-acceptance criterion is exactly that: full behavior surface, zero app-level browser tests.
-SPEC §11.4, §16
+form fields, binding paths, fragment targets, and coverage are all checked by `vp check` and
+`fw check`, so apps need few or no browser tests of their own. The reference commerce app meets
+exactly that bar: its full behavior surface is tested with zero app-level browser tests.
 
 A practical app suite is therefore:
 
@@ -195,3 +194,15 @@ A practical app suite is therefore:
 
 - [Reading fw check & fw explain](/guides/fw-explain/) — the static half of verification.
 - [Mutations & forms](/guides/mutations/) — the lifecycle `exec` runs.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+The browser-free verification posture: SPEC §11.4, §16. The test harness and unit/property testing:
+SPEC §12. The unified change record (`{domain, keys, input}`): SPEC §14. Typed error schemas:
+SPEC §6.3. The `observed ⊆ static ∪ declared` invariant and read-side shape verification: SPEC §11.2.
+The FW402–FW410 verification family: SPEC §11.3; manual touches at an opaque write are **FW406**; a
+query reading an `exempt` table is **FW411** (SPEC §10.1); `exempt` tables and the read/write rules:
+SPEC §10.1.
+
+</details>
