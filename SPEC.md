@@ -1011,6 +1011,12 @@ propertyTest(addToCart, cartQuery); // patch∘shape ≡ shape∘apply over gene
 
 Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input)`; the wire as HTTP.
 
+### 12.1 Accessibility conformance (axe-clean states)
+
+Every claimed primitive family MUST be free of axe-core violations not only at initial render but in the terminal awaited state of each interaction tier it supports: open/expanded (accordion, disclosure, collapsible, dialog, alert-dialog, sheet, drawer, popover, tooltip, hover-card, command, and all menu surfaces), checked/pressed/selected (checkbox including `aria-checked="mixed"`, switch, toggle, radio-group, checkbox-group, toggle-group, toolbar, tabs), value end-states (slider, number-field, OTP filled/complete, progress complete and indeterminate, meter optimum band), and validation/error states (field/fieldset). Static styled families (alert, avatar, badge, breadcrumb, button, card, kbd, separator, skeleton, table) MUST be axe-clean as rendered. Native top-layer content (promoted `<dialog>`, `popover` content) MUST be evaluated as visible, active DOM, not as a hidden subtree.
+
+A state MAY be excluded from this requirement only where it cannot be represented as an axe-stable DOM — transient transition/closing frames, time-based auto-dismiss countdowns, and hover-only visual states with no ARIA/DOM delta — and each exclusion MUST be justified in the proving suite. Conformance is proven by the gallery browser axe suite (`examples/gallery/src/interactive-gallery.browser.test.ts`), run under Chromium.
+
 ---
 
 ## 13. Open Design Areas
