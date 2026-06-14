@@ -6,11 +6,11 @@ order: 8
 
 # Streaming & defer
 
-Sometimes one subtree dominates a page's server time — a slow model, a wide aggregation, a
-third-party call. `<fw-defer>` lets the page answer immediately with everything cheap and stream
-the expensive part later **in the same response**: the shell renders with a fallback, the real
-fragment arrives as a later chunk, and the morph layer patches it in. It is the fragment protocol
-reused within first render — not a second mechanism. SPEC §8
+A product page where recommendations come from a slow model shouldn't make the whole page wait on
+them. With `<fw-defer>` the page answers immediately with everything cheap, and the expensive subtree
+streams into the same response: the shell renders with a fallback, the real fragment arrives as a
+later chunk, and the morph layer patches it in. It reuses the fragment protocol within first render
+rather than adding a second mechanism.
 
 ## The shape of a deferred response
 
@@ -62,43 +62,40 @@ The response is one chunked HTML document. On the wire, in order:
 </html>
 ```
 
-The vocabulary is exactly the mutation response's — `<fw-query>` then `<fw-fragment>` — arriving
-during first render instead of after a POST. Readable top to bottom in view-source, like
-everything else on the wire. SPEC §8, §9.1
+The vocabulary is the mutation response's — `<fw-query>` then `<fw-fragment>` — arriving during first
+render instead of after a POST. It reads top to bottom in view-source, like everything else on the
+wire.
 
-## Fallback → morph-in
+## How the fallback gets replaced
 
-The `<fw-defer>` element _is_ the fallback: whatever you render inside it (a skeleton, a spinner,
-a static placeholder) paints with the shell at first byte. When the matching
-`<fw-fragment target="…">` chunk arrives, it is morphed in. Morph semantics mean the swap
-preserves what a replace would destroy: focus, scroll position, selection, CSS transitions, and
-the state of any islands nested in the fallback. Patched-in islands are inert-until-touched like
-everything else, and `on:visible` observers attach to them normally — the morph layer accounts
-for islands it patches in. SPEC §8, §4.7
+The `<fw-defer>` element is the fallback. Whatever you render inside it — a skeleton, a spinner, a
+static placeholder — paints with the shell at first byte. When the matching
+`<fw-fragment target="…">` chunk arrives, the morph layer patches it in. Because it morphs rather
+than replaces, the swap preserves focus, scroll position, selection, CSS transitions, and the state
+of any islands nested in the fallback. Patched-in islands are inert-until-touched like everything
+else, and `on:visible` observers attach to them normally.
 
-`mode="append"` is available on deferred fragments as the explicit append vocabulary, same as
-mutation fragments — useful for streaming list pages. SPEC §9.1
+`mode="append"` is available on deferred fragments as the explicit append vocabulary, the same as
+mutation fragments — useful for streaming list pages.
 
-## Deferred query ordering
+## Keep deferred queries ahead of their consumers
 
-The normative guarantee: **deferred query JSON arrives before or with its consumers**. That is
-why `renderDeferredStream` couples `queries` and `fragments` per chunk — the
+The guarantee to rely on: deferred query JSON arrives before or with its consumers. That's why
+`renderDeferredStream` couples `queries` and `fragments` per chunk — the
 `<fw-query name="productGrid">` value lands in the same chunk as the fragment whose `data-bind`
-attributes read it, so a deferred island never renders against missing data. When you build
-chunks by hand, keep a fragment's queries in its own chunk or an earlier one; never a later one.
-SPEC §8
+attributes read it, so a deferred island never renders against missing data. When you build chunks by
+hand, keep a fragment's queries in its own chunk or an earlier one, never a later one.
 
 Chunks and fragments accept a `priority` (`'high' | 'normal' | 'low'` or a number), and emission
-order follows priority with declaration order as the tiebreaker — declared hinting within the
-stream, with finer priority semantics an open design area. Query-JSON placement under HTTP/1.1
-fallbacks is part of the same open area; the before-or-with guarantee is the contract to rely on.
-SPEC §13.3
+order follows priority with declaration order as the tiebreaker. That's declared hinting within the
+stream; finer priority semantics and query-JSON placement under HTTP/1.1 fallbacks are still open
+design areas. The before-or-with guarantee is the contract you can depend on.
 
 ## Stylesheets for late fragments
 
-A deferred fragment may use classes the shell never referenced. Fragment chunks therefore declare
-their stylesheets, and the links ride inside the fragment — present before the content paints,
-deduped by `href` within the response. SPEC §13.1
+A deferred fragment may use classes the shell never referenced. So fragment chunks declare their
+stylesheets, and the links ride inside the fragment — present before the content paints, deduped by
+`href` within the response:
 
 ```ts
 fragments: [
@@ -111,13 +108,13 @@ fragments: [
 ```
 
 The same Tailwind rule applies as everywhere: classes in deferred HTML must be statically
-discoverable or safelisted, because they must already exist in the generated CSS — see
+discoverable or safelisted, because they have to already exist in the generated CSS. See
 [styling with Tailwind](/guides/styling/).
 
 ## The client side
 
-On a server-rendered stream the loader handles this; the runtime primitive it uses is exported,
-and the starter's `client.ts` wires it for programmatic use:
+On a server-rendered stream the loader handles this. The runtime primitive it uses is exported, and
+the starter's `client.ts` wires it for programmatic use:
 
 ```ts
 import {
@@ -141,39 +138,49 @@ bindings, fragments morph into their targets.
 
 ## When to reach for it
 
-`<fw-defer>` is the relief valve for a deliberate posture: projected children all ship in the
-initial HTML — every tab panel, dialog body, accordion content. There is no client-side lazy
-mount. So the decision is about **server render cost at first paint**, not payload hygiene.
-SPEC §4.5
+Projected children all ship in the initial HTML — every tab panel, dialog body, accordion content.
+There's no client-side lazy mount. So the question `<fw-defer>` answers is about server render cost at
+first paint, not payload size.
 
-**Use it when** a subtree is expensive to _produce_ and the rest of the page isn't —
-recommendations behind a slow model, an analytics panel aggregating wide tables, third-party-data
-sections with unpredictable latency. The cheap 95% of the page paints at first byte; the slow
-section streams in seconds later with no client round-trip.
+**Use it when** a subtree is expensive to produce and the rest of the page isn't: recommendations
+behind a slow model, an analytics panel aggregating wide tables, third-party-data sections with
+unpredictable latency. The cheap 95% of the page paints at first byte, and the slow section streams in
+seconds later with no client round-trip.
 
 **Don't use it for:**
 
-- _Big-but-cheap subtrees._ Streaming doesn't shrink HTML; it reorders it. A long static page is
-  fine as a long static page.
-- _Below-the-fold JS deferral._ That's `on:visible` — execution triggers defer _JavaScript_, not
-  HTML. SPEC §4.7
-- _Data that updates after load._ That's a query with refetch or a mutation response. Defer is
-  strictly a first-render mechanism. SPEC §9.3
-- _Navigation._ Pages are complete documents; defer streams within one response, it does not
-  splice between pages. SPEC §8
+- _Big-but-cheap subtrees._ Streaming reorders HTML; it doesn't shrink it. A long static page is fine
+  as a long static page.
+- _Below-the-fold JS deferral._ That's `on:visible`, which defers executing JavaScript, not HTML.
+- _Data that updates after load._ That's a query with refetch or a mutation response. Defer is a
+  first-render mechanism only.
+- _Navigation._ Pages are complete documents; defer streams within one response, it doesn't splice
+  between pages.
 
 A reasonable default: render everything inline until a route's server time is dominated by one
 identifiable subtree, then defer exactly that subtree. The wire stays readable either way, and
-`fw explain page` keeps listing the route's queries — deferred or not — as one surface. SPEC §5.3
+`fw explain page` keeps listing the route's queries — deferred or not — as one surface.
 
 ## Degradation
 
-The stream is one HTML response, so the no-JS story degrades the same way the rest of the
-framework does: the document still arrives and completes; the fallback content is what a non-JS
-visitor keeps for deferred regions. Keep fallbacks honest — a meaningful placeholder or summary,
-not an empty box — for the same reason the no-JS form path stays a real form. SPEC §8
+The stream is one HTML response, so the no-JS story degrades the way the rest of the framework does:
+the document still arrives and completes, and the fallback content is what a non-JS visitor keeps for
+deferred regions. Keep fallbacks honest — a meaningful placeholder or summary, not an empty box — for
+the same reason the no-JS form path stays a real form.
 
 ## Next
 
 - [Styling with Tailwind](/guides/styling/) — the stylesheet contract these chunks use.
 - [Queries & invalidation](/guides/queries/) — the query values deferred chunks deliver.
+
+<details>
+<summary>Spec & diagnostics</summary>
+
+Defer as a first-render reuse of the fragment protocol, morph survival, the before-or-with ordering
+guarantee, and no-JS degradation: SPEC §8. The shared `<fw-query>`/`<fw-fragment>` wire vocabulary and
+`mode="append"`: SPEC §9.1. `on:visible` and inert-until-touched islands: SPEC §4.7. Projected
+children shipping in initial HTML: SPEC §4.5. Priority hinting and open stream-ordering areas:
+SPEC §13.3. Stylesheets for late fragments: SPEC §13.1. Defer vs. post-load data updates: SPEC §9.3.
+`fw explain page` as one surface: SPEC §5.3.
+
+</details>
