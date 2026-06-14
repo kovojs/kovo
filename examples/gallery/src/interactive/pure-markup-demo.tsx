@@ -30,7 +30,7 @@ export const GalleryPureMarkupDemo = component('gallery-pure-markup-demo', {
             <li class="inline-flex items-center gap-1.5">
               <a
                 class="font-medium text-neutral-600 transition-colors hover:text-neutral-950"
-                href="/components/button"
+                href="/gallery/components/button/"
               >
                 Button
               </a>
