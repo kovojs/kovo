@@ -18,12 +18,19 @@ import {
   runPaymentWebhook,
   type UploadReceiptInput,
 } from './app.js';
-import { commerceFile, requestWithDb, stripeHeader } from './app-test-helpers.js';
+import {
+  commerceFile,
+  readAttachments,
+  readOrders,
+  requestWithDb,
+  seedOrders,
+  stripeHeader,
+} from './app-test-helpers.js';
 
 describe('commerce example', () => {
-  it('renders a multipart receipt upload form on the commerce page', () => {
+  it('renders a multipart receipt upload form on the commerce page', async () => {
     const form = renderReceiptUploadForm('order-1');
-    const html = renderCartPage();
+    const html = await renderCartPage();
     const [uploadForm] = htmlFormFacts(form);
     const fieldsByName = htmlFormFieldsByName(uploadForm);
 
@@ -77,7 +84,7 @@ describe('commerce example', () => {
     expect(storedObject).not.toBeUndefined();
     expect(await storageBodyToBytes(storedObject!.body)).toHaveLength(2048);
 
-    expect(
+    await expect(
       uploadReceipt.handler(
         storedReceipt,
         { db, session: { id: 's-upload', user: { id: 'u1' } } },
@@ -90,14 +97,14 @@ describe('commerce example', () => {
           },
         },
       ),
-    ).toEqual({
+    ).resolves.toEqual({
       attachmentId: 'attachment-1',
       fileName: 'receipt.pdf',
       orderId: 'order-1',
       size: 2048,
       uploadedBy: 'u1',
     });
-    expect(db.attachments).toEqual([
+    expect(await readAttachments(db)).toEqual([
       {
         contentType: 'application/pdf',
         filename: 'receipt.pdf',
@@ -165,7 +172,7 @@ describe('commerce example', () => {
     expect(first.response.headers.get('FW-Changes')).toBe(
       '[{"domain":"order","keys":["order-paid-1"]}]',
     );
-    expect(db.orders).toEqual([
+    expect(await readOrders(db)).toEqual([
       {
         id: 'order-paid-1',
         productId: 'p1',
@@ -181,7 +188,7 @@ describe('commerce example', () => {
       }),
     );
     expect(replay.replayed).toBe(true);
-    expect(db.orders).toHaveLength(1);
+    expect(await readOrders(db)).toHaveLength(1);
 
     const tampered = await runPaymentWebhook(
       requestWithDb(body.replace('2998', '9999'), db, {
@@ -193,20 +200,22 @@ describe('commerce example', () => {
 
   it('uses route file and stream outcomes for order CSV export and attachment download', async () => {
     const db = createCommerceDb();
-    db.write('orders', {
-      id: 'order-1',
-      productId: 'p1',
-      qty: 2,
-      total: 2998,
-      userId: 'u1',
-    });
-    db.write('orders', {
-      id: 'order-2',
-      productId: 'p2',
-      qty: 1,
-      total: 2599,
-      userId: 'u2',
-    });
+    await seedOrders(db, [
+      {
+        id: 'order-1',
+        productId: 'p1',
+        qty: 2,
+        total: 2998,
+        userId: 'u1',
+      },
+      {
+        id: 'order-2',
+        productId: 'p2',
+        qty: 1,
+        total: 2599,
+        userId: 'u2',
+      },
+    ]);
     const storedReceipt = await (
       uploadReceipt.input as typeof uploadReceipt.input & {
         parseAsync(input: unknown): Promise<UploadReceiptInput>;

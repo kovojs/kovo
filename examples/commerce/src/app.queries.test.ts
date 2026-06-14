@@ -31,7 +31,16 @@ import {
   renderProductGridDeferredStream,
   renderProductGridPageFragment,
 } from './app.js';
-import { keyedListNode, productGridInput, queryContext } from './app-test-helpers.js';
+import {
+  keyedListNode,
+  productGridInput,
+  queryContext,
+  readCartItems,
+  resetProducts,
+  seedCartItems,
+  seedOrders,
+} from './app-test-helpers.js';
+import { cartItems, orders, products } from './schema.js';
 
 describe('commerce example', () => {
   it('marks demo-only CSRF secrets as example-only source', () => {
@@ -46,19 +55,19 @@ describe('commerce example', () => {
 
     await expect(
       db.transaction(async (tx) => {
-        tx.write('cart_items', { productId: 'p1', qty: 1, unitPrice: 1499 });
+        await tx.insert(cartItems).values({ productId: 'p1', qty: 1, unitPrice: 1499 });
         return 'committed';
       }),
     ).resolves.toBe('committed');
-    expect(db.cartItems).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
+    expect(await readCartItems(db)).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
 
     await expect(
       db.transaction(async (tx) => {
-        tx.write('cart_items', { productId: 'p2', qty: 1, unitPrice: 2599 });
+        await tx.insert(cartItems).values({ productId: 'p2', qty: 1, unitPrice: 2599 });
         throw new Error('rollback');
       }),
     ).rejects.toThrow('rollback');
-    expect(db.cartItems).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
+    expect(await readCartItems(db)).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
   });
 
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
@@ -131,19 +140,19 @@ describe('commerce example', () => {
       ],
     });
 
-    expect(() => productGridQuery.load({ limit: 1 })).toThrow(
+    await expect(productGridQuery.load({ limit: 1 })).rejects.toThrow(
       'commerce query loaders require context.db or request.db',
     );
   });
 
   it('loads every declared query from a custom request database instead of starter data', async () => {
     const db = createCommerceDb();
-    db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
-    db.cartItems = [
+    await resetProducts(db, [{ id: 'custom', stock: 42, unitPrice: 777 }]);
+    await seedCartItems(db, [
       { productId: 'custom', qty: 4, unitPrice: 777 },
       { productId: 'custom', qty: 6, unitPrice: 777 },
-    ];
-    db.orders = [
+    ]);
+    const customOrders = [
       {
         id: 'custom-order',
         productId: 'custom',
@@ -152,6 +161,7 @@ describe('commerce example', () => {
         userId: 'u-custom-query',
       },
     ];
+    await seedOrders(db, customOrders);
     const context = queryContext(db);
 
     await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 10 });
@@ -160,7 +170,7 @@ describe('commerce example', () => {
       nextCursor: null,
     });
     await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
-      items: db.orders,
+      items: customOrders,
     });
   });
 
@@ -174,17 +184,24 @@ describe('commerce example', () => {
           productGrid: productGridQuery,
         },
         setupDb(db) {
-          db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
-          db.cartItems = [{ productId: 'custom', qty: 3, unitPrice: 777 }];
-          db.orders = [
-            {
+          // The harness does not await setupDb, so submit the seed as
+          // fire-and-queue Drizzle statements via .execute(): that hands each
+          // op to the PGlite client synchronously, and PGlite runs operations
+          // FIFO, so they land before the later awaited harness.query select
+          // (the same pattern createCommerceDb uses for its DDL + product seed).
+          void db.delete(products).execute();
+          void db.insert(products).values({ id: 'custom', stock: 42, unitPrice: 777 }).execute();
+          void db.insert(cartItems).values({ productId: 'custom', qty: 3, unitPrice: 777 }).execute();
+          void db
+            .insert(orders)
+            .values({
               id: 'custom-order',
               productId: 'custom',
               qty: 3,
               total: 2331,
               userId: 'u-custom-query',
-            },
-          ];
+            })
+            .execute();
         },
         verification: {
           domainByTable: {
@@ -225,8 +242,8 @@ describe('commerce example', () => {
 
   it('renders cursor-paged product grid and order history with stable list keys', async () => {
     const db = createCommerceDb();
-    const firstPage = loadProductGrid(db, { limit: 2 });
-    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
+    const firstPage = await loadProductGrid(db, { limit: 2 });
+    const secondPage = await loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
 
     expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
     expect(
@@ -237,7 +254,7 @@ describe('commerce example', () => {
     ).toHaveLength(1);
     expect(htmlKeyValues(renderProductGrid(secondPage))).toEqual(['p3']);
 
-    const appendFragment = renderProductGridPageFragment(
+    const appendFragment = await renderProductGridPageFragment(
       db,
       productGridInput(firstPage.nextCursor, 2),
     );
@@ -261,16 +278,16 @@ describe('commerce example', () => {
       },
     );
 
-    expect(htmlKeyTextMap(renderOrderHistory(db))).toMatchObject({
+    expect(htmlKeyTextMap(await renderOrderHistory(db))).toMatchObject({
       'order-1': 'p1 x 2 - 2998',
     });
   });
 
   it('preserves commerce list identity through append and simultaneous optimistic reorder', async () => {
     const db = createCommerceDb();
-    const firstPage = loadProductGrid(db, { limit: 2 });
+    const firstPage = await loadProductGrid(db, { limit: 2 });
     const firstPageKeys = firstPage.items.map((item) => item.id);
-    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
+    const secondPage = await loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
     const currentGrid = keyedListNode('product-grid', firstPageKeys, {
       p1: { islandState: { pendingMutation: 'cart/add' } },
     });
@@ -285,7 +302,7 @@ describe('commerce example', () => {
     expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
     expect(
       fwFragmentFacts(
-        renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),
+        await renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),
         'product-grid',
       ),
     ).toMatchObject([{ attrs: { mode: 'append', target: 'product-grid' } }]);
@@ -328,7 +345,7 @@ describe('commerce example', () => {
       keyedListNode('order-history', ['order-1', 'order-draft']),
     );
 
-    expect(htmlKeyValues(renderOrderHistory(db))).toContain('order-1');
+    expect(htmlKeyValues(await renderOrderHistory(db))).toContain('order-1');
     expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
     expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
     expect(reconciledHistory.children?.[1]?.browserState).toEqual({
@@ -336,8 +353,8 @@ describe('commerce example', () => {
     });
   });
 
-  it('streams deferred product grid fragments with Tailwind stylesheet hints', () => {
-    const response = renderProductGridDeferredStream(createCommerceDb());
+  it('streams deferred product grid fragments with Tailwind stylesheet hints', async () => {
+    const response = await renderProductGridDeferredStream(createCommerceDb());
 
     expect(response).toMatchObject({
       headers: {

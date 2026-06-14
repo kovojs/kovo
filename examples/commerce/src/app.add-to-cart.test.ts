@@ -53,9 +53,9 @@ describe('commerce example', () => {
     ).toEqual({ cases: 18 });
   });
 
-  it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', () => {
+  it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {
     const form = renderAddToCartForm({ id: 'p1', stock: 5 });
-    const html = renderCartPage();
+    const html = await renderCartPage();
     const [addForm] = htmlFormFacts(form);
     const fieldsByName = htmlFormFieldsByName(addForm);
 
@@ -93,8 +93,8 @@ describe('commerce example', () => {
       status: 303,
     });
 
-    expect(htmlTextContent(renderCartPage(db))).toContain('3 in stock');
-    expect(htmlKeyValues(renderOrderHistory(db))).toContain('order-1');
+    expect(htmlTextContent(await renderCartPage(db))).toContain('3 in stock');
+    expect(htmlKeyValues(await renderOrderHistory(db))).toContain('order-1');
   });
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
@@ -216,7 +216,7 @@ describe('commerce example', () => {
       }),
     ).toHaveLength(1);
     expect(htmlTextContent(response.body)).toContain('Only 2 available.');
-    expect(htmlKeyValues(renderOrderHistory(db))).not.toContain('order-1');
+    expect(htmlKeyValues(await renderOrderHistory(db))).not.toContain('order-1');
   });
 
   it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
@@ -262,6 +262,6 @@ describe('commerce example', () => {
       }),
     ).toHaveLength(1);
     expect(htmlTextContent(formFragment?.innerHtml ?? '')).toContain('Only 2 available.');
-    expect(htmlKeyValues(renderOrderHistory(db))).not.toContain('order-1');
+    expect(htmlKeyValues(await renderOrderHistory(db))).not.toContain('order-1');
   });
 });

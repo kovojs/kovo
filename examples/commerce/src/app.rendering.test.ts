@@ -14,10 +14,11 @@ import {
   renderCommercePageHints,
   renderCartPage,
 } from './app.js';
+import { seedCartItems } from './app-test-helpers.js';
 
 describe('commerce example', () => {
-  it('renders Tailwind-first stylesheet hints and static utility classes', () => {
-    const cartPage = renderCartPage();
+  it('renders Tailwind-first stylesheet hints and static utility classes', async () => {
+    const cartPage = await renderCartPage();
     const pageHints = htmlDocumentFacts(commercePageHints.html);
     const cartDocument = htmlDocumentFacts(cartPage);
 
@@ -58,16 +59,18 @@ describe('commerce example', () => {
     ).toHaveLength(1);
   });
 
-  it('resolves commerce route meta from loaded cart query data', () => {
+  it('resolves commerce route meta from loaded cart query data', async () => {
     const db = createCommerceDb();
-    db.write('cart_items', { productId: 'p1', qty: 3, unitPrice: 1499 });
-    db.write('cart_items', { productId: 'p2', qty: 2, unitPrice: 2599 });
+    await seedCartItems(db, [
+      { productId: 'p1', qty: 3, unitPrice: 1499 },
+      { productId: 'p2', qty: 2, unitPrice: 2599 },
+    ]);
 
-    expect(loadCartQuery(db)).toEqual({ count: 5 });
-    expect(htmlDocumentFacts(renderCommercePageHints(loadCartQuery(db)).html).title).toBe(
+    expect(await loadCartQuery(db)).toEqual({ count: 5 });
+    expect(htmlDocumentFacts(renderCommercePageHints(await loadCartQuery(db)).html).title).toBe(
       'Jiso Commerce (5)',
     );
-    expect(htmlDocumentFacts(renderCartPage(db)).metas).toEqual(
+    expect(htmlDocumentFacts(await renderCartPage(db)).metas).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           attrs: expect.objectContaining({
