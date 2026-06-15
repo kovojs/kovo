@@ -15,6 +15,11 @@ become functional in the no-shim Playwright harness with their handlers reduced 
 mutation; the existing imperative demos keep working unchanged; all compiler gates (fixpoint, update
 coverage, gzip budget) stay green.
 
+Phase 1 is intentionally scalar and same-island: pure state paths, state-only attribute/text derives,
+and correct same-island scoping. State list stamps, mixed query+state derives, and primitive helper
+binding emission are follow-up phases unless a target demo cannot be made spec-conformant without one
+of them.
+
 ## Background: the gap (verified in source)
 
 SPEC §4.8: _"When a query value — **or island-local state; same machinery, two data sources** —
@@ -30,8 +35,8 @@ Reality today (read 2026-06-14):
   text-stamp/attr-derive paths are all query-gated.
 - **Analysis keys on query names.** `packages/compiler/src/analyze/query-updates.ts`
   (`collectQueryUpdatePlans`, `collectQueryUpdateCoverage`) groups bindings by `query` name only;
-  there is no `state` plan.
-- **The loader never applies a state plan.** The inline 4KB loader
+  there are no state binding/coverage facts.
+- **The loader never applies state bindings.** The inline 4KB loader
   (`packages/runtime/src/inline-loader-build.ts`, `dispatch`) writes `fw-state` and stops — it does
   **not** walk bindings (grep: 0 `data-bind` references). Client binding application lives in the full
   loader (`packages/runtime/src/query-bindings.ts` `applyQueryBindings`/
@@ -83,6 +88,14 @@ Author writes `{state.checked}` / `aria-checked={state.checked ? 'true' : 'false
   `state` (compile error if so).
 - Inline expressions → named derives with `input: 'state'`, `param: 'state'`, receiving the parsed
   state object. Same lazy-load + non-renamable export rules as query derives.
+- Mixed-source inline expressions (`state.open && cart.count > 0`) are **not** Phase 1 lowering
+  targets. They must be classified as uncovered/unsupported until the framework grows multi-input
+  derives, because a state-only derive would silently miss query updates and a query-only derive would
+  silently miss state updates.
+- Boolean-presence attributes (`hidden`, `disabled`, `required`, etc.) must not lower to raw
+  `"false"` strings. Direct path bindings are valid for text, reflected string attributes, ARIA, and
+  `data-*`; presence attributes lower through derives that return a present value or `null`/`undefined`
+  so the loader removes the attribute per SPEC §4.8 empty semantics.
 - This keeps "a merged element is indistinguishable from one written by hand" (Constitution #3/#4): the
   wire shows ordinary `data-bind` attributes.
 
@@ -94,40 +107,48 @@ ambiguity (query vs state root) proves messy.
 
 - [ ] Add `state` expression detection alongside the query path in `scan/parse.ts` / a new
       `lower/inline-state-derives.ts` (mirror `lower/inline-derives.ts`): recognize JSX text and
-      attribute expressions whose member-root is `state`, and lower them to `data-bind`/`data-bind:<attr>` + named derives. Do **not** early-return on "no queries".
+      attribute expressions whose only reactive root is `state`, and lower them to
+      `data-bind`/`data-bind:<attr>` + named derives. Do **not** early-return on "no queries".
+- [ ] Reject or classify mixed query+state expressions as unhandled coverage in Phase 1; do not emit a
+      single-input derive for an expression that depends on two update sources.
+- [ ] Lower boolean-presence attributes through null-removing derives instead of direct path bindings
+      that would serialize `false` as a still-present attribute.
 - [ ] **Spread caveat (the switch bug).** `{...switchRootAttributes({ checked: state.checked })}`
       hides the `state` dependency behind an opaque helper call — the compiler cannot see it. Phase 1
       handles this by **migrating the 4 target demos** to bind state-dependent attributes as direct
-      expressions the compiler can analyze (use the primitive helper only for static parts). The
-      general "make primitive composition emit the bindings" is Phase 2 of `plans/fix-ui.md` (§4.6
-      attrs-function chaining), out of scope here.
+      expressions the compiler can analyze only where that does not violate SPEC §4.6 primitive-owned
+      attribute rules. If a target attribute is primitive-owned (`data-state`, primitive ARIA), either
+      pull in the minimal primitive-binding emission needed for that slot or leave the direct override
+      lint-visible; do not normalize a FW232 violation as the long-term shape. The general "make
+      primitive composition emit the bindings" is Phase 2 of `plans/fix-ui.md` (§4.6 attrs-function
+      chaining), out of scope here unless required for spec-conformant acceptance.
 - [ ] Classification mirrors §4.8: sole-text-child expression → stamp that element; mixed content →
       synthesized `<span data-bind>` (reported in `fw explain`); attribute position → named derive.
 
-### D3. Analysis — per-island state update plan
+### D3. Analysis — state binding facts, not a runtime plan
 
-- [ ] Add `collectStateUpdatePlan(model)` in `analyze/query-updates.ts` (or a sibling
-      `analyze/state-updates.ts`). Unlike queries (N named inputs), an island has **one** state object,
-      so the plan is **per-component** (`fw-c`): the set of state-bound selectors + derives + list
-      stamps to re-apply when that island's `state` changes. New facts:
-      `StateUpdatePlanFact { componentName, paths, derives?, stamps?, templateStamps? }` in `types.ts`
-      (parallel to `QueryUpdatePlanFact`, minus the `query` key).
-- [ ] List stamps (`data-bind-list` over a `state` array) reuse `fw-key` reconciliation — include for
-      completeness; most gallery state is scalar so this can land second.
+- [ ] Add state binding/coverage facts in `analyze/query-updates.ts` or a sibling
+      `analyze/state-updates.ts` for type-checking, diagnostics, and `fw explain` only. Do **not** emit
+      or depend on a separate runtime `StateUpdatePlanFact`; SPEC §4.8 says the DOM is the plan and
+      there is no separate compiled-plan artifact.
+- [ ] Runtime identity for state updates is the nearest `[fw-state]` host, not `fw-c`: SPEC §4.2 allows
+      omitting `fw-c` when the host tag spells the component name, and nested stateful islands must not
+      be updated by an ancestor's state mutation.
+- [ ] Defer `data-bind-list="state.items"` until after scalar state bindings are proven. When it lands,
+      reuse `fw-key` reconciliation and item-relative binding semantics verbatim.
 
-### D4. Emit — derives + plan + island wiring
+### D4. Emit — derives + island wiring
 
 - [ ] `emit/server.ts`: emit the `data-bind`/`data-bind:<attr>` attributes on the lowered element; mark
       the island host so the loader can scope the walk (the island already carries `fw-c` + `fw-state`;
       reuse, do not add a second marker — SPEC §4.6 "one element = one island").
 - [ ] `emit/client.ts`: emit state derives as client-module exports (same module the handlers live in;
       `input: 'state'`).
-- [ ] Decide the **plan delivery** (see D5): either the inline loader self-discovers the plan by walking
-      `[data-bind]` under the `fw-state` host (no emitted plan object needed), or emit a compiled
-      per-island state plan like `queryPlans`. **Prefer self-discovery by DOM walk** (SPEC "the DOM is
-      the plan" — no separate compiled-plan artifact), keeping emission minimal.
+- [ ] Do **not** add a `statePlans` bootstrap object. The inline and full loaders self-discover state
+      bindings by walking `[data-bind]` / `[data-bind:*]` under the mutated `[fw-state]` host, keeping
+      SPEC §4.8's DOM-as-plan contract intact.
 
-### D5. Loader — apply the state plan on mutation (SPEC §4.4 responsibility)
+### D5. Loader — apply state bindings on mutation (SPEC §4.4 responsibility)
 
 The loader that runs in the gallery is the **inline 4KB loader**; it currently applies no update plan
 at all. Two sub-decisions:
@@ -147,8 +168,9 @@ at all. Two sub-decisions:
       walk/format logic is shared and parameterized by a value resolver (`query` vs `state`); the full
       bootstrap loader gets the same state application for free.
 - [ ] **Scope + identity.** Apply scoped to the mutated island's `fw-state` host subtree (not the whole
-      document); respect `?.` empty semantics (text → empty string, attribute → remove) exactly as the
-      server renderer does (SPEC §4.8 FW222 drift rule).
+      document), and skip bindings whose closest `[fw-state]` is a nested island rather than the
+      mutated host. Respect `?.` empty semantics (text → empty string, attribute → remove) exactly as
+      the server renderer does (SPEC §4.8 FW222 drift rule).
 
 ### D6. Coverage — §4.9 exhaustiveness for state
 
@@ -157,6 +179,11 @@ at all. Two sub-decisions:
       stale — this is exactly what hid the switch `<output>` bug). Decide FW311-extension vs. a
       state-specific sibling code; wire the diagnostic + fix-menu message (extract a named derive / bind
       directly).
+- [ ] Before landing the diagnostic, resolve the SPEC wording mismatch: §4.9 and the FW311 table
+      currently say "query-dependent" output. Preferred change is to broaden FW311 to
+      query/state-dependent DOM positions while documenting that state positions have Phase 1 statuses
+      `plan`, `isomorphic`, or `renderOnce`; `fragment` is not a state remedy unless SPEC later defines
+      how client-private state participates in server fragments.
 
 ### D7. Backward compatibility with the imperative demos
 
@@ -173,24 +200,43 @@ at all. Two sub-decisions:
       fixtures (no compiler yet). Proves the runtime half end-to-end.
 - [ ] **S2 — Lowering** (D2): `state` text + attribute expressions → `data-bind`/derives; unit tests in
       a new `state-bindings.test.ts` mirroring `query-bindings.test.ts`.
-- [ ] **S3 — Analysis + types** (D3): `StateUpdatePlanFact`, `collectStateUpdatePlan`; tests mirroring
-      `query-update-plans.test.ts`.
+- [ ] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
+      output only; tests prove no emitted runtime `statePlans` artifact is required.
 - [ ] **S4 — Emit** (D4): server attributes + client derives; fixpoint/IR parity holds
       (`assertFixpoint`/`assertRenderEquivalence` in the gallery emit path).
 - [ ] **S5 — Loader application** (D5): wire the walk into the inline loader `dispatch`; regenerate
       `inline-loader.ts`; budget + parity `--check` green.
 - [ ] **S6 — Coverage gate** (D6): FW311-for-state diagnostic + tests.
 - [ ] **S7 — Migrate the 4 target demos** to declarative state binding (drop the helper-spread for
-      state-dependent attrs): `switch`, `toggle`, `disclosure`, `checkbox`. Handler bodies reduce to the
-      state mutation (+ the primitive's `*TriggerClick` for the change contract where applicable).
+      state-dependent attrs where spec-conformant): `switch`, `toggle`, `disclosure`, `checkbox`.
+      Handler bodies reduce to the state mutation (+ the primitive's `*TriggerClick` for the change
+      contract where applicable). Do not hide primitive-owned attribute override lints; either avoid
+      those direct writes or promote the minimal primitive-binding emission needed.
 - [ ] **S8 — Re-emit the gallery** (`pnpm --filter @jiso/example-gallery emit:interactive-gallery`) and
       verify in the no-shim harness; update any demo-fixture/markup tests.
+
+## Focused verification matrix
+
+- [ ] State-only component without `fw-deps` still updates from `fw-state` + `data-bind="state.*"`.
+- [ ] Nested stateful islands do not cross-update: an ancestor state mutation skips descendant bindings
+      whose closest `[fw-state]` is the descendant host.
+- [ ] A query named `state` is rejected before emission.
+- [ ] Optional state paths use the same `?.` empty semantics as query paths (text → empty string,
+      attribute → remove).
+- [ ] Boolean-presence attributes such as `hidden` are added/removed via derives; no test accepts
+      `hidden="false"` as a passing update.
+- [ ] Mixed query+state expressions are rejected or reported as unhandled coverage until multi-input
+      derives are designed.
+- [ ] Chained handlers update DOM from the final `ctx.state` value after all handler refs run.
+- [ ] The four target demo client modules contain state mutation and derive exports only; no
+      hand-authored DOM writes are needed for the state-bound slots.
 
 ## Acceptance criteria
 
 - [ ] `switch`/`toggle`/`disclosure`/`checkbox` toggle visibly in the **unmodified** static export
       (no-shim Playwright): `aria-checked`/`aria-pressed`/`data-state`/`hidden`/`<output>` all update
-      from a one-line state-mutation handler.
+      from a one-line state-mutation handler. Presence attributes like `hidden` are proven by
+      add/remove behavior, not by serializing `"false"`.
 - [ ] The generated client modules for those four contain **no** `getElementById`/`setAttribute` (state
       mutation only) — the inverse of the current "DECLARATIVE-ONLY → broken" taxonomy in
       `scratch/fix-ui-evidence.md`.
@@ -206,11 +252,20 @@ at all. Two sub-decisions:
 - **Reserved-root ambiguity.** `state` as a binding root must not collide with a query named `state`;
   add a validation. Re-confirm the unified-`data-bind` vs `data-bind-state` decision early (D1) — it's
   load-bearing for the resolver.
+- **Nested island bleed.** A subtree walk from an ancestor `[fw-state]` can see descendant islands.
+  Loader tests must prove nearest-`[fw-state]` scoping before gallery migration.
+- **Mixed query/state expressions.** Single-input derives cannot safely cover expressions that read two
+  update sources. Phase 1 must classify them as unsupported/unhandled or explicitly defer them.
+- **Boolean presence attributes.** Direct path writes can produce `hidden="false"` bugs. Presence attrs
+  must use derives that remove on false/null.
 - **Fixpoint / byte-stable IR.** State derives + `data-bind` attributes change emitted IR; the gallery
   emit asserts fixpoint and render-equivalence — extend fixtures, don't fight the gate.
 - **Spread opacity.** Phase 1 sidesteps `{...helper(state)}` by migrating the 4 demos to direct
   expressions; the general primitive-composition binding is Phase 2 (`plans/fix-ui.md` §4.6 chaining)
   and must not regress this work.
+- **Primitive-owned attrs.** Directly binding primitive-owned `data-state` / ARIA can violate SPEC §4.6
+  FW232. Keep the violation visible or pull the minimum primitive binding emission into scope; do not
+  bless direct overrides as the final design.
 - **Double application.** A demo that both hand-writes DOM and gets an auto-binding could fight itself;
   D7 + the migration (S7) keep the four target demos binding-only.
 
