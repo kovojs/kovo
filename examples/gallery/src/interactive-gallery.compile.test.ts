@@ -267,6 +267,8 @@ describe('compiled interactive gallery demos', () => {
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
     expect(hoverCard).toContain('fw-state=\'{"open":false}\'');
     expect(hoverCard).toContain('hoverCardTriggerAttributes({ contentId, open: state.open })');
+    expect(hoverCard).not.toContain('aria-controls');
+    expect(hoverCard).not.toContain('aria-expanded');
     expect(hoverCard).toMatch(
       /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js\?v=[0-9a-f]{8}#GalleryHoverCardDemo\$a_focus"/,
     );

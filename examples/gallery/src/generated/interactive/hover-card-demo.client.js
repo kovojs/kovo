@@ -15,7 +15,6 @@ export const GalleryHoverCardDemo$a_blur = handler((event, ctx) => {
 
   if (trigger) {
     Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'false');
   }
   if (content) {
     Object(content)['hidePopover']?.call(content);
@@ -38,7 +37,6 @@ export const GalleryHoverCardDemo$a_focus = handler((event, ctx) => {
 
   if (trigger) {
     Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'true');
   }
   if (content) {
     content['hidden'] = false;
@@ -63,7 +61,6 @@ export const GalleryHoverCardDemo$a_keydown = handler((event, ctx) => {
 
   if (trigger) {
     Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'false');
   }
   if (content) {
     Object(content)['hidePopover']?.call(content);
@@ -86,7 +83,6 @@ export const GalleryHoverCardDemo$a_pointerenter = handler((event, ctx) => {
 
   if (trigger) {
     Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'true');
   }
   if (content) {
     content['hidden'] = false;
@@ -109,7 +105,6 @@ export const GalleryHoverCardDemo$a_pointerleave = handler((event, ctx) => {
 
   if (trigger) {
     Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'false');
   }
   if (content) {
     Object(content)['hidePopover']?.call(content);

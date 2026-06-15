@@ -62,11 +62,9 @@ export function hoverCardTriggerAttributes(
 
   return Object.freeze({
     ...mergeDataAttributes(openState(options.open), dataDisabled(options.disabled === true)),
-    'aria-expanded': String(options.open),
     ...(enabledContentId === undefined
       ? {}
       : {
-          'aria-controls': enabledContentId,
           'jiso-hover-card': enabledContentId,
         }),
   });

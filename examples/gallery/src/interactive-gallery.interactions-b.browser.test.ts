@@ -1300,7 +1300,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('shows and hides a generated hover-card through browser-visible ARIA and popover state', async () => {
+  it('shows and hides a generated hover-card through browser-visible popover state', async () => {
     const root = mountInteractiveDemo(GalleryHoverCardDemo);
     const trigger = required(root.querySelector<HTMLAnchorElement>('[jiso-hover-card]'));
     const content = required(root.querySelector<HTMLElement>('#gallery-hover-card-content'));
@@ -1313,8 +1313,8 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     expect(root.getAttribute('fw-state')).toBe('{"open":false}');
     expect(trigger.getAttribute('jiso-hover-card')).toBe('gallery-hover-card-content');
-    expect(trigger.getAttribute('aria-controls')).toBe('gallery-hover-card-content');
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.getAttribute('aria-controls')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBeNull();
     expect(content.getAttribute('popover')).toBe('manual');
     expect(content.hidden).toBe(true);
     expect(content.matches(':popover-open')).toBe(false);
@@ -1327,7 +1327,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         '/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js',
       );
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
-      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(trigger.getAttribute('aria-expanded')).toBeNull();
       expect(content.hidden).toBe(false);
       expect(content.getAttribute('data-state')).toBe('open');
       expect(content.matches(':popover-open')).toBe(true);
@@ -1338,7 +1338,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
-      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(trigger.getAttribute('aria-expanded')).toBeNull();
       expect(content.hidden).toBe(true);
       expect(content.matches(':popover-open')).toBe(false);
       expect(output.textContent).toBe('closed');
@@ -1356,7 +1356,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
-      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(trigger.getAttribute('aria-expanded')).toBeNull();
       expect(content.hidden).toBe(true);
       expect(content.matches(':popover-open')).toBe(false);
     });

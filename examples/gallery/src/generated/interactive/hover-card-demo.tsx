@@ -46,11 +46,11 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
           {...hoverCardTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
           href="#hover-card-demo"
-          on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_blur"
-          on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_focus"
-          on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_keydown"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_pointerleave"
+          on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=e9c381f8#GalleryHoverCardDemo$a_blur"
+          on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=e9c381f8#GalleryHoverCardDemo$a_focus"
+          on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=e9c381f8#GalleryHoverCardDemo$a_keydown"
+          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=e9c381f8#GalleryHoverCardDemo$a_pointerenter"
+          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=e9c381f8#GalleryHoverCardDemo$a_pointerleave"
         >
           Ada Lovelace
         </a>
@@ -62,7 +62,7 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
         </aside>
         <output
           data-demo-state="hover-card-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=e9c381f8#GalleryHoverCardDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

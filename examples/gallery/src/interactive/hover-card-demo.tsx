@@ -53,7 +53,6 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
 
             if (trigger) {
               Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-              Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'false');
             }
             if (content) {
               Object(content)['hidePopover']?.call(content);
@@ -78,7 +77,6 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
 
             if (trigger) {
               Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-              Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'true');
             }
             if (content) {
               content['hidden'] = false;
@@ -105,7 +103,6 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
 
             if (trigger) {
               Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-              Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'false');
             }
             if (content) {
               Object(content)['hidePopover']?.call(content);
@@ -130,7 +127,6 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
 
             if (trigger) {
               Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-              Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'true');
             }
             if (content) {
               content['hidden'] = false;
@@ -155,7 +151,6 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
 
             if (trigger) {
               Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-              Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'false');
             }
             if (content) {
               Object(content)['hidePopover']?.call(content);

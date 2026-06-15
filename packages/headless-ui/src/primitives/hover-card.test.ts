@@ -42,21 +42,16 @@ describe('headless-ui hover-card primitive', () => {
     });
 
     expect(hoverCardTriggerAttributes({ contentId: 'profile-card', open: true })).toEqual({
-      'aria-controls': 'profile-card',
-      'aria-expanded': 'true',
       'data-state': 'open',
       'jiso-hover-card': 'profile-card',
     });
     expect(hoverCardTriggerAttributes({ contentId: 'profile-card', open: false })).toEqual({
-      'aria-controls': 'profile-card',
-      'aria-expanded': 'false',
       'data-state': 'closed',
       'jiso-hover-card': 'profile-card',
     });
     expect(
       hoverCardTriggerAttributes({ contentId: 'profile-card', disabled: true, open: false }),
     ).toEqual({
-      'aria-expanded': 'false',
       'data-disabled': '',
       'data-state': 'closed',
     });

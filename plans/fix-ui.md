@@ -529,6 +529,11 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       `aria-expanded`/`aria-controls`, but Radix/Base UI do **not** treat a hover card as a disclosure —
       drop them from `hoverCardTriggerAttributes`. Wire the existing `hoverCardContentPointerEnter/Leave`
       so the card is hoverable; add a close-delay grace period.
+  - Evidence 2026-06-15: the P1 ARIA divergence is closed: `hoverCardTriggerAttributes` no longer
+    emits `aria-expanded`/`aria-controls`, `examples/gallery/src/interactive/hover-card-demo.tsx`
+    no longer writes those attributes imperatively, regenerated hover-card artifacts contain neither
+    attribute, and the browser hover-card test asserts they remain absent through pointer/focus/Escape
+    interactions. The P0 hoverability/delay work remains open, so this checkbox stays open.
 
 ### Overlays — native dialog family (open/close work via native `<dialog command>`; gaps are dismissal/state/fallback)
 
@@ -611,8 +616,17 @@ These are framework changes the demo rewrites depend on (not just demo edits):
   - Evidence 2026-06-15: closed by the Phase 2 accordion slice above; verified by
     `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/accordion.test.ts` and
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
-- [ ] `hover-card.ts`: remove `aria-expanded`/`aria-controls` from the trigger (model divergence);
+- [x] `hover-card.ts`: remove `aria-expanded`/`aria-controls` from the trigger (model divergence);
       update `hover-card.test.ts`.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/hover-card.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.client-behavior.test.ts`, `pnpm --filter @jiso/example-gallery exec
+    vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+    -t hover-card`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
+    --check`, and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed; `rg -n
+    "aria-expanded|aria-controls"` against the hover-card primitive/demo/generated files found no
+    matches.
 - [x] `number-field.ts`: add `numberFieldKeyDown`, `largeStep`/`smallStep`; optional hold-repeat + `Intl`.
   - Evidence 2026-06-15: closed by the Phase 3 number-field slice above; verified by
     `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/number-field.test.ts` and
