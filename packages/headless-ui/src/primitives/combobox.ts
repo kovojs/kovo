@@ -15,6 +15,7 @@ import {
 
 export interface ComboboxItem {
   disabled?: boolean;
+  id?: string;
   label?: string;
   textValue?: string;
   value: string;
@@ -123,7 +124,8 @@ export type ComboboxPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type ComboboxInputEvent = Event & {
-  readonly currentTarget: EventTarget & { value?: string };
+  readonly currentTarget: (EventTarget & { value?: string }) | null;
+  readonly target?: (EventTarget & { value?: string }) | null;
 };
 export type ComboboxOptionEvent = Event;
 export type ComboboxKeyboardEvent = Event & { readonly key: string };
@@ -145,6 +147,14 @@ export function comboboxValueText(state: ComboboxState): string {
   if (selected) return selected.label ?? selected.textValue ?? selected.value;
   if (state.value === undefined || state.value === '') return state.placeholder ?? '';
   return state.value;
+}
+
+export function comboboxFilteredItems(state: ComboboxState): readonly ComboboxItem[] {
+  const query = normalizeComboboxQuery(state.value);
+  const items = state.items ?? [];
+  if (query === '') return items;
+
+  return Object.freeze(items.filter((item) => comboboxItemMatches(item, query)));
 }
 
 export function comboboxRootAttributes(
@@ -369,9 +379,13 @@ export function comboboxInput(
 ): ComboboxValueChangeResult | undefined {
   if (event.defaultPrevented) return;
 
-  const result = setComboboxValue(state, event.currentTarget.value, 'input', options);
+  const inputTarget = event.target ?? event.currentTarget;
+  const result = setComboboxValue(state, inputTarget?.value, 'input', options);
   if (!result.changed) {
-    event.currentTarget.value = result.value ?? '';
+    if (inputTarget) inputTarget.value = result.value ?? '';
+    if (event.currentTarget && event.currentTarget !== inputTarget) {
+      event.currentTarget.value = result.value ?? '';
+    }
     event.preventDefault();
   }
 
@@ -483,6 +497,9 @@ function comboboxValueDisabled(state: ComboboxState, value: string | undefined):
 function comboboxActiveDescendant(options: ComboboxInputAttributeOptions): string | undefined {
   if (options.highlightedValue === undefined) return undefined;
 
+  const itemId = options.items?.find((item) => item.value === options.highlightedValue)?.id;
+  if (itemId !== undefined) return itemId;
+
   const index = options.items?.findIndex((item) => item.value === options.highlightedValue) ?? -1;
   if (index < 0) return undefined;
 
@@ -497,4 +514,19 @@ function comboboxDescribedBy(options: {
   return [options.descriptionId, options.invalid === true ? options.errorId : undefined]
     .filter((id): id is string => id !== undefined && id.length > 0)
     .join(' ');
+}
+
+function comboboxItemMatches(item: ComboboxItem, query: string): boolean {
+  return comboboxSearchText(item).includes(query);
+}
+
+function comboboxSearchText(item: ComboboxItem): string {
+  return [item.label, item.textValue, item.value]
+    .filter((value): value is string => value !== undefined)
+    .join(' ')
+    .toLocaleLowerCase();
+}
+
+function normalizeComboboxQuery(inputValue: string | undefined): string {
+  return (inputValue ?? '').trim().toLocaleLowerCase();
 }

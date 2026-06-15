@@ -271,7 +271,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
 
     expect(root.getAttribute('fw-state')).toBe(
-      '{"highlightedValue":"austin","open":false,"value":"austin"}',
+      '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
     );
     expect(input.getAttribute('role')).toBe('combobox');
     expect(input.getAttribute('aria-expanded')).toBe('false');
@@ -284,6 +284,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(chicago.getAttribute('role')).toBe('option');
     expect(output.textContent).toBe('Austin');
 
+    input.value = 'chi';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -302,18 +303,18 @@ describe('compiled interactive gallery demos in the browser', () => {
         '/c/examples/gallery/src/generated/interactive/combobox-demo.client.js',
       );
       expect(root.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"chicago","open":true,"value":"chicago"}',
+        '{"highlightedValue":"chicago","inputValue":"chi","open":true,"value":"austin"}',
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('true');
       expect(currentInput.getAttribute('aria-activedescendant')).toBe(
         'gallery-combobox-listbox-option-2',
       );
-      expect(currentInput.value).toBe('chicago');
-      expect(new FormData(form).get('gallery-city')).toBe('chicago');
+      expect(currentInput.value).toBe('chi');
+      expect(new FormData(form).get('gallery-city')).toBe('chi');
       expect(currentListbox.hidden).toBe(false);
       expect(currentChicago.getAttribute('data-highlighted')).toBe('');
-      expect(currentChicago.getAttribute('aria-selected')).toBe('true');
-      expect(currentOutput.textContent).toBe('Chicago city');
+      expect(currentChicago.getAttribute('aria-selected')).toBe('false');
+      expect(currentOutput.textContent).toBe('Austin');
     });
 
     // SPEC §12.1: the combobox open state (expanded combobox with an active descendant
@@ -334,7 +335,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
 
       expect(root.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"chicago","open":false,"value":"chicago"}',
+        '{"highlightedValue":"chicago","inputValue":"chicago","open":false,"value":"chicago"}',
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('false');
       expect(currentInput.value).toBe('chicago');
@@ -352,7 +353,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
 
       expect(root.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"austin","open":false,"value":"austin"}',
+        '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
       );
       expect(currentInput.value).toBe('austin');
       expect(new FormData(form).get('gallery-city')).toBe('austin');

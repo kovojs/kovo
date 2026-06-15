@@ -266,11 +266,25 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Typeahead / listbox
 
-- [ ] **combobox** [P0]: ArrowDown/Up don't move highlight — any non-Enter key runs
+- [x] **combobox** [P0]: ArrowDown/Up don't move highlight — any non-Enter key runs
       `state.open = !state.open`, so ArrowDown **closes** the listbox; Home/End/Escape unimplemented;
       typing rewrites the committed `value`. Wire `comboboxKeyDown`/`comboboxMove`; on input update
       query/highlight only (commit on Enter/click via `comboboxOptionClick`); drive option
       visibility/highlight from the typed text.
+      - Evidence 2026-06-15: `packages/headless-ui/src/primitives/combobox.ts` now accepts delegated
+        input values from `event.target`, resolves active descendants from item ids, and exposes
+        `comboboxFilteredItems`; covered by
+        `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/combobox.test.ts`.
+      - Evidence 2026-06-15: `examples/gallery/src/interactive/combobox-demo.tsx` keeps
+        `inputValue` separate from committed `value`, routes input/key/click handlers through
+        `comboboxInput`, `comboboxFilteredItems`, `comboboxKeyDown`, and `comboboxOptionClick`, and
+        drives input/listbox/option/output state through TSX bindings. Generated
+        `combobox-demo.client.js` imports those primitive helpers and has no
+        `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches.
+      - Evidence 2026-06-15: gallery client/compile and browser interaction coverage passed via
+        `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
+        and
+        `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t combobox`.
 - [ ] **autocomplete** [P1]: popup is a native `<datalist>` with a single hardcoded `<option>` (not a
       navigable `role=listbox`); typing always scripts `'dev'→development`; arrows toggle open instead
       of navigating. Render a real `role=listbox`/`role=option` list from `autocompleteSuggestions`,

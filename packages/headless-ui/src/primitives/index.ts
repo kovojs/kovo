@@ -178,6 +178,7 @@ export type {
 } from './checkbox-group.js';
 
 export {
+  comboboxFilteredItems,
   comboboxInput,
   comboboxInputAttributes,
   comboboxKeyDown,

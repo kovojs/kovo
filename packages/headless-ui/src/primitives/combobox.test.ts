@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   comboboxInput as exportedComboboxInput,
+  comboboxFilteredItems as exportedComboboxFilteredItems,
   comboboxInputAttributes as exportedComboboxInputAttributes,
   comboboxKeyDown as exportedComboboxKeyDown,
   comboboxListboxAttributes as exportedComboboxListboxAttributes,
@@ -20,6 +21,7 @@ import {
 } from '../index.js';
 import {
   comboboxInput,
+  comboboxFilteredItems,
   comboboxInputAttributes,
   comboboxKeyDown,
   comboboxListboxAttributes,
@@ -40,9 +42,9 @@ import {
 import { comboboxRootAttributes as primitiveComboboxRootAttributes } from './index.js';
 
 const cityItems: readonly ComboboxItem[] = Object.freeze([
-  { label: 'Austin', value: 'austin' },
-  { disabled: true, label: 'Boston', value: 'boston' },
-  { textValue: 'Chicago city', value: 'chicago' },
+  { id: 'city-list-option-0', label: 'Austin', value: 'austin' },
+  { disabled: true, id: 'city-list-option-1', label: 'Boston', value: 'boston' },
+  { id: 'city-list-option-2', textValue: 'Chicago city', value: 'chicago' },
 ]);
 
 describe('headless-ui combobox primitive', () => {
@@ -173,6 +175,16 @@ describe('headless-ui combobox primitive', () => {
     expect(comboboxValueText({ value: 'custom' })).toBe('custom');
     expect(comboboxValueText({ placeholder: 'Choose city', value: '' })).toBe('Choose city');
     expect(comboboxValueText({ placeholder: 'Choose city' })).toBe('Choose city');
+  });
+
+  it('filters options by label, text value, and raw value', () => {
+    expect(comboboxFilteredItems({ items: cityItems, value: '' })).toBe(cityItems);
+    expect(comboboxFilteredItems({ items: cityItems, value: 'chi' })).toEqual([
+      { id: 'city-list-option-2', textValue: 'Chicago city', value: 'chicago' },
+    ]);
+    expect(comboboxFilteredItems({ items: cityItems, value: 'bos' })).toEqual([
+      { disabled: true, id: 'city-list-option-1', label: 'Boston', value: 'boston' },
+    ]);
   });
 
   it('dispatches cancelable value and open-state changes before committing state', () => {
@@ -348,6 +360,14 @@ describe('headless-ui combobox primitive', () => {
     expect(inputResult).toMatchObject({ changed: true, value: 'chicago' });
     expect(reasons).toEqual(['input']);
 
+    const delegatedInputEvent = comboboxInputEvent('target city', 'current target city');
+    const delegatedInputResult = comboboxInput(delegatedInputEvent, { value: 'austin' });
+    expect(delegatedInputResult).toMatchObject({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'input', value: 'target city' }),
+      value: 'target city',
+    });
+
     const disabledEvent = comboboxInputEvent('chicago');
     const disabledResult = comboboxInput(disabledEvent, { disabled: true, value: 'austin' });
     expect(disabledResult).toEqual({ changed: false, value: 'austin' });
@@ -490,6 +510,7 @@ describe('headless-ui combobox primitive', () => {
 
   it('is exported through the package root and primitives barrel', () => {
     expect(exportedComboboxRootAttributes).toBe(comboboxRootAttributes);
+    expect(exportedComboboxFilteredItems).toBe(comboboxFilteredItems);
     expect(exportedComboboxInputAttributes).toBe(comboboxInputAttributes);
     expect(exportedComboboxListboxAttributes).toBe(comboboxListboxAttributes);
     expect(exportedComboboxMove).toBe(comboboxMove);
@@ -509,13 +530,22 @@ describe('headless-ui combobox primitive', () => {
   });
 });
 
-function comboboxInputEvent(value: string): Event & {
+function comboboxInputEvent(
+  value: string,
+  currentTargetValue?: string,
+): Event & {
   readonly currentTarget: EventTarget & { value?: string };
+  readonly target: EventTarget & { value?: string };
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: EventTarget & { value?: string };
+    target: EventTarget & { value?: string };
   };
-  Object.defineProperty(event, 'currentTarget', { value: { value } });
+  const target = { value };
+  Object.defineProperty(event, 'currentTarget', {
+    value: currentTargetValue === undefined ? target : { value: currentTargetValue },
+  });
+  Object.defineProperty(event, 'target', { value: target });
   return event;
 }
 

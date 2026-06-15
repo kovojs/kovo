@@ -130,6 +130,7 @@ export {
   checkboxGroupRovingIndex,
   checkboxRootAttributes,
   checkboxTriggerClick,
+  comboboxFilteredItems,
   comboboxInput,
   comboboxInputAttributes,
   comboboxKeyDown,

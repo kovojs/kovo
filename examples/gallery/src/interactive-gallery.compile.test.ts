@@ -13,6 +13,7 @@ describe('compiled interactive gallery demos', () => {
     const checkboxGroup = readGenerated('checkbox-group-demo.tsx');
     const collapsible = readGenerated('collapsible-demo.tsx');
     const combobox = readGenerated('combobox-demo.tsx');
+    const comboboxClient = readGenerated('combobox-demo.client.js');
     const command = readGenerated('command-demo.tsx');
     const commandClient = readGenerated('command-demo.client.js');
     const contextMenu = readGenerated('context-menu-demo.tsx');
@@ -140,12 +141,15 @@ describe('compiled interactive gallery demos', () => {
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');
     expect(combobox).toContain(
-      'fw-state=\'{"highlightedValue":"austin","open":false,"value":"austin"}\'',
+      'fw-state=\'{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}\'',
     );
     expect(combobox).toContain('comboboxInputAttributes({');
     expect(combobox).toContain('id="gallery-combobox-form" data-gallery-form="combobox"');
     expect(combobox).toContain("form: 'gallery-combobox-form'");
     expect(combobox).toContain('comboboxListboxAttributes({');
+    expect(combobox).toContain('data-bind:aria-expanded=');
+    expect(combobox).toContain('data-bind:aria-activedescendant=');
+    expect(combobox).toContain('data-bind:hidden=');
     expect(combobox).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$input_input"/,
     );
@@ -154,6 +158,12 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(combobox).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$button_click"/,
+    );
+    expect(comboboxClient).toContain('comboboxInput as _comboboxInput');
+    expect(comboboxClient).toContain('comboboxKeyDown as _comboboxKeyDown');
+    expect(comboboxClient).toContain('comboboxOptionClick as _comboboxOptionClick');
+    expect(comboboxClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis|ctx\.params)\b/,
     );
 
     expect(command).toContain('data-gallery-interactive="command"');

@@ -185,25 +185,45 @@ describe('compiled interactive gallery demos', () => {
       value: 'billing',
     });
 
-    const comboboxState = { highlightedValue: 'austin', open: false, value: 'austin' };
-    clientHandler(combobox, 'GalleryComboboxDemo$input_input')(new Event('input'), {
+    const comboboxState = {
+      highlightedValue: 'austin',
+      inputValue: 'austin',
+      open: false,
+      value: 'austin',
+    };
+    clientHandler(combobox, 'GalleryComboboxDemo$input_input')(inputEvent('chi'), {
       params: {},
       signal,
       state: comboboxState,
     });
-    expect(comboboxState).toEqual({ highlightedValue: 'chicago', open: true, value: 'chicago' });
+    expect(comboboxState).toEqual({
+      highlightedValue: 'chicago',
+      inputValue: 'chi',
+      open: true,
+      value: 'austin',
+    });
     clientHandler(combobox, 'GalleryComboboxDemo$input_keydown')(keyEvent('Enter'), {
       params: {},
       signal,
       state: comboboxState,
     });
-    expect(comboboxState).toEqual({ highlightedValue: 'chicago', open: false, value: 'chicago' });
+    expect(comboboxState).toEqual({
+      highlightedValue: 'chicago',
+      inputValue: 'chicago',
+      open: false,
+      value: 'chicago',
+    });
     clientHandler(combobox, 'GalleryComboboxDemo$button_click')(new Event('click'), {
       params: { value: 'austin' },
       signal,
       state: comboboxState,
     });
-    expect(comboboxState).toEqual({ highlightedValue: 'austin', open: false, value: 'austin' });
+    expect(comboboxState).toEqual({
+      highlightedValue: 'austin',
+      inputValue: 'austin',
+      open: false,
+      value: 'austin',
+    });
 
     const commandState = {
       highlightedValue: 'dashboard',

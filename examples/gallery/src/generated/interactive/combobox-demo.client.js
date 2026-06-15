@@ -1,115 +1,234 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
-export const GalleryComboboxDemo$input_input = handler((_event, ctx) => {
+import {
+  comboboxFilteredItems as _comboboxFilteredItems,
+  comboboxInput as _comboboxInput,
+  comboboxKeyDown as _comboboxKeyDown,
+  comboboxOptionClick as _comboboxOptionClick,
+} from '@jiso/headless-ui/primitives';
+
+export const GalleryComboboxDemo$input_input = handler((event, ctx) => {
+  const result = _comboboxInput(Object(event), { value: ctx.state.inputValue });
+  if (!result) return;
+  ctx.state.inputValue = result.value ?? '';
   ctx.state.open = true;
-  ctx.state.highlightedValue = 'chicago';
-  ctx.state.value = 'chicago';
-  const doc = Reflect['get'](globalThis, 'document');
-  const input = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-input')
-    : undefined;
-  const listbox = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox')
-    : undefined;
-  const austin = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox-option-0')
-    : undefined;
-  const chicago = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox-option-2')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="combobox-value"]')
-    : undefined;
-
-  if (input) {
-    input['value'] = 'chicago';
-    Object(input)['setAttribute']?.call(input, 'aria-expanded', 'true');
-    Object(input)['setAttribute']?.call(
-      input,
-      'aria-activedescendant',
-      'gallery-combobox-listbox-option-2',
-    );
-  }
-  if (listbox) {
-    listbox['hidden'] = false;
-    Object(listbox)['removeAttribute']?.call(listbox, 'hidden');
-  }
-  if (austin) Object(austin)['setAttribute']?.call(austin, 'aria-selected', 'false');
-  if (chicago) {
-    Object(chicago)['setAttribute']?.call(chicago, 'aria-selected', 'true');
-    Object(chicago)['setAttribute']?.call(chicago, 'data-highlighted', '');
-  }
-  if (output) output['textContent'] = 'Chicago city';
+  const filteredItems = _comboboxFilteredItems({
+    items: [
+      {
+        id: 'gallery-combobox-listbox-option-0',
+        label: 'Austin',
+        value: 'austin',
+      },
+      {
+        disabled: true,
+        id: 'gallery-combobox-listbox-option-1',
+        label: 'Boston',
+        value: 'boston',
+      },
+      {
+        id: 'gallery-combobox-listbox-option-2',
+        textValue: 'Chicago city',
+        value: 'chicago',
+      },
+    ],
+    value: ctx.state.inputValue,
+  });
+  ctx.state.highlightedValue =
+    filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
 });
 export const GalleryComboboxDemo$input_keydown = handler((event, ctx) => {
-  const delegatedEvent = event;
-  const eventKey = delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'key');
-  const doc = Reflect['get'](globalThis, 'document');
-  const input = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-input')
-    : undefined;
-  const listbox = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="combobox-value"]')
-    : undefined;
+  const result = _comboboxKeyDown(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: _comboboxFilteredItems({
+      items: [
+        {
+          id: 'gallery-combobox-listbox-option-0',
+          label: 'Austin',
+          value: 'austin',
+        },
+        {
+          disabled: true,
+          id: 'gallery-combobox-listbox-option-1',
+          label: 'Boston',
+          value: 'boston',
+        },
+        {
+          id: 'gallery-combobox-listbox-option-2',
+          textValue: 'Chicago city',
+          value: 'chicago',
+        },
+      ],
+      value: ctx.state.inputValue,
+    }),
+    open: ctx.state.open,
+    value: ctx.state.value,
+  });
+  if (!result) return;
 
-  if (eventKey === 'Enter' && ctx.state.open && ctx.state.highlightedValue === 'chicago') {
-    ctx.state.open = false;
-    ctx.state.value = 'chicago';
-    if (input) {
-      input['value'] = 'chicago';
-      Object(input)['setAttribute']?.call(input, 'aria-expanded', 'false');
+  if ('value' in result) {
+    if (result.value.changed) {
+      ctx.state.open = result.open.open;
+      ctx.state.value = result.value.value ?? ctx.state.value;
+      ctx.state.inputValue = ctx.state.value;
+      ctx.state.highlightedValue = ctx.state.value;
     }
-    if (listbox) listbox['hidden'] = true;
-    if (output) output['textContent'] = 'Chicago city';
+  } else if ('highlightedValue' in result) {
+    ctx.state.highlightedValue = result.highlightedValue ?? '';
   } else {
-    ctx.state.open = !ctx.state.open;
+    ctx.state.open = result.open;
+    if (Object(event)['key'] === 'Escape') {
+      ctx.state.inputValue = ctx.state.value;
+      ctx.state.highlightedValue = ctx.state.value;
+    }
   }
 });
-export const GalleryComboboxDemo$button_click = handler((_event, ctx) => {
-  ctx.state.open = false;
-  ctx.state.highlightedValue = 'austin';
-  ctx.state.value = 'austin';
-  const doc = Reflect['get'](globalThis, 'document');
-  const input = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-input')
-    : undefined;
-  const listbox = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="combobox-value"]')
-    : undefined;
+export const GalleryComboboxDemo$button_click = handler((event, ctx) => {
+  const result = _comboboxOptionClick(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: [
+      {
+        id: 'gallery-combobox-listbox-option-0',
+        label: 'Austin',
+        value: 'austin',
+      },
+      {
+        disabled: true,
+        id: 'gallery-combobox-listbox-option-1',
+        label: 'Boston',
+        value: 'boston',
+      },
+      {
+        id: 'gallery-combobox-listbox-option-2',
+        textValue: 'Chicago city',
+        value: 'chicago',
+      },
+    ],
+    itemValue: 'austin',
+    open: ctx.state.open,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if (result.value.changed) {
+    ctx.state.open = result.open.open;
+    ctx.state.value = result.value.value ?? ctx.state.value;
+    ctx.state.inputValue = ctx.state.value;
+    ctx.state.highlightedValue = ctx.state.value;
+  }
+});
+export const GalleryComboboxDemo$button_click_2 = handler((event, ctx) => {
+  const result = _comboboxOptionClick(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: [
+      {
+        id: 'gallery-combobox-listbox-option-0',
+        label: 'Austin',
+        value: 'austin',
+      },
+      {
+        disabled: true,
+        id: 'gallery-combobox-listbox-option-1',
+        label: 'Boston',
+        value: 'boston',
+      },
+      {
+        id: 'gallery-combobox-listbox-option-2',
+        textValue: 'Chicago city',
+        value: 'chicago',
+      },
+    ],
+    itemValue: 'chicago',
+    open: ctx.state.open,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if (result.value.changed) {
+    ctx.state.open = result.open.open;
+    ctx.state.value = result.value.value ?? ctx.state.value;
+    ctx.state.inputValue = ctx.state.value;
+    ctx.state.highlightedValue = ctx.state.value;
+  }
+});
 
-  if (input) {
-    input['value'] = 'austin';
-    Object(input)['setAttribute']?.call(input, 'aria-expanded', 'false');
-  }
-  if (listbox) listbox['hidden'] = true;
-  if (output) output['textContent'] = 'Austin';
-});
-export const GalleryComboboxDemo$button_click_2 = handler((_event, ctx) => {
-  ctx.state.open = false;
-  ctx.state.highlightedValue = 'chicago';
-  ctx.state.value = 'chicago';
-  const doc = Reflect['get'](globalThis, 'document');
-  const input = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-input')
-    : undefined;
-  const listbox = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="combobox-value"]')
-    : undefined;
-
-  if (input) {
-    input['value'] = 'chicago';
-    Object(input)['setAttribute']?.call(input, 'aria-expanded', 'false');
-  }
-  if (listbox) listbox['hidden'] = true;
-  if (output) output['textContent'] = 'Chicago city';
-});
+export const GalleryComboboxDemo$section_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryComboboxDemo$input_aria_activedescendant_derive = derive(['state'], (state) =>
+  state.highlightedValue === 'chicago'
+    ? 'gallery-combobox-listbox-option-2'
+    : state.highlightedValue === 'boston'
+      ? 'gallery-combobox-listbox-option-1'
+      : state.highlightedValue === 'austin'
+        ? 'gallery-combobox-listbox-option-0'
+        : null,
+);
+export const GalleryComboboxDemo$input_aria_expanded_derive = derive(['state'], (state) =>
+  state.open ? 'true' : 'false',
+);
+export const GalleryComboboxDemo$input_data_placeholder_derive = derive(['state'], (state) =>
+  state.inputValue === '' ? '' : null,
+);
+export const GalleryComboboxDemo$input_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryComboboxDemo$input_value_derive = derive(
+  ['state'],
+  (state) => state.inputValue,
+);
+export const GalleryComboboxDemo$div_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryComboboxDemo$div_hidden_derive = derive(['state'], (state) =>
+  !state.open ? '' : null,
+);
+export const GalleryComboboxDemo$button_aria_selected_derive = derive(['state'], (state) =>
+  state.value === 'austin' ? 'true' : 'false',
+);
+export const GalleryComboboxDemo$button_data_highlighted_derive = derive(['state'], (state) =>
+  state.highlightedValue === 'austin' ? '' : null,
+);
+export const GalleryComboboxDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.value === 'austin' ? 'checked' : 'unchecked',
+);
+export const GalleryComboboxDemo$button_hidden_derive = derive(['state'], (state) =>
+  state.inputValue !== '' && !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
+    ? ''
+    : null,
+);
+export const GalleryComboboxDemo$button_tabIndex_derive = derive(['state'], (state) =>
+  state.highlightedValue === 'austin' ? 0 : -1,
+);
+export const GalleryComboboxDemo$button_aria_selected_derive_2 = derive(['state'], (state) =>
+  state.value === 'boston' ? 'true' : 'false',
+);
+export const GalleryComboboxDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
+  state.highlightedValue === 'boston' ? '' : null,
+);
+export const GalleryComboboxDemo$button_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'boston' ? 'checked' : 'unchecked',
+);
+export const GalleryComboboxDemo$button_hidden_derive_2 = derive(['state'], (state) =>
+  state.inputValue !== '' && !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
+    ? ''
+    : null,
+);
+export const GalleryComboboxDemo$button_aria_selected_derive_3 = derive(['state'], (state) =>
+  state.value === 'chicago' ? 'true' : 'false',
+);
+export const GalleryComboboxDemo$button_data_highlighted_derive_3 = derive(['state'], (state) =>
+  state.highlightedValue === 'chicago' ? '' : null,
+);
+export const GalleryComboboxDemo$button_data_state_derive_3 = derive(['state'], (state) =>
+  state.value === 'chicago' ? 'checked' : 'unchecked',
+);
+export const GalleryComboboxDemo$button_hidden_derive_3 = derive(['state'], (state) =>
+  state.inputValue !== '' && !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
+    ? ''
+    : null,
+);
+export const GalleryComboboxDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
+  state.highlightedValue === 'chicago' ? 0 : -1,
+);
+export const GalleryComboboxDemo$output_text_derive = derive(['state'], (state) =>
+  state.value === 'chicago' ? 'Chicago city' : 'Austin',
+);
