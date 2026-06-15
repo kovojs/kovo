@@ -16,6 +16,7 @@ export const GalleryDisclosureDemo$div_hidden_derive = derive(['state'], (state:
 );
 
 import { component } from '@jiso/core';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/disclosure.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -45,11 +46,11 @@ export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
       <button
         aria-controls="gallery-interactive-disclosure-panel"
         aria-expanded={String(state.open)}
-        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=497fc189#GalleryDisclosureDemo$button_aria_expanded_derive"
+        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$button_aria_expanded_derive"
         class={TRIGGER_CLASS}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=497fc189#GalleryDisclosureDemo$button_data_state_derive"
-        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=497fc189#GalleryDisclosureDemo$button_click"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$button_click"
         type="button"
       >
         Shipping rules
@@ -57,9 +58,9 @@ export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
       <div
         class={CONTENT_CLASS}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=497fc189#GalleryDisclosureDemo$div_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$div_data_state_derive"
         hidden={!state.open}
-        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=497fc189#GalleryDisclosureDemo$div_hidden_derive"
+        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=a22e4c3e#GalleryDisclosureDemo$div_hidden_derive"
         id="gallery-interactive-disclosure-panel"
       >
         Orders over $50 ship free.

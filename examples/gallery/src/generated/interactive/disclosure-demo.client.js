@@ -1,8 +1,12 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryDisclosureDemo$button_click = handler((_event, ctx) => {
-  ctx.state.open = !ctx.state.open;
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@jiso/headless-ui/primitives';
+
+export const GalleryDisclosureDemo$button_click = handler((event, ctx) => {
+  const result = _disclosureTriggerClick(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 
 export const GalleryDisclosureDemo$button_aria_expanded_derive = derive(['state'], (state) =>

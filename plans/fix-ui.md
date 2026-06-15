@@ -334,9 +334,22 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Expandables
 
-- [ ] **disclosure** [P0]: Phase 1 now updates trigger `aria-expanded`/`data-state` and panel
+- [x] **disclosure** [P0]: Phase 1 now updates trigger `aria-expanded`/`data-state` and panel
       `hidden`/`data-state` from declarative state bindings in the no-shim export. Remaining parity
       work: route through the modeled disclosure primitive and add keyboard/focus contract coverage.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/disclosure-demo.tsx` now calls
+    `_disclosureTriggerClick`, mutates only `state.open`, and keeps trigger `aria-expanded`/
+    `data-state` plus panel `hidden`/`data-state` as state-bound TSX attributes.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/disclosure-demo.client.js` imports the primitive
+    reducer helper, mutates only `ctx.state`, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated disclosure files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t disclosure`, and
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **tabs** [P1]: `onKeyDown` is a stub that **never reads `event.key`** (any key flips
       overview→details); no ArrowRight/Left roving, no Home/End, no manual Enter/Space activation, no
       disabled-skip. Replace with `tabsKeyDown` + `tabsMoveFocus`; re-stamp roving `tabIndex`,

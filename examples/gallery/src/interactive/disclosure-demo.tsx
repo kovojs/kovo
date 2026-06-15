@@ -1,5 +1,6 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/disclosure.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -27,7 +28,9 @@ export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
         class={TRIGGER_CLASS}
         data-state={state.open ? 'open' : 'closed'}
         onClick={() => {
-          state.open = !state.open;
+          const result = _disclosureTriggerClick(Object(event), { open: state.open });
+          if (!result) return;
+          state.open = result.open;
         }}
         type="button"
       >

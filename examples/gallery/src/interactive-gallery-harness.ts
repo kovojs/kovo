@@ -100,6 +100,7 @@ export function evaluateClientModule(
     handler: (fn: ClientExports[string]) => fn,
     ...headlessPrimitives,
     _checkboxTriggerClick: headlessPrimitives.checkboxTriggerClick,
+    _disclosureTriggerClick: headlessPrimitives.disclosureTriggerClick,
     _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
     _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
     _switchTriggerClick: headlessPrimitives.switchTriggerClick,
