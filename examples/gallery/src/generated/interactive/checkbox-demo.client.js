@@ -18,6 +18,10 @@ export const GalleryCheckboxDemo$input_checked_derive = derive(['state'], (state
 export const GalleryCheckboxDemo$input_data_state_derive = derive(['state'], (state) =>
   state.checked === 'indeterminate' ? 'indeterminate' : state.checked ? 'checked' : 'unchecked',
 );
+export const GalleryCheckboxDemo$input_indeterminate_derive = derive(
+  ['state'],
+  (state) => state.checked === 'indeterminate',
+);
 export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state) =>
   String(state.checked),
 );

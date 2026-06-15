@@ -8,6 +8,7 @@ import type {
 export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
   checked?: boolean;
+  indeterminate?: boolean;
   textContent?: string | null;
   value?: string;
 }
@@ -365,10 +366,13 @@ function removeBoundAttribute(element: QueryBindingElement, name: string): void 
   if (name === 'checked' && element.checked !== undefined) {
     element.checked = false;
   }
+  if (name === 'indeterminate' && element.indeterminate !== undefined) {
+    element.indeterminate = false;
+  }
 }
 
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
-  if (name === 'checked' && value === false) {
+  if ((name === 'checked' || name === 'indeterminate') && value === false) {
     removeBoundAttribute(element, name);
     return;
   }
@@ -376,6 +380,9 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   element.setAttribute?.(name, formatBoundValue(value));
   if (name === 'checked' && element.checked !== undefined) {
     element.checked = true;
+  }
+  if (name === 'indeterminate' && element.indeterminate !== undefined) {
+    element.indeterminate = true;
   }
 }
 

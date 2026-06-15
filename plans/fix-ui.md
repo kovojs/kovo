@@ -297,15 +297,31 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     output text as state-bound TSX.
   - Evidence 2026-06-15: the focused gallery client/compile test, browser interaction test for
     `toggle stamped`, and gallery typecheck commands listed under `switch` passed.
-- [ ] **checkbox** [P1]: Phase 1 now updates `aria-checked`, `data-state`, native `checked`, and
-      `<output>` from the indeterminate initial state on click. Remaining parity work:
-      `checkboxTriggerClick`/`applyCheckboxIndeterminate` and fuller checkbox model coverage.
-  - Progress 2026-06-15: `examples/gallery/src/interactive/checkbox-demo.tsx` now calls
-    `_checkboxTriggerClick`, mutates only `state.checked`, and keeps `aria-checked`, native `checked`,
-    `data-state`, and output text as state-bound TSX. The focused gallery client/compile test and
-    browser interaction test for `checkbox stamped` passed. Leave open until
-    `applyCheckboxIndeterminate` is integrated into the demo/runtime path instead of being applied
-    manually by the browser test.
+- [x] **checkbox** [P1]: Phase 1 now updates `aria-checked`, `data-state`, native `checked`,
+      native `indeterminate`, and `<output>` from the indeterminate initial state on click.
+      Remaining parity work: fuller checkbox model coverage.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/checkbox-demo.tsx` now calls
+    `_checkboxTriggerClick`, mutates only `state.checked`, and keeps `aria-checked`, native
+    `checked`, native `indeterminate`, `data-state`, and output text as state-bound TSX.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts`,
+    `packages/runtime/src/loader.ts`, and `packages/runtime/src/inline-loader-build.ts` now reflect
+    `data-bind:indeterminate` to the live checkbox property and initialize SSR-native mixed
+    checkboxes during modular and inline loader install.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts
+    src/loader.test.ts src/inline-loader-delegated.test.ts src/handlers.test.ts`,
+    `pnpm --filter @jiso/runtime check:inline-loader`, `pnpm --filter @jiso/runtime exec tsc
+    --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox stamped"`,
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter
+    @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check` passed.
+  - Evidence 2026-06-15: `rg
+    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"
+    examples/gallery/src/interactive/checkbox-demo.tsx
+    examples/gallery/src/generated/interactive/checkbox-demo.tsx
+    examples/gallery/src/generated/interactive/checkbox-demo.client.js` found no imperative
+    DOM escape-hatch usage in the checkbox authored/generated path.
 - [x] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
       every key (Tab/typing flip it) and never wraps/skips disabled; per-item `onClick` is hardcoded
       one-directional and native `checked` desyncs from stamped `aria-checked`. Wire `radioGroupKeyDown` + `radioGroupItemClick`; maintain roving `tabindex` via `radioGroupItemTabIndex`.

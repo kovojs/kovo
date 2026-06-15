@@ -93,10 +93,13 @@ function installInlineJisoLoader(importModule) {
       (attribute) => attribute.name.startsWith('data-bind:') && attribute.value,
     );
   const writeAttr = (element, name, value) => {
-    if (name === 'checked' && value === false) value = null;
+    if ((name === 'checked' || name === 'indeterminate') && value === false) value = null;
     if (value == null) element.removeAttribute?.(name);
     else element.setAttribute?.(name, formatBoundValue(value));
     if (name === 'checked' && element.checked !== undefined) element.checked = value != null;
+    if (name === 'indeterminate' && element.indeterminate !== undefined) {
+      element.indeterminate = value != null;
+    }
   };
   const writeStateBinding = (element, path, boundAttribute, state) => {
     if (!path?.startsWith('state.')) return;
@@ -179,6 +182,12 @@ function installInlineJisoLoader(importModule) {
     doc.querySelector('[fw-c="' + target + '"]') ??
     doc.getElementById(target) ??
     doc.querySelector('[fw-fragment-target="' + target + '"]');
+  for (const element of queryAll(
+    doc,
+    'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
+  )) {
+    if (element.indeterminate !== undefined) element.indeterminate = true;
+  }
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
   const dispatchQueryEvent = (type, init) => {

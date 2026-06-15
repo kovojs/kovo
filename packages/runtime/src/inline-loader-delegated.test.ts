@@ -160,6 +160,83 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'keeps inline indeterminate checkbox properties in parity through %s',
+    async (_name, installSource) => {
+      const host = new FakeStatefulBindingElement({
+        'fw-state': '{"checked":"indeterminate"}',
+        'on:click': '/c/checkbox.js#toggle',
+      });
+      const input = new FakeStatefulBindingElement(
+        {
+          'aria-checked': 'mixed',
+          'data-bind:indeterminate': '/c/checkbox.js#isIndeterminate',
+          'data-state': 'indeterminate',
+          type: 'checkbox',
+        },
+        { indeterminate: false, parent: host },
+      );
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        importModule: globalRecord.__jisoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => Promise<void>>();
+      const importModule = vi.fn(async () => ({
+        isIndeterminate: {
+          run(value: unknown) {
+            return (value as { checked: boolean | 'indeterminate' }).checked === 'indeterminate'
+              ? ''
+              : null;
+          },
+        },
+        toggle(_event: unknown, ctx: { state: { checked: boolean | 'indeterminate' } }) {
+          ctx.state.checked = true;
+        },
+      }));
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelectorAll(selector: string) {
+            return selector ===
+              'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]'
+              ? [input]
+              : [];
+          },
+        };
+
+        installSource(importModule, globalRecord);
+        expect(input.indeterminate).toBe(true);
+
+        await listeners.get('click')?.({
+          target: host,
+          type: 'click',
+        });
+
+        expect(host.getAttribute('fw-state')).toBe('{"checked":true}');
+        expect(input.getAttribute('indeterminate')).toBeNull();
+        expect(input.indeterminate).toBe(false);
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__jisoInlineImport;
+        } else {
+          globalRecord.__jisoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'keeps inline delegated error messages in parity through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: handler resolution failures are part of the shipped loader contract.

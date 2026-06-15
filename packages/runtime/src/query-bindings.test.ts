@@ -347,6 +347,35 @@ describe('query binding helpers', () => {
     expect(input.checked).toBe(false);
   });
 
+  it('reflects state-derived indeterminate bindings to the live input property', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"checked":"indeterminate"}' });
+    const input = new FakeStatefulBindingElement(
+      {
+        'data-bind:indeterminate': '/c/checkbox.client.js#Checkbox$input_indeterminate_derive',
+      },
+      { indeterminate: false, parent: host },
+    );
+    const importModule = async () => ({
+      Checkbox$input_indeterminate_derive: {
+        run(value: unknown) {
+          return (value as { checked: boolean | 'indeterminate' }).checked === 'indeterminate'
+            ? ''
+            : null;
+        },
+      },
+    });
+
+    await expect(
+      applyStateBindings(host, { checked: 'indeterminate' }, { importModule }),
+    ).resolves.toEqual(['/c/checkbox.client.js#Checkbox$input_indeterminate_derive']);
+    expect(input.getAttribute('indeterminate')).toBe('');
+    expect(input.indeterminate).toBe(true);
+
+    await applyStateBindings(host, { checked: true }, { importModule });
+    expect(input.getAttribute('indeterminate')).toBeNull();
+    expect(input.indeterminate).toBe(false);
+  });
+
   it('lazy-imports state derive text bindings', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":""}' });
     const output = new FakeStatefulBindingElement(

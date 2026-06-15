@@ -30,4 +30,27 @@ describe('runtime loader module', () => {
     loader.dispose();
     expect(root.listeners.has('click')).toBe(false);
   });
+
+  it('hydrates SSR-native indeterminate checkbox state during loader install', () => {
+    const root = new FakeRoot();
+    const input = Object.assign(
+      new FakeElement({
+        'aria-checked': 'mixed',
+        'data-state': 'indeterminate',
+        type: 'checkbox',
+      }),
+      { indeterminate: false },
+    );
+    root.elements.set(
+      'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
+      [input],
+    );
+
+    installJisoLoader({
+      importModule: vi.fn(async () => ({})),
+      root,
+    });
+
+    expect(input.indeterminate).toBe(true);
+  });
 });

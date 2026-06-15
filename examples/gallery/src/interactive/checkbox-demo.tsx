@@ -35,6 +35,7 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
               ? 'checked'
               : 'unchecked'
         }
+        indeterminate={state.checked === 'indeterminate'}
         name="gallery-email-summary"
         onClick={() => {
           const result = _checkboxTriggerClick(Object(event), { checked: state.checked });

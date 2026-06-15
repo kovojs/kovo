@@ -1,4 +1,3 @@
-import { applyCheckboxIndeterminate } from '@jiso/headless-ui/primitives';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
@@ -496,7 +495,6 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     expect(root.getAttribute('fw-state')).toBe('{"checked":"indeterminate"}');
     expect(input.getAttribute('aria-checked')).toBe('mixed');
-    applyCheckboxIndeterminate(input, 'indeterminate');
     expect(input.indeterminate).toBe(true);
     expect(output.textContent).toBe('indeterminate');
 

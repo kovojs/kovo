@@ -97,6 +97,8 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
 
+  initializeNativeIndeterminateCheckboxes(options.root);
+
   disposers.push(
     installDelegatedEventLifecycle({
       ...definedProps({
@@ -152,4 +154,16 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     },
     events,
   };
+}
+
+function initializeNativeIndeterminateCheckboxes(root: LoaderRoot): void {
+  if (!root.querySelectorAll) return;
+
+  for (const element of root.querySelectorAll(
+    'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
+  ) as Iterable<{ indeterminate?: boolean }>) {
+    if (element.indeterminate !== undefined) {
+      element.indeterminate = true;
+    }
+  }
 }
