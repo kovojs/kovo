@@ -32,12 +32,15 @@ Self-contained, no cross-deps; do first.
 
 The keyed morph and template-stamp reconciler exist but no production seam constructs them. Highest leverage: Phase 2a is mostly wiring of code that already passes isolated tests.
 
-- [ ] **Wire the idiomorph-class morph into all three production fragment-apply seams** — `packages/runtime/src/inline-loader.ts` (`replaceHtmlResponseFragment` = `innerHTML`), `packages/runtime/src/response-fragment-apply.ts:62`, `packages/create-jiso/templates/src/client.ts:75` (overrides `replaceWithHtml` with `innerHTML`) (SPEC §9.1, §4.4). Route all three through `morph.ts` (`DomMorphRoot` / `keyedDomMorph`): capture activeElement focus/selection/scroll, keyed child reconcile by `fw-key`, restore. The inline-loader port must stay within the §4.4 4KB budget. Fix the bad `applyDeferredStreamResponseToDom` import in the starter template (real export is `applyDeferredStreamResponseToRuntime`).
-  - Done = an integration test drives a fragment apply through the _actually-installed_ loader (not a hand-built `DomMorphRoot`) and asserts focus + text selection survive; `innerHTML` no longer appears on any production fragment-replace path.
+- [ ] **Finish production fragment morph wiring for the inline/raw-DOM apply seam** — `packages/runtime/src/response-fragment-apply.ts` still exposes the generated inline loader's raw DOM replacement path, and the checked-in `packages/runtime/src/inline-loader.ts` currently embeds that helper with `element.innerHTML = html` (SPEC §9.1, §4.4). The modular runtime and starter template already construct `DomMorphTarget`; finish the remaining raw DOM seam with an inline-budget-safe bridge to the same morph semantics: preserve activeElement focus/selection/scroll, reconcile keyed children by `fw-key`, and keep the generated bootstrap within the §4.4 4KB gzip budget.
+  - Done = an integration test drives a fragment apply through the _actually-installed_ inline loader (not a hand-built `DomMorphRoot`) and asserts focus + text selection survive; `innerHTML` no longer appears on any production fragment-replace path except non-production tests or explicitly documented fallback-only code.
   - Prove: `pnpm run check:inline-loader && pnpm test morph response-fragment && pnpm run test:browser`
   - Progress 2026-06-15: `packages/create-jiso/templates/src/client.ts` now imports
     `applyDeferredStreamResponseToRuntime` and returns `DomMorphTarget` from the starter browser root,
     removing that template's raw `innerHTML` replacement override.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/runtime run check:inline-loader` passed with the current
+    bootstrap exactly at the SPEC §4.4 4096-byte gzip ceiling, so the remaining inline morph work must
+    either reduce bootstrap size first or add a compact raw-DOM morph path with equivalent budget proof.
   - Gap 2026-06-15: the runtime `response-fragment-apply.ts`/inline-loader replacement seam remains
     open. A direct inline keyed-morph port exceeded the SPEC §4.4 gzip budget, so this checkbox stays
     open until the inline-safe design is compact enough and proven by the full done criteria.
