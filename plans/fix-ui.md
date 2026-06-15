@@ -244,9 +244,25 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       Products→Docs with no ArrowLeft/loop; **Escape is actively wrong** — it sets
       `value='escape-canceled'` and leaves the panel open. Wire `navigationMenuMove`,
       `navigationMenuKeyDown` (Escape closes + restores focus), hover-open via `pointerover`/`focusin`.
-- [ ] **toolbar** [P2]: root `onKeyDown` hardcodes a bold↔link flip ignoring the key (ArrowLeft==Right,
+- [x] **toolbar** [P2]: root `onKeyDown` hardcodes a bold↔link flip ignoring the key (ArrowLeft==Right,
       no Home/End, disabled 'italic' skipped only incidentally). Wire `toolbarKeyDown`/`toolbarMoveFocus`
       (auto-skips disabled). Click-toggle already works (imperative stamps present).
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/toolbar-demo.tsx` now calls
+    `_toolbarKeyDown`, mutates only `state.activeValue`/`state.pressedValue`, and exposes
+    `aria-pressed`, `data-pressed`, roving `tabIndex`, active output, and pressed output as
+    state-bound TSX.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/toolbar-demo.client.js` imports `_toolbarKeyDown`,
+    emits state derives for toolbar button/output attributes, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated toolbar files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t "toolbar"`,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
+    and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 
 ### Typeahead / listbox
 

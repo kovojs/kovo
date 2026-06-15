@@ -316,22 +316,29 @@ describe('compiled interactive gallery demos', () => {
 
       const toolbar = evaluateClientModule('toolbar-demo.client.js', { document });
       const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
-      clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
+      const toolbarKeyboardEvent = keyEvent('ArrowRight');
+      clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(toolbarKeyboardEvent, {
         params: {},
         signal,
         state: toolbarState,
       });
-      expect(element(document, 'gallery-toolbar-bold').tabIndex).toBe(-1);
-      expect(element(document, 'gallery-toolbar-link').tabIndex).toBe(0);
-      expect(element(document, 'gallery-toolbar-link').focusCalls).toBe(1);
-      expect(selector(document, '[data-demo-state="toolbar-active"]').textContent).toBe('link');
+      expect(toolbarKeyboardEvent.defaultPrevented).toBe(true);
+      expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_tabIndex_derive', toolbarState)).toBe(-1);
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_tabIndex_derive_2', toolbarState)).toBe(0);
       clientHandler(toolbar, 'GalleryToolbarDemo$button_click_2')(new Event('click'), {
         params: {},
         signal,
         state: toolbarState,
       });
-      expect(element(document, 'gallery-toolbar-link').attrs['aria-pressed']).toBe('true');
-      expect(selector(document, '[data-demo-state="toolbar-pressed"]').textContent).toBe('link');
+      expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'link' });
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_aria_pressed_derive', toolbarState)).toBe(
+        'false',
+      );
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_aria_pressed_derive_2', toolbarState)).toBe(
+        'true',
+      );
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$output_text_derive', toolbarState)).toBe('link');
 
       const toggleGroup = evaluateClientModule('toggle-group-demo.client.js', { document });
       const toggleGroupState = { activeValue: 'bold', value: 'bold' };

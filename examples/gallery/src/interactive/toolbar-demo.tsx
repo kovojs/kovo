@@ -3,6 +3,7 @@ import { component } from '@jiso/core';
 import {
   toolbarButtonAttributes,
   toolbarItemAttributes,
+  toolbarKeyDown as _toolbarKeyDown,
   toolbarRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -47,23 +48,19 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         class="grid gap-2"
         data-gallery-interactive="toolbar"
         onKeyDown={() => {
-          state.activeValue = state.activeValue === 'bold' ? 'link' : 'bold';
-          const doc = Reflect['get'](globalThis, 'document');
-          const bold = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-bold')
-            : undefined;
-          const link = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-link')
-            : undefined;
-          const output = doc
-            ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-active"]')
-            : undefined;
-
-          if (bold) bold['tabIndex'] = state.activeValue === 'bold' ? 0 : -1;
-          if (link) link['tabIndex'] = state.activeValue === 'link' ? 0 : -1;
-          if (state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
-          if (state.activeValue === 'link' && link) Object(link)['focus']?.call(link);
-          if (output) output['textContent'] = state.activeValue;
+          const result = _toolbarKeyDown(Object(event), {
+            activeValue: state.activeValue,
+            items: [
+              { value: 'bold' },
+              { disabled: true, value: 'italic' },
+              { value: 'link' },
+            ],
+          });
+          if (!result?.value) return;
+          state.activeValue = result.value;
+          const root = Object(event)['target']?.closest?.('[role="toolbar"]');
+          const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+          Object(next)['focus']?.call(next);
         }}
       >
         <div class={TOOLBAR_CLASS}>
@@ -74,53 +71,14 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 id: 'gallery-toolbar-bold',
                 pressed: state.pressedValue === 'bold',
               })}
+              aria-pressed={String(state.pressedValue === 'bold')}
               class={BUTTON_CLASS}
+              data-pressed={String(state.pressedValue === 'bold')}
               onClick={() => {
                 state.activeValue = 'bold';
                 state.pressedValue = state.pressedValue === 'bold' ? '' : 'bold';
-                const doc = Reflect['get'](globalThis, 'document');
-                const bold = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-bold')
-                  : undefined;
-                const link = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-link')
-                  : undefined;
-                const activeOutput = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-active"]')
-                  : undefined;
-                const pressedOutput = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-pressed"]')
-                  : undefined;
-
-                if (bold) {
-                  bold['tabIndex'] = 0;
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'aria-pressed',
-                    state.pressedValue === 'bold' ? 'true' : 'false',
-                  );
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'data-pressed',
-                    state.pressedValue === 'bold' ? 'true' : 'false',
-                  );
-                }
-                if (link) {
-                  link['tabIndex'] = -1;
-                  Object(link)['setAttribute']?.call(
-                    link,
-                    'aria-pressed',
-                    state.pressedValue === 'link' ? 'true' : 'false',
-                  );
-                  Object(link)['setAttribute']?.call(
-                    link,
-                    'data-pressed',
-                    state.pressedValue === 'link' ? 'true' : 'false',
-                  );
-                }
-                if (activeOutput) activeOutput['textContent'] = state.activeValue;
-                if (pressedOutput) pressedOutput['textContent'] = state.pressedValue || 'none';
               }}
+              tabIndex={state.activeValue === 'bold' ? 0 : -1}
             >
               Bold
             </button>
@@ -133,6 +91,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 pressed: false,
               })}
               class={BUTTON_CLASS}
+              tabIndex={-1}
             >
               Italic
             </button>
@@ -144,53 +103,14 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 id: 'gallery-toolbar-link',
                 pressed: state.pressedValue === 'link',
               })}
+              aria-pressed={String(state.pressedValue === 'link')}
               class={BUTTON_CLASS}
+              data-pressed={String(state.pressedValue === 'link')}
               onClick={() => {
                 state.activeValue = 'link';
                 state.pressedValue = state.pressedValue === 'link' ? '' : 'link';
-                const doc = Reflect['get'](globalThis, 'document');
-                const bold = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-bold')
-                  : undefined;
-                const link = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-link')
-                  : undefined;
-                const activeOutput = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-active"]')
-                  : undefined;
-                const pressedOutput = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toolbar-pressed"]')
-                  : undefined;
-
-                if (bold) {
-                  bold['tabIndex'] = -1;
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'aria-pressed',
-                    state.pressedValue === 'bold' ? 'true' : 'false',
-                  );
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'data-pressed',
-                    state.pressedValue === 'bold' ? 'true' : 'false',
-                  );
-                }
-                if (link) {
-                  link['tabIndex'] = 0;
-                  Object(link)['setAttribute']?.call(
-                    link,
-                    'aria-pressed',
-                    state.pressedValue === 'link' ? 'true' : 'false',
-                  );
-                  Object(link)['setAttribute']?.call(
-                    link,
-                    'data-pressed',
-                    state.pressedValue === 'link' ? 'true' : 'false',
-                  );
-                }
-                if (activeOutput) activeOutput['textContent'] = state.activeValue;
-                if (pressedOutput) pressedOutput['textContent'] = state.pressedValue || 'none';
               }}
+              tabIndex={state.activeValue === 'link' ? 0 : -1}
             >
               Link
             </button>

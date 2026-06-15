@@ -668,19 +668,21 @@ describe('compiled interactive gallery demos', () => {
     expect(tabsState).toEqual({ activeValue: 'overview', value: 'overview' });
 
     const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
-    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
+    const toolbarNextEvent = keyEvent('ArrowRight');
+    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(toolbarNextEvent, {
       params: {},
       signal,
       state: toolbarState,
     });
+    expect(toolbarNextEvent.defaultPrevented).toBe(true);
     expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
-    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
+    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(keyEvent('ArrowLeft'), {
       params: {},
       signal,
       state: toolbarState,
     });
     expect(toolbarState).toEqual({ activeValue: 'bold', pressedValue: 'bold' });
-    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
+    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(keyEvent('End'), {
       params: {},
       signal,
       state: toolbarState,

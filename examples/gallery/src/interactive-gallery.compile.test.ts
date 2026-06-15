@@ -430,6 +430,13 @@ describe('compiled interactive gallery demos', () => {
     expect(toolbar).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$button_click_2"/,
     );
+    expect(toolbar).toContain('data-bind:aria-pressed=');
+    expect(toolbar).toContain('data-bind:data-pressed=');
+    expect(toolbar).toContain('data-bind:tabIndex=');
+    expect(toolbar).toContain('data-bind="state.activeValue"');
+    const toolbarClient = readGenerated('toolbar-demo.client.js');
+    expect(toolbarClient).toContain('toolbarKeyDown as _toolbarKeyDown');
+    expect(toolbarClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
 
     expect(tooltip).toContain('data-gallery-interactive="tooltip"');
     expect(tooltip).toContain('fw-state=\'{"open":false}\'');

@@ -111,6 +111,7 @@ export function evaluateClientModule(
     _toggleGroupItemClick: headlessPrimitives.toggleGroupItemClick,
     _toggleGroupKeyDown: headlessPrimitives.toggleGroupKeyDown,
     _toggleTriggerClick: headlessPrimitives.toggleTriggerClick,
+    _toolbarKeyDown: headlessPrimitives.toolbarKeyDown,
     ...globals,
   });
 
