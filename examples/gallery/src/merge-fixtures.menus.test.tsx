@@ -34,7 +34,7 @@ import {
   navigationMenuTriggerAttributes,
   navigationMenuViewportAttributes,
 } from '@jiso/headless-ui/primitives';
-import { mergePrimitiveAttrs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden command merge with combobox IDREFs and option semantics', () => {
@@ -48,7 +48,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       open: true,
       value: 'settings',
     };
-    const input = mergePrimitiveAttrs(
+    const input = mergeCompilerPrimitiveAttrs(
       {
         ...commandInputAttributes({
           ...state,
@@ -68,7 +68,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author query',
       },
     );
-    const listbox = mergePrimitiveAttrs(
+    const listbox = mergeCompilerPrimitiveAttrs(
       {
         ...commandListboxAttributes({
           ...state,
@@ -84,7 +84,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'menu',
       },
     );
-    const item = mergePrimitiveAttrs(
+    const item = mergeCompilerPrimitiveAttrs(
       {
         ...commandItemAttributes({
           ...state,
@@ -165,7 +165,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       ],
       open: true,
     };
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...dropdownMenuTriggerAttributes({
           ...state,
@@ -181,7 +181,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...dropdownMenuContentAttributes({
           ...state,
@@ -196,7 +196,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'listbox',
       },
     );
-    const group = mergePrimitiveAttrs(
+    const group = mergeCompilerPrimitiveAttrs(
       {
         ...dropdownMenuGroupAttributes({
           ...state,
@@ -210,7 +210,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'presentation',
       },
     );
-    const item = mergePrimitiveAttrs(
+    const item = mergeCompilerPrimitiveAttrs(
       {
         ...dropdownMenuItemAttributes({
           ...state,
@@ -228,7 +228,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-profile',
       },
     );
-    const separator = mergePrimitiveAttrs(
+    const separator = mergeCompilerPrimitiveAttrs(
       dropdownMenuSeparatorAttributes({ id: 'gallery-dropdown-separator' }),
       { role: 'none' },
     );
@@ -304,7 +304,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       open: true,
       point: { x: 32, y: 64 },
     };
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...contextMenuTriggerAttributes({
           ...state,
@@ -322,7 +322,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'jiso-context-menu': 'author-context-content',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...contextMenuContentAttributes({
           ...state,
@@ -338,7 +338,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'listbox',
       },
     );
-    const group = mergePrimitiveAttrs(
+    const group = mergeCompilerPrimitiveAttrs(
       {
         ...contextMenuGroupAttributes({
           ...state,
@@ -352,7 +352,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'presentation',
       },
     );
-    const item = mergePrimitiveAttrs(
+    const item = mergeCompilerPrimitiveAttrs(
       {
         ...contextMenuItemAttributes({
           ...state,
@@ -371,7 +371,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-paste',
       },
     );
-    const separator = mergePrimitiveAttrs(
+    const separator = mergeCompilerPrimitiveAttrs(
       contextMenuSeparatorAttributes({ id: 'gallery-context-separator' }),
       { role: 'none' },
     );
@@ -461,7 +461,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       ],
       openValue: 'products',
     };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuRootAttributes({
           ...state,
@@ -478,7 +478,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'menubar',
       },
     );
-    const list = mergePrimitiveAttrs(
+    const list = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuListAttributes({ ...state, id: 'gallery-nav-list' }),
         class: 'navigation-list',
@@ -488,7 +488,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'menu',
       },
     );
-    const item = mergePrimitiveAttrs(
+    const item = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuItemAttributes({
           ...state,
@@ -503,7 +503,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'presentation',
       },
     );
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuTriggerAttributes({
           ...state,
@@ -522,7 +522,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuContentAttributes({
           id: 'gallery-nav-products-panel',
@@ -538,7 +538,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'region',
       },
     );
-    const link = mergePrimitiveAttrs(
+    const link = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuLinkAttributes({
           ...state,
@@ -556,7 +556,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-company',
       },
     );
-    const viewport = mergePrimitiveAttrs(
+    const viewport = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuViewportAttributes({ id: 'gallery-nav-viewport', openValue: 'products' }),
         class: 'navigation-viewport',
@@ -566,7 +566,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         hidden: true,
       },
     );
-    const indicator = mergePrimitiveAttrs(
+    const indicator = mergeCompilerPrimitiveAttrs(
       {
         ...navigationMenuIndicatorAttributes({
           id: 'gallery-nav-indicator',
@@ -674,7 +674,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       openValue: 'file',
       orientation: 'horizontal' as const,
     };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...menubarRootAttributes({
           ...state,
@@ -690,7 +690,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'menu',
       },
     );
-    const item = mergePrimitiveAttrs(
+    const item = mergeCompilerPrimitiveAttrs(
       {
         ...menubarItemAttributes({
           ...state,
@@ -709,7 +709,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-file',
       },
     );
-    const submenu = mergePrimitiveAttrs(
+    const submenu = mergeCompilerPrimitiveAttrs(
       {
         ...menubarSubmenuAttributes({
           ...state,
@@ -725,7 +725,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'listbox',
       },
     );
-    const group = mergePrimitiveAttrs(
+    const group = mergeCompilerPrimitiveAttrs(
       {
         ...menubarGroupAttributes({
           ...state,
@@ -740,7 +740,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'presentation',
       },
     );
-    const separator = mergePrimitiveAttrs(
+    const separator = mergeCompilerPrimitiveAttrs(
       menubarSeparatorAttributes({ id: 'gallery-file-separator' }),
       { role: 'none' },
     );
@@ -823,11 +823,11 @@ describe('gallery G5 primitive merge fixtures', () => {
       open: true,
       value: '',
     };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       { ...commandRootAttributes({ ...state, id: 'gallery-command-root' }), class: 'command-root' },
       { class: 'command-root border', 'data-state': 'author-open' },
     );
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...commandTriggerAttributes({
           ...state,
@@ -843,7 +843,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-    const dialog = mergePrimitiveAttrs(
+    const dialog = mergeCompilerPrimitiveAttrs(
       {
         ...commandDialogAttributes({
           ...state,
@@ -859,7 +859,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-command-dialog',
       },
     );
-    const close = mergePrimitiveAttrs(
+    const close = mergeCompilerPrimitiveAttrs(
       {
         ...commandCloseAttributes({ ...state, contentId: 'gallery-command-dialog' }),
         class: 'command-close',
@@ -870,7 +870,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         disabled: true,
       },
     );
-    const empty = mergePrimitiveAttrs(
+    const empty = mergeCompilerPrimitiveAttrs(
       { ...commandEmptyAttributes({ ...state, id: 'gallery-command-empty' }), class: 'empty' },
       { class: 'empty py-6', hidden: true },
     );

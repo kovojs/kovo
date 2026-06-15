@@ -22,7 +22,7 @@ import {
   scrollAreaViewportAttributes,
   separatorRootAttributes,
 } from '@jiso/headless-ui/primitives';
-import { mergePrimitiveAttrs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden accordion merge with primitive-owned state and authored ARIA overrides', () => {
@@ -31,7 +31,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       type: 'multiple' as const,
       value: ['shipping'],
     };
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...accordionTriggerAttributes({
           ...state,
@@ -49,7 +49,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-accordion-trigger',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...accordionContentAttributes({
           ...state,
@@ -96,7 +96,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden avatar merge with fallback scalar and semantic root overrides', () => {
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...avatarRootAttributes({
           label: 'Ada Lovelace avatar',
@@ -112,7 +112,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'figure',
       },
     );
-    const fallback = mergePrimitiveAttrs(
+    const fallback = mergeCompilerPrimitiveAttrs(
       {
         ...avatarFallbackAttributes({
           delayMs: 250,
@@ -164,7 +164,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden collapsible merge with details and summary attrs', () => {
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...collapsibleRootAttributes({ disabled: true, open: false }),
         class: 'collapsible-root',
@@ -175,7 +175,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         open: true,
       },
     );
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...collapsibleTriggerAttributes({
           contentId: 'gallery-filters-panel',
@@ -190,7 +190,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-state': 'author-open',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...collapsibleContentAttributes({
           contentId: 'gallery-filters-panel',
@@ -240,7 +240,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden meter merge with threshold scalars and author value text', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       {
         ...meterRootAttributes({
           high: 90,
@@ -282,7 +282,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden progress merge with scalar author values and primitive-owned state', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       {
         ...progressRootAttributes({
           max: 100,
@@ -318,7 +318,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden separator merge with orientation and semantic overrides', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       {
         ...separatorRootAttributes({ decorative: false, orientation: 'vertical' }),
         class: 'separator-root',
@@ -348,7 +348,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden scroll-area merge with viewport ARIA overrides and hidden parts', () => {
-    const viewport = mergePrimitiveAttrs(
+    const viewport = mergeCompilerPrimitiveAttrs(
       {
         ...scrollAreaViewportAttributes({
           descriptionId: 'gallery-scroll-description',
@@ -365,7 +365,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         tabIndex: -1,
       },
     );
-    const scrollbar = mergePrimitiveAttrs(
+    const scrollbar = mergeCompilerPrimitiveAttrs(
       {
         ...scrollAreaScrollbarAttributes({
           forceMount: true,
@@ -420,11 +420,11 @@ describe('gallery G5 primitive merge fixtures', () => {
 
   it('renders golden disclosure and avatar image merges for remaining simple attrs records', () => {
     const disclosure = { disabled: true, open: true };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       { ...disclosureRootAttributes(disclosure), class: 'disclosure-root' },
       { class: 'disclosure-root rounded', 'data-state': 'closed' },
     );
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...disclosureTriggerAttributes({
           ...disclosure,
@@ -439,7 +439,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         disabled: false,
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...disclosureContentAttributes({
           ...disclosure,
@@ -453,7 +453,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-disclosure-panel',
       },
     );
-    const image = mergePrimitiveAttrs(
+    const image = mergeCompilerPrimitiveAttrs(
       {
         ...avatarImageAttributes({
           alt: 'Ada Lovelace',
@@ -513,7 +513,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders golden scroll-area merges across root, viewport, scrollbar, thumb, and corner attrs', () => {
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...scrollAreaRootAttributes({
           dir: 'rtl',
@@ -530,7 +530,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-scroll-root',
       },
     );
-    const viewport = mergePrimitiveAttrs(
+    const viewport = mergeCompilerPrimitiveAttrs(
       {
         ...scrollAreaViewportAttributes({
           descriptionId: 'gallery-scroll-description',
@@ -546,7 +546,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'feed',
       },
     );
-    const thumb = mergePrimitiveAttrs(
+    const thumb = mergeCompilerPrimitiveAttrs(
       {
         ...scrollAreaThumbAttributes({
           forceMount: true,
@@ -563,7 +563,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-state': 'hidden',
       },
     );
-    const corner = mergePrimitiveAttrs(
+    const corner = mergeCompilerPrimitiveAttrs(
       {
         ...scrollAreaCornerAttributes({
           forceMount: true,

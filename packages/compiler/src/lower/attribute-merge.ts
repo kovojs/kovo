@@ -34,6 +34,9 @@ const idrefAttributes = new Set([
   'commandfor',
   'for',
   'htmlFor',
+  'jiso-context-menu',
+  'jiso-hover-card',
+  'jiso-tooltip',
   'popovertarget',
 ]);
 
@@ -232,7 +235,7 @@ function authorValue(
 }
 
 function primitiveOwnedDataStateAttribute(name: string): boolean {
-  return name.startsWith('data-') && !name.startsWith('data-bind') && !name.startsWith('data-p-');
+  return name === 'data-state';
 }
 
 function isBindingAttribute(name: string): boolean {

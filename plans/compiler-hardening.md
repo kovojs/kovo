@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (21 / 32 findings closed)
+**Status:** open (22 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -259,8 +259,20 @@ The full merge-rules implementation currently lives only in `examples/gallery/sr
   - Evidence 2026-06-15: `packages/compiler/src/lower/attribute-merge.ts` owns the SPEC §4.6 rule table, and `packages/compiler/src/lower/primitive-spreads.ts` now rewrites `asChild`/attrs-function primitive wrappers to a single merged child opening tag instead of appending primitive attrs.
   - Evidence 2026-06-15: `packages/compiler/src/attribute-merge.test.ts` proves an attrs-function primitive merges class/style, chains `on:click`, preserves author `id`/scalar defaults, lets primitive `data-state` win, ORs boolean attrs, unions `fw-deps`, and emits FW231/FW232/FW233 for primitive-vs-author conflicts.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/attribute-merge.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec vitest run`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm exec vp check` passed.
-- [ ] **Drive FW231/FW232/FW233 from the merged primitive-vs-author result; delete the gallery oracle** — extract the rule table into a shared compiler module feeding both the G5 gallery fixtures and the diagnostics; keep same-element literal-duplicate detection as a separate, clearly-scoped author-error check (stop presenting it as the §4.6 merge). (SPEC §4.6)
+- [x] **Drive FW231/FW232/FW233 from the merged primitive-vs-author result; delete the gallery oracle** — extract the rule table into a shared compiler module feeding both the G5 gallery fixtures and the diagnostics; keep same-element literal-duplicate detection as a separate, clearly-scoped author-error check (stop presenting it as the §4.6 merge). (SPEC §4.6)
   - Done = FW232 fires on a genuine author-over-primitive override (not a duplicate-name shape); `mergePrimitiveAttrs` removed. Prove: `pnpm test attribute-merge && pnpm run test:browser` (gallery G5)
+  - Evidence 2026-06-15: `packages/compiler/src/lower/attribute-merge.ts` is now the shared
+    compiler merge rule table used by both primitive lowering diagnostics and the G5 gallery
+    fixtures; `examples/gallery/src/merge-fixtures-oracle.tsx` no longer contains a duplicate
+    §4.6 merge implementation and the old `mergePrimitiveAttrs` helper is removed.
+  - Evidence 2026-06-15: compiler merge diagnostics now cover package-prefixed behavior IDREF attrs
+    (`jiso-context-menu`, `jiso-hover-card`, `jiso-tooltip`) and keep primitive-owned `data-*`
+    precedence scoped to `data-state`, matching the proven gallery/compiler fixtures.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/attribute-merge.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec
+    tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run`, `pnpm --filter
+    @jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run` passed.
 
 ---
 

@@ -1,4 +1,9 @@
 /** @jsxImportSource @jiso/server */
+import {
+  mergePrimitiveAndAuthorAttributes,
+  type MergeableAttribute,
+  type MergeableAttributeValue,
+} from '@jiso/compiler';
 import * as primitiveExports from '@jiso/headless-ui/primitives';
 
 export { primitiveExports };
@@ -596,128 +601,28 @@ export const tooltipSample = {
   open: true,
 };
 
-export function mergePrimitiveAttrs(
+export function mergeCompilerPrimitiveAttrs(
   primitive: AttributeRecord,
   author: AttributeRecord,
 ): MergeFixtureResult {
-  const attrs: Record<string, AttributeValue> = {};
-  const diagnostics: MergeDiagnostic[] = [];
-  const keys = stableKeys(primitive, author);
+  const order = mergedAttributeOrder(primitive, author);
+  const merge = mergePrimitiveAndAuthorAttributes(
+    attributeRecordEntries(primitive, 'primitive'),
+    attributeRecordEntries(author, 'author'),
+    { fileName: 'examples/gallery/src/merge-fixtures-oracle.tsx', source: '' },
+  );
 
-  // SPEC.md §4.6 is the normative merge table. This gallery-only oracle keeps
-  // G5 deterministic while compiler/runtime merge lowering remains outside this slice.
-  for (const key of keys) {
-    const primitiveValue = primitive[key];
-    const authorValue = author[key];
-    const primitiveSet = primitiveValue !== undefined;
-    const authorSet = authorValue !== undefined;
-
-    if (key === 'class') {
-      attrs[key] = mergeTokenLists(primitiveValue, authorValue);
-      continue;
-    }
-
-    if (key === 'style') {
-      attrs[key] = mergeStyles(primitiveValue, authorValue);
-      continue;
-    }
-
-    if (key.startsWith('on:')) {
-      attrs[key] = mergeRefs(authorValue, primitiveValue);
-      continue;
-    }
-
-    if (key === 'id') {
-      attrs[key] = authorSet ? authorValue : primitiveValue;
-      continue;
-    }
-
-    if (idrefAttributes.has(key)) {
-      if (primitiveSet && authorSet && primitiveValue !== authorValue) {
-        diagnostics.push({
-          attr: key,
-          code: 'FW231',
-          message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
-        });
-      }
-      attrs[key] = authorSet ? authorValue : primitiveValue;
-      continue;
-    }
-
-    if (key.startsWith('aria-') || key === 'role') {
-      if (primitiveSet && authorSet && primitiveValue !== authorValue) {
-        diagnostics.push({
-          attr: key,
-          code: 'FW232',
-          message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
-        });
-      }
-      attrs[key] = authorSet ? authorValue : primitiveValue;
-      continue;
-    }
-
-    if (key === 'data-state') {
-      if (primitiveSet && authorSet && primitiveValue !== authorValue) {
-        diagnostics.push({
-          attr: key,
-          code: 'FW232',
-          message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
-        });
-      }
-      attrs[key] = primitiveSet ? primitiveValue : authorValue;
-      continue;
-    }
-
-    if (key.startsWith('data-p-')) {
-      if (primitiveSet && authorSet && primitiveValue !== authorValue) {
-        diagnostics.push({
-          attr: key,
-          code: 'FW231',
-          message: 'Unmergeable primitive handler-param conflict per SPEC.md section 4.6',
-        });
-      }
-      attrs[key] = authorSet ? authorValue : primitiveValue;
-      continue;
-    }
-
-    if (key === 'data-bind' || key.startsWith('data-bind:')) {
-      if (primitiveSet && authorSet && primitiveValue !== authorValue) {
-        diagnostics.push({
-          attr: key,
-          code: 'FW233',
-          message: 'Unmergeable primitive binding conflict per SPEC.md section 4.6',
-        });
-      }
-      attrs[key] = authorSet ? authorValue : primitiveValue;
-      continue;
-    }
-
-    if (logicalOrAttributes.has(key)) {
-      attrs[key] = Boolean(primitiveValue) || Boolean(authorValue);
-      continue;
-    }
-
-    if (key === 'fw-deps') {
-      attrs[key] = mergeTokenLists(primitiveValue, authorValue);
-      continue;
-    }
-
-    if (key === 'fw-c' || key === 'fw-state') {
-      if (primitiveSet && authorSet && primitiveValue !== authorValue) {
-        diagnostics.push({
-          attr: key,
-          code: 'FW231',
-          message: 'Unmergeable primitive island conflict per SPEC.md section 4.6',
-        });
-      }
-      attrs[key] = authorSet ? authorValue : primitiveValue;
-      continue;
-    }
-
-    attrs[key] = authorSet ? authorValue : primitiveValue;
-  }
-
-  return { attrs, diagnostics };
+  return {
+    attrs: Object.fromEntries(
+      merge.attributes.flatMap((attribute) => {
+        const value = fixtureAttributeValue(attribute.value);
+        return value === undefined ? [] : [[attribute.name, value]];
+      }),
+    ),
+    diagnostics: merge.diagnostics.map((diagnostic) =>
+      galleryMergeDiagnostic(diagnostic.code as MergeDiagnostic['code'], diagnostic.message),
+    ).sort((left, right) => order.indexOf(left.attr) - order.indexOf(right.attr)),
+  };
 }
 
 export function rewriteIdrefs(
@@ -744,42 +649,66 @@ export function rewriteIdrefValue(value: string, rewrites: ReadonlyMap<string, s
     .join(' ');
 }
 
-export function stableKeys(primitive: AttributeRecord, author: AttributeRecord): readonly string[] {
-  return [...new Set([...Object.keys(primitive), ...Object.keys(author)])];
+function attributeRecordEntries(
+  attrs: AttributeRecord,
+  origin: MergeableAttribute['origin'],
+): readonly MergeableAttribute[] {
+  return Object.entries(attrs).flatMap(([name, value]) => {
+    const mergedValue = mergeableAttributeValue(value);
+    return mergedValue === undefined ? [] : [{ name, origin, value: mergedValue }];
+  });
 }
 
-export function mergeRefs(
-  authorValue: AttributeValue,
-  primitiveValue: AttributeValue,
-): string | undefined {
-  return mergeTokenLists(authorValue, primitiveValue);
+function mergeableAttributeValue(value: AttributeValue): MergeableAttributeValue | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return { kind: 'boolean', value };
+  if (typeof value === 'number') return { kind: 'number', value };
+  return { kind: 'string', value };
 }
 
-export function mergeStyles(
-  primitiveValue: AttributeValue,
-  authorValue: AttributeValue,
-): string | undefined {
-  return (
-    [primitiveValue, authorValue]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .map((value) => value.trim().replace(/;+$/, ''))
-      .join('; ') || undefined
-  );
+function fixtureAttributeValue(value: MergeableAttributeValue): AttributeValue {
+  if (value.kind === 'expression') return value.source;
+  return value.value;
 }
 
-export function mergeTokenLists(first: AttributeValue, second: AttributeValue): string | undefined {
-  const tokens: string[] = [];
-  const seen = new Set<string>();
+function galleryMergeDiagnostic(
+  code: MergeDiagnostic['code'],
+  compilerMessage: string,
+): MergeDiagnostic {
+  const attr = compilerMessage.slice(compilerMessage.lastIndexOf(' ') + 1);
 
-  for (const value of [first, second]) {
-    if (typeof value !== 'string') continue;
-
-    for (const token of value.trim().split(/\s+/)) {
-      if (!token || seen.has(token)) continue;
-      seen.add(token);
-      tokens.push(token);
-    }
+  if (code === 'FW231') {
+    return {
+      attr,
+      code,
+      message: `Unmergeable primitive ${fw231ConflictKind(attr)} conflict per SPEC.md section 4.6`,
+    };
   }
 
-  return tokens.join(' ') || undefined;
+  if (code === 'FW233') {
+    return {
+      attr,
+      code,
+      message: 'Unmergeable primitive binding conflict per SPEC.md section 4.6',
+    };
+  }
+
+  return {
+    attr,
+    code,
+    message:
+      attr === 'data-state' || (attr.startsWith('data-') && !attr.startsWith('data-p-'))
+        ? 'Author override of primitive-owned state attribute per SPEC.md section 4.6'
+        : 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+  };
+}
+
+function fw231ConflictKind(attr: string): string {
+  if (attr.startsWith('data-p-')) return 'handler-param';
+  if (attr === 'fw-c' || attr === 'fw-state') return 'island';
+  return 'IDREF';
+}
+
+function mergedAttributeOrder(primitive: AttributeRecord, author: AttributeRecord): readonly string[] {
+  return [...new Set([...Object.keys(primitive), ...Object.keys(author)])];
 }

@@ -17,6 +17,12 @@ export type {
   JisoVitePluginOptions,
 } from './vite.js';
 export type { PlatformSubstitution } from './lower/platform.js';
+export type {
+  AttributeMergeResult,
+  MergeableAttribute,
+  MergeableAttributeValue,
+} from './lower/attribute-merge.js';
+export { mergePrimitiveAndAuthorAttributes } from './lower/attribute-merge.js';
 export { deriveAppGraph, deriveRegistryFactsFromGraph } from './graph.js';
 export type {
   ComponentCssAsset,

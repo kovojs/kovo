@@ -42,7 +42,7 @@ import {
   toolbarItemAttributes,
   toolbarRootAttributes,
 } from '@jiso/headless-ui/primitives';
-import { mergePrimitiveAttrs, rewriteIdrefs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs, rewriteIdrefs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden combobox merge with active descendant and option conflicts', () => {
@@ -59,7 +59,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       required: true,
       value: 'enterprise',
     };
-    const input = mergePrimitiveAttrs(
+    const input = mergeCompilerPrimitiveAttrs(
       {
         ...comboboxInputAttributes({
           ...state,
@@ -79,7 +79,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const listbox = mergePrimitiveAttrs(
+    const listbox = mergeCompilerPrimitiveAttrs(
       {
         ...comboboxListboxAttributes({
           ...state,
@@ -93,7 +93,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'menu',
       },
     );
-    const option = mergePrimitiveAttrs(
+    const option = mergeCompilerPrimitiveAttrs(
       {
         ...comboboxOptionAttributes({
           ...state,
@@ -175,7 +175,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       required: true,
       value: 'austin',
     };
-    const input = mergePrimitiveAttrs(
+    const input = mergeCompilerPrimitiveAttrs(
       {
         ...autocompleteInputAttributes({
           ...state,
@@ -197,7 +197,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'searchbox',
       },
     );
-    const list = mergePrimitiveAttrs(
+    const list = mergeCompilerPrimitiveAttrs(
       {
         ...autocompleteListAttributes({
           ...state,
@@ -211,7 +211,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-autocomplete-list',
       },
     );
-    const option = mergePrimitiveAttrs(
+    const option = mergeCompilerPrimitiveAttrs(
       {
         ...autocompleteOptionAttributes({
           ...state,
@@ -229,7 +229,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         selected: true,
       },
     );
-    const value = mergePrimitiveAttrs(
+    const value = mergeCompilerPrimitiveAttrs(
       {
         ...autocompleteValueAttributes({
           id: 'gallery-autocomplete-value',
@@ -295,7 +295,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       step: 2,
       value: 6,
     };
-    const input = mergePrimitiveAttrs(
+    const input = mergeCompilerPrimitiveAttrs(
       {
         ...sliderInputAttributes({
           ...state,
@@ -316,7 +316,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const track = mergePrimitiveAttrs(
+    const track = mergeCompilerPrimitiveAttrs(
       {
         ...sliderTrackAttributes({ ...state, id: 'gallery-slider-track' }),
         class: 'slider-track',
@@ -327,7 +327,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'presentation',
       },
     );
-    const thumb = mergePrimitiveAttrs(
+    const thumb = mergeCompilerPrimitiveAttrs(
       {
         ...sliderThumbAttributes({ ...state, id: 'gallery-slider-thumb' }),
         class: 'slider-thumb',
@@ -337,7 +337,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-value-ratio': 'author-ratio',
       },
     );
-    const hidden = mergePrimitiveAttrs(
+    const hidden = mergeCompilerPrimitiveAttrs(
       {
         ...sliderHiddenInputAttributes({
           ...state,
@@ -375,7 +375,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden toggle merge with authored class, handlers, scalars, and state overrides', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       {
         ...toggleRootAttributes({ pressed: true }),
         class: 'inline-flex saved',
@@ -413,7 +413,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden checkbox merge with native control logical-OR attributes', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       {
         ...checkboxRootAttributes({
           checked: 'indeterminate',
@@ -452,7 +452,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden field merge with native label and control wiring', () => {
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...fieldRootAttributes({ id: 'gallery-field', invalid: true, required: true }),
         class: 'field-root',
@@ -463,7 +463,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-field',
       },
     );
-    const control = mergePrimitiveAttrs(
+    const control = mergeCompilerPrimitiveAttrs(
       {
         ...fieldControlAttributes({
           descriptionId: 'gallery-field-description',
@@ -483,7 +483,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const label = mergePrimitiveAttrs(
+    const label = mergeCompilerPrimitiveAttrs(
       rewriteIdrefs(
         fieldLabelAttributes({ controlId: 'gallery-field-email' }),
         new Map([['gallery-field-email', 'author-field-email']]),
@@ -507,7 +507,13 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
-    expect(label.diagnostics).toEqual([]);
+    expect(label.diagnostics).toEqual([
+      {
+        attr: 'for',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
     expect(
       <div data-gallery-merge="field">
         <div {...root.attrs}>
@@ -521,7 +527,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden otp-field merge with aggregate input and slot overrides', () => {
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...otpFieldRootAttributes({
           descriptionId: 'gallery-otp-description',
@@ -540,7 +546,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'application',
       },
     );
-    const hiddenInput = mergePrimitiveAttrs(
+    const hiddenInput = mergeCompilerPrimitiveAttrs(
       {
         ...otpFieldHiddenInputAttributes({
           length: 6,
@@ -559,7 +565,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const slot = mergePrimitiveAttrs(
+    const slot = mergeCompilerPrimitiveAttrs(
       {
         ...otpFieldInputAttributes({
           inputMode: 'numeric',
@@ -618,7 +624,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden number-field merge with native input scalars and step button wiring', () => {
-    const input = mergePrimitiveAttrs(
+    const input = mergeCompilerPrimitiveAttrs(
       {
         ...numberFieldInputAttributes({
           descriptionId: 'gallery-number-description',
@@ -645,7 +651,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 6,
       },
     );
-    const increment = mergePrimitiveAttrs(
+    const increment = mergeCompilerPrimitiveAttrs(
       {
         ...numberFieldIncrementAttributes({
           id: 'gallery-number-increment',
@@ -691,7 +697,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       required: true,
       value: 'growth',
     };
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...selectTriggerAttributes({
           ...state,
@@ -709,7 +715,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const option = mergePrimitiveAttrs(
+    const option = mergeCompilerPrimitiveAttrs(
       {
         ...selectItemAttributes({
           ...state,
@@ -756,7 +762,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden switch merge with native logical-OR attributes', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       {
         ...switchRootAttributes({
           checked: true,
@@ -804,7 +810,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       required: true,
       value: ['email'],
     };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...checkboxGroupRootAttributes({
           ...state,
@@ -819,7 +825,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'group',
       },
     );
-    const item = mergePrimitiveAttrs(
+    const item = mergeCompilerPrimitiveAttrs(
       {
         ...checkboxGroupItemAttributes({
           ...state,
@@ -834,7 +840,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-notifications-email-item',
       },
     );
-    const control = mergePrimitiveAttrs(
+    const control = mergeCompilerPrimitiveAttrs(
       checkboxGroupControlAttributes({
         ...state,
         controlId: 'gallery-notifications-email',
@@ -848,7 +854,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const label = mergePrimitiveAttrs(
+    const label = mergeCompilerPrimitiveAttrs(
       rewriteIdrefs(
         checkboxGroupLabelAttributes({
           ...state,
@@ -862,6 +868,11 @@ describe('gallery G5 primitive merge fixtures', () => {
     );
 
     expect(root.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
       {
         attr: 'aria-describedby',
         code: 'FW231',
@@ -905,7 +916,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       type: 'multiple' as const,
       value: ['bold'],
     };
-    const toggleRoot = mergePrimitiveAttrs(
+    const toggleRoot = mergeCompilerPrimitiveAttrs(
       {
         ...toggleGroupRootAttributes({
           ...toggleState,
@@ -921,7 +932,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'toolbar',
       },
     );
-    const toggleItem = mergePrimitiveAttrs(
+    const toggleItem = mergeCompilerPrimitiveAttrs(
       {
         ...toggleGroupItemAttributes({
           ...toggleState,
@@ -932,7 +943,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       { class: 'toggle-group-item selected', 'data-state': 'off' },
     );
-    const toggleButton = mergePrimitiveAttrs(
+    const toggleButton = mergeCompilerPrimitiveAttrs(
       toggleGroupButtonAttributes({
         ...toggleState,
         id: 'gallery-bold-button',
@@ -950,7 +961,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       items: [{ value: 'align-left' }, { disabled: true, value: 'align-right' }],
       orientation: 'vertical' as const,
     };
-    const toolbar = mergePrimitiveAttrs(
+    const toolbar = mergeCompilerPrimitiveAttrs(
       {
         ...toolbarRootAttributes({
           ...toolbarState,
@@ -966,7 +977,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'group',
       },
     );
-    const toolbarItem = mergePrimitiveAttrs(
+    const toolbarItem = mergeCompilerPrimitiveAttrs(
       {
         ...toolbarItemAttributes({
           ...toolbarState,
@@ -977,7 +988,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       { class: 'toolbar-item shrink-0' },
     );
-    const toolbarButton = mergePrimitiveAttrs(
+    const toolbarButton = mergeCompilerPrimitiveAttrs(
       toolbarButtonAttributes({
         ...toolbarState,
         id: 'gallery-align-left-button',
@@ -1070,7 +1081,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       required: true,
       value: '',
     };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       { ...selectRootAttributes({ ...state, id: 'gallery-select-root' }), class: 'select-root' },
       {
         class: 'select-root grid',
@@ -1078,7 +1089,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-select-root',
       },
     );
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...selectTriggerAttributes({
           ...state,
@@ -1097,7 +1108,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...selectContentAttributes({
           ...state,
@@ -1111,7 +1122,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         class: 'select-content shadow',
       },
     );
-    const value = mergePrimitiveAttrs(
+    const value = mergeCompilerPrimitiveAttrs(
       {
         ...selectValueAttributes({ ...state, id: 'gallery-select-value' }),
         class: 'select-value',
@@ -1122,7 +1133,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-select-value',
       },
     );
-    const option = mergePrimitiveAttrs(
+    const option = mergeCompilerPrimitiveAttrs(
       {
         ...selectItemAttributes({
           ...state,
@@ -1173,7 +1184,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders golden fieldset merges for grouped field semantics', () => {
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...fieldsetRootAttributes({
           descriptionId: 'gallery-fieldset-description',
@@ -1191,7 +1202,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         disabled: false,
       },
     );
-    const legend = mergePrimitiveAttrs(
+    const legend = mergeCompilerPrimitiveAttrs(
       {
         ...fieldsetLegendAttributes({
           id: 'gallery-fieldset-legend',

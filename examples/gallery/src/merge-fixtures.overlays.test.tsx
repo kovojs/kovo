@@ -19,12 +19,12 @@ import {
   toastTitleAttributes,
   toastViewportAttributes,
 } from '@jiso/headless-ui/primitives';
-import { mergePrimitiveAttrs } from './merge-fixtures-oracle.js';
+import { mergeCompilerPrimitiveAttrs } from './merge-fixtures-oracle.js';
 
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden toast merge with live-region roles and action buttons', () => {
     const state = { id: 'gallery-toast', open: true };
-    const viewport = mergePrimitiveAttrs(
+    const viewport = mergeCompilerPrimitiveAttrs(
       {
         ...toastViewportAttributes({
           id: 'gallery-toast-viewport',
@@ -40,7 +40,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         tabIndex: 0,
       },
     );
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       {
         ...toastRootAttributes({
           ...state,
@@ -58,7 +58,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'status',
       },
     );
-    const action = mergePrimitiveAttrs(
+    const action = mergeCompilerPrimitiveAttrs(
       {
         ...toastActionAttributes({ ...state, actionValue: 'retry' }),
         class: 'toast-action',
@@ -69,7 +69,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-    const close = mergePrimitiveAttrs(
+    const close = mergeCompilerPrimitiveAttrs(
       {
         ...toastCloseAttributes(state),
         class: 'toast-close',
@@ -126,7 +126,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden alert-dialog merge with command wiring and action intents', () => {
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...alertDialogTriggerAttributes({
           contentId: 'gallery-delete-dialog',
@@ -141,7 +141,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-state': 'author-open',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...alertDialogContentAttributes({
           contentId: 'gallery-delete-dialog',
@@ -158,7 +158,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'dialog',
       },
     );
-    const cancel = mergePrimitiveAttrs(
+    const cancel = mergeCompilerPrimitiveAttrs(
       {
         ...alertDialogCancelAttributes({
           autoFocus: true,
@@ -174,7 +174,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-    const action = mergePrimitiveAttrs(
+    const action = mergeCompilerPrimitiveAttrs(
       {
         ...alertDialogActionAttributes({
           contentId: 'gallery-delete-dialog',
@@ -241,7 +241,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden popover merge with native popover target conflicts', () => {
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...popoverTriggerAttributes({
           contentId: 'gallery-account-popover',
@@ -258,7 +258,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...popoverContentAttributes({
           contentId: 'gallery-account-popover',
@@ -307,7 +307,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders a golden hover-card merge with package-prefixed behavior IDREFs', () => {
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       {
         ...hoverCardTriggerAttributes({
           contentId: 'gallery-profile-card',
@@ -323,7 +323,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         'jiso-hover-card': 'author-profile-card',
       },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       {
         ...hoverCardContentAttributes({
           contentId: 'gallery-profile-card',
@@ -369,11 +369,11 @@ describe('gallery G5 primitive merge fixtures', () => {
       open: true,
       titleId: 'gallery-profile-title',
     };
-    const root = mergePrimitiveAttrs(
+    const root = mergeCompilerPrimitiveAttrs(
       { ...dialogRootAttributes(state), class: 'dialog-root' },
       { class: 'dialog-root isolate', 'data-state': 'author-open', id: 'author-dialog-root' },
     );
-    const close = mergePrimitiveAttrs(
+    const close = mergeCompilerPrimitiveAttrs(
       { ...dialogCloseAttributes(state), class: 'dialog-close' },
       {
         class: 'dialog-close top-2',
@@ -409,7 +409,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('renders golden toast title and description merges with part attrs', () => {
-    const title = mergePrimitiveAttrs(
+    const title = mergeCompilerPrimitiveAttrs(
       { ...toastTitleAttributes({ id: 'gallery-toast-title' }), class: 'toast-title' },
       {
         class: 'toast-title font-medium',
@@ -417,7 +417,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-toast-title',
       },
     );
-    const description = mergePrimitiveAttrs(
+    const description = mergeCompilerPrimitiveAttrs(
       {
         ...toastDescriptionAttributes({ id: 'gallery-toast-description' }),
         class: 'toast-description',

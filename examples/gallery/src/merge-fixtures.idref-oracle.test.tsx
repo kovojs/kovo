@@ -14,7 +14,7 @@ import {
   type AttributeRecord,
   authorStressAttrs,
   idrefAttributes,
-  mergePrimitiveAttrs,
+  mergeCompilerPrimitiveAttrs,
   primitiveAttributeBuilderNames,
   primitiveExports,
   renderMergedBuilder,
@@ -25,14 +25,14 @@ import {
 describe('gallery G5 primitive merge fixtures', () => {
   it('rewires dialog trigger IDREFs when an authored dialog content id wins', () => {
     const idRewrites = new Map([['gallery-dialog-content', 'authored-dialog-content']]);
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       rewriteIdrefs(
         dialogTriggerAttributes({ contentId: 'gallery-dialog-content', open: false }),
         idRewrites,
       ),
       { class: 'dialog-trigger' },
     );
-    const content = mergePrimitiveAttrs(
+    const content = mergeCompilerPrimitiveAttrs(
       dialogContentAttributes({
         contentId: 'gallery-dialog-content',
         descriptionId: 'gallery-dialog-description',
@@ -59,7 +59,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       ['gallery-tabs-overview', 'authored-tabs-overview'],
       ['gallery-tabs-overview-panel', 'authored-tabs-overview-panel'],
     ]);
-    const trigger = mergePrimitiveAttrs(
+    const trigger = mergeCompilerPrimitiveAttrs(
       rewriteIdrefs(
         tabsTriggerAttributes({
           activeValue: 'overview',
@@ -72,7 +72,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       ),
       { class: 'tabs-trigger', id: 'authored-tabs-overview' },
     );
-    const panel = mergePrimitiveAttrs(
+    const panel = mergeCompilerPrimitiveAttrs(
       rewriteIdrefs(
         tabsPanelAttributes({
           id: 'gallery-tabs-overview-panel',
@@ -105,7 +105,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       required: true,
       value: 'express',
     };
-    const radio = mergePrimitiveAttrs(
+    const radio = mergeCompilerPrimitiveAttrs(
       radioGroupRadioAttributes({
         ...state,
         controlId: 'gallery-radio-express',
@@ -113,7 +113,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       }),
       { class: 'radio-input', id: 'authored-radio-express', required: false },
     );
-    const label = mergePrimitiveAttrs(
+    const label = mergeCompilerPrimitiveAttrs(
       rewriteIdrefs(
         radioGroupLabelAttributes({
           ...state,
@@ -138,7 +138,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('pins FW231 for package-prefixed behavior IDREF conflicts', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       tooltipTriggerAttributes({
         contentId: 'gallery-tooltip-content',
         open: true,
@@ -156,7 +156,7 @@ describe('gallery G5 primitive merge fixtures', () => {
   });
 
   it('pins FW231 for double-wired dialog trigger relationships', () => {
-    const merged = mergePrimitiveAttrs(
+    const merged = mergeCompilerPrimitiveAttrs(
       dialogTriggerAttributes({ contentId: 'gallery-dialog-content', open: false }),
       { commandfor: 'other-dialog' },
     );
@@ -183,7 +183,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         class: `primitive-${name}`,
       };
       const author = authorStressAttrs(name, primitive);
-      const merged = mergePrimitiveAttrs(primitive, author);
+      const merged = mergeCompilerPrimitiveAttrs(primitive, author);
 
       expect(merged.attrs.class).toBe(`primitive-${name} author-${name}`);
 
