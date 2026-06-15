@@ -51,6 +51,52 @@ export function renderEquivalenceCheck(
   };
 }
 
+export function renderEquivalenceSourceCheck(
+  artifact: string,
+  expectedSource: string,
+  actualSource: string,
+  options: { expectedIgnoredSpans?: readonly RenderEquivalenceIgnoredSpan[] } = {},
+): RenderEquivalenceCheck {
+  const expected = normalizeRenderEquivalenceSource(
+    removeIgnoredSpans(expectedSource, options.expectedIgnoredSpans ?? []),
+  );
+  const actual = normalizeRenderEquivalenceSource(actualSource);
+
+  return {
+    actual,
+    artifact,
+    expected,
+    ok: actual === expected,
+  };
+}
+
+export interface RenderEquivalenceIgnoredSpan {
+  end: number;
+  start: number;
+}
+
+function removeIgnoredSpans(
+  source: string,
+  spans: readonly RenderEquivalenceIgnoredSpan[],
+): string {
+  return [...spans]
+    .toSorted((left, right) => right.start - left.start)
+    .reduce((next, span) => `${next.slice(0, span.start)}${next.slice(span.end)}`, source);
+}
+
+function normalizeRenderEquivalenceSource(source: string): string {
+  return source
+    .replace(
+      /\s+(?:fw-c|fw-deps|fw-state|fw-param-types|data-p-[\w-]+|on:[\w-]+)=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/g,
+      '',
+    )
+    .replace(/\s+(data-bind(?::[\w-]+)?)(?:=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+))?/g, ' $1')
+    .replace(/\s+on[A-Z][\w-]*=(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([>/])/g, '$1')
+    .trim();
+}
+
 function emittedServerRenderSource(serverSource: string): string {
   try {
     const actual = runInNewContext(`${serverSource}\n;renderSource();`, {}, { timeout: 1000 });

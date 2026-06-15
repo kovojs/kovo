@@ -99,7 +99,12 @@ describe('compile/v1 and fw mcp', () => {
         "ok": true,
         "platformSubstitutions": [],
         "queryUpdatePlans": [],
-        "renderEquivalenceChecks": [],
+        "renderEquivalenceChecks": [
+          {
+            "artifact": "cart-badge.server.js",
+            "ok": true,
+          },
+        ],
         "updateCoverage": [],
         "version": "compile/v1",
         "viewTransitions": [],

@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (22 / 32 findings closed)
+**Status:** open (24 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -227,13 +227,21 @@ tsc --noEmit`, and `pnpm exec vp check --fix` passed.
 
 Do before/alongside the broad refactors so subsequent changes are actually checked.
 
-- [ ] **Render-equivalence: a real authored-vs-lowered differential** — `packages/compiler/src/emit/server.ts:39`, `compile.ts:151` (SPEC §5.2 rule 3). Produce the lowered-side HTML by executing `renderSource()` (as today) and the authored-side HTML from a separate reference render over the _originally parsed_ model (available pre-lowering), then diff byte-for-byte allowing only provably HTML-preserving deltas (`fw-c`, `fw-deps`, `fw-state`, versioned handler values). Until an authored renderer exists, **stop labeling it the rule-3 gate** and stop letting `fw check` report the invariant as enforced.
+- [x] **Render-equivalence: a real authored-vs-lowered differential** — `packages/compiler/src/emit/server.ts:39`, `compile.ts:151` (SPEC §5.2 rule 3). Produce the lowered-side HTML by executing `renderSource()` (as today) and the authored-side HTML from a separate reference render over the _originally parsed_ model (available pre-lowering), then diff byte-for-byte allowing only provably HTML-preserving deltas (`fw-c`, `fw-deps`, `fw-state`, versioned handler values). Until an authored renderer exists, **stop labeling it the rule-3 gate** and stop letting `fw check` report the invariant as enforced.
   - Done = a lowering that changes emitted HTML makes the gate fail (a regression test proves it can fail). Prove: `pnpm test compile-component && pnpm run check:fw`
   - Progress 2026-06-15: `packages/compiler/src/compile.ts` no longer emits the previous generated render-equivalence fact from the lowered `renderSource()` round trip; compile/MCP output now reports an empty `renderEquivalenceChecks` list until a real authored-vs-lowered differential supplies facts.
   - Progress 2026-06-15: `CompileResult.loweredSource` now carries the lowered TSX used by committed
     IR generators, so gallery, commerce, tutorial, and shared test helpers no longer abuse
     `renderEquivalenceChecks[0].expected` as a lowered-source transport.
-  - Gap 2026-06-15: the SPEC §5.2 authored renderer still does not exist, so this checkbox remains open; no regression yet proves that a lowering which changes emitted HTML fails the semantic gate.
+  - Evidence 2026-06-15: `packages/compiler/src/emit/server.ts` now emits a source differential
+    check comparing the pre-server-stamp reference render source with the lowered server render
+    source after normalizing parser-proven generated runtime attributes (`on:*`, `data-p-*`,
+    `fw-c`, `fw-deps`, `fw-state`, and generated `data-bind*` reference values); authored event
+    attributes are removed through parser spans rather than raw string matching.
+  - Evidence 2026-06-15: `packages/compiler/src/compile-component.test.ts` asserts a real
+    `renderEquivalenceChecks[0]` for compiled components and proves `assertRenderEquivalence`
+    rejects an injected mismatch; `tests/fw-check.node.mjs` now observes `checkCount: 1`,
+    `mismatchRejected: true`, and `ok: true` for the acceptance fixture.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/compile-component.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm --filter fw exec tsc --noEmit` passed.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
     src/compile-component.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/example-gallery
@@ -241,6 +249,11 @@ Do before/alongside the broad refactors so subsequent changes are actually check
     exec node scripts/emit-components.mjs --check`, `node site/tutorial/run-steps.mjs --check`, and
     `pnpm --filter @jiso/example-commerce exec vitest run src/app.rendering.test.ts -t
     "committed IR"` passed.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/compile-component.test.ts
+    src/stamps.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts
+    src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
+    `pnpm exec vp run build`, `pnpm run check:fw`, and `pnpm test` passed.
 
 - [x] **FW228: wire route-ambiguity detection into a blocking pipeline** — `packages/server/src/match.ts:100` (`findRouteAmbiguities`, currently zero callers) (SPEC §9.5, §11.3 severity=error). Invoke during `createApp` / route-table compile; register FW228 at severity `error` so it blocks dev serving, vite build, and static export (mirror FW229's wiring). Drop the "planned 9.5 shell dispatch" hedge in the message.
   - Done = an ambiguous route table is rejected end-to-end with FW228 instead of resolving by declaration order. Prove: `pnpm test match && pnpm run check:fw`
@@ -295,7 +308,7 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
 - [x] **JSX comment→attribute attachment: structural, not char-class gap** — `packages/compiler/src/scan/parse.ts:1503` (SPEC §5.2 rule 8). Associate a justification comment with the opening element it directly precedes via the ts tree, not `isAttachedJsxCommentGap`'s permissive regex. Prove: `pnpm test execution-triggers scan/parse`
   - Evidence 2026-06-15: `packages/compiler/src/scan/parse.ts` now derives `attachedAttributeStart` from the JSX parent/child tree instead of scanning the raw gap; `packages/compiler/src/scan/parse.test.ts` and `packages/compiler/src/execution-triggers.test.ts` cover a FW211 comment inside a preceding `<p>` and prove it no longer attaches to the following `on:load`.
   - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts src/execution-triggers.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
-- [ ] **Remove dead snippet-reparse exports; FW311 help text; FW224 message scope; FW232 placement; primitive-handler-lint default-on** — bundle the remaining audit lows (`scan/parse.ts:462`, `core/diagnostics.ts` FW311, `markup.ts` FW224/FW232, `headless-ui/.../primitive-handler-lint.ts`). Each: tighten the rule or wording to match SPEC; add the asserting test. Prove: `pnpm test` + `pnpm run check:fw`
+- [x] **Remove dead snippet-reparse exports; FW311 help text; FW224 message scope; FW232 placement; primitive-handler-lint default-on** — bundle the remaining audit lows (`scan/parse.ts:462`, `core/diagnostics.ts` FW311, `markup.ts` FW224/FW232, `headless-ui/.../primitive-handler-lint.ts`). Each: tighten the rule or wording to match SPEC; add the asserting test. Prove: `pnpm test` + `pnpm run check:fw`
   - Progress 2026-06-15: removed the exported snippet-reparse helpers from
     `packages/compiler/src/scan/parse.ts` and kept parser-model coverage in
     `packages/compiler/src/scan/parse.test.ts`; narrowed FW224 wording and added FW311 fix-menu help
@@ -331,9 +344,9 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
     passed from the repo root; the same eight files passed with `pnpm --filter @jiso/drizzle exec
     vitest run ...`; `pnpm --filter @jiso/drizzle exec tsc --noEmit`, `pnpm --filter fw exec tsc
     --noEmit`, `pnpm --filter @jiso/test exec tsc --noEmit`, and `git diff --check` passed.
-  - Gap 2026-06-15: the checkbox stays open because the requested `pnpm run check:fw` closure
-    gate still fails at the separate Phase 6 render-equivalence item (`P1 render-equivalence gate
-    remains represented`: `checkCount: 0`, no authored-vs-lowered differential yet).
+  - Evidence 2026-06-15: `pnpm exec vp run build`, `pnpm run check:fw`, and `pnpm test` passed
+    after the Phase 6 render-equivalence differential landed, satisfying the requested closure
+    gates for this low-risk bundle.
 
 ---
 

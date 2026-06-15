@@ -2,7 +2,11 @@ import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/q
 import { componentCssAssetForFile, emitCssModule } from './css.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
-import { emitServerModule, serverRenderLowering } from './emit/server.js';
+import {
+  emitServerModule,
+  renderEquivalenceSourceCheck,
+  serverRenderLowering,
+} from './emit/server.js';
 import { componentGraphFact, findFragmentTargetFacts } from './graph.js';
 import {
   clientModuleUrl,
@@ -170,14 +174,29 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
-    // SPEC §5.2 rule 3 requires an authored-vs-lowered render differential. The previous
-    // generated fact compared renderSource() with its own lowered source, so it proved only the
-    // wrapper round-trip. Do not emit a render-equivalence fact until an independent authored
-    // renderer backs it.
-    renderEquivalenceChecks: [],
+    // SPEC §5.2 rule 3: compare the pre-server-stamp reference render source with the lowered
+    // server render source after normalizing generated-only runtime attributes.
+    renderEquivalenceChecks: [
+      renderEquivalenceSourceCheck(fileNames.server, source, serverRenderedSource, {
+        expectedIgnoredSpans: renderEquivalenceExpectedIgnoredSpans(model),
+      }),
+    ],
     updateCoverage,
     viewTransitions: viewTransitions.stamps,
   };
+}
+
+function renderEquivalenceExpectedIgnoredSpans(
+  model: ComponentModuleModel,
+): readonly { end: number; start: number }[] {
+  // SPEC §5.2 rule 3: authored event expressions become generated handler refs and element-param
+  // stamps in the lowered render. Remove only parser-proven event attributes from the reference
+  // side; do not use raw string matching for nested JSX expressions.
+  return model.jsxElements.flatMap((element) =>
+    element.attributes
+      .filter((attribute) => attribute.domEventName || /^on[A-Z]/.test(attribute.name))
+      .map((attribute) => ({ end: attribute.end, start: attribute.start })),
+  );
 }
 
 function versionStateDeriveReferences(
