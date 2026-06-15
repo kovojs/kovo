@@ -9,6 +9,13 @@ import {
   selector,
 } from './interactive-gallery-harness.js';
 
+function deriveRun(exports: Record<string, unknown>, name: string, state: unknown): unknown {
+  const derive = exports[name] as { run(value: unknown): unknown } | undefined;
+  if (derive === undefined) throw new Error(`Missing generated derive export: ${name}`);
+
+  return derive.run(state);
+}
+
 describe('compiled interactive gallery demos', () => {
   it('updates browser-observable ARIA, focus, visibility, and output contracts', () => {
     const previousDocument = Reflect.get(globalThis, 'document') as unknown;
@@ -316,17 +323,26 @@ describe('compiled interactive gallery demos', () => {
         signal,
         state: toggleGroupState,
       });
-      expect(element(document, 'gallery-toggle-group-bold').attrs).toMatchObject({
-        'aria-pressed': 'true',
-        'data-state': 'pressed',
-      });
-      expect(element(document, 'gallery-toggle-group-italic').attrs).toMatchObject({
-        'aria-pressed': 'true',
-        'data-state': 'pressed',
-      });
-      expect(selector(document, '[data-demo-state="toggle-group-value"]').textContent).toBe(
-        'bold,italic',
-      );
+      expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
+      expect(
+        deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_aria_pressed_derive', toggleGroupState),
+      ).toBe('true');
+      expect(
+        deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_data_state_derive', toggleGroupState),
+      ).toBe('pressed');
+      expect(
+        deriveRun(
+          toggleGroup,
+          'GalleryToggleGroupDemo$button_aria_pressed_derive_2',
+          toggleGroupState,
+        ),
+      ).toBe('true');
+      expect(
+        deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_data_state_derive_2', toggleGroupState),
+      ).toBe('pressed');
+      expect(
+        deriveRun(toggleGroup, 'GalleryToggleGroupDemo$output_text_derive', toggleGroupState),
+      ).toBe('bold,italic');
 
       const toast = evaluateClientModule('toast-demo.client.js', { document });
       const toastState = { open: true };

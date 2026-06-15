@@ -3,6 +3,8 @@ import { component } from '@jiso/core';
 import {
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
+  toggleGroupItemClick as _toggleGroupItemClick,
+  toggleGroupKeyDown as _toggleGroupKeyDown,
   toggleGroupRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -53,19 +55,26 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         class="grid gap-2 text-sm text-neutral-950"
         data-gallery-interactive="toggle-group"
         onKeyDown={() => {
-          state.activeValue = state.activeValue === 'bold' ? 'italic' : 'bold';
-          const doc = Reflect['get'](globalThis, 'document');
-          const bold = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-toggle-group-bold')
-            : undefined;
-          const italic = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-toggle-group-italic')
-            : undefined;
-
-          if (bold) bold['tabIndex'] = state.activeValue === 'bold' ? 0 : -1;
-          if (italic) italic['tabIndex'] = state.activeValue === 'italic' ? 0 : -1;
-          if (state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
-          if (state.activeValue === 'italic' && italic) Object(italic)['focus']?.call(italic);
+          const result = _toggleGroupKeyDown(Object(event), {
+            activeValue: state.activeValue,
+            items: [
+              { value: 'bold' },
+              { disabled: true, value: 'strike' },
+              { value: 'italic' },
+            ],
+            type: 'multiple',
+            value:
+              state.value === 'bold,italic'
+                ? ['bold', 'italic']
+                : state.value === ''
+                  ? []
+                  : [state.value],
+          });
+          if (!result?.value) return;
+          state.activeValue = result.value;
+          const root = Object(event)['target']?.closest?.('[role="group"]');
+          const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+          Object(next)['focus']?.call(next);
         }}
       >
         <h3 id="gallery-toggle-group-label" class="text-sm font-medium">
@@ -78,58 +87,34 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
+              aria-pressed={String(
+                state.value === 'bold' || state.value === 'bold,italic',
+              )}
               class={BUTTON_CLASS}
+              data-state={
+                state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'
+              }
               onClick={() => {
-                state.value =
-                  state.value === 'bold,italic'
-                    ? 'italic'
-                    : state.value === 'bold'
-                      ? ''
-                      : state.value === 'italic'
-                        ? 'bold,italic'
-                        : 'bold';
-                const doc = Reflect['get'](globalThis, 'document');
-                const bold = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toggle-group-bold')
-                  : undefined;
-                const italic = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toggle-group-italic')
-                  : undefined;
-                const output = doc
-                  ? Object(doc)['querySelector']?.call(
-                      doc,
-                      '[data-demo-state="toggle-group-value"]',
-                    )
-                  : undefined;
-                const boldPressed = state.value === 'bold' || state.value === 'bold,italic';
-                const italicPressed = state.value === 'italic' || state.value === 'bold,italic';
-
-                if (bold) {
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'aria-pressed',
-                    boldPressed ? 'true' : 'false',
-                  );
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'data-state',
-                    boldPressed ? 'pressed' : 'off',
-                  );
-                }
-                if (italic) {
-                  Object(italic)['setAttribute']?.call(
-                    italic,
-                    'aria-pressed',
-                    italicPressed ? 'true' : 'false',
-                  );
-                  Object(italic)['setAttribute']?.call(
-                    italic,
-                    'data-state',
-                    italicPressed ? 'pressed' : 'off',
-                  );
-                }
-                if (output) output['textContent'] = state.value || 'none';
+                const result = _toggleGroupItemClick(Object(event), {
+                  itemValue: 'bold',
+                  items: [
+                    { value: 'bold' },
+                    { disabled: true, value: 'strike' },
+                    { value: 'italic' },
+                  ],
+                  type: 'multiple',
+                  value:
+                    state.value === 'bold,italic'
+                      ? ['bold', 'italic']
+                      : state.value === ''
+                        ? []
+                        : [state.value],
+                });
+                if (!result) return;
+                state.activeValue = 'bold';
+                state.value = result.value?.toString() ?? '';
               }}
+              tabIndex={state.activeValue === 'bold' ? 0 : -1}
             >
               Bold
             </button>
@@ -141,6 +126,8 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 id: 'gallery-toggle-group-strike',
               })}
               class={BUTTON_CLASS}
+              data-state="off"
+              tabIndex={-1}
             >
               Strike
             </button>
@@ -151,58 +138,34 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
+              aria-pressed={String(
+                state.value === 'italic' || state.value === 'bold,italic',
+              )}
               class={BUTTON_CLASS}
+              data-state={
+                state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'
+              }
               onClick={() => {
-                state.value =
-                  state.value === 'bold,italic'
-                    ? 'bold'
-                    : state.value === 'italic'
-                      ? ''
-                      : state.value === 'bold'
-                        ? 'bold,italic'
-                        : 'italic';
-                const doc = Reflect['get'](globalThis, 'document');
-                const bold = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toggle-group-bold')
-                  : undefined;
-                const italic = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-toggle-group-italic')
-                  : undefined;
-                const output = doc
-                  ? Object(doc)['querySelector']?.call(
-                      doc,
-                      '[data-demo-state="toggle-group-value"]',
-                    )
-                  : undefined;
-                const boldPressed = state.value === 'bold' || state.value === 'bold,italic';
-                const italicPressed = state.value === 'italic' || state.value === 'bold,italic';
-
-                if (bold) {
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'aria-pressed',
-                    boldPressed ? 'true' : 'false',
-                  );
-                  Object(bold)['setAttribute']?.call(
-                    bold,
-                    'data-state',
-                    boldPressed ? 'pressed' : 'off',
-                  );
-                }
-                if (italic) {
-                  Object(italic)['setAttribute']?.call(
-                    italic,
-                    'aria-pressed',
-                    italicPressed ? 'true' : 'false',
-                  );
-                  Object(italic)['setAttribute']?.call(
-                    italic,
-                    'data-state',
-                    italicPressed ? 'pressed' : 'off',
-                  );
-                }
-                if (output) output['textContent'] = state.value || 'none';
+                const result = _toggleGroupItemClick(Object(event), {
+                  itemValue: 'italic',
+                  items: [
+                    { value: 'bold' },
+                    { disabled: true, value: 'strike' },
+                    { value: 'italic' },
+                  ],
+                  type: 'multiple',
+                  value:
+                    state.value === 'bold,italic'
+                      ? ['bold', 'italic']
+                      : state.value === ''
+                        ? []
+                        : [state.value],
+                });
+                if (!result) return;
+                state.activeValue = 'italic';
+                state.value = result.value?.toString() ?? '';
               }}
+              tabIndex={state.activeValue === 'italic' ? 0 : -1}
             >
               Italic
             </button>

@@ -344,9 +344,24 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       arrow-roving (wrong model — checkboxes are each Tab-focusable + Space) and is a blind 2-state flip.
       Drop the arrow-roving (or route through `checkboxGroupKeyDown`); refactor clicks to
       `checkboxGroupItemClick`. Demonstrate the indeterminate parent affordance.
-- [ ] **toggle-group** [P1]: click-toggle works; `onKeyDown` hardcodes bold↔italic ignoring the key and
+- [x] **toggle-group** [P1]: click-toggle works; `onKeyDown` hardcodes bold↔italic ignoring the key and
       the disabled 'strike' middle item. Wire `toggleGroupKeyDown`/`toggleGroupMoveFocus`; route clicks
       through `toggleGroupItemClick`.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/toggle-group-demo.tsx` now calls
+    `_toggleGroupKeyDown`/`_toggleGroupItemClick`, mutates only `state.activeValue`/`state.value`, and
+    exposes `aria-pressed`, `data-state`, roving `tabIndex`, and output text as state-bound TSX.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/toggle-group-demo.client.js` imports the reducer
+    helpers, emits state derives for toggle-group button/output attributes, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated toggle-group files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t "toggle-group"`,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
+    and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 
 ### Expandables
 

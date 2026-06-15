@@ -451,7 +451,12 @@ describe('compiled interactive gallery demos', () => {
     expect(toggleGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleGroupDemo\$button_click_2"/,
     );
-    expect(toggleGroupClient).toContain("Object(italic)['focus']?.call(italic)");
+    expect(toggleGroup).toContain('data-bind:aria-pressed=');
+    expect(toggleGroup).toContain('data-bind:data-state=');
+    expect(toggleGroup).toContain('data-bind:tabIndex=');
+    expect(toggleGroupClient).toContain('toggleGroupKeyDown as _toggleGroupKeyDown');
+    expect(toggleGroupClient).toContain('toggleGroupItemClick as _toggleGroupItemClick');
+    expect(toggleGroupClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
 
     expect(toast).toContain('data-gallery-interactive="toast"');
     expect(toast).toContain('fw-state=\'{"open":true}\'');

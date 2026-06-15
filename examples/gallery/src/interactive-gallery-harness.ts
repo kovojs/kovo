@@ -107,6 +107,8 @@ export function evaluateClientModule(
     _switchTriggerClick: headlessPrimitives.switchTriggerClick,
     _tabsKeyDown: headlessPrimitives.tabsKeyDown,
     _tabsTriggerClick: headlessPrimitives.tabsTriggerClick,
+    _toggleGroupItemClick: headlessPrimitives.toggleGroupItemClick,
+    _toggleGroupKeyDown: headlessPrimitives.toggleGroupKeyDown,
     _toggleTriggerClick: headlessPrimitives.toggleTriggerClick,
     ...globals,
   });

@@ -716,11 +716,13 @@ describe('compiled interactive gallery demos', () => {
     expect(tooltipState).toEqual({ open: false });
 
     const toggleGroupState = { activeValue: 'bold', value: 'bold' };
-    clientHandler(toggleGroup, 'GalleryToggleGroupDemo$section_keydown')(new Event('keydown'), {
+    const toggleGroupKeyboardEvent = keyEvent('ArrowRight');
+    clientHandler(toggleGroup, 'GalleryToggleGroupDemo$section_keydown')(toggleGroupKeyboardEvent, {
       params: {},
       signal,
       state: toggleGroupState,
     });
+    expect(toggleGroupKeyboardEvent.defaultPrevented).toBe(true);
     expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold' });
     clientHandler(toggleGroup, 'GalleryToggleGroupDemo$button_click_2')(new Event('click'), {
       params: {},
