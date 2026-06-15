@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (6 / 32 findings closed)
+**Status:** open (7 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -108,8 +108,17 @@ src/query-coverage.test.ts src/view-transitions.test.ts src/query-update-plans.t
 
 Shared pattern: carry the typed parser fact instead of matching a name/string. Sequence the two real soundness holes (FW302, FW235) first, then the lint-precision items.
 
-- [ ] **FW302: validate `state.*` binding paths against the declared state shape** — `packages/compiler/src/validate/bindings.ts:48` (SPEC §4.8). Remove the `query !== 'state'` exemption: build a `QueryShape` from `componentStateReturnObjectModel().entries` and run `validatePathInQueryShapes` on `state.*` paths. Scope first cut to top-level key existence; follow with nested-shape FW227 parity.
+- [x] **FW302: validate `state.*` binding paths against the declared state shape** — `packages/compiler/src/validate/bindings.ts:48` (SPEC §4.8). Remove the `query !== 'state'` exemption: build a `QueryShape` from `componentStateReturnObjectModel().entries` and run `validatePathInQueryShapes` on `state.*` paths. Scope first cut to top-level key existence; follow with nested-shape FW227 parity.
   - Done = `<output data-bind="state.doesNotExist">` emits FW302. Prove: `pnpm test state-bindings bindings`
+  - Evidence 2026-06-15: `packages/compiler/src/validate/bindings.ts` now validates `state.*`
+    bindings even when query-shape metadata is absent, using typed `componentStateReturnObjectModel`
+    entries for top-level state keys and allowing compiler-generated exported state derives.
+  - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` covers a valid
+    `state.profile.name` binding, invalid `state.doesNotExist` FW302, and keeps generated
+    state-derive bindings diagnostic-free.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/state-bindings.test.ts src/query-bindings.test.ts`, `pnpm --filter @jiso/compiler exec tsc
+--noEmit`, and `pnpm exec vp check --fix` passed.
 
 - [ ] **FW235: fire from the typed string-render fact, not the HTML-tag regex** — `packages/compiler/src/validate/authoring-surface.ts:51` (SPEC §5.2 rule 7). Drop the `firstHtmlTagName ?` filter so every `StringRenderModel` (any string/template-literal render, tag or not) triggers FW235; keep `firstHtmlTagName` only for the teaching message.
   - Done = FW235 fires for tagless `` render: () => `Total items` `` and tagless `renderSource(){ return 'Total: 2'; }`. Prove: `pnpm test compile-component authoring`

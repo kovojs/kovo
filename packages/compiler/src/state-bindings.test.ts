@@ -139,6 +139,47 @@ export const Counter = component('counter', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('validates state bindings against declared top-level state keys', () => {
+    const valid = compileComponentModule({
+      fileName: 'profile-card.tsx',
+      source: `
+export const ProfileCard = component('profile-card', {
+  state: () => ({ profile: { name: 'Ada' } }),
+  render: (_queries, state) => (
+    <profile-card>
+      <output data-bind="state.profile.name">{state.profile.name}</output>
+    </profile-card>
+  ),
+});
+`,
+    });
+    const invalid = compileComponentModule({
+      fileName: 'bad-profile-card.tsx',
+      source: `
+export const BadProfileCard = component('bad-profile-card', {
+  state: () => ({ profile: { name: 'Ada' } }),
+  render: () => (
+    <bad-profile-card>
+      <output data-bind="state.doesNotExist">Missing</output>
+    </bad-profile-card>
+  ),
+});
+`,
+    });
+
+    expect(valid.diagnostics).toEqual([]);
+    expect(invalid.diagnostics).toEqual([
+      {
+        code: 'FW302',
+        fileName: 'bad-profile-card.tsx',
+        length: 30,
+        message: 'data-bind path is not present in the declared query shape. state.doesNotExist',
+        severity: 'error',
+        start: { column: 15, line: 6 },
+      },
+    ]);
+  });
+
   it('lowers state-only attribute expressions to versioned derive bindings', () => {
     const result = compileComponentModule({
       fileName: 'disclosure-demo.tsx',
@@ -215,6 +256,14 @@ export const MixedState = component('mixed-state', {
     expect(result.updateCoverage).toEqual([
       {
         componentName: 'MixedState',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        sourceSpan: { length: 50, start: 253 },
+        status: 'UNHANDLED',
+      },
+      {
+        componentName: 'MixedState',
         detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
         position: 'expression',
         query: 'state.open',
@@ -233,6 +282,15 @@ export const MixedState = component('mixed-state', {
       },
     ]);
     expect(result.diagnostics).toEqual([
+      {
+        code: 'FW311',
+        fileName: 'mixed-state.tsx',
+        length: 50,
+        message:
+          'Query/state-dependent DOM position has no update status. MixedState cart.count expression',
+        severity: 'warn',
+        start: { column: 22, line: 8 },
+      },
       {
         code: 'FW311',
         fileName: 'mixed-state.tsx',

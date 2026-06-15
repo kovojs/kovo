@@ -4,6 +4,8 @@ import { collectDataBindListStamps } from '../analyze/query-updates.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
+  callExpressions,
+  componentStateReturnObjectModel,
   jsxElements,
   soleJsxExpressionChild,
   type ComponentModuleModel,
@@ -21,6 +23,7 @@ import {
   validateListBindingInQueryShapes,
   validatePathInQueryShapes,
   validatePathInShape,
+  type PathShapeValidation,
 } from '../analyze/query-shapes.js';
 import type { CompileComponentOptions, QueryShape, QueryTemplateStampFact } from '../types.js';
 
@@ -39,16 +42,15 @@ export function validateDataBindings(
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
   const queryShapes = componentQueryShapes(options);
-  if (!queryShapes) return [];
 
   const listStamps = collectDataBindListStamps(model);
   const listBindings = dataBindListAttributes(model);
   const bindingAttributes = dataBindAttributes(model);
 
   const bindingDiagnostics = bindingAttributes
-    .filter((binding) => binding.query !== null && binding.query !== 'state')
+    .filter((binding) => queryShapes && binding.query !== null && binding.query !== 'state')
     .flatMap((binding) => {
-      const result = validatePathInQueryShapes(binding.path, queryShapes);
+      const result = validatePathInQueryShapes(binding.path, queryShapes ?? {});
       if (!result.exists) {
         return [
           {
@@ -63,33 +65,51 @@ export function validateDataBindings(
         : [];
     });
 
-  const listDiagnostics = listStamps.flatMap((stamp) => {
-    const binding = listBindings.find((candidate) => candidate.path === stamp.list);
-    const result = validateListStampInQueryShapes(stamp, queryShapes);
-    if (!result.exists) {
+  const stateDiagnostics = bindingAttributes
+    .filter((binding) => binding.query === 'state')
+    .flatMap((binding) => {
+      const result = validateStateBindingPath(binding.path, model);
+      if (result.exists) return [];
+
       return [
         {
-          ...diagnosticFor(options.fileName, 'FW302', source, binding?.index, binding?.length),
-          message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
+          ...diagnosticFor(options.fileName, 'FW302', source, binding.index, binding.length),
+          message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
         },
       ];
-    }
+    });
 
-    return result.nullableTraversal && binding
-      ? [fw227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
-      : [];
-  });
+  const listDiagnostics = queryShapes
+    ? listStamps.flatMap((stamp) => {
+        const binding = listBindings.find((candidate) => candidate.path === stamp.list);
+        const result = validateListStampInQueryShapes(stamp, queryShapes);
+        if (!result.exists) {
+          return [
+            {
+              ...diagnosticFor(options.fileName, 'FW302', source, binding?.index, binding?.length),
+              message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
+            },
+          ];
+        }
 
-  const itemDiagnostics = nullableItemBindingDiagnostics(
-    source,
-    model,
-    bindingAttributes,
-    listStamps,
-    queryShapes,
-    options.fileName,
-  );
+        return result.nullableTraversal && binding
+          ? [fw227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+          : [];
+      })
+    : [];
 
-  return bindingDiagnostics.concat(listDiagnostics, itemDiagnostics);
+  const itemDiagnostics = queryShapes
+    ? nullableItemBindingDiagnostics(
+        source,
+        model,
+        bindingAttributes,
+        listStamps,
+        queryShapes,
+        options.fileName,
+      )
+    : [];
+
+  return bindingDiagnostics.concat(stateDiagnostics, listDiagnostics, itemDiagnostics);
 }
 
 export function validateStampExpressionDrift(
@@ -178,6 +198,28 @@ function validateListStampInQueryShapes(
     stamp.itemBindingPlaceholders?.map((placeholder) => placeholder.path) ?? [],
     queryShapes,
   );
+}
+
+function validateStateBindingPath(path: string, model: ComponentModuleModel): PathShapeValidation {
+  const [root, firstSegment] = parseBindingPath(path);
+  if (root?.name !== 'state') return { exists: true };
+
+  const stateObject = componentStateReturnObjectModel(model);
+  const allowedRoots = new Set([
+    ...(stateObject?.entries.map((entry) => entry.key) ?? []),
+    ...exportedStateDeriveNames(model),
+  ]);
+  if (firstSegment === undefined) return { exists: allowedRoots.size > 0 };
+
+  return { exists: allowedRoots.has(firstSegment.name) };
+}
+
+function exportedStateDeriveNames(model: ComponentModuleModel): string[] {
+  return callExpressions(model)
+    .filter((call) => call.name === 'derive' && call.exportedConstName)
+    .filter((call) => call.argumentStringLiteralArrayValues[0]?.[0] === 'state')
+    .map((call) => call.exportedConstName)
+    .filter((name): name is string => name !== undefined);
 }
 
 function nullableItemBindingDiagnostics(
