@@ -65,6 +65,68 @@ describe('@jiso/drizzle touch graph helpers', () => {
     expect(graph).toEqual({});
   });
 
+  it('defaults unannotated pgTable writes to same-name domains', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const carts = pgTable("carts", {});',
+            '',
+            'export async function addCart(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(carts).values({ id: "c1" });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addCart: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'carts' }],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('emits FW404 for resolved unannotated pgTable writes without a static table name', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'audit.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'const tableName = "audit_log";',
+            'export const auditLog = pgTable(tableName, {});',
+            '',
+            'export async function writeAudit(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(auditLog).values({ id: "a1" });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      writeAudit: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW404',
+            message: 'Write to unmapped table.',
+            site: 'audit.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('extracts project-mode direct Drizzle write calls from typed arrow handlers', () => {
     const graph = extractTouchGraphFromProject({
       files: [

@@ -41,6 +41,7 @@ export interface ReadSummaryInput {
 }
 
 export interface UnresolvedSummaryInput {
+  code?: 'FW404' | 'FW406';
   domain?: string;
   operation: string;
   site: string;
@@ -95,7 +96,7 @@ export function createTouchGraphEntry(input: {
       }))
       .sort(compareTouchSites),
     unresolved: [...(input.unresolved ?? [])].map((site) => ({
-      code: 'FW406',
+      code: site.code ?? 'FW406',
       ...(site.domain === undefined ? {} : { domain: site.domain }),
       message: unresolvedMessage(site),
       site: site.site,
@@ -104,6 +105,8 @@ export function createTouchGraphEntry(input: {
 }
 
 function unresolvedMessage(site: UnresolvedSummaryInput): string {
+  if (site.code === 'FW404') return diagnosticDefinitions.FW404.message;
+
   // SPEC §11.1: write read sources are separate visible surfaces from the write target. Keep
   // their FW406 diagnostics explicit when the source table cannot be proven.
   if (site.operation === 'insert-select') {
@@ -145,7 +148,7 @@ export function serializeTouchGraph(graph: TouchGraph): string {
     lines.push('    unresolved: [');
     for (const unresolved of entry.unresolved) {
       lines.push(
-        `      { code: 'FW406', site: ${JSON.stringify(unresolved.site)}, message: ${JSON.stringify(unresolved.message)}${unresolved.domain === undefined ? '' : `, domain: ${JSON.stringify(unresolved.domain)}`} },`,
+        `      { code: '${unresolved.code}', site: ${JSON.stringify(unresolved.site)}, message: ${JSON.stringify(unresolved.message)}${unresolved.domain === undefined ? '' : `, domain: ${JSON.stringify(unresolved.domain)}`} },`,
       );
     }
     lines.push('    ],');

@@ -79,10 +79,8 @@ export type {
 } from './drizzle-surface.js';
 export { jiso } from './drizzle-surface.js';
 import {
-  isDomainTableAnnotation,
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
-  isExemptTableAnnotation,
   isJisoExtraConfigCallName,
   type JisoDomainTableAnnotation,
   type JisoTableAnnotation,
@@ -179,8 +177,15 @@ export interface TouchGraphProjectOptions {
   files: readonly SourceFileInput[];
 }
 
+type ExtractedTableAnnotation =
+  | (JisoTableAnnotation & { name: string })
+  | {
+      name: string;
+      unmapped: true;
+    };
+
 interface ExtractedTable {
-  annotation: JisoTableAnnotation & { name: string };
+  annotation: ExtractedTableAnnotation;
   columns: Readonly<Record<string, QueryShape>>;
   exported: boolean;
 }
@@ -2100,7 +2105,7 @@ function projectTableNamesBySymbol(
   for (const sourceFile of sourceFiles) {
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const initializer = declaration.getInitializer();
-      if (!initializer || !isProjectAnnotatedTableInitializerNode(initializer)) continue;
+      if (!initializer || !isProjectTableInitializerNode(initializer)) continue;
 
       const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
       if (!symbolKey) continue;
@@ -2258,7 +2263,7 @@ function projectColumnShapesByTable(
   for (const sourceFile of sourceFiles) {
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const initializer = declaration.getInitializer();
-      if (!initializer || !isProjectAnnotatedTableInitializerNode(initializer)) continue;
+      if (!initializer || !isProjectTableInitializerNode(initializer)) continue;
 
       const tableName = tableNamesBySymbol.get(
         resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
@@ -2559,25 +2564,23 @@ function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined 
   return `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
 }
 
-function isAnnotatedTableInitializerNode(initializer: Node): boolean {
+function isTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = initializer.getExpression();
   if (!Node.isIdentifier(expression)) return false;
   if (!isDrizzleTableFactoryName(expression.getText())) return false;
 
-  return initializer.getArguments().some(isJisoAnnotationCall);
+  return true;
 }
 
-function isProjectAnnotatedTableInitializerNode(initializer: Node): boolean {
+function isProjectTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = unwrappedStaticExpressionNode(initializer.getExpression());
   const isTableFactory = Node.isIdentifier(expression)
     ? isDrizzleTableFactoryName(projectPgCoreIdentifierExportName(expression) ?? '')
     : Node.isPropertyAccessExpression(expression) &&
       isDrizzleTableFactoryNamespaceMember(expression);
-  if (!isTableFactory) return false;
-
-  return initializer.getArguments().some(isJisoAnnotationCall);
+  return isTableFactory;
 }
 
 function isDrizzleTableFactoryNamespaceMember(access: Node): boolean {
@@ -4626,7 +4629,7 @@ function queryReadDomains(
 
   for (const tableExpression of tableExpressions) {
     for (const table of tables.get(tableExpression) ?? []) {
-      if (!isDomainTableAnnotation(table.annotation)) continue;
+      if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
       domains.add(table.annotation.domain);
     }
   }
@@ -4643,7 +4646,8 @@ function exemptQueryReadDiagnostics(
 
   for (const tableExpression of tableExpressions) {
     for (const table of tables.get(tableExpression) ?? []) {
-      if (isExemptTableAnnotation(table.annotation)) exemptTables.add(table.annotation.name);
+      if (isExemptExtractedTableAnnotation(table.annotation))
+        exemptTables.add(table.annotation.name);
     }
   }
 
@@ -5012,7 +5016,7 @@ function resolvedQueryTableKey(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): { domain: string } | null {
   for (const table of tables.get(key.tableIdentifier) ?? []) {
-    if (isDomainTableAnnotation(table.annotation) && table.annotation.key === key.key) {
+    if (isDomainExtractedTableAnnotation(table.annotation) && table.annotation.key === key.key) {
       return { domain: table.annotation.domain };
     }
   }
@@ -5038,7 +5042,15 @@ function directSummaryForFunction(
 
     if (resolvedTables.length > 0) {
       for (const table of resolvedTables) {
-        if (isExemptTableAnnotation(table.annotation)) continue;
+        if (isExemptExtractedTableAnnotation(table.annotation)) continue;
+        if (isUnmappedTableAnnotation(table.annotation)) {
+          unresolved.push({
+            code: 'FW404',
+            operation: call.operation,
+            site,
+          });
+          continue;
+        }
         reads.push({
           operation: call.operation,
           site,
@@ -5063,7 +5075,15 @@ function directSummaryForFunction(
 
     if (resolvedTables.length > 0) {
       for (const table of resolvedTables) {
-        if (isExemptTableAnnotation(table.annotation)) continue;
+        if (isExemptExtractedTableAnnotation(table.annotation)) continue;
+        if (isUnmappedTableAnnotation(table.annotation)) {
+          unresolved.push({
+            code: 'FW404',
+            operation: call.operation,
+            site,
+          });
+          continue;
+        }
         const writePredicate = predicateSummaryFromFacts(
           call.predicateFacts,
           call.tableExpression,
@@ -5116,7 +5136,15 @@ function appendReadSourceSummaries(
     const readTables = tables.get(readSource.tableExpression) ?? [];
     if (readTables.length > 0) {
       for (const readTable of readTables) {
-        if (isExemptTableAnnotation(readTable.annotation)) continue;
+        if (isExemptExtractedTableAnnotation(readTable.annotation)) continue;
+        if (isUnmappedTableAnnotation(readTable.annotation)) {
+          unresolved.push({
+            code: 'FW404',
+            operation: readSource.operation,
+            site,
+          });
+          continue;
+        }
         const readPredicate = predicateSummaryFromFacts(
           call.predicateFacts,
           readSource.tableExpression,
@@ -5221,7 +5249,12 @@ function readSummaryKey(read: ReadSummaryInput): string {
 }
 
 function unresolvedSummaryKey(unresolved: UnresolvedSummaryInput): string {
-  return [unresolved.operation, unresolved.site, unresolved.domain ?? ''].join('\0');
+  return [
+    unresolved.code ?? '',
+    unresolved.operation,
+    unresolved.site,
+    unresolved.domain ?? '',
+  ].join('\0');
 }
 
 function writeSummaryKey(write: WriteSummaryInput): string {
@@ -5235,18 +5268,51 @@ function writeSummaryKey(write: WriteSummaryInput): string {
   ].join('\0');
 }
 
-function tableAnnotation(initializer: Node): JisoTableAnnotation | null {
+function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   if (!Node.isCallExpression(initializer)) return null;
   const annotationCall = initializer.getArguments().find(isJisoAnnotationCall);
-  if (!annotationCall || !Node.isCallExpression(annotationCall)) return null;
+  if (!annotationCall) {
+    const tableName = tableNameArgument(initializer);
+    return tableName
+      ? { domain: defaultDomainForTableName(tableName), name: tableName }
+      : { name: UNRESOLVED_READ_SOURCE_EXPRESSION, unmapped: true };
+  }
+  if (!Node.isCallExpression(annotationCall)) return null;
   const annotationObject = annotationCall.getArguments()[0];
   if (!annotationObject || !Node.isObjectLiteralExpression(annotationObject)) return null;
 
-  if (booleanPropertyFromObject(annotationObject, 'exempt') === true) return { exempt: true };
+  const tableName = tableNameArgument(initializer) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
+  if (booleanPropertyFromObject(annotationObject, 'exempt') === true) {
+    return { exempt: true, name: tableName };
+  }
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
   const key = stringPropertyFromObject(annotationObject, 'key');
-  return { domain, ...(key ? { key } : {}) };
+  return { domain, ...(key ? { key } : {}), name: tableName };
+}
+
+function defaultDomainForTableName(tableName: string): string {
+  // SPEC §10.1: tables default to their same-name domain. Existing fixtures and plan ledger use
+  // singular domain names for simple plural table names such as `carts` -> `cart`.
+  return tableName.length > 1 && tableName.endsWith('s') ? tableName.slice(0, -1) : tableName;
+}
+
+function isDomainExtractedTableAnnotation(
+  annotation: ExtractedTableAnnotation,
+): annotation is JisoDomainTableAnnotation & { name: string } {
+  return 'domain' in annotation;
+}
+
+function isExemptExtractedTableAnnotation(
+  annotation: ExtractedTableAnnotation,
+): annotation is { exempt: true; name: string } {
+  return 'exempt' in annotation && annotation.exempt === true;
+}
+
+function isUnmappedTableAnnotation(
+  annotation: ExtractedTableAnnotation,
+): annotation is { name: string; unmapped: true } {
+  return 'unmapped' in annotation && annotation.unmapped === true;
 }
 
 function stringPropertyFromObject(object: Node, name: string): string | undefined {
@@ -5285,7 +5351,7 @@ interface SourceVariableDeclaration {
   exported: boolean;
   identifier: string;
   table?: {
-    annotation: JisoTableAnnotation;
+    annotation: ExtractedTableAnnotation;
     columns: Record<string, QueryShape>;
     name: string;
   };
@@ -5298,9 +5364,7 @@ function variableDeclarationsFromSource(file: SourceFileInput): SourceVariableDe
       const initializer = declaration.getInitializer();
       if (!initializer || !Node.isIdentifier(name)) return [];
 
-      const annotation = isAnnotatedTableInitializerNode(initializer)
-        ? tableAnnotation(initializer)
-        : null;
+      const annotation = isTableInitializerNode(initializer) ? tableAnnotation(initializer) : null;
       return [
         {
           aliasTargets: aliasTargetsFromInitializer(initializer),
@@ -5408,7 +5472,7 @@ function projectTablesBySyntheticName(
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
-      if (!initializer || !isProjectAnnotatedTableInitializerNode(initializer)) continue;
+      if (!initializer || !isProjectTableInitializerNode(initializer)) continue;
 
       const syntheticName = extraction.tableNamesBySymbol.get(
         resolvedSymbolKey(name.getSymbol()) ?? '',
@@ -8650,7 +8714,7 @@ interface DeriveCallback {
 }
 
 /** The instance/primary-key column from a table annotation (null for exempt tables). */
-function tableAnnotationKey(annotation: JisoTableAnnotation & { name: string }): string | null {
+function tableAnnotationKey(annotation: ExtractedTableAnnotation): string | null {
   return 'key' in annotation && annotation.key ? annotation.key : null;
 }
 

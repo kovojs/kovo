@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (12 / 32 findings closed)
+**Status:** open (13 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -190,7 +190,19 @@ tsc --noEmit`, and `pnpm exec vp check --fix` passed.
     `pnpm --filter @jiso/drizzle exec tsc --noEmit` passed.
   - Done = a `class PgDatabase` in app code with no drizzle import is **not** accepted as a db; its writes don't produce authoritative touches. Prove: `pnpm test --dir packages/drizzle` (or the drizzle static suite)
 
-- [ ] **Default same-name domain for un-annotated `pgTable`; emit FW404 at compile time** — `static.ts:2556` (SPEC §10.1, §11.3). Recognize any module-verified `pgTable()` as a table regardless of `jiso()` annotation; synthesize a default domain from the table-name literal. Route only genuinely unmappable writes to FW406; emit FW404 statically for writes to a resolved table with no domain and not `exempt`.
+- [x] **Default same-name domain for un-annotated `pgTable`; emit FW404 at compile time** — `static.ts:2556` (SPEC §10.1, §11.3). Recognize any module-verified `pgTable()` as a table regardless of `jiso()` annotation; synthesize a default domain from the table-name literal. Route only genuinely unmappable writes to FW406; emit FW404 statically for writes to a resolved table with no domain and not `exempt`.
+  - Evidence 2026-06-15: `packages/drizzle/src/static.ts` now treats verified `pgTable()`
+    initializers as table facts without requiring `jiso()`, synthesizes a default domain from the
+    static table-name literal, and keeps dynamically named unannotated tables as resolved-but-FW404
+    unmapped table writes instead of FW406.
+  - Evidence 2026-06-15: `packages/core/src/graph.ts` and `packages/drizzle/src/graph.ts` allow
+    serialized touch-graph unresolved diagnostics to carry FW404 as well as FW406.
+  - Evidence 2026-06-15: `packages/drizzle/src/index.writes-receivers.test.ts` covers
+    `pgTable("carts", {})` + `db.insert(carts)` producing a `cart` touch and dynamic unannotated
+    `pgTable(tableName, {})` writes producing FW404.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/drizzle exec vitest run`,
+    `pnpm --filter @jiso/drizzle exec tsc --noEmit`, and
+    `pnpm --filter @jiso/core exec tsc --noEmit` passed.
   - Done = bare `pgTable("carts", {})` + `db.insert(carts)` yields a `cart` touch (not FW406); an unmapped non-exempt write emits FW404 at compile time. Prove: drizzle static suite with bare-table fixtures.
 
 - [ ] **Composite key derivation: unwrap `and(eq…)` and prove RHS is a write param** — `static.ts:8491`, `:8569` (SPEC §11.1 step 4, FW408). In `extractParameterizedKey`, unwrap a top-level `and(...)` (share the helper with the v2 `keyEqMatchesFromPredicate` to prevent drift) and record `arg:` keys for eq conjuncts. Record a key **only** when the RHS identifier resolves to a `ParameterDeclaration` of the enclosing write (stop hardcoding `input`, stop fabricating `arg:<anyLocal>`); otherwise degrade to table-level (FW409).

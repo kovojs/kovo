@@ -22,7 +22,7 @@ export interface ReadSite {
 }
 
 export interface UnresolvedWriteSite {
-  code: 'FW406';
+  code: 'FW404' | 'FW406';
   domain?: string;
   message: string;
   site: string;
