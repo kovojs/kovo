@@ -1263,7 +1263,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const navValue = required(
       navRoot.querySelector<HTMLOutputElement>('[data-demo-state="navigation-value"]'),
     );
-    installGeneratedGalleryLoader(navRoot, { events: ['click', 'keydown'] });
+    installGeneratedGalleryLoader(navRoot, {
+      events: ['click', 'focus', 'keydown', 'pointerenter'],
+    });
 
     expect(navRoot.getAttribute('role')).toBe('navigation');
     expect(products.getAttribute('aria-haspopup')).toBe('true');
@@ -1294,22 +1296,24 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(navRoot.getAttribute('fw-state')).toBe(
-        '{"activeValue":"products","openValue":"products","value":"escape-canceled"}',
+        '{"activeValue":"products","openValue":"","value":"none"}',
       );
-      expect(products.getAttribute('aria-expanded')).toBe('true');
-      expect(productsContent.hidden).toBe(false);
-      expect(viewport.hidden).toBe(false);
-      expect(navValue.textContent).toBe('escape-canceled');
+      expect(products.getAttribute('aria-expanded')).toBe('false');
+      expect(productsContent.hidden).toBe(true);
+      expect(viewport.hidden).toBe(true);
+      expect(navValue.textContent).toBe('none');
+      expect(document.activeElement).toBe(products);
     });
 
     navRoot.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
 
     await vi.waitFor(() => {
       expect(navRoot.getAttribute('fw-state')).toBe(
-        '{"activeValue":"docs","openValue":"products","value":"escape-canceled"}',
+        '{"activeValue":"docs","openValue":"","value":"none"}',
       );
       expect(products.tabIndex).toBe(-1);
       expect(docs.tabIndex).toBe(0);
+      expect(document.activeElement).toBe(docs);
     });
 
     docs.removeAttribute('href');
@@ -1320,6 +1324,17 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"activeValue":"docs","openValue":"","value":"docs"}',
       );
       expect(navValue.textContent).toBe('docs');
+    });
+
+    products.dispatchEvent(new Event('pointerenter', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(navRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"products","openValue":"products","value":"docs"}',
+      );
+      expect(products.getAttribute('aria-expanded')).toBe('true');
+      expect(productsContent.hidden).toBe(false);
+      expect(viewport.hidden).toBe(false);
     });
   });
 

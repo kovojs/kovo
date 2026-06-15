@@ -552,6 +552,7 @@ export type {
 
 export {
   navigationMenuContentAttributes,
+  navigationMenuFocusElement,
   navigationMenuIndicatorAttributes,
   navigationMenuItemAttributes,
   navigationMenuItemHighlighted,
@@ -575,6 +576,8 @@ export {
 export type {
   NavigationMenuChangeOptions,
   NavigationMenuContentAttributeOptions,
+  NavigationMenuFocusEvent,
+  NavigationMenuFocusOptions,
   NavigationMenuIndicatorAttributeOptions,
   NavigationMenuItem,
   NavigationMenuItemAttributeOptions,

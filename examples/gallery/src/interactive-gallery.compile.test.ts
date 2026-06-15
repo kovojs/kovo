@@ -460,13 +460,46 @@ describe('compiled interactive gallery demos', () => {
     expect(navigationMenu).toContain(
       'fw-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
     );
-    expect(navigationMenuClient).toContain("key === 'Escape'");
     expect(navigationMenu).toContain('navigationMenuTriggerAttributes({');
+    expect(navigationMenu).toContain('navigationMenuFocusElement as _navigationMenuFocusElement');
+    expect(navigationMenu).toContain('navigationMenuKeyDown as _navigationMenuKeyDown');
+    expect(navigationMenu).toContain('navigationMenuLinkClick as _navigationMenuLinkClick');
+    expect(navigationMenu).toContain('navigationMenuMove as _navigationMenuMove');
+    expect(navigationMenu).toContain('navigationMenuTriggerClick as _navigationMenuTriggerClick');
+    expect(navigationMenu).toContain('navigationMenuTriggerFocus as _navigationMenuTriggerFocus');
+    expect(navigationMenu).toContain(
+      'navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter',
+    );
+    expect(navigationMenu).toContain('navigationMenuTypeahead as _navigationMenuTypeahead');
+    expect(navigationMenu).toContain('data-bind:aria-expanded=');
+    expect(navigationMenu).toContain('data-bind:data-highlighted=');
+    expect(navigationMenu).toContain('data-bind:hidden=');
+    expect(navigationMenu).toContain('data-bind:tabIndex=');
+    expect(navigationMenuClient).toContain('navigationMenuKeyDown as _navigationMenuKeyDown');
+    expect(navigationMenuClient).toContain('navigationMenuLinkClick as _navigationMenuLinkClick');
+    expect(navigationMenuClient).toContain(
+      'navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter',
+    );
+    expect(navigationMenuClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(navigationMenu).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$section_keydown"/,
     );
     expect(navigationMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$button_click"/,
+    );
+    expect(navigationMenu).toMatch(
+      /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$button_focus"/,
+    );
+    expect(navigationMenu).toMatch(
+      /on:pointerenter="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$button_pointerenter"/,
+    );
+    expect(navigationMenu).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$a_click"/,
+    );
+    expect(navigationMenu).toMatch(
+      /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$a_focus"/,
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');

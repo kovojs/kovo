@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   navigationMenuContentAttributes as exportedNavigationMenuContentAttributes,
+  navigationMenuFocusElement as exportedNavigationMenuFocusElement,
   navigationMenuIndicatorAttributes as exportedNavigationMenuIndicatorAttributes,
   navigationMenuItemAttributes as exportedNavigationMenuItemAttributes,
   navigationMenuItemHighlighted as exportedNavigationMenuItemHighlighted,
@@ -24,6 +25,7 @@ import {
 } from '../index.js';
 import {
   navigationMenuContentAttributes,
+  navigationMenuFocusElement,
   navigationMenuIndicatorAttributes,
   navigationMenuItemAttributes,
   navigationMenuItemHighlighted,
@@ -590,8 +592,88 @@ describe('headless-ui navigation-menu primitive', () => {
     expect(canceledEvent.defaultPrevented).toBe(true);
   });
 
+  it('focuses navigation menu elements through delegated event ownerDocument access', () => {
+    let focusCount = 0;
+    const ownerDocument = {
+      getElementById(id: string) {
+        return id === 'products-trigger'
+          ? {
+              focus() {
+                focusCount += 1;
+              },
+            }
+          : undefined;
+      },
+    };
+    const directEvent = {
+      currentTarget: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+    const delegatedEvent = {
+      currentTarget: null,
+      target: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: null;
+      target: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+
+    expect(navigationMenuFocusElement(directEvent, 'products-trigger')).toBe(true);
+    expect(navigationMenuFocusElement(delegatedEvent, 'products-trigger')).toBe(true);
+    expect(navigationMenuFocusElement(directEvent, 'missing')).toBe(false);
+    expect(focusCount).toBe(2);
+  });
+
+  it('can defer navigation menu focus until after reactive state bindings commit', () => {
+    let deferredFocusCount = 0;
+    const scheduled: Array<() => void> = [];
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'docs-link'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: {
+        ownerDocument: {
+          getElementById(id: string): unknown;
+        };
+      };
+    };
+
+    expect(
+      navigationMenuFocusElement(event, 'docs-link', {
+        defer: true,
+        schedule(callback) {
+          scheduled.push(callback);
+        },
+      }),
+    ).toBe(true);
+    expect(deferredFocusCount).toBe(0);
+
+    scheduled.forEach((callback) => callback());
+    expect(deferredFocusCount).toBe(1);
+  });
+
   it('exports navigation-menu helpers from package and primitives barrels', () => {
     expect(exportedNavigationMenuContentAttributes).toBe(navigationMenuContentAttributes);
+    expect(exportedNavigationMenuFocusElement).toBe(navigationMenuFocusElement);
     expect(exportedNavigationMenuIndicatorAttributes).toBe(navigationMenuIndicatorAttributes);
     expect(exportedNavigationMenuItemAttributes).toBe(navigationMenuItemAttributes);
     expect(exportedNavigationMenuItemHighlighted).toBe(navigationMenuItemHighlighted);

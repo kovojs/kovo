@@ -144,6 +144,22 @@ export type NavigationMenuPrimitiveAttributes = PrimitiveDataAttributes &
 export type NavigationMenuTriggerEvent = Event;
 export type NavigationMenuLinkEvent = Event;
 export type NavigationMenuKeyboardEvent = Event & { readonly key: string };
+export type NavigationMenuFocusEvent = Event & {
+  readonly currentTarget?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+  readonly target?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+};
+export interface NavigationMenuFocusOptions {
+  defer?: boolean;
+  schedule?: (callback: () => void) => void;
+}
 
 export function navigationMenuRootAttributes(
   options: NavigationMenuRootAttributeOptions = {},
@@ -516,6 +532,28 @@ export function navigationMenuKeyDown(
   }
 
   return undefined;
+}
+
+export function navigationMenuFocusElement(
+  event: NavigationMenuFocusEvent,
+  id: string | undefined,
+  options: NavigationMenuFocusOptions = {},
+): boolean {
+  if (!id) return false;
+
+  const ownerDocument = event.currentTarget?.ownerDocument ?? event.target?.ownerDocument;
+  const target = ownerDocument?.getElementById?.(id);
+  if (typeof (target as { focus?: unknown } | undefined)?.focus !== 'function') return false;
+
+  const focus = () => {
+    (target as { focus(): void }).focus();
+  };
+  if (options.defer === true) {
+    (options.schedule ?? ((callback) => setTimeout(callback, 0)))(focus);
+  } else {
+    focus();
+  }
+  return true;
 }
 
 function navigationMenuKeyboardOpensContent(key: string): boolean {

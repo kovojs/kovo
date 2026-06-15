@@ -252,39 +252,70 @@ describe('compiled interactive gallery demos', () => {
         keyEvent('ArrowRight'),
         { params: {}, signal, state: navigationState },
       );
-      expect(element(document, 'gallery-navigation-products-trigger').tabIndex).toBe(-1);
-      expect(element(document, 'gallery-navigation-docs-link').tabIndex).toBe(0);
-      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_click')(new Event('click'), {
-        params: {},
-        signal,
-        state: navigationState,
-      });
-      expect(element(document, 'gallery-navigation-products-trigger').attrs['aria-expanded']).toBe(
-        'true',
+      expect(navigationState).toEqual({ activeValue: 'docs', openValue: '', value: 'none' });
+      expect(
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$button_tabIndex_derive',
+          navigationState,
+        ),
+      ).toBe(-1);
+      expect(
+        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$a_tabIndex_derive', navigationState),
+      ).toBe(0);
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_pointerenter')(
+        new Event('pointerenter'),
+        {
+          params: {},
+          signal,
+          state: navigationState,
+        },
       );
-      expect(element(document, 'gallery-navigation-products-content').hidden).toBe(false);
-      expect(element(document, 'gallery-navigation-viewport').hidden).toBe(false);
-      expect(selector(document, '[data-demo-state="navigation-open"]').textContent).toBe(
-        'products',
-      );
-      const navEscape = Object.assign(new Event('keydown', { cancelable: true }), {
-        key: 'Escape',
+      expect(navigationState).toEqual({
+        activeValue: 'products',
+        openValue: 'products',
+        value: 'none',
       });
+      expect(
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$button_aria_expanded_derive',
+          navigationState,
+        ),
+      ).toBe('true');
+      expect(
+        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$div_hidden_derive', navigationState),
+      ).toBeNull();
+      expect(
+        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$div_hidden_derive_2', navigationState),
+      ).toBeNull();
+      expect(
+        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$output_text_derive', navigationState),
+      ).toBe('products');
+      const navEscape = keyEvent('Escape');
       clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(navEscape, {
         params: {},
         signal,
         state: navigationState,
       });
       expect(navEscape.defaultPrevented).toBe(true);
-      expect(element(document, 'gallery-navigation-products-trigger').attrs['aria-expanded']).toBe(
-        'true',
-      );
-      expect(element(document, 'gallery-navigation-products-content').hidden).toBe(false);
-      expect(selector(document, '[data-demo-state="navigation-open"]').textContent).toBe(
-        'products',
-      );
-      expect(selector(document, '[data-demo-state="navigation-value"]').textContent).toBe(
-        'escape-canceled',
+      expect(navigationState).toEqual({ activeValue: 'products', openValue: '', value: 'none' });
+      expect(
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$button_aria_expanded_derive',
+          navigationState,
+        ),
+      ).toBe('false');
+      expect(
+        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$div_hidden_derive', navigationState),
+      ).toBe('');
+      expect(
+        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$output_text_derive', navigationState),
+      ).toBe('none');
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+        keyEvent('ArrowRight'),
+        { params: {}, signal, state: navigationState },
       );
       const navClick = new Event('click', { cancelable: true });
       clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$a_click')(navClick, {
@@ -293,7 +324,7 @@ describe('compiled interactive gallery demos', () => {
         state: navigationState,
       });
       expect(navClick.defaultPrevented).toBe(true);
-      expect(selector(document, '[data-demo-state="navigation-value"]').textContent).toBe('docs');
+      expect(navigationState).toEqual({ activeValue: 'docs', openValue: '', value: 'docs' });
 
       const scrollArea = evaluateClientModule('scroll-area-demo.client.js');
       const scrollAreaState = {

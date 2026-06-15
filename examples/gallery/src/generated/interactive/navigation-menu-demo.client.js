@@ -1,98 +1,206 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
+import {
+  navigationMenuFocusElement as _navigationMenuFocusElement,
+  navigationMenuKeyDown as _navigationMenuKeyDown,
+  navigationMenuLinkClick as _navigationMenuLinkClick,
+  navigationMenuMove as _navigationMenuMove,
+  navigationMenuTriggerClick as _navigationMenuTriggerClick,
+  navigationMenuTriggerFocus as _navigationMenuTriggerFocus,
+  navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
+  navigationMenuTypeahead as _navigationMenuTypeahead,
+} from '@jiso/headless-ui/primitives';
+
 export const GalleryNavigationMenuDemo$section_keydown = handler((event, ctx) => {
-  const key = String(Object(event)['key'] ?? '');
-  const doc = Reflect['get'](globalThis, 'document');
-  const products = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-products-trigger')
-    : undefined;
-  const docs = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-docs-link')
-    : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-products-content')
-    : undefined;
-  const viewport = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-viewport')
-    : undefined;
-  const openOutput = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="navigation-open"]')
-    : undefined;
-  const valueOutput = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="navigation-value"]')
-    : undefined;
-
-  if (key === 'ArrowRight') {
-    ctx.state.activeValue = 'docs';
-    if (products) products['tabIndex'] = -1;
-    if (docs) docs['tabIndex'] = 0;
-    return;
-  }
-
-  if (
-    (key === 'Enter' || key === ' ' || key === 'Spacebar' || key === 'ArrowDown') &&
-    ctx.state.activeValue === 'products'
-  ) {
-    Object(event)['preventDefault']?.call(event);
-    ctx.state.openValue = 'products';
-  } else if (key === 'Escape' && ctx.state.openValue === 'products') {
-    Object(event)['preventDefault']?.call(event);
-    ctx.state.value = 'escape-canceled';
-  } else {
-    return;
-  }
-
-  {
-    if (products) {
-      Object(products)['setAttribute']?.call(
-        products,
-        'aria-expanded',
-        String(ctx.state.openValue === 'products'),
+  const keyResult = _navigationMenuKeyDown(Object(event), {
+    activeValue: ctx.state.activeValue,
+    items: [
+      { hasContent: true, label: 'Products', value: 'products' },
+      { label: 'Docs', value: 'docs' },
+    ],
+    ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+  });
+  if (keyResult?.changed) {
+    ctx.state.openValue = keyResult.openValue ?? '';
+    if (Object(event).key === 'Escape') {
+      _navigationMenuFocusElement(
+        Object(event),
+        ctx.state.activeValue === 'docs'
+          ? 'gallery-navigation-docs-link'
+          : 'gallery-navigation-products-trigger',
       );
+    } else {
+      ctx.state.activeValue = 'products';
+      _navigationMenuFocusElement(Object(event), 'gallery-navigation-products-trigger');
     }
-    if (content) content['hidden'] = ctx.state.openValue !== 'products';
-    if (viewport) viewport['hidden'] = ctx.state.openValue === '';
-    if (openOutput) openOutput['textContent'] = ctx.state.openValue || 'none';
-    if (valueOutput) valueOutput['textContent'] = ctx.state.value;
+    return;
   }
-});
-export const GalleryNavigationMenuDemo$button_click = handler((_event, ctx) => {
-  ctx.state.openValue = ctx.state.openValue === 'products' ? '' : 'products';
-  const doc = Reflect['get'](globalThis, 'document');
-  const trigger = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-products-trigger')
-    : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-products-content')
-    : undefined;
-  const viewport = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-navigation-viewport')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="navigation-open"]')
-    : undefined;
-  if (trigger)
-    Object(trigger)['setAttribute']?.call(
-      trigger,
-      'aria-expanded',
-      String(ctx.state.openValue === 'products'),
+
+  const move = _navigationMenuMove(
+    {
+      activeValue: ctx.state.activeValue,
+      items: [
+        { hasContent: true, label: 'Products', value: 'products' },
+        { label: 'Docs', value: 'docs' },
+      ],
+      ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+    },
+    Object(event).key,
+    { loop: true },
+  );
+  if (move) {
+    Object(event).preventDefault?.();
+    ctx.state.activeValue = move.activeValue ?? ctx.state.activeValue;
+    if (ctx.state.openValue !== '')
+      ctx.state.openValue = ctx.state.activeValue === 'products' ? 'products' : '';
+    _navigationMenuFocusElement(
+      Object(event),
+      ctx.state.activeValue === 'docs'
+        ? 'gallery-navigation-docs-link'
+        : 'gallery-navigation-products-trigger',
     );
-  if (content) content['hidden'] = ctx.state.openValue !== 'products';
-  if (viewport) viewport['hidden'] = ctx.state.openValue === '';
-  if (output) output['textContent'] = ctx.state.openValue || 'none';
+    return;
+  }
+
+  const typeahead = _navigationMenuTypeahead(
+    {
+      activeValue: ctx.state.activeValue,
+      items: [
+        { hasContent: true, label: 'Products', value: 'products' },
+        { label: 'Docs', value: 'docs' },
+      ],
+      ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+    },
+    Object(event).key,
+    { loop: true, now: 0 },
+  );
+  if (typeahead.activeValue === ctx.state.activeValue) return;
+  Object(event).preventDefault?.();
+  ctx.state.activeValue = typeahead.activeValue ?? ctx.state.activeValue;
+  if (ctx.state.openValue !== '')
+    ctx.state.openValue = ctx.state.activeValue === 'products' ? 'products' : '';
+  _navigationMenuFocusElement(
+    Object(event),
+    ctx.state.activeValue === 'docs'
+      ? 'gallery-navigation-docs-link'
+      : 'gallery-navigation-products-trigger',
+  );
+});
+export const GalleryNavigationMenuDemo$button_click = handler((event, ctx) => {
+  const result = _navigationMenuTriggerClick(Object(event), {
+    activeValue: ctx.state.activeValue,
+    contentId: 'gallery-navigation-products-content',
+    itemValue: 'products',
+    items: [
+      { hasContent: true, label: 'Products', value: 'products' },
+      { label: 'Docs', value: 'docs' },
+    ],
+    ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+  });
+  if (!result?.changed) return;
+  ctx.state.activeValue = 'products';
+  ctx.state.openValue = result.openValue ?? '';
+});
+export const GalleryNavigationMenuDemo$button_focus = handler((event, ctx) => {
+  const result = _navigationMenuTriggerFocus(Object(event), {
+    activeValue: ctx.state.activeValue,
+    contentId: 'gallery-navigation-products-content',
+    itemValue: 'products',
+    items: [
+      { hasContent: true, label: 'Products', value: 'products' },
+      { label: 'Docs', value: 'docs' },
+    ],
+    ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+  });
+  ctx.state.activeValue = 'products';
+  if (result?.changed) ctx.state.openValue = result.openValue ?? '';
+});
+export const GalleryNavigationMenuDemo$button_pointerenter = handler((event, ctx) => {
+  const result = _navigationMenuTriggerPointerEnter(Object(event), {
+    activeValue: ctx.state.activeValue,
+    contentId: 'gallery-navigation-products-content',
+    itemValue: 'products',
+    items: [
+      { hasContent: true, label: 'Products', value: 'products' },
+      { label: 'Docs', value: 'docs' },
+    ],
+    ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+  });
+  ctx.state.activeValue = 'products';
+  if (result?.changed) ctx.state.openValue = result.openValue ?? '';
 });
 export const GalleryNavigationMenuDemo$a_click = handler((event, ctx) => {
+  const result = _navigationMenuLinkClick(Object(event), {
+    activeValue: ctx.state.activeValue,
+    href: '/docs',
+    itemValue: 'docs',
+    items: [
+      { hasContent: true, label: 'Products', value: 'products' },
+      { label: 'Docs', value: 'docs' },
+    ],
+    ...(ctx.state.openValue === '' ? {} : { openValue: ctx.state.openValue }),
+  });
+  if (!result?.selected) return;
+  Object(event).preventDefault?.();
+  ctx.state.activeValue = 'docs';
+  ctx.state.openValue = result.open.openValue ?? '';
+  ctx.state.value = result.value;
+});
+export const GalleryNavigationMenuDemo$a_focus = handler((_event, ctx) => {
+  ctx.state.activeValue = 'docs';
   ctx.state.openValue = '';
-  ctx.state.value = 'docs';
-  const doc = Reflect['get'](globalThis, 'document');
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="navigation-value"]')
-    : undefined;
-  if (event) Object(event)['preventDefault']?.call(event);
-  if (output) output['textContent'] = 'docs';
 });
 
+export const GalleryNavigationMenuDemo$section_data_open_derive = derive(
+  ['state'],
+  (state) => state.openValue || 'none',
+);
+export const GalleryNavigationMenuDemo$div_data_highlighted_derive = derive(['state'], (state) =>
+  state.activeValue === 'products' ? '' : null,
+);
+export const GalleryNavigationMenuDemo$div_data_state_derive = derive(['state'], (state) =>
+  state.activeValue === 'products' ? 'active' : 'inactive',
+);
+export const GalleryNavigationMenuDemo$button_aria_expanded_derive = derive(['state'], (state) =>
+  state.openValue === 'products' ? 'true' : 'false',
+);
+export const GalleryNavigationMenuDemo$button_data_highlighted_derive = derive(['state'], (state) =>
+  state.activeValue === 'products' ? '' : null,
+);
+export const GalleryNavigationMenuDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.openValue === 'products' ? 'open' : 'closed',
+);
+export const GalleryNavigationMenuDemo$button_tabIndex_derive = derive(['state'], (state) =>
+  state.activeValue === 'products' ? 0 : -1,
+);
+export const GalleryNavigationMenuDemo$div_data_highlighted_derive_2 = derive(['state'], (state) =>
+  state.activeValue === 'docs' ? '' : null,
+);
+export const GalleryNavigationMenuDemo$div_data_state_derive_2 = derive(['state'], (state) =>
+  state.activeValue === 'docs' ? 'active' : 'inactive',
+);
+export const GalleryNavigationMenuDemo$a_data_highlighted_derive = derive(['state'], (state) =>
+  state.activeValue === 'docs' ? '' : null,
+);
+export const GalleryNavigationMenuDemo$a_data_state_derive = derive(['state'], (state) =>
+  state.activeValue === 'docs' ? 'active' : 'inactive',
+);
+export const GalleryNavigationMenuDemo$a_tabIndex_derive = derive(['state'], (state) =>
+  state.activeValue === 'docs' ? 0 : -1,
+);
+export const GalleryNavigationMenuDemo$div_data_state_derive_3 = derive(['state'], (state) =>
+  state.openValue === 'products' ? 'open' : 'closed',
+);
+export const GalleryNavigationMenuDemo$div_hidden_derive = derive(['state'], (state) =>
+  state.openValue !== 'products' ? '' : null,
+);
+export const GalleryNavigationMenuDemo$div_data_state_derive_4 = derive(['state'], (state) =>
+  state.openValue === 'products' ? 'open' : 'closed',
+);
+export const GalleryNavigationMenuDemo$div_hidden_derive_2 = derive(['state'], (state) =>
+  state.openValue === '' ? '' : null,
+);
 export const GalleryNavigationMenuDemo$output_text_derive = derive(
   ['state'],
   (state) => state.openValue || 'none',

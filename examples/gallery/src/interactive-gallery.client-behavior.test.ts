@@ -609,21 +609,48 @@ describe('compiled interactive gallery demos', () => {
     expect(navigationEscapeEvent.defaultPrevented).toBe(true);
     expect(navigationMenuState).toEqual({
       activeValue: 'products',
-      openValue: 'products',
-      value: 'escape-canceled',
+      openValue: '',
+      value: 'none',
     });
-    navigationMenuState.activeValue = 'docs';
-    navigationMenuState.openValue = '';
-    navigationMenuState.value = 'none';
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_click')(new Event('click'), {
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_pointerenter')(
+      new Event('pointerenter'),
+      {
+        params: {},
+        signal,
+        state: navigationMenuState,
+      },
+    );
+    expect(navigationMenuState).toEqual({
+      activeValue: 'products',
+      openValue: 'products',
+      value: 'none',
+    });
+    const navigationMoveToDocsEvent = keyEvent('ArrowRight');
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+      navigationMoveToDocsEvent,
+      {
+        params: {},
+        signal,
+        state: navigationMenuState,
+      },
+    );
+    expect(navigationMoveToDocsEvent.defaultPrevented).toBe(true);
+    expect(navigationMenuState).toEqual({
+      activeValue: 'docs',
+      openValue: '',
+      value: 'none',
+    });
+    const navigationClickEvent = new Event('click', { cancelable: true });
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$a_click')(navigationClickEvent, {
       params: {},
       signal,
       state: navigationMenuState,
     });
+    expect(navigationClickEvent.defaultPrevented).toBe(true);
     expect(navigationMenuState).toEqual({
       activeValue: 'docs',
-      openValue: 'products',
-      value: 'none',
+      openValue: '',
+      value: 'docs',
     });
 
     const numberFieldState = { value: 2 };

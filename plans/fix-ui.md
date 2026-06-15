@@ -307,10 +307,33 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
     tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
     scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
-- [ ] **navigation-menu** [P1]: no hover-open (signature interaction); ArrowRight is one-way
+- [x] **navigation-menu** [P1]: no hover-open (signature interaction); ArrowRight is one-way
       Products→Docs with no ArrowLeft/loop; **Escape is actively wrong** — it sets
       `value='escape-canceled'` and leaves the panel open. Wire `navigationMenuMove`,
       `navigationMenuKeyDown` (Escape closes + restores focus), hover-open via `pointerover`/`focusin`.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/navigation-menu.ts` now exports
+    deferred `navigationMenuFocusElement`; primitive coverage verifies movement, typeahead, trigger
+    click/focus/pointer-enter open, keyboard open, Escape close, link selection, delegated
+    ownerDocument focus, deferred focus scheduling, and barrel exports.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/navigation-menu-demo.tsx` now calls
+    `_navigationMenuKeyDown`, `_navigationMenuMove`, `_navigationMenuTypeahead`,
+    `_navigationMenuTriggerClick`, `_navigationMenuTriggerFocus`,
+    `_navigationMenuTriggerPointerEnter`, and `_navigationMenuLinkClick`, with state-bound
+    `aria-expanded`, `data-open`, `data-state`, `hidden`, `data-highlighted`, `tabIndex`, and outputs.
+  - Evidence 2026-06-15: generated `navigation-menu-demo.client.js` mutates only `ctx.state`, imports
+    the navigation-menu reducers/focus helper, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated navigation-menu files found no matches.
+  - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/navigation-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+    "navigation-menu"`; `pnpm --filter @jiso/example-gallery exec vitest --config
+    vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts -t
+    "generated interactive"`; `pnpm --filter @jiso/headless-ui exec tsc --noEmit`;
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery
+    exec node scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [x] **toolbar** [P2]: root `onKeyDown` hardcodes a bold↔link flip ignoring the key (ArrowLeft==Right,
       no Home/End, disabled 'italic' skipped only incidentally). Wire `toolbarKeyDown`/`toolbarMoveFocus`
       (auto-skips disabled). Click-toggle already works (imperative stamps present).
