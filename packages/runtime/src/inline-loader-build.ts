@@ -96,6 +96,9 @@ function installInlineJisoLoader(importModule) {
     if ((name === 'checked' || name === 'indeterminate') && value === false) value = null;
     if (value == null) element.removeAttribute?.(name);
     else element.setAttribute?.(name, formatBoundValue(value));
+    if (name === 'value' && element.value !== undefined) {
+      element.value = value == null ? '' : formatBoundValue(value);
+    }
     if (name === 'checked' && element.checked !== undefined) element.checked = value != null;
     if (name === 'indeterminate' && element.indeterminate !== undefined) {
       element.indeterminate = value != null;

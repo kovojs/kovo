@@ -2,6 +2,23 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryNumberFieldDemo$button_data_disabled_derive = derive(['state'], (state: any) =>
+  state.value <= 0 ? '' : null,
+);
+export const GalleryNumberFieldDemo$button_disabled_derive = derive(['state'], (state: any) =>
+  state.value <= 0 ? '' : null,
+);
+export const GalleryNumberFieldDemo$input_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryNumberFieldDemo$button_data_disabled_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.value >= 5 ? '' : null),
+);
+export const GalleryNumberFieldDemo$button_disabled_derive_2 = derive(['state'], (state: any) =>
+  state.value >= 5 ? '' : null,
+);
 export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.value),
 );
@@ -9,8 +26,12 @@ export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (stat
 import { component } from '@jiso/core';
 import {
   numberFieldDecrementAttributes,
+  numberFieldDecrementClick as _numberFieldDecrementClick,
   numberFieldIncrementAttributes,
+  numberFieldIncrementClick as _numberFieldIncrementClick,
+  numberFieldInput as _numberFieldInput,
   numberFieldInputAttributes,
+  numberFieldKeyDown as _numberFieldKeyDown,
   numberFieldRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -42,6 +63,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
       min: 0,
       name: 'gallery-seat-count',
       required: true,
+      smallStep: 1,
       step: 1,
       value: state.value,
     };
@@ -64,7 +86,11 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
           <button
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$button_click"
+            data-disabled={state.value <= 0 ? '' : null}
+            data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_data_disabled_derive"
+            disabled={state.value <= 0}
+            data-bind:disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_disabled_derive"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_click"
           >
             -
           </button>
@@ -76,12 +102,19 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
               label: 'Seats',
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$input_input"
+            value={state.value}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$input_value_derive"
+            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$input_keydown"
           />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$button_click_2"
+            data-disabled={state.value >= 5 ? '' : null}
+            data-bind:data-disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_data_disabled_derive_2"
+            disabled={state.value >= 5}
+            data-bind:disabled="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_disabled_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$button_click_2"
           >
             +
           </button>
@@ -89,7 +122,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
         <output
           data-demo-state="value"
           class="text-xs text-neutral-500"
-          data-bind="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=1f609f8e#GalleryNumberFieldDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

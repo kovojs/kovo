@@ -347,6 +347,34 @@ describe('query binding helpers', () => {
     expect(input.checked).toBe(false);
   });
 
+  it('reflects state-derived value attribute bindings to the live input property', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":2}' });
+    const input = new FakeStatefulBindingElement(
+      {
+        'data-bind:value': '/c/number-field.client.js#NumberField$input_value_derive',
+        value: '2',
+      },
+      { parent: host, value: '2' },
+    );
+    const importModule = async () => ({
+      NumberField$input_value_derive: {
+        run(value: unknown) {
+          return (value as { value: number | undefined }).value;
+        },
+      },
+    });
+
+    await expect(applyStateBindings(host, { value: 5 }, { importModule })).resolves.toEqual([
+      '/c/number-field.client.js#NumberField$input_value_derive',
+    ]);
+    expect(input.getAttribute('value')).toBe('5');
+    expect(input.value).toBe('5');
+
+    await applyStateBindings(host, { value: undefined }, { importModule });
+    expect(input.getAttribute('value')).toBeNull();
+    expect(input.value).toBe('');
+  });
+
   it('reflects state-derived indeterminate bindings to the live input property', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"checked":"indeterminate"}' });
     const input = new FakeStatefulBindingElement(

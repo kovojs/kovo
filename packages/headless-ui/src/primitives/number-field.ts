@@ -11,10 +11,12 @@ export type NumberFieldValue = number | undefined;
 export interface NumberFieldState {
   disabled?: boolean;
   invalid?: boolean;
+  largeStep?: number;
   max?: number;
   min?: number;
   name?: string;
   required?: boolean;
+  smallStep?: number;
   step?: number;
   value?: NumberFieldValue;
 }
@@ -61,6 +63,14 @@ export type NumberFieldPrimitiveAttributes = PrimitiveDataAttributes &
 export type NumberFieldButtonEvent = Event;
 export type NumberFieldInputEvent = Event & {
   readonly currentTarget: { value: string } | null;
+  readonly target?: { value?: string } | null;
+};
+export type NumberFieldKeyboardEvent = Event & {
+  readonly altKey?: boolean;
+  readonly ctrlKey?: boolean;
+  readonly key: string;
+  readonly metaKey?: boolean;
+  readonly shiftKey?: boolean;
 };
 
 export function numberFieldRootAttributes(
@@ -166,16 +176,17 @@ export function numberFieldInput(
 ): NumberFieldChangeResult | undefined {
   if (event.defaultPrevented) return;
 
-  if (event.currentTarget === null) return;
+  const input = numberFieldInputEventTarget(event);
+  if (input === undefined) return;
 
   const result = setNumberFieldValue(
     state,
-    numberFieldValueFromString(event.currentTarget.value),
+    numberFieldValueFromString(input.value),
     'input',
     options,
   );
   if (!result.changed) {
-    event.currentTarget.value = numberFieldInputValue(result.value);
+    input.value = numberFieldInputValue(result.value);
     event.preventDefault();
   }
 
@@ -224,6 +235,27 @@ export function numberFieldDecrementClick(
   return result;
 }
 
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function numberFieldKeyDown(
+  event: NumberFieldKeyboardEvent,
+  state: NumberFieldState,
+  options: NumberFieldChangeOptions = {},
+): NumberFieldChangeResult | undefined {
+  if (event.defaultPrevented) return;
+
+  const result = numberFieldKeyboardValueChange(event, state, options);
+  if (result === undefined) return;
+
+  event.preventDefault();
+
+  return result;
+}
+
 function numberFieldStepButtonAttributes(
   options: NumberFieldButtonAttributeOptions,
   direction: 'decrement' | 'increment',
@@ -257,8 +289,9 @@ function numberFieldDataAttributes(state: NumberFieldState): PrimitiveDataAttrib
 function numberFieldStepValue(
   state: NumberFieldState,
   direction: 'decrement' | 'increment',
+  stepOverride?: number,
 ): NumberFieldValue {
-  const step = numberFieldStep(state.step);
+  const step = stepOverride ?? numberFieldSmallStep(state);
   const currentValue = normalizeNumberFieldValue(state.value);
   const nextValue =
     currentValue === undefined
@@ -266,6 +299,59 @@ function numberFieldStepValue(
       : numberFieldAlignedStepValue(state, currentValue, step, direction);
 
   return clampNumberFieldValue(nextValue, state);
+}
+
+function numberFieldKeyboardValueChange(
+  event: NumberFieldKeyboardEvent,
+  state: NumberFieldState,
+  options: NumberFieldChangeOptions,
+): NumberFieldChangeResult | undefined {
+  const direction =
+    event.key === 'ArrowUp' || event.key === 'PageUp'
+      ? 'increment'
+      : event.key === 'ArrowDown' || event.key === 'PageDown'
+        ? 'decrement'
+        : undefined;
+
+  if (direction !== undefined) {
+    const step = numberFieldKeyboardStep(event, state);
+    return setNumberFieldValue(
+      state,
+      numberFieldStepValue(state, direction, step),
+      direction,
+      options,
+    );
+  }
+
+  if (event.key === 'Home' && numberFieldFinite(state.min)) {
+    return setNumberFieldValue(state, state.min, 'decrement', options);
+  }
+
+  if (event.key === 'End' && numberFieldFinite(state.max)) {
+    return setNumberFieldValue(state, state.max, 'increment', options);
+  }
+
+  return undefined;
+}
+
+function numberFieldKeyboardStep(event: NumberFieldKeyboardEvent, state: NumberFieldState): number {
+  return event.key === 'PageUp' ||
+    event.key === 'PageDown' ||
+    event.shiftKey === true ||
+    event.metaKey === true ||
+    event.ctrlKey === true ||
+    event.altKey === true
+    ? numberFieldLargeStep(state)
+    : numberFieldSmallStep(state);
+}
+
+function numberFieldInputEventTarget(
+  event: NumberFieldInputEvent,
+): { value: string } | undefined {
+  if (event.currentTarget !== null) return event.currentTarget;
+  const target = event.target;
+  if (target && typeof target.value === 'string') return target as { value: string };
+  return undefined;
 }
 
 function numberFieldEmptyStepValue(
@@ -326,8 +412,15 @@ function numberFieldInputValue(value: NumberFieldValue): string {
   return value === undefined ? '' : String(value);
 }
 
-function numberFieldStep(step: number | undefined): number {
-  return numberFieldFinite(step) && step > 0 ? step : 1;
+function numberFieldSmallStep(state: NumberFieldState): number {
+  if (numberFieldFinite(state.smallStep) && state.smallStep > 0) return state.smallStep;
+  if (numberFieldFinite(state.step) && state.step > 0) return state.step;
+  return 1;
+}
+
+function numberFieldLargeStep(state: NumberFieldState): number {
+  if (numberFieldFinite(state.largeStep) && state.largeStep > 0) return state.largeStep;
+  return numberFieldSmallStep(state) * 10;
 }
 
 function numberFieldFinite(value: unknown): value is number {

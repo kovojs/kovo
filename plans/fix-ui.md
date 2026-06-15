@@ -485,10 +485,34 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       (`aria-valuemin/now/max/valuetext/orientation`, keydown Arrow/Page/Home/End + Shift-large-step,
       pointer drag, track-click) matching shadcn/Radix; drop the native range as the primary control.
       Replace the demo's hardcoded threshold quantizer with `sliderInput`. See Phase 4 `slider.ts`.
-- [ ] **number-field** [P1]: functional via native `<input type=number>` + `+/-` buttons, but stepping
+- [x] **number-field** [P1]: functional via native `<input type=number>` + `+/-` buttons, but stepping
       is the browser's (not the primitive's aligned-step/clamp), and there's no PageUp/Down, Shift/Meta
       step, press-and-hold repeat, or `Intl` formatting. Add `numberFieldKeyDown` + `largeStep`/
       `smallStep` to the primitive; route demo handlers through `numberFieldInput`/`increment`/`decrement`.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/number-field.ts` now exposes
+    `numberFieldKeyDown`, `smallStep`, and `largeStep`; primitive tests cover Arrow/Page/Home/End
+    keyboard stepping, aligned-step behavior, and package/primitives barrel exports.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/number-field-demo.tsx` routes input,
+    stepper clicks, and keydown through `_numberFieldInput`, `_numberFieldIncrementClick`,
+    `_numberFieldDecrementClick`, and `_numberFieldKeyDown`; `value`, stepper `disabled`,
+    `data-disabled`, and output text are state-bound TSX. Regenerated artifacts import the primitive
+    reducers and emit the corresponding state derives.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts` and
+    `packages/runtime/src/inline-loader-build.ts` now reflect derived `data-bind:value` updates to the
+    live control `.value`, with modular and inline tests covering the property reflection.
+  - Evidence 2026-06-15: `rg
+    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
+    generated number-field files found no matches; `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/number-field.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+    `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts
+    src/inline-loader-delegated.test.ts`, `pnpm --filter @jiso/runtime run check:inline-loader`,
+    `pnpm --filter @jiso/runtime exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest
+    run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t number-field`, `pnpm --filter
+    @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
+    @jiso/example-gallery exec tsc --noEmit` passed. Press-and-hold repeat and `Intl` formatting remain
+    future enhancements beyond this verified primitive-routing closeout.
 - [ ] **field** [P2]: ARIA/`data-*` wiring is correct, but handlers are one-way scripted transitions
       (email always becomes valid; plan `<select>` toggles instead of reading the chosen value) and
       `aria-describedby` is only recomputed valid→invalid one direction. Drive from real constraint
@@ -589,7 +613,11 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
 - [ ] `hover-card.ts`: remove `aria-expanded`/`aria-controls` from the trigger (model divergence);
       update `hover-card.test.ts`.
-- [ ] `number-field.ts`: add `numberFieldKeyDown`, `largeStep`/`smallStep`; optional hold-repeat + `Intl`.
+- [x] `number-field.ts`: add `numberFieldKeyDown`, `largeStep`/`smallStep`; optional hold-repeat + `Intl`.
+  - Evidence 2026-06-15: closed by the Phase 3 number-field slice above; verified by
+    `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/number-field.test.ts` and
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`. Hold-repeat and `Intl` formatting remain
+    optional future enhancements.
 - [ ] `slider.ts`: `role=slider` thumb + `aria-valuemin/now/max/valuetext/orientation` + keydown
       (Arrow/Page/Home/End/Shift-large-step) + pointer drag + track-click + `largeStep` (custom-thumb
       chosen; native range dropped as primary).

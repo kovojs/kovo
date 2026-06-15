@@ -363,6 +363,9 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
 
 function removeBoundAttribute(element: QueryBindingElement, name: string): void {
   element.removeAttribute?.(name);
+  if (name === 'value' && element.value !== undefined) {
+    element.value = '';
+  }
   if (name === 'checked' && element.checked !== undefined) {
     element.checked = false;
   }
@@ -377,7 +380,11 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
     return;
   }
 
-  element.setAttribute?.(name, formatBoundValue(value));
+  const rendered = formatBoundValue(value);
+  element.setAttribute?.(name, rendered);
+  if (name === 'value' && element.value !== undefined) {
+    element.value = rendered;
+  }
   if (name === 'checked' && element.checked !== undefined) {
     element.checked = true;
   }

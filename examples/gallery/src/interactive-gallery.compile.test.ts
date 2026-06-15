@@ -26,6 +26,7 @@ describe('compiled interactive gallery demos', () => {
     const navigationMenu = readGenerated('navigation-menu-demo.tsx');
     const navigationMenuClient = readGenerated('navigation-menu-demo.client.js');
     const numberField = readGenerated('number-field-demo.tsx');
+    const numberFieldClient = readGenerated('number-field-demo.client.js');
     const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
     const progress = readGenerated('progress-demo.tsx');
@@ -311,8 +312,21 @@ describe('compiled interactive gallery demos', () => {
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
     expect(numberField).toContain('fw-state=\'{"value":2}\'');
+    expect(numberField).toContain('numberFieldInput as _numberFieldInput');
+    expect(numberField).toContain('numberFieldKeyDown as _numberFieldKeyDown');
+    expect(numberField).toContain('data-bind:value=');
+    expect(numberField).toContain('data-bind:disabled=');
+    expect(numberField).toContain('data-bind:data-disabled=');
+    expect(numberFieldClient).toContain('numberFieldInput as _numberFieldInput');
+    expect(numberFieldClient).toContain('numberFieldKeyDown as _numberFieldKeyDown');
+    expect(numberFieldClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(numberField).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNumberFieldDemo\$input_input"/,
+    );
+    expect(numberField).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNumberFieldDemo\$input_keydown"/,
     );
     expect(numberField).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNumberFieldDemo\$button_click"/,

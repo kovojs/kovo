@@ -2,8 +2,12 @@
 import { component } from '@jiso/core';
 import {
   numberFieldDecrementAttributes,
+  numberFieldDecrementClick as _numberFieldDecrementClick,
   numberFieldIncrementAttributes,
+  numberFieldIncrementClick as _numberFieldIncrementClick,
+  numberFieldInput as _numberFieldInput,
   numberFieldInputAttributes,
+  numberFieldKeyDown as _numberFieldKeyDown,
   numberFieldRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -35,6 +39,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
       min: 0,
       name: 'gallery-seat-count',
       required: true,
+      smallStep: 1,
       step: 1,
       value: state.value,
     };
@@ -55,18 +60,18 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
           <button
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
             class={BUTTON_CLASS}
+            data-disabled={state.value <= 0 ? '' : null}
+            disabled={state.value <= 0}
             onClick={() => {
-              state.value = state.value <= 0 ? 0 : state.value - 1;
-              const doc = Reflect['get'](globalThis, 'document');
-              const input = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-number-field-input')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="value"]')
-                : undefined;
-
-              if (input) input['value'] = String(state.value);
-              if (output) output['textContent'] = String(state.value);
+              const result = _numberFieldDecrementClick(Object(event), {
+                max: 5,
+                min: 0,
+                smallStep: 1,
+                step: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              state.value = result.value ?? 0;
             }}
           >
             -
@@ -79,44 +84,45 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
               label: 'Seats',
             })}
             class={INPUT_CLASS}
+            value={state.value}
             onInput={() => {
-              const delegatedEvent = event;
-              const eventTarget =
-                delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
-              const eventValue =
-                eventTarget === null || eventTarget === undefined
-                  ? state.value
-                  : +Reflect['get'](Object(eventTarget), 'value');
-              const nextValue = eventValue === eventValue ? eventValue : state.value;
-              state.value = nextValue <= 0 ? 0 : nextValue >= 5 ? 5 : nextValue;
-
-              const doc = Reflect['get'](globalThis, 'document');
-              const input = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-number-field-input')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="value"]')
-                : undefined;
-
-              if (input) input['value'] = String(state.value);
-              if (output) output['textContent'] = String(state.value);
+              const result = _numberFieldInput(Object(event), {
+                max: 5,
+                min: 0,
+                smallStep: 1,
+                step: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              state.value = result.value ?? 0;
+            }}
+            onKeyDown={() => {
+              const result = _numberFieldKeyDown(Object(event), {
+                max: 5,
+                min: 0,
+                smallStep: 1,
+                step: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              state.value = result.value ?? 0;
             }}
           />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
             class={BUTTON_CLASS}
+            data-disabled={state.value >= 5 ? '' : null}
+            disabled={state.value >= 5}
             onClick={() => {
-              state.value = state.value >= 5 ? 5 : state.value + 1;
-              const doc = Reflect['get'](globalThis, 'document');
-              const input = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-number-field-input')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="value"]')
-                : undefined;
-
-              if (input) input['value'] = String(state.value);
-              if (output) output['textContent'] = String(state.value);
+              const result = _numberFieldIncrementClick(Object(event), {
+                max: 5,
+                min: 0,
+                smallStep: 1,
+                step: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              state.value = result.value ?? 0;
             }}
           >
             +

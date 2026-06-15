@@ -656,18 +656,35 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"value":5}');
+      expect(increment.disabled).toBe(true);
+      expect(increment.getAttribute('data-disabled')).toBe('');
       expect(new FormData(form).get('gallery-seat-count')).toBe('5');
     });
 
-    required(root.querySelector<HTMLButtonElement>('[data-action="decrement"]')).click();
+    const decrement = required(root.querySelector<HTMLButtonElement>('[data-action="decrement"]'));
+    decrement.click();
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"value":4}');
+      expect(increment.disabled).toBe(false);
+      expect(increment.hasAttribute('data-disabled')).toBe(false);
       expect(new FormData(form).get('gallery-seat-count')).toBe('4');
     });
 
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }),
+    );
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"value":0}');
+      expect(decrement.disabled).toBe(true);
+      expect(decrement.getAttribute('data-disabled')).toBe('');
+      expect(output.textContent).toBe('0');
+      expect(new FormData(form).get('gallery-seat-count')).toBe('0');
+    });
+
     // SPEC §12.1: the number-field value/required/stepper state after input and stepper
-    // changes must stay axe-clean.
+    // changes plus keyboard stepping must stay axe-clean.
     await expectNoAxeViolations(root);
   });
 

@@ -483,6 +483,12 @@ describe('compiled interactive gallery demos', () => {
       state: numberFieldState,
     });
     expect(numberFieldState).toEqual({ value: 4 });
+    clientHandler(numberField, 'GalleryNumberFieldDemo$input_keydown')(keyEvent('Home'), {
+      params: {},
+      signal,
+      state: numberFieldState,
+    });
+    expect(numberFieldState).toEqual({ value: 0 });
 
     const fieldState = {
       email: 'ada@example',

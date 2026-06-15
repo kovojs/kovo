@@ -109,6 +109,13 @@ describe('inline loader delegated handlers', () => {
         { 'data-bind': 'state.count' },
         { parent: host, textContent: '1' },
       );
+      const input = new FakeStatefulBindingElement(
+        {
+          'data-bind:value': '/c/cart.js#inputValue',
+          value: '1',
+        },
+        { parent: host, value: '1' },
+      );
       const label = new FakeStatefulBindingElement(
         {
           'aria-label': 'Old',
@@ -146,6 +153,11 @@ describe('inline loader delegated handlers', () => {
             return (value as { status?: string }).status === 'open' ? null : '';
           },
         },
+        inputValue: {
+          run(value: unknown) {
+            return (value as { count: number }).count;
+          },
+        },
       }));
 
       await dispatchInlineDelegatedClick(host, importModule, installSource);
@@ -153,6 +165,8 @@ describe('inline loader delegated handlers', () => {
       expect(host.getAttribute('fw-state')).toBe('{"count":2,"status":"open","label":"Ready"}');
       expect(host.getAttribute('data-state')).toBe('open');
       expect(count.textContent).toBe('2');
+      expect(input.getAttribute('value')).toBe('2');
+      expect(input.value).toBe('2');
       expect(label.getAttribute('aria-label')).toBe('Ready');
       expect(panel.getAttribute('hidden')).toBeNull();
       expect(nestedCount.textContent).toBe('100');

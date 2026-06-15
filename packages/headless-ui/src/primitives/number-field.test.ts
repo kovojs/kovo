@@ -9,6 +9,7 @@ import {
   numberFieldIncrementClick as exportedNumberFieldIncrementClick,
   numberFieldInput as exportedNumberFieldInput,
   numberFieldInputAttributes as exportedNumberFieldInputAttributes,
+  numberFieldKeyDown as exportedNumberFieldKeyDown,
   numberFieldRootAttributes as exportedNumberFieldRootAttributes,
   numberFieldValueFromString as exportedNumberFieldValueFromString,
   setNumberFieldValue as exportedSetNumberFieldValue,
@@ -22,6 +23,7 @@ import {
   numberFieldIncrementClick as primitiveNumberFieldIncrementClick,
   numberFieldInput as primitiveNumberFieldInput,
   numberFieldInputAttributes as primitiveNumberFieldInputAttributes,
+  numberFieldKeyDown as primitiveNumberFieldKeyDown,
   numberFieldRootAttributes as primitiveNumberFieldRootAttributes,
   numberFieldValueFromString as primitiveNumberFieldValueFromString,
   setNumberFieldValue as primitiveSetNumberFieldValue,
@@ -35,6 +37,7 @@ import {
   numberFieldIncrementClick,
   numberFieldInput,
   numberFieldInputAttributes,
+  numberFieldKeyDown,
   numberFieldRootAttributes,
   numberFieldValueFromString,
   setNumberFieldValue,
@@ -326,6 +329,30 @@ describe('headless-ui number-field primitive', () => {
     expect(emptyEvent.defaultPrevented).toBe(true);
   });
 
+  it('maps keyboard stepping to aligned primitive value changes', () => {
+    const arrowEvent = numberFieldKeyboardEvent('ArrowUp');
+    expect(
+      numberFieldKeyDown(arrowEvent, { largeStep: 4, max: 10, min: 0, step: 2, value: 3 }),
+    ).toMatchObject({ changed: true, value: 4 });
+    expect(arrowEvent.defaultPrevented).toBe(true);
+
+    const pageEvent = numberFieldKeyboardEvent('PageUp');
+    expect(
+      numberFieldKeyDown(pageEvent, { largeStep: 4, max: 10, min: 0, step: 1, value: 4 }),
+    ).toMatchObject({ changed: true, value: 8 });
+    expect(pageEvent.defaultPrevented).toBe(true);
+
+    expect(numberFieldKeyDown(numberFieldKeyboardEvent('Home'), { min: 0, value: 7 })).toMatchObject({
+      changed: true,
+      value: 0,
+    });
+    expect(numberFieldKeyDown(numberFieldKeyboardEvent('End'), { max: 10, value: 7 })).toMatchObject({
+      changed: true,
+      value: 10,
+    });
+    expect(numberFieldKeyDown(numberFieldKeyboardEvent('Enter'), { value: 7 })).toBeUndefined();
+  });
+
   it('returns frozen attribute records', () => {
     expect(Object.isFrozen(numberFieldRootAttributes())).toBe(true);
     expect(Object.isFrozen(numberFieldInputAttributes())).toBe(true);
@@ -344,6 +371,7 @@ describe('headless-ui number-field primitive', () => {
     expect(exportedNumberFieldInput).toBe(numberFieldInput);
     expect(exportedNumberFieldIncrementClick).toBe(numberFieldIncrementClick);
     expect(exportedNumberFieldDecrementClick).toBe(numberFieldDecrementClick);
+    expect(exportedNumberFieldKeyDown).toBe(numberFieldKeyDown);
 
     expect(primitiveNumberFieldRootAttributes).toBe(numberFieldRootAttributes);
     expect(primitiveNumberFieldInputAttributes).toBe(numberFieldInputAttributes);
@@ -356,6 +384,7 @@ describe('headless-ui number-field primitive', () => {
     expect(primitiveNumberFieldInput).toBe(numberFieldInput);
     expect(primitiveNumberFieldIncrementClick).toBe(numberFieldIncrementClick);
     expect(primitiveNumberFieldDecrementClick).toBe(numberFieldDecrementClick);
+    expect(primitiveNumberFieldKeyDown).toBe(numberFieldKeyDown);
   });
 });
 
@@ -366,5 +395,13 @@ function numberFieldInputEvent(value: string): Event & {
     currentTarget: { value: string } | null;
   };
   Object.defineProperty(event, 'currentTarget', { value: { value } });
+  return event;
+}
+
+function numberFieldKeyboardEvent(key: string): Event & {
+  readonly key: string;
+} {
+  const event = new Event('keydown', { cancelable: true }) as Event & { key: string };
+  Object.defineProperty(event, 'key', { value: key });
   return event;
 }
