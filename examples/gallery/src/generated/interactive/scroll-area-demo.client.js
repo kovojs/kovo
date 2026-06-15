@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryScrollAreaDemo$button_click = handler((event, ctx) => {
+export const GalleryScrollAreaDemo$button_click = handler((_event, ctx) => {
   ctx.state.position = ctx.state.position === 'top' ? 'end' : 'top';
   const nextAtEnd = ctx.state.position === 'end';
   const doc = Reflect['get'](globalThis, 'document');

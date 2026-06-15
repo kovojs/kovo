@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 

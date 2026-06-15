@@ -85,10 +85,14 @@ export function evaluateClientModule(
   globals: Record<string, unknown> = {},
 ): ClientExports {
   const source = readGenerated(fileName)
-    .replace("import { handler } from '@jiso/runtime';\n\n", '')
+    .replace(/import \{[^}]*\} from '@jiso\/runtime';\n\n?/, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {
+    derive: (inputs: readonly string[], run: (...values: unknown[]) => unknown) => ({
+      inputs,
+      run,
+    }),
     exports,
     handler: (fn: ClientExports[string]) => fn,
     ...globals,

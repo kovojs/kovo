@@ -30,17 +30,12 @@ export function emitClientModule(
   ].sort();
   const importLine =
     imports.length > 0 ? `import { ${imports.join(', ')} } from '@jiso/runtime';\n\n` : '';
-  const handlerExports = handlers.length
-    ? handlers
-        .map(
-          (handler) =>
-            `export const ${handler.exportName} = handler((event, ctx) => {\n${indent(emitHandlerBody(handler))}\n});`,
-        )
-        .join('\n')
-    : '';
+  const handlerExports = handlers.length ? handlers.map(emitHandlerExport).join('\n') : '';
   const stateDeriveExports = stateDerives.map(emitStateDeriveExport).join('\n');
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
-  const exports = [handlerExports, stateDeriveExports, queryPlanExport].filter(Boolean).join('\n\n');
+  const exports = [handlerExports, stateDeriveExports, queryPlanExport]
+    .filter(Boolean)
+    .join('\n\n');
 
   return `${compilerIrHeader}
 ${importLine}${exports || '// no client handlers emitted'}
@@ -49,6 +44,14 @@ ${importLine}${exports || '// no client handlers emitted'}
 
 function emitStateDeriveExport(deriveFact: StateDeriveFact): string {
   return `export const ${deriveFact.exportName} = derive(["state"], (state) => ${deriveFact.expression});`;
+}
+
+function emitHandlerExport(handler: HandlerLowering): string {
+  const body = emitHandlerBody(handler);
+  const eventParam = /\bevent\b/.test(body) ? 'event' : '_event';
+  const contextParam = /\bctx\b/.test(body) ? 'ctx' : '_ctx';
+
+  return `export const ${handler.exportName} = handler((${eventParam}, ${contextParam}) => {\n${indent(body)}\n});`;
 }
 
 function emitHandlerBody(handler: HandlerLowering): string {

@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryProgressDemo$button_click = handler((event, ctx) => {
+export const GalleryProgressDemo$button_click = handler((_event, ctx) => {
   ctx.state.value = ctx.state.value === 100 ? 40 : 100;
   const doc = Reflect['get'](globalThis, 'document');
   const progress = doc
@@ -25,7 +25,7 @@ export const GalleryProgressDemo$button_click = handler((event, ctx) => {
   }
   if (output) output['textContent'] = `${ctx.state.value}%`;
 });
-export const GalleryProgressDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryProgressDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.value = null;
   const doc = Reflect['get'](globalThis, 'document');
   const progress = doc

@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryDropdownMenuDemo$button_click = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$button_click = handler((_event, ctx) => {
   ctx.state.open = !ctx.state.open;
   const doc = Reflect['get'](globalThis, 'document');
   const trigger = doc
@@ -38,7 +38,7 @@ export const GalleryDropdownMenuDemo$div_keydown = handler((event, ctx) => {
   if (content) content['hidden'] = true;
   if (output) output['textContent'] = 'closed';
 });
-export const GalleryDropdownMenuDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.open = false;
   ctx.state.highlightedValue = 'duplicate';
   ctx.state.value = 'duplicate';
@@ -79,7 +79,7 @@ export const GalleryDropdownMenuDemo$button_keydown = handler((event, ctx) => {
   if (item) Object(item)['setAttribute']?.call(item, 'data-highlighted', '');
   if (output) output['textContent'] = 'rename';
 });
-export const GalleryDropdownMenuDemo$button_click_3 = handler((event, ctx) => {
+export const GalleryDropdownMenuDemo$button_click_3 = handler((_event, ctx) => {
   ctx.state.open = false;
   ctx.state.highlightedValue = 'rename';
   ctx.state.value = 'rename';

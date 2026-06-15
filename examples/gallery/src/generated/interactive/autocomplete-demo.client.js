@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryAutocompleteDemo$input_input = handler((event, ctx) => {
+export const GalleryAutocompleteDemo$input_input = handler((_event, ctx) => {
   ctx.state.inputValue = 'dev';
   ctx.state.highlightedValue = 'development';
   ctx.state.open = true;
@@ -51,7 +51,7 @@ export const GalleryAutocompleteDemo$input_keydown = handler((event, ctx) => {
     ctx.state.open = !ctx.state.open;
   }
 });
-export const GalleryAutocompleteDemo$option_click = handler((event, ctx) => {
+export const GalleryAutocompleteDemo$option_click = handler((_event, ctx) => {
   ctx.state.inputValue = 'development';
   ctx.state.open = false;
   ctx.state.highlightedValue = 'development';

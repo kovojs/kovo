@@ -4,7 +4,7 @@ import { derive } from '@jiso/runtime';
 
 export const GalleryToggleGroupDemo$output_text_derive = derive(
   ['state'],
-  (state) => state.value || 'none',
+  (state: any) => state.value || 'none',
 );
 
 import { component } from '@jiso/core';
@@ -60,7 +60,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         })}
         class="grid gap-2 text-sm text-neutral-950"
         data-gallery-interactive="toggle-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=8a4d1489#GalleryToggleGroupDemo$section_keydown"
         fw-c="gallery-toggle-group-demo"
         fw-state='{"activeValue":"bold","value":"bold"}'
       >
@@ -75,7 +75,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 id: 'gallery-toggle-group-bold',
               })}
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=8a4d1489#GalleryToggleGroupDemo$button_click"
             >
               Bold
             </button>
@@ -98,7 +98,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 id: 'gallery-toggle-group-italic',
               })}
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=8a4d1489#GalleryToggleGroupDemo$button_click_2"
             >
               Italic
             </button>
@@ -107,7 +107,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         <output
           class="text-xs text-neutral-500"
           data-demo-state="toggle-group-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=8a4d1489#GalleryToggleGroupDemo$output_text_derive"
         >
           {state.value || 'none'}
         </output>

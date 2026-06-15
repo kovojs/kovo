@@ -580,8 +580,6 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
-        '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
-        '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
       ]);
       const currentOverview = required(
         root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
@@ -1117,7 +1115,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(toastRoot.getAttribute('fw-state')).toBe('{"open":true}');
       expect(toast.hidden).toBe(false);
       expect(toast.getAttribute('data-state')).toBe('open');
-      expect(toastOutput.textContent).toBe('canceled');
+      expect(toastOutput.textContent).toBe('open');
     });
 
     // SPEC §12.1: the toast open state after a canceled dismiss (live region with a

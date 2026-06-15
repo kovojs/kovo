@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
@@ -63,14 +63,14 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
           {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
           class={TRIGGER_CLASS}
           id="gallery-dropdown-menu-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_click"
         >
           Actions
         </button>
         <div
           {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
           class={CONTENT_CLASS}
-          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$div_keydown"
+          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$div_keydown"
         >
           <button
             {...dropdownMenuItemAttributes({
@@ -80,7 +80,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemValue: 'duplicate',
             })}
             class={ITEM_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_click_2"
           >
             Duplicate
           </button>
@@ -104,15 +104,15 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemValue: 'rename',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_click_3"
+            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_click_3"
           >
             Rename
           </button>
         </div>
         <output
           data-demo-state="dropdown-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

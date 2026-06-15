@@ -2,15 +2,15 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryFieldDemo$input_value_derive = derive(['state'], (state) => state.email);
-export const GalleryFieldDemo$select_value_derive = derive(['state'], (state) => state.plan);
-export const GalleryFieldDemo$option_selected_derive = derive(['state'], (state) =>
+export const GalleryFieldDemo$input_value_derive = derive(['state'], (state: any) => state.email);
+export const GalleryFieldDemo$select_value_derive = derive(['state'], (state: any) => state.plan);
+export const GalleryFieldDemo$option_selected_derive = derive(['state'], (state: any) =>
   state.plan === 'team' ? '' : null,
 );
-export const GalleryFieldDemo$option_selected_derive_2 = derive(['state'], (state) =>
+export const GalleryFieldDemo$option_selected_derive_2 = derive(['state'], (state: any) =>
   state.plan === 'enterprise' ? '' : null,
 );
-export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state) =>
+export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state: any) =>
   state.shippingDisabled ? '' : null,
 );
 
@@ -107,8 +107,9 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
             type="email"
             class={CONTROL_CLASS}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_value_derive"
-            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_input"
+            value={state.email}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$input_value_derive"
+            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$input_input"
           />
           <p
             {...fieldDescriptionAttributes({
@@ -185,19 +186,22 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               required: true,
             })}
             class={SELECT_CLASS}
-            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$select_value_derive"
-            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$select_change"
+            value={state.plan}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$select_value_derive"
+            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$select_change"
           >
             <option
               value="team"
-              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$option_selected_derive"
+              selected={state.plan === 'team'}
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$option_selected_derive"
               class={SELECT_OPTION_CLASS}
             >
               Team
             </option>
             <option
               value="enterprise"
-              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$option_selected_derive_2"
+              selected={state.plan === 'enterprise'}
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$option_selected_derive_2"
               class={SELECT_OPTION_CLASS}
             >
               Enterprise
@@ -236,8 +240,9 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
-                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_checked_derive"
-                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_click"
+                checked={state.shippingDisabled}
+                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$input_checked_derive"
+                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=35a81831#GalleryFieldDemo$input_click"
               />
               Disable shipping group
             </label>

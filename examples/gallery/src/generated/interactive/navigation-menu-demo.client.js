@@ -57,7 +57,7 @@ export const GalleryNavigationMenuDemo$section_keydown = handler((event, ctx) =>
     if (valueOutput) valueOutput['textContent'] = ctx.state.value;
   }
 });
-export const GalleryNavigationMenuDemo$button_click = handler((event, ctx) => {
+export const GalleryNavigationMenuDemo$button_click = handler((_event, ctx) => {
   ctx.state.openValue = ctx.state.openValue === 'products' ? '' : 'products';
   const doc = Reflect['get'](globalThis, 'document');
   const trigger = doc

@@ -81,8 +81,8 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
           })}
           id="gallery-autocomplete-input"
           class={INPUT_CLASS}
-          on:input="/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js?v=5c683f1f#GalleryAutocompleteDemo$input_input"
-          on:keydown="/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js?v=5c683f1f#GalleryAutocompleteDemo$input_keydown"
+          on:input="/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js?v=fdcc3c5d#GalleryAutocompleteDemo$input_input"
+          on:keydown="/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js?v=fdcc3c5d#GalleryAutocompleteDemo$input_keydown"
         />
         <datalist
           {...autocompleteListAttributes({
@@ -99,7 +99,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
               itemValue: 'development',
             })}
             class={OPTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js?v=5c683f1f#GalleryAutocompleteDemo$option_click"
+            on:click="/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js?v=fdcc3c5d#GalleryAutocompleteDemo$option_click"
           >
             Development
           </option>

@@ -157,14 +157,13 @@ export const DisclosureDemo = component('disclosure-demo', {
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain(
-      'data-bind:aria-expanded="/c/disclosure-demo.client.js?v=',
-    );
+    expect(serverSource).toContain('data-bind:aria-expanded="/c/disclosure-demo.client.js?v=');
     expect(serverSource).toContain('#DisclosureDemo$button_aria_expanded_derive');
     expect(serverSource).toContain('data-bind:hidden="/c/disclosure-demo.client.js?v=');
     expect(serverSource).toContain('#DisclosureDemo$section_hidden_derive');
     expect(serverSource).not.toContain('data-derive=');
-    expect(serverSource).not.toContain('hidden={!state.open}');
+    expect(serverSource).toContain("aria-expanded={state.open ? 'true' : 'false'}");
+    expect(serverSource).toContain('hidden={!state.open}');
     expect(clientSource).toContain("import { derive } from '@jiso/runtime';");
     expect(clientSource).toContain(
       `export const DisclosureDemo$button_aria_expanded_derive = derive(["state"], (state) => state.open ? 'true' : 'false');`,

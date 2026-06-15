@@ -58,10 +58,7 @@ async function htmlFilesUnder(directory) {
  * producer — the same bridge the example ships for standalone hosting.
  */
 export async function buildCommerceEmbed({ outDir, repoRootPath }) {
-  const exportStaticPath = path.join(
-    repoRootPath,
-    'examples/commerce/scripts/export-static.mjs',
-  );
+  const exportStaticPath = path.join(repoRootPath, 'examples/commerce/scripts/export-static.mjs');
   const { exportCommerceStaticApp } = await import(pathToFileURL(exportStaticPath).href);
   const appDir = path.join(outDir, COMMERCE.appBase.replace(/^\//, ''));
 

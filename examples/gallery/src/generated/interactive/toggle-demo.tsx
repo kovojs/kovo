@@ -2,13 +2,13 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state) =>
+export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state: any) =>
   String(state.pressed),
 );
-export const GalleryToggleDemo$button_data_state_derive = derive(['state'], (state) =>
+export const GalleryToggleDemo$button_data_state_derive = derive(['state'], (state: any) =>
   state.pressed ? 'pressed' : 'off',
 );
-export const GalleryToggleDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryToggleDemo$output_text_derive = derive(['state'], (state: any) =>
   state.pressed ? 'pressed' : 'off',
 );
 
@@ -39,10 +39,12 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
     >
       <button
         aria-label="Toggle gallery density"
-        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$button_aria_pressed_derive"
+        aria-pressed={String(state.pressed)}
+        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$button_aria_pressed_derive"
         class={BUTTON_CLASS}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$button_data_state_derive"
-        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$button_click"
+        data-state={state.pressed ? 'pressed' : 'off'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$button_click"
         type="button"
       >
         Dense rows
@@ -50,7 +52,7 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
       <output
         class="text-xs text-neutral-500"
         data-demo-state="pressed"
-        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$output_text_derive"
       >
         {state.pressed ? 'pressed' : 'off'}
       </output>

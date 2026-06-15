@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryComboboxDemo$input_input = handler((event, ctx) => {
+export const GalleryComboboxDemo$input_input = handler((_event, ctx) => {
   ctx.state.open = true;
   ctx.state.highlightedValue = 'chicago';
   ctx.state.value = 'chicago';
@@ -69,7 +69,7 @@ export const GalleryComboboxDemo$input_keydown = handler((event, ctx) => {
     ctx.state.open = !ctx.state.open;
   }
 });
-export const GalleryComboboxDemo$button_click = handler((event, ctx) => {
+export const GalleryComboboxDemo$button_click = handler((_event, ctx) => {
   ctx.state.open = false;
   ctx.state.highlightedValue = 'austin';
   ctx.state.value = 'austin';
@@ -91,7 +91,7 @@ export const GalleryComboboxDemo$button_click = handler((event, ctx) => {
   if (listbox) listbox['hidden'] = true;
   if (output) output['textContent'] = 'Austin';
 });
-export const GalleryComboboxDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryComboboxDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.open = false;
   ctx.state.highlightedValue = 'chicago';
   ctx.state.value = 'chicago';

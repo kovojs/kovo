@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
+export const GalleryToggleGroupDemo$section_keydown = handler((_event, ctx) => {
   ctx.state.activeValue = ctx.state.activeValue === 'bold' ? 'italic' : 'bold';
   const doc = Reflect['get'](globalThis, 'document');
   const bold = doc
@@ -16,7 +16,7 @@ export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
   if (ctx.state.activeValue === 'bold' && bold) Object(bold)['focus']?.call(bold);
   if (ctx.state.activeValue === 'italic' && italic) Object(italic)['focus']?.call(italic);
 });
-export const GalleryToggleGroupDemo$button_click = handler((event, ctx) => {
+export const GalleryToggleGroupDemo$button_click = handler((_event, ctx) => {
   ctx.state.value =
     ctx.state.value === 'bold,italic'
       ? 'italic'
@@ -48,7 +48,7 @@ export const GalleryToggleGroupDemo$button_click = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value || 'none';
 });
-export const GalleryToggleGroupDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryToggleGroupDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.value =
     ctx.state.value === 'bold,italic'
       ? 'bold'

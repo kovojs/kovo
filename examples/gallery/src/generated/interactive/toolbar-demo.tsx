@@ -4,7 +4,7 @@ import { derive } from '@jiso/runtime';
 
 export const GalleryToolbarDemo$output_text_derive = derive(
   ['state'],
-  (state) => state.pressedValue || 'none',
+  (state: any) => state.pressedValue || 'none',
 );
 
 import { component } from '@jiso/core';
@@ -54,7 +54,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         {...toolbarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="toolbar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e4d57a87#GalleryToolbarDemo$div_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e3de55aa#GalleryToolbarDemo$div_keydown"
         fw-c="gallery-toolbar-demo"
         fw-state='{"activeValue":"bold","pressedValue":"bold"}'
       >
@@ -67,7 +67,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 pressed: state.pressedValue === 'bold',
               })}
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e4d57a87#GalleryToolbarDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e3de55aa#GalleryToolbarDemo$button_click"
             >
               Bold
             </button>
@@ -92,7 +92,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 pressed: state.pressedValue === 'link',
               })}
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e4d57a87#GalleryToolbarDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e3de55aa#GalleryToolbarDemo$button_click_2"
             >
               Link
             </button>
@@ -103,7 +103,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         </output>
         <output
           data-demo-state="toolbar-pressed"
-          data-bind="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e4d57a87#GalleryToolbarDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=e3de55aa#GalleryToolbarDemo$output_text_derive"
         >
           {state.pressedValue || 'none'}
         </output>

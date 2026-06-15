@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryProgressDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryProgressDemo$output_text_derive = derive(['state'], (state: any) =>
   state.value === null ? 'pending' : `${state.value}%`,
 );
 
@@ -50,21 +50,21 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=37a76896#GalleryProgressDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=956fc9cc#GalleryProgressDemo$button_click"
           >
             Complete upload
           </button>
           <button
             type="button"
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=37a76896#GalleryProgressDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=956fc9cc#GalleryProgressDemo$button_click_2"
           >
             Mark pending
           </button>
         </div>
         <output
           data-demo-state="progress-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=37a76896#GalleryProgressDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/progress-demo.client.js?v=956fc9cc#GalleryProgressDemo$output_text_derive"
         >
           {state.value === null ? 'pending' : `${state.value}%`}
         </output>

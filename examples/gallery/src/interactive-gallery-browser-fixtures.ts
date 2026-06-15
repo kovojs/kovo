@@ -287,7 +287,7 @@ export function installGeneratedGalleryLoader(
   const loader = installJisoLoader({
     async importModule(url) {
       const modulePath = url.split('?')[0] ?? url;
-      imports.push(modulePath);
+      if (!imports.includes(modulePath)) imports.push(modulePath);
 
       const mod = generatedModules[modulePath];
       if (!mod) throw new Error(`Missing generated interactive module: ${url}`);

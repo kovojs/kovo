@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryPureMarkupDemo$button_click = handler((event, ctx) => {
+export const GalleryPureMarkupDemo$button_click = handler((_event, ctx) => {
   ctx.state.submitted = true;
   const doc = Reflect['get'](globalThis, 'document');
   const output = doc

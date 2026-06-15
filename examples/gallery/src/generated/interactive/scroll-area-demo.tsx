@@ -102,7 +102,7 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
           aria-pressed={String(atEnd)}
           class={TOGGLE_CLASS}
           id="gallery-scroll-area-toggle"
-          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=f3ce9203#GalleryScrollAreaDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=00e96f2c#GalleryScrollAreaDemo$button_click"
         >
           {atEnd ? 'Back to top' : 'Jump to end'}
         </button>

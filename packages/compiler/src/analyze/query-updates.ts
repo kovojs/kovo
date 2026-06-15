@@ -392,11 +392,37 @@ function stateExpressionCoveredByDataBind(
   expression: { end: number; start: number },
   model: ComponentModuleModel,
 ): boolean {
+  if (stateAttributeExpressionCoveredByDataBind(expression, model)) return true;
+
   const element = innermostContainingElement(expression, model);
   const binding = element?.attributes.find(
     (attribute) => attribute.name === 'data-bind' && attribute.value?.startsWith('state.'),
   );
   return binding !== undefined;
+}
+
+function stateAttributeExpressionCoveredByDataBind(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): boolean {
+  for (const element of jsxElements(model)) {
+    const sourceAttribute = element.attributes.find(
+      (attribute) =>
+        attribute.expressionStart !== undefined &&
+        attribute.expressionEnd !== undefined &&
+        expression.start >= attribute.expressionStart &&
+        expression.end <= attribute.expressionEnd,
+    );
+    if (!sourceAttribute) continue;
+
+    return element.attributes.some(
+      (attribute) =>
+        attribute.name === `data-bind:${sourceAttribute.name}` &&
+        attribute.value?.startsWith('state.'),
+    );
+  }
+
+  return false;
 }
 
 function innermostContainingElement(

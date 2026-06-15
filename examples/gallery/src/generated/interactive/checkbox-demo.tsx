@@ -2,16 +2,16 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryCheckboxDemo$input_aria_checked_derive = derive(['state'], (state) =>
+export const GalleryCheckboxDemo$input_aria_checked_derive = derive(['state'], (state: any) =>
   state.checked === 'indeterminate' ? 'mixed' : String(state.checked),
 );
-export const GalleryCheckboxDemo$input_checked_derive = derive(['state'], (state) =>
+export const GalleryCheckboxDemo$input_checked_derive = derive(['state'], (state: any) =>
   state.checked === true ? '' : null,
 );
-export const GalleryCheckboxDemo$input_data_state_derive = derive(['state'], (state) =>
+export const GalleryCheckboxDemo$input_data_state_derive = derive(['state'], (state: any) =>
   state.checked === 'indeterminate' ? 'indeterminate' : state.checked ? 'checked' : 'unchecked',
 );
-export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.checked),
 );
 
@@ -43,12 +43,21 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
       fw-state='{"checked":"indeterminate"}'
     >
       <input
-        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_aria_checked_derive"
-        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_checked_derive"
+        aria-checked={state.checked === 'indeterminate' ? 'mixed' : String(state.checked)}
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_aria_checked_derive"
+        checked={state.checked === true}
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_checked_derive"
         class={INPUT_CLASS}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_data_state_derive"
+        data-state={
+          state.checked === 'indeterminate'
+            ? 'indeterminate'
+            : state.checked
+              ? 'checked'
+              : 'unchecked'
+        }
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_data_state_derive"
         name="gallery-email-summary"
-        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_click"
+        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_click"
         type="checkbox"
         value="enabled"
       />
@@ -56,7 +65,7 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$output_text_derive"
       >
         {String(state.checked)}
       </output>

@@ -4,7 +4,7 @@ import { derive } from '@jiso/runtime';
 
 export const GalleryMenubarDemo$output_text_derive = derive(
   ['state'],
-  (state) => state.openValue || 'none',
+  (state: any) => state.openValue || 'none',
 );
 
 import { component } from '@jiso/core';
@@ -55,7 +55,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
       <section
         class="grid gap-2"
         data-gallery-interactive="menubar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=60439105#GalleryMenubarDemo$section_keydown"
         fw-c="gallery-menubar-demo"
         fw-state='{"activeValue":"file","openValue":"","value":"new"}'
       >
@@ -69,7 +69,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemValue: 'file',
             })}
             class={ITEM_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=60439105#GalleryMenubarDemo$button_click"
           >
             File
           </button>
@@ -103,8 +103,8 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemValue: 'new',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$button_click_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=60439105#GalleryMenubarDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=60439105#GalleryMenubarDemo$button_click_2"
           >
             New file
           </button>
@@ -127,7 +127,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
         </output>
         <output
           data-demo-state="menubar-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=60439105#GalleryMenubarDemo$output_text_derive"
         >
           {state.openValue || 'none'}
         </output>

@@ -1,10 +1,10 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryCommandDemo$button_click = handler((event, ctx) => {
+export const GalleryCommandDemo$button_click = handler((_event, ctx) => {
   ctx.state.open = true;
 });
-export const GalleryCommandDemo$input_input = handler((event, ctx) => {
+export const GalleryCommandDemo$input_input = handler((_event, ctx) => {
   ctx.state.open = true;
   ctx.state.inputValue = 'invite';
   ctx.state.highlightedValue = 'invite';
@@ -59,7 +59,7 @@ export const GalleryCommandDemo$input_keydown = handler((event, ctx) => {
     if (canceled) canceled['textContent'] = 'selected';
   }
 });
-export const GalleryCommandDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryCommandDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.open = false;
   ctx.state.value = 'invite';
   const doc = Reflect['get'](globalThis, 'document');
@@ -72,7 +72,7 @@ export const GalleryCommandDemo$button_click_2 = handler((event, ctx) => {
   if (dialog) Object(dialog)['close']?.call(dialog);
   if (output) output['textContent'] = 'Invite teammate';
 });
-export const GalleryCommandDemo$button_click_3 = handler((event, ctx) => {
+export const GalleryCommandDemo$button_click_3 = handler((_event, ctx) => {
   ctx.state.open = false;
 });
 

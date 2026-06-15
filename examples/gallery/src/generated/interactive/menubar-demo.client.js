@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
+export const GalleryMenubarDemo$section_keydown = handler((_event, ctx) => {
   ctx.state.activeValue = 'edit';
   const doc = Reflect['get'](globalThis, 'document');
   const file = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-menubar-file') : undefined;
@@ -13,7 +13,7 @@ export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
   if (edit) edit['tabIndex'] = 0;
   if (output) output['textContent'] = 'edit';
 });
-export const GalleryMenubarDemo$button_click = handler((event, ctx) => {
+export const GalleryMenubarDemo$button_click = handler((_event, ctx) => {
   ctx.state.activeValue = 'file';
   ctx.state.openValue = ctx.state.openValue === 'file' ? '' : 'file';
   const doc = Reflect['get'](globalThis, 'document');
@@ -61,7 +61,7 @@ export const GalleryMenubarDemo$button_keydown = handler((event, ctx) => {
   if (openOutput) openOutput['textContent'] = 'none';
   if (valueOutput) valueOutput['textContent'] = 'new';
 });
-export const GalleryMenubarDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryMenubarDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.openValue = '';
   ctx.state.value = 'new';
   const doc = Reflect['get'](globalThis, 'document');

@@ -30,7 +30,7 @@ export const GalleryCheckboxGroupDemo$section_keydown = handler((event, ctx) => 
   }
   if (updates && ctx.state.activeValue === 'updates') Object(updates)['focus']?.call(updates);
 });
-export const GalleryCheckboxGroupDemo$input_click = handler((event, ctx) => {
+export const GalleryCheckboxGroupDemo$input_click = handler((_event, ctx) => {
   ctx.state.value =
     ctx.state.value === 'updates,billing'
       ? 'billing'
@@ -80,7 +80,7 @@ export const GalleryCheckboxGroupDemo$input_click = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value || 'none';
 });
-export const GalleryCheckboxGroupDemo$input_click_2 = handler((event, ctx) => {
+export const GalleryCheckboxGroupDemo$input_click_2 = handler((_event, ctx) => {
   ctx.state.value =
     ctx.state.value === 'updates,billing'
       ? 'updates'

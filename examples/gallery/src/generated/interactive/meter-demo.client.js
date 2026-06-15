@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryMeterDemo$button_click = handler((event, ctx) => {
+export const GalleryMeterDemo$button_click = handler((_event, ctx) => {
   ctx.state.value = ctx.state.value === 92 ? 72 : 92;
   const doc = Reflect['get'](globalThis, 'document');
   const meter = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-meter-value') : undefined;

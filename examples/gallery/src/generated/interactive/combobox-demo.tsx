@@ -76,8 +76,8 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
           })}
           id="gallery-combobox-input"
           class={INPUT_CLASS}
-          on:input="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$input_input"
-          on:keydown="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$input_keydown"
+          on:input="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=5a3cc515#GalleryComboboxDemo$input_input"
+          on:keydown="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=5a3cc515#GalleryComboboxDemo$input_keydown"
         />
         <div
           {...comboboxListboxAttributes({
@@ -95,7 +95,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               itemValue: 'austin',
             })}
             class={OPTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=5a3cc515#GalleryComboboxDemo$button_click"
           >
             Austin
           </button>
@@ -118,7 +118,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               itemValue: 'chicago',
             })}
             class={OPTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=5a3cc515#GalleryComboboxDemo$button_click_2"
           >
             Chicago city
           </button>

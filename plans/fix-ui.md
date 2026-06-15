@@ -171,9 +171,8 @@ coverage gate. **Fleshed out as a standalone plan: `plans/reactive-ui.md`.** Sum
 - [x] **Migrate** `switch`/`toggle`/`disclosure`/`checkbox` to declarative state binding (handlers
       reduce to a state mutation); verify in the no-shim harness; imperative demos unaffected.
   - Evidence 2026-06-15: see `plans/reactive-ui.md` S7/S8; `pnpm --filter @jiso/example-gallery
-    emit:interactive-gallery --check`, `node examples/gallery/scripts/export-static.mjs --out
-    examples/gallery/dist`, `node scratch/gallery-verify-noshim.mjs`, and the focused target
-    Playwright probe passed.
+emit:interactive-gallery --check`, static export, `node scratch/gallery-verify-noshim.mjs`, and
+    the focused target Playwright probe passed.
 
 Note: the `{...primitiveAttrs(state)}` spread hides the dependency from the compiler — Phase 1 migrates
 the 4 target demos to direct expressions; the general primitive-composition binding is Phase 2 below.

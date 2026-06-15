@@ -79,7 +79,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 0,
             })}
             class={INPUT_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_keydown"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_keydown"
           />
           <input
             {...otpFieldInputAttributes({
@@ -89,7 +89,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 1,
             })}
             class={INPUT_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_keydown_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_keydown_2"
           />
           <input
             {...otpFieldInputAttributes({
@@ -99,7 +99,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 2,
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_input"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_input"
           />
           <input
             {...otpFieldInputAttributes({
@@ -109,8 +109,8 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 3,
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_input_2"
-            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=36f2a5db#GalleryOtpFieldDemo$input_paste"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_input_2"
+            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_paste"
           />
         </div>
         <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>

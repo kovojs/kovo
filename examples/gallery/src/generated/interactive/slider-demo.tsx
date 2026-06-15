@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GallerySliderDemo$output_text_derive = derive(['state'], (state) =>
+export const GallerySliderDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.value),
 );
 

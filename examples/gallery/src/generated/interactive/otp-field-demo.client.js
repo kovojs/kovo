@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryOtpFieldDemo$input_keydown = handler((event, ctx) => {
+export const GalleryOtpFieldDemo$input_keydown = handler((_event, ctx) => {
   ctx.state.activeSlot = 1;
   const doc = Reflect['get'](globalThis, 'document');
   const first = doc
@@ -15,7 +15,7 @@ export const GalleryOtpFieldDemo$input_keydown = handler((event, ctx) => {
   if (second) second['tabIndex'] = 0;
   if (second) Object(second)['focus']?.call(second);
 });
-export const GalleryOtpFieldDemo$input_keydown_2 = handler((event, ctx) => {
+export const GalleryOtpFieldDemo$input_keydown_2 = handler((_event, ctx) => {
   ctx.state.value = '1';
   ctx.state.activeSlot = 1;
   const doc = Reflect['get'](globalThis, 'document');
@@ -36,7 +36,7 @@ export const GalleryOtpFieldDemo$input_keydown_2 = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value;
 });
-export const GalleryOtpFieldDemo$input_input = handler((event, ctx) => {
+export const GalleryOtpFieldDemo$input_input = handler((_event, ctx) => {
   ctx.state.value = ctx.state.value === '12' ? '123' : ctx.state.value;
   ctx.state.activeSlot = 3;
   const doc = Reflect['get'](globalThis, 'document');
@@ -65,7 +65,7 @@ export const GalleryOtpFieldDemo$input_input = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value;
 });
-export const GalleryOtpFieldDemo$input_input_2 = handler((event, ctx) => {
+export const GalleryOtpFieldDemo$input_input_2 = handler((_event, ctx) => {
   ctx.state.value = '1234';
   ctx.state.activeSlot = 3;
   const doc = Reflect['get'](globalThis, 'document');

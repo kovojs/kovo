@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryToastDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryToastDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
@@ -56,7 +56,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
         })}
         class={VIEWPORT_CLASS}
         data-gallery-interactive="toast"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=e5548e28#GalleryToastDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=98224d61#GalleryToastDemo$section_keydown"
         fw-c="gallery-toast-demo"
         fw-state='{"open":true}'
       >
@@ -73,7 +73,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           <button
             {...toastActionAttributes({ ...toastState, actionValue: 'undo' })}
             class={ACTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=e5548e28#GalleryToastDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=98224d61#GalleryToastDemo$button_click"
           >
             Undo
           </button>
@@ -85,14 +85,14 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             })}
             class={ACTION_CLASS}
             data-toast-cancel-dismiss=""
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=e5548e28#GalleryToastDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=98224d61#GalleryToastDemo$button_click_2"
           >
             Keep open
           </button>
           <button
             {...toastCloseAttributes(toastState)}
             class={CLOSE_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=e5548e28#GalleryToastDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=98224d61#GalleryToastDemo$button_click_3"
           >
             Dismiss
           </button>
@@ -105,14 +105,14 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             })}
             class={ACTION_CLASS}
             data-toast-disabled-action=""
-            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=e5548e28#GalleryToastDemo$button_click_4"
+            on:click="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=98224d61#GalleryToastDemo$button_click_4"
           >
             Blocked
           </button>
         </div>
         <output
           data-demo-state="toast-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=e5548e28#GalleryToastDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/toast-demo.client.js?v=98224d61#GalleryToastDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

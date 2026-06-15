@@ -54,7 +54,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
         })}
         class={ROOT_CLASS}
         data-gallery-interactive="radio-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=3411a457#GalleryRadioGroupDemo$div_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=9cf03844#GalleryRadioGroupDemo$div_keydown"
         fw-c="gallery-radio-group-demo"
         fw-state='{"value":"email"}'
       >
@@ -66,7 +66,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
           <input
             {...radioGroupRadioAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
             class={RADIO_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=3411a457#GalleryRadioGroupDemo$input_click"
+            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=9cf03844#GalleryRadioGroupDemo$input_click"
           />
           <label
             {...radioGroupLabelAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
@@ -91,7 +91,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
           <input
             {...radioGroupRadioAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
             class={RADIO_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=3411a457#GalleryRadioGroupDemo$input_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=9cf03844#GalleryRadioGroupDemo$input_click_2"
           />
           <label
             {...radioGroupLabelAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}

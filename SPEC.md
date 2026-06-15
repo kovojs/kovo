@@ -301,12 +301,12 @@ On change, the loader keys existing `[fw-key]` children against the new array: c
 
 During lowering, the compiler classifies every render-output position that reads query data or island-local state:
 
-| Status       | Meaning                                                                         | Latency                           |
-| ------------ | ------------------------------------------------------------------------------- | --------------------------------- |
-| `plan`       | lowered to a binding, derive, or stamp (§4.8)                                   | instant; participates in optimism |
-| `isomorphic` | island self-renders on change (§4.8, FW302)                                     | instant; costs the render module  |
+| Status       | Meaning                                                                                                                                                                                                  | Latency                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `plan`       | lowered to a binding, derive, or stamp (§4.8)                                                                                                                                                            | instant; participates in optimism |
+| `isomorphic` | island self-renders on change (§4.8, FW302)                                                                                                                                                              | instant; costs the render module  |
 | `fragment`   | inside a `fragmentTarget` — server re-renders query-backed output on mutation responses (§9.1); not a state remedy unless a later SPEC defines how client-private state participates in server fragments | 1 RTT — **no optimistic update**  |
-| `renderOnce` | declared immutable for the document's lifetime (suppression recorded in source) | never                             |
+| `renderOnce` | declared immutable for the document's lifetime (suppression recorded in source)                                                                                                                          | never                             |
 
 A position fitting none of these is **FW311**. The teaching error shows the classification, why the position exceeds the plan grammar, and the fix menu — extract a derive, lower to a CSS/attribute toggle, `fragmentTarget: true`, `isomorphic: true`, or declare `renderOnce`:
 

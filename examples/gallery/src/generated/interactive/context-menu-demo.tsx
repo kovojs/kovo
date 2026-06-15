@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
@@ -63,8 +63,8 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
           {...contextMenuTriggerAttributes({ ...menuState, contentId })}
           class={TRIGGER_CLASS}
           id="gallery-context-menu-trigger"
-          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$div_contextmenu"
-          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$div_keydown"
+          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$div_contextmenu"
+          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$div_keydown"
           tabIndex="0"
         >
           Right click target
@@ -104,15 +104,15 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemValue: 'inspect',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$button_click"
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$button_click"
           >
             Inspect
           </button>
         </div>
         <output
           data-demo-state="context-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

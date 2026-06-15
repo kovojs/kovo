@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
@@ -39,14 +39,14 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         {...popoverRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="popover"
-        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=781db81d#GalleryPopoverDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=7e088074#GalleryPopoverDemo$section_keydown"
         fw-c="gallery-popover-demo"
         fw-state='{"open":false}'
       >
         <button
           {...popoverTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=781db81d#GalleryPopoverDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=7e088074#GalleryPopoverDemo$button_click"
         >
           Delivery window
         </button>
@@ -55,7 +55,7 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         </div>
         <output
           data-demo-state="popover-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=781db81d#GalleryPopoverDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=7e088074#GalleryPopoverDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

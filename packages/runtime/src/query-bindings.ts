@@ -6,8 +6,7 @@ import type {
 } from './dom-like.js';
 
 export interface QueryBindingElement
-  extends AttributeElementLike,
-    ClosestElementLike<QueryBindingElement> {
+  extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
   textContent?: string | null;
   value?: string;
 }
@@ -321,10 +320,7 @@ async function applyStateDeriveBindings(
 
 function isRunnableDerive(value: unknown): value is { run(value: unknown): unknown } {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'run' in value &&
-    typeof value.run === 'function'
+    typeof value === 'object' && value !== null && 'run' in value && typeof value.run === 'function'
   );
 }
 

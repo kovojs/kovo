@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryTabsDemo$section_keydown = handler((event, ctx) => {
+export const GalleryTabsDemo$section_keydown = handler((_event, ctx) => {
   if (ctx.state.activeValue === 'overview') {
     ctx.state.activeValue = 'details';
   } else {
@@ -91,7 +91,7 @@ export const GalleryTabsDemo$section_keydown = handler((event, ctx) => {
     );
   }
 });
-export const GalleryTabsDemo$button_click = handler((event, ctx) => {
+export const GalleryTabsDemo$button_click = handler((_event, ctx) => {
   ctx.state.activeValue = 'overview';
   ctx.state.value = 'overview';
   const doc = Reflect['get'](globalThis, 'document');
@@ -127,7 +127,7 @@ export const GalleryTabsDemo$button_click = handler((event, ctx) => {
     Object(detailsPanel)['setAttribute']?.call(detailsPanel, 'data-state', 'inactive');
   }
 });
-export const GalleryTabsDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryTabsDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.activeValue = 'details';
   ctx.state.value = 'details';
   const doc = Reflect['get'](globalThis, 'document');

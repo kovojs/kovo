@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryToolbarDemo$div_keydown = handler((event, ctx) => {
+export const GalleryToolbarDemo$div_keydown = handler((_event, ctx) => {
   ctx.state.activeValue = ctx.state.activeValue === 'bold' ? 'link' : 'bold';
   const doc = Reflect['get'](globalThis, 'document');
   const bold = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-bold') : undefined;
@@ -16,7 +16,7 @@ export const GalleryToolbarDemo$div_keydown = handler((event, ctx) => {
   if (ctx.state.activeValue === 'link' && link) Object(link)['focus']?.call(link);
   if (output) output['textContent'] = ctx.state.activeValue;
 });
-export const GalleryToolbarDemo$button_click = handler((event, ctx) => {
+export const GalleryToolbarDemo$button_click = handler((_event, ctx) => {
   ctx.state.activeValue = 'bold';
   ctx.state.pressedValue = ctx.state.pressedValue === 'bold' ? '' : 'bold';
   const doc = Reflect['get'](globalThis, 'document');
@@ -58,7 +58,7 @@ export const GalleryToolbarDemo$button_click = handler((event, ctx) => {
   if (activeOutput) activeOutput['textContent'] = ctx.state.activeValue;
   if (pressedOutput) pressedOutput['textContent'] = ctx.state.pressedValue || 'none';
 });
-export const GalleryToolbarDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryToolbarDemo$button_click_2 = handler((_event, ctx) => {
   ctx.state.activeValue = 'link';
   ctx.state.pressedValue = ctx.state.pressedValue === 'link' ? '' : 'link';
   const doc = Reflect['get'](globalThis, 'document');

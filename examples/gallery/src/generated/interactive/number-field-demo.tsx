@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.value),
 );
 
@@ -64,7 +64,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
           <button
             {...numberFieldDecrementAttributes({ ...fieldState, inputId, label: 'Decrease seats' })}
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=eb15a8a3#GalleryNumberFieldDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$button_click"
           >
             -
           </button>
@@ -76,12 +76,12 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
               label: 'Seats',
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=eb15a8a3#GalleryNumberFieldDemo$input_input"
+            on:input="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$input_input"
           />
           <button
             {...numberFieldIncrementAttributes({ ...fieldState, inputId, label: 'Increase seats' })}
             class={BUTTON_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=eb15a8a3#GalleryNumberFieldDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$button_click_2"
           >
             +
           </button>
@@ -89,7 +89,7 @@ export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
         <output
           data-demo-state="value"
           class="text-xs text-neutral-500"
-          data-bind="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=eb15a8a3#GalleryNumberFieldDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/number-field-demo.client.js?v=b8f7136f#GalleryNumberFieldDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

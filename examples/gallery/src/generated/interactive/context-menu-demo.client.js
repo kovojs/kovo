@@ -57,7 +57,7 @@ export const GalleryContextMenuDemo$button_keydown = handler((event, ctx) => {
   if (content) content['hidden'] = true;
   if (output) output['textContent'] = 'inspect';
 });
-export const GalleryContextMenuDemo$button_click = handler((event, ctx) => {
+export const GalleryContextMenuDemo$button_click = handler((_event, ctx) => {
   ctx.state.open = false;
   ctx.state.highlightedValue = 'inspect';
   ctx.state.value = 'inspect';

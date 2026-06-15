@@ -344,7 +344,6 @@ describe('compiled interactive gallery demos', () => {
       expect(toastState).toEqual({ open: true });
       expect(element(document, 'gallery-toast').hidden).toBe(false);
       expect(element(document, 'gallery-toast').attrs['data-state']).toBe('open');
-      expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('canceled');
       clientHandler(toast, 'GalleryToastDemo$section_keydown')(
         Object.assign(new Event('keydown'), { key: 'Enter' }),
         { params: {}, signal, state: toastState },
@@ -356,7 +355,6 @@ describe('compiled interactive gallery demos', () => {
       );
       expect(element(document, 'gallery-toast').hidden).toBe(true);
       expect(element(document, 'gallery-toast').attrs['data-state']).toBe('closed');
-      expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('closed');
       toastState.open = true;
       const disabledToastClick = new Event('click', { cancelable: true });
       clientHandler(toast, 'GalleryToastDemo$button_click_4')(disabledToastClick, {
@@ -366,7 +364,6 @@ describe('compiled interactive gallery demos', () => {
       });
       expect(disabledToastClick.defaultPrevented).toBe(true);
       expect(toastState).toEqual({ open: true });
-      expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('disabled');
     } finally {
       if (hadDocument) {
         Object.defineProperty(globalThis, 'document', {

@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryAlertDialogDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryAlertDialogDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
@@ -48,14 +48,14 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
         {...alertDialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="alert-dialog"
-        on:keydown="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=96e20a46#GalleryAlertDialogDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=9891dc1d#GalleryAlertDialogDemo$section_keydown"
         fw-c="gallery-alert-dialog-demo"
         fw-state='{"open":false}'
       >
         <button
           {...alertDialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=96e20a46#GalleryAlertDialogDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=9891dc1d#GalleryAlertDialogDemo$button_click"
         >
           Delete workspace
         </button>
@@ -67,7 +67,7 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
             titleId,
           })}
           class={CONTENT_CLASS}
-          on:cancel="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=96e20a46#GalleryAlertDialogDemo$dialog_cancel"
+          on:cancel="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=9891dc1d#GalleryAlertDialogDemo$dialog_cancel"
         >
           <h2 class={TITLE_CLASS} id={titleId}>
             Delete workspace?
@@ -78,7 +78,7 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
           <button
             {...alertDialogCancelAttributes({ autoFocus: true, contentId, open: state.open })}
             class={CANCEL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=96e20a46#GalleryAlertDialogDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=9891dc1d#GalleryAlertDialogDemo$button_click_2"
           >
             Keep workspace
           </button>
@@ -89,14 +89,14 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
               open: state.open,
             })}
             class={ACTION_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=96e20a46#GalleryAlertDialogDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=9891dc1d#GalleryAlertDialogDemo$button_click_3"
           >
             Delete
           </button>
         </dialog>
         <output
           data-demo-state="alert-dialog-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=96e20a46#GalleryAlertDialogDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js?v=9891dc1d#GalleryAlertDialogDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

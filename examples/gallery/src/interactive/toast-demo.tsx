@@ -54,14 +54,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           state.open = false;
           const doc = Reflect['get'](globalThis, 'document');
           const toast = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-toast') : undefined;
-          const output = doc
-            ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
-            : undefined;
           if (toast) {
             toast['hidden'] = true;
             Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
           }
-          if (output) output['textContent'] = 'closed';
         }}
       >
         <div {...toastRootAttributes(toastState)} class={TOAST_CLASS}>
@@ -83,14 +79,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
               const toast = doc
                 ? Object(doc)['getElementById']?.call(doc, 'gallery-toast')
                 : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
-                : undefined;
               if (toast) {
                 toast['hidden'] = true;
                 Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
               }
-              if (output) output['textContent'] = 'closed';
             }}
           >
             Undo
@@ -112,14 +104,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
               const toast = doc
                 ? Object(doc)['getElementById']?.call(doc, 'gallery-toast')
                 : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
-                : undefined;
               if (toast) {
                 toast['hidden'] = false;
                 Object(toast)['setAttribute']?.call(toast, 'data-state', 'open');
               }
-              if (output) output['textContent'] = 'canceled';
             }}
           >
             Keep open
@@ -133,14 +121,10 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
               const toast = doc
                 ? Object(doc)['getElementById']?.call(doc, 'gallery-toast')
                 : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
-                : undefined;
               if (toast) {
                 toast['hidden'] = true;
                 Object(toast)['setAttribute']?.call(toast, 'data-state', 'closed');
               }
-              if (output) output['textContent'] = 'closed';
             }}
           >
             Dismiss
@@ -157,12 +141,6 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
             onClick={() => {
               if (!event) return;
               Object(event)['preventDefault']?.call(event);
-
-              const doc = Reflect['get'](globalThis, 'document');
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="toast-open"]')
-                : undefined;
-              if (output) output['textContent'] = state.open ? 'disabled' : 'closed';
             }}
           >
             Blocked

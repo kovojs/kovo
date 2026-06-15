@@ -2,7 +2,7 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
-export const GalleryMeterDemo$output_text_derive = derive(['state'], (state) =>
+export const GalleryMeterDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.value),
 );
 
@@ -53,13 +53,13 @@ export const GalleryMeterDemo = component('gallery-meter-demo', {
         <button
           type="button"
           class={BUTTON_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=76d0f2c6#GalleryMeterDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=c7496eb3#GalleryMeterDemo$button_click"
         >
           Optimize capacity
         </button>
         <output
           data-demo-state="meter-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=76d0f2c6#GalleryMeterDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=c7496eb3#GalleryMeterDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

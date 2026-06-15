@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryDisclosureDemo$button_click = handler((event, ctx) => {
+export const GalleryDisclosureDemo$button_click = handler((_event, ctx) => {
   ctx.state.open = !ctx.state.open;
 });
 

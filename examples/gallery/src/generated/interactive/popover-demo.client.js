@@ -15,7 +15,7 @@ export const GalleryPopoverDemo$section_keydown = handler((event, ctx) => {
   if (content) Object(content)['hidePopover']?.call(content);
   if (output) output['textContent'] = 'closed';
 });
-export const GalleryPopoverDemo$button_click = handler((event, ctx) => {
+export const GalleryPopoverDemo$button_click = handler((_event, ctx) => {
   ctx.state.open = !ctx.state.open;
   const doc = Reflect['get'](globalThis, 'document');
   const output = doc

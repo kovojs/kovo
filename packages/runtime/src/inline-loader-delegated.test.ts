@@ -134,12 +134,10 @@ describe('inline loader delegated handlers', () => {
       const add = vi.fn((_event, ctx: { state: { count: number } }) => {
         ctx.state.count += 1;
       });
-      const finish = vi.fn(
-        (_event, ctx: { state: { label?: string; status?: string } }) => {
-          ctx.state.label = 'Ready';
-          ctx.state.status = 'open';
-        },
-      );
+      const finish = vi.fn((_event, ctx: { state: { label?: string; status?: string } }) => {
+        ctx.state.label = 'Ready';
+        ctx.state.status = 'open';
+      });
       const importModule = vi.fn(async () => ({
         add,
         finish,

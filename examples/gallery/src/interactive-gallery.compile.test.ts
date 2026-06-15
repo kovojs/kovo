@@ -404,7 +404,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(switchDemo).toContain('data-gallery-interactive="switch"');
-    expect(switchDemo).toContain("form: 'gallery-switch-form'");
+    expect(switchDemo).toContain('form="gallery-switch-form"');
     expect(switchDemo).toContain('fw-state=\'{"checked":false}\'');
     expect(switchDemo).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/switch-demo\.client\.js\?v=[0-9a-f]{8}#GallerySwitchDemo\$input_click"/,

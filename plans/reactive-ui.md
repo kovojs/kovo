@@ -1,6 +1,6 @@
 # Reactive UI: island-local state → DOM update plan (Jiso §4.8 for `state`)
 
-Status: **open — target reactive demo migration verified; broader gallery/visual gates remain.**
+Status: **done — state reactivity implemented, target demos migrated, and full gates verified.**
 Created 2026-06-14. Split out of `plans/fix-ui.md`
 Phase 1 (the long pole). `SPEC.md` is the source of truth; cite §4.8 (the update plan), §4.4 (the
 loader's responsibilities), §4.9 (update coverage), §6.2 (binding type-checks). This is the framework
@@ -130,10 +130,9 @@ ambiguity (query vs state root) proves messy.
       lint-visible; do not normalize a FW232 violation as the long-term shape. The general "make
       primitive composition emit the bindings" is Phase 2 of `plans/fix-ui.md` (§4.6 attrs-function
       chaining), out of scope here unless required for spec-conformant acceptance.
-  - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,
-    checkbox-demo}.tsx` now expose state-dependent ARIA/`data-state`/`hidden`/text positions as direct
-    JSX expressions and keep handlers to local `state` mutations; primitive reducer/chaining remains
-    open in `plans/fix-ui.md` Phase 2.
+  - Evidence 2026-06-15: the four target demo sources now expose state-dependent ARIA/`data-state`/
+    `hidden`/text positions as direct JSX expressions and keep handlers to local `state` mutations;
+    primitive reducer/chaining remains open in `plans/fix-ui.md` Phase 2.
 - [x] Classification mirrors §4.8: sole-text-child expression → stamp that element; mixed content →
       synthesized `<span data-bind>` (reported in `fw explain`); attribute position → named derive.
   - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts sole state text
@@ -155,7 +154,7 @@ ambiguity (query vs state root) proves messy.
     coverage facts for state `data-bind`/`data-bind:<attr>`, `renderOnce(state.*)`, isomorphic state
     reads, and unhandled state reads, while still skipping `data-bind-list` state stamps in Phase 1;
     `packages/core/src/graph.ts`, `packages/cli/src/index.ts`, and `packages/test/src/
-    compiler-fixtures.ts` preserve/print the optional coverage source for explain/check surfaces.
+compiler-fixtures.ts` preserve/print the optional coverage source for explain/check surfaces.
 
 ### D4. Emit — derives + island wiring
 
@@ -201,9 +200,9 @@ at all. Two sub-decisions:
     `packages/runtime/src/inline-loader-build.ts` applies pure and derive-backed state bindings after
     writing `fw-state`, and `packages/runtime/src/inline-loader.ts` was regenerated.
   - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
-    src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed 37
+src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed 37
     tests; `pnpm --filter @jiso/runtime check:inline-loader` passed; `pnpm --filter @jiso/runtime
-    exec tsc --noEmit` passed.
+exec tsc --noEmit` passed.
 
 ### D6. Coverage — §4.9 exhaustiveness for state
 
@@ -219,7 +218,7 @@ at all. Two sub-decisions:
       how client-private state participates in server fragments.
   - Evidence 2026-06-15: `SPEC.md` §4.9 and the FW311 table now say query/state-dependent output and
     document the state/fragment caveat; `packages/core/src/diagnostics.ts` broadens FW311; `packages/
-    compiler/src/state-bindings.test.ts` covers unhandled state reads, mixed query+state reads, and
+compiler/src/state-bindings.test.ts` covers unhandled state reads, mixed query+state reads, and
     `renderOnce(state.*)` coverage; `packages/cli/src/index.fw-check.test.ts` covers `source=state`
     FW311 output.
 
@@ -244,17 +243,17 @@ at all. Two sub-decisions:
     supports `querySelectorAll`; `packages/runtime/src/inline-loader-build.ts` contains the minimal
     inline pure-path state walker and regenerated `packages/runtime/src/inline-loader.ts`.
   - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
-    src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed
+src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed
     36 tests; `pnpm --filter @jiso/runtime exec tsc --noEmit` passed; `pnpm --filter @jiso/runtime
-    build:inline-loader` reported the generated loader unchanged after the final source cleanup.
+build:inline-loader` reported the generated loader unchanged after the final source cleanup.
 - [x] **S2a — Lowering, text paths** (D2): `state.*` sole text children and mixed text expressions
       lower to `data-bind="state.*"` without creating a fake query plan.
   - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` recognizes `state.*` paths
     for text binding classification even when a component has no queries; `packages/compiler/src/
-    analyze/query-updates.ts` and `packages/compiler/src/validate/bindings.ts` exclude the reserved
+analyze/query-updates.ts` and `packages/compiler/src/validate/bindings.ts` exclude the reserved
     `state` root from query-plan and query-shape handling.
   - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts` passed
+src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts` passed
     29 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 - [x] **S2b — Lowering, attribute derives** (D2): state-only attribute expressions lower to
       derive-backed `data-bind:<attr>`/client exports without emitting a runtime `statePlans` artifact;
@@ -262,11 +261,11 @@ at all. Two sub-decisions:
   - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` emits state-only attribute
     derives as `data-bind:<attr>` placeholders, wraps boolean-presence expressions with
     `""`/`null` semantics, and leaves mixed query+state expressions unlowered; `packages/compiler/src/
-    emit/client.ts` emits `derive(["state"], ...)` exports; `packages/compiler/src/compile.ts`
+emit/client.ts` emits `derive(["state"], ...)` exports; `packages/compiler/src/compile.ts`
     versions those refs to `/c/*.client.js?v=...#export`.
   - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts
-    src/handler-lowering.test.ts` passed 55 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit`
+src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts
+src/handler-lowering.test.ts` passed 55 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit`
     passed.
 - [x] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
       output only; tests prove no emitted runtime `statePlans` artifact is required.
@@ -283,11 +282,11 @@ at all. Two sub-decisions:
   - Evidence 2026-06-15: same S2b and D5 evidence above.
 - [x] **S6 — Coverage gate** (D6): FW311-for-state diagnostic + tests.
   - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/state-bindings.test.ts src/query-coverage.test.ts src/stamps.test.ts src/vite.test.ts` passed
+src/state-bindings.test.ts src/query-coverage.test.ts src/stamps.test.ts src/vite.test.ts` passed
     45 tests; `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts` passed 3 tests;
     `pnpm --filter fw exec vitest run src/index.fw-check.test.ts` passed 47 tests; `pnpm exec vitest
-    run packages/test/src/compiler-fixtures.test.ts packages/test/src/fw-check-fixtures.test.ts
-    packages/test/src/package-exports.test.ts` passed 17 tests; compiler, `@jiso/test`, and `fw`
+run packages/test/src/compiler-fixtures.test.ts packages/test/src/fw-check-fixtures.test.ts
+packages/test/src/package-exports.test.ts` passed 17 tests; compiler, `@jiso/test`, and `fw`
     `tsc --noEmit` passed.
 - [x] **S7 — Migrate the 4 target demos** to declarative state binding (drop the helper-spread for
       state-dependent attrs where spec-conformant): `switch`, `toggle`, `disclosure`, `checkbox`.
@@ -295,7 +294,7 @@ at all. Two sub-decisions:
       contract where applicable). Do not hide primitive-owned attribute override lints; either avoid
       those direct writes or promote the minimal primitive-binding emission needed.
   - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,
-    checkbox-demo}.tsx` removed state-dependent primitive attr spreads and DOM writes for the bound
+checkbox-demo}.tsx` removed state-dependent primitive attr spreads and DOM writes for the bound
     slots; the generated client modules import `derive`/`handler`, export derives, and use local
     state mutation handlers.
 - [x] **S8 — Re-emit the gallery** (`pnpm --filter @jiso/example-gallery emit:interactive-gallery`) and
@@ -332,7 +331,7 @@ at all. Two sub-decisions:
       `hidden="false"` as a passing update.
   - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts `hidden={!state.open}`
     lowers to `derive(["state"], (state) => ((!state.open) ? "" : null))`; `packages/runtime/src/
-    query-bindings.test.ts` and `packages/runtime/src/inline-loader-delegated.test.ts` assert
+query-bindings.test.ts` and `packages/runtime/src/inline-loader-delegated.test.ts` assert
     derive-backed `data-bind:hidden` removes `hidden` when the derive returns `null` and sets it when
     the derive returns `""`; the focused compiler/runtime vitest commands above passed.
 - [x] Mixed query+state expressions are rejected or reported as unhandled coverage until multi-input
@@ -343,13 +342,13 @@ at all. Two sub-decisions:
 - [x] Chained handlers update DOM from the final `ctx.state` value after all handler refs run.
   - Evidence 2026-06-15: `packages/runtime/src/handlers.test.ts` asserts modular delegated handlers
     update `data-bind="state.count"` after two chained refs mutate one context; `packages/runtime/src/
-    inline-loader-delegated.test.ts` asserts the same for the readable, freshly minified, generated,
+inline-loader-delegated.test.ts` asserts the same for the readable, freshly minified, generated,
     and extracted inline loader installers; the focused runtime vitest command above passed.
 - [x] The four target demo client modules contain state mutation and derive exports only; no
       hand-authored DOM writes are needed for the state-bound slots.
   - Verification 2026-06-15: `rg -n "getElementById|querySelector|setAttribute|textContent|Reflect\\['get'\\]|document"
-    examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,checkbox-demo}.tsx
-    examples/gallery/src/generated/interactive/{switch-demo,toggle-demo,disclosure-demo,checkbox-demo}.client.js`
+examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,checkbox-demo}.tsx
+examples/gallery/src/generated/interactive/{switch-demo,toggle-demo,disclosure-demo,checkbox-demo}.client.js`
     returned no matches.
 
 ## Acceptance criteria
@@ -370,15 +369,20 @@ at all. Two sub-decisions:
 - [x] All imperative demos still pass the no-shim harness (no regressions).
   - Verification 2026-06-15: `node scratch/gallery-verify-noshim.mjs` passed the existing no-shim
     smoke harness; only known font 404s were reported.
-- [ ] Gates: runtime + compiler + gallery suites green; `vp check` clean; inline-loader gzip budget +
+- [x] Gates: runtime + compiler + gallery suites green; `vp check` clean; inline-loader gzip budget +
       parity `--check` green; gallery emit fixpoint (`assertFixpoint`) green; new
       state-coverage diagnostic has tests.
-  - Evidence 2026-06-15: focused compiler/runtime tests, compiler/runtime `tsc --noEmit`,
-    `pnpm --filter @jiso/runtime check:inline-loader`, `pnpm --filter @jiso/example-gallery
-    emit:interactive-gallery --check`, `node examples/gallery/scripts/export-static.mjs --out
-    examples/gallery/dist`, `node scratch/gallery-verify-noshim.mjs`, focused target Playwright probe,
-    and `git diff --check` passed. Left open because `vp check` and the full gallery suite were not run
-    in this checkpoint.
+  - Evidence 2026-06-15: focused compiler/runtime tests, compiler/runtime `tsc --noEmit`, runtime
+    inline-loader check, gallery emit check, static export, no-shim smoke, focused target Playwright
+    probe, and `git diff --check` passed.
+  - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run` passed 226 tests;
+    `pnpm --filter @jiso/runtime exec vitest run` passed 321 tests; `pnpm --filter @jiso/example-gallery
+test` passed 86 tests; `pnpm --filter @jiso/example-gallery test:browser` passed 40 tests;
+    `pnpm exec vp check` passed with existing non-fatal warnings; `pnpm --filter @jiso/runtime
+check:inline-loader` passed; `pnpm --filter @jiso/example-gallery emit:interactive-gallery --check`
+    passed; `node examples/gallery/scripts/export-static.mjs --out examples/gallery/dist` reported
+    `html=1 client-modules=36 assets=1 diagnostics=0`; `node scratch/gallery-verify-noshim.mjs`
+    passed with 0 runtime specifier errors and only known font 404s; `git diff --check` passed.
 
 ## Risks
 

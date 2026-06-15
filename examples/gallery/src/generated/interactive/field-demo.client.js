@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryFieldDemo$input_input = handler((event, ctx) => {
+export const GalleryFieldDemo$input_input = handler((_event, ctx) => {
   ctx.state.email = 'ada@jiso.dev';
   ctx.state.invalid = false;
   const doc = Reflect['get'](globalThis, 'document');
@@ -28,7 +28,7 @@ export const GalleryFieldDemo$input_input = handler((event, ctx) => {
   if (error) error['hidden'] = true;
   if (output) output['textContent'] = ctx.state.email;
 });
-export const GalleryFieldDemo$select_change = handler((event, ctx) => {
+export const GalleryFieldDemo$select_change = handler((_event, ctx) => {
   ctx.state.plan = ctx.state.plan === 'team' ? 'enterprise' : 'team';
   const doc = Reflect['get'](globalThis, 'document');
   const select = doc
@@ -41,7 +41,7 @@ export const GalleryFieldDemo$select_change = handler((event, ctx) => {
   if (select) select['value'] = ctx.state.plan;
   if (output) output['textContent'] = ctx.state.plan;
 });
-export const GalleryFieldDemo$input_click = handler((event, ctx) => {
+export const GalleryFieldDemo$input_click = handler((_event, ctx) => {
   ctx.state.shippingDisabled = !ctx.state.shippingDisabled;
   const doc = Reflect['get'](globalThis, 'document');
   const fieldset = doc

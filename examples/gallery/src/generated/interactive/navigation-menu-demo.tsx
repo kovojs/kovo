@@ -4,7 +4,7 @@ import { derive } from '@jiso/runtime';
 
 export const GalleryNavigationMenuDemo$output_text_derive = derive(
   ['state'],
-  (state) => state.openValue || 'none',
+  (state: any) => state.openValue || 'none',
 );
 
 import { component } from '@jiso/core';
@@ -63,7 +63,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
         {...navigationMenuRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="navigation-menu"
-        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=1abda1b8#GalleryNavigationMenuDemo$section_keydown"
         fw-c="gallery-navigation-menu-demo"
         fw-state='{"activeValue":"products","openValue":"","value":"none"}'
       >
@@ -81,7 +81,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemValue: 'products',
               })}
               class={TRIGGER_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=1abda1b8#GalleryNavigationMenuDemo$button_click"
             >
               Products
             </button>
@@ -99,7 +99,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemValue: 'docs',
               })}
               class={LINK_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$a_click"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=1abda1b8#GalleryNavigationMenuDemo$a_click"
             >
               Docs
             </a>
@@ -122,7 +122,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
         />
         <output
           data-demo-state="navigation-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=1abda1b8#GalleryNavigationMenuDemo$output_text_derive"
         >
           {state.openValue || 'none'}
         </output>

@@ -81,7 +81,7 @@ export function lowerInlineAttributeDerives(
           : candidate.expression.trim();
 
       deriveExports.push(
-        `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${candidate.query}) => ${expression});`,
+        `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${deriveParam(candidate)}) => ${expression});`,
       );
       if (candidate.source === 'state') {
         stateDerives.push({
@@ -98,7 +98,7 @@ export function lowerInlineAttributeDerives(
         end: candidate.attribute.end,
         replacement:
           candidate.source === 'state'
-            ? `${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`
+            ? stateAttributeBindingReplacement(candidate, stampName, options.source)
             : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
         start: candidate.attribute.start,
       });
@@ -223,7 +223,9 @@ function recordStateDerive(
   stateDerives: StateDeriveFact[],
 ): void {
   const expression = derive.expression.trim();
-  deriveExports.push(`export const ${exportName} = derive(["state"], (state) => ${expression});`);
+  deriveExports.push(
+    `export const ${exportName} = derive(["state"], (state: any) => ${expression});`,
+  );
   stateDerives.push({
     expression,
     exportName,
@@ -387,7 +389,9 @@ function isBindingAttributeName(name: string): boolean {
 
 function isStateOnlyExpression(paths: readonly { path: string }[]): boolean {
   const roots = new Set(
-    paths.map((path) => queryNameFromPath(path.path)).filter((root): root is string => root !== null),
+    paths
+      .map((path) => queryNameFromPath(path.path))
+      .filter((root): root is string => root !== null),
   );
   return roots.size > 0 && [...roots].every((root) => root === 'state');
 }
@@ -399,6 +403,20 @@ function derivePrefixInsertionOffset(source: string): number {
 
 function stateBindingAttributeName(name: string): string {
   return `data-bind:${name}`;
+}
+
+function stateAttributeBindingReplacement(
+  candidate: InlineAttributeDerive,
+  stampName: string,
+  source: string,
+): string {
+  const attributeSource = source.slice(candidate.attribute.start, candidate.attribute.end);
+
+  return `${attributeSource} ${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`;
+}
+
+function deriveParam(candidate: InlineAttributeDerive): string {
+  return candidate.source === 'state' ? 'state: any' : candidate.query;
 }
 
 function deriveExpression(attribute: JsxAttributeModel, expression: string): string {

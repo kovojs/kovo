@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryRadioGroupDemo$div_keydown = handler((event, ctx) => {
+export const GalleryRadioGroupDemo$div_keydown = handler((_event, ctx) => {
   ctx.state.value = ctx.state.value === 'email' ? 'sms' : 'email';
   const doc = Reflect['get'](globalThis, 'document');
   const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;
@@ -30,7 +30,7 @@ export const GalleryRadioGroupDemo$div_keydown = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value;
 });
-export const GalleryRadioGroupDemo$input_click = handler((event, ctx) => {
+export const GalleryRadioGroupDemo$input_click = handler((_event, ctx) => {
   ctx.state.value = 'email';
   const doc = Reflect['get'](globalThis, 'document');
   const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;
@@ -51,7 +51,7 @@ export const GalleryRadioGroupDemo$input_click = handler((event, ctx) => {
   }
   if (output) output['textContent'] = 'email';
 });
-export const GalleryRadioGroupDemo$input_click_2 = handler((event, ctx) => {
+export const GalleryRadioGroupDemo$input_click_2 = handler((_event, ctx) => {
   ctx.state.value = 'sms';
   const doc = Reflect['get'](globalThis, 'document');
   const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;

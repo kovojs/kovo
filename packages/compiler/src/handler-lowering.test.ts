@@ -263,11 +263,11 @@ export const CartActions = component('cart-actions', {
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(serverSource).toContain('fw-param-types="quantity:number"');
     expect(clientSource).toContain(
-      'export const CartActions$button_click = handler((event, ctx) => {',
+      'export const CartActions$button_click = handler((_event, ctx) => {',
     );
     expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
     expect(clientSource).toContain(
-      'export const CartActions$button_click_2 = handler((event, ctx) => {',
+      'export const CartActions$button_click_2 = handler((_event, ctx) => {',
     );
     expect(clientSource).toContain(
       'return ctx.state.count = ctx.state.count - ctx.params.quantity;',

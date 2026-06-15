@@ -48,7 +48,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
         {...tabsRootAttributes(rootState)}
         class={ROOT_CLASS}
         data-gallery-interactive="tabs"
-        on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=bef3ac17#GalleryTabsDemo$section_keydown"
         fw-c="gallery-tabs-demo"
         fw-state='{"activeValue":"overview","value":"overview"}'
       >
@@ -64,7 +64,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               panelId: 'gallery-tabs-overview-panel',
             })}
             class={TRIGGER_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=bef3ac17#GalleryTabsDemo$button_click"
           >
             Overview
           </button>
@@ -76,7 +76,7 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               panelId: 'gallery-tabs-details-panel',
             })}
             class={TRIGGER_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=6eb82670#GalleryTabsDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/tabs-demo.client.js?v=bef3ac17#GalleryTabsDemo$button_click_2"
           >
             Details
           </button>

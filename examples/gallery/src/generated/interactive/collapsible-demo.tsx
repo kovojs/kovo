@@ -39,7 +39,7 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
         <summary
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=65e15314#GalleryCollapsibleDemo$summary_click"
+          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=dea3c593#GalleryCollapsibleDemo$summary_click"
         >
           Release notes
         </summary>

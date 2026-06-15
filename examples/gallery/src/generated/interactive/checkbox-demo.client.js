@@ -1,7 +1,7 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryCheckboxDemo$input_click = handler((event, ctx) => {
+export const GalleryCheckboxDemo$input_click = handler((_event, ctx) => {
   ctx.state.checked = ctx.state.checked === 'indeterminate' ? true : !ctx.state.checked;
 });
 
