@@ -1,10 +1,14 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
-  sliderInputAttributes,
+  sliderHiddenInputAttributes,
+  sliderKeyDown as _sliderKeyDown,
   sliderRangeAttributes,
   sliderRootAttributes,
+  sliderThumbDrag as _sliderThumbDrag,
+  sliderThumbDragStart as _sliderThumbDragStart,
   sliderThumbAttributes,
+  sliderTrackPointerDown as _sliderTrackPointerDown,
   sliderTrackAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -14,28 +18,35 @@ import {
 // inlined; they stay Tailwind-discoverable via the site @source on packages/ui.
 const ROOT_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[orientation=vertical]:inline-grid';
-const INPUT_CLASS =
-  'h-2 w-full accent-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 data-[orientation=vertical]:h-40 data-[orientation=vertical]:w-2';
 const TRACK_CLASS =
-  'relative h-2 w-full overflow-hidden rounded-full bg-neutral-200 data-[orientation=vertical]:h-40 data-[orientation=vertical]:w-2';
-const RANGE_CLASS = 'block h-full rounded-full bg-neutral-950 data-[orientation=vertical]:w-full';
+  'relative h-2 w-full cursor-pointer rounded-full bg-neutral-200 data-[orientation=vertical]:h-40 data-[orientation=vertical]:w-2';
+const RANGE_CLASS =
+  'pointer-events-none block h-full rounded-full bg-neutral-950 data-[orientation=vertical]:w-full';
 const THUMB_CLASS =
-  'block h-4 w-4 rounded-full border border-neutral-300 bg-white shadow-sm data-[disabled]:opacity-50';
+  'absolute block h-4 w-4 cursor-grab rounded-full border border-neutral-300 bg-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 data-[disabled]:opacity-50 data-[dragging]:cursor-grabbing';
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 const OUTPUT_CLASS = 'text-xs text-neutral-500';
 
 export interface GallerySliderDemoState {
+  dragging: boolean;
+  dragPointerStart: number;
+  dragValueStart: number;
   value: number;
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GallerySliderDemo = component('gallery-slider-demo', {
-  state: () => ({ value: 25 }),
+  state: () => ({
+    dragging: false,
+    dragPointerStart: 0,
+    dragValueStart: 25,
+    value: 25,
+  }),
   render: (_queries: Record<string, never>, state: GallerySliderDemoState) => {
     const sliderState = {
       form: 'gallery-slider-form',
-      label: 'Completion',
+      labelledBy: 'gallery-slider-label',
       max: 100,
       min: 0,
       name: 'gallery-completion',
@@ -49,83 +60,93 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
         {...sliderRootAttributes(sliderState)}
         class={ROOT_CLASS}
         data-gallery-interactive="slider"
+        data-value={String(state.value)}
       >
         <form id="gallery-slider-form" data-gallery-form="slider" />
-        <label for="gallery-slider-input" class={LABEL_CLASS}>
+        <label id="gallery-slider-label" class={LABEL_CLASS}>
           Completion
         </label>
         <input
-          {...sliderInputAttributes(sliderState)}
+          {...sliderHiddenInputAttributes(sliderState)}
           id="gallery-slider-input"
-          class={INPUT_CLASS}
-          onInput={() => {
-            const doc = Reflect['get'](globalThis, 'document');
-            const delegatedEvent = event;
-            const eventTarget =
-              delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
-            const eventValue =
-              eventTarget === null || eventTarget === undefined
-                ? state.value
-                : +Reflect['get'](Object(eventTarget), 'value');
-            const nextValue = eventValue === eventValue ? eventValue : state.value;
-            state.value =
-              nextValue <= 12.5
-                ? 0
-                : nextValue <= 37.5
-                  ? 25
-                  : nextValue <= 62.5
-                    ? 50
-                    : nextValue <= 87.5
-                      ? 75
-                      : 100;
-            const root = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-gallery-interactive="slider"]')
-              : undefined;
-            const input = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-slider-input')
-              : undefined;
-            const track = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-part="track"]')
-              : undefined;
-            const range = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-part="range"]')
-              : undefined;
-            const thumb = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-part="thumb"]')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="slider-value"]')
-              : undefined;
-            const ratio = String(state.value / 100);
-
-            if (root) Object(root)['setAttribute']?.call(root, 'data-value', String(state.value));
-            if (input) {
-              input['value'] = String(state.value);
-              Object(input)['setAttribute']?.call(
-                input,
-                'aria-valuetext',
-                `${state.value} percent`,
-              );
-              Object(input)['setAttribute']?.call(input, 'data-value', String(state.value));
-            }
-            if (track) {
-              Object(track)['setAttribute']?.call(track, 'data-value', String(state.value));
-              Object(track)['setAttribute']?.call(track, 'data-value-ratio', ratio);
-            }
-            if (range) {
-              Object(range)['setAttribute']?.call(range, 'data-value', String(state.value));
-              Object(range)['setAttribute']?.call(range, 'data-value-ratio', ratio);
-            }
-            if (thumb) {
-              Object(thumb)['setAttribute']?.call(thumb, 'data-value', String(state.value));
-              Object(thumb)['setAttribute']?.call(thumb, 'data-value-ratio', ratio);
-            }
-            if (output) output['textContent'] = String(state.value);
-          }}
+          value={state.value}
         />
-        <div {...sliderTrackAttributes(sliderState)} class={TRACK_CLASS}>
-          <span {...sliderRangeAttributes(sliderState)} class={RANGE_CLASS} />
-          <span {...sliderThumbAttributes(sliderState)} class={THUMB_CLASS} />
+        <div
+          {...sliderTrackAttributes(sliderState)}
+          class={TRACK_CLASS}
+          data-value={String(state.value)}
+          data-value-ratio={String(state.value / 100)}
+          onPointerDown={() => {
+            const result = _sliderTrackPointerDown(Object(event), {
+              max: 100,
+              min: 0,
+              step: 25,
+              value: state.value,
+            });
+            if (!result?.changed) return;
+            state.value = result.value;
+          }}
+        >
+          <span
+            {...sliderRangeAttributes(sliderState)}
+            class={RANGE_CLASS}
+            data-value={String(state.value)}
+            data-value-ratio={String(state.value / 100)}
+            style={`width: ${state.value}%;`}
+          />
+          <span
+            {...sliderThumbAttributes(sliderState)}
+            class={THUMB_CLASS}
+            aria-valuenow={state.value}
+            aria-valuetext={`${state.value} percent`}
+            data-dragging={state.dragging ? '' : null}
+            data-value={String(state.value)}
+            data-value-ratio={String(state.value / 100)}
+            style={`left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`}
+            onKeyDown={() => {
+              const result = _sliderKeyDown(Object(event), {
+                max: 100,
+                min: 0,
+                step: 25,
+                value: state.value,
+              });
+              if (!result?.changed) return;
+              state.value = result.value;
+            }}
+            onPointerDown={() => {
+              const result = _sliderThumbDragStart(Object(event), {
+                max: 100,
+                min: 0,
+                step: 25,
+                value: state.value,
+              });
+              if (!result) return;
+              state.dragging = true;
+              state.dragPointerStart = result.pointerStart;
+              state.dragValueStart = result.valueStart;
+            }}
+            onPointerMove={() => {
+              if (!state.dragging) return;
+              const result = _sliderThumbDrag(
+                Object(event),
+                {
+                  max: 100,
+                  min: 0,
+                  step: 25,
+                  value: state.value,
+                },
+                {
+                  pointerStart: state.dragPointerStart,
+                  valueStart: state.dragValueStart,
+                },
+              );
+              if (!result?.changed) return;
+              state.value = result.value;
+            }}
+            onPointerUp={() => {
+              state.dragging = false;
+            }}
+          />
         </div>
         <output data-demo-state="slider-value" class={OUTPUT_CLASS}>
           {String(state.value)}

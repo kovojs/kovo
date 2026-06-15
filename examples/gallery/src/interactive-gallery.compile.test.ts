@@ -509,10 +509,20 @@ describe('compiled interactive gallery demos', () => {
     expect(slider).toContain('data-gallery-interactive="slider"');
     expect(slider).toContain('id="gallery-slider-form" data-gallery-form="slider"');
     expect(slider).toContain("form: 'gallery-slider-form'");
-    expect(slider).toContain('fw-state=\'{"value":25}\'');
-    expect(slider).toContain('sliderInputAttributes(sliderState)');
+    expect(slider).toContain(
+      'fw-state=\'{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}\'',
+    );
+    expect(slider).toContain('sliderHiddenInputAttributes(sliderState)');
+    expect(slider).toContain('sliderThumbAttributes(sliderState)');
+    expect(slider).toContain('data-bind:aria-valuenow=');
     expect(slider).toMatch(
-      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js\?v=[0-9a-f]{8}#GallerySliderDemo\$input_input"/,
+      /on:pointerdown="\/c\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js\?v=[0-9a-f]{8}#GallerySliderDemo\$div_pointerdown"/,
+    );
+    expect(slider).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js\?v=[0-9a-f]{8}#GallerySliderDemo\$span_keydown"/,
+    );
+    expect(slider).toMatch(
+      /on:pointermove="\/c\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js\?v=[0-9a-f]{8}#GallerySliderDemo\$span_pointermove"/,
     );
 
     expect(switchDemo).toContain('data-gallery-interactive="switch"');

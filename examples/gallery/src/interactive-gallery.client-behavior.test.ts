@@ -830,13 +830,68 @@ describe('compiled interactive gallery demos', () => {
     expect(selectState).toEqual({ value: 'express' });
     expect(disabledSelectEvent.defaultPrevented).toBe(true);
 
-    const sliderState = { value: 25 };
-    clientHandler(slider, 'GallerySliderDemo$input_input')(inputEvent('63'), {
+    const sliderState = {
+      dragging: false,
+      dragPointerStart: 0,
+      dragValueStart: 25,
+      value: 25,
+    };
+    clientHandler(slider, 'GallerySliderDemo$div_pointerdown')(
+      pointerEvent('pointerdown', {
+        offsetX: 150,
+        target: { clientWidth: 200 },
+      }),
+      {
+        params: {},
+        signal,
+        state: sliderState,
+      },
+    );
+    expect(sliderState).toEqual({
+      dragging: false,
+      dragPointerStart: 0,
+      dragValueStart: 25,
+      value: 75,
+    });
+    const sliderKeyDown = keyEvent('ArrowLeft');
+    clientHandler(slider, 'GallerySliderDemo$span_keydown')(sliderKeyDown, {
       params: {},
       signal,
       state: sliderState,
     });
-    expect(sliderState).toEqual({ value: 75 });
+    expect(sliderKeyDown.defaultPrevented).toBe(true);
+    expect(sliderState.value).toBe(50);
+    clientHandler(slider, 'GallerySliderDemo$span_pointerdown')(
+      pointerEvent('pointerdown', { clientX: 20 }),
+      {
+        params: {},
+        signal,
+        state: sliderState,
+      },
+    );
+    expect(sliderState).toMatchObject({
+      dragging: true,
+      dragPointerStart: 20,
+      dragValueStart: 50,
+    });
+    clientHandler(slider, 'GallerySliderDemo$span_pointermove')(
+      pointerEvent('pointermove', {
+        clientX: 120,
+        target: { parentElement: { clientWidth: 200 } },
+      }),
+      {
+        params: {},
+        signal,
+        state: sliderState,
+      },
+    );
+    expect(sliderState.value).toBe(100);
+    clientHandler(slider, 'GallerySliderDemo$span_pointerup')(new Event('pointerup'), {
+      params: {},
+      signal,
+      state: sliderState,
+    });
+    expect(sliderState.dragging).toBe(false);
 
     const switchState = { checked: false };
     clientHandler(switchDemo, 'GallerySwitchDemo$input_click')(new Event('click'), {

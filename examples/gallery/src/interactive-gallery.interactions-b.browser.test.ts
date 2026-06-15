@@ -334,52 +334,104 @@ describe('compiled interactive gallery demos in the browser', () => {
     await expectNoAxeViolations(root);
   });
 
-  it('updates slider stamped state while the native range input moves', async () => {
+  it('updates slider stamped state through custom thumb, keyboard, and track handlers', async () => {
     const root = mountInteractiveDemo(GallerySliderDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-slider-input'));
     const form = required(root.querySelector<HTMLFormElement>('#gallery-slider-form'));
+    const track = required(root.querySelector<HTMLElement>('[data-part="track"]'));
     const range = required(root.querySelector<HTMLElement>('[data-part="range"]'));
+    const thumb = required(root.querySelector<HTMLElement>('[data-part="thumb"]'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, { events: ['input'] });
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['keydown', 'pointerdown', 'pointermove', 'pointerup'],
+    });
 
-    expect(root.getAttribute('fw-state')).toBe('{"value":25}');
+    Object.defineProperty(track, 'clientWidth', { configurable: true, value: 200 });
+
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}',
+    );
     expect(root.getAttribute('data-value')).toBe('25');
-    expect(input.type).toBe('range');
+    expect(input.type).toBe('hidden');
     expect(input.form).toBe(form);
     expect(input.name).toBe('gallery-completion');
     expect(input.value).toBe('25');
     expect(new FormData(form).get('gallery-completion')).toBe('25');
-    expect(input.getAttribute('aria-valuetext')).toBe('25 percent');
+    expect(thumb.getAttribute('role')).toBe('slider');
+    expect(thumb.getAttribute('aria-valuemin')).toBe('0');
+    expect(thumb.getAttribute('aria-valuemax')).toBe('100');
+    expect(thumb.getAttribute('aria-valuenow')).toBe('25');
+    expect(thumb.getAttribute('aria-valuetext')).toBe('25 percent');
     expect(range.getAttribute('data-value-ratio')).toBe('0.25');
     expect(output.textContent).toBe('25');
 
-    input.value = '63';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const trackDown = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
+    Object.defineProperty(trackDown, 'offsetX', { configurable: true, value: 150 });
+    track.dispatchEvent(trackDown);
 
     await vi.waitFor(() => {
       const currentInput = required(root.querySelector<HTMLInputElement>('#gallery-slider-input'));
       const currentRange = required(root.querySelector<HTMLElement>('[data-part="range"]'));
+      const currentThumb = required(root.querySelector<HTMLElement>('[data-part="thumb"]'));
       const currentOutput = required(
         root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe('{"value":75}');
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":75}',
+      );
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/slider-demo.client.js',
       ]);
       expect(root.getAttribute('data-value')).toBe('75');
       expect(currentInput.value).toBe('75');
       expect(new FormData(form).get('gallery-completion')).toBe('75');
-      expect(currentInput.getAttribute('data-value')).toBe('75');
-      expect(currentInput.getAttribute('aria-valuetext')).toBe('75 percent');
       expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');
+      expect(currentThumb.getAttribute('aria-valuenow')).toBe('75');
+      expect(currentThumb.getAttribute('aria-valuetext')).toBe('75 percent');
       expect(currentOutput.textContent).toBe('75');
     });
 
-    // SPEC §12.1: the slider end-state after the native range moves to 75 (updated
-    // aria-valuetext and range ratio) must stay axe-clean.
+    thumb.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }));
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":0}',
+      );
+      expect(input.value).toBe('0');
+      expect(thumb.getAttribute('aria-valuenow')).toBe('0');
+      expect(output.textContent).toBe('0');
+    });
+
+    thumb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 20 }));
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"dragging":true,"dragPointerStart":20,"dragValueStart":0,"value":0}',
+      );
+      expect(thumb.getAttribute('data-dragging')).toBe('');
+    });
+
+    thumb.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: 170 }));
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"dragging":true,"dragPointerStart":20,"dragValueStart":0,"value":75}',
+      );
+      expect(input.value).toBe('75');
+      expect(thumb.getAttribute('aria-valuenow')).toBe('75');
+    });
+
+    thumb.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"dragging":false,"dragPointerStart":20,"dragValueStart":0,"value":75}',
+      );
+      expect(thumb.hasAttribute('data-dragging')).toBe(false);
+    });
+
+    // SPEC §12.1: the custom slider end-state after pointer and keyboard changes
+    // must keep its role/valuenow/valuetext contract axe-clean.
     await expectNoAxeViolations(root);
   });
 

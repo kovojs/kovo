@@ -47,6 +47,14 @@ export interface SliderPartProps extends SliderStateProps {
   id?: string;
 }
 
+export interface SliderThumbProps extends SliderPartProps {
+  descriptionId?: string;
+  errorId?: string;
+  label?: string;
+  labelledBy?: string;
+  valueText?: string;
+}
+
 export const sliderClassNames = defineVariants({
   base: 'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950 data-[orientation=vertical]:inline-grid',
   variants: {},
@@ -236,11 +244,15 @@ export const SliderRange = component('slider-range', {
 });
 
 export const SliderThumb = component('slider-thumb', {
-  render(props: SliderPartProps) {
+  render(props: SliderThumbProps) {
     const attrs = sliderThumbAttributes({
+      ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.label === undefined ? {} : { label: props.label }),
+      ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
       ...(props.max === undefined ? {} : { max: props.max }),
       ...(props.min === undefined ? {} : { min: props.min }),
       ...(props.name === undefined ? {} : { name: props.name }),
@@ -248,11 +260,21 @@ export const SliderThumb = component('slider-thumb', {
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.step === undefined ? {} : { step: props.step }),
       ...(props.value === undefined ? {} : { value: props.value }),
+      ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
 
     return (
       <span
-        aria-hidden={attrs['aria-hidden']}
+        aria-describedby={attrs['aria-describedby']}
+        aria-disabled={attrs['aria-disabled']}
+        aria-invalid={attrs['aria-invalid']}
+        aria-label={attrs['aria-label']}
+        aria-labelledby={attrs['aria-labelledby']}
+        aria-orientation={attrs['aria-orientation']}
+        aria-valuemax={attrs['aria-valuemax']}
+        aria-valuemin={attrs['aria-valuemin']}
+        aria-valuenow={attrs['aria-valuenow']}
+        aria-valuetext={attrs['aria-valuetext']}
         class={cn(sliderThumbClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -264,6 +286,8 @@ export const SliderThumb = component('slider-thumb', {
         data-value={attrs['data-value']}
         data-value-ratio={attrs['data-value-ratio']}
         id={attrs.id}
+        role={attrs.role}
+        tabIndex={attrs.tabIndex}
       />
     );
   },

@@ -12,6 +12,7 @@ export type SliderOrientation = 'horizontal' | 'vertical';
 export interface SliderState {
   disabled?: boolean;
   invalid?: boolean;
+  largeStep?: number;
   max?: number;
   min?: number;
   name?: string;
@@ -35,11 +36,23 @@ export interface SliderInputAttributeOptions extends SliderState {
   valueText?: string;
 }
 
+export interface SliderHiddenInputAttributeOptions extends SliderState {
+  form?: string;
+}
+
 export interface SliderPartAttributeOptions extends SliderState {
   id?: string;
 }
 
-export type SliderChangeReason = 'input' | 'programmatic';
+export interface SliderThumbAttributeOptions extends SliderPartAttributeOptions {
+  descriptionId?: string;
+  errorId?: string;
+  label?: string;
+  labelledBy?: string;
+  valueText?: string;
+}
+
+export type SliderChangeReason = 'input' | 'keyboard' | 'pointer' | 'programmatic';
 
 export type SliderChangeDetail = PrimitiveChangeDetail<SliderChangeReason, number>;
 
@@ -68,6 +81,42 @@ export type SliderPrimitiveAttributes = PrimitiveDataAttributes &
 export type SliderInputEvent = Event & {
   readonly currentTarget: { value: string } | null;
 };
+
+export type SliderKeyboardEvent = Event & {
+  readonly key?: string;
+  readonly shiftKey?: boolean;
+};
+
+export interface SliderPointerTarget {
+  readonly clientHeight?: number;
+  readonly clientWidth?: number;
+  readonly getBoundingClientRect?: () => {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+  };
+  readonly parentElement?: SliderPointerTarget | null;
+}
+
+export type SliderPointerEvent = Event & {
+  readonly clientX?: number;
+  readonly clientY?: number;
+  readonly currentTarget?: SliderPointerTarget | null;
+  readonly offsetX?: number;
+  readonly offsetY?: number;
+  readonly target?: SliderPointerTarget | null;
+};
+
+export interface SliderPointerDragStart {
+  readonly pointerStart: number;
+  readonly valueStart: number;
+}
+
+export interface SliderPointerDragOptions extends SliderChangeOptions {
+  pointerStart: number;
+  valueStart: number;
+}
 
 export function sliderValueState(options: SliderState = {}): SliderComputedState {
   const min = normalizeSliderMin(options.min);
@@ -123,6 +172,20 @@ export function sliderInputAttributes(
   });
 }
 
+export function sliderHiddenInputAttributes(
+  options: SliderHiddenInputAttributeOptions = {},
+): SliderPrimitiveAttributes {
+  const state = sliderValueState(options);
+
+  return Object.freeze({
+    disabled: options.disabled === true,
+    ...(options.form === undefined ? {} : { form: options.form }),
+    ...(options.name === undefined ? {} : { name: options.name }),
+    type: 'hidden',
+    value: state.value,
+  });
+}
+
 export function sliderTrackAttributes(
   options: SliderPartAttributeOptions = {},
 ): SliderPrimitiveAttributes {
@@ -136,9 +199,29 @@ export function sliderRangeAttributes(
 }
 
 export function sliderThumbAttributes(
-  options: SliderPartAttributeOptions = {},
+  options: SliderThumbAttributeOptions = {},
 ): SliderPrimitiveAttributes {
-  return sliderPartAttributes(options, 'thumb');
+  const state = sliderValueState(options);
+  const describedBy = sliderDescribedBy(options);
+
+  return Object.freeze({
+    ...sliderDataAttributes(options),
+    ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
+    ...(options.disabled === true ? { 'aria-disabled': 'true' } : {}),
+    ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
+    ...(state.orientation === 'vertical' ? { 'aria-orientation': 'vertical' } : {}),
+    ...(options.label === undefined ? {} : { 'aria-label': options.label }),
+    ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
+    'aria-valuemax': state.max,
+    'aria-valuemin': state.min,
+    'aria-valuenow': state.value,
+    ...(options.valueText === undefined ? {} : { 'aria-valuetext': options.valueText }),
+    'data-part': 'thumb',
+    'data-value-ratio': String(state.valueRatio),
+    ...(options.id === undefined ? {} : { id: options.id }),
+    role: 'slider',
+    tabIndex: options.disabled === true ? -1 : 0,
+  });
 }
 
 export function sliderValueFromString(value: string, state: SliderState = {}): number {
@@ -197,19 +280,191 @@ export function sliderInput(
   return result;
 }
 
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function sliderKeyDown(
+  event: SliderKeyboardEvent,
+  state: SliderState,
+  options: SliderChangeOptions = {},
+): SliderChangeResult | undefined {
+  if (event.defaultPrevented) return;
+
+  const current = sliderValueState(state);
+  const step = sliderKeyboardStep(state, event);
+  let nextValue: number | undefined;
+
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowLeft':
+      nextValue = current.value - step;
+      break;
+    case 'ArrowRight':
+    case 'ArrowUp':
+      nextValue = current.value + step;
+      break;
+    case 'End':
+      nextValue = current.max;
+      break;
+    case 'Home':
+      nextValue = current.min;
+      break;
+    case 'PageDown':
+      nextValue = current.value - sliderLargeStep(state);
+      break;
+    case 'PageUp':
+      nextValue = current.value + sliderLargeStep(state);
+      break;
+    default:
+      return;
+  }
+
+  event.preventDefault();
+  return setSliderValue(state, nextValue, 'keyboard', options);
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function sliderTrackPointerDown(
+  event: SliderPointerEvent,
+  state: SliderState,
+  options: SliderChangeOptions = {},
+): SliderChangeResult | undefined {
+  if (event.defaultPrevented) return;
+
+  const pointerValue = sliderPointerValue(event, state);
+  if (pointerValue === undefined) return;
+
+  event.preventDefault();
+  return setSliderValue(state, pointerValue, 'pointer', options);
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function sliderThumbDragStart(
+  event: SliderPointerEvent,
+  state: SliderState,
+): SliderPointerDragStart | undefined {
+  if (event.defaultPrevented) return;
+
+  const orientation = sliderOrientation(state.orientation);
+  const pointerStart = sliderPointerClient(event, orientation);
+  if (pointerStart === undefined) return;
+
+  event.preventDefault();
+  return Object.freeze({
+    pointerStart,
+    valueStart: sliderValueState(state).value,
+  });
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function sliderThumbDrag(
+  event: SliderPointerEvent,
+  state: SliderState,
+  options: SliderPointerDragOptions,
+): SliderChangeResult | undefined {
+  if (event.defaultPrevented) return;
+
+  const orientation = sliderOrientation(state.orientation);
+  const pointer = sliderPointerClient(event, orientation);
+  const thumbTarget = event.target ?? event.currentTarget;
+  const trackSize = sliderPointerTargetSize(thumbTarget?.parentElement ?? thumbTarget, orientation);
+  if (pointer === undefined || trackSize <= 0) return;
+
+  const current = sliderValueState(state);
+  const delta = pointer - options.pointerStart;
+  const nextValue = options.valueStart + (delta / trackSize) * (current.max - current.min);
+
+  event.preventDefault();
+  return setSliderValue(state, nextValue, 'pointer', options);
+}
+
 function sliderPartAttributes(
   options: SliderPartAttributeOptions,
-  part: 'range' | 'thumb' | 'track',
+  part: 'range' | 'track',
 ): SliderPrimitiveAttributes {
   const state = sliderValueState(options);
 
   return Object.freeze({
     ...sliderDataAttributes(options),
-    'aria-hidden': 'true',
+    ...(part === 'range' ? { 'aria-hidden': 'true' } : {}),
     'data-part': part,
     'data-value-ratio': String(state.valueRatio),
     ...(options.id === undefined ? {} : { id: options.id }),
   });
+}
+
+function sliderKeyboardStep(state: SliderState, event: SliderKeyboardEvent): number {
+  return event.shiftKey === true ? sliderLargeStep(state) : sliderValueState(state).step;
+}
+
+function sliderLargeStep(state: SliderState): number {
+  const normalized = sliderValueState(state);
+  return sliderFinite(state.largeStep) && state.largeStep > 0
+    ? state.largeStep
+    : normalized.step * 10;
+}
+
+function sliderPointerValue(event: SliderPointerEvent, state: SliderState): number | undefined {
+  const computed = sliderValueState(state);
+  const orientation = computed.orientation;
+  const trackSize = sliderPointerTargetSize(event.target ?? event.currentTarget, orientation);
+  const pointerOffset = sliderPointerOffset(event, orientation);
+  if (trackSize <= 0 || pointerOffset === undefined) return undefined;
+
+  const ratio =
+    orientation === 'vertical'
+      ? 1 - Math.min(Math.max(pointerOffset / trackSize, 0), 1)
+      : Math.min(Math.max(pointerOffset / trackSize, 0), 1);
+  return computed.min + ratio * (computed.max - computed.min);
+}
+
+function sliderPointerTargetSize(
+  target: SliderPointerTarget | null | undefined,
+  orientation: SliderOrientation,
+): number {
+  const rect = target?.getBoundingClientRect?.();
+  if (orientation === 'vertical') return sliderFiniteNumber(target?.clientHeight ?? rect?.height);
+  return sliderFiniteNumber(target?.clientWidth ?? rect?.width);
+}
+
+function sliderPointerOffset(
+  event: SliderPointerEvent,
+  orientation: SliderOrientation,
+): number | undefined {
+  const offset = orientation === 'vertical' ? event.offsetY : event.offsetX;
+  if (typeof offset === 'number' && Number.isFinite(offset)) return offset;
+
+  const rect = (event.target ?? event.currentTarget)?.getBoundingClientRect?.();
+  const pointer = sliderPointerClient(event, orientation);
+  if (rect === undefined || pointer === undefined) return undefined;
+
+  return orientation === 'vertical' ? pointer - rect.top : pointer - rect.left;
+}
+
+function sliderPointerClient(
+  event: SliderPointerEvent,
+  orientation: SliderOrientation,
+): number | undefined {
+  const value = orientation === 'vertical' ? event.clientY : event.clientX;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function sliderDataAttributes(state: SliderState): PrimitiveDataAttributes {
@@ -261,6 +516,10 @@ function sliderOrientation(orientation: SliderOrientation | undefined): SliderOr
 
 function sliderFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function sliderFiniteNumber(value: unknown): number {
+  return sliderFinite(value) ? value : 0;
 }
 
 function roundSliderValue(value: number, step: number): number {

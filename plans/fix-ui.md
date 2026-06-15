@@ -536,13 +536,34 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     examples/gallery/src/interactive/otp-field-demo.tsx
     examples/gallery/src/generated/interactive/otp-field-demo.tsx
     examples/gallery/src/generated/interactive/otp-field-demo.client.js` found no matches.
-- [ ] **slider** [P1]: native `<input type=range>` with decorative `aria-hidden` track/thumb — neither
+- [x] **slider** [P1]: native `<input type=range>` with decorative `aria-hidden` track/thumb — neither
       Base UI's per-thumb nested input nor shadcn/Radix's `role=slider` thumb. No `role=slider`/
       `aria-valuemin/now/max`, no track-click, no drag, no large-step, no multi-thumb.
       **Decision (locked 2026-06-14): build the custom thumb** — add a `role=slider` thumb primitive
       (`aria-valuemin/now/max/valuetext/orientation`, keydown Arrow/Page/Home/End + Shift-large-step,
       pointer drag, track-click) matching shadcn/Radix; drop the native range as the primary control.
       Replace the demo's hardcoded threshold quantizer with `sliderInput`. See Phase 4 `slider.ts`.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/slider.ts` now exposes a custom
+    `role=slider` thumb (`aria-valuemin`/`aria-valuemax`/`aria-valuenow`/`aria-valuetext`,
+    orientation, focusability), `sliderKeyDown`, `sliderTrackPointerDown`,
+    `sliderThumbDragStart`, `sliderThumbDrag`, and `sliderHiddenInputAttributes` for submitted
+    form values when the custom thumb is primary. `sliderTrackAttributes` no longer hides a focusable
+    thumb subtree with `aria-hidden`.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/slider-demo.tsx` uses the custom thumb as
+    the primary control, keeps only a hidden submitted input, removes the previous
+    `Reflect`/`document`/`setAttribute` path, and drives all visible value, ratio, output, hidden
+    input value, and thumb ARIA updates through state bindings in the generated client.
+  - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/slider.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec
+    vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t slider`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/merge-fixtures.forms.test.tsx
+    src/merge-fixtures.idref-oracle.test.tsx`, `pnpm --filter @jiso/headless-ui exec tsc
+    --noEmit`, `pnpm --filter @jiso/ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery
+    exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
+    @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **number-field** [P1]: functional via native `<input type=number>` + `+/-` buttons, but stepping
       is the browser's (not the primitive's aligned-step/clamp), and there's no PageUp/Down, Shift/Meta
       step, press-and-hold repeat, or `Intl` formatting. Add `numberFieldKeyDown` + `largeStep`/
@@ -807,9 +828,13 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/number-field.test.ts` and
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`. Hold-repeat and `Intl` formatting remain
     optional future enhancements.
-- [ ] `slider.ts`: `role=slider` thumb + `aria-valuemin/now/max/valuetext/orientation` + keydown
+- [x] `slider.ts`: `role=slider` thumb + `aria-valuemin/now/max/valuetext/orientation` + keydown
       (Arrow/Page/Home/End/Shift-large-step) + pointer drag + track-click + `largeStep` (custom-thumb
       chosen; native range dropped as primary).
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/slider.ts` exports the custom thumb,
+    keyboard, track-click, thumb-drag, large-step, and hidden-input helpers; verified by
+    `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/slider.test.ts` and
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
 - [ ] `select.ts`: custom button-trigger (`aria-haspopup=listbox`) + `role=listbox`/`role=option` popup
       primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` for keyboard + highlight).
 - [x] `scroll-area.ts`: thumb-geometry helper + `data-has-overflow-*`/`data-scrolling`/`data-hovering` +

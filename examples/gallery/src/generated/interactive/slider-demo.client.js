@@ -1,59 +1,108 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GallerySliderDemo$input_input = handler((event, ctx) => {
-  const doc = Reflect['get'](globalThis, 'document');
-  const delegatedEvent = event;
-  const eventTarget =
-    delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
-  const eventValue =
-    eventTarget === null || eventTarget === undefined
-      ? ctx.state.value
-      : +Reflect['get'](Object(eventTarget), 'value');
-  const nextValue = eventValue === eventValue ? eventValue : ctx.state.value;
-  ctx.state.value =
-    nextValue <= 12.5
-      ? 0
-      : nextValue <= 37.5
-        ? 25
-        : nextValue <= 62.5
-          ? 50
-          : nextValue <= 87.5
-            ? 75
-            : 100;
-  const root = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-gallery-interactive="slider"]')
-    : undefined;
-  const input = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-slider-input') : undefined;
-  const track = doc ? Object(doc)['querySelector']?.call(doc, '[data-part="track"]') : undefined;
-  const range = doc ? Object(doc)['querySelector']?.call(doc, '[data-part="range"]') : undefined;
-  const thumb = doc ? Object(doc)['querySelector']?.call(doc, '[data-part="thumb"]') : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="slider-value"]')
-    : undefined;
-  const ratio = String(ctx.state.value / 100);
+import {
+  sliderKeyDown as _sliderKeyDown,
+  sliderThumbDrag as _sliderThumbDrag,
+  sliderThumbDragStart as _sliderThumbDragStart,
+  sliderTrackPointerDown as _sliderTrackPointerDown,
+} from '@jiso/headless-ui/primitives';
 
-  if (root) Object(root)['setAttribute']?.call(root, 'data-value', String(ctx.state.value));
-  if (input) {
-    input['value'] = String(ctx.state.value);
-    Object(input)['setAttribute']?.call(input, 'aria-valuetext', `${ctx.state.value} percent`);
-    Object(input)['setAttribute']?.call(input, 'data-value', String(ctx.state.value));
-  }
-  if (track) {
-    Object(track)['setAttribute']?.call(track, 'data-value', String(ctx.state.value));
-    Object(track)['setAttribute']?.call(track, 'data-value-ratio', ratio);
-  }
-  if (range) {
-    Object(range)['setAttribute']?.call(range, 'data-value', String(ctx.state.value));
-    Object(range)['setAttribute']?.call(range, 'data-value-ratio', ratio);
-  }
-  if (thumb) {
-    Object(thumb)['setAttribute']?.call(thumb, 'data-value', String(ctx.state.value));
-    Object(thumb)['setAttribute']?.call(thumb, 'data-value-ratio', ratio);
-  }
-  if (output) output['textContent'] = String(ctx.state.value);
+export const GallerySliderDemo$div_pointerdown = handler((event, ctx) => {
+  const result = _sliderTrackPointerDown(Object(event), {
+    max: 100,
+    min: 0,
+    step: 25,
+    value: ctx.state.value,
+  });
+  if (!result?.changed) return;
+  ctx.state.value = result.value;
+});
+export const GallerySliderDemo$span_keydown = handler((event, ctx) => {
+  const result = _sliderKeyDown(Object(event), {
+    max: 100,
+    min: 0,
+    step: 25,
+    value: ctx.state.value,
+  });
+  if (!result?.changed) return;
+  ctx.state.value = result.value;
+});
+export const GallerySliderDemo$span_pointerdown = handler((event, ctx) => {
+  const result = _sliderThumbDragStart(Object(event), {
+    max: 100,
+    min: 0,
+    step: 25,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  ctx.state.dragging = true;
+  ctx.state.dragPointerStart = result.pointerStart;
+  ctx.state.dragValueStart = result.valueStart;
+});
+export const GallerySliderDemo$span_pointermove = handler((event, ctx) => {
+  if (!ctx.state.dragging) return;
+  const result = _sliderThumbDrag(
+    Object(event),
+    {
+      max: 100,
+      min: 0,
+      step: 25,
+      value: ctx.state.value,
+    },
+    {
+      pointerStart: ctx.state.dragPointerStart,
+      valueStart: ctx.state.dragValueStart,
+    },
+  );
+  if (!result?.changed) return;
+  ctx.state.value = result.value;
+});
+export const GallerySliderDemo$span_pointerup = handler((_event, ctx) => {
+  ctx.state.dragging = false;
 });
 
+export const GallerySliderDemo$section_data_value_derive = derive(['state'], (state) =>
+  String(state.value),
+);
+export const GallerySliderDemo$input_value_derive = derive(['state'], (state) => state.value);
+export const GallerySliderDemo$div_data_value_derive = derive(['state'], (state) =>
+  String(state.value),
+);
+export const GallerySliderDemo$div_data_value_ratio_derive = derive(['state'], (state) =>
+  String(state.value / 100),
+);
+export const GallerySliderDemo$span_data_value_derive = derive(['state'], (state) =>
+  String(state.value),
+);
+export const GallerySliderDemo$span_data_value_ratio_derive = derive(['state'], (state) =>
+  String(state.value / 100),
+);
+export const GallerySliderDemo$span_style_derive = derive(
+  ['state'],
+  (state) => `width: ${state.value}%;`,
+);
+export const GallerySliderDemo$span_aria_valuenow_derive = derive(
+  ['state'],
+  (state) => state.value,
+);
+export const GallerySliderDemo$span_aria_valuetext_derive = derive(
+  ['state'],
+  (state) => `${state.value} percent`,
+);
+export const GallerySliderDemo$span_data_dragging_derive = derive(['state'], (state) =>
+  state.dragging ? '' : null,
+);
+export const GallerySliderDemo$span_data_value_derive_2 = derive(['state'], (state) =>
+  String(state.value),
+);
+export const GallerySliderDemo$span_data_value_ratio_derive_2 = derive(['state'], (state) =>
+  String(state.value / 100),
+);
+export const GallerySliderDemo$span_style_derive_2 = derive(
+  ['state'],
+  (state) => `left: ${state.value}%; top: 50%; transform: translate(-50%, -50%);`,
+);
 export const GallerySliderDemo$output_text_derive = derive(['state'], (state) =>
   String(state.value),
 );

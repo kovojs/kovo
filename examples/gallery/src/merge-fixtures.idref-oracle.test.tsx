@@ -225,7 +225,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       };
     });
 
-    expect(cases).toHaveLength(134);
+    expect(cases).toHaveLength(135);
     expect(cases.some((testCase) => testCase.diagnostics > 0)).toBe(true);
     expect(cases.filter((testCase) => testCase.attrCount > 1).length).toBeGreaterThan(100);
     expect(
@@ -258,7 +258,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="accordionTriggerAttributes" data-state="open" aria-expanded="false" disabled type="author-accordionTriggerAttributes" aria-controls="author-aria-controls" id="author-accordionTriggerAttributes" class="primitive-accordionTriggerAttributes author-accordionTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="accordionTriggerAttributes" data-state="open" aria-expanded="false" disabled tabIndex="1" type="author-accordionTriggerAttributes" aria-controls="author-aria-controls" id="author-accordionTriggerAttributes" class="primitive-accordionTriggerAttributes author-accordionTriggerAttributes">merged</div>",
           "name": "accordionTriggerAttributes",
         },
         {
@@ -288,17 +288,17 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 9,
-          "html": "<div data-gallery-merge-builder="autocompleteInputAttributes" data-state="open" data-invalid="author-autocompleteInputAttributes" data-required="author-autocompleteInputAttributes" aria-autocomplete="author-aria" aria-expanded="false" autocomplete="author-autocompleteInputAttributes" disabled role="presentation" type="author-autocompleteInputAttributes" value="author-autocompleteInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" list="author-autocompleteInputAttributes" id="author-autocompleteInputAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" aria-invalid="false" name="author-autocompleteInputAttributes" placeholder="author-autocompleteInputAttributes" required class="primitive-autocompleteInputAttributes author-autocompleteInputAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="autocompleteInputAttributes" data-state="open" data-invalid="author-autocompleteInputAttributes" data-required="author-autocompleteInputAttributes" aria-autocomplete="author-aria" aria-expanded="false" autocomplete="author-autocompleteInputAttributes" disabled role="presentation" type="author-autocompleteInputAttributes" value="author-autocompleteInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" id="author-autocompleteInputAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" aria-invalid="false" name="author-autocompleteInputAttributes" placeholder="author-autocompleteInputAttributes" required class="primitive-autocompleteInputAttributes author-autocompleteInputAttributes">merged</div>",
           "name": "autocompleteInputAttributes",
         },
         {
-          "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="autocompleteListAttributes" data-state="open" data-invalid="author-autocompleteListAttributes" data-required="author-autocompleteListAttributes" id="author-autocompleteListAttributes" aria-labelledby="author-aria-labelledby" class="primitive-autocompleteListAttributes author-autocompleteListAttributes">merged</div>",
+          "diagnostics": 3,
+          "html": "<div data-gallery-merge-builder="autocompleteListAttributes" data-state="open" data-invalid="author-autocompleteListAttributes" data-required="author-autocompleteListAttributes" id="author-autocompleteListAttributes" aria-labelledby="author-aria-labelledby" role="presentation" class="primitive-autocompleteListAttributes author-autocompleteListAttributes">merged</div>",
           "name": "autocompleteListAttributes",
         },
         {
-          "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="autocompleteOptionAttributes" data-state="unchecked" disabled id="author-autocompleteOptionAttributes" class="primitive-autocompleteOptionAttributes author-autocompleteOptionAttributes">merged</div>",
+          "diagnostics": 3,
+          "html": "<div data-gallery-merge-builder="autocompleteOptionAttributes" data-state="unchecked" aria-selected="author-aria" role="presentation" id="author-autocompleteOptionAttributes" class="primitive-autocompleteOptionAttributes author-autocompleteOptionAttributes">merged</div>",
           "name": "autocompleteOptionAttributes",
         },
         {
@@ -572,8 +572,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "hoverCardRootAttributes",
         },
         {
-          "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="hoverCardTriggerAttributes" data-state="open" aria-expanded="false" aria-controls="author-aria-controls" jiso-hover-card="author-jiso-hover-card" class="primitive-hoverCardTriggerAttributes author-hoverCardTriggerAttributes">merged</div>",
+          "diagnostics": 2,
+          "html": "<div data-gallery-merge-builder="hoverCardTriggerAttributes" data-state="open" jiso-hover-card="author-jiso-hover-card" class="primitive-hoverCardTriggerAttributes author-hoverCardTriggerAttributes">merged</div>",
           "name": "hoverCardTriggerAttributes",
         },
         {
@@ -777,6 +777,11 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "separatorRootAttributes",
         },
         {
+          "diagnostics": 0,
+          "html": "<div data-gallery-merge-builder="sliderHiddenInputAttributes" disabled name="author-sliderHiddenInputAttributes" type="author-sliderHiddenInputAttributes" value="41" class="primitive-sliderHiddenInputAttributes author-sliderHiddenInputAttributes">merged</div>",
+          "name": "sliderHiddenInputAttributes",
+        },
+        {
           "diagnostics": 4,
           "html": "<div data-gallery-merge-builder="sliderInputAttributes" data-orientation="author-sliderInputAttributes" data-invalid="author-sliderInputAttributes" data-required="author-sliderInputAttributes" data-max="author-sliderInputAttributes" data-min="author-sliderInputAttributes" data-value="author-sliderInputAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" aria-labelledby="author-aria-labelledby" aria-valuetext="author-aria" disabled id="author-sliderInputAttributes" max="101" min="1" name="author-sliderInputAttributes" required step="2" type="author-sliderInputAttributes" value="41" class="primitive-sliderInputAttributes author-sliderInputAttributes">merged</div>",
           "name": "sliderInputAttributes",
@@ -792,13 +797,13 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "sliderRootAttributes",
         },
         {
-          "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="sliderThumbAttributes" data-orientation="author-sliderThumbAttributes" data-invalid="author-sliderThumbAttributes" data-required="author-sliderThumbAttributes" data-max="author-sliderThumbAttributes" data-min="author-sliderThumbAttributes" data-value="author-sliderThumbAttributes" aria-hidden="false" data-part="author-sliderThumbAttributes" data-value-ratio="author-sliderThumbAttributes" id="author-sliderThumbAttributes" class="primitive-sliderThumbAttributes author-sliderThumbAttributes">merged</div>",
+          "diagnostics": 8,
+          "html": "<div data-gallery-merge-builder="sliderThumbAttributes" data-orientation="author-sliderThumbAttributes" data-invalid="author-sliderThumbAttributes" data-required="author-sliderThumbAttributes" data-max="author-sliderThumbAttributes" data-min="author-sliderThumbAttributes" data-value="author-sliderThumbAttributes" aria-describedby="author-aria-describedby" aria-invalid="false" aria-labelledby="author-aria-labelledby" aria-valuemax="author-aria" aria-valuemin="author-aria" aria-valuenow="author-aria" aria-valuetext="author-aria" data-part="author-sliderThumbAttributes" data-value-ratio="author-sliderThumbAttributes" id="author-sliderThumbAttributes" role="presentation" tabIndex="1" class="primitive-sliderThumbAttributes author-sliderThumbAttributes">merged</div>",
           "name": "sliderThumbAttributes",
         },
         {
-          "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="sliderTrackAttributes" data-orientation="author-sliderTrackAttributes" data-invalid="author-sliderTrackAttributes" data-required="author-sliderTrackAttributes" data-max="author-sliderTrackAttributes" data-min="author-sliderTrackAttributes" data-value="author-sliderTrackAttributes" aria-hidden="false" data-part="author-sliderTrackAttributes" data-value-ratio="author-sliderTrackAttributes" id="author-sliderTrackAttributes" class="primitive-sliderTrackAttributes author-sliderTrackAttributes">merged</div>",
+          "diagnostics": 0,
+          "html": "<div data-gallery-merge-builder="sliderTrackAttributes" data-orientation="author-sliderTrackAttributes" data-invalid="author-sliderTrackAttributes" data-required="author-sliderTrackAttributes" data-max="author-sliderTrackAttributes" data-min="author-sliderTrackAttributes" data-value="author-sliderTrackAttributes" data-part="author-sliderTrackAttributes" data-value-ratio="author-sliderTrackAttributes" id="author-sliderTrackAttributes" class="primitive-sliderTrackAttributes author-sliderTrackAttributes">merged</div>",
           "name": "sliderTrackAttributes",
         },
         {
@@ -893,7 +898,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="tooltipContentAttributes" data-state="open" id="author-tooltipContentAttributes" popover="author-tooltipContentAttributes" role="presentation" class="primitive-tooltipContentAttributes author-tooltipContentAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="tooltipContentAttributes" data-state="open" id="author-tooltipContentAttributes" role="presentation" class="primitive-tooltipContentAttributes author-tooltipContentAttributes">merged</div>",
           "name": "tooltipContentAttributes",
         },
         {

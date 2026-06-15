@@ -791,11 +791,16 @@ export type {
 
 export {
   setSliderValue,
+  sliderHiddenInputAttributes,
   sliderInput,
   sliderInputAttributes,
+  sliderKeyDown,
   sliderRangeAttributes,
   sliderRootAttributes,
+  sliderThumbDrag,
+  sliderThumbDragStart,
   sliderThumbAttributes,
+  sliderTrackPointerDown,
   sliderTrackAttributes,
   sliderValueFromString,
   sliderValueState,
@@ -806,13 +811,20 @@ export type {
   SliderChangeReason,
   SliderChangeResult,
   SliderComputedState,
+  SliderHiddenInputAttributeOptions,
   SliderInputAttributeOptions,
   SliderInputEvent,
+  SliderKeyboardEvent,
   SliderOrientation,
   SliderPartAttributeOptions,
+  SliderPointerDragOptions,
+  SliderPointerDragStart,
+  SliderPointerEvent,
+  SliderPointerTarget,
   SliderPrimitiveAttributes,
   SliderRootAttributeOptions,
   SliderState,
+  SliderThumbAttributeOptions,
 } from './slider.js';
 
 export {

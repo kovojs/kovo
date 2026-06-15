@@ -29,6 +29,7 @@ import {
   selectRootAttributes,
   selectTriggerAttributes,
   selectValueAttributes,
+  sliderHiddenInputAttributes,
   sliderInputAttributes,
   sliderThumbAttributes,
   sliderTrackAttributes,
@@ -279,7 +280,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <span {...value.attrs}>Choose a city</span>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="autocomplete"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" autocomplete="name" role="searchbox" type="text" value="chi" aria-activedescendant="gallery-autocomplete-list-option-2" aria-controls="gallery-autocomplete-list" list="gallery-autocomplete-list" id="gallery-autocomplete-input" aria-labelledby="gallery-autocomplete-label" aria-describedby="author-autocomplete-help" aria-invalid="true" name="author-city" placeholder="Choose a city" required class="autocomplete-input rounded"><datalist data-state="open" data-invalid="" data-required="" id="author-autocomplete-list" aria-labelledby="gallery-autocomplete-label" class="autocomplete-list shadow"><option data-state="unchecked" data-highlighted="" disabled selected value="chicago" id="gallery-autocomplete-option-2" label="Author Chicago" class="autocomplete-option font-medium">Chicago</option></datalist><span data-placeholder="author-placeholder" id="author-autocomplete-value" class="autocomplete-value text-muted">Choose a city</span></section>',
+      '<section data-gallery-merge="autocomplete"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" autocomplete="name" role="searchbox" type="text" value="chi" aria-activedescendant="gallery-autocomplete-list-option-2" aria-controls="gallery-autocomplete-list" id="gallery-autocomplete-input" aria-labelledby="gallery-autocomplete-label" aria-describedby="author-autocomplete-help" aria-invalid="true" name="author-city" placeholder="Choose a city" required class="autocomplete-input rounded"><datalist data-state="open" data-invalid="" data-required="" id="author-autocomplete-list" aria-labelledby="gallery-autocomplete-label" role="listbox" class="autocomplete-list shadow"><option data-state="unchecked" data-highlighted="" aria-selected="false" role="option" value="chicago" id="gallery-autocomplete-option-2" label="Author Chicago" class="autocomplete-option font-medium" disabled selected>Chicago</option></datalist><span data-placeholder="author-placeholder" id="author-autocomplete-value" class="autocomplete-value text-muted">Choose a city</span></section>',
     );
   });
 
@@ -336,6 +337,19 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-value-ratio': 'author-ratio',
       },
     );
+    const hidden = mergePrimitiveAttrs(
+      {
+        ...sliderHiddenInputAttributes({
+          ...state,
+          form: 'gallery-slider-form',
+        }),
+        class: 'slider-hidden',
+      },
+      {
+        class: 'slider-hidden author-hidden',
+        value: 8,
+      },
+    );
 
     expect(input.diagnostics).toEqual([
       {
@@ -344,23 +358,19 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
-    expect(track.diagnostics).toEqual([
-      {
-        attr: 'aria-hidden',
-        code: 'FW232',
-        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
-      },
-    ]);
+    expect(track.diagnostics).toEqual([]);
     expect(thumb.diagnostics).toEqual([]);
+    expect(hidden.diagnostics).toEqual([]);
     expect(
       <section data-gallery-merge="slider">
         <input {...input.attrs} />
+        <input {...hidden.attrs} />
         <div {...track.attrs}>
           <span {...thumb.attrs} />
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="slider"><input data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="author-value" aria-describedby="gallery-slider-description gallery-slider-error" aria-invalid="true" aria-orientation="horizontal" aria-labelledby="gallery-slider-label" aria-valuetext="60 percent" id="gallery-slider-input" max="12" min="0" name="author-volume" required step="2" type="range" value="6" class="slider-input sr-only"><div data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" aria-hidden="false" data-part="track" data-value-ratio="0.6" id="gallery-slider-track" class="slider-track h-24" role="presentation"><span data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" aria-hidden="true" data-part="thumb" data-value-ratio="author-ratio" id="gallery-slider-thumb" class="slider-thumb shadow"></span></div></section>',
+      '<section data-gallery-merge="slider"><input data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="author-value" aria-describedby="gallery-slider-description gallery-slider-error" aria-invalid="true" aria-orientation="horizontal" aria-labelledby="gallery-slider-label" aria-valuetext="60 percent" id="gallery-slider-input" max="12" min="0" name="author-volume" required step="2" type="range" value="6" class="slider-input sr-only"><input form="gallery-slider-form" name="gallery-volume" type="hidden" value="8" class="slider-hidden author-hidden"><div data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" data-part="track" data-value-ratio="0.6" id="gallery-slider-track" class="slider-track h-24" aria-hidden="false" role="presentation"><span data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" aria-invalid="true" aria-orientation="vertical" aria-valuemax="10" aria-valuemin="0" aria-valuenow="6" data-part="thumb" data-value-ratio="author-ratio" id="gallery-slider-thumb" role="slider" tabIndex="0" class="slider-thumb shadow"></span></div></section>',
     );
   });
 
