@@ -66,6 +66,9 @@ function serverRenderPatches(
 ): SourceReplacement[] {
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
+  const chained = chainedPrimitiveHandlerPatches(handlers, model);
+  const chainedHandlers = new Set(chained.handlers);
+  patches.push(...chained.patches);
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -73,6 +76,7 @@ function serverRenderPatches(
     : [];
 
   for (const handler of handlers) {
+    if (chainedHandlers.has(handler)) continue;
     if (hostHandlers.includes(handler)) continue;
     patches.push({
       end: handler.attributeEnd,
@@ -85,11 +89,76 @@ function serverRenderPatches(
     const hostElement = componentRenderHostElement(model);
     if (!hostElement) return patches;
 
-    patches.push(...hostHandlers.map(handlerSourceReplacement));
+    patches.push(
+      ...hostHandlers.filter((handler) => !chainedHandlers.has(handler)).map(handlerSourceReplacement),
+    );
     patches.push(...renderHostStampPatches(model, hostElement));
   }
 
   return patches;
+}
+
+function chainedPrimitiveHandlerPatches(
+  handlers: readonly HandlerLowering[],
+  model: ComponentModuleModel,
+): { handlers: readonly HandlerLowering[]; patches: readonly SourceReplacement[] } {
+  const patches: SourceReplacement[] = [];
+  const chainedHandlers: HandlerLowering[] = [];
+
+  for (const element of model.jsxElements) {
+    const elementHandlers = handlers.filter(
+      (handler) =>
+        handler.attributeStart >= element.start && handler.attributeEnd <= element.openingEnd,
+    );
+    if (elementHandlers.length === 0) continue;
+
+    for (const attribute of element.attributes) {
+      if (!attribute.name.startsWith('on:') || !attribute.value) continue;
+
+      const attributeHandlers = elementHandlers.filter(
+        (handler) => handler.attributeName === attribute.name,
+      );
+      if (attributeHandlers.length === 0) continue;
+
+      // SPEC.md §4.6: primitive composition chains on:* refs author-first, then primitive.
+      patches.push({
+        end: attribute.end,
+        replacement: chainedPrimitiveHandlerAttribute(
+          attribute.name,
+          attribute.value,
+          attributeHandlers,
+        ),
+        start: attribute.start,
+      });
+      for (const handler of attributeHandlers) {
+        patches.push({ end: handler.attributeEnd, replacement: '', start: handler.attributeStart });
+        chainedHandlers.push(handler);
+      }
+    }
+  }
+
+  return { handlers: chainedHandlers, patches };
+}
+
+function chainedPrimitiveHandlerAttribute(
+  name: string,
+  primitiveRefs: string,
+  handlers: readonly HandlerLowering[],
+): string {
+  return [
+    `${name}="${escapeAttribute(
+      [
+        ...handlers.map((handler) => handler.attributeValue),
+        ...primitiveRefs.split(/\s+/).filter(Boolean),
+      ].join(' '),
+    )}"`,
+    emitElementParamTypes(handlers.flatMap((handler) => handler.params)),
+    ...handlers.flatMap((handler) =>
+      handler.params.map((param) => `${param.attributeName}="${escapeAttribute(param.value)}"`),
+    ),
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function handlerSourceReplacement(handler: HandlerLowering): SourceReplacement {

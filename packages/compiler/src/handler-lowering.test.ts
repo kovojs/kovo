@@ -328,6 +328,41 @@ export const TabsDemo = component('tabs-demo', {
     expect(clientSource).not.toContain('ctx.params.value');
   });
 
+  it('chains lowered author handlers before existing primitive on:* refs', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <button
+      on:click="/c/primitives/toggle.client.js#toggleTriggerClick"
+      onClick={() => state.count += item.quantity}
+    >
+      Add one
+    </button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toMatch(
+      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
+    );
+    expect(serverSource).not.toContain('onClick=');
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(clientSource).toContain(
+      'export const CartActions$button_click = handler((_event, ctx) => {',
+    );
+    expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
+  });
+
   it('declares boolean coercion for boolean-ish captured handler params', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',

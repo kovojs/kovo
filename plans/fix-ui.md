@@ -214,10 +214,23 @@ The demos use the low-level `*Attributes()` plain-function spelling, which yield
     src/interactive-gallery.compile.test.ts`, and
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
-- [ ] **Implement primitive `on:*` chaining for the framework authoring spelling.** Decide and wire the
-      long-term §4.6 attrs-function / `asChild` / behavior-attribute form that merges chained primitive
-      `on:keydown`/`on:click` refs into the author element. The gallery now has an explicit-reducer
-      pattern to unblock rewrites, but automatic primitive chaining remains open.
+- [x] **Implement primitive `on:*` chaining for the behavior-attribute authoring spelling.** Merge a
+      static primitive `on:keydown`/`on:click` ref with a lowered author JSX handler on the same element.
+  - Evidence 2026-06-15: `packages/compiler/src/emit/server.ts` merges an existing static
+    `on:<event>` behavior ref with a lowered JSX author handler on the same element, preserving
+    SPEC §4.6 author-first ordering and carrying generated `data-p-*`/`fw-param-types` params onto
+    the merged attribute.
+  - Evidence 2026-06-15: `packages/compiler/src/handler-lowering.test.ts` asserts
+    `onClick={...}` plus `on:click="/c/...#primitive"` emits one chained `on:click` attribute,
+    removes the residual `onClick`, preserves element params, and emits the generated handler body.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec vitest run
+    src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts`,
+    and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
+- [ ] **Lower attrs-function and `asChild` primitive composition sugar onto the behavior-attribute
+      merge path.** The verified behavior-attribute form now provides the underlying §4.6
+      author-first chain; the remaining work is parser/lowering support for proving the render-prop
+      and single-child `asChild` shapes before emission.
 
 ## Phase 3 — Per-component demo rewrites (use the primitives + declarative state)
 
