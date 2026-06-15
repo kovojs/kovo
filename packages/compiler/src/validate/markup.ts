@@ -208,7 +208,8 @@ export function validateAttributeMergeConflicts(
 
     for (const [name, count] of counts) {
       if (count < 2) continue;
-      const attribute = element.attributes.find((item) => item.name === name);
+      const duplicateAttributes = element.attributes.filter((item) => item.name === name);
+      const attribute = duplicateAttributes[0];
       if (!attribute) continue;
 
       if (isBindingAttribute(name)) {
@@ -227,7 +228,15 @@ export function validateAttributeMergeConflicts(
       }
 
       if (name.startsWith('aria-') || primitiveOwnedOverrideAttributes.has(name)) {
-        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'FW232', name, attribute));
+        diagnostics.push(
+          attributeMergeDiagnostic(
+            source,
+            fileName,
+            'FW232',
+            name,
+            duplicateAttributes[1] ?? attribute,
+          ),
+        );
       }
     }
   }

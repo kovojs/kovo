@@ -306,6 +306,8 @@ function numberFieldKeyboardValueChange(
   state: NumberFieldState,
   options: NumberFieldChangeOptions,
 ): NumberFieldChangeResult | undefined {
+  if (event.defaultPrevented) return;
+
   const direction =
     event.key === 'ArrowUp' || event.key === 'PageUp'
       ? 'increment'

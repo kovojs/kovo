@@ -151,7 +151,7 @@ export const diagnosticDefinitions = {
   FW224: {
     code: 'FW224',
     severity: 'error',
-    message: 'Static id appears in a repeatable component or duplicate page composition.',
+    message: 'Static id is duplicated in component scope or appears inside a repeatable stamp.',
   },
   FW225: {
     code: 'FW225',
@@ -243,6 +243,7 @@ export const diagnosticDefinitions = {
   },
   FW311: {
     code: 'FW311',
+    help: 'Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.',
     severity: 'warn',
     message: 'Query/state-dependent DOM position has no update status.',
   },

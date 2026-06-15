@@ -272,6 +272,25 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
   - Evidence 2026-06-15: `packages/compiler/src/scan/parse.ts` now derives `attachedAttributeStart` from the JSX parent/child tree instead of scanning the raw gap; `packages/compiler/src/scan/parse.test.ts` and `packages/compiler/src/execution-triggers.test.ts` cover a FW211 comment inside a preceding `<p>` and prove it no longer attaches to the following `on:load`.
   - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts src/execution-triggers.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
 - [ ] **Remove dead snippet-reparse exports; FW311 help text; FW224 message scope; FW232 placement; primitive-handler-lint default-on** — bundle the remaining audit lows (`scan/parse.ts:462`, `core/diagnostics.ts` FW311, `markup.ts` FW224/FW232, `headless-ui/.../primitive-handler-lint.ts`). Each: tighten the rule or wording to match SPEC; add the asserting test. Prove: `pnpm test` + `pnpm run check:fw`
+  - Progress 2026-06-15: removed the exported snippet-reparse helpers from
+    `packages/compiler/src/scan/parse.ts` and kept parser-model coverage in
+    `packages/compiler/src/scan/parse.test.ts`; narrowed FW224 wording and added FW311 fix-menu help
+    in `packages/core/src/diagnostics.ts`; moved residual FW232 duplicate-attribute spans to the
+    overriding attribute in `packages/compiler/src/validate/markup.ts`; made primitive handler lint
+    default-on for event-shaped primitive handler names and guarded the real
+    `numberFieldKeyboardValueChange` helper.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/scan/parse.test.ts src/attribute-merge.test.ts src/id-content-model.test.ts`,
+    `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts`,
+    `pnpm --filter @jiso/headless-ui exec vitest run
+    src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts
+    src/primitives/number-field.test.ts`, `pnpm exec vp run build`, and `pnpm run check` passed.
+  - Gap 2026-06-15: the required closure gates are still red, so this checkbox stays open.
+    `pnpm test` failed in existing Drizzle project extraction, gallery/UI fixture drift, commerce
+    generated artifact drift, and CLI export snapshot buckets. After rebuilding `dist/`,
+    `pnpm run check:fw` no longer fails the FW224/FW311 assertions, but still fails unrelated loader
+    event-snapshot, starter `DomMorphTarget`, production-emit FW201 fixture, open render-equivalence,
+    and Drizzle conformance gates.
 
 ---
 

@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  arrowFunctionParts,
   callExpressions,
   componentOptionObjectEntries,
   componentRenderHostElement,
-  documentElementActionFromZeroArgArrow,
-  functionBodyPropertyAccessPaths,
   jsxElementChildBody,
   jsxElements,
   jsxExpressions,
   mutationHandlers,
   parseComponentModule,
   soleJsxExpressionChild,
-  solePropertyAccessPath,
-  soleWrappedPropertyAccessPath,
-  stringLiteralArrayValues,
 } from './parse.js';
 
 describe('compiler scan parser helpers', () => {
@@ -142,23 +136,29 @@ export const CartBadge = component('cart-badge', {
     expect(soleJsxExpressionChild(wrap, model)).toBeNull();
   });
 
-  it('extracts one property access expression with optional receiver segments', () => {
-    expect(solePropertyAccessPath('expression.tsx', 'cart.count')).toBe('cart.count');
-    expect(solePropertyAccessPath('expression.tsx', 'cart.items?.name')).toBe('cart.items?.name');
-    expect(solePropertyAccessPath('expression.tsx', 'cart.items?.details?.price')).toBe(
+  it('records sole JSX property access expressions with optional receiver segments', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <span>{cart.count}</span>
+      <span>{cart.items?.name}</span>
+      <span>{cart.items?.details?.price}</span>
+      <span>{cart.count + 1}</span>
+      <span>{count}</span>
+    </cart-badge>
+  ),
+});
+`;
+    const expressions = jsxExpressions(parseComponentModule('cart-badge.tsx', source));
+
+    expect(expressions.map((expression) => expression.solePropertyAccessPath ?? null)).toEqual([
+      'cart.count',
+      'cart.items?.name',
       'cart.items?.details?.price',
-    );
-  });
-
-  it('rejects non-sole property access expressions', () => {
-    expect(solePropertyAccessPath('expression.tsx', 'cart.count + 1')).toBeNull();
-    expect(solePropertyAccessPath('expression.tsx', 'count')).toBeNull();
-  });
-
-  it('extracts one property access from wrapped JSX expression text', () => {
-    expect(soleWrappedPropertyAccessPath('expression.tsx', ' { cart.count } ')).toBe('cart.count');
-    expect(soleWrappedPropertyAccessPath('expression.tsx', 'cart.count')).toBeNull();
-    expect(soleWrappedPropertyAccessPath('expression.tsx', '{cart.count + 1}')).toBeNull();
+      null,
+      null,
+    ]);
   });
 
   it('returns the parsed component render host element', () => {
@@ -291,15 +291,6 @@ export function renderSource() {
     ]);
   });
 
-  it('extracts outer property access paths from function body source', () => {
-    expect(
-      functionBodyPropertyAccessPaths(
-        'handler-expression.ts',
-        'submit(item.id, cart.items?.length, state.count, "item.name")',
-      ),
-    ).toEqual(['item.id', 'cart.items?.length', 'state.count']);
-  });
-
   it('records mutation handler property access paths with source spans', () => {
     const source = `
 export const save = mutation('cart/save', {
@@ -333,15 +324,6 @@ export const save = mutation('cart/save', {
     const [handler] = mutationHandlers(parseComponentModule('cart.mutation.ts', source));
 
     expect(handler?.paramNames).toEqual(['db']);
-  });
-
-  it('extracts string literal array values from expression source', () => {
-    expect(stringLiteralArrayValues('expression.tsx', '["cart"]')).toEqual(['cart']);
-    expect(stringLiteralArrayValues('expression.tsx', "['cart', 'productGrid']")).toEqual([
-      'cart',
-      'productGrid',
-    ]);
-    expect(stringLiteralArrayValues('expression.tsx', '[cart]')).toBeNull();
   });
 
   it('records zero-argument JSX arrow attribute body facts', () => {
@@ -666,18 +648,6 @@ export const CartActions = component('cart-actions', {
     expect(click?.expressionPropertyAccesses?.map((access) => access.path)).toEqual(['item.id']);
   });
 
-  it('extracts concise arrow function parts through the TypeScript parser', () => {
-    expect(arrowFunctionParts('expression.tsx', '(cart: Cart) => cart.count + ";"')).toEqual({
-      expression: 'cart.count + ";"',
-      param: 'cart',
-    });
-    expect(arrowFunctionParts('expression.tsx', 'cart => cart.count')).toEqual({
-      expression: 'cart.count',
-      param: 'cart',
-    });
-    expect(arrowFunctionParts('expression.tsx', 'cart => { return cart.count; }')).toBeNull();
-  });
-
   it('records call argument facts on zero-argument JSX arrow attributes', () => {
     const source = `
 export const CartActions = component('cart-actions', {
@@ -713,42 +683,5 @@ export const CartActions = component('cart-actions', {
         references.map((reference) => reference.name),
       ),
     ).toEqual([[], ['item'], ['item'], ['state']]);
-  });
-
-  it('extracts document element method actions from zero-argument arrows', () => {
-    expect(
-      documentElementActionFromZeroArgArrow(
-        'handler.tsx',
-        "() => (document.getElementById('cart-drawer') as HTMLDialogElement).requestClose()",
-      ),
-    ).toEqual({
-      action: 'method',
-      method: 'requestClose',
-      target: 'cart-drawer',
-    });
-    expect(
-      documentElementActionFromZeroArgArrow(
-        'handler.tsx',
-        '() => document.getElementById(dynamicId)!.showModal()',
-      ),
-    ).toBeNull();
-  });
-
-  it('extracts matching document element open toggles from zero-argument arrows', () => {
-    expect(
-      documentElementActionFromZeroArgArrow(
-        'handler.tsx',
-        "() => document.getElementById('shipping')!.open = !document.getElementById('shipping')!.open",
-      ),
-    ).toEqual({
-      action: 'toggle-open',
-      target: 'shipping',
-    });
-    expect(
-      documentElementActionFromZeroArgArrow(
-        'handler.tsx',
-        "() => document.getElementById('shipping')!.open = !document.getElementById('billing')!.open",
-      ),
-    ).toBeNull();
   });
 });

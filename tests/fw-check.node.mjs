@@ -896,7 +896,7 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
     FW211: 'on:load eager trigger requires a justification comment.',
     FW212: 'Unknown on:* event or execution trigger name.',
     FW221: 'IDREF references an id not present in component scope.',
-    FW224: 'Static id appears in a repeatable component or duplicate page composition.',
+    FW224: 'Static id is duplicated in component scope or appears inside a repeatable stamp.',
     FW225: 'JSX nesting violates the HTML content model.',
     FW226: 'fw-deps or fw-c names an unknown query instance or component.',
   });

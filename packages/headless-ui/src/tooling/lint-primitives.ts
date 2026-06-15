@@ -89,6 +89,7 @@ function collectPrimitiveSourceInputs(
       const path = resolve(directory, entry.name);
       if (entry.isDirectory()) return collectPrimitiveSourceInputs(packageRoot, path);
       if (!entry.isFile() || !isSourceFile(entry.name)) return [];
+      if (!isPrimitiveImplementationSource(packageRoot, path)) return [];
 
       return [
         {
@@ -102,6 +103,16 @@ function collectPrimitiveSourceInputs(
 
 function isSourceFile(fileName: string): boolean {
   return sourceExtensions.some((extension) => fileName.endsWith(extension));
+}
+
+function isPrimitiveImplementationSource(packageRoot: string, path: string): boolean {
+  const relativePath = relative(packageRoot, path);
+  return (
+    relativePath.startsWith('src/primitives/') &&
+    !relativePath.endsWith('.test.ts') &&
+    !relativePath.endsWith('.test.tsx') &&
+    relativePath !== 'src/primitives/index.ts'
+  );
 }
 
 type ParsedArgs = { ok: true; packageRoot?: string } | { error: string; ok: false };

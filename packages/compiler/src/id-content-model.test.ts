@@ -192,7 +192,7 @@ export const CartShell = component('cart-shell', {
         code: 'FW224',
         fileName: 'cart-shell.tsx',
         message:
-          'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-title"',
+          'Static id is duplicated in component scope or appears inside a repeatable stamp. duplicate id="cart-title"',
         severity: 'error',
         start: { column: 15, line: 6 },
         length: 15,
@@ -221,7 +221,7 @@ export const CartShell = component('cart-shell', {
         code: 'FW224',
         fileName: 'cart-shell.tsx',
         message:
-          'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-drawer"',
+          'Static id is duplicated in component scope or appears inside a repeatable stamp. duplicate id="cart-drawer"',
         severity: 'error',
         start: { column: 15, line: 7 },
         length: 16,
@@ -250,7 +250,7 @@ export const CartList = component('cart-list', {
         code: 'FW224',
         fileName: 'cart-list.tsx',
         message:
-          'Static id appears in a repeatable component or duplicate page composition. repeatable id="cart-row"',
+          'Static id is duplicated in component scope or appears inside a repeatable stamp. repeatable id="cart-row"',
         severity: 'error',
         start: { column: 13, line: 6 },
         length: 13,

@@ -62,6 +62,27 @@ export const triggerPointerEnter = (event: Event): void => {
     );
   });
 
+  it('reports unmarked event-shaped primitive handlers by default', () => {
+    const findings = lintPrimitiveHandlers([
+      {
+        path: 'src/tooltip.ts',
+        source: `
+export function tooltipPointerEnter(event: Event): void {
+  showTooltip();
+}
+`,
+      },
+    ]);
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: 'JISO_HUI001',
+        handlerName: 'tooltipPointerEnter',
+        path: 'src/tooltip.ts',
+      }),
+    ]);
+  });
+
   it('requires the guard to check the first event parameter', () => {
     expect(
       lintPrimitiveHandlers([

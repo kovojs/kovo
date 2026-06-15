@@ -97,7 +97,7 @@ describe('diagnostic registry', () => {
         },
         "FW224": {
           "code": "FW224",
-          "message": "Static id appears in a repeatable component or duplicate page composition.",
+          "message": "Static id is duplicated in component scope or appears inside a repeatable stamp.",
           "severity": "error",
         },
         "FW225": {
@@ -187,6 +187,7 @@ describe('diagnostic registry', () => {
         },
         "FW311": {
           "code": "FW311",
+          "help": "Fixes: add a data-bind/query update plan, mark the expression renderOnce, move the subtree behind a fragment target, or make the component isomorphic.",
           "message": "Query/state-dependent DOM position has no update status.",
           "severity": "warn",
         },

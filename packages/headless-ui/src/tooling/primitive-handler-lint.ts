@@ -27,17 +27,16 @@ interface HandlerCandidate {
   node: ts.Node;
 }
 
-const defaultMarker = '@jisoPrimitiveHandler';
 const defaultPreventedMessage =
   'Primitive handler must begin by no-oping when event.defaultPrevented is true; SPEC.md §4.6 keeps chained on:* handlers running left-to-right and assigns cancellation handling to primitive handlers.';
+const handlerNamePattern =
+  /(Click|Change|Input|KeyDown|KeyUp|PointerDown|PointerMove|PointerUp|PointerEnter|PointerLeave|Focus|Blur|OpenAutoFocus|CloseAutoFocus|EscapeKeyDown|InteractOutside)$/;
 
 export function lintPrimitiveHandlers(
   inputs: readonly PrimitiveHandlerLintInput[],
   options: PrimitiveHandlerLintOptions = {},
 ): PrimitiveHandlerLintFinding[] {
-  return inputs.flatMap((input) =>
-    lintPrimitiveHandlerSource(input, options.marker ?? defaultMarker),
-  );
+  return inputs.flatMap((input) => lintPrimitiveHandlerSource(input, options.marker));
 }
 
 export function formatPrimitiveHandlerLintFindings(
@@ -53,15 +52,18 @@ export function formatPrimitiveHandlerLintFindings(
 
 function lintPrimitiveHandlerSource(
   input: PrimitiveHandlerLintInput,
-  marker: string,
+  marker: string | undefined,
 ): PrimitiveHandlerLintFinding[] {
   const sourceFile = ts.createSourceFile(input.path, input.source, ts.ScriptTarget.Latest, true);
   const findings: PrimitiveHandlerLintFinding[] = [];
 
   for (const statement of sourceFile.statements) {
-    if (!hasPrimitiveHandlerMarker(statement, sourceFile, marker)) continue;
+    const markerMatched =
+      marker === undefined ? false : hasPrimitiveHandlerMarker(statement, sourceFile, marker);
+    if (marker !== undefined && !markerMatched) continue;
 
     for (const candidate of handlerCandidates(statement)) {
+      if (marker === undefined && !isPrimitiveHandlerCandidate(candidate)) continue;
       if (hasDefaultPreventedGuard(candidate)) continue;
 
       const { line, character } = sourceFile.getLineAndCharacterOfPosition(
@@ -79,6 +81,15 @@ function lintPrimitiveHandlerSource(
   }
 
   return findings;
+}
+
+function isPrimitiveHandlerCandidate(candidate: HandlerCandidate): boolean {
+  return (
+    candidate.body !== undefined &&
+    candidate.eventParamName !== null &&
+    /event|evt/i.test(candidate.eventParamName) &&
+    handlerNamePattern.test(candidate.name)
+  );
 }
 
 function handlerCandidates(statement: ts.Statement): HandlerCandidate[] {

@@ -536,97 +536,6 @@ export function mutationHandlers(model: ComponentModuleModel): MutationHandlerMo
   return [...model.mutationHandlers];
 }
 
-export function identifierReferences(fileName: string, source: string): string[] {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const declared = new Set<string>();
-  const referenced: string[] = [];
-
-  const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node)) {
-      if (isDeclaredIdentifier(node)) declared.add(node.text);
-      if (isReferenceIdentifier(node)) referenced.push(node.text);
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-
-  return referenced.filter((name) => !declared.has(name));
-}
-
-export function propertyAccessPaths(fileName: string, source: string): string[] {
-  const sourceFile = parseExpressionSource(fileName, source);
-  return propertyAccessPathsFromSourceFile(sourceFile);
-}
-
-export function functionBodyPropertyAccessPaths(fileName: string, body: string): string[] {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    `function __jiso_scan__() {\n${body}\n}`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  return propertyAccessPathsFromSourceFile(sourceFile);
-}
-
-function propertyAccessPathsFromSourceFile(sourceFile: ts.SourceFile): string[] {
-  const paths: string[] = [];
-
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)
-    ) {
-      const path = propertyAccessPath(node);
-      if (path) paths.push(path);
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-
-  return paths;
-}
-
-export function solePropertyAccessPath(fileName: string, source: string): string | null {
-  const sourceFile = parseExpressionSource(fileName, source);
-  const initializer = firstVariableInitializer(sourceFile);
-  if (!initializer || !ts.isPropertyAccessExpression(initializer)) return null;
-
-  return propertyAccessPath(initializer);
-}
-
-export function soleWrappedPropertyAccessPath(fileName: string, source: string): string | null {
-  const trimmed = source.trim();
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
-
-  return solePropertyAccessPath(fileName, trimmed.slice(1, -1).trim());
-}
-
-export function stringLiteralArrayValues(fileName: string, source: string): string[] | null {
-  const sourceFile = parseExpressionSource(fileName, source);
-  const initializer = firstVariableInitializer(sourceFile);
-  return initializer ? stringLiteralArrayValuesFromExpression(initializer) : null;
-}
-
-export function arrowFunctionParts(
-  fileName: string,
-  source: string,
-): ArrowFunctionPartsModel | null {
-  const sourceFile = parseExpressionSource(fileName, source);
-  const initializer = firstVariableInitializer(sourceFile);
-  return initializer ? arrowFunctionPartsFromExpression(sourceFile, initializer) : null;
-}
-
 function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
   if (!ts.isArrayLiteralExpression(expression)) return null;
 
@@ -655,20 +564,6 @@ function arrowFunctionPartsFromExpression(
   };
 }
 
-export function documentElementActionFromZeroArgArrow(
-  fileName: string,
-  source: string,
-): DocumentElementActionModel | null {
-  const sourceFile = parseExpressionSource(fileName, source);
-  const initializer = firstVariableInitializer(sourceFile);
-  if (!initializer || !ts.isArrowFunction(initializer) || initializer.parameters.length > 0) {
-    return null;
-  }
-  if (ts.isBlock(initializer.body)) return null;
-
-  return documentElementActionFromExpression(sourceFile, initializer.body);
-}
-
 function documentElementActionFromExpression(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
@@ -678,32 +573,6 @@ function documentElementActionFromExpression(
   if (methodAction) return methodAction;
 
   return documentElementToggleOpenAction(sourceFile, body);
-}
-
-export function objectLiteralPropertyPaths(fileName: string, source: string): string[] {
-  const sourceFile = parseExpressionSource(fileName, source);
-  const initializer = firstVariableInitializer(sourceFile);
-  if (!initializer || !ts.isObjectLiteralExpression(initializer)) return [];
-
-  return objectLiteralPaths(initializer);
-}
-
-function parseExpressionSource(fileName: string, source: string): ts.SourceFile {
-  return ts.createSourceFile(
-    fileName,
-    `const __jisoExpression = (${source});`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-}
-
-function firstVariableInitializer(sourceFile: ts.SourceFile): ts.Expression | null {
-  const statement = sourceFile.statements[0];
-  if (!statement || !ts.isVariableStatement(statement)) return null;
-
-  const initializer = statement.declarationList.declarations[0]?.initializer;
-  return initializer ? unwrapParenthesizedExpression(initializer) : null;
 }
 
 function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
