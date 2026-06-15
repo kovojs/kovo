@@ -26,6 +26,7 @@ interface InlineAttributeDerive {
   expression: string;
   query: string;
   source: 'query' | 'state';
+  targetAttr: string;
 }
 
 interface InlineStateTextDerive {
@@ -96,7 +97,7 @@ export function lowerInlineAttributeDerives(
             ? stateAttributeBindingReplacement(candidate, stampName, options.source)
             : useBindingStamp
               ? queryAttributeBindingReplacement(candidate, stampName)
-              : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
+              : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.targetAttr)}"`,
         start: candidate.attribute.start,
       });
     }
@@ -184,6 +185,9 @@ function inlineAttributeDerive(
   knownQueries: ReadonlySet<string>,
 ): InlineAttributeDerive | null {
   if (attribute.expression === undefined) return null;
+  if (attribute.name === 'viewTransitionName') {
+    return inlineViewTransitionNameDerive(attribute, element, componentName, knownQueries);
+  }
   if (shouldSkipInlineAttributeDerive(attribute)) return null;
 
   const queryRoots = new Set(
@@ -209,6 +213,42 @@ function inlineAttributeDerive(
     expression: attribute.expression.trim(),
     query,
     source: stateOnly ? 'state' : 'query',
+    targetAttr: attribute.name,
+  };
+}
+
+function inlineViewTransitionNameDerive(
+  attribute: JsxAttributeModel,
+  element: JsxElementModel,
+  componentName: string,
+  knownQueries: ReadonlySet<string>,
+): InlineAttributeDerive | null {
+  if (attribute.expression === undefined) return null;
+
+  const styleAttribute = element.attributes.find((item) => item.name === 'style');
+  const propertyAccesses = [
+    ...(attribute.expressionPropertyAccesses ?? []),
+    ...(styleAttribute?.expressionPropertyAccesses ?? []),
+  ];
+  const roots = new Set(
+    propertyAccesses
+      .map((path) => queryNameFromPath(path.path))
+      .filter((root): root is string => root !== null),
+  );
+  const queryRoots = new Set([...roots].filter((query) => knownQueries.has(query)));
+  const stateOnly = roots.size > 0 && [...roots].every((root) => root === 'state');
+  const queryOnly =
+    queryRoots.size === 1 && [...roots].every((root) => root === [...queryRoots][0]);
+  const query = stateOnly ? 'state' : queryOnly ? [...queryRoots][0] : null;
+  if (!query) return null;
+
+  return {
+    attribute,
+    baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_style_derive`,
+    expression: viewTransitionNameStyleExpression(attribute.expression, styleAttribute),
+    query,
+    source: stateOnly ? 'state' : 'query',
+    targetAttr: 'style',
   };
 }
 
@@ -245,7 +285,6 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     attribute.domEventName !== undefined ||
     attribute.executionTriggerName !== undefined ||
     name === 'className' ||
-    name === 'viewTransitionName' ||
     name === 'data-derive' ||
     name === 'data-derive-attr' ||
     name === 'data-bind' ||
@@ -259,7 +298,7 @@ function queryAttributeBindingReplacement(
   candidate: InlineAttributeDerive,
   stampName: string,
 ): string {
-  return `${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`;
+  return `${stateBindingAttributeName(candidate.targetAttr)}="${escapeAttribute(stampName)}"`;
 }
 
 function inlineTextBinding(
@@ -415,9 +454,13 @@ function stateAttributeBindingReplacement(
   stampName: string,
   source: string,
 ): string {
+  if (candidate.targetAttr !== candidate.attribute.name) {
+    return `${stateBindingAttributeName(candidate.targetAttr)}="${escapeAttribute(stampName)}"`;
+  }
+
   const attributeSource = source.slice(candidate.attribute.start, candidate.attribute.end);
 
-  return `${attributeSource} ${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`;
+  return `${attributeSource} ${stateBindingAttributeName(candidate.targetAttr)}="${escapeAttribute(stampName)}"`;
 }
 
 function deriveParam(candidate: InlineAttributeDerive): string {
@@ -427,6 +470,25 @@ function deriveParam(candidate: InlineAttributeDerive): string {
 function deriveExpression(attribute: JsxAttributeModel, expression: string): string {
   const trimmed = expression.trim();
   return booleanPresenceAttributes.has(attribute.name) ? `((${trimmed}) ? "" : null)` : trimmed;
+}
+
+function viewTransitionNameStyleExpression(
+  transitionExpression: string,
+  styleAttribute: JsxAttributeModel | undefined,
+): string {
+  const transition = `view-transition-name: \${${transitionExpression.trim()}}`;
+  if (styleAttribute?.expression !== undefined) {
+    return `[${styleAttribute.expression}, \`${transition}\`].filter(Boolean).join('; ')`;
+  }
+
+  const existing = (styleAttribute?.value ?? '').trim();
+  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
+  const prefix = existing === '' ? '' : `${templateLiteralText(existing)}${separator} `;
+  return `\`${prefix}${transition}\``;
+}
+
+function templateLiteralText(value: string): string {
+  return value.replace(/[`\\]/g, (char) => `\\${char}`).replace(/\$\{/g, '\\${');
 }
 
 const booleanPresenceAttributes = new Set([

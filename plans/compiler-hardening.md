@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (5 / 32 findings closed)
+**Status:** open (6 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -84,12 +84,23 @@ src/query-coverage.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit`
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
 src/query-coverage.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
-- [ ] **Lower every derivable attribute per element; handle dynamic `viewTransitionName`** — `packages/compiler/src/lower/inline-derives.ts:62` and `packages/compiler/src/lower/view-transitions.ts:18` (SPEC §4.8 #2, §4.2). Drop the `candidates.length !== 1` cap so two bound attributes on one element both lower to named derives. In view-transitions, handle the `expression` form (not just string `value`): lower a dynamic name to the `view-transition-name` **style** channel (one merged `style`, never a duplicate attribute and never a bogus `viewTransitionName` attr), or emit an explicit diagnostic if out of v1 scope — never silently leak raw JSX.
+- [x] **Lower every derivable attribute per element; handle dynamic `viewTransitionName`** — `packages/compiler/src/lower/inline-derives.ts:62` and `packages/compiler/src/lower/view-transitions.ts:18` (SPEC §4.8 #2, §4.2). Drop the `candidates.length !== 1` cap so two bound attributes on one element both lower to named derives. In view-transitions, handle the `expression` form (not just string `value`): lower a dynamic name to the `view-transition-name` **style** channel (one merged `style`, never a duplicate attribute and never a bogus `viewTransitionName` attr), or emit an explicit diagnostic if out of v1 scope — never silently leak raw JSX.
   - Done = `<button aria-expanded={…} aria-busy={…}>` emits two `data-bind:*`; `viewTransitionName={q.slug}` produces a stamp or a diagnostic, not leaked JSX. Prove: `pnpm test query-update-plans view-transitions`
-  - Progress 2026-06-15: multiple query-derived attributes on one element now lower to separate derive exports with `data-bind:*` selector stamps, and query update plan collection recognizes those stamped derived attributes.
-  - Progress 2026-06-15: dynamic `viewTransitionName={query.path}` is removed from JSX and merged into the CSS `view-transition-name` style channel, so the raw React-style attribute no longer leaks into emitted TSX/JSX.
-  - Gap: dynamic view-transition style expressions still surface FW311 instead of a live query-update stamp because view-transition patches and inline derives currently run in the same model pass; close this with staged re-lowering, explicit style-stamp lowering, or an intentional diagnostic contract before checking the item off.
-  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/query-coverage.test.ts src/view-transitions.test.ts src/query-update-plans.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm exec vp check --fix` passed.
+  - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` now lowers all
+    derivable attributes on an element and uses `data-bind:*` selector stamps when multiple query
+    stamps would otherwise collide on `data-derive`; `packages/compiler/src/analyze/query-updates.ts`
+    recognizes those `data-bind:*` query derive stamps.
+  - Evidence 2026-06-15: dynamic `viewTransitionName={query.path}` is handled by
+    `packages/compiler/src/lower/inline-derives.ts` as a compiled `style` query-update stamp with a
+    `view-transition-name` CSS expression, while `packages/compiler/src/lower/view-transitions.ts`
+    remains the static registry-stamp path for string values.
+  - Evidence 2026-06-15: `packages/compiler/src/query-coverage.test.ts` covers two derived query
+    attributes on one element; `packages/compiler/src/view-transitions.test.ts` covers dynamic
+    view-transition style stamps with and without an existing static style and asserts no FW311/raw
+    `viewTransitionName` leak.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/query-coverage.test.ts src/view-transitions.test.ts src/query-update-plans.test.ts`, `pnpm
+--filter @jiso/compiler exec tsc --noEmit`, and `pnpm exec vp check --fix` passed.
 
 ---
 
