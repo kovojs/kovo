@@ -90,6 +90,7 @@ export interface HandlerLowering {
   attributeStart: number;
   attributeValue: string;
   arrowBody?: HandlerArrowBody;
+  clientImports?: readonly ClientImportDependency[];
   expression: string;
   // SPEC §5.2: typed fact (threaded from the parser) marking a bare-named-reference handler such as
   // `onClick={handleClick}`, so client emit chooses the call-through body without re-deciding from
@@ -98,6 +99,12 @@ export interface HandlerLowering {
   params: ElementParam[];
   diagnostic?: CompilerDiagnostic;
   diagnostics?: readonly CompilerDiagnostic[];
+}
+
+export interface ClientImportDependency {
+  importedName: string;
+  localName: string;
+  moduleSpecifier: string;
 }
 
 export interface HandlerArrowBody {

@@ -274,6 +274,60 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('preserves referenced named imports in generated client handler modules', () => {
+    const result = compileComponentModule({
+      fileName: 'components/tabs/tabs-demo.tsx',
+      source: `
+import { component } from '@jiso/core';
+import { tabsKeyDown as keyDown, tabsTriggerClick } from '@jiso/headless-ui/primitives';
+
+export const TabsDemo = component('tabs-demo', {
+  state: () => ({ activeValue: 'overview', value: 'overview' }),
+  render: () => (
+    <section
+      onKeyDown={() => {
+        const result = keyDown(event, {
+          activeValue: state.activeValue,
+          items: [{ value: 'overview' }, { value: 'details' }],
+          value: state.value,
+        });
+        if (result) {
+          state.activeValue = result.activeValue ?? state.activeValue;
+          state.value = result.value ?? state.value;
+        }
+      }}
+      onClick={() => {
+        const result = tabsTriggerClick(event, {
+          itemValue: 'details',
+          value: state.value,
+        });
+        if (result?.changed) {
+          state.activeValue = result.value ?? state.activeValue;
+          state.value = result.value ?? state.value;
+        }
+      }}
+    />
+  ),
+});
+`,
+    });
+
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'import { tabsKeyDown as keyDown, tabsTriggerClick } from "@jiso/headless-ui/primitives";',
+    );
+    expect(clientSource).toContain('const result = keyDown(event, {');
+    expect(clientSource).toContain('activeValue: ctx.state.activeValue,');
+    expect(clientSource).toContain('const result = tabsTriggerClick(event, {');
+    expect(clientSource).toContain('value: ctx.state.value,');
+    expect(clientSource).toContain(
+      'ctx.state.activeValue = result.activeValue ?? ctx.state.activeValue;',
+    );
+    expect(clientSource).toContain('ctx.state.value = result.value ?? ctx.state.value;');
+    expect(clientSource).not.toContain('ctx.params.value');
+  });
+
   it('declares boolean coercion for boolean-ish captured handler params', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',

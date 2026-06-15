@@ -152,6 +152,7 @@ export interface ZeroArgArrowModel {
   // SPEC §5.2: per-call-argument typed kind computed from the ts arg nodes, so handler lowering
   // never re-derives element-param eligibility by comparing the raw argument source string.
   callArgumentKinds?: readonly ZeroArgArrowCallArgumentKind[];
+  bodyLocalNames: readonly string[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyReferences: readonly IdentifierReferenceModel[];
   bodyStart: number;
@@ -200,6 +201,12 @@ export interface ModuleSpecifierModel {
   specifier: string;
 }
 
+export interface NamedImportModel {
+  importedName: string;
+  localName: string;
+  moduleSpecifier: string;
+}
+
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
   components: readonly ComponentModel[];
@@ -208,6 +215,7 @@ export interface ComponentModuleModel {
   jsxElements: readonly JsxElementModel[];
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];
+  namedImports: readonly NamedImportModel[];
   renderSourceReturns: readonly StringRenderModel[];
 }
 
@@ -226,11 +234,13 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const jsxElements: JsxElementModel[] = [];
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
+  const namedImports: NamedImportModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
 
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifierModel(node);
     if (specifier) moduleSpecifiers.push(specifier);
+    namedImports.push(...namedImportModels(node));
 
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
       const model = componentModelFromInitializer(
@@ -276,6 +286,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     jsxElements,
     moduleSpecifiers,
     mutationHandlers,
+    namedImports,
     renderSourceReturns,
   };
 }
@@ -295,6 +306,26 @@ function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
   }
 
   return null;
+}
+
+function namedImportModels(node: ts.Node): NamedImportModel[] {
+  if (
+    !ts.isImportDeclaration(node) ||
+    !node.moduleSpecifier ||
+    !ts.isStringLiteralLike(node.moduleSpecifier)
+  ) {
+    return [];
+  }
+
+  const bindings = node.importClause?.namedBindings;
+  if (!bindings || !ts.isNamedImports(bindings)) return [];
+  const moduleSpecifier = node.moduleSpecifier.text;
+
+  return bindings.elements.map((element) => ({
+    importedName: element.propertyName?.text ?? element.name.text,
+    localName: element.name.text,
+    moduleSpecifier,
+  }));
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -1625,6 +1656,7 @@ function zeroArgArrowModel(
       ...(callArgumentPropertyAccesses === undefined ? {} : { callArgumentPropertyAccesses }),
       ...(callArgumentStaticValues === undefined ? {} : { callArgumentStaticValues }),
       ...(callArgumentKinds === undefined ? {} : { callArgumentKinds }),
+      bodyLocalNames: localDeclarationNames(body),
       bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
       bodyReferences: referenceIdentifierModels(sourceFile, body),
       bodyStart,
@@ -1648,6 +1680,38 @@ function zeroArgArrowCallArgumentKind(argument: ts.Expression): ZeroArgArrowCall
   }
 
   return 'other';
+}
+
+function localDeclarationNames(node: ts.Node): string[] {
+  const names: string[] = [];
+
+  const visit = (child: ts.Node): void => {
+    if (ts.isVariableDeclaration(child)) {
+      collectBindingNames(child.name, names);
+    }
+    if (
+      (ts.isFunctionDeclaration(child) || ts.isClassDeclaration(child)) &&
+      child.name !== undefined
+    ) {
+      names.push(child.name.text);
+    }
+
+    ts.forEachChild(child, visit);
+  };
+
+  ts.forEachChild(node, visit);
+  return [...new Set(names)];
+}
+
+function collectBindingNames(name: ts.BindingName, names: string[]): void {
+  if (ts.isIdentifier(name)) {
+    names.push(name.text);
+    return;
+  }
+
+  for (const element of name.elements) {
+    if (ts.isBindingElement(element)) collectBindingNames(element.name, names);
+  }
 }
 
 function documentElementActionModel(

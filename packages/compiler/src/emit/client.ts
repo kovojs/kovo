@@ -2,6 +2,7 @@ import { compilerIrHeader } from '../ir.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import { elementParamNameFromAttribute } from '../types.js';
 import type {
+  ClientImportDependency,
   ElementParam,
   HandlerArrowBody,
   HandlerLowering,
@@ -30,6 +31,9 @@ export function emitClientModule(
   ].sort();
   const importLine =
     imports.length > 0 ? `import { ${imports.join(', ')} } from '@jiso/runtime';\n\n` : '';
+  const dependencyImportLines = emitClientImportDependencies(
+    handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
+  );
   const handlerExports = handlers.length ? handlers.map(emitHandlerExport).join('\n') : '';
   const stateDeriveExports = stateDerives.map(emitStateDeriveExport).join('\n');
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
@@ -38,8 +42,37 @@ export function emitClientModule(
     .join('\n\n');
 
   return `${compilerIrHeader}
-${importLine}${exports || '// no client handlers emitted'}
+${importLine}${dependencyImportLines}${exports || '// no client handlers emitted'}
 `;
+}
+
+function emitClientImportDependencies(imports: readonly ClientImportDependency[]): string {
+  const entriesByModule = new Map<string, ClientImportDependency[]>();
+
+  for (const item of dedupeBy(
+    imports,
+    (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.localName}`,
+  )) {
+    entriesByModule.set(item.moduleSpecifier, [
+      ...(entriesByModule.get(item.moduleSpecifier) ?? []),
+      item,
+    ]);
+  }
+
+  return [...entriesByModule]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([moduleSpecifier, entries]) => {
+      const specifiers = entries
+        .sort((left, right) => left.localName.localeCompare(right.localName))
+        .map((entry) =>
+          entry.importedName === entry.localName
+            ? entry.importedName
+            : `${entry.importedName} as ${entry.localName}`,
+        )
+        .join(', ');
+      return `import { ${specifiers} } from ${JSON.stringify(moduleSpecifier)};\n\n`;
+    })
+    .join('');
 }
 
 function emitStateDeriveExport(deriveFact: StateDeriveFact): string {

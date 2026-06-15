@@ -5,11 +5,13 @@ import {
   jsxElements,
   type ComponentModuleModel,
   type IdentifierReferenceModel,
+  type NamedImportModel,
   type PropertyAccessPathModel,
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
 import type {
+  ClientImportDependency,
   CompileComponentOptions,
   ElementParam,
   ElementParamType,
@@ -91,6 +93,7 @@ export function lowerEventHandlers(
             },
           }
         : {}),
+      ...clientImportDependencies(model.namedImports, handlerReferenceNames(eventAttribute)),
       ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
       exportName,
@@ -152,6 +155,31 @@ export function clientModuleVersion(source: string): string {
   }
 
   return hash.toString(16).padStart(8, '0');
+}
+
+function handlerReferenceNames(eventAttribute: {
+  expressionReferences?: readonly string[];
+  expressionIsBareIdentifier?: boolean;
+  expressionBareIdentifierName?: string;
+  zeroArgArrow?: ZeroArgArrowModel;
+}): ReadonlySet<string> {
+  return new Set([
+    ...(eventAttribute.zeroArgArrow?.bodyReferences.map((reference) => reference.name) ?? []),
+    ...(eventAttribute.expressionReferences ?? []),
+    ...(eventAttribute.expressionIsBareIdentifier === true &&
+    eventAttribute.expressionBareIdentifierName !== undefined
+      ? [eventAttribute.expressionBareIdentifierName]
+      : []),
+  ]);
+}
+
+function clientImportDependencies(
+  namedImports: readonly NamedImportModel[],
+  references: ReadonlySet<string>,
+): { clientImports: readonly ClientImportDependency[] } | {} {
+  const clientImports = namedImports.filter((item) => references.has(item.localName));
+
+  return clientImports.length > 0 ? { clientImports } : {};
 }
 
 function eventAttributes(model: ComponentModuleModel): Array<{
@@ -266,6 +294,7 @@ function extractElementParams(
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): ElementParam[] {
   const callArgumentKinds = zeroArgArrow?.callArgumentKinds;
+  const localNames = new Set(zeroArgArrow?.bodyLocalNames ?? []);
   const candidates = callArgumentKinds
     ? callArgumentKinds.flatMap((kind, index) => {
         // 'empty'/'state'/'static' arguments never become element params (these typed kinds replace
@@ -276,7 +305,7 @@ function extractElementParams(
         // member accesses such as `{ id: item.id }`) contributes its parsed property accesses.
         const members =
           zeroArgArrow?.callArgumentPropertyAccesses?.[index]
-            ?.filter((access) => serializableMemberExpression(access.path))
+            ?.filter((access) => serializableMemberExpression(access.path, localNames))
             .map(elementParamCandidateFromAccess) ?? [];
         if (members.length > 0) return members;
 
@@ -292,7 +321,7 @@ function extractElementParams(
 
         return [];
       })
-    : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
+    : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, localNames);
 
   return dedupeElementParamCandidates(candidates).map((candidate) => ({
     attributeName: elementParamAttributeNameFromPropertyName(candidate.terminalName),
@@ -338,14 +367,20 @@ function inferElementParamType(
 function serializableMemberExpressions(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
+  localNames: ReadonlySet<string> = new Set(),
 ): ElementParamCandidate[] {
   return collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses)
-    .filter((access) => serializableMemberExpression(access.path))
+    .filter((access) => serializableMemberExpression(access.path, localNames))
     .map(elementParamCandidateFromAccess);
 }
 
-function serializableMemberExpression(member: string): boolean {
+function serializableMemberExpression(
+  member: string,
+  localNames: ReadonlySet<string> = new Set(),
+): boolean {
+  const root = /^[A-Za-z_$][\w$]*/.exec(member)?.[0];
   return (
+    (root === undefined || !localNames.has(root)) &&
     !member.startsWith('state.') &&
     !member.startsWith('ctx.') &&
     !member.startsWith('document.') &&

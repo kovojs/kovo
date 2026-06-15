@@ -28,6 +28,7 @@ export {
 } from './demo-fixtures.js';
 export {
   galleryInteractiveAppShell,
+  galleryHeadlessUiClientModuleHrefs,
   galleryInteractiveClientModuleHrefs,
   galleryInteractiveNodeHandler,
   galleryInteractiveRoute,

@@ -3,7 +3,10 @@ import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { galleryInteractiveClientModuleHrefs } from './app-shell.js';
+import {
+  galleryHeadlessUiClientModuleHrefs,
+  galleryInteractiveClientModuleHrefs,
+} from './app-shell.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 import {
   compareStrings,
@@ -64,9 +67,13 @@ describe('compiled interactive gallery demos', () => {
 
       expect(output).toContain('gallery-interactive-export/v1');
       expect(output).toContain('html=1');
-      // One module per demo plus the shared jiso-runtime module the demos import (SPEC §4.4: the
-      // server serves @jiso/runtime at a resolvable URL instead of a bare specifier).
-      expect(output).toContain(`client-modules=${interactiveGalleryDemos.length + 1}`);
+      // One module per demo, plus the shared jiso-runtime module and the served headless-ui
+      // primitive modules imported by generated handlers (SPEC §4.4: resolvable URLs, no import map).
+      expect(output).toContain(
+        `client-modules=${
+          interactiveGalleryDemos.length + galleryHeadlessUiClientModuleHrefs.length + 1
+        }`,
+      );
       expect(output).toContain('assets=1');
       expect(output).toContain('diagnostics=0');
 
@@ -76,7 +83,10 @@ describe('compiled interactive gallery demos', () => {
       expect(html).toContain('data-gallery-interactive="progress"');
       expect(html).toContain('data-gallery-interactive="meter"');
 
-      for (const href of galleryInteractiveClientModuleHrefs) {
+      for (const href of [
+        ...galleryHeadlessUiClientModuleHrefs,
+        ...galleryInteractiveClientModuleHrefs,
+      ]) {
         expect(html).toContain(`<link rel="modulepreload" href="${href}">`);
         const modulePath = href.replace(/^\//, '').replace(/\?v=[0-9a-f]{8}$/, '');
         expect(existsSync(join(distDir, modulePath)), `${modulePath} was exported`).toBe(true);
@@ -87,6 +97,12 @@ describe('compiled interactive gallery demos', () => {
         'utf8',
       );
       expect(progressClient).toContain('GalleryProgressDemo$button_click');
+
+      const tabsClient = readFileSync(
+        join(distDir, 'c/examples/gallery/src/generated/interactive/tabs-demo.client.js'),
+        'utf8',
+      );
+      expect(tabsClient).toContain("from '/c/packages/headless-ui/src/primitives/index.js?v=");
     } finally {
       rmSync(distDir, { force: true, recursive: true });
     }

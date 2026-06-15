@@ -1,15 +1,19 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { route } from '@jiso/server';
 import { createMemoryVersionedClientModuleRegistry } from '@jiso/server/app-shell/client-modules';
 import { createApp, createRequestHandler } from '@jiso/server/app-shell/core';
 import { toNodeHandler } from '@jiso/server/app-shell/node';
+import ts from 'typescript';
 
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 const galleryGeneratedRoot = fileURLToPath(new URL('./generated/interactive/', import.meta.url));
+const headlessUiSourceRoot = fileURLToPath(
+  new URL('../../../packages/headless-ui/src/', import.meta.url),
+);
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
 
 // SPEC.md §4.4: load-bearing import maps are a non-goal — "the compiler and server emit full module
@@ -27,6 +31,17 @@ const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
   source: galleryRuntimeModuleSource,
   version: createHash('sha256').update(galleryRuntimeModuleSource).digest('hex').slice(0, 8),
 });
+const galleryHeadlessPrimitivesModulePath = '/c/packages/headless-ui/src/primitives/index.js';
+const galleryHeadlessUiClientModuleHrefMap = registerHeadlessUiClientModules();
+export const galleryHeadlessUiClientModuleHrefs = Object.freeze([
+  ...galleryHeadlessUiClientModuleHrefMap.values(),
+]);
+const galleryHeadlessPrimitivesModuleHref = galleryHeadlessUiClientModuleHrefMap.get(
+  galleryHeadlessPrimitivesModulePath,
+);
+if (galleryHeadlessPrimitivesModuleHref === undefined) {
+  throw new Error('Missing gallery headless UI primitives client module.');
+}
 
 export const galleryInteractiveClientModuleHrefs = Object.freeze(
   interactiveGalleryDemos.map((demo) => registerGalleryInteractiveClientModule(demo.name)),
@@ -38,8 +53,12 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
     title: 'Jiso Interactive Gallery',
   },
   // Include the shared runtime module first so the static export writes it (the demo modules
-  // import it) and the browser preloads it before the handler modules.
-  modulepreloads: [galleryRuntimeModuleHref, ...galleryInteractiveClientModuleHrefs],
+  // import it), then the primitive modules imported by generated handlers, before demo handlers.
+  modulepreloads: [
+    galleryRuntimeModuleHref,
+    ...galleryHeadlessUiClientModuleHrefs,
+    ...galleryInteractiveClientModuleHrefs,
+  ],
   page() {
     return renderInteractiveGalleryRoute();
   },
@@ -76,7 +95,7 @@ export default galleryInteractiveAppShell.app;
 function registerGalleryInteractiveClientModule(demoName: string): string {
   const modulePath = `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`;
   const generatedServerTsx = readGeneratedInteractiveArtifact(`${demoName}.tsx`);
-  const generatedClientSource = rewriteRuntimeImport(
+  const generatedClientSource = rewriteGalleryClientImports(
     readGeneratedInteractiveArtifact(`${demoName}.client.js`),
   );
   const version = generatedClientModuleVersion(generatedServerTsx, modulePath, demoName);
@@ -93,14 +112,56 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
   return href;
 }
 
+function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
+  const hrefs = new Map<string, string>();
+
+  for (const directory of ['lib', 'primitives']) {
+    for (const fileName of readdirSync(
+      new URL(`${directory}/`, `file://${headlessUiSourceRoot}`),
+    )) {
+      if (!fileName.endsWith('.ts') || fileName.endsWith('.test.ts')) continue;
+
+      const sourcePath = `${directory}/${fileName}`;
+      const modulePath = `/c/packages/headless-ui/src/${sourcePath.replace(/\.ts$/, '.js')}`;
+      const source = readFileSync(new URL(sourcePath, `file://${headlessUiSourceRoot}`), 'utf8');
+      const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+          importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+          module: ts.ModuleKind.ES2022,
+          target: ts.ScriptTarget.ES2022,
+        },
+        fileName,
+      }).outputText;
+      const href = galleryInteractiveClientModules.put({
+        path: modulePath,
+        source: transpiled,
+        version: createHash('sha256').update(transpiled).digest('hex').slice(0, 8),
+      });
+
+      hrefs.set(modulePath, href);
+    }
+  }
+
+  return hrefs;
+}
+
 function readGeneratedInteractiveArtifact(fileName: string): string {
   return readFileSync(new URL(fileName, `file://${galleryGeneratedRoot}`), 'utf8');
 }
 
-// SPEC.md §4.4: rewrite the bare `@jiso/runtime` specifier to the served runtime module URL so the
-// browser can resolve it without an import map.
-function rewriteRuntimeImport(source: string): string {
-  return source.replaceAll("from '@jiso/runtime';", `from '${galleryRuntimeModuleHref}';`);
+// SPEC.md §4.4: rewrite bare specifiers to served module URLs so the browser can resolve the
+// generated client module graph without an import map.
+function rewriteGalleryClientImports(source: string): string {
+  return source
+    .replaceAll("from '@jiso/runtime';", `from '${galleryRuntimeModuleHref}';`)
+    .replaceAll(
+      'from "@jiso/headless-ui/primitives";',
+      `from '${galleryHeadlessPrimitivesModuleHref}';`,
+    )
+    .replaceAll(
+      "from '@jiso/headless-ui/primitives';",
+      `from '${galleryHeadlessPrimitivesModuleHref}';`,
+    );
 }
 
 function generatedClientModuleVersion(

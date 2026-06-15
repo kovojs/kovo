@@ -2,6 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 
+import * as headlessPrimitives from '@jiso/headless-ui/primitives';
+
 export const galleryRoot = resolve(import.meta.dirname, '..');
 
 export type ClientExports = Record<
@@ -85,7 +87,8 @@ export function evaluateClientModule(
   globals: Record<string, unknown> = {},
 ): ClientExports {
   const source = readGenerated(fileName)
-    .replace(/import \{[^}]*\} from '@jiso\/runtime';\n\n?/, '')
+    .replace(/import \{[\s\S]*?\} from '@jiso\/runtime';\n\n?/, '')
+    .replace(/import \{[\s\S]*?\} from '@jiso\/headless-ui\/primitives';\n\n?/, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {
@@ -95,6 +98,9 @@ export function evaluateClientModule(
     }),
     exports,
     handler: (fn: ClientExports[string]) => fn,
+    ...headlessPrimitives,
+    _tabsKeyDown: headlessPrimitives.tabsKeyDown,
+    _tabsTriggerClick: headlessPrimitives.tabsTriggerClick,
     ...globals,
   });
 

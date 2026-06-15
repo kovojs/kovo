@@ -33,6 +33,29 @@ const loader = () => import('@acme/lazy/panel');
       { specifier: '@acme/theme' },
       { specifier: '@acme/lazy/panel' },
     ]);
+    expect(parseComponentModule('imports.tsx', source).namedImports).toEqual([
+      { importedName: 'component', localName: 'component', moduleSpecifier: '@jiso/core' },
+      { importedName: 'Dialog', localName: 'Dialog', moduleSpecifier: '@acme/primitives/dialog' },
+    ]);
+  });
+
+  it('records aliased named imports for client handler dependency emission', () => {
+    const source = `
+import { tabsKeyDown as keyDown, tabsTriggerClick } from '@jiso/headless-ui/primitives';
+`;
+
+    expect(parseComponentModule('imports.tsx', source).namedImports).toEqual([
+      {
+        importedName: 'tabsKeyDown',
+        localName: 'keyDown',
+        moduleSpecifier: '@jiso/headless-ui/primitives',
+      },
+      {
+        importedName: 'tabsTriggerClick',
+        localName: 'tabsTriggerClick',
+        moduleSpecifier: '@jiso/headless-ui/primitives',
+      },
+    ]);
   });
 
   it('records trimmed JSX child bodies with original source offsets', () => {
@@ -311,6 +334,7 @@ export const CartActions = component('cart-actions', {
       body: "log('item.id'); state.count += item.quantity;",
       bodyEnd: source.indexOf(' }}>Add') + 1,
       bodyKind: 'block',
+      bodyLocalNames: [],
       bodyPropertyAccesses: [
         {
           end: source.indexOf('state.count') + 'state.count'.length,
@@ -348,6 +372,20 @@ export const CartActions = component('cart-actions', {
       bodySourceStart: source.indexOf("log('item.id');"),
       references: ['log', 'state', 'item'],
     });
+  });
+
+  it('records local declaration names inside zero-argument JSX arrow attributes', () => {
+    const source = `
+export const Tabs = component('tabs', {
+  render: () => (
+    <button onClick={() => { const result = choose(item.id); state.value = result.value; }}>Pick</button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('tabs.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.zeroArgArrow?.bodyLocalNames).toEqual(['result']);
   });
 
   it('records document element actions on zero-argument JSX arrow attributes', () => {

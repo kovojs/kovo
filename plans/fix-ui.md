@@ -1,7 +1,7 @@
 # Fix UI: make gallery components behave like their base-ui / shadcn models
 
-Status: **open — Phase 0 done; Phase 1 target reactive migration verified; primitive behavior and
-per-component parity remain.**
+Status: **open — Phase 0 done; Phase 1 target reactive migration verified; Phase 2 tabs pattern
+landed; remaining primitive behavior and per-component parity remain.**
 Created 2026-06-14. `SPEC.md` is the source of truth for framework behavior; this file is the active
 remediation ledger for the `@jiso/headless-ui` (modeled on **Base UI**) and `@jiso/ui` (modeled on
 **shadcn/ui**, i.e. Radix) component layers as exercised by `examples/gallery`.
@@ -186,13 +186,38 @@ its `on:*` refs into the author element and the loader **chains** them (author f
 The demos use the low-level `*Attributes()` plain-function spelling, which yields static ARIA but does
 **not** wire the behavior handlers — so authors hand-rolled keyboard, badly.
 
-- [ ] **Confirm/implement primitive `on:*` chaining for the gallery's authoring spelling.** Decide the
-      supported idiom: the §4.6 attrs-function / `asChild` / behavior-attribute form that merges chained
-      handlers, vs. demos explicitly calling the reducer in their own handler. Document the chosen
-      pattern and make the merge wire the primitive `on:keydown`/`on:click` refs.
-- [ ] **Establish the canonical demo pattern** (one worked example, e.g. tabs or dropdown-menu) that
-      other demos copy: declarative state-bound attributes (Phase 1) + chained primitive handlers
-      (Phase 2), no `Reflect['get'](globalThis,'document')` hand-rolling.
+- [x] **Preserve primitive reducer imports into generated client handlers and static export modules.**
+      Generated client modules now carry referenced named imports from app-authored TSX, and the gallery
+      static shell registers the headless-ui primitive module graph under versioned `/c/...` URLs
+      (SPEC §4.4) so explicit reducer calls run in the browser without import maps.
+  - Evidence 2026-06-15:
+    `packages/compiler/src/scan/parse.ts`, `packages/compiler/src/lower/handlers.ts`,
+    `packages/compiler/src/emit/client.ts`, and `examples/gallery/src/app-shell.ts` implement the
+    parser/lowering/client-import/static-rewrite path.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts
+    src/handler-lowering.test.ts` passed.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec tsc --noEmit` and
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
+- [x] **Establish the canonical demo pattern** with tabs: declarative state-bound attributes (Phase 1)
+      plus explicit primitive reducer calls in the demo handler, no
+      `Reflect['get'](globalThis,'document')` hand-rolling.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/tabs-demo.tsx` calls
+    `_tabsKeyDown`/`_tabsTriggerClick`, mutates only `state`, and expresses trigger/panel
+    `aria-selected`, `data-state`, `tabIndex`, and `hidden` as state-bound TSX attributes.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/tabs-demo.client.js` imports the reducer helpers,
+    mutates only `ctx.state`, emits state derives for the changing tabs attributes, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated tabs files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts`, and
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
+- [ ] **Implement primitive `on:*` chaining for the framework authoring spelling.** Decide and wire the
+      long-term §4.6 attrs-function / `asChild` / behavior-attribute form that merges chained primitive
+      `on:keydown`/`on:click` refs into the author element. The gallery now has an explicit-reducer
+      pattern to unblock rewrites, but automatic primitive chaining remains open.
 
 ## Phase 3 — Per-component demo rewrites (use the primitives + declarative state)
 
@@ -272,10 +297,17 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 - [ ] **disclosure** [P0]: Phase 1 now updates trigger `aria-expanded`/`data-state` and panel
       `hidden`/`data-state` from declarative state bindings in the no-shim export. Remaining parity
       work: route through the modeled disclosure primitive and add keyboard/focus contract coverage.
-- [ ] **tabs** [P1]: `onKeyDown` is a stub that **never reads `event.key`** (any key flips
+- [x] **tabs** [P1]: `onKeyDown` is a stub that **never reads `event.key`** (any key flips
       overview→details); no ArrowRight/Left roving, no Home/End, no manual Enter/Space activation, no
       disabled-skip. Replace with `tabsKeyDown` + `tabsMoveFocus`; re-stamp roving `tabIndex`,
       `aria-selected`, `data-state`, panel `hidden`. Click selection already works.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/tabs-demo.tsx` now calls
+    `_tabsKeyDown`/`_tabsTriggerClick` and uses declarative state-bound trigger/panel attributes;
+    generated client/server artifacts were refreshed under `examples/gallery/src/generated/interactive/`.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts` and
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
 - [ ] **accordion** [P1, needs primitive work]: no `onKeyDown` at all → no Arrow/Home/End roving between
       triggers; the primitive has **no** `accordionKeyDown`/roving-`tabindex` helper (unlike tabs). Add
       `accordionKeyDown` + roving `tabindex` to `accordion.ts` (mirror `tabsKeyDown`/`tabsMoveFocus`),

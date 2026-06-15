@@ -1,9 +1,11 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
+  tabsKeyDown as _tabsKeyDown,
   tabsListAttributes,
   tabsPanelAttributes,
   tabsRootAttributes,
+  tabsTriggerClick as _tabsTriggerClick,
   tabsTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -48,94 +50,19 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="tabs"
         onKeyDown={() => {
-          if (state.activeValue === 'overview') {
-            state.activeValue = 'details';
-          } else {
-            state.value = state.activeValue;
-          }
-          const doc = Reflect['get'](globalThis, 'document');
-          const overview = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-trigger')
-            : undefined;
-          const details = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-trigger')
-            : undefined;
-          const audit = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-audit-trigger')
-            : undefined;
-          const overviewPanel = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-panel')
-            : undefined;
-          const detailsPanel = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-panel')
-            : undefined;
-          const auditPanel = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-audit-panel')
-            : undefined;
-
-          if (overview) {
-            overview['tabIndex'] = state.activeValue === 'overview' ? 0 : -1;
-            Object(overview)['setAttribute']?.call(
-              overview,
-              'aria-selected',
-              state.value === 'overview' ? 'true' : 'false',
-            );
-            Object(overview)['setAttribute']?.call(
-              overview,
-              'data-state',
-              state.value === 'overview' ? 'active' : 'inactive',
-            );
-          }
-          if (details) {
-            details['tabIndex'] = state.activeValue === 'details' ? 0 : -1;
-            Object(details)['setAttribute']?.call(
-              details,
-              'aria-selected',
-              state.value === 'details' ? 'true' : 'false',
-            );
-            Object(details)['setAttribute']?.call(
-              details,
-              'data-state',
-              state.value === 'details' ? 'active' : 'inactive',
-            );
-          }
-          if (audit) {
-            audit['tabIndex'] = -1;
-            Object(audit)['setAttribute']?.call(
-              audit,
-              'aria-selected',
-              state.value === 'audit' ? 'true' : 'false',
-            );
-            Object(audit)['setAttribute']?.call(
-              audit,
-              'data-state',
-              state.value === 'audit' ? 'active' : 'inactive',
-            );
-          }
-          if (overviewPanel) {
-            overviewPanel['hidden'] = state.value !== 'overview';
-            Object(overviewPanel)['setAttribute']?.call(
-              overviewPanel,
-              'data-state',
-              state.value === 'overview' ? 'active' : 'inactive',
-            );
-          }
-          if (detailsPanel) {
-            detailsPanel['hidden'] = state.value !== 'details';
-            Object(detailsPanel)['setAttribute']?.call(
-              detailsPanel,
-              'data-state',
-              state.value === 'details' ? 'active' : 'inactive',
-            );
-          }
-          if (auditPanel) {
-            auditPanel['hidden'] = state.value !== 'audit';
-            Object(auditPanel)['setAttribute']?.call(
-              auditPanel,
-              'data-state',
-              state.value === 'audit' ? 'active' : 'inactive',
-            );
-          }
+          const result = _tabsKeyDown(Object(event), {
+            activationMode: 'manual',
+            activeValue: state.activeValue,
+            items: [
+              { value: 'overview' },
+              { disabled: true, value: 'audit' },
+              { value: 'details' },
+            ],
+            value: state.value,
+          });
+          if (!result) return;
+          state.activeValue = result.activeValue ?? state.activeValue;
+          state.value = result.value ?? state.value;
         }}
       >
         <div
@@ -149,43 +76,19 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'overview',
               panelId: 'gallery-tabs-overview-panel',
             })}
+            aria-selected={String(state.value === 'overview')}
             class={TRIGGER_CLASS}
+            data-state={state.value === 'overview' ? 'active' : 'inactive'}
             onClick={() => {
-              state.activeValue = 'overview';
-              state.value = 'overview';
-              const doc = Reflect['get'](globalThis, 'document');
-              const overview = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-trigger')
-                : undefined;
-              const details = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-trigger')
-                : undefined;
-              const overviewPanel = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-panel')
-                : undefined;
-              const detailsPanel = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-panel')
-                : undefined;
-
-              if (overview) {
-                overview['tabIndex'] = 0;
-                Object(overview)['setAttribute']?.call(overview, 'aria-selected', 'true');
-                Object(overview)['setAttribute']?.call(overview, 'data-state', 'active');
-              }
-              if (details) {
-                details['tabIndex'] = -1;
-                Object(details)['setAttribute']?.call(details, 'aria-selected', 'false');
-                Object(details)['setAttribute']?.call(details, 'data-state', 'inactive');
-              }
-              if (overviewPanel) {
-                overviewPanel['hidden'] = false;
-                Object(overviewPanel)['setAttribute']?.call(overviewPanel, 'data-state', 'active');
-              }
-              if (detailsPanel) {
-                detailsPanel['hidden'] = true;
-                Object(detailsPanel)['setAttribute']?.call(detailsPanel, 'data-state', 'inactive');
-              }
+              const result = _tabsTriggerClick(Object(event), {
+                itemValue: 'overview',
+                value: state.value,
+              });
+              if (!result) return;
+              state.activeValue = result.value ?? state.activeValue;
+              state.value = result.value ?? state.value;
             }}
+            tabIndex={state.activeValue === 'overview' ? 0 : -1}
           >
             Overview
           </button>
@@ -196,47 +99,19 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'details',
               panelId: 'gallery-tabs-details-panel',
             })}
+            aria-selected={String(state.value === 'details')}
             class={TRIGGER_CLASS}
+            data-state={state.value === 'details' ? 'active' : 'inactive'}
             onClick={() => {
-              state.activeValue = 'details';
-              state.value = 'details';
-              const doc = Reflect['get'](globalThis, 'document');
-              const overview = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-trigger')
-                : undefined;
-              const details = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-trigger')
-                : undefined;
-              const overviewPanel = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-overview-panel')
-                : undefined;
-              const detailsPanel = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-tabs-details-panel')
-                : undefined;
-
-              if (overview) {
-                overview['tabIndex'] = -1;
-                Object(overview)['setAttribute']?.call(overview, 'aria-selected', 'false');
-                Object(overview)['setAttribute']?.call(overview, 'data-state', 'inactive');
-              }
-              if (details) {
-                details['tabIndex'] = 0;
-                Object(details)['setAttribute']?.call(details, 'aria-selected', 'true');
-                Object(details)['setAttribute']?.call(details, 'data-state', 'active');
-              }
-              if (overviewPanel) {
-                overviewPanel['hidden'] = true;
-                Object(overviewPanel)['setAttribute']?.call(
-                  overviewPanel,
-                  'data-state',
-                  'inactive',
-                );
-              }
-              if (detailsPanel) {
-                detailsPanel['hidden'] = false;
-                Object(detailsPanel)['setAttribute']?.call(detailsPanel, 'data-state', 'active');
-              }
+              const result = _tabsTriggerClick(Object(event), {
+                itemValue: 'details',
+                value: state.value,
+              });
+              if (!result) return;
+              state.activeValue = result.value ?? state.activeValue;
+              state.value = result.value ?? state.value;
             }}
+            tabIndex={state.activeValue === 'details' ? 0 : -1}
           >
             Details
           </button>
@@ -247,7 +122,10 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
               itemValue: 'audit',
               panelId: 'gallery-tabs-audit-panel',
             })}
+            aria-selected={String(state.value === 'audit')}
             class={TRIGGER_CLASS}
+            data-state={state.value === 'audit' ? 'active' : 'inactive'}
+            tabIndex={-1}
           >
             Audit
           </button>
@@ -260,6 +138,9 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
             triggerId: 'gallery-tabs-overview-trigger',
           })}
           class={PANEL_CLASS}
+          data-state={state.value === 'overview' ? 'active' : 'inactive'}
+          hidden={state.value !== 'overview'}
+          tabIndex={state.value === 'overview' ? 0 : undefined}
         >
           Summary metrics stay visible without client runtime.
         </section>
@@ -271,6 +152,9 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
             triggerId: 'gallery-tabs-details-trigger',
           })}
           class={PANEL_CLASS}
+          data-state={state.value === 'details' ? 'active' : 'inactive'}
+          hidden={state.value !== 'details'}
+          tabIndex={state.value === 'details' ? 0 : undefined}
         >
           Detailed notes are selected by click or arrow-key activation.
         </section>
@@ -282,6 +166,9 @@ export const GalleryTabsDemo = component('gallery-tabs-demo', {
             triggerId: 'gallery-tabs-audit-trigger',
           })}
           class={PANEL_CLASS}
+          data-state={state.value === 'audit' ? 'active' : 'inactive'}
+          hidden={state.value !== 'audit'}
+          tabIndex={state.value === 'audit' ? 0 : undefined}
         >
           Disabled audit notes stay out of the roving keyboard path.
         </section>
