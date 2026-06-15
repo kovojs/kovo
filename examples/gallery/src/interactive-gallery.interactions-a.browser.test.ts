@@ -49,7 +49,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe('{"value":"shipping"}');
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"activeValue":"shipping","value":"shipping"}',
+    );
     expect(shipping.getAttribute('aria-expanded')).toBe('true');
     expect(shippingPanel.hidden).toBe(false);
     expect(billing.getAttribute('aria-expanded')).toBe('false');
@@ -78,7 +80,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"value":"billing"}');
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"billing"}');
       expect(currentShipping.getAttribute('aria-expanded')).toBe('false');
       expect(currentShippingPanel.hidden).toBe(true);
       expect(currentBilling.getAttribute('aria-expanded')).toBe('true');

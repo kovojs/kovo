@@ -98,7 +98,8 @@ function installInlineJisoLoader(importModule) {
     if (value == null) element.removeAttribute?.(name);
     else element.setAttribute?.(name, formatBoundValue(value));
     if (name === 'value' && element.value !== undefined) {
-      element.value = value == null ? '' : formatBoundValue(value);
+      if (value != null) element.value = formatBoundValue(value);
+      else if (element.localName != 'progress') element.value = '';
     }
     if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
       element.scrollLeft = Number(value) || 0;

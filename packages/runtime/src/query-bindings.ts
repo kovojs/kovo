@@ -11,6 +11,7 @@ export interface QueryBindingElement
   indeterminate?: boolean;
   scrollLeft?: number;
   scrollTop?: number;
+  tagName?: string;
   textContent?: string | null;
   value?: string;
 }
@@ -365,7 +366,11 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
 
 function removeBoundAttribute(element: QueryBindingElement, name: string): void {
   element.removeAttribute?.(name);
-  if (name === 'value' && element.value !== undefined) {
+  if (
+    name === 'value' &&
+    element.value !== undefined &&
+    shouldClearRemovedValueProperty(element)
+  ) {
     element.value = '';
   }
   if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
@@ -380,6 +385,10 @@ function removeBoundAttribute(element: QueryBindingElement, name: string): void 
   if (name === 'indeterminate' && element.indeterminate !== undefined) {
     element.indeterminate = false;
   }
+}
+
+function shouldClearRemovedValueProperty(element: QueryBindingElement): boolean {
+  return element.tagName?.toLowerCase() !== 'progress';
 }
 
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {

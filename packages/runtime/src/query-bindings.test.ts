@@ -375,6 +375,43 @@ describe('query binding helpers', () => {
     expect(input.value).toBe('');
   });
 
+  it('removes native progress value bindings without restoring determinate state', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":40}' });
+    const progress = new FakeStatefulBindingElement(
+      {
+        'data-bind:value': '/c/progress.client.js#Progress$value_derive',
+        value: '40',
+      },
+      { parent: host },
+    );
+    let liveValue = '40';
+    Object.defineProperty(progress, 'tagName', { value: 'PROGRESS' });
+    Object.defineProperty(progress, 'value', {
+      configurable: true,
+      get: () => liveValue,
+      set: (value: string) => {
+        liveValue = value;
+        progress.setAttribute('value', value);
+      },
+    });
+    const importModule = async () => ({
+      Progress$value_derive: {
+        run(value: unknown) {
+          return (value as { value: number | null }).value;
+        },
+      },
+    });
+
+    await expect(applyStateBindings(host, { value: 100 }, { importModule })).resolves.toEqual([
+      '/c/progress.client.js#Progress$value_derive',
+    ]);
+    expect(progress.getAttribute('value')).toBe('100');
+    expect(progress.value).toBe('100');
+
+    await applyStateBindings(host, { value: null }, { importModule });
+    expect(progress.getAttribute('value')).toBeNull();
+  });
+
   it('reflects state-derived scroll attribute bindings to live scroll properties', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"scrollTop":0}' });
     const viewport = new FakeStatefulBindingElement(

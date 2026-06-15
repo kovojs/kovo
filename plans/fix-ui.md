@@ -57,6 +57,15 @@ Done when:
       **model contracts** (ArrowRight roving, Home/End, typeahead, Escape, focus-into-menu, hover-open,
       …) — not the old canned behavior — with axe clean on real interactive end-states; `vp check` and
       the gzip-budget/fixpoint parity gates stay green.
+  - Evidence 2026-06-15: the interaction-contract browser suites and axe suite now pass after the
+    native progress indeterminate runtime fix: `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
+    src/interactive-gallery.interactions-b.browser.test.ts` and `pnpm --filter @jiso/example-gallery
+    exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts`.
+  - Gap 2026-06-15: top-level closure still blocked by the full `vp check` gate. `pnpm exec vp check`
+    currently fails on formatting across existing files; `pnpm exec vp check --no-fmt` still reports
+    unrelated lint/type issues including missing `@tailwindcss/vite` in `examples/crm` and
+    `examples/stackoverflow`.
 
 **Success metric:** re-run `scratch/gallery-probe3.mjs` semantics against the **unmodified** export —
 every component that is `broken`/`wrong-primitive`/`partial` today returns the model-correct result
@@ -1084,12 +1093,25 @@ These are framework changes the demo rewrites depend on (not just demo edits):
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
     src/interactive-gallery.static-export.test.ts` and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
-- [ ] **Rewrite the interaction assertions to the model contracts, not the canned paths.** Current
+- [x] **Rewrite the interaction assertions to the model contracts, not the canned paths.** Current
       tests assert the hardcoded demo behavior (e.g. tabs flipping on any key), which is why broken
       keyboard passed. Assert the Base UI/shadcn keyboard map per component (ArrowRight roving, Home/End,
       typeahead, Escape, focus-into-menu, etc.).
-- [ ] **Keep axe coverage on the real interactive end-states** (open menu with focus moved, expanded
+  - Evidence 2026-06-15: `examples/gallery/src/interactive-gallery.interactions-a.browser.test.ts`
+    and `examples/gallery/src/interactive-gallery.interactions-b.browser.test.ts` assert model-level
+    keyboard/pointer contracts across the rewritten gallery demos, including roving active state,
+    Home/End movement, typeahead, Escape close paths, menu focus movement, hover-open paths, native
+    progress complete/indeterminate states, and emitted `fw-state` transitions.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest --config
+    vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
+    src/interactive-gallery.interactions-b.browser.test.ts` passed.
+- [x] **Keep axe coverage on the real interactive end-states** (open menu with focus moved, expanded
       accordion via keyboard, etc.) — extend `interactive-gallery.axe.browser.test.ts`.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive-gallery.axe.browser.test.ts` exercises
+    real terminal interactive states instead of only initial render, while the interaction suites
+    separately drive the same end-state contracts for component behavior.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest --config
+    vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts` passed.
 - [x] **Primitive unit tests already exist and pass** — they are not the gap; the gap is the demos and
       the framework wiring. Add tests that the demos actually call the primitives (or that the chained
       `on:*` refs are present in emitted HTML).
