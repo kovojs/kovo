@@ -147,6 +147,27 @@ try {
     ),
     'JS: interactive gallery client module loads on interaction',
   );
+
+  // Examples: the commerce app loads as a static export inside the docs page's
+  // sandboxed iframe, and the authored source renders beside it.
+  await page.goto(`${origin}/examples/commerce/`, { waitUntil: 'networkidle' });
+  check(
+    (await page.locator('.example-source .code-window').count()) >= 3,
+    'JS: commerce example shows authored source windows',
+  );
+  const commerceFrame = page.frameLocator('iframe.example-frame');
+  await commerceFrame.locator('[data-commerce-shell]').waitFor({ state: 'attached' });
+  check(
+    await commerceFrame
+      .locator('[data-commerce-shell]')
+      .count()
+      .then((count) => count === 1),
+    'JS: commerce example app renders inside the docs iframe',
+  );
+  check(
+    (await commerceFrame.locator('cart-badge').first().textContent())?.includes('Cart'),
+    'JS: commerce example renders its cart badge',
+  );
   await context.close();
 } finally {
   await browser.close();

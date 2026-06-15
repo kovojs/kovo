@@ -1,9 +1,15 @@
 # Examples in the docs site — side-by-side running app + source
 
-Status: **open — not started.** Created 2026-06-14. `SPEC.md` is the source of truth for framework
-behavior; this plan changes the **docs site build** (`site/`) and adds a thin static-export hand-off
-from `examples/commerce`. It does not change framework behavior. Keep this file compact: checklist,
-open work, risks, proving commands.
+Status: **done (commerce) — 2026-06-14.** Created 2026-06-14. `SPEC.md` is the source of truth for
+framework behavior; this plan changes the **docs site build** (`site/`) and adds a thin
+static-export hand-off from `examples/commerce`. It does not change framework behavior. Keep this
+file compact: checklist, open work, risks, proving commands.
+
+Shipped: `/examples/commerce/` renders the commerce app live in a sandboxed `<iframe>` (its own §9.5
+static export, re-rooted under `/examples/commerce/app/`) beside a zero-JS tabbed viewer of the
+authored components. Verified end-to-end in a real browser by the site smoke gate (Playwright drives
+the docs page and asserts the app renders *inside* the iframe). Phase 4 (generalized `{{example:}}`)
+stays open by choice.
 
 ## Goal
 
@@ -14,16 +20,20 @@ other.**
 
 Done when:
 
-- [ ] A new docs page (e.g. `/examples/commerce/`) renders, in a two-pane layout, (a) a sandboxed
+- [x] A new docs page (`/examples/commerce/`) renders, in a two-pane layout, (a) a sandboxed
       `<iframe>` running the commerce static export and (b) the authored source for
-      `cart-badge.tsx`, `order-history.tsx`, `product-grid.tsx` in a tabbed Shiki code panel.
-- [ ] The commerce static export is produced as part of `site` build (or a prebuild step) and its
-      artifacts are copied into the site `dist/` under a stable path the iframe loads from.
-- [ ] The page is reachable from site nav and the docs link-check (`scripts/check-links.mjs`) and
-      smoke build stay green.
-- [ ] Source shown is **app-authored** TSX (`examples/commerce/src/components/*.tsx`), never lowered
+      `product-grid.tsx`, `cart-badge.tsx`, `order-history.tsx` in a tabbed (zero-JS, CSS `:checked`)
+      Shiki code panel. (`site/scripts/examples.mjs` `renderExampleSplit`; smoke: "commerce example
+      shows authored source windows" + screenshot.)
+- [x] The commerce static export is produced as part of the `site` build (`build.mjs` →
+      `buildCommerceEmbed`, calling `exportCommerceStaticApp`) into `dist/examples/commerce/app/`,
+      gated on the export's diagnostics (throws if any). One `pnpm build` produces everything.
+- [x] The page is reachable from site nav (`chrome.mjs` NAV + sidebar Examples group) and the docs
+      link-check + smoke gate stay green (`vp run export` → `check:links` OK pages=85; `vp run smoke`
+      14/14 ok incl. 3 commerce checks).
+- [x] Source shown is **app-authored** TSX (`examples/commerce/src/components/*.tsx`), never lowered
       IR / generated stamps (`SPEC.md` §5.2 — hand-authored lowered IR is FW235; we display, not
-      author). Source is read from the repo at build time so it cannot drift from what compiles.
+      author). Read from disk at build time (`loadCommerceSources`) so it cannot drift from what compiles.
 
 Out of scope (this iteration): gallery (already embedded inline via `build.mjs:133`), reference
 (auth, public-only export), and the data-only libs crm/stackoverflow (no UI to run). Revisit a
@@ -63,34 +73,34 @@ loads a **prebuilt export** rather than SSR-rendering inline.
 
 ### Phase 1 — Producer hand-off (commerce export → site dist)
 
-- [ ] Decide the trigger: add a site `prebuild`/script step that runs commerce `vp run export` (or
-      depends on a prebuilt `examples/commerce/dist`), then copies the export tree into
-      `dist/examples/commerce/app/`. Prefer wiring into `site/scripts/build.mjs` so one `pnpm build`
-      produces everything; gate on the export's diagnostics (it sets non-zero exit on warnings).
-- [ ] Confirm the copied export loads standalone from the chosen base path — open
-      `dist/examples/commerce/app/index.html` served at `/examples/commerce/app/` and verify zero
-      `Failed to resolve module specifier` / 404 asset errors (mirror the gallery no-shim check in
-      `scratch/gallery-verify-noshim.mjs`).
+- [x] Wired into `site/scripts/build.mjs`: `buildCommerceEmbed` imports `exportCommerceStaticApp`
+      and exports straight into `dist/examples/commerce/app/` (its `outDir` option), drops the
+      shipped `.vite/manifest.json`, and throws if the export reports any diagnostic. One `pnpm build`
+      (and `vp run export`) produces everything.
+- [x] Export loads standalone from the base path — re-rooting (below) makes `/assets` and `/c`
+      resolve; the smoke gate drives the served export inside the iframe with zero resolution/404
+      errors and asserts `[data-commerce-shell]` + the cart badge render.
 
 ### Phase 2 — Two-pane page in the site build
 
-- [ ] Add the content/route: a markdown or build-driven page at `/examples/commerce/` with title +
-      blurb, plus a placeholder the renderer fills (follow the gallery `renderGalleryPage` pattern in
-      `build.mjs`, and section wiring near the `gallerySection`/SECTIONS concat).
-- [ ] Implement the renderer: left pane sandboxed `<iframe>` pointing at the export base path; right
-      pane a tabbed `.code-window` (reuse `md.mjs` Shiki + `.code-window` markup; tabs can be a small
-      L1 island like the existing copy/search islands under `site/public/c/`, or CSS `:target`/details
-      for zero-JS).
-- [ ] Add styling for the side-by-side layout (Tailwind via `site/src/styles.css`); responsive
-      stack on narrow screens (iframe above, source below).
+- [x] Build-driven page at `/examples/commerce/` (+ an `/examples/` section index), emitted in
+      `build.mjs` alongside the gallery pages, using the Examples group in `groups`.
+- [x] Renderer `renderExampleSplit` (`site/scripts/examples.mjs`): left pane sandboxed `<iframe>`
+      (`sandbox="allow-scripts allow-same-origin"`) at the export base; right pane a tabbed
+      `.code-window` viewer. Tabs are **zero-JS** — radio inputs + `:checked` sibling rules (per-index
+      rules emitted inline so they track file count); source highlighted via the shared `md.mjs`
+      Shiki pipeline (`renderMarkdown`).
+- [x] Side-by-side layout styled in `site/src/styles.css` (`.example-split` etc.); single-column
+      stack below 64rem (iframe above, source below).
 
 ### Phase 3 — Nav, links, and gates
 
-- [ ] Add the page to site nav / sidebar (`chrome.mjs`) and any section index.
-- [ ] `node scripts/check-links.mjs` passes (the iframe `src` and any source-file deep links resolve).
-- [ ] Smoke build passes (`vp run smoke` / the `export` task) and `site` `vitest --run` stays green;
-      add a smoke assertion that `dist/examples/commerce/app/index.html` exists and the page contains
-      the iframe + a code-window for each of the three components.
+- [x] Added to top nav (`chrome.mjs` NAV `/examples/`) and the docs sidebar (Examples group); section
+      intro added.
+- [x] `check:links` passes. The embedded app subtree (`dist/examples/*/app/**`) is excluded from the
+      docs link gate — it is a self-contained export with intentionally-unexported in-app routes
+      (commerce's `/products` "More" link). Evidence: `check-links/v1 pages=85 ... OK`.
+- [x] `vp run smoke` green (14/14) incl. three new commerce checks; `site` `vitest --run` 50/50.
 
 ### Phase 4 (stretch) — generalize
 
@@ -98,22 +108,30 @@ loads a **prebuilt export** rather than SSR-rendering inline.
       in, with a per-example manifest (export command, base path, source-file list). Leave open until
       commerce ships.
 
-## Risks / open questions
+## Risks / resolutions
 
-- **Asset path rewriting.** The commerce export emits root-relative hrefs (`/c/…`, `/assets/…`).
-  Served under `/examples/commerce/app/` they will 404 unless the iframe document uses a `<base href>`
-  or the export is re-rooted. Resolve in Phase 1 — check whether `exportJisoAppShellViteBuild…`
-  supports a base prefix, else inject `<base href="/examples/commerce/app/">` into the copied
-  `index.html`. **This is the highest-risk item.**
-- **`sandbox` attribute scope.** `allow-scripts` is needed for the app's client modules; the commerce
-  public export hits an in-memory/pglite DB — confirm the static export is fully client-runnable
-  without a live server (it should be: it's a static replay). If any route needs a server, the iframe
-  shows static HTML only and we note that on the page.
-- **Build cost / ordering.** Running `vp build` for commerce inside the site build adds time and a
-  cross-package dependency. Consider treating `examples/commerce/dist` as a prerequisite produced by
-  CI before the site build, with the site step only copying if present (and a clear error if absent).
-- **Source/compile drift.** Reading source from disk avoids drift, but if a component is renamed the
-  page silently drops it — assert the three expected files exist at build time and fail loudly.
+- **Asset path rewriting (was top risk) — RESOLVED.** A `<base href>` does *not* fix root-relative
+  URLs (only relative ones), so we re-root instead: `rerootHtml` rewrites `="/assets/` and `="/c/`
+  (covering the modulepreload href *and* the inline loader's `on:*` handler refs like
+  `/c/commerce.client.js#fn`) to the `/examples/commerce/app/` base. Verified: the served export has
+  zero unresolved modules/404s in the smoke browser run.
+- **`sandbox` scope — RESOLVED.** `allow-scripts allow-same-origin` (same-origin needed so the
+  inline loader can `import()` the same-origin client module). The commerce public export is a fully
+  client-runnable static replay (no live server); the in-app `/products` pagination link is *not*
+  exported and 404s if clicked — acceptable for a demo, and excluded from the link gate.
+- **Build cost / ordering.** `buildCommerceEmbed` runs commerce `vp build` during the site build
+  (~adds a few seconds). Acceptable; the `build-site`/`export` vite tasks now list
+  `examples/commerce/**` as inputs so the cache invalidates on commerce changes. (Note: the `vp run`
+  output cache hashes git-tracked inputs — a first run with the new files *untracked* can serve a
+  stale dist; once committed it invalidates correctly. Use `vp run --no-cache export` to force.)
+- **Source/compile drift — RESOLVED.** `loadCommerceSources` reads the three files from disk at build
+  time; a missing/renamed file throws (ENOENT) and fails the build loudly rather than silently
+  dropping a tab.
+
+## Open work
+
+- [ ] **Phase 4 — generalize** `{{example:<name>}}` with a per-example manifest (export command, base
+      path, source-file list) so reference/future apps can opt in. Open by choice.
 
 ## Proving commands
 
@@ -128,8 +146,11 @@ loads a **prebuilt export** rather than SSR-rendering inline.
 - `examples/commerce/scripts/export-static.mjs` — `exportCommerceStaticApp` (producer; reuse as-is).
 - `examples/commerce/src/app-shell.ts` — `commerceStaticExportApp`, public routes `/`, `/cart`, `/login`.
 - `examples/commerce/src/components/{cart-badge,order-history,product-grid}.tsx` — authored source to display.
-- `site/scripts/build.mjs` — page emission; gallery embed precedent (`loadGalleryData`, `renderGalleryPage`, SECTIONS).
-- `site/scripts/md.mjs` — Shiki render + `.code-window` markup to reuse for the source pane.
-- `site/scripts/chrome.mjs` — page templates / nav / sidebar.
-- `site/public/c/` — L1 island precedent if tabs need JS (`code.js`, `search.js`).
-- `scratch/gallery-verify-noshim.mjs` — no-shim export load check to mirror.
+- `site/scripts/examples.mjs` — **new**: `buildCommerceEmbed` (export + re-root), `loadCommerceSources`,
+  `renderExampleSplit` (two-pane layout + zero-JS CSS tabs).
+- `site/scripts/build.mjs` — page emission; calls the above after the gallery loop; Examples group/section.
+- `site/scripts/md.mjs` — Shiki render + `.code-window` markup reused for the source pane (`renderMarkdown`).
+- `site/scripts/chrome.mjs` — NAV `/examples/`, sidebar Examples group, section intro.
+- `site/scripts/check-links.mjs` — `EMBEDDED_APP` exclusion for `dist/examples/*/app/**`.
+- `site/scripts/smoke.mjs` — three commerce-embed browser assertions (renders inside the iframe).
+- `site/src/styles.css` — `.example-*` side-by-side + tab styles.

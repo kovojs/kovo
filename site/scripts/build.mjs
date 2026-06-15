@@ -7,6 +7,7 @@ import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
 import { renderDocument, renderDocsPage, renderSectionIndex } from './chrome.mjs';
 import { generateDiagnosticsReference } from './diagnostics-ref.mjs';
+import { buildCommerceEmbed, loadCommerceSources, renderExampleSplit } from './examples.mjs';
 import { renderLanding } from './landing.mjs';
 import { buildLlmsFull, buildLlmsIndex } from './llms.mjs';
 import { parseFrontmatter, renderMarkdown } from './md.mjs';
@@ -302,9 +303,15 @@ async function main() {
     })),
     title: 'Gallery',
   };
+  // Examples: runnable apps embedded as a static export beside their source.
+  const examplesSection = {
+    key: 'examples',
+    pages: [{ title: 'Commerce', url: '/examples/commerce/' }],
+    title: 'Examples',
+  };
   const groups = sections
     .filter((section) => section.pages.length > 0)
-    .concat(gallerySection)
+    .concat(gallerySection, examplesSection)
     .map((section) => ({
       pages: section.pages.map((page) => ({ title: page.title, url: page.url })),
       title: section.title,
@@ -429,6 +436,80 @@ async function main() {
     });
   }
 
+  // Examples: produce the commerce static export under dist/examples/commerce/app/
+  // and render its docs page (running app in a sandboxed iframe + authored
+  // source). The export is the example's own §9.5 bridge; we re-root its refs.
+  const commerceEmbed = await buildCommerceEmbed({ outDir, repoRootPath });
+  const commerceSources = await loadCommerceSources({ repoRootPath });
+  const commerceFiles = [];
+  for (const file of commerceSources) {
+    const { html: codeHtml } = await renderMarkdown(
+      `\`\`\`tsx title="examples/commerce/${file.name}"\n${file.code}\n\`\`\``,
+    );
+    commerceFiles.push({ html: codeHtml, name: file.name });
+  }
+  const commerceTitle = 'Commerce';
+  const commerceBlurb =
+    'A full Jiso app — product grid, cart badge, and order history — running live next to the authored components that render it.';
+  const commerceExampleHtml = renderExampleSplit({
+    appBase: commerceEmbed.appBase,
+    blurb: commerceBlurb,
+    files: commerceFiles,
+    idBase: 'commerce-src',
+    title: commerceTitle,
+  });
+
+  await writeRoutePage(
+    '/examples/',
+    finishPage(
+      renderDocument({
+        body: renderDocsPage({
+          activePath: '/examples/',
+          groups,
+          html: renderSectionIndex({
+            key: 'examples',
+            pages: [
+              {
+                description: commerceBlurb,
+                title: commerceTitle,
+                url: '/examples/commerce/',
+              },
+            ],
+            title: 'Examples',
+          }),
+          prose: false,
+        }),
+        description: 'Runnable Jiso example apps, embedded beside their source.',
+        path: '/examples/',
+        title: 'Examples · Jiso',
+      }),
+    ),
+  );
+
+  await writeRoutePage(
+    '/examples/commerce/',
+    finishPage(
+      renderDocument({
+        body: renderDocsPage({
+          activePath: '/examples/commerce/',
+          groups,
+          html: commerceExampleHtml,
+          prose: false,
+        }),
+        description: commerceBlurb,
+        path: '/examples/commerce/',
+        title: 'Commerce · Examples · Jiso',
+      }),
+    ),
+  );
+
+  searchIndex.push({
+    section: 'Examples',
+    text: `${commerceTitle} ${commerceBlurb} ${commerceFiles.map((file) => file.name).join(' ')}`,
+    title: commerceTitle,
+    url: '/examples/commerce/',
+  });
+
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
   await writeRoutePage(
     '/spec/',
@@ -529,6 +610,7 @@ async function main() {
   const pageCount =
     sections.reduce((total, section) => total + section.pages.length, 0) +
     galleryRoutes.length +
+    2 + // examples index + commerce
     1 +
     1;
   process.stdout.write(

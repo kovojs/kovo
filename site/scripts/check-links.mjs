@@ -11,10 +11,18 @@ import { fileURLToPath } from 'node:url';
 
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 
+// Embedded example apps (dist/examples/<name>/app/**) are self-contained static
+// exports with their own link semantics — including intentionally-unexported
+// in-app routes (e.g. commerce's /products pagination link). They are not docs
+// pages, so the docs link/anchor gate skips them.
+const EMBEDDED_APP = /(?:^|\/)examples\/[^/]+\/app(?:\/|$)/;
+
 async function htmlFiles(directory) {
   const found = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);
+    const relative = path.relative(distDir, full).split(path.sep).join('/');
+    if (EMBEDDED_APP.test(relative)) continue;
     if (entry.isDirectory()) found.push(...(await htmlFiles(full)));
     else if (entry.name.endsWith('.html')) found.push(full);
   }
