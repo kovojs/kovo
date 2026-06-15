@@ -23,6 +23,7 @@ describe('runtime barrel loader smoke', () => {
       'contextmenu',
       'paste',
       'cancel',
+      'beforetoggle',
       'focus',
       'blur',
     ]);
@@ -36,6 +37,7 @@ describe('runtime barrel loader smoke', () => {
       'contextmenu',
       'paste',
       'cancel',
+      'beforetoggle',
       'focus',
       'blur',
       'pointerover',

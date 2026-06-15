@@ -31,6 +31,7 @@ describe('compiled interactive gallery demos', () => {
     const numberFieldClient = readGenerated('number-field-demo.client.js');
     const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
+    const popoverClient = readGenerated('popover-demo.client.js');
     const progress = readGenerated('progress-demo.tsx');
     const radioGroup = readGenerated('radio-group-demo.tsx');
     const scrollArea = readGenerated('scroll-area-demo.tsx');
@@ -381,11 +382,17 @@ describe('compiled interactive gallery demos', () => {
     expect(popover).toContain('data-gallery-interactive="popover"');
     expect(popover).toContain('fw-state=\'{"open":false}\'');
     expect(popover).toContain('data-demo-state="popover-open"');
+    expect(popover).toContain('popoverBeforeToggle as _popoverBeforeToggle');
+    expect(popover).toContain('data-bind:aria-expanded=');
+    expect(popover).toContain('data-bind:data-state=');
     expect(popover).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$section_keydown"/,
+      /on:beforetoggle="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$div_beforetoggle"/,
     );
-    expect(popover).toMatch(
-      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$button_click"/,
+    expect(popover).not.toContain('on:click=');
+    expect(popover).not.toContain('on:keydown=');
+    expect(popoverClient).toContain('popoverBeforeToggle as _popoverBeforeToggle');
+    expect(popoverClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
 
     expect(progress).toContain('data-gallery-interactive="progress"');

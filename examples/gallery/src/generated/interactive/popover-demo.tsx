@@ -2,12 +2,25 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryPopoverDemo$section_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryPopoverDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
+  state.open ? 'true' : 'false',
+);
+export const GalleryPopoverDemo$button_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryPopoverDemo$div_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
 export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
 import { component } from '@jiso/core';
 import {
+  popoverBeforeToggle as _popoverBeforeToggle,
   popoverContentAttributes,
   popoverRootAttributes,
   popoverTriggerAttributes,
@@ -39,23 +52,33 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         {...popoverRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="popover"
-        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=7e088074#GalleryPopoverDemo$section_keydown"
+        data-state={state.open ? 'open' : 'closed'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$section_data_state_derive"
         fw-c="gallery-popover-demo"
         fw-state='{"open":false}'
       >
         <button
           {...popoverTriggerAttributes({ contentId, open: state.open })}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$button_aria_expanded_derive"
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=7e088074#GalleryPopoverDemo$button_click"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$button_data_state_derive"
         >
           Delivery window
         </button>
-        <div {...popoverContentAttributes({ contentId, open: state.open })} class={CONTENT_CLASS}>
+        <div
+          {...popoverContentAttributes({ contentId, open: state.open })}
+          class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$div_data_state_derive"
+          on:beforetoggle="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$div_beforetoggle"
+        >
           Weekday arrivals are available from 9 AM to 5 PM.
         </div>
         <output
           data-demo-state="popover-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=7e088074#GalleryPopoverDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=256c6535#GalleryPopoverDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

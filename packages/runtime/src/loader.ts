@@ -59,6 +59,7 @@ const defaultDelegatedEvents = [
   'contextmenu',
   'paste',
   'cancel',
+  'beforetoggle',
   'focus',
   'blur',
 ] as const;

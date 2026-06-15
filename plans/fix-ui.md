@@ -618,10 +618,33 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       (`closedby='any'`) + the `showModal()` invoker fallback like the rest of the dialog family, add a
       visible (decorative) handle for affordance, and note the deviation in the gallery copy. Downgraded
       P1→P2.
-- [ ] **popover** [P2]: best-behaved (native Popover API: open/close, outside light-dismiss, Escape all
+- [x] **popover** [P2]: best-behaved (native Popover API: open/close, outside light-dismiss, Escape all
       native). Trigger `data-state`/`aria-expanded` styling goes stale (Phase 1); the hand-rolled
       Escape/`<output>` imperative block duplicates `popoverEscapeKeyDown` and is dead under loader #2 —
       rely on native `popover='auto'` + chained primitive instead.
+  - Evidence 2026-06-15: `packages/runtime/src/loader.ts` and regenerated
+    `packages/runtime/src/inline-loader.ts` now delegate `beforetoggle` (SPEC §4.4), so native
+    popover transitions can reach component handlers in both loader paths.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/popover-demo.tsx` removed the imperative
+    click/Escape DOM block and now relies on native `popovertarget`/`popover="auto"` for visibility,
+    with `_popoverBeforeToggle` as the single state-sync reducer. Root/trigger/content `data-state`,
+    trigger `aria-expanded`, and output text are state-bound TSX.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/popover-demo.client.js` imports
+    `_popoverBeforeToggle`, mutates only `ctx.state.open`, emits derives for `aria-expanded`,
+    `data-state`, and output text, and the authored/generated popover scan found no `Reflect`,
+    `document`, `getElementById`, `setAttribute`, `showPopover`, `hidePopover`, `on:click`, or
+    `on:keydown` matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/index.test.ts
+    src/loader.test.ts src/inline-loader-build.test.ts src/inline-loader-delegated.test.ts`,
+    `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm --filter @jiso/runtime exec tsc
+    --noEmit`, `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/popover.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/demo-fixtures.test.ts
+    src/behavior-contracts.test.ts src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+    -t popover`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
+    --check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
 
 ### Feedback / display
 

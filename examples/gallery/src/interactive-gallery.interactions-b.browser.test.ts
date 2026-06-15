@@ -170,7 +170,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
     );
-    installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
+    installGeneratedGalleryLoader(root, { events: ['beforetoggle'] });
 
     expect(button.getAttribute('popovertarget')).toBe('gallery-popover-content');
     expect(content.matches(':popover-open')).toBe(false);
@@ -194,45 +194,6 @@ describe('compiled interactive gallery demos in the browser', () => {
     // descends into it.
     await expectNoAxeViolations(root);
 
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
-
-    await vi.waitFor(() => {
-      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
-      const currentOutput = required(
-        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
-      );
-
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
-      expect(currentContent.matches(':popover-open')).toBe(true);
-      expect(currentOutput.textContent).toBe('open');
-    });
-
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
-
-    await vi.waitFor(() => {
-      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
-      const currentOutput = required(
-        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
-      );
-
-      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
-      expect(currentContent.matches(':popover-open')).toBe(false);
-      expect(currentOutput.textContent).toBe('closed');
-    });
-
-    required(root.querySelector<HTMLButtonElement>('button')).click();
-
-    await vi.waitFor(() => {
-      const currentContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
-      const currentOutput = required(
-        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
-      );
-
-      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
-      expect(currentContent.matches(':popover-open')).toBe(true);
-      expect(currentOutput.textContent).toBe('open');
-    });
-
     required(root.querySelector<HTMLButtonElement>('button')).click();
 
     await vi.waitFor(() => {
@@ -259,12 +220,42 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('open');
     });
 
-    const escapeContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
-    if (escapeContent.matches(':popover-open')) {
-      escapeContent.hidePopover();
-    }
+    required(root.querySelector<HTMLElement>('#gallery-popover-content')).hidePopover();
 
     await vi.waitFor(() => {
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(currentOutput.textContent).toBe('closed');
+      expect(
+        required(root.querySelector<HTMLElement>('#gallery-popover-content')).matches(
+          ':popover-open',
+        ),
+      ).toBe(false);
+    });
+
+    required(root.querySelector<HTMLButtonElement>('button')).click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(
+        required(root.querySelector<HTMLElement>('#gallery-popover-content')).matches(
+          ':popover-open',
+        ),
+      ).toBe(true);
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    await vi.waitFor(() => {
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(currentOutput.textContent).toBe('closed');
       expect(
         required(root.querySelector<HTMLElement>('#gallery-popover-content')).matches(
           ':popover-open',

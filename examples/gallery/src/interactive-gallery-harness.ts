@@ -118,6 +118,7 @@ export function evaluateClientModule(
     _numberFieldIncrementClick: headlessPrimitives.numberFieldIncrementClick,
     _numberFieldInput: headlessPrimitives.numberFieldInput,
     _numberFieldKeyDown: headlessPrimitives.numberFieldKeyDown,
+    _popoverBeforeToggle: headlessPrimitives.popoverBeforeToggle,
     _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
     _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
     _switchTriggerClick: headlessPrimitives.switchTriggerClick,

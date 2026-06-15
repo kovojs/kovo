@@ -598,29 +598,32 @@ describe('compiled interactive gallery demos', () => {
     expect(collapsibleState).toEqual({ open: true });
 
     const popoverState = { open: false };
-    clientHandler(popover, 'GalleryPopoverDemo$button_click')(new Event('click'), {
-      params: {},
-      signal,
-      state: popoverState,
-    });
+    clientHandler(popover, 'GalleryPopoverDemo$div_beforetoggle')(
+      Object.assign(new Event('beforetoggle'), { newState: 'open' }),
+      {
+        params: {},
+        signal,
+        state: popoverState,
+      },
+    );
     expect(popoverState).toEqual({ open: true });
-    clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(keyEvent('ArrowDown'), {
-      params: {},
-      signal,
-      state: popoverState,
-    });
-    expect(popoverState).toEqual({ open: true });
-    clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(keyEvent('Escape'), {
-      params: {},
-      signal,
-      state: popoverState,
-    });
+    clientHandler(popover, 'GalleryPopoverDemo$div_beforetoggle')(
+      Object.assign(new Event('beforetoggle'), { newState: 'closed' }),
+      {
+        params: {},
+        signal,
+        state: popoverState,
+      },
+    );
     expect(popoverState).toEqual({ open: false });
-    clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(new Event('keydown'), {
-      params: {},
-      signal,
-      state: popoverState,
-    });
+    clientHandler(popover, 'GalleryPopoverDemo$div_beforetoggle')(
+      Object.assign(new Event('beforetoggle'), { newState: undefined }),
+      {
+        params: {},
+        signal,
+        state: popoverState,
+      },
+    );
     expect(popoverState).toEqual({ open: false });
 
     const progressState: { value: number | null } = { value: 40 };
