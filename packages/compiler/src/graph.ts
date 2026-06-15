@@ -102,11 +102,10 @@ function componentQueryNames(model: ComponentModuleModel): string[] {
 }
 
 function fragmentTargetPropsType(model: ComponentModuleModel): string {
-  const props = componentOptionObjectEntries(model, 'props').flatMap((entry) =>
-    entry.staticConstructorType === undefined
-      ? []
-      : [{ key: entry.key, type: entry.staticConstructorType }],
-  );
+  const props = componentOptionObjectEntries(model, 'props').map((entry) => ({
+    key: entry.key,
+    type: entry.staticConstructorType ?? 'unknown',
+  }));
 
   if (props.length === 0) return '{}';
 

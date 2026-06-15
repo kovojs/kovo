@@ -29,6 +29,25 @@ export const CartRow = component('cart-row', {
   }`);
   });
 
+  it('preserves unknown declared prop types in fragment target registry facts', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+const jsonProp = createJsonProp();
+
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String, payload: jsonProp },
+  render: ({ rowId, payload }) => <tr fw-c="cart-row" data-row={rowId}>{renderOnce(payload.label)}</tr>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[2]?.source).toContain("'cart-row': { rowId: string; payload: unknown };");
+    expect(result.files[2]?.source).not.toContain("'cart-row': {};");
+  });
+
   it('reports FW303 when fragment target render inputs cannot be rerendered from queries or stamped props', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
