@@ -466,7 +466,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root);
 
-    expect(root.getAttribute('fw-state')).toBe('{"value":72}');
+    expect(root.getAttribute('fw-state')).toBe('{"dataState":"suboptimum","value":72}');
     expect(meter.min).toBe(0);
     expect(meter.max).toBe(100);
     expect(meter.low).toBe(40);
@@ -488,7 +488,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/meter-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"value":92}');
+      expect(root.getAttribute('fw-state')).toBe('{"dataState":"optimum","value":92}');
       expect(currentMeter.value).toBe(92);
       expect(currentMeter.getAttribute('data-state')).toBe('optimum');
       expect(currentMeter.getAttribute('aria-valuetext')).toBe('92 percent capacity');

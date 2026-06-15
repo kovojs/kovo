@@ -31,8 +31,14 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
         <label for="gallery-progress-value">Upload progress</label>
         <progress
           {...progressRootAttributes({ max: 100, value: state.value, valueText })}
+          aria-valuetext={state.value === null ? 'Upload pending' : `${state.value} percent uploaded`}
           class={PROGRESS_CLASS}
+          data-state={
+            state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'
+          }
+          data-value={state.value === null ? undefined : String(state.value)}
           id="gallery-progress-value"
+          value={state.value === null ? undefined : state.value}
         />
         <div class="inline-flex gap-2">
           <button
@@ -40,27 +46,6 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
             class={BUTTON_CLASS}
             onClick={() => {
               state.value = state.value === 100 ? 40 : 100;
-              const doc = Reflect['get'](globalThis, 'document');
-              const progress = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-progress-value')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="progress-value"]')
-                : undefined;
-              const text = `${state.value} percent uploaded`;
-
-              if (progress) {
-                progress['value'] = state.value;
-                Object(progress)['setAttribute']?.call(progress, 'value', String(state.value));
-                Object(progress)['setAttribute']?.call(progress, 'data-value', String(state.value));
-                Object(progress)['setAttribute']?.call(
-                  progress,
-                  'data-state',
-                  state.value === 100 ? 'complete' : 'loading',
-                );
-                Object(progress)['setAttribute']?.call(progress, 'aria-valuetext', text);
-              }
-              if (output) output['textContent'] = `${state.value}%`;
             }}
           >
             Complete upload
@@ -70,25 +55,6 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
             class={BUTTON_CLASS}
             onClick={() => {
               state.value = null;
-              const doc = Reflect['get'](globalThis, 'document');
-              const progress = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-progress-value')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="progress-value"]')
-                : undefined;
-
-              if (progress) {
-                Object(progress)['removeAttribute']?.call(progress, 'value');
-                Object(progress)['removeAttribute']?.call(progress, 'data-value');
-                Object(progress)['setAttribute']?.call(progress, 'data-state', 'indeterminate');
-                Object(progress)['setAttribute']?.call(
-                  progress,
-                  'aria-valuetext',
-                  'Upload pending',
-                );
-              }
-              if (output) output['textContent'] = 'pending';
             }}
           >
             Mark pending

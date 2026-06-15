@@ -381,13 +381,13 @@ describe('compiled interactive gallery demos', () => {
     expect(menubarKeyboardEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
 
-    const meterState = { value: 72 };
+    const meterState = { dataState: 'suboptimum', value: 72 };
     clientHandler(meter, 'GalleryMeterDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: meterState,
     });
-    expect(meterState).toEqual({ value: 92 });
+    expect(meterState).toEqual({ dataState: 'optimum', value: 92 });
 
     const navigationMenuState = { activeValue: 'products', openValue: '', value: 'none' };
     clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(

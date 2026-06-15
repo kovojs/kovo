@@ -274,7 +274,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
-    expect(meter).toContain('fw-state=\'{"value":72}\'');
+    expect(meter).toContain('fw-state=\'{"dataState":"suboptimum","value":72}\'');
     expect(meter).toContain('meterRootAttributes(meterState)');
     expect(meter).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/meter-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMeterDemo\$button_click"/,

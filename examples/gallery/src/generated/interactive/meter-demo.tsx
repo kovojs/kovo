@@ -2,12 +2,28 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryMeterDemo$meter_aria_valuetext_derive = derive(
+  ['state'],
+  (state: any) => `${state.value} percent capacity`,
+);
+export const GalleryMeterDemo$meter_data_state_derive = derive(
+  ['state'],
+  (state: any) => state.dataState,
+);
+export const GalleryMeterDemo$meter_data_value_derive = derive(['state'], (state: any) =>
+  String(state.value),
+);
+export const GalleryMeterDemo$meter_value_derive = derive(['state'], (state: any) => state.value);
 export const GalleryMeterDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.value),
 );
 
 import { component } from '@jiso/core';
-import { meterRootAttributes } from '@jiso/headless-ui/primitives';
+import {
+  meterRootAttributes,
+  meterValueState as _meterValueState,
+  type MeterDataState,
+} from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/meter.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -23,13 +39,14 @@ const BUTTON_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryMeterDemoState {
+  dataState: MeterDataState;
   value: number;
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryMeterDemo = component('gallery-meter-demo', {
-  state: () => ({ value: 72 }),
+  state: () => ({ dataState: 'suboptimum' as MeterDataState, value: 72 }),
   render: (_queries: Record<string, never>, state: GalleryMeterDemoState) => {
     const meterState = {
       high: 80,
@@ -46,20 +63,32 @@ export const GalleryMeterDemo = component('gallery-meter-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="meter"
         fw-c="gallery-meter-demo"
-        fw-state='{"value":72}'
+        fw-state='{"dataState":"suboptimum","value":72}'
       >
         <label for="gallery-meter-value">Storage capacity</label>
-        <meter {...meterRootAttributes(meterState)} class={METER_CLASS} id="gallery-meter-value" />
+        <meter
+          {...meterRootAttributes(meterState)}
+          aria-valuetext={`${state.value} percent capacity`}
+          data-bind:aria-valuetext="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_aria_valuetext_derive"
+          class={METER_CLASS}
+          data-state={state.dataState}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_data_state_derive"
+          data-value={String(state.value)}
+          data-bind:data-value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_data_value_derive"
+          id="gallery-meter-value"
+          value={state.value}
+          data-bind:value="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$meter_value_derive"
+        />
         <button
           type="button"
           class={BUTTON_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=c7496eb3#GalleryMeterDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$button_click"
         >
           Optimize capacity
         </button>
         <output
           data-demo-state="meter-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=c7496eb3#GalleryMeterDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=ea00e9b5#GalleryMeterDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

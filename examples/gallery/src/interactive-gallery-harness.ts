@@ -101,6 +101,7 @@ export function evaluateClientModule(
     ...headlessPrimitives,
     _checkboxTriggerClick: headlessPrimitives.checkboxTriggerClick,
     _disclosureTriggerClick: headlessPrimitives.disclosureTriggerClick,
+    _meterValueState: headlessPrimitives.meterValueState,
     _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
     _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
     _switchTriggerClick: headlessPrimitives.switchTriggerClick,

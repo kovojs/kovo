@@ -433,17 +433,39 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Feedback / display
 
-- [ ] **progress** [P2]: renders native `<progress>` instead of `<div role=progressbar>` with a
+- [x] **progress** [P2]: renders native `<progress>` instead of `<div role=progressbar>` with a
       transform-translated indicator. **Decision (locked 2026-06-14): keep native `<progress>`, document
       the deviation.** No primitive rewrite — but (a) document that the gallery progress is the native
       element (not the Radix/Base UI `role=progressbar` div, so cross-browser fill styling and the
       `data-progressing/complete` attribute surface are intentionally not provided), and (b) fix the demo
       to derive `data-state`/`aria-valuetext` from the value rather than hardcoding. Downgraded P1→P2.
-- [ ] **meter** [P2]: renders native `<meter>` instead of Base UI `<div role=meter>` + indicator; demo
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/progress-demo.tsx` keeps the native
+    `<progress>` decision, mutates only `state.value`, and exposes progress `value`, `data-value`,
+    `data-state`, `aria-valuetext`, and output text as state-bound TSX attributes.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/progress-demo.client.js` mutates only `ctx.state`,
+    emits state derives for progress attributes/text, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated progress files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t "progress|meter"`, and
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
+- [x] **meter** [P2]: renders native `<meter>` instead of Base UI `<div role=meter>` + indicator; demo
       hardcodes the `data-state` region (`value===92?optimum:suboptimum`). **Decision (locked 2026-06-14):
       keep native `<meter>`, document the deviation** (and note Jiso's native high/low/optimum is a
       superset of Base UI's plain gauge). No primitive rewrite — fix the demo to derive `data-state`/
       `aria-valuetext` from `meterValueState` instead of the hardcoded literal. Downgraded P1→P2.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/meter-demo.tsx` keeps the native `<meter>`
+    decision, computes qualitative `state.dataState` through `_meterValueState` when `state.value`
+    changes, and exposes meter `value`, `data-value`, `data-state`, `aria-valuetext`, and output text
+    as state-bound TSX attributes.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/meter-demo.client.js` imports `_meterValueState`,
+    mutates only `ctx.state`, emits state derives for meter attributes/text, and the focused
+    progress/meter browser and gallery client/compile/typecheck commands listed under `progress`
+    passed.
 - [ ] **scroll-area** [P0]: the custom thumb does **not** track real scrolling — no `on:scroll` handler
       on the viewport (and `scroll` doesn't bubble, so the loader needs direct attachment); thumb has no
       proportional size/transform; no thumb-drag or track-click; no `data-has-overflow-*`/auto-hide.
