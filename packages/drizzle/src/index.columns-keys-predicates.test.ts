@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
-  extractQueryFactsFromProject,
+  extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
 } from '@jiso/drizzle/static';
-import { pgDatabaseTypes } from './test-helpers.js';
+import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
+
+const extractQueryFactsFromProject = (
+  options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
+) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@jiso/drizzle touch graph helpers', () => {
   it('derives project query shapes from Drizzle column builders instead of selected aliases', () => {

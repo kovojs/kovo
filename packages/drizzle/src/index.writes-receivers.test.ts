@@ -40,6 +40,31 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
   });
 
+  it('does not accept app-local PgDatabase classes as Drizzle receivers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+            '',
+            'class PgDatabase {',
+            '  insert(_table: unknown) {',
+            '    return { values(_value: unknown) { return Promise.resolve(); } };',
+            '  }',
+            '}',
+            '',
+            'export async function addItem(db: PgDatabase) {',
+            '  await db.insert(cartItems).values({ productId: "p1" });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({});
+  });
+
   it('extracts project-mode direct Drizzle write calls from typed arrow handlers', () => {
     const graph = extractTouchGraphFromProject({
       files: [

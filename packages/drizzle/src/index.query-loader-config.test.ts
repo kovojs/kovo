@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   diagnosticsForQueryFacts,
   extractTouchGraphFromProject,
-  extractQueryFactsFromProject,
+  extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
 } from '@jiso/drizzle/static';
-import { pgDatabaseTypes } from './test-helpers.js';
+import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
+
+const extractQueryFactsFromProject = (
+  options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
+) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@jiso/drizzle touch graph helpers', () => {
   it('marks project query-loader writes as FW406 instead of dropping the query fact', () => {

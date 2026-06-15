@@ -2032,7 +2032,12 @@ function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {
 function isDrizzleDatabaseType(type: MorphType): boolean {
   // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
   // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
-  return drizzleDatabaseTypeNames(type, new Set()).some(isDrizzleDatabaseTypeName);
+  return (
+    drizzleDatabaseTypeNames(type, new Set()).some(isDrizzleDatabaseTypeName) &&
+    drizzleDatabaseTypeDeclarations(type, new Set()).some((declaration) =>
+      isDrizzleOrmDeclaration(declaration),
+    )
+  );
 }
 
 function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] {
@@ -2047,11 +2052,9 @@ function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] 
   const aliasName = type.getAliasSymbol()?.getName();
   const symbolName = type.getSymbol()?.getName();
   const apparentSymbolName = type.getApparentType().getSymbol()?.getName();
-  const exactTextName = drizzleDatabaseTypeNameFromExactTypeText(type.getText());
   if (aliasName) names.add(aliasName);
   if (symbolName) names.add(symbolName);
   if (apparentSymbolName) names.add(apparentSymbolName);
-  if (exactTextName) names.add(exactTextName);
 
   for (const baseType of type.getBaseTypes()) {
     for (const name of drizzleDatabaseTypeNames(baseType, seen)) names.add(name);
@@ -2060,24 +2063,32 @@ function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] 
   return [...names];
 }
 
-function drizzleDatabaseTypeNameFromExactTypeText(typeText: string): string | undefined {
-  // SPEC §11.1: unresolved imported annotations can print as exact type references even when
-  // ts-morph has no declaration symbol. Keep this anchored to the whole type reference so
-  // similarly named structural fakes such as `PgDatabaseLike` are not promoted.
-  const match = /^(?:import\("[^"]+"\)\.)?([A-Za-z_$][\w$]*)(?:<.*>)?$/.exec(typeText);
-  return match?.[1];
+function drizzleDatabaseTypeDeclarations(type: MorphType, seen: Set<string>): Node[] {
+  const key =
+    type.getAliasSymbol()?.getFullyQualifiedName() ??
+    type.getSymbol()?.getFullyQualifiedName() ??
+    type.getText();
+  if (seen.has(key)) return [];
+  seen.add(key);
+
+  return [
+    ...(type.getAliasSymbol()?.getDeclarations() ?? []),
+    ...(type.getSymbol()?.getDeclarations() ?? []),
+    ...(type.getApparentType().getSymbol()?.getDeclarations() ?? []),
+    ...type.getBaseTypes().flatMap((baseType) => drizzleDatabaseTypeDeclarations(baseType, seen)),
+  ];
 }
 
 function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
   if (typeNode.getKind() !== SyntaxKind.TypeReference) return false;
+  if (isDrizzleDatabaseType(typeNode.getType())) return true;
+
   const typeReference = typeNode.asKind(SyntaxKind.TypeReference);
-  const typeName = typeReference?.getTypeName();
-  const name = typeName
-    ? Node.isIdentifier(typeName)
-      ? typeName.getText()
-      : staticAccessName(typeName)
-    : undefined;
-  return name ? isDrizzleDatabaseTypeName(name) : false;
+  const typeNameSymbol = typeReference?.getTypeName().getSymbol();
+  const symbol = typeNameSymbol?.getAliasedSymbol() ?? typeNameSymbol;
+  if (!symbol || !isDrizzleDatabaseTypeName(symbol.getName())) return false;
+
+  return symbol.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration));
 }
 
 function projectTableNamesBySymbol(
@@ -2231,7 +2242,11 @@ function isDrizzleOrmDeclaration(declaration: Node): boolean {
   if (declaration.getSourceFile().getFilePath().includes('drizzle-orm')) return true;
 
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-  return importDeclaration?.getModuleSpecifierValue().startsWith('drizzle-orm') ?? false;
+  if (importDeclaration?.getModuleSpecifierValue().startsWith('drizzle-orm')) return true;
+
+  const moduleDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ModuleDeclaration);
+  const moduleName = moduleDeclaration?.getNameNode();
+  return Node.isStringLiteral(moduleName) && moduleName.getLiteralText().startsWith('drizzle-orm');
 }
 
 function projectColumnShapesByTable(

@@ -8,13 +8,17 @@ import {
   deriveInvalidationRegistry,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
-  extractQueryFactsFromProject,
+  extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
   jiso,
   serializeInvalidationRegistry,
   serializeDomainRegistry,
   serializeTouchGraph,
 } from '@jiso/drizzle/static';
-import { annotatedTable, pgDatabaseTypes } from './test-helpers.js';
+import { annotatedTable, pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
+
+const extractQueryFactsFromProject = (
+  options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
+) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@jiso/drizzle touch graph helpers', () => {
   it('extracts writes and query facts through real drizzle-orm pgTable/select/update types', () => {

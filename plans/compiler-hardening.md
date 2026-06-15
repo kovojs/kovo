@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (11 / 32 findings closed)
+**Status:** open (12 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -177,7 +177,17 @@ tsc --noEmit`, and `pnpm exec vp check --fix` passed.
 
 `packages/drizzle/src/static.ts` + `drizzle-surface.ts`. Independent of the compiler phases; parallelizable.
 
-- [ ] **db-receiver provenance gate (originate-in-`drizzle-orm`), not type-name match** — `static.ts` `isDrizzleDatabaseType`, `drizzle-surface.ts:51` (SPEC §11.1 step 1). Resolve the receiver type's symbol/base symbols to declarations and require a declaration originating in `drizzle-orm` (mirror the table-factory path's `isDrizzleOrmDeclaration`) before the name disambiguates db flavor. Drop the `getText()` name fallback; unresolved receiver ⇒ FW406 (manual touches), §11.1 step 2E.
+- [x] **db-receiver provenance gate (originate-in-`drizzle-orm`), not type-name match** — `static.ts` `isDrizzleDatabaseType`, `drizzle-surface.ts:51` (SPEC §11.1 step 1). Resolve the receiver type's symbol/base symbols to declarations and require a declaration originating in `drizzle-orm` (mirror the table-factory path's `isDrizzleOrmDeclaration`) before the name disambiguates db flavor. Drop the `getText()` name fallback; unresolved receiver ⇒ FW406 (manual touches), §11.1 step 2E.
+  - Evidence 2026-06-15: `packages/drizzle/src/static.ts` now requires Drizzle database type
+    names to be backed by declarations originating in `drizzle-orm`, including base/apparent type
+    declarations and import/module declaration provenance for unresolved `TypeReference` annotations;
+    the old `type.getText()` name extraction fallback was removed.
+  - Evidence 2026-06-15: `packages/drizzle/src/index.writes-receivers.test.ts` covers an
+    app-local `class PgDatabase` with a Drizzle-shaped `insert()` method producing no touch graph
+    facts, while query-loader receiver fixtures now supply a real Drizzle-origin type declaration
+    instead of depending on bare name matching.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/drizzle exec vitest run` and
+    `pnpm --filter @jiso/drizzle exec tsc --noEmit` passed.
   - Done = a `class PgDatabase` in app code with no drizzle import is **not** accepted as a db; its writes don't produce authoritative touches. Prove: `pnpm test --dir packages/drizzle` (or the drizzle static suite)
 
 - [ ] **Default same-name domain for un-annotated `pgTable`; emit FW404 at compile time** — `static.ts:2556` (SPEC §10.1, §11.3). Recognize any module-verified `pgTable()` as a table regardless of `jiso()` annotation; synthesize a default domain from the table-name literal. Route only genuinely unmappable writes to FW406; emit FW404 statically for writes to a resolved table with no domain and not `exempt`.

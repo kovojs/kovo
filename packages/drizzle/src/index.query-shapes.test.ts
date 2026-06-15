@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticsForQueryFacts, extractQueryFactsFromProject } from '@jiso/drizzle/static';
-import { pgDatabaseTypes } from './test-helpers.js';
+import {
+  diagnosticsForQueryFacts,
+  extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
+} from '@jiso/drizzle/static';
+import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
+
+const extractQueryFactsFromProject = (
+  options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
+) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@jiso/drizzle touch graph helpers', () => {
   it('extracts project query result shapes, read domains, and instance keys from joined Drizzle selects', () => {

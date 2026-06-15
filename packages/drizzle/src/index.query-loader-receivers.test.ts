@@ -7,6 +7,15 @@ import {
 } from '@jiso/drizzle/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
+const queryReceiverTypes = pgDatabaseTypes([
+  '$count(table: unknown): Promise<number>;',
+  '$with(name: string): unknown;',
+  'execute(query: unknown): Promise<void>;',
+  'query: any;',
+  'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+  'update(table: unknown): { set(value: unknown): Promise<void> };',
+]);
+
 describe('@jiso/drizzle touch graph helpers', () => {
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
@@ -37,6 +46,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('extracts project query-loader direct typed receiver carrier members', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: [
@@ -103,6 +113,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('extracts project query-loader nested typed receiver carrier members', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: [
@@ -188,6 +199,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks project query-loader detached receiver method aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: `
@@ -273,6 +285,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('keeps project query-loader reads through Postgres with() select chains', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: [
@@ -317,6 +330,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('uses project query-loader detached receiver method symbols without name fallback', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: [
@@ -377,6 +391,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks project query-loader bound receiver method aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: `
@@ -535,6 +550,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks query-loader helpers receiving db as FW406 instead of dropping the query fact', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: `
@@ -578,6 +594,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks query-loader member helpers receiving db as FW406 instead of dropping the query fact', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: `
@@ -623,6 +640,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks query-loader helpers receiving db through containers as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: `
@@ -714,6 +732,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks local query-loader helpers receiving carrier aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: [
@@ -762,6 +781,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
   it('marks local query-loader helpers receiving assigned carrier aliases as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
+        queryReceiverTypes,
         {
           fileName: 'product.queries.ts',
           source: [

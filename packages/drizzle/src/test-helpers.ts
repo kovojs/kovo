@@ -1,4 +1,4 @@
-import { jiso, type SourceFileInput } from '@jiso/drizzle/static';
+import { jiso, type SourceFileInput, type TouchGraphProjectOptions } from '@jiso/drizzle/static';
 
 export function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
   return {
@@ -17,7 +17,19 @@ export function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
+      'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
     ].join('\n'),
+  };
+}
+
+export function withPgDatabaseTypes(
+  options: TouchGraphProjectOptions,
+  methods: readonly string[] = [],
+): TouchGraphProjectOptions {
+  if (options.files.some((file) => file.fileName === 'drizzle-types.d.ts')) return options;
+  return {
+    ...options,
+    files: [pgDatabaseTypes(methods), ...options.files],
   };
 }
 
