@@ -2,6 +2,7 @@ import {
   callExpressions,
   jsxElements,
   type ComponentModuleModel,
+  type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
@@ -10,24 +11,31 @@ import { escapeAttribute, type SourceReplacement } from '../shared.js';
 export function navigationLinkLowering(model: ComponentModuleModel): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
 
-  for (const link of jsxElements(model).filter(
-    (element) => element.tag === 'Link' && !element.selfClosing,
-  )) {
-    const target = jsxStaticAttributeValue(link, 'to');
-    if (!target) continue;
+  for (const link of jsxElements(model).filter((element) => element.tag === 'Link')) {
+    const toAttribute = link.attributes.find((attribute) => attribute.name === 'to');
+    const target =
+      jsxStaticAttributeValue(link, 'to') ?? staticStringValue(toAttribute?.expressionStaticValue);
+    if (!toAttribute) continue;
 
-    const params = navigationObjectAttributeValue(link, 'params');
-    const search = navigationObjectAttributeValue(link, 'search');
-    if (params === null || search === null) continue;
+    if (target) {
+      const params = navigationObjectAttributeValue(link, 'params');
+      const search = navigationObjectAttributeValue(link, 'search');
+      if (params === null || search === null) continue;
 
-    const href = buildStaticHref(target, params ?? {}, search ?? {});
-    replacements.push(...lowerLinkElementPatches(link, href));
+      const href = buildStaticHref(target, params ?? {}, search ?? {});
+      replacements.push(...lowerStaticLinkElementPatches(link, href));
+      continue;
+    }
+
+    if (toAttribute.expression === undefined) continue;
+
+    replacements.push(...lowerDynamicLinkElementPatches(link, toAttribute));
   }
 
   return replacements;
 }
 
-function lowerLinkElementPatches(link: JsxElementModel, href: string): SourceReplacement[] {
+function lowerStaticLinkElementPatches(link: JsxElementModel, href: string): SourceReplacement[] {
   return [
     {
       end: link.openingTagNameEnd,
@@ -41,6 +49,40 @@ function lowerLinkElementPatches(link: JsxElementModel, href: string): SourceRep
         replacement: '',
         start: attribute.leadingStart,
       })),
+    ...lowerLinkClosingTagPatches(link),
+  ];
+}
+
+function lowerDynamicLinkElementPatches(
+  link: JsxElementModel,
+  toAttribute: JsxAttributeModel,
+): SourceReplacement[] {
+  return [
+    {
+      end: link.openingTagNameEnd,
+      replacement: 'a',
+      start: link.openingTagNameStart,
+    },
+    {
+      end: toAttribute.start + toAttribute.name.length,
+      replacement: 'href',
+      start: toAttribute.start,
+    },
+    ...link.attributes
+      .filter((attribute) => ['params', 'search'].includes(attribute.name))
+      .map((attribute) => ({
+        end: attribute.end,
+        replacement: '',
+        start: attribute.leadingStart,
+      })),
+    ...lowerLinkClosingTagPatches(link),
+  ];
+}
+
+function lowerLinkClosingTagPatches(link: JsxElementModel): SourceReplacement[] {
+  if (link.selfClosing) return [];
+
+  return [
     {
       end: link.closingStart + 2 + link.tag.length,
       replacement: 'a',

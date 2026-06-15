@@ -164,6 +164,53 @@ export const ProductLinks = component('product-links', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers self-closing static Link navigation sugar to a plain anchor', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/cart'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <Link aria-label="Cart" to="/cart" />
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[0]?.source).toContain('<a href="/cart" aria-label="Cart" />');
+    expect(result.files[0]?.source).not.toContain('<Link');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers dynamic Link targets to native anchor href expressions', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: ({ product }) => {
+    const target = href('/products/:id', { params: { id: product.id } });
+    return <Link className="product-link" to={target}>Product</Link>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[0]?.source).toContain(
+      '<a className="product-link" href={target} fw-c="product-links">Product</a>',
+    );
+    expect(result.files[0]?.source).not.toContain('<Link');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('ignores Link navigation sugar text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
