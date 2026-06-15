@@ -1,9 +1,12 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
+  dialogCancel as _dialogCancel,
   dialogCloseAttributes,
+  dialogCloseClick as _dialogCloseClick,
   dialogContentAttributes,
   dialogRootAttributes,
+  dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -38,15 +41,17 @@ export const GalleryDialogDemo = component('gallery-dialog-demo', {
         {...dialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="dialog"
-        onKeyDown={() => {
-          state.open = false;
-        }}
+        data-state={state.open ? 'open' : 'closed'}
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-state={state.open ? 'open' : 'closed'}
           onClick={() => {
-            state.open = true;
+            const result = _dialogTriggerClick(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           Review cart
@@ -54,8 +59,12 @@ export const GalleryDialogDemo = component('gallery-dialog-demo', {
         <dialog
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
           onCancel={() => {
-            state.open = false;
+            const result = _dialogCancel(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           <h2 class={TITLE_CLASS} id={titleId}>
@@ -67,8 +76,11 @@ export const GalleryDialogDemo = component('gallery-dialog-demo', {
           <button
             {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
-              state.open = false;
+              const result = _dialogCloseClick(Object(event), { open: state.open });
+              if (!result?.changed) return;
+              state.open = result.open;
             }}
           >
             Close review

@@ -2,9 +2,13 @@
 import { component } from '@jiso/core';
 import {
   alertDialogActionAttributes,
+  alertDialogActionClick as _alertDialogActionClick,
   alertDialogCancelAttributes,
+  alertDialogCancel as _alertDialogCancel,
+  alertDialogCancelClick as _alertDialogCancelClick,
   alertDialogContentAttributes,
   alertDialogRootAttributes,
+  alertDialogTriggerClick as _alertDialogTriggerClick,
   alertDialogTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -41,15 +45,17 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
         {...alertDialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="alert-dialog"
-        onKeyDown={() => {
-          state.open = false;
-        }}
+        data-state={state.open ? 'open' : 'closed'}
       >
         <button
           {...alertDialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-state={state.open ? 'open' : 'closed'}
           onClick={() => {
-            state.open = true;
+            const result = _alertDialogTriggerClick(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           Delete workspace
@@ -62,8 +68,12 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
             titleId,
           })}
           class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
           onCancel={() => {
-            state.open = false;
+            const result = _alertDialogCancel(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           <h2 class={TITLE_CLASS} id={titleId}>
@@ -75,8 +85,11 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
           <button
             {...alertDialogCancelAttributes({ autoFocus: true, contentId, open: state.open })}
             class={CANCEL_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
-              state.open = false;
+              const result = _alertDialogCancelClick(Object(event), { open: state.open });
+              if (!result?.changed) return;
+              state.open = result.open;
             }}
           >
             Keep workspace
@@ -88,8 +101,11 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
               open: state.open,
             })}
             class={ACTION_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
-              state.open = false;
+              const result = _alertDialogActionClick(Object(event), { open: state.open });
+              if (!result?.changed) return;
+              state.open = result.open;
             }}
           >
             Delete

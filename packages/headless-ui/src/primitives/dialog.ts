@@ -6,6 +6,7 @@ import {
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
+import { runDialogInvokerCommand, type DialogInvokerEvent } from '../lib/dialog-invoker.js';
 
 export type DialogChangeReason =
   | 'cancel-event'
@@ -24,6 +25,7 @@ export interface DialogState {
 export interface DialogAttributeOptions extends DialogState {
   contentId?: string;
   descriptionId?: string;
+  dismissible?: boolean;
   titleId?: string;
 }
 
@@ -40,9 +42,9 @@ export interface DialogChangeResult {
 export type DialogPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | string>>;
 
-export type DialogTriggerEvent = Event;
+export type DialogTriggerEvent = Event & DialogInvokerEvent;
 
-export type DialogCloseEvent = Event;
+export type DialogCloseEvent = Event & DialogInvokerEvent;
 
 export type DialogCancelEvent = Event;
 
@@ -83,6 +85,7 @@ export function dialogContentAttributes(
 ): DialogPrimitiveAttributes {
   return Object.freeze({
     ...openState(options.open),
+    closedby: options.dismissible === false ? 'closerequest' : 'any',
     open: options.open,
     ...(options.contentId === undefined ? {} : { id: options.contentId }),
     ...(options.titleId === undefined ? {} : { 'aria-labelledby': options.titleId }),
@@ -146,6 +149,7 @@ export function dialogTriggerClick(
   if (event.defaultPrevented) return;
 
   const result = setDialogOpen(state, true, 'trigger-click', options);
+  if (result.changed) runDialogInvokerCommand(event, 'show-modal');
   if (!result.changed) {
     event.preventDefault();
   }
@@ -167,6 +171,7 @@ export function dialogCloseClick(
   if (event.defaultPrevented) return;
 
   const result = setDialogOpen(state, false, 'close-click', options);
+  if (result.changed) runDialogInvokerCommand(event, 'request-close');
   if (!result.changed) {
     event.preventDefault();
   }

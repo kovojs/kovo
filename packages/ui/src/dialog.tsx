@@ -33,6 +33,7 @@ export interface DialogContentProps extends DialogStateProps {
   class?: ClassValue;
   contentId?: string;
   descriptionId?: string;
+  dismissible?: boolean;
   titleId?: string;
 }
 
@@ -125,6 +126,7 @@ export const DialogContent = component('dialog-content', {
       ...dialogState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
+      ...(props.dismissible === undefined ? {} : { dismissible: props.dismissible }),
       ...(props.titleId === undefined ? {} : { titleId: props.titleId }),
     });
 
@@ -133,6 +135,7 @@ export const DialogContent = component('dialog-content', {
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         class={cn(dialogContentClassNames(), props.class)}
+        closedby={attrs.closedby}
         data-state={attrs['data-state']}
         id={attrs.id}
         open={attrs.open}

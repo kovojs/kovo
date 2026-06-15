@@ -110,6 +110,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(dialog.open).toBe(false);
     expect(dialog.getAttribute('role')).toBe('alertdialog');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('closedby')).toBeNull();
     expect(dialog.getAttribute('aria-labelledby')).toBe('gallery-interactive-alert-dialog-title');
     expect(dialog.getAttribute('aria-describedby')).toBe(
       'gallery-interactive-alert-dialog-description',
@@ -1018,6 +1019,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(trigger.getAttribute('aria-controls')).toBe('gallery-dialog-content');
     expect(dialog.open).toBe(false);
+    expect(dialog.getAttribute('closedby')).toBe('any');
     expect(dialog.getAttribute('aria-labelledby')).toBe('gallery-dialog-title');
     expect(dialog.getAttribute('aria-describedby')).toBe('gallery-dialog-description');
     expect(output.textContent).toBe('closed');

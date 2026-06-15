@@ -78,15 +78,19 @@ describe('compiled interactive gallery demos', () => {
     expect(alertDialog).toContain('alertDialogTriggerAttributes({ contentId, open: state.open })');
     expect(alertDialog).toContain('alertDialogCancelAttributes({');
     expect(alertDialog).toContain("intent: 'destructive'");
+    expect(alertDialog).toContain('alertDialogTriggerClick as _alertDialogTriggerClick');
+    expect(alertDialog).toContain('alertDialogCancel as _alertDialogCancel');
+    expect(alertDialog).toContain('alertDialogActionClick as _alertDialogActionClick');
+    expect(alertDialog).toContain('data-bind:data-state=');
+    expect(alertDialog).toContain('data-bind:open=');
+    expect(alertDialog).not.toContain('closedby');
     expect(alertDialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click"/,
     );
     expect(alertDialog).toMatch(
       /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$dialog_cancel"/,
     );
-    expect(alertDialog).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$section_keydown"/,
-    );
+    expect(alertDialog).not.toContain('on:keydown=');
     expect(alertDialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click_2"/,
     );
@@ -236,15 +240,18 @@ describe('compiled interactive gallery demos', () => {
     expect(dialog).toContain('fw-state=\'{"open":false}\'');
     expect(dialog).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
     expect(dialog).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(dialog).toContain('dialogTriggerClick as _dialogTriggerClick');
+    expect(dialog).toContain('dialogCloseClick as _dialogCloseClick');
+    expect(dialog).toContain('data-bind:aria-expanded=');
+    expect(dialog).toContain('data-bind:data-state=');
+    expect(dialog).toContain('data-bind:open=');
     expect(dialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click"/,
     );
     expect(dialog).toMatch(
       /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$dialog_cancel"/,
     );
-    expect(dialog).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$section_keydown"/,
-    );
+    expect(dialog).not.toContain('on:keydown=');
     expect(dialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click_2"/,
     );
@@ -254,15 +261,19 @@ describe('compiled interactive gallery demos', () => {
     expect(drawer).toContain('fw-state=\'{"open":false}\'');
     expect(drawer).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
     expect(drawer).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(drawer).toContain('dialogTriggerClick as _dialogTriggerClick');
+    expect(drawer).toContain('data-bind:aria-expanded=');
+    expect(drawer).toContain('data-bind:data-state=');
+    expect(drawer).toContain('data-bind:open=');
+    expect(drawer).toContain('Vaul drag, snap, and background-scale gestures are not');
+    expect(drawer).toContain('modeled.');
     expect(drawer).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$button_click"/,
     );
     expect(drawer).toMatch(
       /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$dialog_cancel"/,
     );
-    expect(drawer).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$section_keydown"/,
-    );
+    expect(drawer).not.toContain('on:keydown=');
     expect(drawer).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/drawer-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDrawerDemo\$button_click_2"/,
     );
@@ -502,15 +513,17 @@ describe('compiled interactive gallery demos', () => {
     expect(sheet).toContain('fw-state=\'{"open":false}\'');
     expect(sheet).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
     expect(sheet).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(sheet).toContain('dialogTriggerClick as _dialogTriggerClick');
+    expect(sheet).toContain('data-bind:aria-expanded=');
+    expect(sheet).toContain('data-bind:data-state=');
+    expect(sheet).toContain('data-bind:open=');
     expect(sheet).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$button_click"/,
     );
     expect(sheet).toMatch(
       /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$dialog_cancel"/,
     );
-    expect(sheet).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$section_keydown"/,
-    );
+    expect(sheet).not.toContain('on:keydown=');
     expect(sheet).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/sheet-demo\.client\.js\?v=[0-9a-f]{8}#GallerySheetDemo\$button_click_2"/,
     );

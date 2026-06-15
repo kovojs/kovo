@@ -37,7 +37,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     expect(visualGeometry(route)).toEqual({
-      height: 6184,
+      height: 6334,
       width: 820,
     });
     expect(visualGeometry(switchDemo)).toEqual({
@@ -53,10 +53,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       width: 780,
     });
 
-    expect(await visualBaselineHash(route)).toBe('7240e2d0');
+    expect(await visualBaselineHash(route)).toBe('c6622329');
     expect(['1dc30a6d', '9ad15de9', '81aa77c6']).toContain(await visualBaselineHash(switchDemo));
     expect(['b19a1055', '94604e9e']).toContain(await visualBaselineHash(menuDemo));
-    expect(['cc33e71c', 'b06676d3']).toContain(await visualBaselineHash(pureMarkupDemo));
+    expect(['cc33e71c', 'b06676d3', 'b970b899']).toContain(await visualBaselineHash(pureMarkupDemo));
   });
 
   it('keeps stable visual baselines for representative styled static gallery routes', async () => {
@@ -326,7 +326,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(alertDialogRoute)).toBe('e90d1fc0');
     expect(['88beb063', '5f24529f']).toContain(await visualBaselineHash(checkboxRoute));
     expect(await visualBaselineHash(collapsibleRoute)).toBe('c1ad7701');
-    expect(['58bd3e47', 'a63506e0']).toContain(await visualBaselineHash(dialogRoute));
+    expect(['58bd3e47', 'a63506e0', 'c0eb0750']).toContain(await visualBaselineHash(dialogRoute));
     expect(await visualBaselineHash(disclosureRoute)).toBe('bffdc990');
     expect(await visualBaselineHash(switchRoute)).toBe('cf4fad35');
     expect(await visualBaselineHash(toggleRoute)).toBe('839450b9');

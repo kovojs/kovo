@@ -331,6 +331,7 @@ export async function expectGeneratedSideDialog(options: {
   expect(trigger.getAttribute('aria-controls')).toBe(options.contentId);
   expect(trigger.getAttribute('commandfor')).toBe(options.contentId);
   expect(dialog.getAttribute('data-side')).toBe(options.side);
+  expect(dialog.getAttribute('closedby')).toBe('any');
   expect(dialog.open).toBe(false);
   expect(output.textContent).toBe('closed');
 

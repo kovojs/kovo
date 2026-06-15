@@ -699,24 +699,57 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Overlays — native dialog family (open/close work via native `<dialog command>`; gaps are dismissal/state/fallback)
 
-- [ ] **dialog** [P1]: no outside/backdrop dismissal (native `showModal()` defaults to
+- [x] **dialog** [P1]: no outside/backdrop dismissal (native `showModal()` defaults to
       `closedby='closerequest'`) — shadcn/Base UI dismiss on overlay click; emit `closedby='any'` (or a
       backdrop handler). Root `onKeyDown` closes on **any** key (no Escape guard) — remove it (native
       `cancel` already handles Escape). `data-state` never flips client-side (Phase 1). Add a
       `showModal()`/`requestClose()` JS fallback for browsers without `command`/`commandfor`.
-- [ ] **alert-dialog** [P2]: correct `role=alertdialog`/`aria-modal`, correct no-backdrop-dismiss
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/dialog.ts` now emits `closedby='any'`
+    for dismissible dialog content and routes accepted trigger/close clicks through a shared
+    `showModal()`/`requestClose()` invoker fallback. `examples/gallery/src/interactive/dialog-demo.tsx`
+    removed the unguarded root `onKeyDown`, calls `_dialogTriggerClick`/`_dialogCloseClick`/
+    `_dialogCancel`, and binds trigger/content/close `data-state`, trigger `aria-expanded`, dialog
+    `open`, and output text from state.
+  - Evidence 2026-06-15: generated dialog artifacts import the primitive reducers, emit state derives
+    for the dynamic slots, and the authored/generated forbidden-DOM scan for the dialog family found no
+    `Reflect`/`getElementById`/`setAttribute`/`document`/`globalThis`/`ctx.params` matches.
+  - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/dialog.test.ts src/primitives/alert-dialog.test.ts`, gallery client/compile tests,
+    focused browser `alert dialog|native dialog|sheet and drawer`, gallery emit `--check`, package
+    typechecks, and visual baseline browser tests passed.
+- [x] **alert-dialog** [P2]: correct `role=alertdialog`/`aria-modal`, correct no-backdrop-dismiss
       (must **not** add `closedby='any'`). Remove the unguarded root `onKeyDown`; add the invoker JS
       fallback; `data-state` stamps via Phase 1.
-- [ ] **sheet** [P1]: native modal `<dialog>` + side variant (closest to its Radix model), but no
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/alert-dialog.ts` reuses the invoker
+    fallback for trigger/cancel/action buttons while `alertDialogContentAttributes` continues to omit
+    `closedby`; primitive tests assert both facts. `examples/gallery/src/interactive/alert-dialog-demo.tsx`
+    removed the unguarded root `onKeyDown`, calls the alert-dialog reducers, and binds
+    `aria-expanded`, `data-state`, `open`, and output through state.
+  - Verification 2026-06-15: the browser alert-dialog test asserts `role=alertdialog`,
+    `aria-modal=true`, `closedby` absent, focus inside the open dialog, axe-clean open state, cancel,
+    native close, and destructive action close.
+- [x] **sheet** [P1]: native modal `<dialog>` + side variant (closest to its Radix model), but no
       overlay-click dismissal — emit `closedby='any'`. Remove unguarded `onKeyDown`; `data-side`/
       `data-state` slide animation won't run client-side until Phase 1; optional explicit `aria-modal`.
-- [ ] **drawer** [P2]: shadcn Drawer is **Vaul** (drag-to-dismiss, snap points, background scale, drag
+  - Evidence 2026-06-15: `packages/ui/src/sheet.tsx` passes through `closedby='any'`; the gallery
+    sheet demo removed the root `onKeyDown`, routes click/cancel through dialog reducers, and binds
+    `data-state`, `aria-expanded`, `open`, and output from state while preserving `data-side='right'`.
+  - Verification 2026-06-15: `expectGeneratedSideDialog` asserts `closedby='any'` for sheet/drawer,
+    open/close state, side placement, and axe-clean open top-layer state in the focused browser slice.
+- [x] **drawer** [P2]: shadcn Drawer is **Vaul** (drag-to-dismiss, snap points, background scale, drag
       handle) — Jiso's drawer is the dialog primitive with a side class (a Sheet, identical render to
       `sheet`). **Decision (locked 2026-06-14): re-scope "drawer" as a directional sheet and document
       that Vaul drag/snap/scale gestures are not modeled.** No drag primitive. Add overlay dismissal
       (`closedby='any'`) + the `showModal()` invoker fallback like the rest of the dialog family, add a
       visible (decorative) handle for affordance, and note the deviation in the gallery copy. Downgraded
       P1→P2.
+  - Evidence 2026-06-15: `packages/ui/src/drawer.tsx` passes through `closedby='any'` and renders a
+    decorative handle; `examples/gallery/src/interactive/drawer-demo.tsx` mirrors the handle, documents
+    the Vaul drag/snap/background-scale deviation in visible copy, removes root `onKeyDown`, and uses
+    dialog reducers plus state-bound dynamic slots.
+  - Verification 2026-06-15: UI markup/overlay tests cover `closedby='any'` and the drawer handle;
+    focused gallery browser tests passed, and visual baseline tests passed with the updated compiled
+    route height/hash plus the new static dialog hash.
 - [x] **popover** [P2]: best-behaved (native Popover API: open/close, outside light-dismiss, Escape all
       native). Trigger `data-state`/`aria-expanded` styling goes stale (Phase 1); the hand-rolled
       Escape/`<output>` imperative block duplicates `popoverEscapeKeyDown` and is dead under loader #2 —
@@ -866,8 +899,16 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     `scrollAreaThumbGeometry`, `scrollAreaTrackPointerDown`, `scrollAreaThumbDragStart`, and
     `scrollAreaThumbDrag`; `scrollAreaDataAttributes` emits overflow/scrolling/hovering data attrs.
     Verified by `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`.
-- [ ] dialog/sheet/drawer: `closedby='any'` for light-dismissable variants (NOT alert-dialog) + a
+- [x] dialog/sheet/drawer: `closedby='any'` for light-dismissable variants (NOT alert-dialog) + a
       `showModal()`/`requestClose()` JS fallback for the `command`/`commandfor` invoker dependency.
+  - Evidence 2026-06-15: `packages/headless-ui/src/lib/dialog-invoker.ts` centralizes the DOM-scoped
+    invoker fallback using the clicked invoker's `ownerDocument`; dialog primitives call it only after
+    a reducer accepts the state transition. `dialogContentAttributes` emits `closedby='any'` by default
+    and `closedby='closerequest'` only when `dismissible: false`; alert-dialog content emits no
+    `closedby`.
+  - Verification 2026-06-15: primitive tests cover fallback `showModal()`/`requestClose()` calls and
+    alert no-light-dismiss; gallery browser tests assert `closedby='any'` on dialog/sheet/drawer and
+    no `closedby` on alert-dialog.
 - [ ] toast: imperative push/stack/auto-dismiss demo + viewport landmark; add a timer affordance if the
       primitive/loader lacks one.
 - [ ] _Not doing (locked):_ `progress.ts`/`meter.ts` stay native `<progress>`/`<meter>` (documented

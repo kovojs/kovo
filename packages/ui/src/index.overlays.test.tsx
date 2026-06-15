@@ -474,6 +474,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(rendered).toContain('aria-controls="account-sheet"');
     expect(rendered).toContain('command="show-modal" commandfor="account-sheet"');
     expect(rendered).toContain('<dialog aria-describedby="account-sheet-description"');
+    expect(rendered).toContain('closedby="any"');
     expect(rendered).toContain('id="account-sheet" open>');
     expect(rendered).toContain('inset-y-0 left-0 w-full max-w-sm border-r');
     expect(rendered).toContain('command="request-close" commandfor="account-sheet"');
@@ -499,8 +500,10 @@ describe('@jiso/ui styled package foundation', () => {
     expect(topSheet).toContain('top-0 max-h-[85vh] border-b');
     expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
     expect(drawer).toContain('<dialog aria-describedby="account-drawer-description"');
+    expect(drawer).toContain('closedby="any"');
     expect(drawer).toContain('id="account-drawer" open>');
     expect(drawer).toContain('bottom-0 max-h-[85vh] border-t');
+    expect(drawer).toContain('aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300"');
     expect(drawer).toContain('command="request-close" commandfor="account-drawer"');
   });
 });

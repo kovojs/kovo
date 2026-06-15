@@ -2,15 +2,36 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryDrawerDemo$section_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDrawerDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
+  state.open ? 'true' : 'false',
+);
+export const GalleryDrawerDemo$button_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDrawerDemo$dialog_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDrawerDemo$dialog_open_derive = derive(['state'], (state: any) =>
+  state.open ? '' : null,
+);
+export const GalleryDrawerDemo$button_data_state_derive_2 = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
 export const GalleryDrawerDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
 import { component } from '@jiso/core';
 import {
+  dialogCancel as _dialogCancel,
   dialogCloseAttributes,
+  dialogCloseClick as _dialogCloseClick,
   dialogContentAttributes,
   dialogRootAttributes,
+  dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -23,6 +44,7 @@ const TRIGGER_CLASS =
   'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
 const CONTENT_CLASS =
   'fixed z-50 flex flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl inset-x-0 bottom-0 max-h-[85vh] border-t';
+const HANDLE_CLASS = 'mx-auto h-1.5 w-12 rounded-full bg-neutral-300';
 const HEADER_CLASS = 'grid gap-1';
 const TITLE_CLASS = 'text-base font-semibold';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
@@ -48,14 +70,19 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
         class="grid gap-2"
         data-gallery-interactive="drawer"
         data-side="bottom"
-        on:keydown="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=66dd6ddd#GalleryDrawerDemo$section_keydown"
+        data-state={state.open ? 'open' : 'closed'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$section_data_state_derive"
         fw-c="gallery-drawer-demo"
         fw-state='{"open":false}'
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=66dd6ddd#GalleryDrawerDemo$button_click"
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$button_aria_expanded_derive"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$button_data_state_derive"
+          on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$button_click"
         >
           Open drawer
         </button>
@@ -63,27 +90,35 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
           data-side="bottom"
-          on:cancel="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=66dd6ddd#GalleryDrawerDemo$dialog_cancel"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$dialog_data_state_derive"
+          open={state.open}
+          data-bind:open="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$dialog_open_derive"
+          on:cancel="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$dialog_cancel"
         >
+          <div aria-hidden="true" class={HANDLE_CLASS} />
           <header class={HEADER_CLASS}>
             <h2 class={TITLE_CLASS} id={titleId}>
               Mobile actions
             </h2>
             <p class={DESCRIPTION_CLASS} id={descriptionId}>
-              Choose a bulk action without leaving the current page.
+              Directional sheet drawer; Vaul drag, snap, and background-scale gestures are not
+              modeled.
             </p>
           </header>
           <button
             {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=66dd6ddd#GalleryDrawerDemo$button_click_2"
+            data-state={state.open ? 'open' : 'closed'}
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$button_data_state_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$button_click_2"
           >
             Close drawer
           </button>
         </dialog>
         <output
           data-demo-state="drawer-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=66dd6ddd#GalleryDrawerDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=0cef8a6c#GalleryDrawerDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

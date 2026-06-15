@@ -6,6 +6,7 @@ import {
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
+import { runDialogInvokerCommand, type DialogInvokerEvent } from '../lib/dialog-invoker.js';
 
 export type AlertDialogChangeReason =
   | 'action-click'
@@ -51,11 +52,11 @@ export interface AlertDialogChangeResult {
 export type AlertDialogPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | string>>;
 
-export type AlertDialogTriggerEvent = Event;
+export type AlertDialogTriggerEvent = Event & DialogInvokerEvent;
 
-export type AlertDialogActionEvent = Event;
+export type AlertDialogActionEvent = Event & DialogInvokerEvent;
 
-export type AlertDialogCancelButtonEvent = Event;
+export type AlertDialogCancelButtonEvent = Event & DialogInvokerEvent;
 
 export type AlertDialogCancelEvent = Event;
 
@@ -184,6 +185,7 @@ export function alertDialogTriggerClick(
   if (event.defaultPrevented) return;
 
   const result = setAlertDialogOpen(state, true, 'trigger-click', options);
+  if (result.changed) runDialogInvokerCommand(event, 'show-modal');
   if (!result.changed) {
     event.preventDefault();
   }
@@ -205,6 +207,7 @@ export function alertDialogCancelClick(
   if (event.defaultPrevented) return;
 
   const result = setAlertDialogOpen(state, false, 'cancel-click', options);
+  if (result.changed) runDialogInvokerCommand(event, 'request-close');
   if (!result.changed) {
     event.preventDefault();
   }
@@ -226,6 +229,7 @@ export function alertDialogActionClick(
   if (event.defaultPrevented) return;
 
   const result = setAlertDialogOpen(state, false, 'action-click', options);
+  if (result.changed) runDialogInvokerCommand(event, 'request-close');
   if (!result.changed) {
     event.preventDefault();
   }

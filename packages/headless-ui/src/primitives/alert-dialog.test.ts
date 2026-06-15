@@ -68,10 +68,10 @@ describe('headless-ui alert-dialog primitive', () => {
         titleId: 'delete-title',
       }),
     ).toEqual({
-      'aria-describedby': 'delete-description',
-      'aria-labelledby': 'delete-title',
-      'aria-modal': 'true',
-      'data-state': 'open',
+        'aria-describedby': 'delete-description',
+        'aria-labelledby': 'delete-title',
+        'aria-modal': 'true',
+        'data-state': 'open',
       id: 'delete-account',
       open: true,
       role: 'alertdialog',
@@ -83,6 +83,9 @@ describe('headless-ui alert-dialog primitive', () => {
       open: false,
       role: 'alertdialog',
     });
+    expect(alertDialogContentAttributes({ contentId: 'delete-account', open: true })).not.toHaveProperty(
+      'closedby',
+    );
 
     expect(
       alertDialogCancelAttributes({
@@ -206,6 +209,47 @@ describe('headless-ui alert-dialog primitive', () => {
     expect(reasons).toEqual(['trigger-click:true', 'cancel-click:false', 'action-click:false']);
   });
 
+  it('falls back to dialog invoker methods without enabling alert light-dismiss', () => {
+    const calls: string[] = [];
+    const dialog = {
+      open: false,
+      requestClose() {
+        calls.push('requestClose');
+        this.open = false;
+      },
+      showModal() {
+        calls.push('showModal');
+        this.open = true;
+      },
+    };
+    const ownerDocument = {
+      getElementById(id: string) {
+        return id === 'delete-account' ? dialog : undefined;
+      },
+    };
+    const triggerEvent = invokerEvent('show-modal', ownerDocument);
+    const cancelEvent = invokerEvent('request-close', ownerDocument);
+    const actionEvent = invokerEvent('request-close', ownerDocument);
+
+    expect(alertDialogTriggerClick(triggerEvent, { open: false })).toMatchObject({
+      changed: true,
+      open: true,
+    });
+    expect(alertDialogCancelClick(cancelEvent, { open: true })).toMatchObject({
+      changed: true,
+      open: false,
+    });
+    expect(alertDialogActionClick(actionEvent, { open: true })).toMatchObject({
+      changed: true,
+      open: false,
+    });
+
+    expect(calls).toEqual(['showModal', 'requestClose', 'requestClose']);
+    expect(triggerEvent.defaultPrevented).toBe(true);
+    expect(cancelEvent.defaultPrevented).toBe(true);
+    expect(actionEvent.defaultPrevented).toBe(true);
+  });
+
   it('prevents native invoker behavior when disabled or canceled', () => {
     const disabledEvent = new Event('click', { cancelable: true });
     const disabledResult = alertDialogTriggerClick(disabledEvent, {
@@ -324,4 +368,28 @@ function beforeToggleEvent(
     new Event('beforetoggle', { cancelable }),
     newState === undefined ? {} : { newState },
   );
+}
+
+function invokerEvent(command: string, ownerDocument: { getElementById(id: string): unknown }) {
+  const button = {
+    getAttribute(name: string) {
+      if (name === 'command') return command;
+      if (name === 'commandfor') return 'delete-account';
+      return null;
+    },
+    ownerDocument,
+  };
+  return {
+    currentTarget: button,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    target: button,
+  } as Event & {
+    currentTarget: typeof button;
+    defaultPrevented: boolean;
+    preventDefault(): void;
+    target: typeof button;
+  };
 }

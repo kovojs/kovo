@@ -1,9 +1,12 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
+  dialogCancel as _dialogCancel,
   dialogCloseAttributes,
+  dialogCloseClick as _dialogCloseClick,
   dialogContentAttributes,
   dialogRootAttributes,
+  dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -41,15 +44,17 @@ export const GallerySheetDemo = component('gallery-sheet-demo', {
         class="grid gap-2"
         data-gallery-interactive="sheet"
         data-side="right"
-        onKeyDown={() => {
-          state.open = false;
-        }}
+        data-state={state.open ? 'open' : 'closed'}
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-state={state.open ? 'open' : 'closed'}
           onClick={() => {
-            state.open = true;
+            const result = _dialogTriggerClick(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           Open sheet
@@ -58,8 +63,12 @@ export const GallerySheetDemo = component('gallery-sheet-demo', {
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
           data-side="right"
+          data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
           onCancel={() => {
-            state.open = false;
+            const result = _dialogCancel(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           <header class={HEADER_CLASS}>
@@ -73,8 +82,11 @@ export const GallerySheetDemo = component('gallery-sheet-demo', {
           <button
             {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
-              state.open = false;
+              const result = _dialogCloseClick(Object(event), { open: state.open });
+              if (!result?.changed) return;
+              state.open = result.open;
             }}
           >
             Close sheet

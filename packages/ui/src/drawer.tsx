@@ -98,10 +98,12 @@ export const Drawer = component('drawer', {
           aria-describedby={contentAttrs['aria-describedby']}
           aria-labelledby={contentAttrs['aria-labelledby']}
           class={cn(drawerContentClassNames({ side }), props.contentClass)}
+          closedby={contentAttrs.closedby}
           data-state={contentAttrs['data-state']}
           id={contentAttrs.id}
           open={contentAttrs.open}
         >
+          <div aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300" />
           <header class="grid gap-1">
             <h2 class="text-base font-semibold" id={titleId}>
               {props.title}

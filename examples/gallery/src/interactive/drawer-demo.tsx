@@ -1,9 +1,12 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
+  dialogCancel as _dialogCancel,
   dialogCloseAttributes,
+  dialogCloseClick as _dialogCloseClick,
   dialogContentAttributes,
   dialogRootAttributes,
+  dialogTriggerClick as _dialogTriggerClick,
   dialogTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -16,6 +19,7 @@ const TRIGGER_CLASS =
   'inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50';
 const CONTENT_CLASS =
   'fixed z-50 flex flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl inset-x-0 bottom-0 max-h-[85vh] border-t';
+const HANDLE_CLASS = 'mx-auto h-1.5 w-12 rounded-full bg-neutral-300';
 const HEADER_CLASS = 'grid gap-1';
 const TITLE_CLASS = 'text-base font-semibold';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
@@ -41,15 +45,17 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
         class="grid gap-2"
         data-gallery-interactive="drawer"
         data-side="bottom"
-        onKeyDown={() => {
-          state.open = false;
-        }}
+        data-state={state.open ? 'open' : 'closed'}
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-state={state.open ? 'open' : 'closed'}
           onClick={() => {
-            state.open = true;
+            const result = _dialogTriggerClick(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
           Open drawer
@@ -58,23 +64,31 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
           data-side="bottom"
+          data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
           onCancel={() => {
-            state.open = false;
+            const result = _dialogCancel(Object(event), { open: state.open });
+            if (!result?.changed) return;
+            state.open = result.open;
           }}
         >
+          <div aria-hidden="true" class={HANDLE_CLASS} />
           <header class={HEADER_CLASS}>
             <h2 class={TITLE_CLASS} id={titleId}>
               Mobile actions
             </h2>
             <p class={DESCRIPTION_CLASS} id={descriptionId}>
-              Choose a bulk action without leaving the current page.
+              Directional sheet drawer; Vaul drag, snap, and background-scale gestures are not modeled.
             </p>
           </header>
           <button
             {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
-              state.open = false;
+              const result = _dialogCloseClick(Object(event), { open: state.open });
+              if (!result?.changed) return;
+              state.open = result.open;
             }}
           >
             Close drawer

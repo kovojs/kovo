@@ -75,15 +75,22 @@ describe('headless-ui dialog primitive', () => {
       }),
     ).toEqual({
       'aria-describedby': 'cart-description',
-      'aria-labelledby': 'cart-title',
-      'data-state': 'open',
-      id: 'cart-drawer',
-      open: true,
-    });
+        'aria-labelledby': 'cart-title',
+        closedby: 'any',
+        'data-state': 'open',
+        id: 'cart-drawer',
+        open: true,
+      });
     expect(dialogContentAttributes({ contentId: 'cart-drawer', open: false })).toEqual({
+      closedby: 'any',
       'data-state': 'closed',
       id: 'cart-drawer',
       open: false,
+    });
+    expect(
+      dialogContentAttributes({ contentId: 'cart-drawer', dismissible: false, open: true }),
+    ).toMatchObject({
+      closedby: 'closerequest',
     });
 
     expect(dialogCloseAttributes({ contentId: 'cart-drawer', open: true })).toEqual({
@@ -180,6 +187,37 @@ describe('headless-ui dialog primitive', () => {
     expect(openResult).toMatchObject({ changed: true, open: true });
     expect(closeResult).toMatchObject({ changed: true, open: false });
     expect(reasons).toEqual(['trigger-click:true', 'close-click:false']);
+  });
+
+  it('falls back to showModal and requestClose when command invokers are unavailable', () => {
+    const calls: string[] = [];
+    const dialog = {
+      open: false,
+      requestClose() {
+        calls.push('requestClose');
+        this.open = false;
+      },
+      showModal() {
+        calls.push('showModal');
+        this.open = true;
+      },
+    };
+    const ownerDocument = {
+      getElementById(id: string) {
+        return id === 'cart-drawer' ? dialog : undefined;
+      },
+    };
+    const triggerEvent = invokerEvent('show-modal', ownerDocument);
+    const closeEvent = invokerEvent('request-close', ownerDocument);
+
+    const openResult = dialogTriggerClick(triggerEvent, { open: false });
+    const closeResult = dialogCloseClick(closeEvent, { open: true });
+
+    expect(openResult).toMatchObject({ changed: true, open: true });
+    expect(closeResult).toMatchObject({ changed: true, open: false });
+    expect(calls).toEqual(['showModal', 'requestClose']);
+    expect(triggerEvent.defaultPrevented).toBe(true);
+    expect(closeEvent.defaultPrevented).toBe(true);
   });
 
   it('prevents native invoker behavior when disabled or canceled', () => {
@@ -297,4 +335,28 @@ function beforeToggleEvent(
     new Event('beforetoggle', { cancelable }),
     newState === undefined ? {} : { newState },
   );
+}
+
+function invokerEvent(command: string, ownerDocument: { getElementById(id: string): unknown }) {
+  const button = {
+    getAttribute(name: string) {
+      if (name === 'command') return command;
+      if (name === 'commandfor') return 'cart-drawer';
+      return null;
+    },
+    ownerDocument,
+  };
+  return {
+    currentTarget: button,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    target: button,
+  } as Event & {
+    currentTarget: typeof button;
+    defaultPrevented: boolean;
+    preventDefault(): void;
+    target: typeof button;
+  };
 }

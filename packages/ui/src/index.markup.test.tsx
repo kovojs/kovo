@@ -396,14 +396,14 @@ describe('@jiso/ui styled package foundation', () => {
     expect(
       DialogTrigger.definition.render({ children: 'Open', contentId: 'dialog-content' }),
     ).toContain('command="show-modal"');
-    expect(
-      DialogContent.definition.render({
-        children: '<h2 id="dialog-title">Title</h2>',
-        contentId: 'dialog-content',
-        open: true,
-        titleId: 'dialog-title',
-      }),
-    ).toContain('aria-labelledby="dialog-title"');
+    const dialogContent = DialogContent.definition.render({
+      children: '<h2 id="dialog-title">Title</h2>',
+      contentId: 'dialog-content',
+      open: true,
+      titleId: 'dialog-title',
+    });
+    expect(dialogContent).toContain('aria-labelledby="dialog-title"');
+    expect(dialogContent).toContain('closedby="any"');
     expect(DialogClose.definition.render({ contentId: 'dialog-content' })).toContain(
       'command="request-close"',
     );

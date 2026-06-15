@@ -87,13 +87,6 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(alertDialogState).toEqual({ open: false });
     alertDialogState.open = true;
-    clientHandler(alertDialog, 'GalleryAlertDialogDemo$section_keydown')(new Event('keydown'), {
-      params: {},
-      signal,
-      state: alertDialogState,
-    });
-    expect(alertDialogState).toEqual({ open: false });
-    alertDialogState.open = true;
     clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
@@ -333,13 +326,6 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(dialogState).toEqual({ open: true });
     clientHandler(dialog, 'GalleryDialogDemo$dialog_cancel')(new Event('cancel'), {
-      params: {},
-      signal,
-      state: dialogState,
-    });
-    expect(dialogState).toEqual({ open: false });
-    dialogState.open = true;
-    clientHandler(dialog, 'GalleryDialogDemo$section_keydown')(new Event('keydown'), {
       params: {},
       signal,
       state: dialogState,
