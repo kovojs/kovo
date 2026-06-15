@@ -1035,8 +1035,17 @@ These are framework changes the demo rewrites depend on (not just demo edits):
   - Evidence 2026-06-15: closed by the toast slice above. The timer affordance is delegated
     `animationend` from a 5000ms CSS animation, which preserves the loader's event/state-binding
     update path instead of mutating state from a detached `setTimeout`.
-- [ ] _Not doing (locked):_ `progress.ts`/`meter.ts` stay native `<progress>`/`<meter>` (documented
+- [x] _Not doing (locked):_ `progress.ts`/`meter.ts` stay native `<progress>`/`<meter>` (documented
       deviation, demo-only `data-state` derivation fix); no Vaul drag primitive for `drawer`.
+  - Evidence 2026-06-15: the progress and meter Phase 3 entries above document the native
+    `<progress>`/`<meter>` decisions and verify state-bound `data-state`/`aria-valuetext` behavior in
+    `examples/gallery/src/interactive/progress-demo.tsx`,
+    `examples/gallery/src/interactive/meter-demo.tsx`, their generated artifacts, and
+    `examples/gallery/src/interactive-gallery.interactions-b.browser.test.ts`.
+  - Evidence 2026-06-15: the drawer Phase 3 entry and
+    `examples/gallery/src/interactive-gallery.compile.test.ts` document that Vaul drag, snap, and
+    background-scale gestures are not modeled; drawer remains a dialog primitive variant with native
+    close wiring and generated state bindings.
 
 ## Phase 5 — Verification (make the contracts regression-proof)
 
