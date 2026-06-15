@@ -1,18 +1,36 @@
 # Reactive UI: Phase 1 island-local state update plan
 
-Status: **Phase 1 closed; residual SPEC gaps are tracked elsewhere**. Created 2026-06-14;
-compacted 2026-06-15.
+Status: **closed ledger, not an active queue**. Created 2026-06-14; compacted 2026-06-15;
+alignment tightened 2026-06-15.
 
 `SPEC.md` is normative. This plan records the completed Phase 1 implementation of the SPEC §4.8
 same-machinery rule for island-local `state`: a handler that mutates only `ctx.state` now updates
 same-island DOM bindings without hand-authored `getElementById`, `setAttribute`, `textContent`,
 `document`, or `globalThis` escape hatches in the target demo paths.
 
-This is no longer the active implementation queue. Use this file as the verified ledger for the
-reactive substrate; use `plans/fix-ui.md` for remaining primitive/demo migration and
-`plans/compiler-hardening.md` for compiler diagnostics, validation, and hardening gaps.
+Read this file as the verified Phase 1 slice of SPEC §4.8/§4.9, not as a claim that all reactive UI
+or primitive composition work is complete. Use `plans/fix-ui.md` for remaining primitive/demo
+migration and `plans/compiler-hardening.md` for compiler diagnostics, validation, and hardening gaps.
 
-## Phase 1 Acceptance Surface
+## Reader Contract
+
+- [x] **This plan proves the scalar island-local state substrate.**
+  - Evidence 2026-06-15: state-only text/attribute expressions lower to `data-bind` or named derives;
+    modular and inline loaders apply those bindings after a handler mutates `ctx.state`; nested
+    `[fw-state]` scope and native checkbox property parity are covered by runtime tests.
+- [x] **This plan proves the target gallery migration only for `switch`, `toggle`, `disclosure`, and
+      `checkbox`.**
+  - Evidence 2026-06-15: those demos bind ARIA/native/text slots through TSX state expressions and
+    their authored/generated target paths were scanned for DOM escape hatches.
+- [x] **This plan does not prove general primitive composition or all component parity.**
+  - Evidence 2026-06-15: SPEC §4.6 attrs-function/`asChild` merge lowering and remaining
+    per-component rewrites stay open in `plans/fix-ui.md` and `plans/compiler-hardening.md`.
+- [x] **This plan does not prove every SPEC §4.8 state feature.**
+  - Evidence 2026-06-15: state list stamps, full state path validation, and multi-input query+state
+    derives remain outside this Phase 1 scalar binding surface and are tracked below as transferred
+    residuals.
+
+## Closure Boundary
 
 - [x] **Handlers mutate state only for the target demos.**
   - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,
@@ -48,6 +66,11 @@ reactive substrate; use `plans/fix-ui.md` for remaining primitive/demo migration
   - Evidence 2026-06-15: `packages/runtime/src/query-bindings.test.ts` covers optional state paths;
     `packages/compiler/src/state-bindings.test.ts` covers boolean-presence derives returning `""` or
     `null`.
+- [x] **SPEC §4.8 keyed list stamps:** not closed by this plan; no parallel state-list mechanism was
+      introduced.
+  - Evidence 2026-06-15: the Phase 1 implementation is limited to scalar state paths and state-only
+    derives; `plans/compiler-hardening.md` keeps the production keyed template-stamp reconciler open,
+    and any future `data-bind-list="state.items"` work must reuse the single `fw-key` contract.
 - [x] **SPEC §4.9 update coverage:** query/state-dependent DOM positions have coverage facts, and
       unsupported mixed query+state expressions stay FW311 instead of lowering to an unsound
       single-input derive.
@@ -171,6 +194,10 @@ reactive substrate; use `plans/fix-ui.md` for remaining primitive/demo migration
   - Evidence 2026-06-15: `plans/compiler-hardening.md` keeps keyed-list runtime behavior and broader
     FW311 classification open; this plan intentionally leaves multi-input state/query derives out of
     scope until their inputs and client-private state semantics are designed.
+- [x] **State list stamp semantics transferred to the keyed-stamp hardening slice.**
+  - Evidence 2026-06-15: SPEC §4.8 step 3 defines keyed template stamps and SPEC §13.2 requires one
+    `fw-key` identity contract; `plans/compiler-hardening.md` Phase 2 keeps the DOM-backed keyed
+    template-stamp reconciler open, so this plan must not grow a separate state-array reconciler.
 
 ## Closed Risk Checks
 
@@ -194,6 +221,10 @@ reactive substrate; use `plans/fix-ui.md` for remaining primitive/demo migration
   - Evidence 2026-06-15: FW301/FW302/FW311/FW233 and primitive merge diagnostics belong to
     `plans/compiler-hardening.md`; this plan should be reopened only if the Phase 1 substrate itself
     regresses or its evidence is found inaccurate.
+- [x] **Reopen only for inaccurate substrate evidence or a regression in the proved scalar state
+      path.**
+  - Evidence 2026-06-15: all other known gaps have named owners in `plans/fix-ui.md` or
+    `plans/compiler-hardening.md`; reopening this file for them would split the active ledger.
 
 ## Reactive Substrate Checkpoint
 
