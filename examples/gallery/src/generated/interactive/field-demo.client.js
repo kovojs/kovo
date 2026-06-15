@@ -1,74 +1,54 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryFieldDemo$input_input = handler((_event, ctx) => {
-  ctx.state.email = 'ada@jiso.dev';
-  ctx.state.invalid = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const input = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-email-input')
-    : undefined;
-  const error = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-email-error')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="field-email"]')
-    : undefined;
-
-  if (input) {
-    input['value'] = ctx.state.email;
-    Object(input)['setAttribute']?.call(
-      input,
-      'aria-describedby',
-      'gallery-interactive-field-email-description',
-    );
-    Object(input)['removeAttribute']?.call(input, 'aria-invalid');
-    Object(input)['removeAttribute']?.call(input, 'data-invalid');
-  }
-  if (error) error['hidden'] = true;
-  if (output) output['textContent'] = ctx.state.email;
+export const GalleryFieldDemo$input_input = handler((event, ctx) => {
+  const target = Object(event)['target'];
+  const nextEmail = Object(target)['value']?.toString?.() ?? ctx.state.email;
+  const checkValidity = Object(target)['checkValidity'];
+  ctx.state.email = nextEmail;
+  ctx.state.invalid =
+    typeof checkValidity === 'function'
+      ? !checkValidity.call(target)
+      : !/.+@jiso\.dev/.test(nextEmail);
 });
-export const GalleryFieldDemo$select_change = handler((_event, ctx) => {
-  ctx.state.plan = ctx.state.plan === 'team' ? 'enterprise' : 'team';
-  const doc = Reflect['get'](globalThis, 'document');
-  const select = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-plan-select')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="field-plan"]')
-    : undefined;
-
-  if (select) select['value'] = ctx.state.plan;
-  if (output) output['textContent'] = ctx.state.plan;
+export const GalleryFieldDemo$select_change = handler((event, ctx) => {
+  ctx.state.plan = Object(event)['target']?.value?.toString?.() ?? ctx.state.plan;
 });
-export const GalleryFieldDemo$input_click = handler((_event, ctx) => {
-  ctx.state.shippingDisabled = !ctx.state.shippingDisabled;
-  const doc = Reflect['get'](globalThis, 'document');
-  const fieldset = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-fieldset')
-    : undefined;
-  const checkbox = doc
-    ? Object(doc)['querySelector']?.call(doc, 'input[name="gallery-shipping-disabled"]')
-    : undefined;
-
-  if (fieldset) {
-    fieldset['disabled'] = ctx.state.shippingDisabled;
-    if (ctx.state.shippingDisabled) {
-      Object(fieldset)['setAttribute']?.call(fieldset, 'data-disabled', '');
-    } else {
-      Object(fieldset)['removeAttribute']?.call(fieldset, 'data-disabled');
-    }
-  }
-  if (checkbox) checkbox['checked'] = ctx.state.shippingDisabled;
+export const GalleryFieldDemo$input_click = handler((event, ctx) => {
+  const checked = Object(event)['target']?.checked;
+  ctx.state.shippingDisabled = typeof checked === 'boolean' ? checked : !ctx.state.shippingDisabled;
 });
 
+export const GalleryFieldDemo$div_data_invalid_derive = derive(['state'], (state) =>
+  state.invalid ? '' : null,
+);
+export const GalleryFieldDemo$input_aria_describedby_derive = derive(['state'], (state) =>
+  state.invalid
+    ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
+    : 'gallery-interactive-field-email-description',
+);
+export const GalleryFieldDemo$input_aria_invalid_derive = derive(['state'], (state) =>
+  state.invalid ? 'true' : null,
+);
+export const GalleryFieldDemo$input_data_invalid_derive = derive(['state'], (state) =>
+  state.invalid ? '' : null,
+);
 export const GalleryFieldDemo$input_value_derive = derive(['state'], (state) => state.email);
+export const GalleryFieldDemo$p_hidden_derive = derive(['state'], (state) =>
+  !state.invalid ? '' : null,
+);
 export const GalleryFieldDemo$select_value_derive = derive(['state'], (state) => state.plan);
 export const GalleryFieldDemo$option_selected_derive = derive(['state'], (state) =>
   state.plan === 'team' ? '' : null,
 );
 export const GalleryFieldDemo$option_selected_derive_2 = derive(['state'], (state) =>
   state.plan === 'enterprise' ? '' : null,
+);
+export const GalleryFieldDemo$fieldset_data_disabled_derive = derive(['state'], (state) =>
+  state.shippingDisabled ? '' : null,
+);
+export const GalleryFieldDemo$fieldset_disabled_derive = derive(['state'], (state) =>
+  state.shippingDisabled ? '' : null,
 );
 export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state) =>
   state.shippingDisabled ? '' : null,

@@ -496,7 +496,7 @@ describe('compiled interactive gallery demos', () => {
       plan: 'team',
       shippingDisabled: false,
     };
-    clientHandler(field, 'GalleryFieldDemo$input_input')(new Event('input'), {
+    clientHandler(field, 'GalleryFieldDemo$input_input')(inputEvent('ada@jiso.dev'), {
       params: {},
       signal,
       state: fieldState,
@@ -507,7 +507,7 @@ describe('compiled interactive gallery demos', () => {
       plan: 'team',
       shippingDisabled: false,
     });
-    clientHandler(field, 'GalleryFieldDemo$select_change')(new Event('change'), {
+    clientHandler(field, 'GalleryFieldDemo$select_change')(changeEvent('enterprise'), {
       params: {},
       signal,
       state: fieldState,

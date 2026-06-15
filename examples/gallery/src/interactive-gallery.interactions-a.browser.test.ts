@@ -751,6 +751,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(new FormData(form).get('gallery-plan')).toBe('team');
     expect(new FormData(form).get('gallery-seat')).toBe('window');
 
+    email.value = 'ada@jiso.dev';
     email.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -781,9 +782,11 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('ada@jiso.dev');
     });
 
-    required(
+    const nextPlan = required(
       root.querySelector<HTMLSelectElement>('#gallery-interactive-field-plan-select'),
-    ).dispatchEvent(new Event('change', { bubbles: true }));
+    );
+    nextPlan.value = 'enterprise';
+    nextPlan.dispatchEvent(new Event('change', { bubbles: true }));
 
     await vi.waitFor(() => {
       const currentPlan = required(

@@ -63,6 +63,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
         <div
           {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
           class={FIELD_CLASS}
+          data-invalid={state.invalid ? '' : null}
         >
           <label
             {...fieldLabelAttributes({
@@ -86,33 +87,23 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
             type="email"
             class={CONTROL_CLASS}
+            aria-describedby={
+              state.invalid
+                ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
+                : 'gallery-interactive-field-email-description'
+            }
+            aria-invalid={state.invalid ? 'true' : null}
+            data-invalid={state.invalid ? '' : null}
             value={state.email}
             onInput={() => {
-              state.email = 'ada@jiso.dev';
-              state.invalid = false;
-              const doc = Reflect['get'](globalThis, 'document');
-              const input = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-email-input')
-                : undefined;
-              const error = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-email-error')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="field-email"]')
-                : undefined;
-
-              if (input) {
-                input['value'] = state.email;
-                Object(input)['setAttribute']?.call(
-                  input,
-                  'aria-describedby',
-                  'gallery-interactive-field-email-description',
-                );
-                Object(input)['removeAttribute']?.call(input, 'aria-invalid');
-                Object(input)['removeAttribute']?.call(input, 'data-invalid');
-              }
-              if (error) error['hidden'] = true;
-              if (output) output['textContent'] = state.email;
+              const target = Object(event)['target'];
+              const nextEmail = Object(target)['value']?.toString?.() ?? state.email;
+              const checkValidity = Object(target)['checkValidity'];
+              state.email = nextEmail;
+              state.invalid =
+                typeof checkValidity === 'function'
+                  ? !checkValidity.call(target)
+                  : !/.+@jiso\.dev/.test(nextEmail);
             }}
           />
           <p
@@ -130,6 +121,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               visible: state.invalid,
             })}
             class={ERROR_CLASS}
+            hidden={!state.invalid}
           >
             Enter a complete email address.
           </p>
@@ -192,17 +184,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             class={SELECT_CLASS}
             value={state.plan}
             onChange={() => {
-              state.plan = state.plan === 'team' ? 'enterprise' : 'team';
-              const doc = Reflect['get'](globalThis, 'document');
-              const select = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-plan-select')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="field-plan"]')
-                : undefined;
-
-              if (select) select['value'] = state.plan;
-              if (output) output['textContent'] = state.plan;
+              state.plan = Object(event)['target']?.value?.toString?.() ?? state.plan;
             }}
           >
             <option value="team" selected={state.plan === 'team'} class={SELECT_OPTION_CLASS}>
@@ -236,6 +218,8 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             name: 'gallery-shipping',
           })}
           class={FIELDSET_CLASS}
+          data-disabled={state.shippingDisabled ? '' : null}
+          disabled={state.shippingDisabled}
         >
           <legend
             {...fieldsetLegendAttributes({
@@ -251,27 +235,9 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
                 type="checkbox"
                 checked={state.shippingDisabled}
                 onClick={() => {
-                  state.shippingDisabled = !state.shippingDisabled;
-                  const doc = Reflect['get'](globalThis, 'document');
-                  const fieldset = doc
-                    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-fieldset')
-                    : undefined;
-                  const checkbox = doc
-                    ? Object(doc)['querySelector']?.call(
-                        doc,
-                        'input[name="gallery-shipping-disabled"]',
-                      )
-                    : undefined;
-
-                  if (fieldset) {
-                    fieldset['disabled'] = state.shippingDisabled;
-                    if (state.shippingDisabled) {
-                      Object(fieldset)['setAttribute']?.call(fieldset, 'data-disabled', '');
-                    } else {
-                      Object(fieldset)['removeAttribute']?.call(fieldset, 'data-disabled');
-                    }
-                  }
-                  if (checkbox) checkbox['checked'] = state.shippingDisabled;
+                  const checked = Object(event)['target']?.checked;
+                  state.shippingDisabled =
+                    typeof checked === 'boolean' ? checked : !state.shippingDisabled;
                 }}
               />
               Disable shipping group

@@ -513,10 +513,27 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
     @jiso/example-gallery exec tsc --noEmit` passed. Press-and-hold repeat and `Intl` formatting remain
     future enhancements beyond this verified primitive-routing closeout.
-- [ ] **field** [P2]: ARIA/`data-*` wiring is correct, but handlers are one-way scripted transitions
+- [x] **field** [P2]: ARIA/`data-*` wiring is correct, but handlers are one-way scripted transitions
       (email always becomes valid; plan `<select>` toggles instead of reading the chosen value) and
       `aria-describedby` is only recomputed valid→invalid one direction. Drive from real constraint
       validation via `fieldControlAttributes`; read `event.target.value` for the select.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/field-demo.tsx` now reads the email input's
+    actual `event.target.value`, uses native `checkValidity()` when available, reads the select's
+    actual selected value, and reads the shipping toggle's native checked state. Email
+    `aria-describedby`, `aria-invalid`, `data-invalid`, error `hidden`, input/select `value`, fieldset
+    `disabled`/`data-disabled`, shipping toggle `checked`, and output text are state-bound TSX instead
+    of imperative DOM writes.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/field-demo.client.js` mutates only `ctx.state` from
+    event values and emits derives for the field validity/value/disabled bindings; `rg
+    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
+    generated field files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t field`, `pnpm --filter
+    @jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter @jiso/example-gallery exec node
+    scripts/emit-interactive-gallery.mjs --check` passed.
 
 ### Overlays — hover
 

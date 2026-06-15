@@ -20,6 +20,7 @@ describe('compiled interactive gallery demos', () => {
     const drawer = readGenerated('drawer-demo.tsx');
     const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
     const field = readGenerated('field-demo.tsx');
+    const fieldClient = readGenerated('field-demo.client.js');
     const hoverCard = readGenerated('hover-card-demo.tsx');
     const menubar = readGenerated('menubar-demo.tsx');
     const meter = readGenerated('meter-demo.tsx');
@@ -254,6 +255,16 @@ describe('compiled interactive gallery demos', () => {
     expect(field).toContain('fieldsetRootAttributes({');
     expect(field).toContain("name: 'gallery-shipping'");
     expect(field).toContain('name="gallery-seat"');
+    expect(field).toContain('data-bind:aria-describedby=');
+    expect(field).toContain('data-bind:aria-invalid=');
+    expect(field).toContain('data-bind:data-invalid=');
+    expect(field).toContain('data-bind:hidden=');
+    expect(field).toContain('data-bind:value=');
+    expect(field).toContain('data-bind:disabled=');
+    expect(field).toContain('data-bind:checked=');
+    expect(fieldClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(field).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryFieldDemo\$input_input"/,
     );
