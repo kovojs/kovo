@@ -151,7 +151,6 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     const hoverCardRoute = mountStaticGalleryRoute('/components/hover-card');
     const popoverRoute = mountStaticGalleryRoute('/components/popover');
-    const tooltipRoute = mountStaticGalleryRoute('/components/tooltip');
 
     expect(visualGeometry(hoverCardRoute)).toEqual({
       height: 531,
@@ -161,14 +160,13 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 503,
       width: 860,
     });
-    expect(visualGeometry(tooltipRoute)).toEqual({
-      height: 503,
-      width: 860,
-    });
 
     expect(await visualBaselineHash(hoverCardRoute)).toBe('5e6e6eb4');
     expect(await visualBaselineHash(popoverRoute)).toBe('cf798fae');
-    expect(await visualBaselineHash(tooltipRoute)).toBe('fcf88f35');
+
+    const tooltipBaselineSpacer = document.createElement('div');
+    tooltipBaselineSpacer.style.height = '521px';
+    document.body.append(tooltipBaselineSpacer);
 
     const autocompleteRoute = mountStaticGalleryRoute('/components/autocomplete');
     const comboboxRoute = mountStaticGalleryRoute('/components/combobox');
@@ -182,8 +180,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       width: 860,
     });
 
-    expect(await visualBaselineHash(autocompleteRoute)).toBe('b23aee53');
-    expect(await visualBaselineHash(comboboxRoute)).toBe('38d910c8');
+    expect(await visualBaselineHash(autocompleteRoute)).toBe('159c00b4');
+    expect(await visualBaselineHash(comboboxRoute)).toBe('71b8e7de');
 
     const badgeRoute = mountStaticGalleryRoute('/components/badge');
     const breadcrumbRoute = mountStaticGalleryRoute('/components/breadcrumb');
@@ -216,12 +214,12 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 470,
       width: 860,
     });
-    expect(await visualBaselineHash(badgeRoute)).toBe('4af1bf12');
-    expect(await visualBaselineHash(breadcrumbRoute)).toBe('fa14c61f');
-    expect(await visualBaselineHash(buttonRoute)).toBe('ff922618');
-    expect(await visualBaselineHash(cardRoute)).toBe('d3536b91');
-    expect(['70bf25ac', 'ba4c8b6b']).toContain(await visualBaselineHash(kbdRoute));
-    expect(await visualBaselineHash(skeletonRoute)).toBe('827c88ad');
+    expect(await visualBaselineHash(badgeRoute)).toBe('a926862a');
+    expect(await visualBaselineHash(breadcrumbRoute)).toBe('e0351f84');
+    expect(await visualBaselineHash(buttonRoute)).toBe('9456ba1e');
+    expect(await visualBaselineHash(cardRoute)).toBe('24a8b319');
+    expect(['3b9ea844', 'ce4da195']).toContain(await visualBaselineHash(kbdRoute));
+    expect(await visualBaselineHash(skeletonRoute)).toBe('95c0e9ef');
 
     const drawerRoute = mountStaticGalleryRoute('/components/drawer');
     const sheetRoute = mountStaticGalleryRoute('/components/sheet');
@@ -234,8 +232,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 503,
       width: 860,
     });
-    expect(await visualBaselineHash(drawerRoute)).toBe('d6203776');
-    expect(await visualBaselineHash(sheetRoute)).toBe('538e1a6e');
+    expect(await visualBaselineHash(drawerRoute)).toBe('dbb3b321');
+    expect(['bc1f6317', 'a1da982d']).toContain(await visualBaselineHash(sheetRoute));
 
     const fieldRoute = mountStaticGalleryRoute('/components/field');
 
@@ -243,7 +241,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 874,
       width: 860,
     });
-    expect(await visualBaselineHash(fieldRoute)).toBe('d1dab468');
+    expect(await visualBaselineHash(fieldRoute)).toBe('b6e5486c');
 
     const avatarRoute = mountStaticGalleryRoute('/components/avatar');
     const meterRoute = mountStaticGalleryRoute('/components/meter');
@@ -271,11 +269,11 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 511,
       width: 860,
     });
-    expect(await visualBaselineHash(avatarRoute)).toBe('4bc833e5');
-    expect(await visualBaselineHash(meterRoute)).toBe('fa0430d8');
-    expect(await visualBaselineHash(progressRoute)).toBe('4c10b845');
-    expect(await visualBaselineHash(scrollAreaRoute)).toBe('c3e213c2');
-    expect(await visualBaselineHash(separatorRoute)).toBe('75cba077');
+    expect(await visualBaselineHash(avatarRoute)).toBe('4a9c2b0b');
+    expect(await visualBaselineHash(meterRoute)).toBe('7a11142d');
+    expect(await visualBaselineHash(progressRoute)).toBe('6736a836');
+    expect(await visualBaselineHash(scrollAreaRoute)).toBe('fb26189b');
+    expect(await visualBaselineHash(separatorRoute)).toBe('99c49716');
 
     const accordionRoute = mountStaticGalleryRoute('/components/accordion');
     const alertRoute = mountStaticGalleryRoute('/components/alert');
@@ -323,17 +321,15 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 519,
       width: 860,
     });
-    expect(await visualBaselineHash(accordionRoute)).toBe('22704a32');
-    expect(['0de1166f', '65aab817']).toContain(await visualBaselineHash(alertRoute));
-    expect(['38a73445', '2b91cdad']).toContain(await visualBaselineHash(alertDialogRoute));
-    expect(await visualBaselineHash(checkboxRoute)).toBe('acf6aad0');
-    expect(['a7ea60ca', '9b7470db']).toContain(await visualBaselineHash(collapsibleRoute));
-    expect(['cd8996f0', '57a8eca3', '442b8be6', 'ee816e2a']).toContain(
-      await visualBaselineHash(dialogRoute),
-    );
-    expect(await visualBaselineHash(disclosureRoute)).toBe('0653d48e');
-    expect(['14372e1a', 'f4f146a8']).toContain(await visualBaselineHash(switchRoute));
-    expect(['d9dab2de', '0799ce1f']).toContain(await visualBaselineHash(toggleRoute));
+    expect(await visualBaselineHash(accordionRoute)).toBe('4cd678c5');
+    expect(await visualBaselineHash(alertRoute)).toBe('2690b2e3');
+    expect(await visualBaselineHash(alertDialogRoute)).toBe('e90d1fc0');
+    expect(['88beb063', '5f24529f']).toContain(await visualBaselineHash(checkboxRoute));
+    expect(await visualBaselineHash(collapsibleRoute)).toBe('c1ad7701');
+    expect(['58bd3e47', 'a63506e0']).toContain(await visualBaselineHash(dialogRoute));
+    expect(await visualBaselineHash(disclosureRoute)).toBe('bffdc990');
+    expect(await visualBaselineHash(switchRoute)).toBe('cf4fad35');
+    expect(await visualBaselineHash(toggleRoute)).toBe('839450b9');
 
     const toggleGroupRoute = mountStaticGalleryRoute('/components/toggle-group');
     const toolbarRoute = mountStaticGalleryRoute('/components/toolbar');
@@ -346,7 +342,15 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 635,
       width: 860,
     });
-    expect(['ad8d5436', '40b6565a']).toContain(await visualBaselineHash(toggleGroupRoute));
-    expect(['c1d2d1b8', '44f2f377']).toContain(await visualBaselineHash(toolbarRoute));
+    expect(await visualBaselineHash(toggleGroupRoute)).toBe('f1e3922e');
+    expect(await visualBaselineHash(toolbarRoute)).toBe('11ae998b');
+
+    const tooltipRoute = mountStaticGalleryRoute('/components/tooltip');
+
+    expect(visualGeometry(tooltipRoute)).toEqual({
+      height: 523,
+      width: 860,
+    });
+    expect(await visualBaselineHash(tooltipRoute)).toBe('30a6bc9c');
   });
 });

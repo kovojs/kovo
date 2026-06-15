@@ -22,6 +22,7 @@ describe('compiled interactive gallery demos', () => {
     const field = readGenerated('field-demo.tsx');
     const fieldClient = readGenerated('field-demo.client.js');
     const hoverCard = readGenerated('hover-card-demo.tsx');
+    const hoverCardClient = readGenerated('hover-card-demo.client.js');
     const menubar = readGenerated('menubar-demo.tsx');
     const meter = readGenerated('meter-demo.tsx');
     const navigationMenu = readGenerated('navigation-menu-demo.tsx');
@@ -279,8 +280,17 @@ describe('compiled interactive gallery demos', () => {
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
     expect(hoverCard).toContain('fw-state=\'{"open":false}\'');
     expect(hoverCard).toContain('hoverCardTriggerAttributes({ contentId, open: state.open })');
+    expect(hoverCard).toContain('hoverCardContentPointerEnter as _hoverCardContentPointerEnter');
+    expect(hoverCard).toContain('data-bind:data-state=');
+    expect(hoverCard).toContain('data-bind:hidden=');
     expect(hoverCard).not.toContain('aria-controls');
     expect(hoverCard).not.toContain('aria-expanded');
+    expect(hoverCardClient).toContain('hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter');
+    expect(hoverCardClient).toContain('hoverCardContentPointerEnter as _hoverCardContentPointerEnter');
+    expect(hoverCardClient).toContain('setTimeout');
+    expect(hoverCardClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(hoverCard).toMatch(
       /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js\?v=[0-9a-f]{8}#GalleryHoverCardDemo\$a_focus"/,
     );

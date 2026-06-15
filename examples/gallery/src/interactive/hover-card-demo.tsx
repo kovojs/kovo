@@ -2,8 +2,15 @@
 import { component } from '@jiso/core';
 import {
   hoverCardContentAttributes,
+  hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
+  hoverCardContentPointerLeave as _hoverCardContentPointerLeave,
+  hoverCardEscapeKeyDown as _hoverCardEscapeKeyDown,
   hoverCardRootAttributes,
+  hoverCardTriggerBlur as _hoverCardTriggerBlur,
+  hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerAttributes,
+  hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
+  hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/hover-card.tsx)
@@ -32,132 +39,41 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
         {...hoverCardRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="hover-card"
+        data-state={state.open ? 'open' : 'closed'}
       >
         <a
           {...hoverCardTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
           href="#hover-card-demo"
           onBlur={() => {
-            state.open = false;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-hover-card]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-            }
-            if (content) {
-              Object(content)['hidePopover']?.call(content);
-              content['hidden'] = true;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-            }
-            if (output) output['textContent'] = 'closed';
+            const result = _hoverCardTriggerBlur(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onFocus={() => {
-            state.open = true;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-hover-card]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-            }
-            if (content) {
-              content['hidden'] = false;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-              Object(content)['showPopover']?.call(content);
-            }
-            if (output) output['textContent'] = 'open';
+            const result = _hoverCardTriggerFocus(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onKeyDown={() => {
-            if (!event || Reflect['get'](event, 'key') !== 'Escape') return;
-
-            state.open = false;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = Reflect['get'](event, 'target');
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-hover-card]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-            }
-            if (content) {
-              Object(content)['hidePopover']?.call(content);
-              content['hidden'] = true;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-            }
-            if (output) output['textContent'] = 'closed';
+            const result = _hoverCardEscapeKeyDown(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onPointerEnter={() => {
-            state.open = true;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-hover-card]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-            }
-            if (content) {
-              content['hidden'] = false;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-              Object(content)['showPopover']?.call(content);
-            }
-            if (output) output['textContent'] = 'open';
+            const result = _hoverCardTriggerPointerEnter(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onPointerLeave={() => {
-            state.open = false;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-hover-card]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-            }
-            if (content) {
-              Object(content)['hidePopover']?.call(content);
-              content['hidden'] = true;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-            }
-            if (output) output['textContent'] = 'closed';
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                const result = _hoverCardTriggerPointerLeave(Object(event), { open: state.open });
+                if (result) state.open = result.open;
+                resolve(undefined);
+              }, 150);
+            });
           }}
         >
           Ada Lovelace
@@ -165,6 +81,18 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
         <aside
           {...hoverCardContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          hidden={!state.open}
+          onPointerEnter={() => {
+            const result = _hoverCardContentPointerEnter(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
+          }}
+          onPointerLeave={() => {
+            const result = _hoverCardContentPointerLeave(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
+          }}
         >
           First programmer and analytical engine collaborator.
         </aside>

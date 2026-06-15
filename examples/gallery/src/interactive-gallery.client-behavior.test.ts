@@ -9,7 +9,7 @@ import {
 } from './interactive-gallery-harness.js';
 
 describe('compiled interactive gallery demos', () => {
-  it('executes generated client behavior for the stateful demos', () => {
+  it('executes generated client behavior for the stateful demos', async () => {
     const accordion = evaluateClientModule('accordion-demo.client.js');
     const alertDialog = evaluateClientModule('alert-dialog-demo.client.js');
     const autocomplete = evaluateClientModule('autocomplete-demo.client.js');
@@ -372,6 +372,34 @@ describe('compiled interactive gallery demos', () => {
       state: hoverCardState,
     });
     expect(hoverCardState).toEqual({ open: true });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerenter')(
+      new Event('pointerenter'),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
+    expect(hoverCardState).toEqual({ open: true });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerleave')(
+      new Event('pointerleave'),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
+    expect(hoverCardState).toEqual({ open: false });
+    hoverCardState.open = true;
+    await clientHandler(hoverCard, 'GalleryHoverCardDemo$a_pointerleave')(
+      new Event('pointerleave'),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
+    expect(hoverCardState).toEqual({ open: false });
 
     const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
     clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(new Event('keydown'), {

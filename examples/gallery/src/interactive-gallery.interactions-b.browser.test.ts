@@ -1294,7 +1294,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('shows and hides a generated hover-card through browser-visible popover state', async () => {
+  it('shows and hides a generated hover-card through browser-visible hidden state', async () => {
     const root = mountInteractiveDemo(GalleryHoverCardDemo);
     const trigger = required(root.querySelector<HTMLAnchorElement>('[jiso-hover-card]'));
     const content = required(root.querySelector<HTMLElement>('#gallery-hover-card-content'));
@@ -1324,11 +1324,22 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(trigger.getAttribute('aria-expanded')).toBeNull();
       expect(content.hidden).toBe(false);
       expect(content.getAttribute('data-state')).toBe('open');
-      expect(content.matches(':popover-open')).toBe(true);
+      expect(content.matches(':popover-open')).toBe(false);
       expect(output.textContent).toBe('open');
     });
 
     trigger.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+    content.dispatchEvent(new Event('pointerenter', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(trigger.getAttribute('aria-expanded')).toBeNull();
+      expect(content.hidden).toBe(false);
+      expect(content.getAttribute('data-state')).toBe('open');
+      expect(output.textContent).toBe('open');
+    });
+
+    content.dispatchEvent(new Event('pointerleave', { bubbles: true }));
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
@@ -1343,7 +1354,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
       expect(content.hidden).toBe(false);
-      expect(content.matches(':popover-open')).toBe(true);
+      expect(content.matches(':popover-open')).toBe(false);
     });
 
     await userEvent.keyboard('{Escape}');

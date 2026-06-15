@@ -569,21 +569,34 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, `pnpm --filter @jiso/ui exec vitest run
     src/index.markup.test.tsx`, `pnpm --filter @jiso/ui exec tsc --noEmit`, and `git diff --check`
     passed.
-- [ ] **hover-card** [P0 hover + P1 ARIA]: same hover gap; additionally the trigger exposes
+- [x] **hover-card** [P0 hover + P1 ARIA]: same hover gap; additionally the trigger exposes
       `aria-expanded`/`aria-controls`, but Radix/Base UI do **not** treat a hover card as a disclosure —
       drop them from `hoverCardTriggerAttributes`. Wire the existing `hoverCardContentPointerEnter/Leave`
       so the card is hoverable; add a close-delay grace period.
-  - Evidence 2026-06-15: the P1 ARIA divergence is closed: `hoverCardTriggerAttributes` no longer
-    emits `aria-expanded`/`aria-controls`, `examples/gallery/src/interactive/hover-card-demo.tsx`
-    no longer writes those attributes imperatively, regenerated hover-card artifacts contain neither
-    attribute, and the browser hover-card test asserts they remain absent through pointer/focus/Escape
-    interactions. The P0 hoverability/delay work remains open, so this checkbox stays open.
-  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/demo-fixtures.test.ts src/behavior-contracts.test.ts` still fails outside the tooltip slice:
-    `/components/hover-card` rendered HTML omits `aria-controls` while the stale static visual fixture
-    and behavior-contract snippet still expect it. Keep the hover-card item open until that fixture/contract
-    is reconciled with the P1 ARIA decision and the remaining hoverability/delay work.
+  - Evidence 2026-06-15: `hoverCardTriggerAttributes` no longer emits `aria-expanded`/`aria-controls`,
+    the static hover-card behavior contract and visual fixture were reconciled to that model decision, and
+    `examples/gallery/src/interactive/hover-card-demo.tsx` no longer writes those attributes imperatively.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/hover-card-demo.tsx` now calls
+    `_hoverCardTriggerPointerEnter`, `_hoverCardTriggerPointerLeave`, `_hoverCardTriggerFocus`,
+    `_hoverCardTriggerBlur`, `_hoverCardEscapeKeyDown`, `_hoverCardContentPointerEnter`, and
+    `_hoverCardContentPointerLeave`; trigger leave returns a 150ms Promise-delayed close, content
+    pointer-enter keeps the card open, and content pointer-leave closes it.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/hover-card-demo.client.js` imports the hover-card
+    primitive reducers, mutates only `ctx.state.open`, emits derives for root/trigger/content
+    `data-state`, content `hidden`, and output text, and contains no `Reflect`, `document`,
+    `getElementById`, `setAttribute`, `showPopover`, or `hidePopover` escape hatches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/hover-card.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t "hover-card|tooltip"`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts -t "stable visual baselines"`, `pnpm --filter
+    @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter
+    @jiso/example-gallery exec tsc --noEmit`, the authored/generated hover-card and tooltip forbidden-DOM
+    `rg` scan, and `git diff --check` passed.
 
 ### Overlays — native dialog family (open/close work via native `<dialog command>`; gaps are dismissal/state/fallback)
 

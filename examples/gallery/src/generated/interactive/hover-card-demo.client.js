@@ -1,119 +1,68 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryHoverCardDemo$a_blur = handler((event, ctx) => {
-  ctx.state.open = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-hover-card]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-    : undefined;
+import {
+  hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
+  hoverCardContentPointerLeave as _hoverCardContentPointerLeave,
+  hoverCardEscapeKeyDown as _hoverCardEscapeKeyDown,
+  hoverCardTriggerBlur as _hoverCardTriggerBlur,
+  hoverCardTriggerFocus as _hoverCardTriggerFocus,
+  hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
+  hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
+} from '@jiso/headless-ui/primitives';
 
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-  }
-  if (content) {
-    Object(content)['hidePopover']?.call(content);
-    content['hidden'] = true;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-  }
-  if (output) output['textContent'] = 'closed';
+export const GalleryHoverCardDemo$a_blur = handler((event, ctx) => {
+  const result = _hoverCardTriggerBlur(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryHoverCardDemo$a_focus = handler((event, ctx) => {
-  ctx.state.open = true;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-hover-card]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-  }
-  if (content) {
-    content['hidden'] = false;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-    Object(content)['showPopover']?.call(content);
-  }
-  if (output) output['textContent'] = 'open';
+  const result = _hoverCardTriggerFocus(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryHoverCardDemo$a_keydown = handler((event, ctx) => {
-  if (!event || Reflect['get'](event, 'key') !== 'Escape') return;
-
-  ctx.state.open = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = Reflect['get'](event, 'target');
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-hover-card]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-  }
-  if (content) {
-    Object(content)['hidePopover']?.call(content);
-    content['hidden'] = true;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-  }
-  if (output) output['textContent'] = 'closed';
+  const result = _hoverCardEscapeKeyDown(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryHoverCardDemo$a_pointerenter = handler((event, ctx) => {
-  ctx.state.open = true;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-hover-card]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-  }
-  if (content) {
-    content['hidden'] = false;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-    Object(content)['showPopover']?.call(content);
-  }
-  if (output) output['textContent'] = 'open';
+  const result = _hoverCardTriggerPointerEnter(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryHoverCardDemo$a_pointerleave = handler((event, ctx) => {
-  ctx.state.open = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-hover-card]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-hover-card-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="hover-card-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-  }
-  if (content) {
-    Object(content)['hidePopover']?.call(content);
-    content['hidden'] = true;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-  }
-  if (output) output['textContent'] = 'closed';
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const result = _hoverCardTriggerPointerLeave(Object(event), { open: ctx.state.open });
+      if (result) ctx.state.open = result.open;
+      resolve(undefined);
+    }, 150);
+  });
+});
+export const GalleryHoverCardDemo$aside_pointerenter = handler((event, ctx) => {
+  const result = _hoverCardContentPointerEnter(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
+});
+export const GalleryHoverCardDemo$aside_pointerleave = handler((event, ctx) => {
+  const result = _hoverCardContentPointerLeave(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 
+export const GalleryHoverCardDemo$section_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryHoverCardDemo$a_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryHoverCardDemo$aside_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryHoverCardDemo$aside_hidden_derive = derive(['state'], (state) =>
+  !state.open ? '' : null,
+);
 export const GalleryHoverCardDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );

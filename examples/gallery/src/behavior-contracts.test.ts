@@ -403,7 +403,6 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/hover-card': [
     'href="/team/ada"',
     'jiso-hover-card="gallery-hover-card-content"',
-    'aria-controls="gallery-hover-card-content"',
     'popover="manual"',
     'id="gallery-hover-card-content"',
   ],
