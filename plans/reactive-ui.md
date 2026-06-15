@@ -1,11 +1,32 @@
-# Reactive UI: island-local state -> DOM update plan
+# Reactive UI: Phase 1 island-local state update plan
 
-Status: **done**. Created 2026-06-14; compacted 2026-06-15.
+Status: **Phase 1 closed; residual SPEC gaps are tracked elsewhere**. Created 2026-06-14;
+compacted 2026-06-15.
 
-`SPEC.md` is normative. This plan records the completed Phase 1 implementation of SPEC §4.8 for
-island-local `state`: a handler that mutates only `ctx.state` now updates same-island DOM bindings
-without hand-authored `getElementById`, `setAttribute`, `textContent`, `document`, or `globalThis`
-escape hatches in the target demo paths.
+`SPEC.md` is normative. This plan records the completed Phase 1 implementation of the SPEC §4.8
+same-machinery rule for island-local `state`: a handler that mutates only `ctx.state` now updates
+same-island DOM bindings without hand-authored `getElementById`, `setAttribute`, `textContent`,
+`document`, or `globalThis` escape hatches in the target demo paths.
+
+This is no longer the active implementation queue. Use this file as the verified ledger for the
+reactive substrate; use `plans/fix-ui.md` for remaining primitive/demo migration and
+`plans/compiler-hardening.md` for compiler diagnostics, validation, and hardening gaps.
+
+## Phase 1 Acceptance Surface
+
+- [x] **Handlers mutate state only for the target demos.**
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,
+    disclosure-demo,checkbox-demo}.tsx` express the visible ARIA/native/text slots through state-bound
+    TSX attributes, with generated client modules mutating `ctx.state`.
+- [x] **The runtime update path is DOM-described, not signal-graph driven.**
+  - Evidence 2026-06-15: modular and inline loaders walk `data-bind`/`data-bind:<attr>` attributes
+    under the nearest `[fw-state]` host after delegated handlers commit `fw-state`.
+- [x] **The work does not establish general primitive composition.**
+  - Evidence 2026-06-15: SPEC §4.6 attrs-function/`asChild` merge lowering remains open in
+    `plans/compiler-hardening.md`, and per-component primitive rewrites remain in `plans/fix-ui.md`.
+- [x] **The work does not claim complete state-binding validation.**
+  - Evidence 2026-06-15: `plans/compiler-hardening.md` keeps FW302 validation of `state.*` paths
+    against the declared state shape open, plus FW301 initializer-dataflow hardening.
 
 ## SPEC Alignment
 
@@ -130,15 +151,28 @@ escape hatches in the target demo paths.
   - Evidence 2026-06-15: `plans/fix-ui.md` keeps the Phase 2 primitive-owned attribute/chaining work
     open, including avoiding long-term direct overrides of primitive-owned ARIA/`data-state` slots per
     SPEC §4.6 FW232.
+- [x] **Primitive composition merge lowering transferred to `plans/compiler-hardening.md`.**
+  - Evidence 2026-06-15: `plans/compiler-hardening.md` keeps SPEC §4.6 merge lowering open:
+    attrs-function/`asChild` lowering, `on:*` chaining, FW231 conflicts, FW232 overrides, FW233
+    binding conflicts, `fw-deps` union, and `fw-c`/`fw-state` collision handling.
 - [x] **Per-component demo cleanups transferred to `plans/fix-ui.md`.**
   - Evidence 2026-06-15: `plans/fix-ui.md` tracks remaining component-family work after the reactive
     substrate was completed.
+- [x] **State binding path validation transferred to `plans/compiler-hardening.md`.**
+  - Evidence 2026-06-15: `plans/compiler-hardening.md` keeps FW302 validation of `state.*` paths
+    against the declared state shape open, so this Phase 1 ledger must not be read as complete SPEC
+    §4.8 typed-path conformance.
+- [x] **Local-state privacy lint hardening transferred to `plans/compiler-hardening.md`.**
+  - Evidence 2026-06-15: `plans/compiler-hardening.md` keeps FW301 initializer-dataflow validation
+    open, so this Phase 1 ledger proves DOM reactivity but not the full SPEC §4.1 server-fact privacy
+    rule.
 - [x] **Compiler/runtime hardening beyond scalar state transferred to `plans/compiler-hardening.md`
       or future SPEC work.**
-  - Evidence 2026-06-15: this plan intentionally leaves multi-input derives and state list stamps out
-    of scope because SPEC §4.8 does not yet define their client-private state semantics.
+  - Evidence 2026-06-15: `plans/compiler-hardening.md` keeps keyed-list runtime behavior and broader
+    FW311 classification open; this plan intentionally leaves multi-input state/query derives out of
+    scope until their inputs and client-private state semantics are designed.
 
-## Current Risks
+## Closed Risk Checks
 
 - [x] **Inline loader budget was proven for Phase 1.**
   - Evidence 2026-06-15: `pnpm --filter @jiso/runtime check:inline-loader` passed after state binding
@@ -151,7 +185,17 @@ escape hatches in the target demo paths.
   - Evidence 2026-06-15: FW311 coverage tests assert mixed expressions are reported instead of
     lowered unsafely.
 
-## Latest Checkpoint
+## Reopen Criteria
+
+- [x] **Do not reopen this plan for component-family rewrites.**
+  - Evidence 2026-06-15: per-family primitive reducer adoption, browser behavior, and axe conformance
+    belong to `plans/fix-ui.md` because they exercise SPEC §4.6 and §12.1 on top of this substrate.
+- [x] **Do not reopen this plan for compiler validation hardening.**
+  - Evidence 2026-06-15: FW301/FW302/FW311/FW233 and primitive merge diagnostics belong to
+    `plans/compiler-hardening.md`; this plan should be reopened only if the Phase 1 substrate itself
+    regresses or its evidence is found inaccurate.
+
+## Reactive Substrate Checkpoint
 
 - [x] Commit `89b3549e` (`Hydrate checkbox indeterminate state`) closed the last reactive substrate
       gap needed by the checkbox target demo.
