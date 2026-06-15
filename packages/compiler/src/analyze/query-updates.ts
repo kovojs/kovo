@@ -359,18 +359,17 @@ function jsxQueryExpressionPaths(
   knownQueries: ReadonlySet<string>,
 ): QueryPathExpressionFact[] {
   return jsxExpressions(model)
-    .map((expression) => {
-      const path = expression.solePropertyAccessPath ?? null;
-      return path === null
-        ? null
-        : {
-            end: expression.end,
-            path,
-            start: expression.start,
-          };
-    })
-    .filter((expression): expression is QueryPathExpressionFact => expression !== null)
-    .filter((expression) => queryPathUsesKnownQuery(expression.path, knownQueries));
+    .filter((expression) => !isJsxEventAttributeExpression(expression, model))
+    .flatMap((expression) => {
+      const queryPaths = [...new Set(expression.propertyAccesses.map((path) => path.path))].filter(
+        (path) => queryPathUsesKnownQuery(path, knownQueries),
+      );
+      return queryPaths.map((path) => ({
+        end: expression.end,
+        path,
+        start: expression.start,
+      }));
+    });
 }
 
 function jsxStateExpressionPaths(model: ComponentModuleModel): QueryPathExpressionFact[] {

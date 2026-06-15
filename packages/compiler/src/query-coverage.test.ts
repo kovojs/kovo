@@ -317,6 +317,39 @@ export const CartBadge = component('cart-badge', {
     });
   });
 
+  it('reports FW311 for compound query expressions in lowerer-skipped positions', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <strong className={cart.count > 5 ? 'full' : 'empty'}>Cart</strong>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'CartBadge',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'FW311',
+        message:
+          'Query/state-dependent DOM position has no update status. CartBadge cart.count expression',
+      }),
+    );
+  });
+
   it('reports FW311 positions in author coordinates after navigation and derive lowerings', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (3 / 32 findings closed)
+**Status:** open (4 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -63,8 +63,15 @@ packages/runtime/src/query-bindings.browser.test.ts`, `pnpm --filter @jiso/runti
 
 Localized to `analyze/query-updates.ts`, `lower/inline-derives.ts`, `lower/view-transitions.ts`; unblocks authors immediately.
 
-- [ ] **Classify every query-dependent position, including compound expressions** — `packages/compiler/src/analyze/query-updates.ts:186` (SPEC §4.9). `jsxQueryExpressionPaths` emits a coverage fact only for a bare `solePropertyAccessPath`; enumerate **all** query property-access reads (mirror `jsxStateExpressionPaths`) so a read inside a ternary/template/binary in a lowerer-skipped position (e.g. `className={cart.x > 5 ? …}`) reaches the UNHANDLED → FW311 fallback instead of vanishing from the proof.
+- [x] **Classify every query-dependent position, including compound expressions** — `packages/compiler/src/analyze/query-updates.ts:186` (SPEC §4.9). `jsxQueryExpressionPaths` emits a coverage fact only for a bare `solePropertyAccessPath`; enumerate **all** query property-access reads (mirror `jsxStateExpressionPaths`) so a read inside a ternary/template/binary in a lowerer-skipped position (e.g. `className={cart.x > 5 ? …}`) reaches the UNHANDLED → FW311 fallback instead of vanishing from the proof.
   - Done = FW311 fires for `className={cart.x > 5 ? 'a':'b'}`. Prove: `pnpm test query-coverage`
+  - Evidence 2026-06-15: `packages/compiler/src/analyze/query-updates.ts` now mirrors state
+    coverage by enumerating every parsed query property access in non-handler JSX expressions instead
+    of only `solePropertyAccessPath`.
+  - Evidence 2026-06-15: `packages/compiler/src/query-coverage.test.ts` covers
+    `className={cart.count > 5 ? 'full' : 'empty'}` reaching UNHANDLED coverage and FW311.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/query-coverage.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
 - [ ] **Produce the `fragment` coverage status** — `packages/compiler/src/analyze/query-updates.ts:122`, `validate/component-contracts.ts:191` (SPEC §4.9 status table). Add a `fragment` branch (gated on `fragmentTarget: true`, mirroring the `isomorphic` branch) before the UNHANDLED sweep so query positions inside a fragment target are covered (1 RTT, declared) instead of emitting a spurious build-blocking FW311. Restrict to **query** paths — state reads still fall to UNHANDLED.
   - Done = a `fragmentTarget: true` component with a query read reports `status:'fragment'` and no FW311; existing fragment-target tests stop wrapping reads in `renderOnce(...)` to dodge it. Prove: `pnpm test query-coverage fragment-targets`
