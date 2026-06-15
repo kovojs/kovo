@@ -51,6 +51,7 @@ describe('compileComponentModule', () => {
       'CartBadge$button_click',
     );
     expect(server?.source).toContain('data-p-id="{item.id}"');
+    expect(result.loweredSource).toContain('data-p-id="{item.id}"');
     expect(registry?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
@@ -112,6 +113,7 @@ export const CartBadge = component('cart-badge', {
     expect(registry?.source).toContain(
       "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
     );
+    expect(result.loweredSource).toContain('export const CartBadge = component');
     expect(result.renderEquivalenceChecks).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();

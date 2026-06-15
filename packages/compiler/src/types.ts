@@ -76,6 +76,7 @@ export interface CompileResult {
   diagnostics: readonly CompilerDiagnostic[];
   files: readonly EmittedFile[];
   handlerExports: readonly string[];
+  loweredSource: string | null;
   platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
@@ -174,6 +175,7 @@ export function createEmptyCompileResult(): CompileResult {
     diagnostics: [],
     files: [],
     handlerExports: [],
+    loweredSource: null,
     platformSubstitutions: [],
     queryUpdatePlans: [],
     renderEquivalenceChecks: [],

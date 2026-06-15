@@ -231,7 +231,13 @@ export const CartBadge = component('cart-badge', {
   state: () => ({ value: '' }),
   render: () => (
     <button onClick={() => {
-      state.value = Object(event)['target']?.value?.toString?.() ?? undefined;
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          state.value = Object(event)['target']?.value?.toString?.() ?? undefined;
+          clearTimeout(undefined);
+          resolve(undefined);
+        }, 0);
+      });
     }}>Track</button>
   ),
 });
@@ -244,6 +250,9 @@ export const CartBadge = component('cart-badge', {
     expect(clientSource).toContain(
       "ctx.state.value = Object(event)['target']?.value?.toString?.() ?? undefined;",
     );
+    expect(clientSource).toContain('return new Promise((resolve) => {');
+    expect(clientSource).toContain('setTimeout(() => {');
+    expect(clientSource).toContain('clearTimeout(undefined);');
   });
 
   it('reports stable-name and serializability diagnostics for anonymous browser handlers', () => {

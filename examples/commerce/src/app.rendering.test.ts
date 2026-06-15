@@ -101,7 +101,7 @@ describe('commerce example', () => {
   it('compiles TSX-authored components to committed IR through the fixpoint gate', () => {
     // SPEC.md sections 4.8 and 5.2: authored sugar carries no lowered stamps,
     // while committed generated IR must match the compiler output for the
-    // source component and pass the compiler fixpoint/render-equivalence gates.
+    // source component and pass the compiler fixpoint gate.
     expect(
       generatedComponentCommittedIrFacts({
         assertFixpoint,

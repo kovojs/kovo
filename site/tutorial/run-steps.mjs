@@ -15,9 +15,8 @@ import { listSnippetReferences, loadTutorialSnippets } from './extract-snippets.
  * Tutorial step gate (plan W5): every checked-in step state must
  *  1. typecheck against the workspace @jiso/* packages (tsgo per step),
  *  2. compile its TSX components with zero error diagnostics through the
- *     SPEC.md §5.2.3 fixpoint and render-equivalence gates, with committed
- *     lowered IR proven fresh (the emit-components.mjs doctrine from
- *     examples/commerce),
+ *     SPEC.md §5.2.3 fixpoint gate, with committed lowered IR proven fresh
+ *     (the emit-components.mjs doctrine from examples/commerce),
  *  3. pass its vitest tests.
  * Chapter snippet references are validated here too, so a renamed marker
  * fails this gate even before the site build runs. `--write` regenerates
@@ -66,12 +65,12 @@ function compileStepComponents(step) {
       [],
       `${fileName} has compiler errors: ${JSON.stringify(errors, null, 2)}`,
     );
-    // SPEC.md §5.2.3 / Constitution #3: compiling the output is a no-op, and
-    // authored vs lowered renders are equivalent.
+    // SPEC.md §5.2.3 / Constitution #3: compiling the output is a no-op.
+    // Real authored-vs-lowered render equivalence is tracked separately in plans/compiler-hardening.md.
     assertFixpoint(result);
     assertRenderEquivalence(result);
 
-    const lowered = result.renderEquivalenceChecks[0]?.expected;
+    const lowered = result.loweredSource;
     assert.ok(lowered, `${fileName} produced no lowered render source`);
     const clientSource = result.files.find((entry) =>
       entry.fileName.endsWith('.client.js'),

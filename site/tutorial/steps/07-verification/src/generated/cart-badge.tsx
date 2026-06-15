@@ -1,6 +1,4 @@
 // @jiso-ir — lowered from site/tutorial/steps/07-verification/src/components/cart-badge.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `node site/tutorial/run-steps.mjs --write`.
-
-
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 

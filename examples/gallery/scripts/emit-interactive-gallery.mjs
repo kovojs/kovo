@@ -93,7 +93,7 @@ for (const name of demos) {
   assertFixpoint(result);
   assertRenderEquivalence(result);
 
-  const lowered = result.renderEquivalenceChecks[0]?.expected;
+  const lowered = result.loweredSource;
   assert.ok(lowered, `${sourceFileName} produced no lowered TSX`);
 
   const generated = new Map([

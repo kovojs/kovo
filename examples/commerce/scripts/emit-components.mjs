@@ -19,8 +19,8 @@ const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
 
 // Compiles the authored TSX components (src/components/*.tsx) through
 // @jiso/compiler and commits the lowered IR modules to src/generated/ — the
-// SPEC.md section 3 pipeline with the section 5.2.3 fixpoint and
-// render-equivalence gates applied to every component. The app imports the
+// SPEC.md section 3 pipeline with the section 5.2.3 fixpoint gate and committed
+// lowered-source freshness applied to every component. The app imports the
 // committed IR at runtime, so served HTML carries the compiler-derived stamps
 // (fw-c, fw-deps, data-bind — SPEC.md sections 4.2 and 4.8) instead of
 // hand-written ones. `--check` verifies the committed IR is not stale.
@@ -50,10 +50,11 @@ for (const name of componentNames) {
     `${fileName} has compiler diagnostics: ${JSON.stringify(result.diagnostics, null, 2)}`,
   );
   // SPEC.md section 5.2.3 / Constitution #3: compiling the output is a no-op.
+  // Real authored-vs-lowered render equivalence is tracked separately in plans/compiler-hardening.md.
   assertFixpoint(result);
   assertRenderEquivalence(result);
 
-  const lowered = result.renderEquivalenceChecks[0]?.expected;
+  const lowered = result.loweredSource;
   assert.ok(lowered, `${fileName} produced no lowered render source`);
 
   const generated = `// @jiso-ir — lowered from ${fileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;

@@ -166,6 +166,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...deriveLowering.stateDerives.map((derive) => derive.exportName),
     ],
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
+    loweredSource: serverRenderedSource,
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,

@@ -227,8 +227,17 @@ Do before/alongside the broad refactors so subsequent changes are actually check
 - [ ] **Render-equivalence: a real authored-vs-lowered differential** — `packages/compiler/src/emit/server.ts:39`, `compile.ts:151` (SPEC §5.2 rule 3). Produce the lowered-side HTML by executing `renderSource()` (as today) and the authored-side HTML from a separate reference render over the _originally parsed_ model (available pre-lowering), then diff byte-for-byte allowing only provably HTML-preserving deltas (`fw-c`, `fw-deps`, `fw-state`, versioned handler values). Until an authored renderer exists, **stop labeling it the rule-3 gate** and stop letting `fw check` report the invariant as enforced.
   - Done = a lowering that changes emitted HTML makes the gate fail (a regression test proves it can fail). Prove: `pnpm test compile-component && pnpm run check:fw`
   - Progress 2026-06-15: `packages/compiler/src/compile.ts` no longer emits the previous generated render-equivalence fact from the lowered `renderSource()` round trip; compile/MCP output now reports an empty `renderEquivalenceChecks` list until a real authored-vs-lowered differential supplies facts.
+  - Progress 2026-06-15: `CompileResult.loweredSource` now carries the lowered TSX used by committed
+    IR generators, so gallery, commerce, tutorial, and shared test helpers no longer abuse
+    `renderEquivalenceChecks[0].expected` as a lowered-source transport.
   - Gap 2026-06-15: the SPEC §5.2 authored renderer still does not exist, so this checkbox remains open; no regression yet proves that a lowering which changes emitted HTML fails the semantic gate.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/compile-component.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm --filter fw exec tsc --noEmit` passed.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/compile-component.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/example-gallery
+    exec node scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter @jiso/example-commerce
+    exec node scripts/emit-components.mjs --check`, `node site/tutorial/run-steps.mjs --check`, and
+    `pnpm --filter @jiso/example-commerce exec vitest run src/app.rendering.test.ts -t
+    "committed IR"` passed.
 
 - [x] **FW228: wire route-ambiguity detection into a blocking pipeline** — `packages/server/src/match.ts:100` (`findRouteAmbiguities`, currently zero callers) (SPEC §9.5, §11.3 severity=error). Invoke during `createApp` / route-table compile; register FW228 at severity `error` so it blocks dev serving, vite build, and static export (mirror FW229's wiring). Drop the "planned 9.5 shell dispatch" hedge in the message.
   - Done = an ambiguous route table is rejected end-to-end with FW228 instead of resolving by declaration order. Prove: `pnpm test match && pnpm run check:fw`
@@ -280,7 +289,9 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
     default-on for event-shaped primitive handler names and guarded the real
     `numberFieldKeyboardValueChange` helper; allowed standard handler expression roots `Object` and
     `undefined` so `Object(event)` guards and `state.value || undefined` do not trip FW201 as fake
-    captures.
+    captures; extended that standard-root allowance to `Promise`, `setTimeout`, and `clearTimeout`
+    for generated production handlers that schedule abortable hover work without capturing module
+    state.
   - Evidence 2026-06-15: targeted compiler/core/headless checks passed:
     `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts src/attribute-merge.test.ts src/id-content-model.test.ts`;
     `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts`;

@@ -1,6 +1,4 @@
 // @jiso-ir — lowered from examples/commerce/src/components/cart-badge.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
-
-
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import { t } from '@jiso/server';

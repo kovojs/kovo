@@ -31,7 +31,7 @@ export const ProductActions = component('product-actions', {
       <button
         type="button"
         class="save"
-        on:click="/c/site/tutorial/steps/02-islands/src/components/product-actions.client.js?v=d6367805#ProductActions$button_click"
+        on:click="/c/site/tutorial/steps/02-islands/src/components/product-actions.client.js?v=519f2610#ProductActions$button_click"
       >
         Save for later
       </button>

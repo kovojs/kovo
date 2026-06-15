@@ -289,8 +289,11 @@ export function capturesUnserializableReferences(
 
   const allowed = new Set([
     'Object',
+    'Promise',
+    'clearTimeout',
     'ctx',
     'event',
+    'setTimeout',
     'state',
     'undefined',
     ...params.flatMap((param) => referenceRootsForElementParam(param)),

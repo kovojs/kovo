@@ -31,6 +31,7 @@ export interface GeneratedComponentSourceFileFact extends GeneratedComponentSour
 
 export interface GeneratedComponentCompileResult {
   diagnostics: readonly unknown[];
+  loweredSource?: string | null;
   renderEquivalenceChecks?: readonly { expected?: string }[];
 }
 
@@ -173,7 +174,7 @@ export function generatedComponentCommittedIrFacts<
     options.assertFixpoint(result);
     options.assertRenderEquivalence(result);
 
-    const lowered = result.renderEquivalenceChecks?.[0]?.expected ?? '';
+    const lowered = result.loweredSource ?? result.renderEquivalenceChecks?.[0]?.expected ?? '';
     const expectedGeneratedSource = [
       `// @jiso-ir — lowered from ${fileName} by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.`,
       lowered,
