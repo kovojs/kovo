@@ -46,7 +46,7 @@ export function validateDataBindings(
   const bindingAttributes = dataBindAttributes(model);
 
   const bindingDiagnostics = bindingAttributes
-    .filter((binding) => binding.query !== null)
+    .filter((binding) => binding.query !== null && binding.query !== 'state')
     .flatMap((binding) => {
       const result = validatePathInQueryShapes(binding.path, queryShapes);
       if (!result.exists) {

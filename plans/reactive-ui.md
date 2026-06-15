@@ -207,8 +207,18 @@ at all. Two sub-decisions:
     src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed
     36 tests; `pnpm --filter @jiso/runtime exec tsc --noEmit` passed; `pnpm --filter @jiso/runtime
     build:inline-loader` reported the generated loader unchanged after the final source cleanup.
-- [ ] **S2 — Lowering** (D2): `state` text + attribute expressions → `data-bind`/derives; unit tests in
-      a new `state-bindings.test.ts` mirroring `query-bindings.test.ts`.
+- [x] **S2a — Lowering, text paths** (D2): `state.*` sole text children and mixed text expressions
+      lower to `data-bind="state.*"` without creating a fake query plan.
+  - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` recognizes `state.*` paths
+    for text binding classification even when a component has no queries; `packages/compiler/src/
+    analyze/query-updates.ts` and `packages/compiler/src/validate/bindings.ts` exclude the reserved
+    `state` root from query-plan and query-shape handling.
+  - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts` passed
+    29 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
+- [ ] **S2b — Lowering, attribute derives** (D2): state-only attribute expressions lower to
+      derive-backed `data-bind:<attr>`/client exports without emitting a runtime `statePlans` artifact;
+      boolean-presence attributes remove on false/null rather than serializing `"false"`.
 - [ ] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
       output only; tests prove no emitted runtime `statePlans` artifact is required.
 - [ ] **S4 — Emit** (D4): server attributes + client derives; fixpoint/IR parity holds

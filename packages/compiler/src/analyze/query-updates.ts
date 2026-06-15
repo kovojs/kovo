@@ -51,7 +51,7 @@ export function collectQueryUpdatePlans(
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
   for (const { path, query } of dataBindAttributes(model)) {
-    if (!query) continue;
+    if (!query || query === 'state') continue;
 
     const paths = pathsByQuery.get(query) ?? new Set<string>();
     paths.add(path);
@@ -60,7 +60,7 @@ export function collectQueryUpdatePlans(
 
   for (const stamp of collectDataBindListStamps(model)) {
     const query = queryNameFromPath(stamp.list);
-    if (!query) continue;
+    if (!query || query === 'state') continue;
 
     const paths = pathsByQuery.get(query) ?? new Set<string>();
     paths.add(stamp.list);
@@ -128,7 +128,9 @@ export function collectQueryUpdateCoverage(
   const coveredPaths = new Set<string>();
   const knownQueries = knownQueryNames(model, options);
 
-  for (const binding of dataBindAttributes(model).filter((item) => item.query !== null)) {
+  for (const binding of dataBindAttributes(model).filter(
+    (item) => item.query !== null && item.query !== 'state',
+  )) {
     const path = binding.path;
     const query = binding.query;
     if (!query) continue;

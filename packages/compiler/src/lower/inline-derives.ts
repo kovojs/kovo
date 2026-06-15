@@ -237,7 +237,7 @@ function isBindingAttributeName(name: string): boolean {
 }
 
 function isStatePath(path: string): boolean {
-  return path === 'state' || path.startsWith('state.');
+  return path.startsWith('state.');
 }
 
 function sanitizeIdentifier(value: string): string {
