@@ -7,6 +7,7 @@ import {
   type HandlerContext,
   type IslandSignalScope,
 } from './handler-context.js';
+import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
@@ -93,6 +94,9 @@ async function dispatchDelegatedEventForElement(
     }
   } finally {
     handlerContext.commit();
+    if (supportsQueryBindings(stateHost)) {
+      applyStateBindings(stateHost, handlerContext.context.state);
+    }
   }
 }
 

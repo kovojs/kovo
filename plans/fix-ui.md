@@ -153,10 +153,11 @@ coverage gate. **Fleshed out as a standalone plan: `plans/reactive-ui.md`.** Sum
 
 - [ ] **Compiler** — lower `state.*` JSX reads to `data-bind`/`data-bind:<attr>` + named derives
       (`input: 'state'`), mirroring the query path (`lower/inline-derives.ts`,
-      `analyze/query-updates.ts`); add a per-island `StateUpdatePlanFact`.
-- [ ] **Loader** — apply the state plan after writing `fw-state` (walk `[data-bind]` under the island,
-      reuse `query-bindings.ts` with a `state` resolver, lazy-load derives), within the inline-loader
-      gzip budget.
+      `analyze/query-updates.ts`); add state binding/coverage facts for diagnostics and `fw explain`
+      only, not a runtime `statePlans` artifact.
+- [ ] **Loader** — apply state bindings after writing `fw-state` (walk `[data-bind]` under the nearest
+      `[fw-state]` host, reuse `query-bindings.ts` with a `state` resolver, lazy-load derives when
+      compiler-emitted state derives land), within the inline-loader gzip budget.
 - [ ] **Coverage** — extend the §4.9 / FW311 exhaustiveness check to state reads.
 - [ ] **Migrate** `switch`/`toggle`/`disclosure`/`checkbox` to declarative state binding (handlers
       reduce to a state mutation); verify in the no-shim harness; imperative demos unaffected.

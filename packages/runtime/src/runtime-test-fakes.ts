@@ -290,6 +290,52 @@ export class FakeQueryBindingElement {
   }
 }
 
+export class FakeStatefulBindingElement extends FakeQueryBindingElement {
+  readonly children: FakeStatefulBindingElement[] = [];
+  private readonly parent: FakeStatefulBindingElement | null;
+
+  constructor(
+    attributes: Record<string, string>,
+    options: {
+      parent?: FakeStatefulBindingElement;
+      textContent?: string | null;
+      value?: string;
+    } = {},
+  ) {
+    super(attributes, options);
+    this.parent = options.parent ?? null;
+    options.parent?.children.push(this);
+  }
+
+  closest(selector: string): FakeStatefulBindingElement | null {
+    if (selector === '[fw-state]') return this.closestAttribute('fw-state');
+
+    const trigger = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
+    if (trigger) return this.closestAttribute(`on:${trigger}`);
+
+    return null;
+  }
+
+  querySelectorAll(selector: string): Iterable<FakeStatefulBindingElement> {
+    return this.descendants().filter((element) => {
+      if (selector === '*') return true;
+      if (selector === '[data-bind]') return element.getAttribute('data-bind') !== null;
+
+      return element.matches(selector);
+    });
+  }
+
+  private closestAttribute(name: string): FakeStatefulBindingElement | null {
+    if (this.getAttribute(name) !== null) return this;
+
+    return this.parent?.closestAttribute(name) ?? null;
+  }
+
+  private descendants(): FakeStatefulBindingElement[] {
+    return this.children.flatMap((child) => [child, ...child.descendants()]);
+  }
+}
+
 export class FakePendingElement {
   attributes: Record<string, string>;
 

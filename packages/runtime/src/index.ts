@@ -110,6 +110,7 @@ export type {
 export {
   applyCompiledQueryUpdatePlan,
   applyQueryBindings,
+  applyStateBindings,
   supportsQueryBindings,
 } from './query-bindings.js';
 export type {

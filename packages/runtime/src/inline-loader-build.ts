@@ -77,6 +77,52 @@ function installInlineJisoLoader(importModule) {
       return {};
     }
   };
+  const queryAll = (root, selector) =>
+    root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+  const valueAtPath = (value, path) =>
+    path.split('.').reduce((current, segment) => {
+      const key = segment.endsWith('?') ? segment.slice(0, -1) : segment;
+      return typeof current === 'object' && current !== null ? current[key] : undefined;
+    }, value);
+  const formatBoundValue = (value) =>
+    value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+  const sameStateHost = (element, host) =>
+    element === host || !element.closest || element.closest('[fw-state]') === host;
+  const bindingAttrs = (element) =>
+    [...(element.attributes || [])].filter(
+      (attribute) => attribute.name.startsWith('data-bind:') && attribute.value,
+    );
+  const writeStateBinding = (element, path, boundAttribute, state) => {
+    if (!path?.startsWith('state.')) return;
+    const value = valueAtPath(state, path.slice('state.'.length));
+    if (boundAttribute) {
+      if (value == null) element.removeAttribute?.(boundAttribute);
+      else element.setAttribute?.(boundAttribute, formatBoundValue(value));
+    } else if (element.value !== undefined) {
+      element.value = formatBoundValue(value);
+    } else {
+      element.textContent = formatBoundValue(value);
+    }
+  };
+  const applyStateBindings = (host, state) => {
+    writeStateBinding(host, host.getAttribute?.('data-bind'), undefined, state);
+    for (const element of queryAll(host, '[data-bind]')) {
+      if (sameStateHost(element, host)) {
+        writeStateBinding(element, element.getAttribute('data-bind'), undefined, state);
+      }
+    }
+    for (const element of [host, ...queryAll(host, '*')]) {
+      if (!sameStateHost(element, host)) continue;
+      for (const attribute of bindingAttrs(element)) {
+        writeStateBinding(
+          element,
+          attribute.value,
+          attribute.name.slice('data-bind:'.length),
+          state,
+        );
+      }
+    }
+  };
   const readDeps = (value) =>
     (value ?? '')
       .split(/[\s,]+/)
@@ -179,6 +225,7 @@ function installInlineJisoLoader(importModule) {
       await fn(event, context);
     }
     stateHost?.setAttribute?.('fw-state', JSON.stringify(state));
+    if (stateHost) applyStateBindings(stateHost, state);
   };
   const trigger = (type, target) => {
     void dispatch({ target, type });

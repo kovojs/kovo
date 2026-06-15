@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCompiledQueryUpdatePlan,
   applyQueryBindings,
+  applyStateBindings,
   createQueryBindingIndex,
   supportsQueryBindings,
 } from './query-bindings.js';
@@ -10,6 +11,7 @@ import {
   FakeMorphRoot,
   FakeQueryBindingElement,
   FakeQueryPlanElement,
+  FakeStatefulBindingElement,
   FakeTemplateStampHost,
 } from './runtime-test-fakes.js';
 
@@ -211,6 +213,75 @@ describe('query binding helpers', () => {
       templateStamps: [],
     });
     expect(host.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('applies same-island state bindings without query dependencies', () => {
+    const host = new FakeStatefulBindingElement({
+      'data-bind:data-state': 'state.status',
+      'fw-state': '{"status":"idle"}',
+    });
+    const count = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.count' },
+      { parent: host, textContent: '0' },
+    );
+    const label = new FakeStatefulBindingElement(
+      {
+        'aria-label': 'Old',
+        'data-bind:aria-label': 'state.label',
+      },
+      { parent: host },
+    );
+
+    expect(applyStateBindings(host, { count: 2, label: 'Ready', status: 'open' })).toEqual([
+      'state.count',
+      'state.status',
+      'state.label',
+    ]);
+    expect(count.textContent).toBe('2');
+    expect(host.getAttribute('data-state')).toBe('open');
+    expect(label.getAttribute('aria-label')).toBe('Ready');
+  });
+
+  it('keeps state binding walks scoped to the nearest state host', () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"count":0}' });
+    const count = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.count' },
+      { parent: host, textContent: '0' },
+    );
+    const nestedHost = new FakeStatefulBindingElement(
+      { 'fw-state': '{"count":100}' },
+      { parent: host },
+    );
+    const nestedCount = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.count' },
+      { parent: nestedHost, textContent: '100' },
+    );
+
+    expect(applyStateBindings(host, { count: 1 })).toEqual(['state.count']);
+    expect(count.textContent).toBe('1');
+    expect(nestedCount.textContent).toBe('100');
+  });
+
+  it('applies optional state path empty semantics to text and attributes', () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"deal":{}}' });
+    const name = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.deal.contact?.name' },
+      { parent: host, textContent: 'Ada' },
+    );
+    const label = new FakeStatefulBindingElement(
+      {
+        'aria-label': 'Ada',
+        'data-bind:aria-label': 'state.deal.contact?.name',
+      },
+      { parent: host },
+    );
+
+    expect(applyStateBindings(host, { deal: { contact: null } })).toEqual([
+      'state.deal.contact?.name',
+      'state.deal.contact?.name',
+    ]);
+    expect(name.textContent).toBe('');
+    expect(label.getAttribute('aria-label')).toBeNull();
   });
 
   it('detects query binding roots by selector support', () => {

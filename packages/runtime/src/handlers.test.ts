@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as runtime from './index.js';
 import { dispatchDelegatedEvent } from './handlers.js';
-import { FakeElement } from './runtime-test-fakes.js';
+import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js';
 
 describe('delegated handler reference dispatch', () => {
   it('imports and invokes a url#export handler only when a matching event arrives', async () => {
@@ -84,6 +84,29 @@ describe('delegated handler reference dispatch', () => {
     expect(importModule).toHaveBeenNthCalledWith(2, '/c/b.js');
     expect(calls).toEqual(['first:1:false', 'second:2:false']);
     expect(element.getAttribute('fw-state')).toBe('{"count":3}');
+  });
+
+  it('applies state bindings from the final state after chained handlers run', async () => {
+    const host = new FakeStatefulBindingElement({
+      'fw-state': '{"count":1}',
+      'on:click': '/c/a.js#first /c/b.js#second',
+    });
+    const output = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.count' },
+      { parent: host, textContent: '1' },
+    );
+    const first = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+    });
+    const second = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async (url: string) => (url === '/c/a.js' ? { first } : { second }));
+
+    await dispatchDelegatedEvent({ target: host, type: 'click' }, importModule);
+
+    expect(host.getAttribute('fw-state')).toBe('{"count":3}');
+    expect(output.textContent).toBe('3');
   });
 
   it('serializes overlapping delegated state writes for the same island', async () => {

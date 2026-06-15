@@ -195,9 +195,18 @@ at all. Two sub-decisions:
 
 ## Implementation checklist (sequence)
 
-- [ ] **S1 — Spike the loader walk in isolation.** Add a `state` resolver + shared apply to
+- [x] **S1 — Spike the loader walk in isolation.** Add a `state` resolver + shared apply to
       `query-bindings.ts`; unit-test `applyStateBindings(host, state)` against hand-written `data-bind`
       fixtures (no compiler yet). Proves the runtime half end-to-end.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts` exports
+    `applyStateBindings(host, state)` and shares path/attribute formatting with query bindings;
+    `packages/runtime/src/handlers.ts` applies it after delegated handler commit when the state host
+    supports `querySelectorAll`; `packages/runtime/src/inline-loader-build.ts` contains the minimal
+    inline pure-path state walker and regenerated `packages/runtime/src/inline-loader.ts`.
+  - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
+    src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed
+    36 tests; `pnpm --filter @jiso/runtime exec tsc --noEmit` passed; `pnpm --filter @jiso/runtime
+    build:inline-loader` reported the generated loader unchanged after the final source cleanup.
 - [ ] **S2 — Lowering** (D2): `state` text + attribute expressions → `data-bind`/derives; unit tests in
       a new `state-bindings.test.ts` mirroring `query-bindings.test.ts`.
 - [ ] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
@@ -217,17 +226,31 @@ at all. Two sub-decisions:
 
 ## Focused verification matrix
 
-- [ ] State-only component without `fw-deps` still updates from `fw-state` + `data-bind="state.*"`.
-- [ ] Nested stateful islands do not cross-update: an ancestor state mutation skips descendant bindings
+- [x] State-only component without `fw-deps` still updates from `fw-state` + `data-bind="state.*"`.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.test.ts` covers
+    `applyStateBindings` on a plain `[fw-state]` host with text and attribute state bindings and no
+    `fw-deps`; the focused runtime vitest command above passed.
+- [x] Nested stateful islands do not cross-update: an ancestor state mutation skips descendant bindings
       whose closest `[fw-state]` is the descendant host.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.test.ts` and
+    `packages/runtime/src/inline-loader-delegated.test.ts` both assert a descendant `[fw-state]`
+    binding keeps its stale child value when the ancestor host applies state bindings; the focused
+    runtime vitest command above passed.
 - [ ] A query named `state` is rejected before emission.
-- [ ] Optional state paths use the same `?.` empty semantics as query paths (text → empty string,
+- [x] Optional state paths use the same `?.` empty semantics as query paths (text → empty string,
       attribute → remove).
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.test.ts` asserts
+    `state.deal.contact?.name` renders text as `''` and removes `aria-label`; the focused runtime
+    vitest command above passed.
 - [ ] Boolean-presence attributes such as `hidden` are added/removed via derives; no test accepts
       `hidden="false"` as a passing update.
 - [ ] Mixed query+state expressions are rejected or reported as unhandled coverage until multi-input
       derives are designed.
-- [ ] Chained handlers update DOM from the final `ctx.state` value after all handler refs run.
+- [x] Chained handlers update DOM from the final `ctx.state` value after all handler refs run.
+  - Evidence 2026-06-15: `packages/runtime/src/handlers.test.ts` asserts modular delegated handlers
+    update `data-bind="state.count"` after two chained refs mutate one context; `packages/runtime/src/
+    inline-loader-delegated.test.ts` asserts the same for the readable, freshly minified, generated,
+    and extracted inline loader installers; the focused runtime vitest command above passed.
 - [ ] The four target demo client modules contain state mutation and derive exports only; no
       hand-authored DOM writes are needed for the state-bound slots.
 

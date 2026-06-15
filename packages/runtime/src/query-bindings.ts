@@ -1,7 +1,13 @@
 import { domAttributes } from './dom-like.js';
-import type { AttributeElementLike, QuerySelectorAllRootLike } from './dom-like.js';
+import type {
+  AttributeElementLike,
+  ClosestElementLike,
+  QuerySelectorAllRootLike,
+} from './dom-like.js';
 
-export interface QueryBindingElement extends AttributeElementLike {
+export interface QueryBindingElement
+  extends AttributeElementLike,
+    ClosestElementLike<QueryBindingElement> {
   textContent?: string | null;
   value?: string;
 }
@@ -78,13 +84,34 @@ export function applyQueryBindings(
   value: unknown,
   options: ApplyQueryBindingsOptions = {},
 ): string[] {
+  return applyRootBindings(root, queryName, value, options);
+}
+
+export function applyStateBindings(
+  root: QueryBindingRoot,
+  state: unknown,
+  options: ApplyQueryBindingsOptions = {},
+): string[] {
+  return applyRootBindings(root, 'state', state, { ...options, scopeRoot: root });
+}
+
+interface ApplyRootBindingsOptions extends ApplyQueryBindingsOptions {
+  scopeRoot?: unknown;
+}
+
+function applyRootBindings(
+  root: QueryBindingRoot,
+  rootName: string,
+  value: unknown,
+  options: ApplyRootBindingsOptions = {},
+): string[] {
   const applied: string[] = [];
 
-  for (const element of root.querySelectorAll('[data-bind]')) {
+  for (const element of dataBindElements(root, options.scopeRoot)) {
     const path = element.getAttribute('data-bind');
-    if (!path?.startsWith(`${queryName}.`)) continue;
+    if (!path?.startsWith(`${rootName}.`)) continue;
 
-    const boundValue = valueAtPath(value, path.slice(queryName.length + 1));
+    const boundValue = valueAtPath(value, path.slice(rootName.length + 1));
     const rendered = formatBoundValue(boundValue);
 
     if (element.value !== undefined) {
@@ -95,14 +122,15 @@ export function applyQueryBindings(
     applied.push(path);
   }
 
-  for (const element of options.bindingIndex?.attributeBindingElements ??
-    queryAttributeBindingElements(root)) {
+  for (const element of attributeBindingElements(root, options)) {
+    if (!elementBelongsToScope(element, options.scopeRoot)) continue;
+
     for (const attribute of bindingAttributes(element)) {
       const boundAttribute = attribute.name.slice('data-bind:'.length);
       const path = attribute.value;
-      if (!path.startsWith(`${queryName}.`)) continue;
+      if (!path.startsWith(`${rootName}.`)) continue;
 
-      const boundValue = valueAtPath(value, path.slice(queryName.length + 1));
+      const boundValue = valueAtPath(value, path.slice(rootName.length + 1));
       if (boundValue === undefined || boundValue === null) {
         element.removeAttribute?.(boundAttribute);
       } else {
@@ -214,6 +242,41 @@ function queryAttributeBindingElements(root: QueryBindingRoot): QueryBindingElem
   } catch {
     return [];
   }
+}
+
+function dataBindElements(root: QueryBindingRoot, scopeRoot: unknown): QueryBindingElement[] {
+  const elements = Array.from(root.querySelectorAll('[data-bind]')).filter((element) =>
+    elementBelongsToScope(element, scopeRoot),
+  );
+  if (isQueryBindingElement(root) && root.getAttribute('data-bind') !== null) {
+    elements.unshift(root);
+  }
+
+  return elements;
+}
+
+function attributeBindingElements(
+  root: QueryBindingRoot,
+  options: ApplyRootBindingsOptions,
+): readonly QueryBindingElement[] {
+  const elements =
+    options.bindingIndex?.attributeBindingElements ?? queryAttributeBindingElements(root);
+  if (isQueryBindingElement(root) && bindingAttributes(root).length > 0) {
+    return [root, ...elements];
+  }
+
+  return elements;
+}
+
+function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown): boolean {
+  if (!scopeRoot || element === scopeRoot) return true;
+
+  const closestStateHost = element.closest?.('[fw-state]');
+  return !closestStateHost || closestStateHost === scopeRoot;
+}
+
+function isQueryBindingElement(value: unknown): value is QueryBindingElement {
+  return typeof (value as Partial<QueryBindingElement>).getAttribute === 'function';
 }
 
 function bindingAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {

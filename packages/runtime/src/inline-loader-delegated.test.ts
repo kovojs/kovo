@@ -5,7 +5,7 @@ import {
   dispatchInlineDelegatedClick,
   inlineSourceInstallCases,
 } from './inline-loader-test-utils.js';
-import { FakeElement } from './runtime-test-fakes.js';
+import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js';
 
 describe('inline loader delegated handlers', () => {
   it.each(inlineSourceInstallCases)(
@@ -94,6 +94,54 @@ describe('inline loader delegated handlers', () => {
       await runDelegatedHandlers(inlineElement, (importModule) =>
         dispatchInlineDelegatedClick(inlineElement, importModule, installSource),
       );
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'applies inline state bindings after chained handlers through %s',
+    async (_name, installSource) => {
+      const host = new FakeStatefulBindingElement({
+        'data-bind:data-state': 'state.status',
+        'fw-state': '{"count":1,"status":"idle"}',
+        'on:click': '/c/cart.js#add /c/cart.js#finish',
+      });
+      const count = new FakeStatefulBindingElement(
+        { 'data-bind': 'state.count' },
+        { parent: host, textContent: '1' },
+      );
+      const label = new FakeStatefulBindingElement(
+        {
+          'aria-label': 'Old',
+          'data-bind:aria-label': 'state.label',
+        },
+        { parent: host },
+      );
+      const nestedHost = new FakeStatefulBindingElement(
+        { 'fw-state': '{"count":100}' },
+        { parent: host },
+      );
+      const nestedCount = new FakeStatefulBindingElement(
+        { 'data-bind': 'state.count' },
+        { parent: nestedHost, textContent: '100' },
+      );
+      const add = vi.fn((_event, ctx: { state: { count: number } }) => {
+        ctx.state.count += 1;
+      });
+      const finish = vi.fn(
+        (_event, ctx: { state: { label?: string; status?: string } }) => {
+          ctx.state.label = 'Ready';
+          ctx.state.status = 'open';
+        },
+      );
+      const importModule = vi.fn(async () => ({ add, finish }));
+
+      await dispatchInlineDelegatedClick(host, importModule, installSource);
+
+      expect(host.getAttribute('fw-state')).toBe('{"count":2,"status":"open","label":"Ready"}');
+      expect(host.getAttribute('data-state')).toBe('open');
+      expect(count.textContent).toBe('2');
+      expect(label.getAttribute('aria-label')).toBe('Ready');
+      expect(nestedCount.textContent).toBe('100');
     },
   );
 
