@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryToastDemo$section_keydown = handler((event, ctx) => {
   if (!event || Reflect['get'](event, 'key') !== 'Escape') return;
@@ -67,3 +67,7 @@ export const GalleryToastDemo$button_click_4 = handler((event, ctx) => {
     : undefined;
   if (output) output['textContent'] = ctx.state.open ? 'disabled' : 'closed';
 });
+
+export const GalleryToastDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);

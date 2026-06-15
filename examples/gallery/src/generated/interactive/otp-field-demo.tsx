@@ -116,7 +116,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
         <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>
           Enter the four digit code.
         </p>
-        <output data-demo-state="otp-value" class={OUTPUT_CLASS}>
+        <output data-demo-state="otp-value" class={OUTPUT_CLASS} data-bind="state.value">
           {state.value}
         </output>
       </section>

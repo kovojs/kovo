@@ -1,6 +1,5 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
-import { toggleRootAttributes } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -18,25 +17,23 @@ export interface GalleryToggleDemoState {
 // client module under src/generated/interactive are compiler artifacts.
 export const GalleryToggleDemo = component('gallery-toggle-demo', {
   state: () => ({ pressed: false }),
-  render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => {
-    const attrs = toggleRootAttributes({ pressed: state.pressed });
-
-    return (
-      <section class="grid gap-2 text-sm text-neutral-950" data-gallery-interactive="toggle">
-        <button
-          {...attrs}
-          aria-label="Toggle gallery density"
-          class={BUTTON_CLASS}
-          onClick={() => {
-            state.pressed = !state.pressed;
-          }}
-        >
-          Dense rows
-        </button>
-        <output class="text-xs text-neutral-500" data-demo-state="pressed">
-          {state.pressed ? 'pressed' : 'off'}
-        </output>
-      </section>
-    );
-  },
+  render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => (
+    <section class="grid gap-2 text-sm text-neutral-950" data-gallery-interactive="toggle">
+      <button
+        aria-label="Toggle gallery density"
+        aria-pressed={String(state.pressed)}
+        class={BUTTON_CLASS}
+        data-state={state.pressed ? 'pressed' : 'off'}
+        onClick={() => {
+          state.pressed = !state.pressed;
+        }}
+        type="button"
+      >
+        Dense rows
+      </button>
+      <output class="text-xs text-neutral-500" data-demo-state="pressed">
+        {state.pressed ? 'pressed' : 'off'}
+      </output>
+    </section>
+  ),
 });

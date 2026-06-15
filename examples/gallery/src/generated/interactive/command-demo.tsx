@@ -1,5 +1,12 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/command-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryCommandDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.inputValue || 'empty',
+);
+
 import { component } from '@jiso/core';
 import {
   commandCloseAttributes,
@@ -89,7 +96,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
           {...commandTriggerAttributes({ ...commandState, contentId })}
           class={TRIGGER_CLASS}
           id="gallery-command-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=ed23131a#GalleryCommandDemo$button_click"
         >
           Open command
         </button>
@@ -111,8 +118,8 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               labelledBy: 'gallery-command-title',
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$input_input"
-            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$input_keydown"
+            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=ed23131a#GalleryCommandDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=ed23131a#GalleryCommandDemo$input_keydown"
           />
           <div
             {...commandListboxAttributes({ ...commandState, id: listboxId })}
@@ -137,7 +144,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemValue: 'invite',
               })}
               class={ITEM_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=ed23131a#GalleryCommandDemo$button_click_2"
             >
               Invite teammate
             </button>
@@ -157,13 +164,20 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
           <button
             {...commandCloseAttributes({ ...commandState, contentId })}
             class={CLOSE_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=55bc1f64#GalleryCommandDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=ed23131a#GalleryCommandDemo$button_click_3"
           >
             Close
           </button>
         </dialog>
-        <output data-demo-state="command-input">{state.inputValue || 'empty'}</output>
-        <output data-demo-state="command-key-canceled">{state.lastKeyAction}</output>
+        <output
+          data-demo-state="command-input"
+          data-bind="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=ed23131a#GalleryCommandDemo$output_text_derive"
+        >
+          {state.inputValue || 'empty'}
+        </output>
+        <output data-demo-state="command-key-canceled" data-bind="state.lastKeyAction">
+          {state.lastKeyAction}
+        </output>
         <output data-demo-state="command-value">{commandValueText(commandState)}</output>
       </section>
     );

@@ -1,5 +1,12 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/accordion-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryAccordionDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.value || 'none',
+);
+
 import { component } from '@jiso/core';
 import {
   accordionContentAttributes,
@@ -53,7 +60,7 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
                 triggerId: 'gallery-accordion-shipping-trigger',
               })}
               class={TRIGGER_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=eaf5df7d#GalleryAccordionDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=ea04de81#GalleryAccordionDemo$button_click"
             >
               Shipping
             </button>
@@ -78,7 +85,7 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
                 triggerId: 'gallery-accordion-billing-trigger',
               })}
               class={TRIGGER_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=eaf5df7d#GalleryAccordionDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=ea04de81#GalleryAccordionDemo$button_click_2"
             >
               Billing
             </button>
@@ -94,7 +101,11 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
             Billing contacts receive invoice updates.
           </div>
         </section>
-        <output class="text-xs text-neutral-500" data-demo-state="accordion-value">
+        <output
+          class="text-xs text-neutral-500"
+          data-demo-state="accordion-value"
+          data-bind="/c/examples/gallery/src/generated/interactive/accordion-demo.client.js?v=ea04de81#GalleryAccordionDemo$output_text_derive"
+        >
           {state.value || 'none'}
         </output>
       </section>

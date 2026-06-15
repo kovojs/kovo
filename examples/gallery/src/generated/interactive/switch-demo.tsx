@@ -1,7 +1,21 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/switch-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GallerySwitchDemo$input_aria_checked_derive = derive(['state'], (state) =>
+  String(state.checked),
+);
+export const GallerySwitchDemo$input_checked_derive = derive(['state'], (state) =>
+  state.checked ? '' : null,
+);
+export const GallerySwitchDemo$input_data_state_derive = derive(['state'], (state) =>
+  state.checked ? 'checked' : 'unchecked',
+);
+export const GallerySwitchDemo$output_text_derive = derive(['state'], (state) =>
+  state.checked ? 'on' : 'off',
+);
+
 import { component } from '@jiso/core';
-import { switchRootAttributes } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/switch.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -20,31 +34,33 @@ export interface GallerySwitchDemoState {
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GallerySwitchDemo = component('gallery-switch-demo', {
   state: () => ({ checked: false }),
-  render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => {
-    const attrs = switchRootAttributes({
-      checked: state.checked,
-      form: 'gallery-switch-form',
-      name: 'gallery-notifications',
-      value: 'enabled',
-    });
-
-    return (
-      <label
-        class={ROOT_CLASS}
-        data-gallery-interactive="switch"
-        fw-c="gallery-switch-demo"
-        fw-state='{"checked":false}'
+  render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => (
+    <label
+      class={ROOT_CLASS}
+      data-gallery-interactive="switch"
+      fw-c="gallery-switch-demo"
+      fw-state='{"checked":false}'
+    >
+      <input
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=4c353ea0#GallerySwitchDemo$input_aria_checked_derive"
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=4c353ea0#GallerySwitchDemo$input_checked_derive"
+        class={INPUT_CLASS}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=4c353ea0#GallerySwitchDemo$input_data_state_derive"
+        form="gallery-switch-form"
+        name="gallery-notifications"
+        on:click="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=4c353ea0#GallerySwitchDemo$input_click"
+        role="switch"
+        type="checkbox"
+        value="enabled"
+      />
+      <span class="select-none leading-none">Notifications</span>
+      <output
+        class="text-xs text-neutral-500"
+        data-demo-state="checked"
+        data-bind="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=4c353ea0#GallerySwitchDemo$output_text_derive"
       >
-        <input
-          {...attrs}
-          class={INPUT_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/switch-demo.client.js?v=fb75c5e0#GallerySwitchDemo$input_click"
-        />
-        <span class="select-none leading-none">Notifications</span>
-        <output class="text-xs text-neutral-500" data-demo-state="checked">
-          {state.checked ? 'on' : 'off'}
-        </output>
-      </label>
-    );
-  },
+        {state.checked ? 'on' : 'off'}
+      </output>
+    </label>
+  ),
 });

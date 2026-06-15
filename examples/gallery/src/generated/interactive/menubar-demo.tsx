@@ -1,5 +1,12 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/menubar-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryMenubarDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.openValue || 'none',
+);
+
 import { component } from '@jiso/core';
 import {
   menubarItemAttributes,
@@ -48,7 +55,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
       <section
         class="grid gap-2"
         data-gallery-interactive="menubar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$section_keydown"
         fw-c="gallery-menubar-demo"
         fw-state='{"activeValue":"file","openValue":"","value":"new"}'
       >
@@ -62,7 +69,7 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemValue: 'file',
             })}
             class={ITEM_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$button_click"
           >
             File
           </button>
@@ -96,8 +103,8 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
               itemValue: 'new',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=7dc1532c#GalleryMenubarDemo$button_click_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$button_click_2"
           >
             New file
           </button>
@@ -115,9 +122,18 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
             Import
           </button>
         </div>
-        <output data-demo-state="menubar-active">{state.activeValue}</output>
-        <output data-demo-state="menubar-open">{state.openValue || 'none'}</output>
-        <output data-demo-state="menubar-value">{state.value}</output>
+        <output data-demo-state="menubar-active" data-bind="state.activeValue">
+          {state.activeValue}
+        </output>
+        <output
+          data-demo-state="menubar-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/menubar-demo.client.js?v=32f6984a#GalleryMenubarDemo$output_text_derive"
+        >
+          {state.openValue || 'none'}
+        </output>
+        <output data-demo-state="menubar-value" data-bind="state.value">
+          {state.value}
+        </output>
       </section>
     );
   },

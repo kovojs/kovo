@@ -1,5 +1,19 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/field-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryFieldDemo$input_value_derive = derive(['state'], (state) => state.email);
+export const GalleryFieldDemo$select_value_derive = derive(['state'], (state) => state.plan);
+export const GalleryFieldDemo$option_selected_derive = derive(['state'], (state) =>
+  state.plan === 'team' ? '' : null,
+);
+export const GalleryFieldDemo$option_selected_derive_2 = derive(['state'], (state) =>
+  state.plan === 'enterprise' ? '' : null,
+);
+export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state) =>
+  state.shippingDisabled ? '' : null,
+);
+
 import { component } from '@jiso/core';
 import {
   fieldControlAttributes,
@@ -93,8 +107,8 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
             })}
             type="email"
             class={CONTROL_CLASS}
-            value={state.email}
-            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=9b1992a4#GalleryFieldDemo$input_input"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_value_derive"
+            on:input="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_input"
           />
           <p
             {...fieldDescriptionAttributes({
@@ -114,7 +128,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           >
             Enter a complete email address.
           </p>
-          <output data-demo-state="field-email" class={OUTPUT_CLASS}>
+          <output data-demo-state="field-email" class={OUTPUT_CLASS} data-bind="state.email">
             {state.email}
           </output>
         </div>
@@ -171,15 +185,19 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               required: true,
             })}
             class={SELECT_CLASS}
-            value={state.plan}
-            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=9b1992a4#GalleryFieldDemo$select_change"
+            data-bind:value="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$select_value_derive"
+            on:change="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$select_change"
           >
-            <option value="team" selected={state.plan === 'team'} class={SELECT_OPTION_CLASS}>
+            <option
+              value="team"
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$option_selected_derive"
+              class={SELECT_OPTION_CLASS}
+            >
               Team
             </option>
             <option
               value="enterprise"
-              selected={state.plan === 'enterprise'}
+              data-bind:selected="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$option_selected_derive_2"
               class={SELECT_OPTION_CLASS}
             >
               Enterprise
@@ -191,7 +209,7 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
           >
             Native select remains the submitted control.
           </p>
-          <output data-demo-state="field-plan" class={OUTPUT_CLASS}>
+          <output data-demo-state="field-plan" class={OUTPUT_CLASS} data-bind="state.plan">
             {state.plan}
           </output>
         </div>
@@ -218,8 +236,8 @@ export const GalleryFieldDemo = component('gallery-field-demo', {
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
-                checked={state.shippingDisabled}
-                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=9b1992a4#GalleryFieldDemo$input_click"
+                data-bind:checked="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_checked_derive"
+                on:click="/c/examples/gallery/src/generated/interactive/field-demo.client.js?v=c1790758#GalleryFieldDemo$input_click"
               />
               Disable shipping group
             </label>

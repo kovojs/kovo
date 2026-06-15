@@ -1,5 +1,12 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/checkbox-group-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryCheckboxGroupDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.value || 'none',
+);
+
 import { component } from '@jiso/core';
 import {
   checkboxGroupControlAttributes,
@@ -56,7 +63,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         })}
         class={ROOT_CLASS}
         data-gallery-interactive="checkbox-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=3949a76f#GalleryCheckboxGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=abfc0c0b#GalleryCheckboxGroupDemo$section_keydown"
         fw-c="gallery-checkbox-group-demo"
         fw-state='{"activeValue":"updates","value":"updates"}'
       >
@@ -71,7 +78,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               controlId: 'gallery-checkbox-group-updates',
             })}
             class={CONTROL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=3949a76f#GalleryCheckboxGroupDemo$input_click"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=abfc0c0b#GalleryCheckboxGroupDemo$input_click"
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -90,7 +97,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               controlId: 'gallery-checkbox-group-billing',
             })}
             class={CONTROL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=3949a76f#GalleryCheckboxGroupDemo$input_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=abfc0c0b#GalleryCheckboxGroupDemo$input_click_2"
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -102,7 +109,11 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
             Billing notices
           </label>
         </div>
-        <output class="text-xs text-neutral-500" data-demo-state="checkbox-group-value">
+        <output
+          class="text-xs text-neutral-500"
+          data-demo-state="checkbox-group-value"
+          data-bind="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=abfc0c0b#GalleryCheckboxGroupDemo$output_text_derive"
+        >
           {state.value || 'none'}
         </output>
       </section>

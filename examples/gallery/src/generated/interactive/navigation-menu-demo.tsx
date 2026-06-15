@@ -1,5 +1,12 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/navigation-menu-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryNavigationMenuDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.openValue || 'none',
+);
+
 import { component } from '@jiso/core';
 import {
   navigationMenuContentAttributes,
@@ -56,7 +63,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
         {...navigationMenuRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="navigation-menu"
-        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e1ea7a14#GalleryNavigationMenuDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$section_keydown"
         fw-c="gallery-navigation-menu-demo"
         fw-state='{"activeValue":"products","openValue":"","value":"none"}'
       >
@@ -74,7 +81,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemValue: 'products',
               })}
               class={TRIGGER_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e1ea7a14#GalleryNavigationMenuDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$button_click"
             >
               Products
             </button>
@@ -92,7 +99,7 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
                 itemValue: 'docs',
               })}
               class={LINK_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e1ea7a14#GalleryNavigationMenuDemo$a_click"
+              on:click="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$a_click"
             >
               Docs
             </a>
@@ -113,8 +120,15 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           {...navigationMenuViewportAttributes({ ...rootState, id: 'gallery-navigation-viewport' })}
           class={VIEWPORT_CLASS}
         />
-        <output data-demo-state="navigation-open">{state.openValue || 'none'}</output>
-        <output data-demo-state="navigation-value">{state.value}</output>
+        <output
+          data-demo-state="navigation-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js?v=e3734cdf#GalleryNavigationMenuDemo$output_text_derive"
+        >
+          {state.openValue || 'none'}
+        </output>
+        <output data-demo-state="navigation-value" data-bind="state.value">
+          {state.value}
+        </output>
       </section>
     );
   },

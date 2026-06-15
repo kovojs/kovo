@@ -215,7 +215,7 @@ export interface QueryDeriveFact {
 }
 
 export interface StateDeriveFact {
-  attr: string;
+  attr?: string;
   expression: string;
   exportName: string;
   input: 'state';

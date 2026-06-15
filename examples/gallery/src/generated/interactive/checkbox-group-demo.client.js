@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryCheckboxGroupDemo$section_keydown = handler((event, ctx) => {
   if (
@@ -130,3 +130,8 @@ export const GalleryCheckboxGroupDemo$input_click_2 = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value || 'none';
 });
+
+export const GalleryCheckboxGroupDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.value || 'none',
+);

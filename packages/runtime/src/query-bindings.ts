@@ -282,6 +282,20 @@ async function applyStateDeriveBindings(
   const importModule = options.importModule;
   if (!importModule) return applied;
 
+  for (const element of dataBindElements(root, root)) {
+    const refValue = element.getAttribute('data-bind');
+    if (!refValue) continue;
+
+    const ref = parseDeriveReference(refValue);
+    if (!ref) continue;
+
+    const mod = await importModule(ref.url);
+    const derive = mod[ref.exportName];
+    const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
+    writeQueryPlanElement(element, formatBoundValue(value));
+    applied.push(refValue);
+  }
+
   for (const element of attributeBindingElements(root, { ...options, scopeRoot: root })) {
     if (!elementBelongsToScope(element, root)) continue;
 

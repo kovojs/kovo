@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryTooltipDemo$button_blur = handler((event, ctx) => {
   ctx.state.open = false;
@@ -118,3 +118,7 @@ export const GalleryTooltipDemo$button_pointerleave = handler((event, ctx) => {
   }
   if (output) output['textContent'] = 'closed';
 });
+
+export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);

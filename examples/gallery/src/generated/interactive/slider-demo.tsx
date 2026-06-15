@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/slider-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GallerySliderDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.value),
+);
+
 import { component } from '@jiso/core';
 import {
   sliderInputAttributes,
@@ -61,13 +67,17 @@ export const GallerySliderDemo = component('gallery-slider-demo', {
           {...sliderInputAttributes(sliderState)}
           id="gallery-slider-input"
           class={INPUT_CLASS}
-          on:input="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=a96ffe28#GallerySliderDemo$input_input"
+          on:input="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e1e10c29#GallerySliderDemo$input_input"
         />
         <div {...sliderTrackAttributes(sliderState)} class={TRACK_CLASS}>
           <span {...sliderRangeAttributes(sliderState)} class={RANGE_CLASS} />
           <span {...sliderThumbAttributes(sliderState)} class={THUMB_CLASS} />
         </div>
-        <output data-demo-state="slider-value" class={OUTPUT_CLASS}>
+        <output
+          data-demo-state="slider-value"
+          class={OUTPUT_CLASS}
+          data-bind="/c/examples/gallery/src/generated/interactive/slider-demo.client.js?v=e1e10c29#GallerySliderDemo$output_text_derive"
+        >
           {String(state.value)}
         </output>
       </section>

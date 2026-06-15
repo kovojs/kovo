@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/popover-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   popoverContentAttributes,
@@ -33,21 +39,26 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         {...popoverRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="popover"
-        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=aa404efa#GalleryPopoverDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=781db81d#GalleryPopoverDemo$section_keydown"
         fw-c="gallery-popover-demo"
         fw-state='{"open":false}'
       >
         <button
           {...popoverTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=aa404efa#GalleryPopoverDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=781db81d#GalleryPopoverDemo$button_click"
         >
           Delivery window
         </button>
         <div {...popoverContentAttributes({ contentId, open: state.open })} class={CONTENT_CLASS}>
           Weekday arrivals are available from 9 AM to 5 PM.
         </div>
-        <output data-demo-state="popover-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          data-demo-state="popover-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/popover-demo.client.js?v=781db81d#GalleryPopoverDemo$output_text_derive"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </section>
     );
   },

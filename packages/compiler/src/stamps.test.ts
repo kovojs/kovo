@@ -354,7 +354,7 @@ export const CartBadge = component('cart-badge', {
         fileName: 'cart-badge.tsx',
         length: 10,
         message:
-          'Query-dependent DOM position has no update status. CartBadge cart.total expression',
+          'Query/state-dependent DOM position has no update status. CartBadge cart.total expression',
         severity: 'warn',
         start: { column: 55, line: 4 },
       },

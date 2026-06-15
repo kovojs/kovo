@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryProgressDemo$button_click = handler((event, ctx) => {
   ctx.state.value = ctx.state.value === 100 ? 40 : 100;
@@ -43,3 +43,7 @@ export const GalleryProgressDemo$button_click_2 = handler((event, ctx) => {
   }
   if (output) output['textContent'] = 'pending';
 });
+
+export const GalleryProgressDemo$output_text_derive = derive(['state'], (state) =>
+  state.value === null ? 'pending' : `${state.value}%`,
+);

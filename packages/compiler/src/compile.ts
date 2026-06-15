@@ -182,7 +182,12 @@ function versionStateDeriveReferences(
 
   for (const element of jsxElements(model)) {
     for (const attribute of element.attributes) {
-      if (!attribute.name.startsWith('data-bind:') || !attribute.value) continue;
+      if (
+        !(attribute.name === 'data-bind' || attribute.name.startsWith('data-bind:')) ||
+        !attribute.value
+      ) {
+        continue;
+      }
 
       const derive = derivesByPlaceholder.get(attribute.value);
       if (!derive) continue;

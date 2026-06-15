@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryPopoverDemo$section_keydown = handler((event, ctx) => {
   if (!event || Reflect['get'](event, 'key') !== 'Escape') return;
@@ -24,3 +24,7 @@ export const GalleryPopoverDemo$button_click = handler((event, ctx) => {
 
   if (output) output['textContent'] = ctx.state.open ? 'open' : 'closed';
 });
+
+export const GalleryPopoverDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);

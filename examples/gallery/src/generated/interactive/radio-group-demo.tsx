@@ -100,7 +100,11 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
             SMS
           </label>
         </div>
-        <output class="text-xs text-neutral-500" data-demo-state="radio-value">
+        <output
+          class="text-xs text-neutral-500"
+          data-demo-state="radio-value"
+          data-bind="state.value"
+        >
           {state.value}
         </output>
       </div>

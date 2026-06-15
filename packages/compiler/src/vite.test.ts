@@ -118,7 +118,7 @@ describe('jisoVitePlugin', () => {
           {
             code: 'FW311',
             fileName: 'src/diagnostics.tsx',
-            message: 'Query-dependent DOM position has no update status.',
+            message: 'Query/state-dependent DOM position has no update status.',
             severity: 'error',
             start: { line: 4, column: 9 },
           },

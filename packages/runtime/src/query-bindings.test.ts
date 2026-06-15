@@ -308,6 +308,26 @@ describe('query binding helpers', () => {
     expect(panel.getAttribute('hidden')).toBe('');
   });
 
+  it('lazy-imports state derive text bindings', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":""}' });
+    const output = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/accordion.client.js#Accordion$output_text_derive' },
+      { parent: host, textContent: 'old' },
+    );
+    const importModule = async () => ({
+      Accordion$output_text_derive: {
+        run(value: unknown) {
+          return (value as { value: string }).value || 'none';
+        },
+      },
+    });
+
+    await expect(applyStateBindings(host, { value: '' }, { importModule })).resolves.toEqual([
+      '/c/accordion.client.js#Accordion$output_text_derive',
+    ]);
+    expect(output.textContent).toBe('none');
+  });
+
   it('detects query binding roots by selector support', () => {
     expect(supportsQueryBindings(new FakeMorphRoot())).toBe(true);
     expect(supportsQueryBindings({})).toBe(false);

@@ -1,6 +1,6 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
-import { checkboxRootAttributes, type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
+import { type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -19,35 +19,30 @@ export interface GalleryCheckboxDemoState {
 // IR and client modules are checked in only as compiler outputs.
 export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
   state: () => ({ checked: 'indeterminate' }),
-  render: (_queries: Record<string, never>, state: GalleryCheckboxDemoState) => {
-    const attrs = checkboxRootAttributes({
-      checked: state.checked,
-      name: 'gallery-email-summary',
-      value: 'enabled',
-    });
-
-    return (
-      <label class={ROOT_CLASS} data-gallery-interactive="checkbox">
-        <input
-          {...attrs}
-          class={INPUT_CLASS}
-          onClick={() => {
-            state.checked = state.checked === 'indeterminate' ? true : !state.checked;
-            const doc = Reflect['get'](globalThis, 'document');
-            const input = doc
-              ? Object(doc)['querySelector']?.call(
-                  doc,
-                  '[data-gallery-interactive="checkbox"] input[type="checkbox"]',
-                )
-              : undefined;
-            if (input) input['indeterminate'] = false;
-          }}
-        />
-        <span class="select-none leading-none">Email summary</span>
-        <output class="text-xs text-neutral-500" data-demo-state="checked">
-          {String(state.checked)}
-        </output>
-      </label>
-    );
-  },
+  render: (_queries: Record<string, never>, state: GalleryCheckboxDemoState) => (
+    <label class={ROOT_CLASS} data-gallery-interactive="checkbox">
+      <input
+        aria-checked={state.checked === 'indeterminate' ? 'mixed' : String(state.checked)}
+        checked={state.checked === true}
+        class={INPUT_CLASS}
+        data-state={
+          state.checked === 'indeterminate'
+            ? 'indeterminate'
+            : state.checked
+              ? 'checked'
+              : 'unchecked'
+        }
+        name="gallery-email-summary"
+        onClick={() => {
+          state.checked = state.checked === 'indeterminate' ? true : !state.checked;
+        }}
+        type="checkbox"
+        value="enabled"
+      />
+      <span class="select-none leading-none">Email summary</span>
+      <output class="text-xs text-neutral-500" data-demo-state="checked">
+        {String(state.checked)}
+      </output>
+    </label>
+  ),
 });

@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
   ctx.state.activeValue = 'edit';
@@ -80,3 +80,8 @@ export const GalleryMenubarDemo$button_click_2 = handler((event, ctx) => {
   if (openOutput) openOutput['textContent'] = 'none';
   if (valueOutput) valueOutput['textContent'] = 'new';
 });
+
+export const GalleryMenubarDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.openValue || 'none',
+);

@@ -272,7 +272,7 @@ export const CartBadge = component('cart-badge', {
         fileName: 'cart-badge.tsx',
         length: 13,
         message:
-          'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
+          'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
         severity: 'warn',
         start: { column: 26, line: 9 },
       },
@@ -281,7 +281,7 @@ export const CartBadge = component('cart-badge', {
         fileName: 'cart-badge.tsx',
         length: 12,
         message:
-          'Query-dependent DOM position has no update status. CartBadge product.name expression',
+          'Query/state-dependent DOM position has no update status. CartBadge product.name expression',
         severity: 'warn',
         start: { column: 22, line: 10 },
       },
@@ -311,7 +311,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       length: 13,
       message:
-        'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
+        'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
       start: { column: 26, line: 9 },
     });
@@ -342,7 +342,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       length: 13,
       message:
-        'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
+        'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
       start: { column: 26, line: 11 },
     });

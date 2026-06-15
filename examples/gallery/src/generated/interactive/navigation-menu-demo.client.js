@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryNavigationMenuDemo$section_keydown = handler((event, ctx) => {
   const key = String(Object(event)['key'] ?? '');
@@ -92,3 +92,8 @@ export const GalleryNavigationMenuDemo$a_click = handler((event, ctx) => {
   if (event) Object(event)['preventDefault']?.call(event);
   if (output) output['textContent'] = 'docs';
 });
+
+export const GalleryNavigationMenuDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.openValue || 'none',
+);

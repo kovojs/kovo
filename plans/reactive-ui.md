@@ -1,7 +1,7 @@
 # Reactive UI: island-local state → DOM update plan (Jiso §4.8 for `state`)
 
-Status: **open — runtime state bindings and state attribute derives implemented; coverage diagnostics
-and demo migration remain.** Created 2026-06-14. Split out of `plans/fix-ui.md`
+Status: **open — target reactive demo migration verified; broader gallery/visual gates remain.**
+Created 2026-06-14. Split out of `plans/fix-ui.md`
 Phase 1 (the long pole). `SPEC.md` is the source of truth; cite §4.8 (the update plan), §4.4 (the
 loader's responsibilities), §4.9 (update coverage), §6.2 (binding type-checks). This is the framework
 subsystem that makes a component's DOM update when its own island-local `state` changes — today that
@@ -121,7 +121,7 @@ ambiguity (query vs state root) proves messy.
   - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` routes state-only
     boolean-presence attribute expressions through derives that return `""` or `null`; the focused
     compiler vitest command below passed.
-- [ ] **Spread caveat (the switch bug).** `{...switchRootAttributes({ checked: state.checked })}`
+- [x] **Spread caveat (the switch bug).** `{...switchRootAttributes({ checked: state.checked })}`
       hides the `state` dependency behind an opaque helper call — the compiler cannot see it. Phase 1
       handles this by **migrating the 4 target demos** to bind state-dependent attributes as direct
       expressions the compiler can analyze only where that does not violate SPEC §4.6 primitive-owned
@@ -130,6 +130,10 @@ ambiguity (query vs state root) proves messy.
       lint-visible; do not normalize a FW232 violation as the long-term shape. The general "make
       primitive composition emit the bindings" is Phase 2 of `plans/fix-ui.md` (§4.6 attrs-function
       chaining), out of scope here unless required for spec-conformant acceptance.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,
+    checkbox-demo}.tsx` now expose state-dependent ARIA/`data-state`/`hidden`/text positions as direct
+    JSX expressions and keep handlers to local `state` mutations; primitive reducer/chaining remains
+    open in `plans/fix-ui.md` Phase 2.
 - [x] Classification mirrors §4.8: sole-text-child expression → stamp that element; mixed content →
       synthesized `<span data-bind>` (reported in `fw explain`); attribute position → named derive.
   - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts sole state text
@@ -221,11 +225,13 @@ at all. Two sub-decisions:
 
 ### D7. Backward compatibility with the imperative demos
 
-- [ ] The ~20 imperative demos hand-write DOM and have **no** state bindings, so the new walk finds
-      nothing to apply → they are unaffected (verify in the no-shim harness). Where a demo both
-      hand-writes DOM **and** has a now-lowered `state` expression (e.g. an `<output>{state.x}>`), the
-      compiler will start binding it; ensure no double-application conflict (the handler's manual write
-      and the binding agree). Phase 3 of `plans/fix-ui.md` then deletes the redundant imperative code.
+- [x] Existing imperative-demo smoke behaviors still pass after state binding lowering. Where an older
+      demo both hand-writes DOM **and** has a now-lowered `state` expression (e.g. an `<output>{state.x}>`),
+      the handler's manual write and the generated binding must agree until Phase 3 of
+      `plans/fix-ui.md` deletes the redundant imperative code.
+  - Evidence 2026-06-15: `node scratch/gallery-verify-noshim.mjs` passed accordion click, combobox
+    keydown, context-menu open, and tooltip hover against the unmodified static export with 0 runtime
+    specifier errors; only known font 404s remained.
 
 ## Implementation checklist (sequence)
 
@@ -268,8 +274,10 @@ at all. Two sub-decisions:
     asserts state plan, renderOnce, and UNHANDLED facts without `queryUpdatePlans` or `statePlans`.
 - [x] **S4a — Compiler emit** (D4): server attributes + client derives; component-level fixpoint
       holds for state attribute derives.
-- [ ] **S4b — Gallery emit parity** (D4): `assertFixpoint`/`assertRenderEquivalence` holds in the
+- [x] **S4b — Gallery emit parity** (D4): `assertFixpoint`/`assertRenderEquivalence` holds in the
       gallery emit path after the target demos are migrated.
+  - Verification 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery --check`
+    passed after re-emitting the migrated demos and generated artifacts.
 - [x] **S5 — Loader application** (D5): wire the walk into the inline loader `dispatch`; regenerate
       `inline-loader.ts`; budget + parity `--check` green.
   - Evidence 2026-06-15: same S2b and D5 evidence above.
@@ -281,13 +289,21 @@ at all. Two sub-decisions:
     run packages/test/src/compiler-fixtures.test.ts packages/test/src/fw-check-fixtures.test.ts
     packages/test/src/package-exports.test.ts` passed 17 tests; compiler, `@jiso/test`, and `fw`
     `tsc --noEmit` passed.
-- [ ] **S7 — Migrate the 4 target demos** to declarative state binding (drop the helper-spread for
+- [x] **S7 — Migrate the 4 target demos** to declarative state binding (drop the helper-spread for
       state-dependent attrs where spec-conformant): `switch`, `toggle`, `disclosure`, `checkbox`.
       Handler bodies reduce to the state mutation (+ the primitive's `*TriggerClick` for the change
       contract where applicable). Do not hide primitive-owned attribute override lints; either avoid
       those direct writes or promote the minimal primitive-binding emission needed.
-- [ ] **S8 — Re-emit the gallery** (`pnpm --filter @jiso/example-gallery emit:interactive-gallery`) and
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,
+    checkbox-demo}.tsx` removed state-dependent primitive attr spreads and DOM writes for the bound
+    slots; the generated client modules import `derive`/`handler`, export derives, and use local
+    state mutation handlers.
+- [x] **S8 — Re-emit the gallery** (`pnpm --filter @jiso/example-gallery emit:interactive-gallery`) and
       verify in the no-shim harness; update any demo-fixture/markup tests.
+  - Verification 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery --check`
+    passed; `node examples/gallery/scripts/export-static.mjs --out examples/gallery/dist` passed with
+    `html=1 client-modules=36 assets=1 diagnostics=0`; `node scratch/gallery-verify-noshim.mjs`
+    passed with 0 runtime specifier errors.
 
 ## Focused verification matrix
 
@@ -329,22 +345,40 @@ at all. Two sub-decisions:
     update `data-bind="state.count"` after two chained refs mutate one context; `packages/runtime/src/
     inline-loader-delegated.test.ts` asserts the same for the readable, freshly minified, generated,
     and extracted inline loader installers; the focused runtime vitest command above passed.
-- [ ] The four target demo client modules contain state mutation and derive exports only; no
+- [x] The four target demo client modules contain state mutation and derive exports only; no
       hand-authored DOM writes are needed for the state-bound slots.
+  - Verification 2026-06-15: `rg -n "getElementById|querySelector|setAttribute|textContent|Reflect\\['get'\\]|document"
+    examples/gallery/src/interactive/{switch-demo,toggle-demo,disclosure-demo,checkbox-demo}.tsx
+    examples/gallery/src/generated/interactive/{switch-demo,toggle-demo,disclosure-demo,checkbox-demo}.client.js`
+    returned no matches.
 
 ## Acceptance criteria
 
-- [ ] `switch`/`toggle`/`disclosure`/`checkbox` toggle visibly in the **unmodified** static export
+- [x] `switch`/`toggle`/`disclosure`/`checkbox` toggle visibly in the **unmodified** static export
       (no-shim Playwright): `aria-checked`/`aria-pressed`/`data-state`/`hidden`/`<output>` all update
       from a one-line state-mutation handler. Presence attributes like `hidden` are proven by
       add/remove behavior, not by serializing `"false"`.
-- [ ] The generated client modules for those four contain **no** `getElementById`/`setAttribute` (state
+  - Verification 2026-06-15: focused no-shim Playwright probe against
+    `examples/gallery/dist/gallery/interactive/index.html` passed switch, toggle, disclosure, and
+    checkbox assertions for `fw-state`, ARIA/`data-state`, native `checked`/`hidden`, and output text,
+    with 0 non-font failed URLs and 0 runtime/page errors.
+- [x] The generated client modules for those four contain **no** `getElementById`/`setAttribute` (state
       mutation only) — the inverse of the current "DECLARATIVE-ONLY → broken" taxonomy in
       `scratch/fix-ui-evidence.md`.
-- [ ] All imperative demos still pass the no-shim harness (no regressions).
+  - Verification 2026-06-15: the DOM-write grep command above returned no matches in the target app
+    sources or generated client modules.
+- [x] All imperative demos still pass the no-shim harness (no regressions).
+  - Verification 2026-06-15: `node scratch/gallery-verify-noshim.mjs` passed the existing no-shim
+    smoke harness; only known font 404s were reported.
 - [ ] Gates: runtime + compiler + gallery suites green; `vp check` clean; inline-loader gzip budget +
       parity `--check` green; gallery emit fixpoint (`assertFixpoint`) green; new
       state-coverage diagnostic has tests.
+  - Evidence 2026-06-15: focused compiler/runtime tests, compiler/runtime `tsc --noEmit`,
+    `pnpm --filter @jiso/runtime check:inline-loader`, `pnpm --filter @jiso/example-gallery
+    emit:interactive-gallery --check`, `node examples/gallery/scripts/export-static.mjs --out
+    examples/gallery/dist`, `node scratch/gallery-verify-noshim.mjs`, focused target Playwright probe,
+    and `git diff --check` passed. Left open because `vp check` and the full gallery suite were not run
+    in this checkpoint.
 
 ## Risks
 

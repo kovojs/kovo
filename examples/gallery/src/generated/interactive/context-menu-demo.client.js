@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
   ctx.state.open = true;
@@ -71,3 +71,7 @@ export const GalleryContextMenuDemo$button_click = handler((event, ctx) => {
   if (content) content['hidden'] = true;
   if (output) output['textContent'] = 'inspect';
 });
+
+export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);

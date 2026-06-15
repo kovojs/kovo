@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/hover-card-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryHoverCardDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   hoverCardContentAttributes,
@@ -40,11 +46,11 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
           {...hoverCardTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
           href="#hover-card-demo"
-          on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_blur"
-          on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_focus"
-          on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_keydown"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=b01f35f3#GalleryHoverCardDemo$a_pointerleave"
+          on:blur="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_blur"
+          on:focus="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_focus"
+          on:keydown="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_keydown"
+          on:pointerenter="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_pointerenter"
+          on:pointerleave="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$a_pointerleave"
         >
           Ada Lovelace
         </a>
@@ -54,7 +60,12 @@ export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
         >
           First programmer and analytical engine collaborator.
         </aside>
-        <output data-demo-state="hover-card-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          data-demo-state="hover-card-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js?v=21b2101d#GalleryHoverCardDemo$output_text_derive"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </section>
     );
   },

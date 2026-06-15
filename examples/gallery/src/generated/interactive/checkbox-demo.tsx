@@ -1,7 +1,22 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/checkbox-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryCheckboxDemo$input_aria_checked_derive = derive(['state'], (state) =>
+  state.checked === 'indeterminate' ? 'mixed' : String(state.checked),
+);
+export const GalleryCheckboxDemo$input_checked_derive = derive(['state'], (state) =>
+  state.checked === true ? '' : null,
+);
+export const GalleryCheckboxDemo$input_data_state_derive = derive(['state'], (state) =>
+  state.checked === 'indeterminate' ? 'indeterminate' : state.checked ? 'checked' : 'unchecked',
+);
+export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.checked),
+);
+
 import { component } from '@jiso/core';
-import { checkboxRootAttributes, type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
+import { type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -20,30 +35,31 @@ export interface GalleryCheckboxDemoState {
 // IR and client modules are checked in only as compiler outputs.
 export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
   state: () => ({ checked: 'indeterminate' }),
-  render: (_queries: Record<string, never>, state: GalleryCheckboxDemoState) => {
-    const attrs = checkboxRootAttributes({
-      checked: state.checked,
-      name: 'gallery-email-summary',
-      value: 'enabled',
-    });
-
-    return (
-      <label
-        class={ROOT_CLASS}
-        data-gallery-interactive="checkbox"
-        fw-c="gallery-checkbox-demo"
-        fw-state='{"checked":"indeterminate"}'
+  render: (_queries: Record<string, never>, state: GalleryCheckboxDemoState) => (
+    <label
+      class={ROOT_CLASS}
+      data-gallery-interactive="checkbox"
+      fw-c="gallery-checkbox-demo"
+      fw-state='{"checked":"indeterminate"}'
+    >
+      <input
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_aria_checked_derive"
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_checked_derive"
+        class={INPUT_CLASS}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_data_state_derive"
+        name="gallery-email-summary"
+        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$input_click"
+        type="checkbox"
+        value="enabled"
+      />
+      <span class="select-none leading-none">Email summary</span>
+      <output
+        class="text-xs text-neutral-500"
+        data-demo-state="checked"
+        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=6a251f2b#GalleryCheckboxDemo$output_text_derive"
       >
-        <input
-          {...attrs}
-          class={INPUT_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b5c8961b#GalleryCheckboxDemo$input_click"
-        />
-        <span class="select-none leading-none">Email summary</span>
-        <output class="text-xs text-neutral-500" data-demo-state="checked">
-          {String(state.checked)}
-        </output>
-      </label>
-    );
-  },
+        {String(state.checked)}
+      </output>
+    </label>
+  ),
 });

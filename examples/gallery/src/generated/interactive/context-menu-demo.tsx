@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/context-menu-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   contextMenuContentAttributes,
@@ -57,8 +63,8 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
           {...contextMenuTriggerAttributes({ ...menuState, contentId })}
           class={TRIGGER_CLASS}
           id="gallery-context-menu-trigger"
-          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$div_contextmenu"
-          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$div_keydown"
+          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$div_contextmenu"
+          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$div_keydown"
           tabIndex="0"
         >
           Right click target
@@ -98,14 +104,21 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemValue: 'inspect',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=02816e0a#GalleryContextMenuDemo$button_click"
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$button_click"
           >
             Inspect
           </button>
         </div>
-        <output data-demo-state="context-open">{state.open ? 'open' : 'closed'}</output>
-        <output data-demo-state="context-value">{state.value}</output>
+        <output
+          data-demo-state="context-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=28da1630#GalleryContextMenuDemo$output_text_derive"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
+        <output data-demo-state="context-value" data-bind="state.value">
+          {state.value}
+        </output>
       </section>
     );
   },

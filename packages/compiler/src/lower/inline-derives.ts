@@ -17,7 +17,7 @@ import type { CompileComponentOptions, StateDeriveFact } from '../types.js';
 
 type InlineDeriveLoweringOptions = Pick<
   CompileComponentOptions,
-  'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts'
+  'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
 >;
 
 interface InlineAttributeDerive {
@@ -26,6 +26,13 @@ interface InlineAttributeDerive {
   expression: string;
   query: string;
   source: 'query' | 'state';
+}
+
+interface InlineStateTextDerive {
+  baseName: string;
+  end?: number;
+  expression: string;
+  start?: number;
 }
 
 interface InlineAttributeDeriveLowering {
@@ -59,60 +66,92 @@ export function lowerInlineAttributeDerives(
       .map((attribute) => inlineAttributeDerive(attribute, element, componentName, knownQueries))
       .filter((candidate): candidate is InlineAttributeDerive => candidate !== null);
 
-    const candidate = candidates[0];
-    if (!candidate || candidates.length !== 1) continue;
-    const count = nameCounts.get(candidate.baseName) ?? 0;
-    nameCounts.set(candidate.baseName, count + 1);
-    const exportName = count === 0 ? candidate.baseName : `${candidate.baseName}_${count + 1}`;
-    const stampName = `${candidate.query}.${exportName}`;
-    const expression =
-      candidate.source === 'state'
-        ? deriveExpression(candidate.attribute, candidate.expression)
-        : candidate.expression.trim();
+    const loweredCandidates =
+      candidates.length === 1
+        ? candidates
+        : candidates.every((item) => item.source === 'state')
+          ? candidates
+          : [];
+    for (const candidate of loweredCandidates) {
+      const exportName = nextExportName(candidate.baseName, nameCounts);
+      const stampName = `${candidate.query}.${exportName}`;
+      const expression =
+        candidate.source === 'state'
+          ? deriveExpression(candidate.attribute, candidate.expression)
+          : candidate.expression.trim();
 
-    deriveExports.push(
-      `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${candidate.query}) => ${expression});`,
-    );
-    if (candidate.source === 'state') {
-      stateDerives.push({
-        attr: candidate.attribute.name,
-        expression,
-        exportName,
-        input: 'state',
-        name: exportName,
-        param: 'state',
-        placeholder: stampName,
+      deriveExports.push(
+        `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${candidate.query}) => ${expression});`,
+      );
+      if (candidate.source === 'state') {
+        stateDerives.push({
+          attr: candidate.attribute.name,
+          expression,
+          exportName,
+          input: 'state',
+          name: exportName,
+          param: 'state',
+          placeholder: stampName,
+        });
+      }
+      replacements.push({
+        end: candidate.attribute.end,
+        replacement:
+          candidate.source === 'state'
+            ? `${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`
+            : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
+        start: candidate.attribute.start,
       });
     }
-    replacements.push({
-      end: candidate.attribute.end,
-      replacement:
-        candidate.source === 'state'
-          ? `${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`
-          : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
-      start: candidate.attribute.start,
-    });
   }
 
   for (const element of jsxElements(model)) {
     const binding = inlineTextBinding(element, model, knownQueries);
-    if (!binding) continue;
+    if (binding) {
+      replacements.push({
+        end: element.openingEnd - 1,
+        replacement: ` data-bind="${escapeAttribute(binding)}"`,
+        start: element.openingEnd - 1,
+      });
+      continue;
+    }
+
+    const derive = inlineTextDerive(element, model, componentName);
+    if (!derive) continue;
+
+    const exportName = nextExportName(derive.baseName, nameCounts);
+    const stampName = `state.${exportName}`;
+    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives);
 
     replacements.push({
       end: element.openingEnd - 1,
-      replacement: ` data-bind="${escapeAttribute(binding)}"`,
+      replacement: ` data-bind="${escapeAttribute(stampName)}"`,
       start: element.openingEnd - 1,
     });
   }
 
   for (const expression of jsxExpressions(model)) {
     const binding = inlineMixedTextBinding(expression, model, knownQueries);
-    if (!binding) continue;
+    if (binding) {
+      replacements.push({
+        end: binding.end,
+        replacement: `<span data-bind="${escapeAttribute(binding.path)}">{${binding.path}}</span>`,
+        start: binding.start,
+      });
+      continue;
+    }
+
+    const derive = inlineMixedTextDerive(expression, model, componentName);
+    if (!derive) continue;
+
+    const exportName = nextExportName(derive.baseName, nameCounts);
+    const stampName = `state.${exportName}`;
+    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives);
 
     replacements.push({
-      end: binding.end,
-      replacement: `<span data-bind="${escapeAttribute(binding.path)}">{${binding.path}}</span>`,
-      start: binding.start,
+      end: derive.end ?? expression.containerEnd,
+      replacement: `<span data-bind="${escapeAttribute(stampName)}">{${derive.expression}}</span>`,
+      start: derive.start ?? expression.containerStart,
     });
   }
 
@@ -124,10 +163,18 @@ export function lowerInlineAttributeDerives(
     };
   }
 
-  const prefix = `${deriveExports.join('\n')}\n\n`;
+  const prefix = `import { derive } from '@jiso/runtime';\n\n${deriveExports.join('\n')}\n\n`;
+  if (deriveExports.length > 0) {
+    const start = derivePrefixInsertionOffset(options.source);
+    replacements.push({
+      end: start,
+      replacement: prefix,
+      start,
+    });
+  }
 
   return {
-    prefix,
+    prefix: '',
     replacements,
     stateDerives,
   };
@@ -168,6 +215,31 @@ function inlineAttributeDerive(
   };
 }
 
+function recordStateDerive(
+  derive: InlineStateTextDerive,
+  exportName: string,
+  stampName: string,
+  deriveExports: string[],
+  stateDerives: StateDeriveFact[],
+): void {
+  const expression = derive.expression.trim();
+  deriveExports.push(`export const ${exportName} = derive(["state"], (state) => ${expression});`);
+  stateDerives.push({
+    expression,
+    exportName,
+    input: 'state',
+    name: exportName,
+    param: 'state',
+    placeholder: stampName,
+  });
+}
+
+function nextExportName(baseName: string, nameCounts: Map<string, number>): string {
+  const count = nameCounts.get(baseName) ?? 0;
+  nameCounts.set(baseName, count + 1);
+  return count === 0 ? baseName : `${baseName}_${count + 1}`;
+}
+
 function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean {
   const { name } = attribute;
   return (
@@ -199,6 +271,24 @@ function inlineTextBinding(
     : null;
 }
 
+function inlineTextDerive(
+  element: JsxElementModel,
+  model: ComponentModuleModel,
+  componentName: string,
+): InlineStateTextDerive | null {
+  if (element.selfClosing) return null;
+  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+
+  const expression = soleJsxExpressionChild(element, model);
+  if (!expression || expression.solePropertyAccessPath) return null;
+  if (!isStateOnlyExpression(expression.propertyAccesses)) return null;
+
+  return {
+    baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
+    expression: expression.expression,
+  };
+}
+
 function inlineMixedTextBinding(
   expression: JsxExpressionModel,
   model: ComponentModuleModel,
@@ -220,6 +310,34 @@ function inlineMixedTextBinding(
   }
 
   return { end, path, start };
+}
+
+function inlineMixedTextDerive(
+  expression: JsxExpressionModel,
+  model: ComponentModuleModel,
+  componentName: string,
+): InlineStateTextDerive | null {
+  if (!isStateOnlyExpression(expression.propertyAccesses)) return null;
+  if (isJsxAttributeExpression(expression, model)) return null;
+
+  const element = innermostContainingElement(expression, model);
+  if (!element) return null;
+  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+  if (inlineTextBinding(element, model, new Set()) !== null) return null;
+  if (inlineTextDerive(element, model, componentName) !== null) return null;
+
+  const start = expression.containerStart;
+  const end = expression.containerEnd;
+  if (start === -1 || end === -1 || start < element.openingEnd || end > element.closingStart) {
+    return null;
+  }
+
+  return {
+    baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
+    end,
+    expression: expression.expression,
+    start,
+  };
 }
 
 function soleKnownQueryPath(
@@ -265,6 +383,18 @@ function innermostContainingElement(
 
 function isBindingAttributeName(name: string): boolean {
   return name === 'data-bind' || name.startsWith('data-bind:') || name === 'data-bind-list';
+}
+
+function isStateOnlyExpression(paths: readonly { path: string }[]): boolean {
+  const roots = new Set(
+    paths.map((path) => queryNameFromPath(path.path)).filter((root): root is string => root !== null),
+  );
+  return roots.size > 0 && [...roots].every((root) => root === 'state');
+}
+
+function derivePrefixInsertionOffset(source: string): number {
+  const jsxImportSource = /^\/\*\* @jsxImportSource [\s\S]*?\*\/\s*/.exec(source);
+  return jsxImportSource?.[0].length ?? 0;
 }
 
 function stateBindingAttributeName(name: string): string {

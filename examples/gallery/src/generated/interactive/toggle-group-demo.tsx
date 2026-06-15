@@ -1,5 +1,12 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/toggle-group-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryToggleGroupDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.value || 'none',
+);
+
 import { component } from '@jiso/core';
 import {
   toggleGroupButtonAttributes,
@@ -53,7 +60,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         })}
         class="grid gap-2 text-sm text-neutral-950"
         data-gallery-interactive="toggle-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=fc92efe7#GalleryToggleGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$section_keydown"
         fw-c="gallery-toggle-group-demo"
         fw-state='{"activeValue":"bold","value":"bold"}'
       >
@@ -68,7 +75,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 id: 'gallery-toggle-group-bold',
               })}
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=fc92efe7#GalleryToggleGroupDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$button_click"
             >
               Bold
             </button>
@@ -91,13 +98,17 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 id: 'gallery-toggle-group-italic',
               })}
               class={BUTTON_CLASS}
-              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=fc92efe7#GalleryToggleGroupDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$button_click_2"
             >
               Italic
             </button>
           </span>
         </div>
-        <output class="text-xs text-neutral-500" data-demo-state="toggle-group-value">
+        <output
+          class="text-xs text-neutral-500"
+          data-demo-state="toggle-group-value"
+          data-bind="/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js?v=dc518e92#GalleryToggleGroupDemo$output_text_derive"
+        >
           {state.value || 'none'}
         </output>
       </section>

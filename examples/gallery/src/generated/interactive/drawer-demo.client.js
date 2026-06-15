@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryDrawerDemo$section_keydown = handler((event, ctx) => {
   ctx.state.open = false;
@@ -13,3 +13,7 @@ export const GalleryDrawerDemo$dialog_cancel = handler((event, ctx) => {
 export const GalleryDrawerDemo$button_click_2 = handler((event, ctx) => {
   ctx.state.open = false;
 });
+
+export const GalleryDrawerDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);

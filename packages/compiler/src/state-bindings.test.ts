@@ -71,6 +71,43 @@ export const ToggleDemo = component('toggle-demo', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers state-only text expressions to versioned derive bindings', () => {
+    const result = compileComponentModule({
+      fileName: 'accordion-demo.tsx',
+      source: `
+export const AccordionDemo = component('accordion-demo', {
+  state: () => ({ value: '' }),
+  render: (_queries, state) => (
+    <accordion-demo>
+      <output>{state.value || 'none'}</output>
+    </accordion-demo>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-bind="/c/accordion-demo.client.js?v=');
+    expect(serverSource).toContain('#AccordionDemo$output_text_derive');
+    expect(clientSource).toContain(
+      `export const AccordionDemo$output_text_derive = derive(["state"], (state) => state.value || 'none');`,
+    );
+    expect(result.queryUpdatePlans).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'AccordionDemo',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'state.AccordionDemo$output_text_derive',
+        source: 'state',
+        status: 'plan',
+      },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('accepts hand-authored state binding IR for fixpoint validation', () => {
     const result = compileComponentModule({
       fileName: 'counter.tsx',

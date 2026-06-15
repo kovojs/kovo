@@ -1,14 +1,19 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryCheckboxDemo$input_click = handler((event, ctx) => {
   ctx.state.checked = ctx.state.checked === 'indeterminate' ? true : !ctx.state.checked;
-  const doc = Reflect['get'](globalThis, 'document');
-  const input = doc
-    ? Object(doc)['querySelector']?.call(
-        doc,
-        '[data-gallery-interactive="checkbox"] input[type="checkbox"]',
-      )
-    : undefined;
-  if (input) input['indeterminate'] = false;
 });
+
+export const GalleryCheckboxDemo$input_aria_checked_derive = derive(['state'], (state) =>
+  state.checked === 'indeterminate' ? 'mixed' : String(state.checked),
+);
+export const GalleryCheckboxDemo$input_checked_derive = derive(['state'], (state) =>
+  state.checked === true ? '' : null,
+);
+export const GalleryCheckboxDemo$input_data_state_derive = derive(['state'], (state) =>
+  state.checked === 'indeterminate' ? 'indeterminate' : state.checked ? 'checked' : 'unchecked',
+);
+export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.checked),
+);

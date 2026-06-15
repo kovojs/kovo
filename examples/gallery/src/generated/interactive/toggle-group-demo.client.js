@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryToggleGroupDemo$section_keydown = handler((event, ctx) => {
   ctx.state.activeValue = ctx.state.activeValue === 'bold' ? 'italic' : 'bold';
@@ -80,3 +80,8 @@ export const GalleryToggleGroupDemo$button_click_2 = handler((event, ctx) => {
   }
   if (output) output['textContent'] = ctx.state.value || 'none';
 });
+
+export const GalleryToggleGroupDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.value || 'none',
+);

@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryFieldDemo$input_input = handler((event, ctx) => {
   ctx.state.email = 'ada@jiso.dev';
@@ -61,3 +61,15 @@ export const GalleryFieldDemo$input_click = handler((event, ctx) => {
   }
   if (checkbox) checkbox['checked'] = ctx.state.shippingDisabled;
 });
+
+export const GalleryFieldDemo$input_value_derive = derive(['state'], (state) => state.email);
+export const GalleryFieldDemo$select_value_derive = derive(['state'], (state) => state.plan);
+export const GalleryFieldDemo$option_selected_derive = derive(['state'], (state) =>
+  state.plan === 'team' ? '' : null,
+);
+export const GalleryFieldDemo$option_selected_derive_2 = derive(['state'], (state) =>
+  state.plan === 'enterprise' ? '' : null,
+);
+export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state) =>
+  state.shippingDisabled ? '' : null,
+);

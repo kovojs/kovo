@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/dropdown-menu-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   dropdownMenuContentAttributes,
@@ -57,14 +63,14 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
           {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
           class={TRIGGER_CLASS}
           id="gallery-dropdown-menu-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_click"
         >
           Actions
         </button>
         <div
           {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
           class={CONTENT_CLASS}
-          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$div_keydown"
+          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$div_keydown"
         >
           <button
             {...dropdownMenuItemAttributes({
@@ -74,7 +80,7 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemValue: 'duplicate',
             })}
             class={ITEM_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_click_2"
           >
             Duplicate
           </button>
@@ -98,14 +104,21 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemValue: 'rename',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=2d7b7818#GalleryDropdownMenuDemo$button_click_3"
+            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$button_click_3"
           >
             Rename
           </button>
         </div>
-        <output data-demo-state="dropdown-open">{state.open ? 'open' : 'closed'}</output>
-        <output data-demo-state="dropdown-value">{state.value}</output>
+        <output
+          data-demo-state="dropdown-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=8770eabc#GalleryDropdownMenuDemo$output_text_derive"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
+        <output data-demo-state="dropdown-value" data-bind="state.value">
+          {state.value}
+        </output>
       </section>
     );
   },

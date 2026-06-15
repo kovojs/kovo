@@ -1,7 +1,18 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/toggle-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state) =>
+  String(state.pressed),
+);
+export const GalleryToggleDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.pressed ? 'pressed' : 'off',
+);
+export const GalleryToggleDemo$output_text_derive = derive(['state'], (state) =>
+  state.pressed ? 'pressed' : 'off',
+);
+
 import { component } from '@jiso/core';
-import { toggleRootAttributes } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -19,28 +30,30 @@ export interface GalleryToggleDemoState {
 // client module under src/generated/interactive are compiler artifacts.
 export const GalleryToggleDemo = component('gallery-toggle-demo', {
   state: () => ({ pressed: false }),
-  render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => {
-    const attrs = toggleRootAttributes({ pressed: state.pressed });
-
-    return (
-      <section
-        class="grid gap-2 text-sm text-neutral-950"
-        data-gallery-interactive="toggle"
-        fw-c="gallery-toggle-demo"
-        fw-state='{"pressed":false}'
+  render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => (
+    <section
+      class="grid gap-2 text-sm text-neutral-950"
+      data-gallery-interactive="toggle"
+      fw-c="gallery-toggle-demo"
+      fw-state='{"pressed":false}'
+    >
+      <button
+        aria-label="Toggle gallery density"
+        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$button_aria_pressed_derive"
+        class={BUTTON_CLASS}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$button_click"
+        type="button"
       >
-        <button
-          {...attrs}
-          aria-label="Toggle gallery density"
-          class={BUTTON_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=359e44f6#GalleryToggleDemo$button_click"
-        >
-          Dense rows
-        </button>
-        <output class="text-xs text-neutral-500" data-demo-state="pressed">
-          {state.pressed ? 'pressed' : 'off'}
-        </output>
-      </section>
-    );
-  },
+        Dense rows
+      </button>
+      <output
+        class="text-xs text-neutral-500"
+        data-demo-state="pressed"
+        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=26df9a57#GalleryToggleDemo$output_text_derive"
+      >
+        {state.pressed ? 'pressed' : 'off'}
+      </output>
+    </section>
+  ),
 });

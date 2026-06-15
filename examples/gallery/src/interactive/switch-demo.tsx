@@ -1,6 +1,5 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
-import { switchRootAttributes } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/switch.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -19,28 +18,26 @@ export interface GallerySwitchDemoState {
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GallerySwitchDemo = component('gallery-switch-demo', {
   state: () => ({ checked: false }),
-  render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => {
-    const attrs = switchRootAttributes({
-      checked: state.checked,
-      form: 'gallery-switch-form',
-      name: 'gallery-notifications',
-      value: 'enabled',
-    });
-
-    return (
-      <label class={ROOT_CLASS} data-gallery-interactive="switch">
-        <input
-          {...attrs}
-          class={INPUT_CLASS}
-          onClick={() => {
-            state.checked = !state.checked;
-          }}
-        />
-        <span class="select-none leading-none">Notifications</span>
-        <output class="text-xs text-neutral-500" data-demo-state="checked">
-          {state.checked ? 'on' : 'off'}
-        </output>
-      </label>
-    );
-  },
+  render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => (
+    <label class={ROOT_CLASS} data-gallery-interactive="switch">
+      <input
+        aria-checked={String(state.checked)}
+        checked={state.checked}
+        class={INPUT_CLASS}
+        data-state={state.checked ? 'checked' : 'unchecked'}
+        form="gallery-switch-form"
+        name="gallery-notifications"
+        onClick={() => {
+          state.checked = !state.checked;
+        }}
+        role="switch"
+        type="checkbox"
+        value="enabled"
+      />
+      <span class="select-none leading-none">Notifications</span>
+      <output class="text-xs text-neutral-500" data-demo-state="checked">
+        {state.checked ? 'on' : 'off'}
+      </output>
+    </label>
+  ),
 });

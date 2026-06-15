@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/meter-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryMeterDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.value),
+);
+
 import { component } from '@jiso/core';
 import { meterRootAttributes } from '@jiso/headless-ui/primitives';
 
@@ -47,11 +53,16 @@ export const GalleryMeterDemo = component('gallery-meter-demo', {
         <button
           type="button"
           class={BUTTON_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=b474bee1#GalleryMeterDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=76d0f2c6#GalleryMeterDemo$button_click"
         >
           Optimize capacity
         </button>
-        <output data-demo-state="meter-value">{String(state.value)}</output>
+        <output
+          data-demo-state="meter-value"
+          data-bind="/c/examples/gallery/src/generated/interactive/meter-demo.client.js?v=76d0f2c6#GalleryMeterDemo$output_text_derive"
+        >
+          {String(state.value)}
+        </output>
       </section>
     );
   },

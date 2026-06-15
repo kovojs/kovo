@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/pure-markup-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryPureMarkupDemo$output_text_derive = derive(['state'], (state) =>
+  state.submitted ? 'confirmed' : 'pending',
+);
+
 import { component } from '@jiso/core';
 
 export interface GalleryPureMarkupDemoState {
@@ -68,12 +74,15 @@ export const GalleryPureMarkupDemo = component('gallery-pure-markup-demo', {
             class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-neutral-950 bg-neutral-950 px-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:pointer-events-none disabled:opacity-50"
             form="gallery-pure-markup-form"
             type="button"
-            on:click="/c/examples/gallery/src/generated/interactive/pure-markup-demo.client.js?v=9a86ad8d#GalleryPureMarkupDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/pure-markup-demo.client.js?v=2eccd0ec#GalleryPureMarkupDemo$button_click"
           >
             Confirm
           </button>
         </form>
-        <output data-demo-state="pure-markup-submit">
+        <output
+          data-demo-state="pure-markup-submit"
+          data-bind="/c/examples/gallery/src/generated/interactive/pure-markup-demo.client.js?v=2eccd0ec#GalleryPureMarkupDemo$output_text_derive"
+        >
           {state.submitted ? 'confirmed' : 'pending'}
         </output>
       </section>

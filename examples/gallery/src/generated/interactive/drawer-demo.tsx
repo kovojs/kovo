@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/drawer-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryDrawerDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   dialogCloseAttributes,
@@ -42,14 +48,14 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
         class="grid gap-2"
         data-gallery-interactive="drawer"
         data-side="bottom"
-        on:keydown="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=748c48b8#GalleryDrawerDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=b254bf73#GalleryDrawerDemo$section_keydown"
         fw-c="gallery-drawer-demo"
         fw-state='{"open":false}'
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=748c48b8#GalleryDrawerDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=b254bf73#GalleryDrawerDemo$button_click"
         >
           Open drawer
         </button>
@@ -57,7 +63,7 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
           class={CONTENT_CLASS}
           data-side="bottom"
-          on:cancel="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=748c48b8#GalleryDrawerDemo$dialog_cancel"
+          on:cancel="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=b254bf73#GalleryDrawerDemo$dialog_cancel"
         >
           <header class={HEADER_CLASS}>
             <h2 class={TITLE_CLASS} id={titleId}>
@@ -70,12 +76,17 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
           <button
             {...dialogCloseAttributes({ contentId, open: state.open })}
             class={CLOSE_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=748c48b8#GalleryDrawerDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=b254bf73#GalleryDrawerDemo$button_click_2"
           >
             Close drawer
           </button>
         </dialog>
-        <output data-demo-state="drawer-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          data-demo-state="drawer-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/drawer-demo.client.js?v=b254bf73#GalleryDrawerDemo$output_text_derive"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </section>
     );
   },

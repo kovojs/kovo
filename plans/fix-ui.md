@@ -1,6 +1,7 @@
 # Fix UI: make gallery components behave like their base-ui / shadcn models
 
-Status: **open — Phase 0 done; Phase 1 compiler/runtime/coverage landed, demo migration remains.**
+Status: **open — Phase 0 done; Phase 1 target reactive migration verified; primitive behavior and
+per-component parity remain.**
 Created 2026-06-14. `SPEC.md` is the source of truth for framework behavior; this file is the active
 remediation ledger for the `@jiso/headless-ui` (modeled on **Base UI**) and `@jiso/ui` (modeled on
 **shadcn/ui**, i.e. Radix) component layers as exercised by `examples/gallery`.
@@ -20,9 +21,13 @@ Done when:
       `Failed to resolve module specifier` errors, and `keydown`/`contextmenu`/`paste`/`cancel`/
       `focus`/`blur`/hover intent all fire (SPEC §4.4). Gallery renders styled. _(Phase 0 done +
       verified via `scratch/gallery-verify-noshim.mjs`.)_
-- [ ] **Reactive by default:** a handler that only mutates `ctx.state` reflects to the DOM
+- [x] **Reactive by default:** a handler that only mutates `ctx.state` reflects to the DOM
       (aria/`data-state`/text/`hidden`) with no hand-authored `setAttribute` — the §4.8 update plan runs
       for island-local state, and FW311 coverage flags unstamped state reads at compile time.
+  - Evidence 2026-06-15: see `plans/reactive-ui.md` S1-S8 and acceptance evidence; focused no-shim
+    Playwright verification passed `switch`, `toggle`, `disclosure`, and `checkbox` state, ARIA,
+    `data-state`, native `checked`/`hidden`, and text-output assertions against the unmodified static
+    export.
 - [ ] **Primitive-driven:** no demo contains hand-rolled `Reflect['get'](globalThis,'document')`
       keyboard logic or hardcoded element-id/state-value scripts; each reads `event.key` via the chained
       primitive reducer (`tabsKeyDown`, `comboboxKeyDown`, `radioGroupKeyDown`, …).
@@ -163,8 +168,12 @@ coverage gate. **Fleshed out as a standalone plan: `plans/reactive-ui.md`.** Sum
 - [x] **Coverage** — extend the §4.9 / FW311 exhaustiveness check to state reads.
   - Evidence 2026-06-15: see `plans/reactive-ui.md` S3/S6 evidence; FW311 and SPEC §4.9 are broadened
     to query/state-dependent DOM positions, with CLI/check fixture coverage for `source=state`.
-- [ ] **Migrate** `switch`/`toggle`/`disclosure`/`checkbox` to declarative state binding (handlers
+- [x] **Migrate** `switch`/`toggle`/`disclosure`/`checkbox` to declarative state binding (handlers
       reduce to a state mutation); verify in the no-shim harness; imperative demos unaffected.
+  - Evidence 2026-06-15: see `plans/reactive-ui.md` S7/S8; `pnpm --filter @jiso/example-gallery
+    emit:interactive-gallery --check`, `node examples/gallery/scripts/export-static.mjs --out
+    examples/gallery/dist`, `node scratch/gallery-verify-noshim.mjs`, and the focused target
+    Playwright probe passed.
 
 Note: the `{...primitiveAttrs(state)}` spread hides the dependency from the compiler — Phase 1 migrates
 the 4 target demos to direct expressions; the general primitive-composition binding is Phase 2 below.
@@ -239,16 +248,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Selection controls
 
-- [ ] **switch** [P0]: click sets `fw-state {checked:true}` but `aria-checked`/`data-state`/native
-      `checked`/`<output>` all stay stale — no visible toggle (no native backstop). Fixed by Phase 1
-      (state→DOM stamps); interim: bind `aria-checked`/`data-state`/output via direct state expressions
-      and route through `switchTriggerClick`. Add Enter-to-toggle to match shadcn.
-- [ ] **toggle** [P0]: identical to switch — `aria-pressed`/`data-state`/output never update; a
-      `<button>` has no native backstop so it is fully inert. Phase 1 + `toggleTriggerClick`.
-- [ ] **checkbox** [P1]: starts indeterminate; click clears the native `indeterminate` property but
-      `aria-checked` stays `'mixed'`, `data-state` and `<output>` stay stale (handler only hand-cleared
-      the native property). Phase 1 stamps + `checkboxTriggerClick`/`applyCheckboxIndeterminate`
-      (primitive already maps indeterminate→true on first click).
+- [ ] **switch** [P0]: Phase 1 now updates `fw-state`, `aria-checked`, `data-state`, native `checked`,
+      and `<output>` from declarative state bindings in the no-shim export. Remaining parity work:
+      route through `switchTriggerClick` and add Enter-to-toggle to match shadcn.
+- [ ] **toggle** [P0]: Phase 1 now updates `aria-pressed`, `data-state`, and `<output>` from
+      declarative state bindings. Remaining parity work: route through `toggleTriggerClick` and cover
+      the modeled keyboard/button contract.
+- [ ] **checkbox** [P1]: Phase 1 now updates `aria-checked`, `data-state`, native `checked`, and
+      `<output>` from the indeterminate initial state on click. Remaining parity work:
+      `checkboxTriggerClick`/`applyCheckboxIndeterminate` and fuller checkbox model coverage.
 - [ ] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
       every key (Tab/typing flip it) and never wraps/skips disabled; per-item `onClick` is hardcoded
       one-directional and native `checked` desyncs from stamped `aria-checked`. Wire `radioGroupKeyDown` + `radioGroupItemClick`; maintain roving `tabindex` via `radioGroupItemTabIndex`.
@@ -262,9 +270,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Expandables
 
-- [ ] **disclosure** [P0]: clicking the trigger does nothing — panel `hidden`/`data-state` and
-      `aria-expanded` never update (cleanest reproduction of the Phase-1 gap; no native backstop).
-      Fixed by Phase 1; interim: bind `hidden={!state.open}`/`aria-expanded`/`data-state` directly.
+- [ ] **disclosure** [P0]: Phase 1 now updates trigger `aria-expanded`/`data-state` and panel
+      `hidden`/`data-state` from declarative state bindings in the no-shim export. Remaining parity
+      work: route through the modeled disclosure primitive and add keyboard/focus contract coverage.
 - [ ] **tabs** [P1]: `onKeyDown` is a stub that **never reads `event.key`** (any key flips
       overview→details); no ArrowRight/Left roving, no Home/End, no manual Enter/Space activation, no
       disabled-skip. Replace with `tabsKeyDown` + `tabsMoveFocus`; re-stamp roving `tabIndex`,

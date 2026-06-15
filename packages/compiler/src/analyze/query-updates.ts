@@ -228,6 +228,7 @@ export function collectQueryUpdateCoverage(
   for (const expression of jsxStateExpressionPaths(model)) {
     const path = expression.path;
     if (coveredPaths.has(coveragePathKey('state', path))) continue;
+    if (stateExpressionCoveredByDataBind(expression, model)) continue;
 
     facts.push({
       componentName,
@@ -374,6 +375,7 @@ function jsxQueryExpressionPaths(
 
 function jsxStateExpressionPaths(model: ComponentModuleModel): QueryPathExpressionFact[] {
   return jsxExpressions(model)
+    .filter((expression) => !isJsxEventAttributeExpression(expression, model))
     .flatMap((expression) => {
       const statePaths = [...new Set(expression.propertyAccesses.map((path) => path.path))].filter(
         isStatePath,
@@ -384,6 +386,49 @@ function jsxStateExpressionPaths(model: ComponentModuleModel): QueryPathExpressi
         start: expression.start,
       }));
     });
+}
+
+function stateExpressionCoveredByDataBind(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): boolean {
+  const element = innermostContainingElement(expression, model);
+  const binding = element?.attributes.find(
+    (attribute) => attribute.name === 'data-bind' && attribute.value?.startsWith('state.'),
+  );
+  return binding !== undefined;
+}
+
+function innermostContainingElement(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): JsxElementModel | null {
+  return (
+    jsxElements(model)
+      .filter(
+        (element) =>
+          !element.selfClosing &&
+          expression.start >= element.openingEnd &&
+          expression.end <= element.closingStart,
+      )
+      .sort((left, right) => left.end - left.start - (right.end - right.start))[0] ?? null
+  );
+}
+
+function isJsxEventAttributeExpression(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): boolean {
+  return jsxElements(model).some((element) =>
+    element.attributes.some(
+      (attribute) =>
+        (attribute.domEventName !== undefined || attribute.executionTriggerName !== undefined) &&
+        attribute.expressionStart !== undefined &&
+        attribute.expressionEnd !== undefined &&
+        expression.start >= attribute.expressionStart &&
+        expression.end <= attribute.expressionEnd,
+    ),
+  );
 }
 
 function updateCoverageKey(fact: QueryUpdateCoverageFact): string {

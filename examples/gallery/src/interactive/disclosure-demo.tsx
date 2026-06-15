@@ -1,9 +1,5 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
-import {
-  disclosureContentAttributes,
-  disclosureTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/disclosure.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -23,26 +19,28 @@ export interface GalleryDisclosureDemoState {
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
   state: () => ({ open: false }),
-  render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => {
-    const contentId = 'gallery-interactive-disclosure-panel';
-    const triggerAttrs = disclosureTriggerAttributes({ contentId, open: state.open });
-    const contentAttrs = disclosureContentAttributes({ contentId, open: state.open });
-
-    return (
-      <section class={ROOT_CLASS} data-gallery-interactive="disclosure">
-        <button
-          {...triggerAttrs}
-          class={TRIGGER_CLASS}
-          onClick={() => {
-            state.open = !state.open;
-          }}
-        >
-          Shipping rules
-        </button>
-        <div {...contentAttrs} class={CONTENT_CLASS}>
-          Orders over $50 ship free.
-        </div>
-      </section>
-    );
-  },
+  render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => (
+    <section class={ROOT_CLASS} data-gallery-interactive="disclosure">
+      <button
+        aria-controls="gallery-interactive-disclosure-panel"
+        aria-expanded={String(state.open)}
+        class={TRIGGER_CLASS}
+        data-state={state.open ? 'open' : 'closed'}
+        onClick={() => {
+          state.open = !state.open;
+        }}
+        type="button"
+      >
+        Shipping rules
+      </button>
+      <div
+        class={CONTENT_CLASS}
+        data-state={state.open ? 'open' : 'closed'}
+        hidden={!state.open}
+        id="gallery-interactive-disclosure-panel"
+      >
+        Orders over $50 ship free.
+      </div>
+    </section>
+  ),
 });

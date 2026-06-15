@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryMeterDemo$button_click = handler((event, ctx) => {
   ctx.state.value = ctx.state.value === 92 ? 72 : 92;
@@ -26,3 +26,7 @@ export const GalleryMeterDemo$button_click = handler((event, ctx) => {
   }
   if (output) output['textContent'] = String(ctx.state.value);
 });
+
+export const GalleryMeterDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.value),
+);

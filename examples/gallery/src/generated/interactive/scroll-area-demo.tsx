@@ -106,7 +106,9 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
         >
           {atEnd ? 'Back to top' : 'Jump to end'}
         </button>
-        <output data-demo-state="scroll-area-position">{state.position}</output>
+        <output data-demo-state="scroll-area-position" data-bind="state.position">
+          {state.position}
+        </output>
       </section>
     );
   },

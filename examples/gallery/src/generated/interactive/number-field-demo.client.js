@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryNumberFieldDemo$button_click = handler((event, ctx) => {
   ctx.state.value = ctx.state.value <= 0 ? 0 : ctx.state.value - 1;
@@ -49,3 +49,7 @@ export const GalleryNumberFieldDemo$button_click_2 = handler((event, ctx) => {
   if (input) input['value'] = String(ctx.state.value);
   if (output) output['textContent'] = String(ctx.state.value);
 });
+
+export const GalleryNumberFieldDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.value),
+);

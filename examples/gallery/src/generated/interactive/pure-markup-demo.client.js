@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryPureMarkupDemo$button_click = handler((event, ctx) => {
   ctx.state.submitted = true;
@@ -10,3 +10,7 @@ export const GalleryPureMarkupDemo$button_click = handler((event, ctx) => {
 
   if (output) output['textContent'] = 'confirmed';
 });
+
+export const GalleryPureMarkupDemo$output_text_derive = derive(['state'], (state) =>
+  state.submitted ? 'confirmed' : 'pending',
+);

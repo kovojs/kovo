@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryCommandDemo$button_click = handler((event, ctx) => {
   ctx.state.open = true;
@@ -75,3 +75,8 @@ export const GalleryCommandDemo$button_click_2 = handler((event, ctx) => {
 export const GalleryCommandDemo$button_click_3 = handler((event, ctx) => {
   ctx.state.open = false;
 });
+
+export const GalleryCommandDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.inputValue || 'empty',
+);

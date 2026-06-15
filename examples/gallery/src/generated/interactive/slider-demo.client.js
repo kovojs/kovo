@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GallerySliderDemo$input_input = handler((event, ctx) => {
   const doc = Reflect['get'](globalThis, 'document');
@@ -53,3 +53,7 @@ export const GallerySliderDemo$input_input = handler((event, ctx) => {
   }
   if (output) output['textContent'] = String(ctx.state.value);
 });
+
+export const GallerySliderDemo$output_text_derive = derive(['state'], (state) =>
+  String(state.value),
+);

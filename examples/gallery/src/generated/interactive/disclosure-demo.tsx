@@ -1,10 +1,21 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/disclosure-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryDisclosureDemo$button_aria_expanded_derive = derive(['state'], (state) =>
+  String(state.open),
+);
+export const GalleryDisclosureDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDisclosureDemo$div_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDisclosureDemo$div_hidden_derive = derive(['state'], (state) =>
+  !state.open ? '' : null,
+);
+
 import { component } from '@jiso/core';
-import {
-  disclosureContentAttributes,
-  disclosureTriggerAttributes,
-} from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/disclosure.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -24,29 +35,31 @@ export interface GalleryDisclosureDemoState {
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
   state: () => ({ open: false }),
-  render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => {
-    const contentId = 'gallery-interactive-disclosure-panel';
-    const triggerAttrs = disclosureTriggerAttributes({ contentId, open: state.open });
-    const contentAttrs = disclosureContentAttributes({ contentId, open: state.open });
-
-    return (
-      <section
-        class={ROOT_CLASS}
-        data-gallery-interactive="disclosure"
-        fw-c="gallery-disclosure-demo"
-        fw-state='{"open":false}'
+  render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => (
+    <section
+      class={ROOT_CLASS}
+      data-gallery-interactive="disclosure"
+      fw-c="gallery-disclosure-demo"
+      fw-state='{"open":false}'
+    >
+      <button
+        aria-controls="gallery-interactive-disclosure-panel"
+        data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=ba041580#GalleryDisclosureDemo$button_aria_expanded_derive"
+        class={TRIGGER_CLASS}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=ba041580#GalleryDisclosureDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=ba041580#GalleryDisclosureDemo$button_click"
+        type="button"
       >
-        <button
-          {...triggerAttrs}
-          class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=18acc22f#GalleryDisclosureDemo$button_click"
-        >
-          Shipping rules
-        </button>
-        <div {...contentAttrs} class={CONTENT_CLASS}>
-          Orders over $50 ship free.
-        </div>
-      </section>
-    );
-  },
+        Shipping rules
+      </button>
+      <div
+        class={CONTENT_CLASS}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=ba041580#GalleryDisclosureDemo$div_data_state_derive"
+        data-bind:hidden="/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js?v=ba041580#GalleryDisclosureDemo$div_hidden_derive"
+        id="gallery-interactive-disclosure-panel"
+      >
+        Orders over $50 ship free.
+      </div>
+    </section>
+  ),
 });

@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryDropdownMenuDemo$button_click = handler((event, ctx) => {
   ctx.state.open = !ctx.state.open;
@@ -97,3 +97,7 @@ export const GalleryDropdownMenuDemo$button_click_3 = handler((event, ctx) => {
   if (item) Object(item)['setAttribute']?.call(item, 'data-highlighted', '');
   if (output) output['textContent'] = 'rename';
 });
+
+export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);

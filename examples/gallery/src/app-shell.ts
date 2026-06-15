@@ -13,11 +13,15 @@ const galleryGeneratedRoot = fileURLToPath(new URL('./generated/interactive/', i
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
 
 // SPEC.md §4.4: load-bearing import maps are a non-goal — "the compiler and server emit full module
-// URLs". Generated client modules `import { handler } from '@jiso/runtime'` (an identity wrapper), a
-// bare specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/ URL
-// and rewrite the bare import to it so the static export is interactive without an import map.
+// URLs". Generated client modules import tiny declaration helpers from `@jiso/runtime`, a bare
+// specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/ URL and
+// rewrite the bare import to it so the static export is interactive without an import map.
 const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/jiso-runtime.client.js';
-const galleryRuntimeModuleSource = 'export const handler = (fn) => fn;\n';
+const galleryRuntimeModuleSource = [
+  'export const derive = (inputs, run) => ({ inputs, run });',
+  'export const handler = (fn) => fn;',
+  '',
+].join('\n');
 const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
   path: galleryRuntimeModulePath,
   source: galleryRuntimeModuleSource,

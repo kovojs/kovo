@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryToolbarDemo$div_keydown = handler((event, ctx) => {
   ctx.state.activeValue = ctx.state.activeValue === 'bold' ? 'link' : 'bold';
@@ -100,3 +100,8 @@ export const GalleryToolbarDemo$button_click_2 = handler((event, ctx) => {
   if (activeOutput) activeOutput['textContent'] = ctx.state.activeValue;
   if (pressedOutput) pressedOutput['textContent'] = ctx.state.pressedValue || 'none';
 });
+
+export const GalleryToolbarDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.pressedValue || 'none',
+);

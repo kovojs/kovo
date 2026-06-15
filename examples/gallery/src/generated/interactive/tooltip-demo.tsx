@@ -1,5 +1,11 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/tooltip-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   tooltipContentAttributes,
@@ -39,18 +45,23 @@ export const GalleryTooltipDemo = component('gallery-tooltip-demo', {
         <button
           {...tooltipTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
-          on:blur="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=294f0bc3#GalleryTooltipDemo$button_blur"
-          on:focus="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=294f0bc3#GalleryTooltipDemo$button_focus"
-          on:keydown="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=294f0bc3#GalleryTooltipDemo$button_keydown"
-          on:pointerenter="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=294f0bc3#GalleryTooltipDemo$button_pointerenter"
-          on:pointerleave="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=294f0bc3#GalleryTooltipDemo$button_pointerleave"
+          on:blur="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=de3ddc44#GalleryTooltipDemo$button_blur"
+          on:focus="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=de3ddc44#GalleryTooltipDemo$button_focus"
+          on:keydown="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=de3ddc44#GalleryTooltipDemo$button_keydown"
+          on:pointerenter="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=de3ddc44#GalleryTooltipDemo$button_pointerenter"
+          on:pointerleave="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=de3ddc44#GalleryTooltipDemo$button_pointerleave"
         >
           Shipping code
         </button>
         <span {...tooltipContentAttributes({ contentId, open: state.open })} class={CONTENT_CLASS}>
           Use the code printed on the packing slip.
         </span>
-        <output data-demo-state="tooltip-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          data-demo-state="tooltip-open"
+          data-bind="/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js?v=de3ddc44#GalleryTooltipDemo$output_text_derive"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </section>
     );
   },

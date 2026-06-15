@@ -1,5 +1,5 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
 export const GalleryAccordionDemo$button_click = handler((event, ctx) => {
   ctx.state.value = ctx.state.value === 'shipping' ? '' : 'shipping';
@@ -71,3 +71,8 @@ export const GalleryAccordionDemo$button_click_2 = handler((event, ctx) => {
   if (billingPanel) billingPanel['hidden'] = ctx.state.value !== 'billing';
   if (output) output['textContent'] = ctx.state.value || 'none';
 });
+
+export const GalleryAccordionDemo$output_text_derive = derive(
+  ['state'],
+  (state) => state.value || 'none',
+);
