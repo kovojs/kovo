@@ -8,6 +8,7 @@ describe('compiled interactive gallery demos', () => {
     const accordionClient = readGenerated('accordion-demo.client.js');
     const alertDialog = readGenerated('alert-dialog-demo.tsx');
     const autocomplete = readGenerated('autocomplete-demo.tsx');
+    const autocompleteClient = readGenerated('autocomplete-demo.client.js');
     const toggle = readGenerated('toggle-demo.tsx');
     const checkbox = readGenerated('checkbox-demo.tsx');
     const checkboxGroup = readGenerated('checkbox-group-demo.tsx');
@@ -102,7 +103,12 @@ describe('compiled interactive gallery demos', () => {
       'id="gallery-autocomplete-form" data-gallery-form="autocomplete"',
     );
     expect(autocomplete).toContain("form: 'gallery-autocomplete-form'");
+    expect(autocomplete).toContain('autocompleteListAttributes({');
     expect(autocomplete).toContain('autocompleteOptionAttributes({');
+    expect(autocomplete).not.toContain('<datalist');
+    expect(autocomplete).toContain('data-bind:aria-expanded=');
+    expect(autocomplete).toContain('data-bind:aria-activedescendant=');
+    expect(autocomplete).toContain('data-bind:hidden=');
     expect(autocomplete).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$input_input"/,
     );
@@ -110,7 +116,13 @@ describe('compiled interactive gallery demos', () => {
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$input_keydown"/,
     );
     expect(autocomplete).toMatch(
-      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$option_click"/,
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$button_click_2"/,
+    );
+    expect(autocompleteClient).toContain('autocompleteInput as _autocompleteInput');
+    expect(autocompleteClient).toContain('autocompleteKeyDown as _autocompleteKeyDown');
+    expect(autocompleteClient).toContain('autocompleteOptionClick as _autocompleteOptionClick');
+    expect(autocompleteClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis|ctx\.params)\b/,
     );
 
     expect(toggle).toContain('data-gallery-interactive="toggle"');

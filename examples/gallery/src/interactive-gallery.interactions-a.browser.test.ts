@@ -361,10 +361,11 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('updates autocomplete datalist suggestions and value through generated handlers', async () => {
+  it('updates autocomplete listbox suggestions and value through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAutocompleteDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'));
     const form = required(root.querySelector<HTMLFormElement>('#gallery-autocomplete-form'));
+    const listbox = required(root.querySelector<HTMLElement>('#gallery-autocomplete-list'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
     );
@@ -382,16 +383,20 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(input.form).toBe(form);
     expect(input.value).toBe('de');
     expect(new FormData(form).get('gallery-tag')).toBe('de');
+    expect(listbox.getAttribute('role')).toBe('listbox');
+    expect(listbox.hidden).toBe(true);
     expect(output.textContent).toBe('Design');
 
+    input.value = 'dev';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
       const currentInput = required(
         root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'),
       );
+      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-autocomplete-list'));
       const currentDevelopment = required(
-        root.querySelector<HTMLOptionElement>('#gallery-autocomplete-list-option-0'),
+        root.querySelector<HTMLButtonElement>('#gallery-autocomplete-list-option-2'),
       );
 
       expect(imports.at(-1)).toBe(
@@ -402,16 +407,19 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       expect(currentInput.getAttribute('aria-expanded')).toBe('true');
       expect(currentInput.getAttribute('aria-activedescendant')).toBe(
-        'gallery-autocomplete-list-option-0',
+        'gallery-autocomplete-list-option-2',
       );
       expect(currentInput.value).toBe('dev');
       expect(new FormData(form).get('gallery-tag')).toBe('dev');
+      expect(currentListbox.hidden).toBe(false);
       expect(currentDevelopment.value).toBe('development');
+      expect(currentDevelopment.getAttribute('role')).toBe('option');
+      expect(currentDevelopment.getAttribute('aria-selected')).toBe('false');
       expect(currentDevelopment.getAttribute('data-highlighted')).toBe('');
     });
 
     // SPEC §12.1: the autocomplete open state (expanded combobox with an active
-    // descendant over the suggestion datalist) must stay axe-clean.
+    // descendant over the suggestion listbox) must stay axe-clean.
     await expectNoAxeViolations(root);
 
     required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input')).dispatchEvent(
@@ -436,7 +444,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
 
     required(
-      root.querySelector<HTMLOptionElement>('#gallery-autocomplete-list-option-0'),
+      root.querySelector<HTMLButtonElement>('#gallery-autocomplete-list-option-2'),
     ).dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     await vi.waitFor(() => {

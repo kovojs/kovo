@@ -118,7 +118,7 @@ describe('compiled interactive gallery demos', () => {
       open: false,
       value: 'design',
     };
-    clientHandler(autocomplete, 'GalleryAutocompleteDemo$input_input')(new Event('input'), {
+    clientHandler(autocomplete, 'GalleryAutocompleteDemo$input_input')(inputEvent('dev'), {
       params: {},
       signal,
       state: autocompleteState,
@@ -140,7 +140,7 @@ describe('compiled interactive gallery demos', () => {
       open: false,
       value: 'development',
     });
-    clientHandler(autocomplete, 'GalleryAutocompleteDemo$option_click')(new Event('click'), {
+    clientHandler(autocomplete, 'GalleryAutocompleteDemo$button_click_2')(new Event('click'), {
       params: { value: 'development' },
       signal,
       state: autocompleteState,

@@ -15,6 +15,7 @@ import {
 
 export interface AutocompleteItem {
   disabled?: boolean;
+  id?: string;
   label?: string;
   textValue?: string;
   value: string;
@@ -142,7 +143,8 @@ export type AutocompletePrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type AutocompleteInputEvent = Event & {
-  readonly currentTarget: EventTarget & { value?: string };
+  readonly currentTarget: (EventTarget & { value?: string }) | null;
+  readonly target?: (EventTarget & { value?: string }) | null;
 };
 export type AutocompleteOptionEvent = Event;
 export type AutocompleteKeyboardEvent = Event & { readonly key: string };
@@ -196,7 +198,7 @@ export function autocompleteInputAttributes(
   const listId = options.listId ?? options.id;
 
   // SPEC.md §6.3: form() typing validates real named controls; autocomplete
-  // keeps the native text input/datalist pair as the submitted control.
+  // keeps the native text input as the submitted control.
   return Object.freeze({
     ...autocompleteDataAttributes(options),
     'aria-autocomplete': 'list',
@@ -207,7 +209,7 @@ export function autocompleteInputAttributes(
     type: 'text',
     value: options.inputValue ?? options.value ?? '',
     ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
-    ...(listId === undefined ? {} : { 'aria-controls': listId, list: listId }),
+    ...(listId === undefined ? {} : { 'aria-controls': listId }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
@@ -226,6 +228,8 @@ export function autocompleteListAttributes(
     ...autocompleteDataAttributes(options),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
+    role: 'listbox',
+    ...(options.open === true ? {} : { hidden: true }),
   });
 }
 
@@ -237,10 +241,11 @@ export function autocompleteOptionAttributes(
 
   return Object.freeze({
     ...autocompleteOptionDataAttributes(options),
-    disabled,
-    selected,
+    'aria-selected': String(selected),
+    role: 'option',
     value: options.itemValue,
     ...(options.id === undefined ? {} : { id: options.id }),
+    ...(disabled ? { 'aria-disabled': 'true' } : {}),
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
   });
 }
@@ -444,14 +449,13 @@ export function autocompleteInput(
 ): AutocompleteInputChangeResult | undefined {
   if (event.defaultPrevented) return;
 
-  const result = setAutocompleteInputValue(
-    state,
-    event.currentTarget.value ?? '',
-    'input',
-    options,
-  );
+  const inputTarget = event.target ?? event.currentTarget;
+  const result = setAutocompleteInputValue(state, inputTarget?.value ?? '', 'input', options);
   if (!result.changed) {
-    event.currentTarget.value = result.inputValue;
+    if (inputTarget) inputTarget.value = result.inputValue;
+    if (event.currentTarget && event.currentTarget !== inputTarget) {
+      event.currentTarget.value = result.inputValue;
+    }
     event.preventDefault();
   }
 
@@ -564,6 +568,9 @@ function autocompleteActiveDescendant(
   options: AutocompleteInputAttributeOptions,
 ): string | undefined {
   if (options.highlightedValue === undefined) return undefined;
+
+  const itemId = options.items?.find((item) => item.value === options.highlightedValue)?.id;
+  if (itemId !== undefined) return itemId;
 
   const index = options.items?.findIndex((item) => item.value === options.highlightedValue) ?? -1;
   if (index < 0) return undefined;

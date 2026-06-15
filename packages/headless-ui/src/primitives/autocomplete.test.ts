@@ -44,13 +44,13 @@ import {
 import { autocompleteRootAttributes as primitiveAutocompleteRootAttributes } from './index.js';
 
 const cityItems: readonly AutocompleteItem[] = Object.freeze([
-  { label: 'Austin', value: 'austin' },
-  { disabled: true, label: 'Boston', value: 'boston' },
-  { textValue: 'Chicago city', value: 'chicago' },
+  { id: 'city-list-option-0', label: 'Austin', value: 'austin' },
+  { disabled: true, id: 'city-list-option-1', label: 'Boston', value: 'boston' },
+  { id: 'city-list-option-2', textValue: 'Chicago city', value: 'chicago' },
 ]);
 
 describe('headless-ui autocomplete primitive', () => {
-  it('builds root and input attributes around a native text input and datalist', () => {
+  it('builds root and input attributes around a native text input and listbox', () => {
     expect(
       autocompleteRootAttributes({
         id: 'city-root',
@@ -72,9 +72,9 @@ describe('headless-ui autocomplete primitive', () => {
         descriptionId: 'city-help',
         errorId: 'city-error',
         highlightedValue: 'chicago',
-        form: 'city-form',
-        id: 'city',
-        inputValue: 'chi',
+      form: 'city-form',
+      id: 'city',
+      inputValue: 'chi',
         invalid: true,
         items: cityItems,
         labelledBy: 'city-label',
@@ -100,7 +100,6 @@ describe('headless-ui autocomplete primitive', () => {
       disabled: false,
       form: 'city-form',
       id: 'city',
-      list: 'city-list',
       name: 'city',
       placeholder: 'Choose city',
       required: true,
@@ -134,28 +133,37 @@ describe('headless-ui autocomplete primitive', () => {
     expect(autocompleteListAttributes({ ...state, id: 'city-list' })).toEqual({
       'data-state': 'open',
       id: 'city-list',
+      role: 'listbox',
+    });
+    expect(autocompleteListAttributes({ id: 'city-list' })).toEqual({
+      'data-placeholder': '',
+      'data-state': 'closed',
+      hidden: true,
+      id: 'city-list',
+      role: 'listbox',
     });
     expect(
       autocompleteOptionAttributes({ ...state, id: 'city-option-0', itemValue: 'austin' }),
     ).toEqual({
+      'aria-selected': 'true',
       'data-state': 'checked',
-      disabled: false,
       id: 'city-option-0',
-      selected: true,
+      role: 'option',
       value: 'austin',
     });
     expect(autocompleteOptionAttributes({ ...state, itemValue: 'boston' })).toEqual({
+      'aria-disabled': 'true',
+      'aria-selected': 'false',
       'data-disabled': '',
       'data-state': 'unchecked',
-      disabled: true,
-      selected: false,
+      role: 'option',
       value: 'boston',
     });
     expect(autocompleteOptionAttributes({ ...state, itemValue: 'chicago' })).toEqual({
+      'aria-selected': 'false',
       'data-highlighted': '',
       'data-state': 'unchecked',
-      disabled: false,
-      selected: false,
+      role: 'option',
       value: 'chicago',
     });
     expect(autocompleteValueAttributes({ ...state, id: 'city-value' })).toEqual({
@@ -172,11 +180,11 @@ describe('headless-ui autocomplete primitive', () => {
     expect(autocompleteValueText({ value: 'custom' })).toBe('custom');
     expect(autocompleteValueText({ placeholder: 'Choose city', value: '' })).toBe('Choose city');
     expect(autocompleteSuggestions({ inputValue: 'c', items: cityItems })).toEqual([
-      { textValue: 'Chicago city', value: 'chicago' },
+      { id: 'city-list-option-2', textValue: 'Chicago city', value: 'chicago' },
     ]);
     expect(autocompleteSuggestions({ inputValue: '', items: cityItems })).toEqual([
-      { label: 'Austin', value: 'austin' },
-      { textValue: 'Chicago city', value: 'chicago' },
+      { id: 'city-list-option-0', label: 'Austin', value: 'austin' },
+      { id: 'city-list-option-2', textValue: 'Chicago city', value: 'chicago' },
     ]);
   });
 
@@ -358,6 +366,16 @@ describe('headless-ui autocomplete primitive', () => {
 
     expect(inputResult).toMatchObject({ changed: true, inputValue: 'chicago' });
     expect(reasons).toEqual(['input']);
+
+    const delegatedInputEvent = autocompleteInputEvent('target tag', 'current target tag');
+    const delegatedInputResult = autocompleteInput(delegatedInputEvent, {
+      inputValue: 'design',
+    });
+    expect(delegatedInputResult).toMatchObject({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'input', value: 'target tag' }),
+      inputValue: 'target tag',
+    });
 
     const disabledEvent = autocompleteInputEvent('chicago');
     const disabledResult = autocompleteInput(disabledEvent, {
@@ -555,13 +573,22 @@ describe('headless-ui autocomplete primitive', () => {
   });
 });
 
-function autocompleteInputEvent(value: string): Event & {
+function autocompleteInputEvent(
+  value: string,
+  currentTargetValue?: string,
+): Event & {
   readonly currentTarget: EventTarget & { value?: string };
+  readonly target: EventTarget & { value?: string };
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: EventTarget & { value?: string };
+    target: EventTarget & { value?: string };
   };
-  Object.defineProperty(event, 'currentTarget', { value: { value } });
+  const target = { value };
+  Object.defineProperty(event, 'currentTarget', {
+    value: currentTargetValue === undefined ? target : { value: currentTargetValue },
+  });
+  Object.defineProperty(event, 'target', { value: target });
   return event;
 }
 

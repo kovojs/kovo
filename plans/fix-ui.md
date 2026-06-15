@@ -285,10 +285,24 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
         `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
         and
         `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t combobox`.
-- [ ] **autocomplete** [P1]: popup is a native `<datalist>` with a single hardcoded `<option>` (not a
+- [x] **autocomplete** [P1]: popup is a native `<datalist>` with a single hardcoded `<option>` (not a
       navigable `role=listbox`); typing always scripts `'dev'→development`; arrows toggle open instead
       of navigating. Render a real `role=listbox`/`role=option` list from `autocompleteSuggestions`,
       wire `autocompleteKeyDown`/`autocompleteMove`, filter on real input.
+      - Evidence 2026-06-15: `packages/headless-ui/src/primitives/autocomplete.ts` now emits
+        listbox/option attributes instead of datalist/option attributes, accepts delegated
+        `event.target` input values, and resolves active descendants from item ids; covered by
+        `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/autocomplete.test.ts`.
+      - Evidence 2026-06-15: `examples/gallery/src/interactive/autocomplete-demo.tsx` renders a real
+        `div role=listbox` with option buttons, routes input/key/click handlers through
+        `autocompleteInput`, `autocompleteSuggestions`, `autocompleteKeyDown`, and
+        `autocompleteOptionClick`, and drives input/listbox/option/output state through TSX
+        bindings. Generated `autocomplete-demo.client.js` imports those primitive helpers and has no
+        `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches.
+      - Evidence 2026-06-15: gallery client/compile and browser interaction coverage passed via
+        `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
+        and
+        `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t autocomplete`.
 - [x] **command** [P0]: input `onKeyDown` early-returns on any non-Enter key, so Arrow nav does nothing
       and `aria-activedescendant`/`data-highlighted` never move. Wire `commandKeyDown`/`commandMove`,
       live filter + reset-highlight-to-first-match (cmdk model), Escape closes dialog.
