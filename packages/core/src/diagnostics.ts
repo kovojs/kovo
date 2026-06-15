@@ -15,6 +15,7 @@ export type DiagnosticCode =
   | 'FW225'
   | 'FW226'
   | 'FW227'
+  | 'FW228'
   | 'FW230'
   | 'FW231'
   | 'FW232'
@@ -170,6 +171,12 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Binding path traverses a nullable segment without ?.',
+  },
+  FW228: {
+    code: 'FW228',
+    help: 'SPEC §9.5 requires static-first route matching to be unambiguous at compile time; split the patterns or make one route path more specific.',
+    severity: 'error',
+    message: 'Ambiguous route table: two routes can match the same canonical request path.',
   },
   FW230: {
     code: 'FW230',

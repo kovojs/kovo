@@ -2,7 +2,11 @@ import type { JisoApp } from './app-types.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
-import { StaticExportError, type StaticExportDiagnostic } from './static-export-diagnostics.js';
+import {
+  blockingStaticExportDiagnostics,
+  StaticExportError,
+  type StaticExportDiagnostic,
+} from './static-export-diagnostics.js';
 import { createStaticExportReplayContext } from './static-export-replay-context.js';
 import {
   type StaticExportArtifact,
@@ -27,6 +31,9 @@ export async function replayStaticExportApp({
   onNonExportable,
   origin: originOption,
 }: StaticExportAppReplayOptions): Promise<StaticExportReplayResult> {
+  const appDiagnostics = blockingStaticExportDiagnostics(app.diagnostics);
+  if (appDiagnostics.length > 0) throw new StaticExportError(appDiagnostics);
+
   const routePlan = staticExportRoutePlan(app);
   const diagnostics = [...routePlan.diagnostics];
   if (diagnostics.length > 0 && onNonExportable !== 'skip') {

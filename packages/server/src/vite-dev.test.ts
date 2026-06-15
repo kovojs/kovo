@@ -203,6 +203,66 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('serves FW228 route-table diagnostics through the default dev handler', async () => {
+    const app = createApp({
+      routes: [
+        route('/products/:id', { page: () => '<main>Param</main>' }),
+        route('/products/new', { page: () => '<main>New</main>' }),
+      ],
+    });
+    let middleware: JisoAppShellViteMiddleware | undefined;
+    const plugin = jisoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule(id) {
+        expect(id).toBe('/src/app-shell.ts');
+        return { default: app };
+      },
+    });
+
+    expect(middleware).toBeDefined();
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        if (error) {
+          const message = error instanceof Error ? error.message : 'Unknown app-shell dev error';
+          response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          response.end(message);
+          return;
+        }
+
+        response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const address = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${address.port}/products/new`);
+      const body = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(body).toContain('<p class="jiso-diagnostic-code">FW228</p>');
+      expect(body).not.toContain('<main>New</main>');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('keeps unversioned client modules on the Vite fallback even with a custom predicate', async () => {
     const app = createApp({ routes: [route('/cart', {})] });
     let middleware: JisoAppShellViteMiddleware | undefined;

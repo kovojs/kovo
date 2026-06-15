@@ -6,6 +6,7 @@ export function isJisoApp(value: unknown): value is JisoApp {
   return (
     isRecord(value) &&
     isEndpointDeclarations(value.endpoints) &&
+    isAppDiagnostics(value.diagnostics) &&
     isMutationDeclarations(value.mutations) &&
     isQueryDeclarations(value.queries) &&
     isRouteDeclarations(value.routes) &&
@@ -18,6 +19,26 @@ export function isJisoApp(value: unknown): value is JisoApp {
     isOptionalFunction(value.renderRoute) &&
     isOptionalFunction(value.sessionProvider) &&
     isOptionalCsrfOptions(value.csrf)
+  );
+}
+
+function isAppDiagnostics(value: unknown): value is JisoApp['diagnostics'] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (diagnostic) =>
+        isRecord(diagnostic) &&
+        typeof diagnostic.code === 'string' &&
+        typeof diagnostic.fileName === 'string' &&
+        typeof diagnostic.message === 'string' &&
+        (diagnostic.help === undefined || typeof diagnostic.help === 'string') &&
+        (diagnostic.length === undefined || typeof diagnostic.length === 'number') &&
+        (diagnostic.severity === undefined || typeof diagnostic.severity === 'string') &&
+        (diagnostic.start === undefined ||
+          (isRecord(diagnostic.start) &&
+            typeof diagnostic.start.column === 'number' &&
+            typeof diagnostic.start.line === 'number')),
+    )
   );
 }
 

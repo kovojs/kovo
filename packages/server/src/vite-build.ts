@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { VersionedClientModuleInput } from './client-modules.js';
+import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
 import { isJisoApp } from './app-guards.js';
 import type { JisoApp } from './app-types.js';
 import type { PageHintOptions } from './hints.js';
@@ -91,6 +92,7 @@ export interface JisoAppShellBuild {
 
 export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
   assertJisoAppShellBuildApp(options.app);
+  assertNoBlockingAppDiagnostics(options.app);
   const manifestOptions = viteManifestOptions(options.base);
   const routeHints = buildRouteHints(options.manifest, options.routeEntries, manifestOptions);
   const app =

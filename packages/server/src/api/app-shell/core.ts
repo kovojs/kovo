@@ -5,6 +5,7 @@ export { route } from '../../route.js';
 export type {
   AppDocumentOptions,
   AppErrorShellOptions,
+  AppDiagnostic,
   AppMutationDeclaration,
   AppMutationResponseContext,
   AppMutationResponseOptions,

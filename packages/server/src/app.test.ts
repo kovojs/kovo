@@ -34,6 +34,7 @@ describe('server createApp request shell', () => {
     expect(app.endpoints).toEqual([statusEndpoint]);
     expect(app.queries).toEqual([productQuery]);
     expect(app.mutations).toEqual([]);
+    expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
     expect('use' in app).toBe(false);
   });
@@ -120,6 +121,35 @@ describe('server createApp request shell', () => {
     expect(method.status).toBe(405);
     expect(method.headers.get('allow')).toBe('GET, HEAD');
     await expect(method.text()).resolves.toBe('Method Not Allowed');
+  });
+
+  it('blocks ambiguous route tables with FW228 before declaration-order dispatch', async () => {
+    const app = createApp({
+      routes: [
+        route('/products/:id', { page: () => '<main>Param</main>' }),
+        route('/products/new', { page: () => '<main>New</main>' }),
+      ],
+    });
+
+    expect(app.diagnostics).toEqual([
+      {
+        code: 'FW228',
+        fileName: '/products/:id <-> /products/new',
+        help: expect.stringContaining('SPEC §9.5'),
+        message:
+          "Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
+      },
+    ]);
+
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/products/new'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(500);
+    expect(body).toContain('<p class="jiso-diagnostic-code">FW228</p>');
+    expect(body).toContain('/products/:id &lt;-&gt; /products/new');
+    expect(body).not.toContain('<main>New</main>');
   });
 
   it('renders configured error shells through the app request boundary', async () => {

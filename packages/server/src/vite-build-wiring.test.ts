@@ -155,6 +155,26 @@ describe('server app shell Vite plugin', () => {
     ).toThrow('App shell route build entry does not match an app route: /account');
   });
 
+  it('blocks FW228 route-table diagnostics through the Vite build helper', () => {
+    expect(() =>
+      createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [route('/products/:id', {}), route('/products/new', {})],
+        }),
+        manifest: {
+          'src/products.client.ts': {
+            file: 'assets/products.js',
+          },
+        },
+        routeEntryMap: {
+          '/products/new': 'src/products.client.ts',
+        },
+      }),
+    ).toThrow(
+      "FW228 Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
+    );
+  });
+
   it('creates a build from a Vite output bundle manifest', () => {
     const build = createJisoAppShellViteBuildFromBundle({
       app: createApp({ routes: [route('/cart', {})] }),

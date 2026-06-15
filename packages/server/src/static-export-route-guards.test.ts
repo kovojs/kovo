@@ -145,7 +145,7 @@ describe('server static export', () => {
     }
   });
 
-  it('rejects duplicate concrete route targets before static replay', async () => {
+  it('rejects canonical route-table ambiguities before static replay', async () => {
     let replayed = false;
     const app = createApp({
       routes: [
@@ -162,14 +162,14 @@ describe('server static export', () => {
     });
 
     await expect(exportStaticApp(app)).rejects.toMatchObject({
-      code: 'FW229',
+      code: 'FW228',
       diagnostics: [
         {
-          code: 'FW229',
+          code: 'FW228',
           message: expect.stringContaining(
-            "cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'",
+            "'/docs/intro' and '/docs/intro' can both match canonical request path '/docs/intro'",
           ),
-          routePath: '/docs/intro/',
+          routePath: '/docs/intro <-> /docs/intro',
         },
       ],
     });

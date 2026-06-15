@@ -64,14 +64,14 @@ describe('server route matching', () => {
       {
         code: 'FW228',
         message:
-          'Ambiguous route table entry. SPEC 6.4 routes must be statically provable navigation targets; planned 9.5 shell dispatch rejects route pairs that can match the same pathname.',
+          "Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
         paths: ['/products/:id', '/products/new'],
         witnessPath: '/products/new',
       },
       {
         code: 'FW228',
         message:
-          'Ambiguous route table entry. SPEC 6.4 routes must be statically provable navigation targets; planned 9.5 shell dispatch rejects route pairs that can match the same pathname.',
+          "Ambiguous route table: '/products/:sku/reviews' and '/products/:id/reviews' can both match canonical request path '/products/:sku/reviews'.",
         paths: ['/products/:sku/reviews', '/products/:id/reviews'],
         witnessPath: '/products/:sku/reviews',
       },

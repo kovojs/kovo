@@ -83,4 +83,30 @@ describe('server static export app replay boundary', () => {
       ],
     });
   });
+
+  it('reports FW228 route-table diagnostics before replaying route documents', async () => {
+    const app = createApp({
+      routes: [
+        route('/products/:id', {
+          page() {
+            throw new Error('ambiguous route replay should not run');
+          },
+        }),
+        route('/products/new', {
+          page: () => '<main>New</main>',
+        }),
+      ],
+    });
+
+    await expect(replayStaticExportApp({ app })).rejects.toMatchObject({
+      code: 'FW228',
+      diagnostics: [
+        {
+          code: 'FW228',
+          message: expect.stringContaining('/products/new'),
+          routePath: '/products/:id <-> /products/new',
+        },
+      ],
+    });
+  });
 });

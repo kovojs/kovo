@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (14 / 32 findings closed)
+**Status:** open (15 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -230,8 +230,11 @@ Do before/alongside the broad refactors so subsequent changes are actually check
   - Gap 2026-06-15: the SPEC §5.2 authored renderer still does not exist, so this checkbox remains open; no regression yet proves that a lowering which changes emitted HTML fails the semantic gate.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/compile-component.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm --filter fw exec tsc --noEmit` passed.
 
-- [ ] **FW228: wire route-ambiguity detection into a blocking pipeline** — `packages/server/src/match.ts:100` (`findRouteAmbiguities`, currently zero callers) (SPEC §9.5, §11.3 severity=error). Invoke during `createApp` / route-table compile; register FW228 at severity `error` so it blocks dev serving, vite build, and static export (mirror FW229's wiring). Drop the "planned 9.5 shell dispatch" hedge in the message.
+- [x] **FW228: wire route-ambiguity detection into a blocking pipeline** — `packages/server/src/match.ts:100` (`findRouteAmbiguities`, currently zero callers) (SPEC §9.5, §11.3 severity=error). Invoke during `createApp` / route-table compile; register FW228 at severity `error` so it blocks dev serving, vite build, and static export (mirror FW229's wiring). Drop the "planned 9.5 shell dispatch" hedge in the message.
   - Done = an ambiguous route table is rejected end-to-end with FW228 instead of resolving by declaration order. Prove: `pnpm test match && pnpm run check:fw`
+  - Evidence 2026-06-15: `packages/core/src/diagnostics.ts` registers FW228 as `error`; `packages/server/src/app.ts` stores route-table diagnostics from `findRouteAmbiguities`; `packages/server/src/app-request.ts`, `vite-build.ts`, `static-export.ts`, and `static-export-replay.ts` block on shared-registry error diagnostics before route dispatch, build output, or export replay.
+  - Evidence 2026-06-15: `packages/server/src/app.test.ts`, `vite-dev.test.ts`, `vite-build-wiring.test.ts`, `static-export-diagnostics.test.ts`, and `static-export-replay.test.ts` prove ambiguous `/products/:id` vs `/products/new` routes fail with FW228 across request dispatch, dev serving, Vite build, and static export; `match.test.ts` verifies the non-hedged message.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts`, `pnpm --filter @jiso/server exec vitest run src/match.test.ts src/app.test.ts src/vite-dev.test.ts src/vite-build-wiring.test.ts src/static-export-diagnostics.test.ts src/static-export-replay.test.ts`, `pnpm --filter @jiso/server exec vitest run`, `pnpm --filter @jiso/core exec vitest run`, `pnpm --filter @jiso/server exec tsc --noEmit`, `pnpm --filter @jiso/core exec tsc --noEmit`, and `pnpm exec vp check` passed.
 
 ---
 

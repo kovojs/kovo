@@ -1,9 +1,11 @@
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
+import { routeTableDiagnostics } from './app-diagnostics.js';
 import { isJisoApp } from './app-guards.js';
 export type {
   AppDocumentOptions,
   AppErrorShellOptions,
+  AppDiagnostic,
   AppMutationDeclaration,
   AppMutationResponseContext,
   AppMutationResponseOptions,
@@ -39,6 +41,7 @@ export function createApp<SessionValue = unknown>(
 ): JisoApp<SessionValue> {
   return {
     clientModules: options.clientModules ?? createMemoryVersionedClientModuleRegistry(),
+    diagnostics: routeTableDiagnostics(options.routes ?? []),
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},

@@ -17,6 +17,7 @@ describe('diagnostic registry', () => {
       'FW225',
       'FW226',
       'FW227',
+      'FW228',
       'FW230',
       'FW231',
       'FW232',
@@ -114,6 +115,12 @@ describe('diagnostic registry', () => {
           "help": "Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.
       SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.",
           "message": "Binding path traverses a nullable segment without ?.",
+          "severity": "error",
+        },
+        "FW228": {
+          "code": "FW228",
+          "help": "SPEC §9.5 requires static-first route matching to be unambiguous at compile time; split the patterns or make one route path more specific.",
+          "message": "Ambiguous route table: two routes can match the same canonical request path.",
           "severity": "error",
         },
         "FW230": {

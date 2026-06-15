@@ -29,7 +29,7 @@ export async function exportStaticApp(
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
   assertStaticExportAppAggregate(app);
-  assertStaticExportCompileDiagnostics(options.diagnostics ?? []);
+  assertStaticExportCompileDiagnostics([...app.diagnostics, ...(options.diagnostics ?? [])]);
   assertNoStaticExportHtmlPathStyleOption(options);
   if (options.outDir !== undefined) staticExportOutputRoot(options.outDir);
 

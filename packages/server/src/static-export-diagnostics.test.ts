@@ -79,6 +79,38 @@ describe('server static export diagnostic boundary', () => {
     }
   });
 
+  it('blocks FW228 app route-table diagnostics before route replay or output writes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-fw228-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/products/:id', {
+            page() {
+              throw new Error('ambiguous route replay should not run');
+            },
+          }),
+          route('/products/new', {
+            page: () => '<main>New</main>',
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'FW228',
+        diagnostics: [
+          {
+            code: 'FW228',
+            message: expect.stringContaining('/products/new'),
+            routePath: '/products/:id <-> /products/new',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'products', 'new', 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('allows non-blocking compiler diagnostics to continue through static replay', async () => {
     const app = createApp({
       routes: [

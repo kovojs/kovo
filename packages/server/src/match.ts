@@ -113,8 +113,7 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
 
       ambiguities.push({
         code: 'FW228',
-        message:
-          'Ambiguous route table entry. SPEC 6.4 routes must be statically provable navigation targets; planned 9.5 shell dispatch rejects route pairs that can match the same pathname.',
+        message: `Ambiguous route table: '${left.path}' and '${right.path}' can both match canonical request path '${witnessPath}'.`,
         paths: [left.path, right.path],
         witnessPath,
       });
