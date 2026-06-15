@@ -52,18 +52,12 @@ function stringRendersFromModel(model: ComponentModuleModel): StringRender[] {
   return [
     ...model.components.flatMap((component) => component.stringRenderReturns ?? []),
     ...model.renderSourceReturns,
-  ].flatMap((render) =>
-    render.firstHtmlTagName
-      ? [
-          {
-            firstHtmlTagName: render.firstHtmlTagName,
-            length: render.end - render.start,
-            source: render.source,
-            start: render.start,
-          },
-        ]
-      : [],
-  );
+  ].map((render) => ({
+    ...(render.firstHtmlTagName ? { firstHtmlTagName: render.firstHtmlTagName } : {}),
+    length: render.end - render.start,
+    source: render.source,
+    start: render.start,
+  }));
 }
 
 function fw235Diagnostic({

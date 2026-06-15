@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (7 / 32 findings closed)
+**Status:** open (8 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -120,8 +120,16 @@ Shared pattern: carry the typed parser fact instead of matching a name/string. S
 src/state-bindings.test.ts src/query-bindings.test.ts`, `pnpm --filter @jiso/compiler exec tsc
 --noEmit`, and `pnpm exec vp check --fix` passed.
 
-- [ ] **FW235: fire from the typed string-render fact, not the HTML-tag regex** — `packages/compiler/src/validate/authoring-surface.ts:51` (SPEC §5.2 rule 7). Drop the `firstHtmlTagName ?` filter so every `StringRenderModel` (any string/template-literal render, tag or not) triggers FW235; keep `firstHtmlTagName` only for the teaching message.
+- [x] **FW235: fire from the typed string-render fact, not the HTML-tag regex** — `packages/compiler/src/validate/authoring-surface.ts:51` (SPEC §5.2 rule 7). Drop the `firstHtmlTagName ?` filter so every `StringRenderModel` (any string/template-literal render, tag or not) triggers FW235; keep `firstHtmlTagName` only for the teaching message.
   - Done = FW235 fires for tagless `` render: () => `Total items` `` and tagless `renderSource(){ return 'Total: 2'; }`. Prove: `pnpm test compile-component authoring`
+  - Evidence 2026-06-15: `packages/compiler/src/validate/authoring-surface.ts` now maps every
+    typed `StringRenderModel` to FW235 and uses `firstHtmlTagName` only to tailor the help text.
+  - Evidence 2026-06-15: `packages/compiler/src/compile-component.test.ts` covers tagless
+    component string renders and tagless app-authored `renderSource()` returns, alongside the
+    existing HTML-tag string-render fixtures.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/compile-component.test.ts src/scan/parse.test.ts`, `pnpm --filter @jiso/compiler exec tsc
+--noEmit`, and `pnpm exec vp check --fix` passed.
 
 - [ ] **FW301: decide "server fact in local state" by initializer dataflow, not key-name prefix** — `packages/compiler/src/validate/component-contracts.ts:36` (SPEC §11.3). Surface each state-return entry's initializer references as parser facts (reuse `PropertyAccessPathModel` — do **not** re-parse `value` in validate, §5.2 rule 8). Flag FW301 only when an initializer reads a path rooted in a declared query, regardless of key spelling. Also fix the drifted FW301 span (thread `sourceOffsetMap`, emit against original source like FW311).
   - Done = `accountNameDraft` stops firing; `{ saved: cart.count }`-via-alias starts firing; span points at authored TSX. Prove: `pnpm test state-events`

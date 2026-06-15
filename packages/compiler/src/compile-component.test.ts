@@ -333,6 +333,60 @@ export function renderSource() {
     ]);
   });
 
+  it('reports FW235 for tagless app-authored string-rendered component modules', () => {
+    const result = compileComponentModule({
+      fileName: 'total-display.tsx',
+      source: `
+export const TotalDisplay = component('total-display', {
+  render: () => \`Total items\`,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW235',
+        fileName: 'total-display.tsx',
+        help: [
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
+        ].join('\n'),
+        length: 13,
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+        severity: 'error',
+        start: { column: 17, line: 3 },
+      },
+    ]);
+  });
+
+  it('reports FW235 for tagless app-authored renderSource modules', () => {
+    const result = compileComponentModule({
+      fileName: 'total-display.server.ts',
+      source: `
+export function renderSource() {
+  return 'Total: 2';
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW235',
+        fileName: 'total-display.server.ts',
+        help: [
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
+        ].join('\n'),
+        length: 10,
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+        severity: 'error',
+        start: { column: 10, line: 3 },
+      },
+    ]);
+  });
+
   it('reports FW235 for app-authored compiler IR through the header fast path', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.server.js',
