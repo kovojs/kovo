@@ -223,6 +223,32 @@ export const CartBadge = component('cart-badge', {
     expect(component?.stateReturnObject?.staticValue).toBeUndefined();
   });
 
+  it('records state return initializer property accesses as parser facts', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  state: () => ({ saved: cart.count, local: 'draft' }),
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`;
+    const [component] = parseComponentModule('cart-badge.tsx', source).components;
+
+    expect(component?.stateReturnObject?.entries).toEqual([
+      {
+        key: 'saved',
+        value: 'cart.count',
+        valuePropertyAccesses: [
+          {
+            end: source.indexOf('cart.count') + 'cart.count'.length,
+            path: 'cart.count',
+            start: source.indexOf('cart.count'),
+            terminalName: 'count',
+          },
+        ],
+      },
+      { key: 'local', value: "'draft'" },
+    ]);
+  });
+
   it('records component prop constructor types as parser model facts', () => {
     const source = `
 export const CartBadge = component('cart-badge', {

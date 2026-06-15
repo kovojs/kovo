@@ -44,14 +44,14 @@ export const CartBadge = component('cart-badge', {
     );
   });
 
-  it('reports FW301 when island-local state stores an obvious query fact', () => {
+  it('reports FW301 when island-local state stores a query fact', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
 export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
-  state: () => ({ cartCount: 0 }),
-  render: ({ cart }, state) => <span>{state.cartCount}</span>,
+  state: () => ({ saved: cart.count }),
+  render: ({ cart }, state) => <button disabled={cart.count === 0}>{state.saved}</button>,
 });
 `,
     });
@@ -62,13 +62,13 @@ export const CartBadge = component('cart-badge', {
         fileName: 'cart-badge.tsx',
         message: fw301.message,
         severity: fw301.severity,
-        start: { column: 17, line: 4 },
-        length: 16,
+        start: { column: 26, line: 4 },
+        length: 10,
       },
     ]);
   });
 
-  it('reports FW301 for any state key prefixed by a declared query name', () => {
+  it('does not report FW301 for state keys merely prefixed by a declared query name', () => {
     const result = compileComponentModule({
       fileName: 'account-menu.tsx',
       source: `
@@ -80,16 +80,7 @@ export const AccountMenu = component('account-menu', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
-      {
-        code: 'FW301',
-        fileName: 'account-menu.tsx',
-        message: fw301.message,
-        severity: fw301.severity,
-        start: { column: 17, line: 4 },
-        length: 24,
-      },
-    ]);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('does not report FW301 for local UI-only state with declared queries', () => {

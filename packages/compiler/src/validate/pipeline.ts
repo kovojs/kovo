@@ -36,7 +36,8 @@ interface ValidatorContext {
 type CompilerValidator = (context: ValidatorContext) => readonly CompilerDiagnostic[];
 
 const compilerValidators: readonly CompilerValidator[] = [
-  ({ model, options, source }) => validateServerFactsInLocalState(source, model, options.fileName),
+  ({ diagnosticSource, model, options, sourceOffsetMap }) =>
+    validateServerFactsInLocalState(diagnosticSource, model, options.fileName, sourceOffsetMap),
   ({ model, options, source }) => validateReservedQueryNames(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),

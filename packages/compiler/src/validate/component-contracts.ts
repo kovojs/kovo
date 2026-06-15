@@ -9,7 +9,6 @@ import {
   componentOptionObjectKeys,
   componentRenderInputModels,
   componentStateReturnObjectModel,
-  componentStateReturnObjectKeys,
   jsxExpressions,
   jsxElementChildBody,
   mutationHandlers,
@@ -37,27 +36,23 @@ export function validateServerFactsInLocalState(
   source: string,
   model: ComponentModuleModel,
   fileName: string,
+  sourceOffsetMap: SourceOffsetMap,
 ): CompilerDiagnostic[] {
   const stateObject = componentStateReturnObjectModel(model);
   const queryNames = componentOptionObjectKeys(model, 'queries');
-  const stateKeys = componentStateReturnObjectKeys(model);
-  if (queryNames.length === 0 || !stateObject || stateKeys.length === 0) return [];
+  if (queryNames.length === 0 || !stateObject || stateObject.entries.length === 0) return [];
 
-  const storesServerFact = stateKeys.some((stateKey) =>
-    queryNames.some((queryName) => stateKeyHasQueryPrefix(stateKey, queryName)),
+  const queryRoots = new Set(queryNames);
+  const serverFactEntry = stateObject.entries.find((entry) =>
+    entry.valuePropertyAccesses?.some((access) => queryRoots.has(queryRootFromPath(access.path))),
   );
+  const access = serverFactEntry?.valuePropertyAccesses?.find((candidate) =>
+    queryRoots.has(queryRootFromPath(candidate.path)),
+  );
+  if (!access) return [];
 
-  return storesServerFact
-    ? [
-        diagnosticFor(
-          fileName,
-          'FW301',
-          source,
-          stateObject.start,
-          stateObject.end - stateObject.start,
-        ),
-      ]
-    : [];
+  const start = generatedOffsetToOriginal(sourceOffsetMap, access.start);
+  return [diagnosticFor(fileName, 'FW301', source, start, access.path.length)];
 }
 
 export function validateReservedQueryNames(
@@ -279,10 +274,6 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
   return payloads;
 }
 
-function stateKeyHasQueryPrefix(stateKey: string, queryName: string): boolean {
-  if (stateKey === queryName) return true;
-  if (!stateKey.startsWith(queryName)) return false;
-
-  const nextChar = stateKey[queryName.length];
-  return nextChar !== undefined && /[A-Z0-9_$]/.test(nextChar);
+function queryRootFromPath(path: string): string {
+  return path.split('.', 1)[0] ?? path;
 }

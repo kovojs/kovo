@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (8 / 32 findings closed)
+**Status:** open (9 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -131,8 +131,21 @@ src/state-bindings.test.ts src/query-bindings.test.ts`, `pnpm --filter @jiso/com
 src/compile-component.test.ts src/scan/parse.test.ts`, `pnpm --filter @jiso/compiler exec tsc
 --noEmit`, and `pnpm exec vp check --fix` passed.
 
-- [ ] **FW301: decide "server fact in local state" by initializer dataflow, not key-name prefix** — `packages/compiler/src/validate/component-contracts.ts:36` (SPEC §11.3). Surface each state-return entry's initializer references as parser facts (reuse `PropertyAccessPathModel` — do **not** re-parse `value` in validate, §5.2 rule 8). Flag FW301 only when an initializer reads a path rooted in a declared query, regardless of key spelling. Also fix the drifted FW301 span (thread `sourceOffsetMap`, emit against original source like FW311).
+- [x] **FW301: decide "server fact in local state" by initializer dataflow, not key-name prefix** — `packages/compiler/src/validate/component-contracts.ts:36` (SPEC §11.3). Surface each state-return entry's initializer references as parser facts (reuse `PropertyAccessPathModel` — do **not** re-parse `value` in validate, §5.2 rule 8). Flag FW301 only when an initializer reads a path rooted in a declared query, regardless of key spelling. Also fix the drifted FW301 span (thread `sourceOffsetMap`, emit against original source like FW311).
   - Done = `accountNameDraft` stops firing; `{ saved: cart.count }`-via-alias starts firing; span points at authored TSX. Prove: `pnpm test state-events`
+  - Evidence 2026-06-15: `packages/compiler/src/scan/parse.ts` records
+    `valuePropertyAccesses` on state-return object entries using the existing typed
+    `PropertyAccessPathModel`, and `packages/compiler/src/validate/component-contracts.ts` uses
+    those facts instead of the old state-key prefix heuristic.
+  - Evidence 2026-06-15: FW301 diagnostics now map state-initializer property-access spans through
+    `sourceOffsetMap` to authored TSX coordinates.
+  - Evidence 2026-06-15: `packages/compiler/src/state-events.test.ts` covers
+    `{ saved: cart.count }` firing FW301 through an offset-map-producing lowering and
+    `accountNameDraft` remaining clean; `packages/compiler/src/scan/parse.test.ts` covers the new
+    parser fact.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/state-events.test.ts src/scan/parse.test.ts`, `pnpm --filter @jiso/compiler exec tsc
+--noEmit`, and `pnpm exec vp check --fix` passed.
 
 - [ ] **FW320: drive event-payload overlap from value provenance, not bare leaf names** — `packages/compiler/src/validate/component-contracts.ts:114`, `analyze/query-shapes.ts:171` (SPEC §6.4/§7). Flag an emit field only when its **value** resolves to a property access rooted in a real query in scope; drop the unprefixed bare-leaf branch in `queryShapePaths`.
   - Done = a renamed server value (`{ snapshotTotal: order.total }`) fires; a same-named client-intent key (`quantity`) does not. Prove: `pnpm test state-events`

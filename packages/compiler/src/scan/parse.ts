@@ -13,6 +13,7 @@ export interface ObjectLiteralEntry {
   key: string;
   staticConstructorType?: 'boolean' | 'number' | 'string';
   value?: string;
+  valuePropertyAccesses?: readonly PropertyAccessPathModel[];
 }
 
 export interface MutationHandlerModel {
@@ -1272,6 +1273,7 @@ function objectLiteralEntries(
         {
           key,
           ...staticConstructorTypeEntry(property.initializer),
+          ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
           value: source.slice(
             property.initializer.getStart(sourceFile),
             property.initializer.getEnd(),
@@ -1291,6 +1293,14 @@ function objectLiteralEntries(
 
     return [];
   });
+}
+
+function objectLiteralEntryPropertyAccesses(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+): { valuePropertyAccesses: readonly PropertyAccessPathModel[] } | {} {
+  const valuePropertyAccesses = propertyAccessPathModels(sourceFile, initializer);
+  return valuePropertyAccesses.length > 0 ? { valuePropertyAccesses } : {};
 }
 
 function jsxElementModel(
