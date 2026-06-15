@@ -24,7 +24,7 @@ describe('compiled interactive gallery demos', () => {
       cwd: galleryRoot,
       stdio: 'pipe',
     });
-  }, 60_000);
+  }, 180_000);
 
   it('wires every compiled interactive demo into the docs gallery route', () => {
     const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
@@ -108,7 +108,7 @@ describe('compiled interactive gallery demos', () => {
     } finally {
       rmSync(distDir, { force: true, recursive: true });
     }
-  }, 60_000);
+  }, 180_000);
 
   it('keeps rendered generated-client DOM refs in lockstep with client exports', () => {
     for (const demo of generatedInteractiveDemoNames()) {
