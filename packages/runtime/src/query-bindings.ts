@@ -4,6 +4,7 @@ import type {
   ClosestElementLike,
   QuerySelectorAllRootLike,
 } from './dom-like.js';
+import { morphDomElement } from './morph.js';
 
 export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
@@ -203,8 +204,7 @@ export function applyCompiledQueryUpdatePlan(
     }));
 
     for (const element of root.querySelectorAll(stamp.selector)) {
-      if (!isTemplateStampHost(element)) continue;
-      element.reconcileTemplateStamp(items);
+      if (!reconcileTemplateStampHost(element, items)) continue;
       applied.templateStamps.push(stamp.selector);
     }
   }
@@ -220,6 +220,104 @@ function isTemplateStampHost(element: QueryBindingElement): element is TemplateS
   return (
     'reconcileTemplateStamp' in element && typeof element.reconcileTemplateStamp === 'function'
   );
+}
+
+function reconcileTemplateStampHost(
+  element: QueryBindingElement,
+  items: readonly TemplateStampItem[],
+): boolean {
+  if (isTemplateStampHost(element)) {
+    element.reconcileTemplateStamp(items);
+    return true;
+  }
+
+  if (!isDomTemplateStampHost(element)) return false;
+
+  reconcileDomTemplateStamp(element, items);
+  return true;
+}
+
+function isDomTemplateStampHost(element: QueryBindingElement): element is Element {
+  return (
+    typeof (element as Partial<Element>).querySelector === 'function' &&
+    typeof (element as Partial<Element>).insertBefore === 'function' &&
+    typeof (element as Partial<Element>).querySelectorAll === 'function'
+  );
+}
+
+function reconcileDomTemplateStamp(host: Element, items: readonly TemplateStampItem[]): void {
+  const template = host.querySelector('template[fw-stamp]');
+  if (!isHtmlTemplateElement(template)) return;
+
+  const existingByKey = new Map(
+    [...host.children]
+      .filter((child) => child !== template)
+      .map((child) => [child.getAttribute('fw-key'), child] as const)
+      .filter((entry): entry is [string, Element] => entry[0] !== null),
+  );
+  const desired = new Set<Element>();
+
+  for (const item of items) {
+    const next = domTemplateStampElement(template, item);
+    if (!next) continue;
+
+    const existing = existingByKey.get(item.key);
+    const element = existing ? morphDomElement(existing, next) : next;
+    applyItemRelativeBindings(element, item.value);
+    desired.add(element);
+    host.insertBefore(element, template);
+  }
+
+  for (const child of Array.from(host.children)) {
+    if (child !== template && child.hasAttribute('fw-key') && !desired.has(child)) child.remove();
+  }
+}
+
+function domTemplateStampElement(
+  template: HTMLTemplateElement,
+  item: TemplateStampItem,
+): Element | null {
+  const parser = template.ownerDocument.createElement('template');
+  parser.innerHTML = item.html.trim();
+  const element = parser.content.firstElementChild;
+  if (!element) return null;
+
+  element.setAttribute('fw-key', item.key);
+  return element;
+}
+
+function isHtmlTemplateElement(element: Element | null): element is HTMLTemplateElement {
+  return element !== null && 'content' in element && 'ownerDocument' in element;
+}
+
+function applyItemRelativeBindings(root: Element, value: unknown): void {
+  for (const element of itemBindingElements(root)) {
+    const path = element.getAttribute('data-bind');
+    if (!path?.startsWith('.')) continue;
+
+    writeQueryPlanElement(element, formatBoundValue(valueAtPath(value, path.slice(1))));
+  }
+
+  for (const element of [root, ...root.querySelectorAll('*')]) {
+    for (const attribute of bindingAttributes(element)) {
+      if (!attribute.value.startsWith('.')) continue;
+
+      const boundAttribute = attribute.name.slice('data-bind:'.length);
+      const selected = valueAtPath(value, attribute.value.slice(1));
+      if (selected === undefined || selected === null) {
+        removeBoundAttribute(element, boundAttribute);
+      } else {
+        setBoundAttribute(element, boundAttribute, selected);
+      }
+    }
+  }
+}
+
+function itemBindingElements(root: Element): Element[] {
+  return [
+    ...(root.getAttribute('data-bind') !== null ? [root] : []),
+    ...root.querySelectorAll('[data-bind]'),
+  ];
 }
 
 function readTemplateStampKey(

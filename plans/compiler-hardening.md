@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (2 / 32 findings closed)
+**Status:** open (3 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -42,9 +42,20 @@ The keyed morph and template-stamp reconciler exist but no production seam const
     open. A direct inline keyed-morph port exceeded the SPEC §4.4 gzip budget, so this checkbox stays
     open until the inline-safe design is compact enough and proven by the full done criteria.
 
-- [ ] **Implement a DOM-backed keyed template-stamp reconciler** — `packages/runtime/src/query-bindings.ts:190` (the `isTemplateStampHost` guard) + `emit/client.ts` template-stamp plan (SPEC §4.8 step 3, §13.2). Invoke a real reconciler directly from `applyCompiledQueryUpdatePlan` (or at loader setup) instead of depending on a `reconcileTemplateStamp` method that only test fakes implement: index existing `[fw-key]` children, clone `<template fw-stamp>` for inserts, remove exits, reorder by key, run item-relative bindings — **reusing the same `fw-key` helper the morph uses** (§13.2 single keyed-identity contract). Keep the host-method interface only as an optional override seam.
+- [x] **Implement a DOM-backed keyed template-stamp reconciler** — `packages/runtime/src/query-bindings.ts:190` (the `isTemplateStampHost` guard) + `emit/client.ts` template-stamp plan (SPEC §4.8 step 3, §13.2). Invoke a real reconciler directly from `applyCompiledQueryUpdatePlan` (or at loader setup) instead of depending on a `reconcileTemplateStamp` method that only test fakes implement: index existing `[fw-key]` children, clone `<template fw-stamp>` for inserts, remove exits, reorder by key, run item-relative bindings — **reusing the same `fw-key` helper the morph uses** (§13.2 single keyed-identity contract). Keep the host-method interface only as an optional override seam.
   - Done = a jsdom test asserts a plain `<ul data-bind-list>` inserts / removes / reorders `<li fw-key>` and re-runs item-relative bindings after a query update — with no test-fake host.
   - Prove: `pnpm test query-bindings stamps`
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts` now falls back from the optional
+    `reconcileTemplateStamp` test seam to a real DOM reconciler for `<template fw-stamp>` hosts,
+    reusing `morphDomElement` for keyed identity and applying item-relative `data-bind`/
+    `data-bind:*` paths after insert/reorder.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.browser.test.ts` covers a plain
+    `<ul data-bind-list>` inserting `p2`, preserving and reordering existing `p1`, removing `p3`,
+    assigning `fw-key`, and updating item-relative text/attribute bindings without a fake host.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts`,
+    `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/query-bindings.browser.test.ts`, `pnpm --filter @jiso/runtime exec tsc
+--noEmit`, and `pnpm --filter @jiso/runtime run check:inline-loader` passed.
 
 ---
 
