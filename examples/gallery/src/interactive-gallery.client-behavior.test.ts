@@ -570,24 +570,25 @@ describe('compiled interactive gallery demos', () => {
     });
 
     const otpFieldState = { activeSlot: 2, value: '12' };
-    clientHandler(otpField, 'GalleryOtpFieldDemo$input_input')(new Event('input'), {
+    clientHandler(otpField, 'GalleryOtpFieldDemo$input_input_3')(inputEvent('3'), {
       params: {},
       signal,
       state: otpFieldState,
     });
     expect(otpFieldState).toEqual({ activeSlot: 3, value: '123' });
-    clientHandler(otpField, 'GalleryOtpFieldDemo$input_input_2')(new Event('input'), {
+    clientHandler(otpField, 'GalleryOtpFieldDemo$input_input_4')(inputEvent('4'), {
       params: {},
       signal,
       state: otpFieldState,
     });
     expect(otpFieldState).toEqual({ activeSlot: 3, value: '1234' });
-    clientHandler(otpField, 'GalleryOtpFieldDemo$input_keydown_2')(new Event('keydown'), {
+    const otpDeleteState = { activeSlot: 1, value: '12' };
+    clientHandler(otpField, 'GalleryOtpFieldDemo$input_keydown_2')(keyEvent('Backspace'), {
       params: {},
       signal,
-      state: otpFieldState,
+      state: otpDeleteState,
     });
-    expect(otpFieldState).toEqual({ activeSlot: 1, value: '1' });
+    expect(otpDeleteState).toEqual({ activeSlot: 1, value: '1' });
 
     const collapsibleState = { open: false };
     clientHandler(collapsible, 'GalleryCollapsibleDemo$summary_click')(new Event('click'), {

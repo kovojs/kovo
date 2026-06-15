@@ -345,6 +345,34 @@ describe('headless-ui otp-field primitive', () => {
     expect(reasons).toEqual(['input', 'delete', 'paste']);
   });
 
+  it('reads input values from delegated event targets', () => {
+    const inputEvent = otpDelegatedInputEvent('7');
+    const pasteEvent = otpDelegatedPasteEvent('9876', '2');
+
+    expect(otpFieldInput(inputEvent, { length: 4, slotIndex: 2, value: '12' })).toMatchObject({
+      changed: true,
+      focusIndex: 3,
+      value: '127',
+    });
+    expect(
+      otpFieldPaste(
+        pasteEvent,
+        { length: 4, slotIndex: 1, value: '1234' },
+        {
+          onValueChange(detail) {
+            detail.preventDefault();
+          },
+        },
+      ),
+    ).toMatchObject({
+      changed: false,
+      focusIndex: 3,
+      value: '1234',
+    });
+    expect(pasteEvent.target?.value).toBe('2');
+    expect(pasteEvent.defaultPrevented).toBe(true);
+  });
+
   it('restores the live slot value when delete and paste changes are rejected', () => {
     const canceledDeleteEvent = otpKeyboardEvent('Backspace', '2');
     const canceledDeleteResult = otpFieldKeyDown(
@@ -430,6 +458,19 @@ function otpInputEvent(value: string): Event & {
   return event;
 }
 
+function otpDelegatedInputEvent(value: string): Event & {
+  readonly currentTarget: null;
+  readonly target: { value: string };
+} {
+  const event = new Event('input', { cancelable: true }) as Event & {
+    currentTarget: null;
+    target: { value: string };
+  };
+  Object.defineProperty(event, 'currentTarget', { value: null });
+  Object.defineProperty(event, 'target', { value: { value } });
+  return event;
+}
+
 function otpKeyboardEvent(
   key: string,
   currentValue?: string,
@@ -466,5 +507,23 @@ function otpPasteEvent(
   if (currentValue !== undefined) {
     Object.defineProperty(event, 'currentTarget', { value: { value: currentValue } });
   }
+  return event;
+}
+
+function otpDelegatedPasteEvent(
+  text: string,
+  currentValue: string,
+): Event & {
+  readonly clipboardData: { getData(format: string): string } | null;
+  readonly currentTarget: null;
+  readonly target: { value: string };
+} {
+  const event = otpPasteEvent(text) as unknown as Event & {
+    clipboardData: { getData(format: string): string } | null;
+    currentTarget: null;
+    target: { value: string };
+  };
+  Object.defineProperty(event, 'currentTarget', { value: null });
+  Object.defineProperty(event, 'target', { value: { value: currentValue } });
   return event;
 }

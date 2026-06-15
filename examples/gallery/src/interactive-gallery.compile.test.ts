@@ -366,11 +366,15 @@ describe('compiled interactive gallery demos', () => {
     expect(otpField).toContain('<form id={formId} data-gallery-form="otp-field" />');
     expect(otpField).toContain('otpFieldHiddenInputAttributes({');
     expect(otpField).toContain('form: formId');
+    expect(otpField).toContain('otpFieldInput as _otpFieldInput');
+    expect(otpField).toContain('data-bind:value=');
+    expect(otpField).toContain('data-bind:data-filled=');
+    expect(otpField).toContain('data-bind:tabIndex=');
     expect(otpField).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryOtpFieldDemo\$input_input"/,
     );
     expect(otpField).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryOtpFieldDemo\$input_keydown_2"/,
+      /on:paste="\/c\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryOtpFieldDemo\$input_paste_4"/,
     );
 
     expect(collapsible).toContain('data-gallery-interactive="collapsible"');

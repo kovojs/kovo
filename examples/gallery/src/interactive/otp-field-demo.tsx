@@ -2,7 +2,10 @@
 import { component } from '@jiso/core';
 import {
   otpFieldHiddenInputAttributes,
+  otpFieldInput as _otpFieldInput,
   otpFieldInputAttributes,
+  otpFieldKeyDown as _otpFieldKeyDown,
+  otpFieldPaste as _otpFieldPaste,
   otpFieldRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -49,6 +52,7 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
           labelledBy: 'gallery-interactive-otp-label',
         })}
         class={ROOT_CLASS}
+        data-complete={state.value.length === 4 ? '' : null}
         data-gallery-interactive="otp-field"
       >
         <form id={formId} data-gallery-form="otp-field" />
@@ -66,6 +70,8 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
           })}
           id="gallery-interactive-otp-hidden"
           class={HIDDEN_INPUT_CLASS}
+          data-complete={state.value.length === 4 ? '' : null}
+          value={state.value}
         />
         <div class={GROUP_CLASS}>
           <input
@@ -76,19 +82,39 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 0,
             })}
             class={INPUT_CLASS}
+            data-complete={state.value.length === 4 ? '' : null}
+            data-filled={(state.value[0] ?? '') === '' ? null : ''}
+            tabIndex={state.activeSlot === 0 ? 0 : -1}
+            value={state.value[0] ?? ''}
+            onInput={() => {
+              const result = _otpFieldInput(Object(event), {
+                length: 4,
+                slotIndex: 0,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
             onKeyDown={() => {
-              state.activeSlot = 1;
-              const doc = Reflect['get'](globalThis, 'document');
-              const first = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-0')
-                : undefined;
-              const second = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-1')
-                : undefined;
-
-              if (first) first['tabIndex'] = -1;
-              if (second) second['tabIndex'] = 0;
-              if (second) Object(second)['focus']?.call(second);
+              const result = _otpFieldKeyDown(Object(event), {
+                length: 4,
+                slotIndex: 0,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
+            onPaste={() => {
+              const result = _otpFieldPaste(Object(event), {
+                length: 4,
+                slotIndex: 0,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
           <input
@@ -99,26 +125,39 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 1,
             })}
             class={INPUT_CLASS}
+            data-complete={state.value.length === 4 ? '' : null}
+            data-filled={(state.value[1] ?? '') === '' ? null : ''}
+            tabIndex={state.activeSlot === 1 ? 0 : -1}
+            value={state.value[1] ?? ''}
+            onInput={() => {
+              const result = _otpFieldInput(Object(event), {
+                length: 4,
+                slotIndex: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
             onKeyDown={() => {
-              state.value = '1';
-              state.activeSlot = 1;
-              const doc = Reflect['get'](globalThis, 'document');
-              const hidden = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-                : undefined;
-              const second = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-1')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-                : undefined;
-
-              if (hidden) hidden['value'] = state.value;
-              if (second) {
-                second['value'] = '';
-                Object(second)['removeAttribute']?.call(second, 'data-filled');
-              }
-              if (output) output['textContent'] = state.value;
+              const result = _otpFieldKeyDown(Object(event), {
+                length: 4,
+                slotIndex: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
+            onPaste={() => {
+              const result = _otpFieldPaste(Object(event), {
+                length: 4,
+                slotIndex: 1,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
           <input
@@ -129,34 +168,39 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 2,
             })}
             class={INPUT_CLASS}
+            data-complete={state.value.length === 4 ? '' : null}
+            data-filled={(state.value[2] ?? '') === '' ? null : ''}
+            tabIndex={state.activeSlot === 2 ? 0 : -1}
+            value={state.value[2] ?? ''}
             onInput={() => {
-              state.value = state.value === '12' ? '123' : state.value;
-              state.activeSlot = 3;
-              const doc = Reflect['get'](globalThis, 'document');
-              const hidden = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-                : undefined;
-              const third = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-2')
-                : undefined;
-              const fourth = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-3')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-                : undefined;
-
-              if (hidden) hidden['value'] = state.value;
-              if (third) {
-                third['value'] = '3';
-                third['tabIndex'] = -1;
-                Object(third)['setAttribute']?.call(third, 'data-filled', '');
-              }
-              if (fourth) {
-                fourth['tabIndex'] = 0;
-                Object(fourth)['focus']?.call(fourth);
-              }
-              if (output) output['textContent'] = state.value;
+              const result = _otpFieldInput(Object(event), {
+                length: 4,
+                slotIndex: 2,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
+            onKeyDown={() => {
+              const result = _otpFieldKeyDown(Object(event), {
+                length: 4,
+                slotIndex: 2,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
+            onPaste={() => {
+              const result = _otpFieldPaste(Object(event), {
+                length: 4,
+                slotIndex: 2,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
           <input
@@ -167,97 +211,39 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 3,
             })}
             class={INPUT_CLASS}
+            data-complete={state.value.length === 4 ? '' : null}
+            data-filled={(state.value[3] ?? '') === '' ? null : ''}
+            tabIndex={state.activeSlot === 3 ? 0 : -1}
+            value={state.value[3] ?? ''}
             onInput={() => {
-              state.value = '1234';
-              state.activeSlot = 3;
-              const doc = Reflect['get'](globalThis, 'document');
-              const root = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp')
-                : undefined;
-              const hidden = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-                : undefined;
-              const fourth = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-3')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-                : undefined;
-
-              if (root) Object(root)['setAttribute']?.call(root, 'data-complete', '');
-              if (hidden) {
-                hidden['value'] = state.value;
-                Object(hidden)['setAttribute']?.call(hidden, 'data-complete', '');
-              }
-              if (fourth) {
-                fourth['value'] = '4';
-                Object(fourth)['setAttribute']?.call(fourth, 'data-filled', '');
-                Object(fourth)['setAttribute']?.call(fourth, 'data-complete', '');
-              }
-              if (output) output['textContent'] = state.value;
+              const result = _otpFieldInput(Object(event), {
+                length: 4,
+                slotIndex: 3,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+            }}
+            onKeyDown={() => {
+              const result = _otpFieldKeyDown(Object(event), {
+                length: 4,
+                slotIndex: 3,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
             onPaste={() => {
-              const delegatedEvent = event;
-              const eventClipboard =
-                delegatedEvent === undefined
-                  ? undefined
-                  : Reflect['get'](Object(delegatedEvent), 'clipboardData');
-              const clipboardText =
-                eventClipboard === null || eventClipboard === undefined
-                  ? ''
-                  : Object(eventClipboard)['getData']?.call(eventClipboard, 'text');
-              state.value = String(clipboardText ?? '')
-                .replace(/\D/g, '')
-                .slice(0, 4);
-              state.activeSlot = state.value.length >= 4 ? 3 : state.value.length;
-
-              if (delegatedEvent !== undefined) {
-                Object(delegatedEvent)['preventDefault']?.call(delegatedEvent);
-              }
-
-              const doc = Reflect['get'](globalThis, 'document');
-              const root = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp')
-                : undefined;
-              const hidden = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-                : undefined;
-
-              if (hidden) hidden['value'] = state.value;
-              for (let slotIndex = 0; slotIndex < 4; slotIndex += 1) {
-                const slot = doc
-                  ? Object(doc)['getElementById']?.call(
-                      doc,
-                      `gallery-interactive-otp-slot-${slotIndex}`,
-                    )
-                  : undefined;
-                const value = state.value[slotIndex] ?? '';
-
-                if (!slot) continue;
-                slot['value'] = value;
-                slot['tabIndex'] = slotIndex === state.activeSlot ? 0 : -1;
-                if (value) {
-                  Object(slot)['setAttribute']?.call(slot, 'data-filled', '');
-                } else {
-                  Object(slot)['removeAttribute']?.call(slot, 'data-filled');
-                }
-                if (state.value.length === 4) {
-                  Object(slot)['setAttribute']?.call(slot, 'data-complete', '');
-                } else {
-                  Object(slot)['removeAttribute']?.call(slot, 'data-complete');
-                }
-              }
-              if (state.value.length === 4) {
-                if (root) Object(root)['setAttribute']?.call(root, 'data-complete', '');
-                if (hidden) Object(hidden)['setAttribute']?.call(hidden, 'data-complete', '');
-              } else {
-                if (root) Object(root)['removeAttribute']?.call(root, 'data-complete');
-                if (hidden) Object(hidden)['removeAttribute']?.call(hidden, 'data-complete');
-              }
-              if (output) output['textContent'] = state.value;
+              const result = _otpFieldPaste(Object(event), {
+                length: 4,
+                slotIndex: 3,
+                value: state.value,
+              });
+              if (!result) return;
+              if ('value' in result && typeof result.value === 'string') state.value = result.value;
+              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
         </div>

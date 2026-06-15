@@ -1,9 +1,77 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/otp-field-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryOtpFieldDemo$section_data_complete_derive = derive(['state'], (state: any) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive = derive(['state'], (state: any) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_2 = derive(['state'], (state: any) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive = derive(['state'], (state: any) =>
+  (state.value[0] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive = derive(['state'], (state: any) =>
+  state.activeSlot === 0 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_2 = derive(
+  ['state'],
+  (state: any) => state.value[0] ?? '',
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_3 = derive(['state'], (state: any) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive_2 = derive(['state'], (state: any) =>
+  (state.value[1] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive_2 = derive(['state'], (state: any) =>
+  state.activeSlot === 1 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_3 = derive(
+  ['state'],
+  (state: any) => state.value[1] ?? '',
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_4 = derive(['state'], (state: any) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive_3 = derive(['state'], (state: any) =>
+  (state.value[2] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive_3 = derive(['state'], (state: any) =>
+  state.activeSlot === 2 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_4 = derive(
+  ['state'],
+  (state: any) => state.value[2] ?? '',
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_5 = derive(['state'], (state: any) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive_4 = derive(['state'], (state: any) =>
+  (state.value[3] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive_4 = derive(['state'], (state: any) =>
+  state.activeSlot === 3 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_5 = derive(
+  ['state'],
+  (state: any) => state.value[3] ?? '',
+);
+
 import { component } from '@jiso/core';
 import {
   otpFieldHiddenInputAttributes,
+  otpFieldInput as _otpFieldInput,
   otpFieldInputAttributes,
+  otpFieldKeyDown as _otpFieldKeyDown,
+  otpFieldPaste as _otpFieldPaste,
   otpFieldRootAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -50,6 +118,8 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
           labelledBy: 'gallery-interactive-otp-label',
         })}
         class={ROOT_CLASS}
+        data-complete={state.value.length === 4 ? '' : null}
+        data-bind:data-complete="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$section_data_complete_derive"
         data-gallery-interactive="otp-field"
         fw-c="gallery-otp-field-demo"
         fw-state='{"activeSlot":2,"value":"12"}'
@@ -69,6 +139,10 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
           })}
           id="gallery-interactive-otp-hidden"
           class={HIDDEN_INPUT_CLASS}
+          data-complete={state.value.length === 4 ? '' : null}
+          data-bind:data-complete="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_complete_derive"
+          value={state.value}
+          data-bind:value="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_value_derive"
         />
         <div class={GROUP_CLASS}>
           <input
@@ -79,7 +153,17 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 0,
             })}
             class={INPUT_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_keydown"
+            data-complete={state.value.length === 4 ? '' : null}
+            data-bind:data-complete="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_complete_derive_2"
+            data-filled={(state.value[0] ?? '') === '' ? null : ''}
+            data-bind:data-filled="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_filled_derive"
+            tabIndex={state.activeSlot === 0 ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_tabIndex_derive"
+            value={state.value[0] ?? ''}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_value_derive_2"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_keydown"
+            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_paste"
           />
           <input
             {...otpFieldInputAttributes({
@@ -89,7 +173,17 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 1,
             })}
             class={INPUT_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_keydown_2"
+            data-complete={state.value.length === 4 ? '' : null}
+            data-bind:data-complete="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_complete_derive_3"
+            data-filled={(state.value[1] ?? '') === '' ? null : ''}
+            data-bind:data-filled="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_filled_derive_2"
+            tabIndex={state.activeSlot === 1 ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_tabIndex_derive_2"
+            value={state.value[1] ?? ''}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_value_derive_3"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_input_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_keydown_2"
+            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_paste_2"
           />
           <input
             {...otpFieldInputAttributes({
@@ -99,7 +193,17 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 2,
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_input"
+            data-complete={state.value.length === 4 ? '' : null}
+            data-bind:data-complete="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_complete_derive_4"
+            data-filled={(state.value[2] ?? '') === '' ? null : ''}
+            data-bind:data-filled="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_filled_derive_3"
+            tabIndex={state.activeSlot === 2 ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_tabIndex_derive_3"
+            value={state.value[2] ?? ''}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_value_derive_4"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_input_3"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_keydown_3"
+            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_paste_3"
           />
           <input
             {...otpFieldInputAttributes({
@@ -109,8 +213,17 @@ export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
               slotIndex: 3,
             })}
             class={INPUT_CLASS}
-            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_input_2"
-            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=4b851ead#GalleryOtpFieldDemo$input_paste"
+            data-complete={state.value.length === 4 ? '' : null}
+            data-bind:data-complete="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_complete_derive_5"
+            data-filled={(state.value[3] ?? '') === '' ? null : ''}
+            data-bind:data-filled="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_data_filled_derive_4"
+            tabIndex={state.activeSlot === 3 ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_tabIndex_derive_4"
+            value={state.value[3] ?? ''}
+            data-bind:value="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_value_derive_5"
+            on:input="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_input_4"
+            on:keydown="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_keydown_4"
+            on:paste="/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js?v=5d39159b#GalleryOtpFieldDemo$input_paste_4"
           />
         </div>
         <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>

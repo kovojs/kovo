@@ -74,6 +74,7 @@ type OtpFieldRestorableTarget = { value?: string } | null;
 
 export type OtpFieldInputEvent = Event & {
   readonly currentTarget: OtpFieldInputTarget;
+  readonly target?: { value?: string } | null;
 };
 export type OtpFieldKeyboardEvent = Event & {
   readonly currentTarget?: OtpFieldRestorableTarget;
@@ -82,6 +83,7 @@ export type OtpFieldKeyboardEvent = Event & {
 export type OtpFieldPasteEvent = Event & {
   readonly clipboardData: { getData(format: string): string } | null;
   readonly currentTarget?: OtpFieldRestorableTarget;
+  readonly target?: { value?: string } | null;
 };
 
 export function otpFieldComplete(state: OtpFieldState): boolean {
@@ -232,17 +234,18 @@ export function otpFieldInput(
 ): OtpFieldChangeResult | undefined {
   if (event.defaultPrevented) return;
 
-  if (event.currentTarget === null) return;
+  const input = otpFieldInputEventTarget(event);
+  if (input === undefined) return;
 
   const result = setOtpFieldSlotValue(
     state,
     state.slotIndex,
-    event.currentTarget.value,
+    input.value,
     'input',
     options,
   );
   if (!result.changed) {
-    restoreOtpFieldSlotTargetValue(event.currentTarget, state, result.value);
+    restoreOtpFieldSlotTargetValue(input, state, result.value);
     event.preventDefault();
   }
 
@@ -296,11 +299,36 @@ export function otpFieldPaste(
 
   const result = setOtpFieldSlotValue(state, state.slotIndex, text, 'paste', options);
   if (!result.changed) {
-    restoreOtpFieldSlotTargetValue(event.currentTarget ?? null, state, result.value);
+    restoreOtpFieldSlotTargetValue(otpFieldRestorableEventTarget(event), state, result.value);
   }
   event.preventDefault();
 
   return result;
+}
+
+function otpFieldInputEventTarget(
+  event: OtpFieldInputEvent,
+): { value: string } | undefined {
+  if (event.currentTarget && typeof event.currentTarget.value === 'string') {
+    return event.currentTarget;
+  }
+
+  const target = event.target;
+  if (target && typeof target.value === 'string') return target as { value: string };
+  return undefined;
+}
+
+function otpFieldRestorableEventTarget(event: {
+  readonly currentTarget?: OtpFieldRestorableTarget;
+  readonly target?: { value?: string } | null;
+}): OtpFieldRestorableTarget {
+  if (event.currentTarget && typeof event.currentTarget.value === 'string') {
+    return event.currentTarget;
+  }
+
+  const target = event.target;
+  if (target && typeof target.value === 'string') return target;
+  return null;
 }
 
 function restoreOtpFieldSlotTargetValue(

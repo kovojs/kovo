@@ -880,6 +880,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(third.value).toBe('');
     expect(output.textContent).toBe('12');
 
+    third.value = '3';
     third.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -895,6 +896,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(output.textContent).toBe('123');
     });
 
+    fourth.value = '4';
     fourth.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -954,7 +956,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       value: { getData: () => '9 8 7 6' },
     });
 
-    fourth.dispatchEvent(paste);
+    first.dispatchEvent(paste);
 
     await vi.waitFor(() => {
       expect(paste.defaultPrevented).toBe(true);

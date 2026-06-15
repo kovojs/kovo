@@ -118,6 +118,9 @@ export function evaluateClientModule(
     _numberFieldIncrementClick: headlessPrimitives.numberFieldIncrementClick,
     _numberFieldInput: headlessPrimitives.numberFieldInput,
     _numberFieldKeyDown: headlessPrimitives.numberFieldKeyDown,
+    _otpFieldInput: headlessPrimitives.otpFieldInput,
+    _otpFieldKeyDown: headlessPrimitives.otpFieldKeyDown,
+    _otpFieldPaste: headlessPrimitives.otpFieldPaste,
     _popoverBeforeToggle: headlessPrimitives.popoverBeforeToggle,
     _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
     _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
@@ -148,7 +151,9 @@ export function clientHandler(exports: ClientExports, name: string): ClientExpor
 
 export function inputEvent(value: string): Event {
   const event = new Event('input', { bubbles: true, cancelable: true });
-  Object.defineProperty(event, 'target', { value: { value } });
+  const target = { value };
+  Object.defineProperty(event, 'currentTarget', { value: target });
+  Object.defineProperty(event, 'target', { value: target });
   return event;
 }
 

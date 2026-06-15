@@ -1,156 +1,189 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
-export const GalleryOtpFieldDemo$input_keydown = handler((_event, ctx) => {
-  ctx.state.activeSlot = 1;
-  const doc = Reflect['get'](globalThis, 'document');
-  const first = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-0')
-    : undefined;
-  const second = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-1')
-    : undefined;
+import {
+  otpFieldInput as _otpFieldInput,
+  otpFieldKeyDown as _otpFieldKeyDown,
+  otpFieldPaste as _otpFieldPaste,
+} from '@jiso/headless-ui/primitives';
 
-  if (first) first['tabIndex'] = -1;
-  if (second) second['tabIndex'] = 0;
-  if (second) Object(second)['focus']?.call(second);
+export const GalleryOtpFieldDemo$input_input = handler((event, ctx) => {
+  const result = _otpFieldInput(Object(event), {
+    length: 4,
+    slotIndex: 0,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
 });
-export const GalleryOtpFieldDemo$input_keydown_2 = handler((_event, ctx) => {
-  ctx.state.value = '1';
-  ctx.state.activeSlot = 1;
-  const doc = Reflect['get'](globalThis, 'document');
-  const hidden = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-    : undefined;
-  const second = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-1')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-    : undefined;
-
-  if (hidden) hidden['value'] = ctx.state.value;
-  if (second) {
-    second['value'] = '';
-    Object(second)['removeAttribute']?.call(second, 'data-filled');
-  }
-  if (output) output['textContent'] = ctx.state.value;
-});
-export const GalleryOtpFieldDemo$input_input = handler((_event, ctx) => {
-  ctx.state.value = ctx.state.value === '12' ? '123' : ctx.state.value;
-  ctx.state.activeSlot = 3;
-  const doc = Reflect['get'](globalThis, 'document');
-  const hidden = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-    : undefined;
-  const third = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-2')
-    : undefined;
-  const fourth = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-3')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-    : undefined;
-
-  if (hidden) hidden['value'] = ctx.state.value;
-  if (third) {
-    third['value'] = '3';
-    third['tabIndex'] = -1;
-    Object(third)['setAttribute']?.call(third, 'data-filled', '');
-  }
-  if (fourth) {
-    fourth['tabIndex'] = 0;
-    Object(fourth)['focus']?.call(fourth);
-  }
-  if (output) output['textContent'] = ctx.state.value;
-});
-export const GalleryOtpFieldDemo$input_input_2 = handler((_event, ctx) => {
-  ctx.state.value = '1234';
-  ctx.state.activeSlot = 3;
-  const doc = Reflect['get'](globalThis, 'document');
-  const root = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp')
-    : undefined;
-  const hidden = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-    : undefined;
-  const fourth = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-slot-3')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-    : undefined;
-
-  if (root) Object(root)['setAttribute']?.call(root, 'data-complete', '');
-  if (hidden) {
-    hidden['value'] = ctx.state.value;
-    Object(hidden)['setAttribute']?.call(hidden, 'data-complete', '');
-  }
-  if (fourth) {
-    fourth['value'] = '4';
-    Object(fourth)['setAttribute']?.call(fourth, 'data-filled', '');
-    Object(fourth)['setAttribute']?.call(fourth, 'data-complete', '');
-  }
-  if (output) output['textContent'] = ctx.state.value;
+export const GalleryOtpFieldDemo$input_keydown = handler((event, ctx) => {
+  const result = _otpFieldKeyDown(Object(event), {
+    length: 4,
+    slotIndex: 0,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
 });
 export const GalleryOtpFieldDemo$input_paste = handler((event, ctx) => {
-  const delegatedEvent = event;
-  const eventClipboard =
-    delegatedEvent === undefined
-      ? undefined
-      : Reflect['get'](Object(delegatedEvent), 'clipboardData');
-  const clipboardText =
-    eventClipboard === null || eventClipboard === undefined
-      ? ''
-      : Object(eventClipboard)['getData']?.call(eventClipboard, 'text');
-  ctx.state.value = String(clipboardText ?? '')
-    .replace(/\D/g, '')
-    .slice(0, 4);
-  ctx.state.activeSlot = ctx.state.value.length >= 4 ? 3 : ctx.state.value.length;
-
-  if (delegatedEvent !== undefined) {
-    Object(delegatedEvent)['preventDefault']?.call(delegatedEvent);
-  }
-
-  const doc = Reflect['get'](globalThis, 'document');
-  const root = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp')
-    : undefined;
-  const hidden = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-otp-hidden')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="otp-value"]')
-    : undefined;
-
-  if (hidden) hidden['value'] = ctx.state.value;
-  for (let slotIndex = 0; slotIndex < 4; slotIndex += 1) {
-    const slot = doc
-      ? Object(doc)['getElementById']?.call(doc, `gallery-interactive-otp-slot-${slotIndex}`)
-      : undefined;
-    const value = ctx.state.value[slotIndex] ?? '';
-
-    if (!slot) continue;
-    slot['value'] = value;
-    slot['tabIndex'] = slotIndex === ctx.state.activeSlot ? 0 : -1;
-    if (value) {
-      Object(slot)['setAttribute']?.call(slot, 'data-filled', '');
-    } else {
-      Object(slot)['removeAttribute']?.call(slot, 'data-filled');
-    }
-    if (ctx.state.value.length === 4) {
-      Object(slot)['setAttribute']?.call(slot, 'data-complete', '');
-    } else {
-      Object(slot)['removeAttribute']?.call(slot, 'data-complete');
-    }
-  }
-  if (ctx.state.value.length === 4) {
-    if (root) Object(root)['setAttribute']?.call(root, 'data-complete', '');
-    if (hidden) Object(hidden)['setAttribute']?.call(hidden, 'data-complete', '');
-  } else {
-    if (root) Object(root)['removeAttribute']?.call(root, 'data-complete');
-    if (hidden) Object(hidden)['removeAttribute']?.call(hidden, 'data-complete');
-  }
-  if (output) output['textContent'] = ctx.state.value;
+  const result = _otpFieldPaste(Object(event), {
+    length: 4,
+    slotIndex: 0,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
 });
+export const GalleryOtpFieldDemo$input_input_2 = handler((event, ctx) => {
+  const result = _otpFieldInput(Object(event), {
+    length: 4,
+    slotIndex: 1,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_keydown_2 = handler((event, ctx) => {
+  const result = _otpFieldKeyDown(Object(event), {
+    length: 4,
+    slotIndex: 1,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_paste_2 = handler((event, ctx) => {
+  const result = _otpFieldPaste(Object(event), {
+    length: 4,
+    slotIndex: 1,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_input_3 = handler((event, ctx) => {
+  const result = _otpFieldInput(Object(event), {
+    length: 4,
+    slotIndex: 2,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_keydown_3 = handler((event, ctx) => {
+  const result = _otpFieldKeyDown(Object(event), {
+    length: 4,
+    slotIndex: 2,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_paste_3 = handler((event, ctx) => {
+  const result = _otpFieldPaste(Object(event), {
+    length: 4,
+    slotIndex: 2,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_input_4 = handler((event, ctx) => {
+  const result = _otpFieldInput(Object(event), {
+    length: 4,
+    slotIndex: 3,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_keydown_4 = handler((event, ctx) => {
+  const result = _otpFieldKeyDown(Object(event), {
+    length: 4,
+    slotIndex: 3,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+export const GalleryOtpFieldDemo$input_paste_4 = handler((event, ctx) => {
+  const result = _otpFieldPaste(Object(event), {
+    length: 4,
+    slotIndex: 3,
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  if ('value' in result && typeof result.value === 'string') ctx.state.value = result.value;
+  if (typeof result.focusIndex === 'number') ctx.state.activeSlot = result.focusIndex;
+});
+
+export const GalleryOtpFieldDemo$section_data_complete_derive = derive(['state'], (state) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive = derive(['state'], (state) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_value_derive = derive(['state'], (state) => state.value);
+export const GalleryOtpFieldDemo$input_data_complete_derive_2 = derive(['state'], (state) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive = derive(['state'], (state) =>
+  (state.value[0] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive = derive(['state'], (state) =>
+  state.activeSlot === 0 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_2 = derive(
+  ['state'],
+  (state) => state.value[0] ?? '',
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_3 = derive(['state'], (state) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive_2 = derive(['state'], (state) =>
+  (state.value[1] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive_2 = derive(['state'], (state) =>
+  state.activeSlot === 1 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_3 = derive(
+  ['state'],
+  (state) => state.value[1] ?? '',
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_4 = derive(['state'], (state) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive_3 = derive(['state'], (state) =>
+  (state.value[2] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive_3 = derive(['state'], (state) =>
+  state.activeSlot === 2 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_4 = derive(
+  ['state'],
+  (state) => state.value[2] ?? '',
+);
+export const GalleryOtpFieldDemo$input_data_complete_derive_5 = derive(['state'], (state) =>
+  state.value.length === 4 ? '' : null,
+);
+export const GalleryOtpFieldDemo$input_data_filled_derive_4 = derive(['state'], (state) =>
+  (state.value[3] ?? '') === '' ? null : '',
+);
+export const GalleryOtpFieldDemo$input_tabIndex_derive_4 = derive(['state'], (state) =>
+  state.activeSlot === 3 ? 0 : -1,
+);
+export const GalleryOtpFieldDemo$input_value_derive_5 = derive(
+  ['state'],
+  (state) => state.value[3] ?? '',
+);

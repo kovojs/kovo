@@ -473,11 +473,28 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Inputs
 
-- [ ] **otp-field** [P0]: typing `123` yields slot values `['1212','1','2','','']` — handlers are canned
+- [x] **otp-field** [P0]: typing `123` yields slot values `['1212','1','2','','']` — handlers are canned
       per-slot scripts that ignore real keystrokes and stamp literal characters; focus-advance,
       Backspace/Delete, Arrow/Home/End, and paste-distribute are all unmodeled. Rewrite to drive every
       slot from `otpFieldInput`/`otpFieldKeyDown`/`otpFieldPaste`/`otpFieldMoveFocus` (primitive is
       correct and unit-tested). Also needs loader keydown+paste delegation (Phase 0).
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/otp-field-demo.tsx` now imports
+    `otpFieldInput`/`otpFieldKeyDown`/`otpFieldPaste`, mutates only `state.value`/`state.activeSlot`
+    from reducer results, and expresses root/hidden/slot `data-complete`, slot `data-filled`,
+    `tabIndex`, native `value`, and output text as state-bound TSX. `packages/headless-ui/src/primitives/otp-field.ts`
+    also accepts delegated `event.target.value` for input/paste parity with the loader.
+  - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/otp-field.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t OTP`, and
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
+    passed. `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed. `rg
+    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params|otpSlotValue|applyOtpResult"
+    examples/gallery/src/interactive/otp-field-demo.tsx
+    examples/gallery/src/generated/interactive/otp-field-demo.tsx
+    examples/gallery/src/generated/interactive/otp-field-demo.client.js` found no matches.
 - [ ] **slider** [P1]: native `<input type=range>` with decorative `aria-hidden` track/thumb — neither
       Base UI's per-thumb nested input nor shadcn/Radix's `role=slider` thumb. No `role=slider`/
       `aria-valuemin/now/max`, no track-click, no drag, no large-step, no multi-thumb.
