@@ -66,13 +66,8 @@ export function lowerInlineAttributeDerives(
       .map((attribute) => inlineAttributeDerive(attribute, element, componentName, knownQueries))
       .filter((candidate): candidate is InlineAttributeDerive => candidate !== null);
 
-    const loweredCandidates =
-      candidates.length === 1
-        ? candidates
-        : candidates.every((item) => item.source === 'state')
-          ? candidates
-          : [];
-    for (const candidate of loweredCandidates) {
+    const useBindingStamp = candidates.length > 1;
+    for (const candidate of candidates) {
       const exportName = nextExportName(candidate.baseName, nameCounts);
       const stampName = `${candidate.query}.${exportName}`;
       const expression =
@@ -99,7 +94,9 @@ export function lowerInlineAttributeDerives(
         replacement:
           candidate.source === 'state'
             ? stateAttributeBindingReplacement(candidate, stampName, options.source)
-            : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
+            : useBindingStamp
+              ? queryAttributeBindingReplacement(candidate, stampName)
+              : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
         start: candidate.attribute.start,
       });
     }
@@ -248,6 +245,7 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     attribute.domEventName !== undefined ||
     attribute.executionTriggerName !== undefined ||
     name === 'className' ||
+    name === 'viewTransitionName' ||
     name === 'data-derive' ||
     name === 'data-derive-attr' ||
     name === 'data-bind' ||
@@ -255,6 +253,13 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     name.startsWith('data-p-') ||
     name.startsWith('fw-')
   );
+}
+
+function queryAttributeBindingReplacement(
+  candidate: InlineAttributeDerive,
+  stampName: string,
+): string {
+  return `${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`;
 }
 
 function inlineTextBinding(

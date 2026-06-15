@@ -86,6 +86,50 @@ export const ProductCard = component('product-card', {
     expect(serverSource).not.toContain('viewTransitionName=');
   });
 
+  it('lowers dynamic view transition names through a style derive', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  queries: { product: {} },
+  render: () => <img viewTransitionName={product.slug} src="/p1.png" />,
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(result.viewTransitions).toEqual([]);
+    expect(serverSource).toContain('style={\\`view-transition-name: \\${product.slug}\\`}');
+    expect(serverSource).not.toContain('viewTransitionName=');
+    expect(serverSource).not.toContain('style="viewTransitionName');
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'FW311',
+        message:
+          'Query/state-dependent DOM position has no update status. ProductCard product.slug expression',
+      }),
+    );
+  });
+
+  it('merges dynamic view transition names into an existing static style through one style derive', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  queries: { product: {} },
+  render: () => <img style="opacity: .8" viewTransitionName={product.slug} src="/p1.png" />,
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain(
+      'style={\\`opacity: .8; view-transition-name: \\${product.slug}\\`}',
+    );
+    expect(serverSource).not.toContain('viewTransitionName=');
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'FW311' }));
+  });
+
   it('ignores view transition attribute text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',

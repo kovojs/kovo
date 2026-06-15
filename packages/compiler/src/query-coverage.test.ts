@@ -63,6 +63,34 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers multiple derivable query attributes on one element', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <button aria-expanded={cart.open ? 'true' : 'false'} aria-busy={cart.loading ? 'true' : 'false'}>Checkout</button>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain(
+      'data-bind:aria-expanded="cart.CartBadge$button_aria_expanded_derive"',
+    );
+    expect(serverSource).toContain('data-bind:aria-busy="cart.CartBadge$button_aria_busy_derive"');
+    expect(serverSource).not.toContain('aria-expanded={cart.open');
+    expect(serverSource).not.toContain('aria-busy={cart.loading');
+    expect(result.queryUpdatePlans[0]?.stamps?.map((stamp) => stamp.attr).sort()).toEqual([
+      'aria-busy',
+      'aria-expanded',
+    ]);
+  });
+
   it('does not lower event handler expressions into inline query derives', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

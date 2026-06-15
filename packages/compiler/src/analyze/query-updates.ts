@@ -298,6 +298,27 @@ function dataDeriveStamps(
   const stampFacts: QueryStampFact[] = [];
 
   for (const element of jsxElements(model)) {
+    for (const attribute of element.attributes.filter(
+      (item) => item.name.startsWith('data-bind:') && item.value,
+    )) {
+      if (!attribute.value) continue;
+
+      const [inputSegment, nameSegment, ...extraSegments] = parseBindingPath(attribute.value);
+      if (!inputSegment || !nameSegment || extraSegments.length > 0) continue;
+
+      const derive = derives.get(nameSegment.name);
+      if (!derive || derive.input !== inputSegment.name || derive.input === 'state') continue;
+
+      stampFacts.push({
+        attr: attribute.name.slice('data-bind:'.length),
+        derive: {
+          ...derive,
+          selector: `[${attribute.name}="${attribute.value}"]`,
+        },
+        selector: `[${attribute.name}="${attribute.value}"]`,
+      });
+    }
+
     const deriveAttribute = element.attributes.find(
       (attribute) => attribute.name === 'data-derive' && attribute.value,
     );
