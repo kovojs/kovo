@@ -292,6 +292,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           {
             domain: 'price',
             keys: null,
+            predicate: 'non-eq',
             site: 'product.domain.ts:11',
             source: 'update-from',
             via: 'prices',
@@ -323,6 +324,14 @@ describe('@jiso/drizzle touch graph helpers', () => {
         unresolved: [],
       },
     });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:11',
+      },
+    ]);
   });
 
   it('extracts read source tables from write call AST without reparsing statement text', () => {
@@ -919,13 +928,39 @@ describe('@jiso/drizzle touch graph helpers', () => {
           },
         ],
         touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:10', via: 'products' },
-          { domain: 'product', keys: null, site: 'product.domain.ts:11', via: 'products' },
           { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:10',
+            via: 'products',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:11',
+            via: 'products',
+          },
         ],
         unresolved: [],
       },
     });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:10',
+      },
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:11',
+      },
+    ]);
   });
 
   it('degrades compound key predicates to table-level invalidation', () => {
@@ -971,6 +1006,93 @@ describe('@jiso/drizzle touch graph helpers', () => {
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'product.domain.ts:7',
+      },
+    ]);
+  });
+
+  it('extracts composite parameter keys from and(eq(...)) predicates', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'user.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id,tenantId" }));',
+            '',
+            'export async function syncUser(db: PgDatabase, id: string, tenantId: string) {',
+            '  await db.update(users).set({ active: true }).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncUser: {
+        reads: [],
+        touches: [
+          {
+            domain: 'user',
+            keys: 'arg:id,arg:tenantId',
+            site: 'user.domain.ts:7',
+            via: 'users',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
+  it('degrades eq predicates with non-parameter values to table-level invalidation', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function syncProduct(db: PgDatabase) {',
+            '  const randomLocal = "p1";',
+            '  await db.update(products).set({ reserved: true }).where(eq(products.id, randomLocal));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:8',
       },
     ]);
   });

@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (13 / 32 findings closed)
+**Status:** open (14 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -205,7 +205,17 @@ tsc --noEmit`, and `pnpm exec vp check --fix` passed.
     `pnpm --filter @jiso/core exec tsc --noEmit` passed.
   - Done = bare `pgTable("carts", {})` + `db.insert(carts)` yields a `cart` touch (not FW406); an unmapped non-exempt write emits FW404 at compile time. Prove: drizzle static suite with bare-table fixtures.
 
-- [ ] **Composite key derivation: unwrap `and(eq…)` and prove RHS is a write param** — `static.ts:8491`, `:8569` (SPEC §11.1 step 4, FW408). In `extractParameterizedKey`, unwrap a top-level `and(...)` (share the helper with the v2 `keyEqMatchesFromPredicate` to prevent drift) and record `arg:` keys for eq conjuncts. Record a key **only** when the RHS identifier resolves to a `ParameterDeclaration` of the enclosing write (stop hardcoding `input`, stop fabricating `arg:<anyLocal>`); otherwise degrade to table-level (FW409).
+- [x] **Composite key derivation: unwrap `and(eq…)` and prove RHS is a write param** — `static.ts:8491`, `:8569` (SPEC §11.1 step 4, FW408). In `extractParameterizedKey`, unwrap a top-level `and(...)` (share the helper with the v2 `keyEqMatchesFromPredicate` to prevent drift) and record `arg:` keys for eq conjuncts. Record a key **only** when the RHS identifier resolves to a `ParameterDeclaration` of the enclosing write (stop hardcoding `input`, stop fabricating `arg:<anyLocal>`); otherwise degrade to table-level (FW409).
+  - Evidence 2026-06-15: `packages/drizzle/src/static.ts` now threads callback parameter
+    symbols into write predicate extraction, uses a shared `eq`/`and` conjunct walker for
+    touch-graph and symbolic-effect extraction, and records `arg:*` keys only for identifiers or
+    property accesses rooted in actual callback parameters.
+  - Evidence 2026-06-15: `packages/drizzle/src/index.columns-keys-predicates.test.ts` covers
+    `and(eq(users.id, id), eq(users.tenantId, tenantId))` producing
+    `arg:id,arg:tenantId` and `eq(products.id, randomLocal)` degrading to table-level FW409.
+  - Evidence 2026-06-15: with `pnpm --filter @jiso/drizzle exec`, the commands
+    `vitest run src/index.columns-keys-predicates.test.ts`, `vitest run`, and `tsc --noEmit`
+    passed.
   - Done = `where(and(eq(T.id,arg), eq(T.tenant,t)))` records both keys; `eq(T.id, randomLocal)` records `null`. Prove: drizzle static suite with composite + non-param fixtures.
 
 ---

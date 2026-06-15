@@ -447,6 +447,7 @@ function projectFunctionExtractionsByFileName(
           extraction.tableNamesBySymbol,
           namespaceTableNames,
           receivers,
+          callbackParameterSymbolKeys(fn),
         ),
       });
     }
@@ -486,6 +487,7 @@ function projectFunctionExtractionsByFileName(
           extraction.tableNamesBySymbol,
           namespaceTableNames,
           receivers,
+          callbackParameterSymbolKeys(callback),
         ),
       });
     }
@@ -522,6 +524,7 @@ function projectFunctionExtractionsByFileName(
           extraction.tableNamesBySymbol,
           namespaceTableNames,
           receivers,
+          callbackParameterSymbolKeys(callback.fn),
         ),
       });
     }
@@ -557,6 +560,7 @@ function projectFunctionExtractionsByFileName(
           extraction.tableNamesBySymbol,
           namespaceTableNames,
           receivers,
+          callbackParameterSymbolKeys(callback.fn),
         ),
       });
     }
@@ -1328,6 +1332,7 @@ function extractProjectDrizzleWriteCalls(
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
   receivers: ProjectDrizzleReceivers,
+  paramSymbolKeys: ReadonlySet<string>,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
 
@@ -1351,8 +1356,10 @@ function extractProjectDrizzleWriteCalls(
     calls.push({
       index: 0,
       operation,
-      predicateFacts: extractPredicateFactsFromWriteChain(chain, (node) =>
-        projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames),
+      predicateFacts: extractPredicateFactsFromWriteChain(
+        chain,
+        (node) => projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames),
+        paramSymbolKeys,
       ),
       readSources: extractReadSourcesFromWriteChain(
         chain,
@@ -8533,18 +8540,32 @@ function predicateSummaryFromFacts(
 ): ExtractedPredicateSummary {
   if (!table.key) return {};
 
-  const tableFacts = facts.filter(
-    (fact) => fact.tableIdentifier === tableIdentifier && fact.key === table.key,
+  const keyColumns = tableKeyColumns(table.key);
+  const keyFacts = keyColumns.map((key) =>
+    facts.find((fact) => fact.tableIdentifier === tableIdentifier && fact.key === key),
   );
-  const keyFact = tableFacts.find((fact) => fact.argumentKey);
-  if (keyFact?.argumentKey) return { key: keyFact.argumentKey };
+  const argumentKeys = keyFacts.map((fact) => fact?.argumentKey);
+  if (
+    argumentKeys.length === keyColumns.length &&
+    argumentKeys.every((argumentKey): argumentKey is string => argumentKey !== undefined)
+  ) {
+    return { key: argumentKeys.join(',') };
+  }
 
-  return tableFacts.some((fact) => fact.predicate === 'non-eq') ? { predicate: 'non-eq' } : {};
+  return keyFacts.some((fact) => fact?.predicate === 'non-eq') ? { predicate: 'non-eq' } : {};
+}
+
+function tableKeyColumns(key: string): string[] {
+  return key
+    .split(',')
+    .map((column) => column.trim())
+    .filter((column) => column.length > 0);
 }
 
 function extractPredicateFactsFromWriteChain(
   chain: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
+  paramSymbolKeys: ReadonlySet<string> = new Set(),
 ): ExtractedPredicateFact[] {
   const facts: ExtractedPredicateFact[] = [];
   const calls = [
@@ -8555,10 +8576,10 @@ function extractPredicateFactsFromWriteChain(
   const predicate = whereCall?.getArguments()[0];
   if (!predicate) return facts;
 
-  const parameterizedKey = extractParameterizedKey(predicate, resolveIdentifier);
-  if (parameterizedKey) facts.push(parameterizedKey);
+  const parameterizedKeys = extractParameterizedKeys(predicate, resolveIdentifier, paramSymbolKeys);
+  facts.push(...parameterizedKeys);
 
-  if (!isEqCall(predicate)) {
+  if (!eqPredicateConjuncts(predicate)) {
     for (const reference of tableKeyReferences(predicate, resolveIdentifier)) {
       facts.push({ ...reference, predicate: 'non-eq' });
     }
@@ -8567,34 +8588,67 @@ function extractPredicateFactsFromWriteChain(
   return dedupePredicateFacts(facts);
 }
 
-function extractParameterizedKey(
+function extractParameterizedKeys(
   predicate: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
-): ExtractedPredicateFact | undefined {
-  if (!Node.isCallExpression(predicate)) return undefined;
+  paramSymbolKeys: ReadonlySet<string> = new Set(),
+): ExtractedPredicateFact[] {
+  const conjuncts = eqPredicateConjuncts(predicate);
+  if (!conjuncts) return [];
 
-  const expression = predicate.getExpression();
-  if (!Node.isIdentifier(expression) || expression.getText() !== 'eq') return undefined;
+  const facts: ExtractedPredicateFact[] = [];
+  for (const { left, right } of conjuncts) {
+    const leftKey = tableKeyReference(left, resolveIdentifier);
+    const rightArgument = argumentKey(right, paramSymbolKeys);
+    if (leftKey) {
+      facts.push(
+        rightArgument
+          ? { ...leftKey, argumentKey: rightArgument }
+          : { ...leftKey, predicate: 'non-eq' },
+      );
+      continue;
+    }
 
-  const [left, right] = predicate.getArguments();
-  if (!left || !right) return undefined;
+    const rightKey = tableKeyReference(right, resolveIdentifier);
+    const leftArgument = argumentKey(left, paramSymbolKeys);
+    if (rightKey) {
+      facts.push(
+        leftArgument
+          ? { ...rightKey, argumentKey: leftArgument }
+          : { ...rightKey, predicate: 'non-eq' },
+      );
+    }
+  }
 
-  const leftKey = tableKeyReference(left, resolveIdentifier);
-  const rightArgument = argumentKey(right);
-  if (leftKey && rightArgument) return { ...leftKey, argumentKey: rightArgument };
-
-  const rightKey = tableKeyReference(right, resolveIdentifier);
-  const leftArgument = argumentKey(left);
-  if (rightKey && leftArgument) return { ...rightKey, argumentKey: leftArgument };
-
-  return undefined;
+  return facts;
 }
 
-function isEqCall(node: Node): boolean {
-  if (!Node.isCallExpression(node)) return false;
+interface EqPredicateConjunct {
+  left: Node;
+  right: Node;
+}
 
-  const expression = node.getExpression();
-  return Node.isIdentifier(expression) && expression.getText() === 'eq';
+function eqPredicateConjuncts(node: Node): EqPredicateConjunct[] | null {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isCallExpression(expression)) return null;
+
+  const callee = expression.getExpression();
+  if (!Node.isIdentifier(callee)) return null;
+  const name = callee.getText();
+
+  if (name === 'and') {
+    const conjuncts: EqPredicateConjunct[] = [];
+    for (const argument of expression.getArguments()) {
+      const nested = eqPredicateConjuncts(argument);
+      if (!nested) return null;
+      conjuncts.push(...nested);
+    }
+    return conjuncts;
+  }
+
+  if (name !== 'eq') return null;
+  const [left, right] = expression.getArguments();
+  return left && right ? [{ left, right }] : null;
 }
 
 function tableKeyReferences(
@@ -8645,14 +8699,20 @@ function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): Extract
   return deduped;
 }
 
-function argumentKey(expression: Node): string | undefined {
-  if (Node.isIdentifier(expression)) return `arg:${expression.getText()}`;
-  if (!Node.isPropertyAccessExpression(expression)) return undefined;
+function argumentKey(expression: Node, paramSymbolKeys: ReadonlySet<string>): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isIdentifier(node)) {
+    const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
+    return symbolKey && paramSymbolKeys.has(symbolKey) ? `arg:${node.getText()}` : undefined;
+  }
+  if (!Node.isPropertyAccessExpression(node)) return undefined;
 
-  const base = expression.getExpression();
-  if (!Node.isIdentifier(base) || base.getText() !== 'input') return undefined;
+  const base = unwrappedStaticExpressionNode(node.getExpression());
+  if (!Node.isIdentifier(base)) return undefined;
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(base));
+  if (!symbolKey || !paramSymbolKeys.has(symbolKey)) return undefined;
 
-  return `arg:${expression.getName()}`;
+  return `arg:${node.getName()}`;
 }
 
 function appendTableEntries<Table>(
@@ -8979,35 +9039,23 @@ function keyEqMatchesFromPredicate(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
 ): { column: string; value: SymbolicValue }[] | null {
-  const node = unwrappedStaticExpressionNode(predicate);
-  if (!Node.isCallExpression(node)) return null;
+  const conjuncts = eqPredicateConjuncts(predicate);
+  if (!conjuncts) return null;
 
-  const callee = node.getExpression();
-  if (!Node.isIdentifier(callee)) return null;
-  const name = callee.getText();
+  const matches: { column: string; value: SymbolicValue }[] = [];
+  for (const { left, right } of conjuncts) {
+    const leftColumn = writeColumnReference(left, resolveTable);
+    const rightColumn = writeColumnReference(right, resolveTable);
+    const column = leftColumn ?? rightColumn;
+    const valueNode = leftColumn ? right : left;
+    if (!column || !valueNode) return null;
 
-  if (name === 'and') {
-    const matches: { column: string; value: SymbolicValue }[] = [];
-    for (const argument of node.getArguments()) {
-      const nested = keyEqMatchesFromPredicate(argument, resolveTable, paramSymbolKeys);
-      if (!nested) return null;
-      matches.push(...nested);
-    }
-    return matches;
+    const value = symbolicValueFromExpression(valueNode, paramSymbolKeys);
+    if (value.kind === 'opaque') return null;
+    matches.push({ column, value });
   }
 
-  if (name !== 'eq') return null;
-  const [left, right] = node.getArguments();
-  if (!left || !right) return null;
-
-  const column =
-    writeColumnReference(left, resolveTable) ?? writeColumnReference(right, resolveTable);
-  const valueNode = writeColumnReference(left, resolveTable) ? right : left;
-  if (!column || !valueNode) return null;
-
-  const value = symbolicValueFromExpression(valueNode, paramSymbolKeys);
-  if (value.kind === 'opaque') return null;
-  return [{ column, value }];
+  return matches;
 }
 
 /** Resolve a `t.col` / `t['col']` reference whose base resolves to a known table → its column. */
