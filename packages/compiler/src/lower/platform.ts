@@ -23,7 +23,7 @@ export function platformBehaviorLowering(model: ComponentModuleModel): PlatformB
     const onClick = element.attributes.find((attribute) => attribute.domEventName === 'click');
     const action = onClick?.zeroArgArrow?.documentElementAction;
     const substitution = action
-      ? platformSubstitutionFromDocumentAction(element.tag, action)
+      ? platformSubstitutionFromDocumentAction(model, element.tag, action)
       : null;
     return onClick && substitution ? [{ attribute: onClick, substitution }] : [];
   });
@@ -43,6 +43,7 @@ export function platformBehaviorLowering(model: ComponentModuleModel): PlatformB
 }
 
 function platformSubstitutionFromDocumentAction(
+  model: ComponentModuleModel,
   tag: string,
   action: DocumentElementActionModel,
 ): PlatformSubstitution | null {
@@ -58,25 +59,34 @@ function platformSubstitutionFromDocumentAction(
 
   if (action.action !== 'method' || !action.method) return null;
 
-  return platformSubstitutionFor(tag, action.target, action.method);
+  return platformSubstitutionFor(model, tag, action.target, action.method);
 }
 
 function platformSubstitutionFor(
+  model: ComponentModuleModel,
   tag: string,
   target: string,
   method: string,
 ): PlatformSubstitution | null {
+  if (tag !== 'button') return null;
+
   if (method === 'showModal') {
-    return { action: 'show-modal', event: 'click', kind: 'dialog', tag, target };
+    return hasDialogTarget(model, target)
+      ? { action: 'show-modal', event: 'click', kind: 'dialog', tag, target }
+      : null;
   }
 
   if (method === 'close') {
-    return { action: 'close', event: 'click', kind: 'dialog', tag, target };
+    return hasDialogTarget(model, target)
+      ? { action: 'close', event: 'click', kind: 'dialog', tag, target }
+      : null;
   }
 
   // SPEC §5.2.4: provable dialog handlers lower to platform invoker commands.
   if (method === 'requestClose') {
-    return { action: 'request-close', event: 'click', kind: 'dialog', tag, target };
+    return hasDialogTarget(model, target)
+      ? { action: 'request-close', event: 'click', kind: 'dialog', tag, target }
+      : null;
   }
 
   const popoverActionByMethod: Record<string, string> = {
@@ -87,7 +97,31 @@ function platformSubstitutionFor(
   const action = popoverActionByMethod[method];
   if (!action) return null;
 
-  return { action, event: 'click', kind: 'popover', tag, target };
+  return hasPopoverTarget(model, target)
+    ? { action, event: 'click', kind: 'popover', tag, target }
+    : null;
+}
+
+function hasDialogTarget(model: ComponentModuleModel, target: string): boolean {
+  return jsxElements(model).some(
+    (element) => element.tag === 'dialog' && hasLiteralId(element, target),
+  );
+}
+
+function hasPopoverTarget(model: ComponentModuleModel, target: string): boolean {
+  return jsxElements(model).some(
+    (element) => hasLiteralId(element, target) && hasPopoverAttribute(element),
+  );
+}
+
+function hasLiteralId(element: ReturnType<typeof jsxElements>[number], target: string): boolean {
+  return element.attributes.some(
+    (attribute) => attribute.name === 'id' && attribute.value === target,
+  );
+}
+
+function hasPopoverAttribute(element: ReturnType<typeof jsxElements>[number]): boolean {
+  return element.attributes.some((attribute) => attribute.name === 'popover');
 }
 
 function platformAttributes(substitution: PlatformSubstitution): string {

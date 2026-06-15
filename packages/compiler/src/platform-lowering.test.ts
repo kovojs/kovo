@@ -19,9 +19,12 @@ describe('platform lowering', () => {
       source: `
 export const CartButton = component('cart-button', {
   render: () => (
-    <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>
-      Open cart
-    </button>
+    <section>
+      <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>
+        Open cart
+      </button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
   ),
 });
 `,
@@ -50,9 +53,12 @@ export const CartButton = component('cart-button', {
       source: `
 export const CartCloseButton = component('cart-close-button', {
   render: () => (
-    <button onClick={() => document.getElementById('cart-drawer')!.requestClose()}>
-      Close cart
-    </button>
+    <section>
+      <button onClick={() => document.getElementById('cart-drawer')!.requestClose()}>
+        Close cart
+      </button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
   ),
 });
 `,
@@ -81,9 +87,12 @@ export const CartCloseButton = component('cart-close-button', {
       source: `
 export const CartCloseButton = component('cart-close-button', {
   render: () => (
-    <button onClick={() => (document.getElementById('cart-drawer') as HTMLDialogElement).requestClose()}>
-      Close cart
-    </button>
+    <section>
+      <button onClick={() => (document.getElementById('cart-drawer') as HTMLDialogElement).requestClose()}>
+        Close cart
+      </button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
   ),
 });
 `,
@@ -108,7 +117,12 @@ export const CartCloseButton = component('cart-close-button', {
       fileName: 'filter-button.tsx',
       source: `
 export const FilterButton = component('filter-button', {
-  render: () => <button onClick={() => document.getElementById('filters')!.togglePopover()}>Filters</button>,
+  render: () => (
+    <section>
+      <button onClick={() => document.getElementById('filters')!.togglePopover()}>Filters</button>
+      <div id="filters" popover>Filters</div>
+    </section>
+  ),
 });
 `,
     });
@@ -136,7 +150,12 @@ export const CartButton = component('cart-button', {
   render: () => {
     const sample = "<button onClick={() => document.getElementById('missing')!.showModal()} />";
     // <button onClick={() => document.getElementById('also-missing')!.showModal()} />
-    return <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>;
+    return (
+      <section>
+        <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>
+        <dialog id="cart-drawer">Cart</dialog>
+      </section>
+    );
   },
 });
 `,
@@ -216,5 +235,77 @@ export const AccordionToggle = component('accordion-toggle', {
       'AccordionToggle$button_click',
     );
     expect(result.files[1]?.source).toContain('export const AccordionToggle$button_click');
+  });
+
+  it('keeps dialog JavaScript when the host is not a platform invoker button', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-link.tsx',
+      source: `
+export const CartLink = component('cart-link', {
+  render: () => (
+    <section>
+      <a href="/cart" onClick={() => document.getElementById('cart-drawer')!.showModal()}>
+        Open cart
+      </a>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.platformSubstitutions).toEqual([]);
+    expect(result.files[0]?.source).not.toContain('commandfor="cart-drawer"');
+    expectHandlerRef(result.files[0]?.source ?? '', '/c/cart-link.client.js', 'CartLink$a_click');
+  });
+
+  it('keeps dialog JavaScript when the target is not a dialog', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-button.tsx',
+      source: `
+export const CartButton = component('cart-button', {
+  render: () => (
+    <section>
+      <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>
+        Open cart
+      </button>
+      <div id="cart-drawer">Cart</div>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.platformSubstitutions).toEqual([]);
+    expect(result.files[0]?.source).not.toContain('commandfor="cart-drawer"');
+    expectHandlerRef(
+      result.files[0]?.source ?? '',
+      '/c/cart-button.client.js',
+      'CartButton$button_click',
+    );
+  });
+
+  it('keeps popover JavaScript when the target is not popover-bearing', () => {
+    const result = compileComponentModule({
+      fileName: 'filter-button.tsx',
+      source: `
+export const FilterButton = component('filter-button', {
+  render: () => (
+    <section>
+      <button onClick={() => document.getElementById('filters')!.togglePopover()}>Filters</button>
+      <div id="filters">Filters</div>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.platformSubstitutions).toEqual([]);
+    expect(result.files[0]?.source).not.toContain('popovertarget="filters"');
+    expectHandlerRef(
+      result.files[0]?.source ?? '',
+      '/c/filter-button.client.js',
+      'FilterButton$button_click',
+    );
   });
 });

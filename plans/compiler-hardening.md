@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (1 / 32 findings closed)
+**Status:** open (2 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -19,9 +19,12 @@ Self-contained, no cross-deps; do first.
   - Evidence 2026-06-15: `packages/compiler/src/handler-lowering.test.ts` covers `fetch`, `localStorage`, captured outer locals, and allowed state/event/element-param/import/static-constant channels; `packages/core/src/diagnostics.ts` no longer advertises the old name denylist.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/handler-lowering.test.ts src/compile-component.test.ts src/scan/parse.test.ts src/fragment-targets.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts` passed.
 
-- [ ] **Platform substitution: prove handler ≡ platform feature before dropping the handler** — `packages/compiler/src/lower/platform.ts:64` (SPEC §5.2 rule 4). Before returning any dialog/popover substitution, prove from typed model facts that (a) the host tag is a valid invoker host (`button`) and (b) the resolved target id refers to the required element kind (`<dialog>` for show-modal/close/request-close; a `popover`-bearing element for popover actions), resolved via the same component id registry FW221 uses — not the raw `getElementById` string. On failure return `null` (preserve the JS handler); optionally emit a teaching note (rule 5).
+- [x] **Platform substitution: prove handler ≡ platform feature before dropping the handler** — `packages/compiler/src/lower/platform.ts:64` (SPEC §5.2 rule 4). Before returning any dialog/popover substitution, prove from typed model facts that (a) the host tag is a valid invoker host (`button`) and (b) the resolved target id refers to the required element kind (`<dialog>` for show-modal/close/request-close; a `popover`-bearing element for popover actions), resolved via the same component id registry FW221 uses — not the raw `getElementById` string. On failure return `null` (preserve the JS handler); optionally emit a teaching note (rule 5).
   - Done = non-`button` hosts, non-`<dialog>` show-modal targets, and popover actions aimed at non-popover elements keep their handler and emit no inert platform attribute.
   - Prove: `pnpm test platform-lowering`
+  - Evidence 2026-06-15: `packages/compiler/src/lower/platform.ts` now requires a `button` host plus a same-model literal `<dialog id=...>` target for dialog commands or a literal `id` element with `popover` for popover actions before emitting platform attributes; failed proofs return `null` so the JS handler remains.
+  - Evidence 2026-06-15: `packages/compiler/src/platform-lowering.test.ts` covers proven dialog/popover lowering plus non-button, non-dialog, and non-popover-target preservation cases.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/platform-lowering.test.ts src/id-content-model.test.ts src/handler-lowering.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
 ---
 
