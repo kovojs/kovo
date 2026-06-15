@@ -1140,6 +1140,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dialog.open).toBe(true);
     });
 
+    input.value = 'invite';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
     await vi.waitFor(() => {
@@ -1157,30 +1158,20 @@ describe('compiled interactive gallery demos in the browser', () => {
     // descendant and a disabled item) must stay axe-clean.
     await expectNoAxeViolations(commandRoot);
 
-    const canceledEnter = new KeyboardEvent('keydown', {
+    const selectedEnter = new KeyboardEvent('keydown', {
       bubbles: true,
       cancelable: true,
       key: 'Enter',
     });
-    input.dispatchEvent(canceledEnter);
+    input.dispatchEvent(selectedEnter);
 
     await vi.waitFor(() => {
       expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"invite","inputValue":"invite","lastKeyAction":"canceled","open":true,"value":"dashboard"}',
+        '{"highlightedValue":"invite","inputValue":"invite","lastKeyAction":"selected","open":false,"value":"invite"}',
       );
-      expect(canceledEnter.defaultPrevented).toBe(true);
-      expect(dialog.open).toBe(true);
-      expect(commandKeyCanceled.textContent).toBe('canceled');
-      expect(commandValue.textContent).toBe('Open dashboard');
-    });
-
-    invite.click();
-
-    await vi.waitFor(() => {
-      expect(commandRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"invite","inputValue":"invite","lastKeyAction":"canceled","open":false,"value":"invite"}',
-      );
+      expect(selectedEnter.defaultPrevented).toBe(true);
       expect(dialog.open).toBe(false);
+      expect(commandKeyCanceled.textContent).toBe('selected');
       expect(commandValue.textContent).toBe('Invite teammate');
     });
 

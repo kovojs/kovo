@@ -2,13 +2,19 @@
 import { component } from '@jiso/core';
 import {
   commandCloseAttributes,
+  commandCloseClick as _commandCloseClick,
   commandDialogAttributes,
+  commandEmptyAttributes,
+  commandFilteredItems as _commandFilteredItems,
+  commandInput as _commandInput,
   commandInputAttributes,
   commandItemAttributes,
+  commandItemClick as _commandItemClick,
+  commandKeyDown as _commandKeyDown,
   commandListboxAttributes,
   commandRootAttributes,
   commandTriggerAttributes,
-  commandValueText,
+  commandTriggerClick as _commandTriggerClick,
   type CommandItem,
 } from '@jiso/headless-ui/primitives';
 
@@ -26,7 +32,7 @@ const INPUT_CLASS =
 const LISTBOX_CLASS =
   'mt-3 max-h-64 overflow-auto rounded-md border border-neutral-200 bg-white p-1 data-[state=closed]:hidden';
 const ITEM_CLASS =
-  'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[state=checked]:font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
+  'flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-neutral-700 outline-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-950 data-[selected]:font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
 const CLOSE_CLASS =
   'mt-3 inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -80,14 +86,19 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
         {...commandRootAttributes(commandState)}
         class={ROOT_CLASS}
         data-gallery-interactive="command"
+        data-placeholder={state.inputValue === '' ? '' : null}
+        data-state={state.open ? 'open' : 'closed'}
       >
         <form id="gallery-command-form" data-gallery-form="command"></form>
         <button
           {...commandTriggerAttributes({ ...commandState, contentId })}
+          aria-expanded={state.open ? 'true' : 'false'}
           class={TRIGGER_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
           id="gallery-command-trigger"
           onClick={() => {
-            state.open = true;
+            const result = _commandTriggerClick(Object(event), { open: state.open });
+            if (result) state.open = result.open;
           }}
         >
           Open command
@@ -100,6 +111,8 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
             titleId: 'gallery-command-title',
           })}
           class={DIALOG_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
         >
           <h2 id="gallery-command-title">Command menu</h2>
           <p id="gallery-command-description">Search project actions.</p>
@@ -111,69 +124,96 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
             })}
             class={INPUT_CLASS}
             onInput={() => {
+              const result = _commandInput(Object(event), { inputValue: state.inputValue });
+              if (!result) return;
+              state.inputValue = result.inputValue;
               state.open = true;
-              state.inputValue = 'invite';
-              state.highlightedValue = 'invite';
-              const doc = Reflect['get'](globalThis, 'document');
-              const input = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-command-input')
-                : undefined;
-              const invite = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-command-listbox-item-1')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-input"]')
-                : undefined;
-              if (input) {
-                input['value'] = 'invite';
-                Object(input)['setAttribute']?.call(
-                  input,
-                  'aria-activedescendant',
-                  'gallery-command-listbox-item-1',
-                );
-              }
-              if (invite) Object(invite)['setAttribute']?.call(invite, 'aria-selected', 'true');
-              if (output) output['textContent'] = 'invite';
+              const filteredItems = _commandFilteredItems({
+                inputValue: state.inputValue,
+                items: [
+                  {
+                    id: 'gallery-command-listbox-item-0',
+                    label: 'Open dashboard',
+                    value: 'dashboard',
+                  },
+                  {
+                    id: 'gallery-command-listbox-item-1',
+                    label: 'Invite teammate',
+                    value: 'invite',
+                  },
+                  {
+                    disabled: true,
+                    id: 'gallery-command-listbox-item-2',
+                    label: 'Delete project',
+                    value: 'delete',
+                  },
+                ],
+              });
+              state.highlightedValue =
+                filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
             }}
             onKeyDown={() => {
-              if (event && Object(event)['key'] !== 'Enter') return;
-              if (event) Object(event)['preventDefault']?.call(event);
-              const doc = Reflect['get'](globalThis, 'document');
-              const dialog = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-command-dialog')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-value"]')
-                : undefined;
-              const canceled = doc
-                ? Object(doc)['querySelector']?.call(
-                    doc,
-                    '[data-demo-state="command-key-canceled"]',
-                  )
-                : undefined;
-              if (state.value === 'dashboard') {
-                state.lastKeyAction = 'canceled';
-                if (canceled) canceled['textContent'] = 'canceled';
-                if (output) output['textContent'] = 'Open dashboard';
-              } else {
-                state.open = false;
-                state.value = state.highlightedValue;
-                state.lastKeyAction = 'selected';
-                if (dialog) Object(dialog)['close']?.call(dialog);
-                if (output) {
-                  if (state.value === 'invite') {
-                    output['textContent'] = 'Invite teammate';
-                  } else {
-                    output['textContent'] = 'Open dashboard';
-                  }
+              const result = _commandKeyDown(Object(event), {
+                highlightedValue: state.highlightedValue,
+                inputValue: state.inputValue,
+                items: [
+                  {
+                    id: 'gallery-command-listbox-item-0',
+                    label: 'Open dashboard',
+                    value: 'dashboard',
+                  },
+                  {
+                    id: 'gallery-command-listbox-item-1',
+                    label: 'Invite teammate',
+                    value: 'invite',
+                  },
+                  {
+                    disabled: true,
+                    id: 'gallery-command-listbox-item-2',
+                    label: 'Delete project',
+                    value: 'delete',
+                  },
+                ],
+                open: state.open,
+                value: state.value,
+              });
+              if (!result) return;
+
+              if ('selected' in result) {
+                if (result.selected) {
+                  state.open = result.open.open;
+                  state.value = result.value.value ?? state.value;
+                  state.lastKeyAction = 'selected';
+                } else {
+                  state.lastKeyAction = 'canceled';
                 }
-                if (canceled) canceled['textContent'] = 'selected';
+              } else if ('highlightedValue' in result) {
+                state.highlightedValue = result.highlightedValue ?? '';
+                state.lastKeyAction = 'moved';
+              } else {
+                state.open = result.open;
+                state.lastKeyAction = Object(event)['key'] === 'Escape' ? 'closed' : 'idle';
               }
             }}
+            aria-activedescendant={
+              state.highlightedValue === 'invite'
+                ? 'gallery-command-listbox-item-1'
+                : state.highlightedValue === 'delete'
+                  ? 'gallery-command-listbox-item-2'
+                  : state.highlightedValue === 'dashboard'
+                    ? 'gallery-command-listbox-item-0'
+                    : null
+            }
+            aria-expanded={state.open ? 'true' : 'false'}
+            data-placeholder={state.inputValue === '' ? '' : null}
+            data-state={state.open ? 'open' : 'closed'}
+            value={state.inputValue}
           />
           <div
             {...commandListboxAttributes({ ...commandState, id: listboxId })}
             class={LISTBOX_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
+            hidden={!state.open}
           >
             <button
               {...commandItemAttributes({
@@ -182,7 +222,49 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Open dashboard',
                 itemValue: 'dashboard',
               })}
+              aria-selected={state.highlightedValue === 'dashboard' ? 'true' : 'false'}
               class={ITEM_CLASS}
+              data-highlighted={state.highlightedValue === 'dashboard' ? '' : null}
+              data-selected={state.value === 'dashboard' ? '' : null}
+              data-state={state.highlightedValue === 'dashboard' ? 'active' : 'inactive'}
+              hidden={
+                state.inputValue !== '' &&
+                !'open dashboard dashboard'.includes(state.inputValue.toLocaleLowerCase())
+              }
+              onClick={() => {
+                const result = _commandItemClick(Object(event), {
+                  highlightedValue: state.highlightedValue,
+                  inputValue: state.inputValue,
+                  items: [
+                    {
+                      id: 'gallery-command-listbox-item-0',
+                      label: 'Open dashboard',
+                      value: 'dashboard',
+                    },
+                    {
+                      id: 'gallery-command-listbox-item-1',
+                      label: 'Invite teammate',
+                      value: 'invite',
+                    },
+                    {
+                      disabled: true,
+                      id: 'gallery-command-listbox-item-2',
+                      label: 'Delete project',
+                      value: 'delete',
+                    },
+                  ],
+                  itemValue: 'dashboard',
+                  open: state.open,
+                  value: state.value,
+                });
+                if (!result) return;
+                if (result.selected) {
+                  state.open = result.open.open;
+                  state.value = result.value.value ?? state.value;
+                  state.lastKeyAction = 'selected';
+                }
+              }}
+              tabIndex={state.highlightedValue === 'dashboard' ? 0 : -1}
             >
               Open dashboard
             </button>
@@ -193,20 +275,49 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Invite teammate',
                 itemValue: 'invite',
               })}
+              aria-selected={state.highlightedValue === 'invite' ? 'true' : 'false'}
               class={ITEM_CLASS}
+              data-highlighted={state.highlightedValue === 'invite' ? '' : null}
+              data-selected={state.value === 'invite' ? '' : null}
+              data-state={state.highlightedValue === 'invite' ? 'active' : 'inactive'}
+              hidden={
+                state.inputValue !== '' &&
+                !'invite teammate invite'.includes(state.inputValue.toLocaleLowerCase())
+              }
               onClick={() => {
-                state.open = false;
-                state.value = 'invite';
-                const doc = Reflect['get'](globalThis, 'document');
-                const dialog = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-command-dialog')
-                  : undefined;
-                const output = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-value"]')
-                  : undefined;
-                if (dialog) Object(dialog)['close']?.call(dialog);
-                if (output) output['textContent'] = 'Invite teammate';
+                const result = _commandItemClick(Object(event), {
+                  highlightedValue: state.highlightedValue,
+                  inputValue: state.inputValue,
+                  items: [
+                    {
+                      id: 'gallery-command-listbox-item-0',
+                      label: 'Open dashboard',
+                      value: 'dashboard',
+                    },
+                    {
+                      id: 'gallery-command-listbox-item-1',
+                      label: 'Invite teammate',
+                      value: 'invite',
+                    },
+                    {
+                      disabled: true,
+                      id: 'gallery-command-listbox-item-2',
+                      label: 'Delete project',
+                      value: 'delete',
+                    },
+                  ],
+                  itemValue: 'invite',
+                  open: state.open,
+                  value: state.value,
+                });
+                if (!result) return;
+                if (result.selected) {
+                  state.open = result.open.open;
+                  state.value = result.value.value ?? state.value;
+                  state.lastKeyAction = 'selected';
+                }
               }}
+              tabIndex={state.highlightedValue === 'invite' ? 0 : -1}
             >
               Invite teammate
             </button>
@@ -218,16 +329,38 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Delete project',
                 itemValue: 'delete',
               })}
+              aria-selected={state.highlightedValue === 'delete' ? 'true' : 'false'}
               class={ITEM_CLASS}
+              data-highlighted={state.highlightedValue === 'delete' ? '' : null}
+              data-selected={state.value === 'delete' ? '' : null}
+              data-state={state.highlightedValue === 'delete' ? 'active' : 'inactive'}
+              hidden={
+                state.inputValue !== '' &&
+                !'delete project delete'.includes(state.inputValue.toLocaleLowerCase())
+              }
+              tabIndex={-1}
             >
               Delete project
             </button>
+            <p
+              {...commandEmptyAttributes(commandState)}
+              hidden={
+                state.inputValue === '' ||
+                'open dashboard dashboard invite teammate invite delete project delete'.includes(
+                  state.inputValue.toLocaleLowerCase(),
+                )
+              }
+            >
+              No commands found.
+            </p>
           </div>
           <button
             {...commandCloseAttributes({ ...commandState, contentId })}
             class={CLOSE_CLASS}
+            data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
-              state.open = false;
+              const result = _commandCloseClick(Object(event), { open: state.open });
+              if (result) state.open = result.open;
             }}
           >
             Close
@@ -235,7 +368,9 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
         </dialog>
         <output data-demo-state="command-input">{state.inputValue || 'empty'}</output>
         <output data-demo-state="command-key-canceled">{state.lastKeyAction}</output>
-        <output data-demo-state="command-value">{commandValueText(commandState)}</output>
+        <output data-demo-state="command-value">
+          {state.value === 'invite' ? 'Invite teammate' : 'Open dashboard'}
+        </output>
       </section>
     );
   },

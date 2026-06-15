@@ -5,6 +5,7 @@ import {
   element,
   evaluateClientModule,
   fakeDocument,
+  inputEvent,
   keyEvent,
   selector,
 } from './interactive-gallery-harness.js';
@@ -291,19 +292,25 @@ describe('compiled interactive gallery demos', () => {
         open: false,
         value: 'dashboard',
       };
-      clientHandler(command, 'GalleryCommandDemo$input_input')(new Event('input'), {
+      clientHandler(command, 'GalleryCommandDemo$input_input')(inputEvent('invite'), {
         params: {},
         signal,
         state: commandState,
       });
-      expect(element(document, 'gallery-command-input')).toMatchObject({ value: 'invite' });
-      expect(element(document, 'gallery-command-input').attrs['aria-activedescendant']).toBe(
-        'gallery-command-listbox-item-1',
-      );
-      expect(element(document, 'gallery-command-listbox-item-1').attrs['aria-selected']).toBe(
+      expect(commandState).toMatchObject({
+        highlightedValue: 'invite',
+        inputValue: 'invite',
+        open: true,
+      });
+      expect(
+        deriveRun(command, 'GalleryCommandDemo$input_aria_activedescendant_derive', commandState),
+      ).toBe('gallery-command-listbox-item-1');
+      expect(deriveRun(command, 'GalleryCommandDemo$button_aria_selected_derive_2', commandState)).toBe(
         'true',
       );
-      expect(selector(document, '[data-demo-state="command-input"]').textContent).toBe('invite');
+      expect(deriveRun(command, 'GalleryCommandDemo$output_text_derive', commandState)).toBe(
+        'invite',
+      );
       const commandEnter = keyEvent('Enter');
       clientHandler(command, 'GalleryCommandDemo$input_keydown')(commandEnter, {
         params: {},
@@ -314,26 +321,30 @@ describe('compiled interactive gallery demos', () => {
       expect(commandState).toEqual({
         highlightedValue: 'invite',
         inputValue: 'invite',
-        lastKeyAction: 'canceled',
-        open: true,
-        value: 'dashboard',
+        lastKeyAction: 'selected',
+        open: false,
+        value: 'invite',
       });
-      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(0);
-      expect(selector(document, '[data-demo-state="command-key-canceled"]').textContent).toBe(
-        'canceled',
-      );
-      expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
-        'Open dashboard',
-      );
+      expect(deriveRun(command, 'GalleryCommandDemo$dialog_open_derive', commandState)).toBeNull();
+      expect(
+        deriveRun(command, 'GalleryCommandDemo$output_text_derive_2', commandState),
+      ).toBe('Invite teammate');
       commandState.open = true;
-      clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
+      commandState.value = 'dashboard';
+      clientHandler(command, 'GalleryCommandDemo$button_click_3')(new Event('click'), {
         params: {},
         signal,
         state: commandState,
       });
-      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(1);
-      expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
-        'Invite teammate',
+      expect(commandState).toEqual({
+        highlightedValue: 'invite',
+        inputValue: 'invite',
+        lastKeyAction: 'selected',
+        open: false,
+        value: 'invite',
+      });
+      expect(deriveRun(command, 'GalleryCommandDemo$button_data_selected_derive_2', commandState)).toBe(
+        '',
       );
 
       const toolbar = evaluateClientModule('toolbar-demo.client.js', { document });

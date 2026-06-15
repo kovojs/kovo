@@ -147,7 +147,8 @@ export type CommandCloseEvent = Event;
 export type CommandCancelEvent = Event;
 export type CommandItemEvent = Event;
 export type CommandInputEvent = Event & {
-  readonly currentTarget: EventTarget & { value?: string };
+  readonly currentTarget: (EventTarget & { value?: string }) | null;
+  readonly target?: (EventTarget & { value?: string }) | null;
 };
 export type CommandKeyboardEvent = Event & { readonly key: string };
 export type CommandBeforeToggleEvent = Event &
@@ -530,9 +531,13 @@ export function commandInput(
 ): CommandInputChangeResult | undefined {
   if (event.defaultPrevented) return;
 
-  const result = setCommandInputValue(state, event.currentTarget.value ?? '', 'input', options);
+  const inputTarget = event.target ?? event.currentTarget;
+  const result = setCommandInputValue(state, inputTarget?.value ?? '', 'input', options);
   if (!result.changed) {
-    event.currentTarget.value = result.inputValue;
+    if (inputTarget) inputTarget.value = result.inputValue;
+    if (event.currentTarget && event.currentTarget !== inputTarget) {
+      event.currentTarget.value = result.inputValue;
+    }
     event.preventDefault();
   }
 

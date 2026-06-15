@@ -275,9 +275,22 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       navigable `role=listbox`); typing always scripts `'dev'→development`; arrows toggle open instead
       of navigating. Render a real `role=listbox`/`role=option` list from `autocompleteSuggestions`,
       wire `autocompleteKeyDown`/`autocompleteMove`, filter on real input.
-- [ ] **command** [P0]: input `onKeyDown` early-returns on any non-Enter key, so Arrow nav does nothing
+- [x] **command** [P0]: input `onKeyDown` early-returns on any non-Enter key, so Arrow nav does nothing
       and `aria-activedescendant`/`data-highlighted` never move. Wire `commandKeyDown`/`commandMove`,
       live filter + reset-highlight-to-first-match (cmdk model), Escape closes dialog.
+      - Evidence 2026-06-15: `examples/gallery/src/interactive/command-demo.tsx` now routes trigger,
+        input, keydown, item click, and close handlers through `commandTriggerClick`,
+        `commandInput`, `commandFilteredItems`, `commandKeyDown`, `commandItemClick`, and
+        `commandCloseClick`; generated `command-demo.client.js` imports those primitive helpers and
+        contains no `Reflect`/`document`/`globalThis`/`setAttribute` escape hatches.
+      - Evidence 2026-06-15: `packages/headless-ui/src/primitives/command.ts` accepts delegated
+        input values from `event.target` with nullable event-target fallback; covered by
+        `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/command.test.ts`.
+      - Evidence 2026-06-15: command gallery behavior, ARIA derives, generated compile assertions,
+        and browser interaction passed via
+        `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`
+        and
+        `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t command`.
 - [ ] **select** [P1]: demo is a **native `<select>`** (and the primitive itself targets a native
       `<select>`/`<optgroup>`), not the shadcn button+`role=listbox` popup. Even as native, the
       `onChange` hardcodes three outcomes and collapses anything but `'express'` to `'standard'`.

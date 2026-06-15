@@ -413,6 +413,14 @@ describe('headless-ui command primitive', () => {
       inputValue: 'publish',
     });
 
+    const delegatedInputEvent = commandInputEvent('target value', 'current target value');
+    const delegatedInputResult = commandInput(delegatedInputEvent, { inputValue: '' });
+    expect(delegatedInputResult).toMatchObject({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'input', value: 'target value' }),
+      inputValue: 'target value',
+    });
+
     const disabledInputEvent = commandInputEvent('delete');
     const disabledInputResult = commandInput(disabledInputEvent, {
       disabled: true,
@@ -593,13 +601,22 @@ describe('headless-ui command primitive', () => {
   });
 });
 
-function commandInputEvent(value: string): Event & {
+function commandInputEvent(
+  value: string,
+  currentTargetValue?: string,
+): Event & {
   readonly currentTarget: EventTarget & { value?: string };
+  readonly target: EventTarget & { value?: string };
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: EventTarget & { value?: string };
+    target: EventTarget & { value?: string };
   };
-  Object.defineProperty(event, 'currentTarget', { value: { value } });
+  const target = { value };
+  Object.defineProperty(event, 'currentTarget', {
+    value: currentTargetValue === undefined ? target : { value: currentTargetValue },
+  });
+  Object.defineProperty(event, 'target', { value: target });
   return event;
 }
 

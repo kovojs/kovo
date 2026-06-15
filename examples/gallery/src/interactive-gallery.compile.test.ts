@@ -14,6 +14,7 @@ describe('compiled interactive gallery demos', () => {
     const collapsible = readGenerated('collapsible-demo.tsx');
     const combobox = readGenerated('combobox-demo.tsx');
     const command = readGenerated('command-demo.tsx');
+    const commandClient = readGenerated('command-demo.client.js');
     const contextMenu = readGenerated('context-menu-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
@@ -169,6 +170,9 @@ describe('compiled interactive gallery demos', () => {
     expect(command).toContain("name: 'gallery-command-query'");
     expect(command).toContain('required: true');
     expect(command).toContain('commandDialogAttributes({');
+    expect(command).toContain('data-bind:aria-expanded=');
+    expect(command).toContain('data-bind:aria-activedescendant=');
+    expect(command).toContain('data-bind:hidden=');
     expect(command).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$input_input"/,
     );
@@ -176,7 +180,13 @@ describe('compiled interactive gallery demos', () => {
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$input_keydown"/,
     );
     expect(command).toMatch(
-      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$button_click_2"/,
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$button_click_3"/,
+    );
+    expect(commandClient).toContain('commandInput as _commandInput');
+    expect(commandClient).toContain('commandKeyDown as _commandKeyDown');
+    expect(commandClient).toContain('commandItemClick as _commandItemClick');
+    expect(commandClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis|commandState)\b|ctx\.params/,
     );
 
     expect(contextMenu).toContain('data-gallery-interactive="context-menu"');

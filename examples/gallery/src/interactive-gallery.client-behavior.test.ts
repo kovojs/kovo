@@ -224,7 +224,7 @@ describe('compiled interactive gallery demos', () => {
       open: true,
       value: 'dashboard',
     });
-    clientHandler(command, 'GalleryCommandDemo$input_input')(new Event('input'), {
+    clientHandler(command, 'GalleryCommandDemo$input_input')(inputEvent('invite'), {
       params: {},
       signal,
       state: commandState,
@@ -244,12 +244,13 @@ describe('compiled interactive gallery demos', () => {
     expect(commandState).toEqual({
       highlightedValue: 'invite',
       inputValue: 'invite',
-      lastKeyAction: 'canceled',
-      open: true,
-      value: 'dashboard',
+      lastKeyAction: 'selected',
+      open: false,
+      value: 'invite',
     });
     commandState.open = true;
-    clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
+    commandState.value = 'dashboard';
+    clientHandler(command, 'GalleryCommandDemo$button_click_3')(new Event('click'), {
       params: {},
       signal,
       state: commandState,
@@ -257,7 +258,7 @@ describe('compiled interactive gallery demos', () => {
     expect(commandState).toEqual({
       highlightedValue: 'invite',
       inputValue: 'invite',
-      lastKeyAction: 'canceled',
+      lastKeyAction: 'selected',
       open: false,
       value: 'invite',
     });
