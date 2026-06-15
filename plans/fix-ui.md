@@ -145,29 +145,24 @@ handlers all fire; **0** `@jiso/runtime` resolution errors; `assets=1` (site.css
     follow-up to copy `/fonts/*`.)
   - **Follow-up (open):** apply the same to `examples/reference`.
 
-## Phase 1 — Local-state reactivity: implement the §4.8 update plan for island state (P0 framework)
+## Phase 1 — Local-state reactivity (P0 framework) → **see `plans/reactive-ui.md`**
 
-This is the central gap. SPEC §4.8: "When a query value — **or island-local state; same machinery,
-two data sources** — changes, the loader runs, in order: bindings → derives → stamps." Today this is
-implemented only for **queries** (the compiler's query-update analysis keys off known query names; the
-loader's `dispatch` writes `fw-state` and applies no state plan — verified in
-`inline-loader-build.ts` dispatch, lines ~141–175). So local-state JSX reads
-(`aria-checked={…}`, `{state.x ? 'on':'off'}`, `hidden={!state.open}`, `data-state={…}`) are never
-reflected to the DOM after a handler mutates `state`.
+The central gap (SPEC §4.8: "island-local state; same machinery, two data sources") is its own
+subsystem — compiler lowering + analysis + emit, loader application within the 4KB budget, and the §4.9
+coverage gate. **Fleshed out as a standalone plan: `plans/reactive-ui.md`.** Summary of scope:
 
-- [ ] **Compiler: derive client state→DOM stamps/binds from local-`state` JSX reads**, the same way it
-      does for query reads — emit `data-bind`/`data-bind:<attr>`/named-derive/`fw-stamp` attributes (or
-      equivalent imperative stamps) for attributes and text that read island `state`. Cover the direct
-      forms (`{state.x}`, `aria-checked={…}`) AND the `{...primitiveAttrs(state)}` spread form the
-      primitives use (so `switchRootAttributes({checked: state.checked})` stays reactive).
-- [ ] **Loader: apply the §4.8 update plan after writing `fw-state`** — walk the island's binding
-      attributes (bindings → derives → stamps) on local-state change, mirroring the query path, within
-      the gzip budget.
-- [ ] **§4.9 update coverage (FW311) should fire for state-driven JSX too**, not only queries, so
-      unstamped state reads are caught at compile time instead of silently going stale.
-  - Until this lands, the **interim** is per-demo hand-authored stamps (what accordion/tabs already do).
-    Phases 3–4 assume Phase 1; if Phase 1 is deferred, each demo fix must hand-author the stamps and
-    that should be called out per item.
+- [ ] **Compiler** — lower `state.*` JSX reads to `data-bind`/`data-bind:<attr>` + named derives
+      (`input: 'state'`), mirroring the query path (`lower/inline-derives.ts`,
+      `analyze/query-updates.ts`); add a per-island `StateUpdatePlanFact`.
+- [ ] **Loader** — apply the state plan after writing `fw-state` (walk `[data-bind]` under the island,
+      reuse `query-bindings.ts` with a `state` resolver, lazy-load derives), within the inline-loader
+      gzip budget.
+- [ ] **Coverage** — extend the §4.9 / FW311 exhaustiveness check to state reads.
+- [ ] **Migrate** `switch`/`toggle`/`disclosure`/`checkbox` to declarative state binding (handlers
+      reduce to a state mutation); verify in the no-shim harness; imperative demos unaffected.
+
+Note: the `{...primitiveAttrs(state)}` spread hides the dependency from the compiler — Phase 1 migrates
+the 4 target demos to direct expressions; the general primitive-composition binding is Phase 2 below.
 
 ## Phase 2 — Wire the chained primitive handlers (SPEC §4.6) so demos stop hand-rolling behavior (P1)
 
