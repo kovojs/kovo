@@ -146,37 +146,161 @@ function prefixCssBlockSelectors(
   hostSelector: string,
   css: string,
   nestedExclusion: string,
+  parentSelectors?: readonly string[],
 ): string {
   let output = '';
   let index = 0;
+  let declarationBuffer = '';
 
   while (index < css.length) {
     const rule = nextCssRule(css, index);
     if (!rule) {
-      output += css.slice(index);
+      if (parentSelectors) {
+        declarationBuffer += css.slice(index);
+      } else {
+        output += css.slice(index);
+      }
       break;
     }
 
-    output += css.slice(index, rule.selectorStart);
+    const betweenRules = css.slice(index, rule.selectorStart);
+    if (parentSelectors) {
+      declarationBuffer += betweenRules;
+    } else {
+      output += betweenRules;
+    }
 
-    const selector = css.slice(rule.selectorStart, rule.bodyStart).trim();
+    let rawSelector = css.slice(rule.selectorStart, rule.bodyStart);
+    if (parentSelectors) {
+      const declarationBoundary = rawSelector.lastIndexOf(';');
+      if (declarationBoundary !== -1) {
+        declarationBuffer += rawSelector.slice(0, declarationBoundary + 1);
+        rawSelector = rawSelector.slice(declarationBoundary + 1);
+      }
+    }
+    const selector = rawSelector.trim();
     const body = css.slice(rule.bodyStart + 1, rule.bodyEnd);
     if (selector.startsWith('@media') || selector.startsWith('@supports')) {
-      output += `${selector} {${prefixCssBlockSelectors(hostSelector, body, nestedExclusion)}}`;
+      output += flushPrefixedDeclarationRule(
+        hostSelector,
+        nestedExclusion,
+        parentSelectors,
+        declarationBuffer,
+      );
+      declarationBuffer = '';
+      output += `${selector} {${prefixCssBlockSelectors(
+        hostSelector,
+        body,
+        nestedExclusion,
+        parentSelectors,
+      )}}`;
     } else if (selector.startsWith('@')) {
+      output += flushPrefixedDeclarationRule(
+        hostSelector,
+        nestedExclusion,
+        parentSelectors,
+        declarationBuffer,
+      );
+      declarationBuffer = '';
       output += css.slice(rule.selectorStart, rule.bodyEnd + 1);
     } else {
-      const prefixed = selector
-        .split(',')
-        .map((part) => `${hostSelector} ${part.trim()}${nestedExclusion}`)
-        .join(', ');
-      output += `${prefixed} {${body}}`;
+      output += flushPrefixedDeclarationRule(
+        hostSelector,
+        nestedExclusion,
+        parentSelectors,
+        declarationBuffer,
+      );
+      declarationBuffer = '';
+      output += prefixCssBlockSelectors(
+        hostSelector,
+        body,
+        nestedExclusion,
+        resolveNestedSelectors(selector, parentSelectors),
+      );
     }
 
     index = rule.bodyEnd + 1;
   }
 
+  output += flushPrefixedDeclarationRule(
+    hostSelector,
+    nestedExclusion,
+    parentSelectors,
+    declarationBuffer,
+  );
+
   return output;
+}
+
+function flushPrefixedDeclarationRule(
+  hostSelector: string,
+  nestedExclusion: string,
+  selectors: readonly string[] | undefined,
+  declarations: string,
+): string {
+  if (!selectors || declarations.trim().length === 0) return '';
+
+  const prefixed = selectors
+    .map((selector) => `${hostSelector} ${selector}${nestedExclusion}`)
+    .join(', ');
+
+  return `${prefixed} {${declarations}}`;
+}
+
+function resolveNestedSelectors(
+  selector: string,
+  parentSelectors: readonly string[] | undefined,
+): string[] {
+  const selectors = splitCssSelectorList(selector);
+  if (!parentSelectors) return selectors;
+
+  return parentSelectors.flatMap((parentSelector) =>
+    selectors.map((nestedSelector) =>
+      nestedSelector.includes('&')
+        ? nestedSelector.replaceAll('&', parentSelector)
+        : `${parentSelector} ${nestedSelector}`,
+    ),
+  );
+}
+
+function splitCssSelectorList(selector: string): string[] {
+  const selectors: string[] = [];
+  let depth = 0;
+  let quote: '"' | "'" | undefined;
+  let start = 0;
+
+  for (let index = 0; index < selector.length; index += 1) {
+    const char = selector[index];
+    const previous = selector[index - 1];
+
+    if (quote) {
+      if (char === quote && previous !== '\\') quote = undefined;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === '(' || char === '[') {
+      depth += 1;
+      continue;
+    }
+
+    if ((char === ')' || char === ']') && depth > 0) {
+      depth -= 1;
+      continue;
+    }
+
+    if (char === ',' && depth === 0) {
+      selectors.push(selector.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+
+  selectors.push(selector.slice(start).trim());
+  return selectors.filter(Boolean);
 }
 
 function nextCssRule(

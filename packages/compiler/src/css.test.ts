@@ -47,6 +47,28 @@ describe('component CSS helpers', () => {
     );
   });
 
+  it('splits fallback selector lists only on top-level commas', () => {
+    const result = scopeComponentCss(
+      '[fw-c="cart-badge"]',
+      ':is(.primary, .secondary), [data-label="a,b"] { color: red; }',
+    );
+
+    expect(result.fallback).toBe(
+      '[fw-c="cart-badge"] :is(.primary, .secondary):not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] [data-label="a,b"]:not([fw-c]):not([fw-c] *) { color: red; }',
+    );
+  });
+
+  it('flattens nested ampersand fallback selectors with the host prefix and donut exclusion', () => {
+    const result = scopeComponentCss(
+      '[fw-c="cart-badge"]',
+      '.card { color: red; & .title, &:is(.active, .open) { color: blue; } }',
+    );
+
+    expect(result.fallback).toBe(
+      '[fw-c="cart-badge"] .card:not([fw-c]):not([fw-c] *) { color: red;}[fw-c="cart-badge"] .card .title:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] .card:is(.active, .open):not([fw-c]):not([fw-c] *) { color: blue; }',
+    );
+  });
+
   it('dedupes normalized CSS chunks in page order', () => {
     expect(dedupeCss(['.a{}', '.a{}', ' .b{} '])).toBe('.a{}\n\n.b{}');
   });

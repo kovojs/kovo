@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (17 / 32 findings closed)
+**Status:** open (18 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -259,7 +259,9 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
 - [x] **Fragment-target props type: never collapse to `{}`** — `packages/compiler/src/graph.ts:104` (SPEC §6.2). Emit each unrecognized prop's declared type (or `unknown`) instead of dropping; never emit `'{}'` when ≥1 prop was declared. Prove: `pnpm test fragment-targets`
   - Evidence 2026-06-15: `packages/compiler/src/graph.ts` now preserves every declared `props` entry and emits `unknown` when the parser cannot infer `String`/`Number`/`Boolean`; `packages/compiler/src/fragment-targets.test.ts` covers a fragment target with a custom prop descriptor and asserts the registry contains `{ rowId: string; payload: unknown }`, not `{}`.
   - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/fragment-targets.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
-- [ ] **CSS scope-fallback: depth-aware selector splitter** — `packages/compiler/src/css.ts:145` (SPEC §13.1). Replace `selector.split(',')` with a splitter that breaks only on top-level commas (track `()`/`[]`/quotes); recurse into nested `&` blocks with the same host-prefix + donut `:not(...)`. Prove: `pnpm test css` (add `:is()`/`[data-x="a,b"]`/`&`-nesting fixtures)
+- [x] **CSS scope-fallback: depth-aware selector splitter** — `packages/compiler/src/css.ts:145` (SPEC §13.1). Replace `selector.split(',')` with a splitter that breaks only on top-level commas (track `()`/`[]`/quotes); recurse into nested `&` blocks with the same host-prefix + donut `:not(...)`. Prove: `pnpm test css` (add `:is()`/`[data-x="a,b"]`/`&`-nesting fixtures)
+  - Evidence 2026-06-15: `packages/compiler/src/css.ts` now uses a depth-aware selector-list splitter and resolves nested selectors under parent selectors; `packages/compiler/src/css.test.ts` covers `:is(.primary, .secondary)`, `[data-label="a,b"]`, and nested `&` selectors with the host prefix plus donut exclusion preserved.
+  - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/css.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
 - [ ] **Thread validated coerced input onto `MutationSuccess`** — `packages/server/src/mutation.ts:746` (SPEC §10.3). Render reruns from the parsed input, not `change.input ?? rawInput`, so render-time and scheduled instance keys derive from the same coerced input. Prove: server mutation suite.
 - [ ] **`<Link>` lowering: self-closing + dynamic-target** — `packages/compiler/src/lower/navigation.ts:13` (SPEC §6.4). Remove the `!selfClosing` filter; route static-`to` Links through FW220; lower non-static `to` to a resolved `<a href>` or diagnose. Prove: `pnpm test navigation-lowering`
 - [ ] **JSX comment→attribute attachment: structural, not char-class gap** — `packages/compiler/src/scan/parse.ts:1503` (SPEC §5.2 rule 8). Associate a justification comment with the opening element it directly precedes via the ts tree, not `isAttachedJsxCommentGap`'s permissive regex. Prove: `pnpm test execution-triggers scan/parse`
