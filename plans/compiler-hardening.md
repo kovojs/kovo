@@ -35,6 +35,12 @@ The keyed morph and template-stamp reconciler exist but no production seam const
 - [ ] **Wire the idiomorph-class morph into all three production fragment-apply seams** — `packages/runtime/src/inline-loader.ts` (`replaceHtmlResponseFragment` = `innerHTML`), `packages/runtime/src/response-fragment-apply.ts:62`, `packages/create-jiso/templates/src/client.ts:75` (overrides `replaceWithHtml` with `innerHTML`) (SPEC §9.1, §4.4). Route all three through `morph.ts` (`DomMorphRoot` / `keyedDomMorph`): capture activeElement focus/selection/scroll, keyed child reconcile by `fw-key`, restore. The inline-loader port must stay within the §4.4 4KB budget. Fix the bad `applyDeferredStreamResponseToDom` import in the starter template (real export is `applyDeferredStreamResponseToRuntime`).
   - Done = an integration test drives a fragment apply through the _actually-installed_ loader (not a hand-built `DomMorphRoot`) and asserts focus + text selection survive; `innerHTML` no longer appears on any production fragment-replace path.
   - Prove: `pnpm run check:inline-loader && pnpm test morph response-fragment && pnpm run test:browser`
+  - Progress 2026-06-15: `packages/create-jiso/templates/src/client.ts` now imports
+    `applyDeferredStreamResponseToRuntime` and returns `DomMorphTarget` from the starter browser root,
+    removing that template's raw `innerHTML` replacement override.
+  - Gap 2026-06-15: the runtime `response-fragment-apply.ts`/inline-loader replacement seam remains
+    open. A direct inline keyed-morph port exceeded the SPEC §4.4 gzip budget, so this checkbox stays
+    open until the inline-safe design is compact enough and proven by the full done criteria.
 
 - [ ] **Implement a DOM-backed keyed template-stamp reconciler** — `packages/runtime/src/query-bindings.ts:190` (the `isTemplateStampHost` guard) + `emit/client.ts` template-stamp plan (SPEC §4.8 step 3, §13.2). Invoke a real reconciler directly from `applyCompiledQueryUpdatePlan` (or at loader setup) instead of depending on a `reconcileTemplateStamp` method that only test fakes implement: index existing `[fw-key]` children, clone `<template fw-stamp>` for inserts, remove exits, reorder by key, run item-relative bindings — **reusing the same `fw-key` helper the morph uses** (§13.2 single keyed-identity contract). Keep the host-method interface only as an optional override seam.
   - Done = a jsdom test asserts a plain `<ul data-bind-list>` inserts / removes / reorders `<li fw-key>` and re-runs item-relative bindings after a query update — with no test-fake host.

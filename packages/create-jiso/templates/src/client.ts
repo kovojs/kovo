@@ -1,6 +1,7 @@
 import {
-  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
   createQueryStore,
+  DomMorphTarget,
   installJisoLoader,
   type EnhancedMutationFetch,
   type MorphRoot,
@@ -29,8 +30,8 @@ type BrowserJisoRoot = MorphRoot & TargetCollectorRoot;
 
 type DeferredStreamOptions = {
   boundary?: string;
-  morph?: Parameters<typeof applyDeferredStreamResponseToDom>[0]['morph'];
-  root?: Parameters<typeof applyDeferredStreamResponseToDom>[0]['root'];
+  morph?: Parameters<typeof applyDeferredStreamResponseToRuntime>[0]['morph'];
+  root?: Parameters<typeof applyDeferredStreamResponseToRuntime>[0]['root'];
 };
 
 installJisoLoader({
@@ -46,7 +47,7 @@ installJisoLoader({
 });
 
 export function applyJisoDeferredStreamResponse(body: string, options: DeferredStreamOptions = {}) {
-  return applyDeferredStreamResponseToDom({
+  return applyDeferredStreamResponseToRuntime({
     body,
     ...(options.boundary ? { boundary: options.boundary } : {}),
     ...(options.morph ? { morph: options.morph } : {}),
@@ -63,19 +64,7 @@ function createBrowserJisoRoot(documentRoot: Document): BrowserJisoRoot {
         documentRoot.getElementById(target) ??
         documentRoot.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
 
-      return element
-        ? {
-            appendHtml(html) {
-              element.insertAdjacentHTML('beforeend', html);
-            },
-            readHtml() {
-              return element.innerHTML;
-            },
-            replaceWithHtml(html) {
-              element.innerHTML = html;
-            },
-          }
-        : null;
+      return element ? new DomMorphTarget(element) : null;
     },
     querySelectorAll(selector) {
       return documentRoot.querySelectorAll(selector);
