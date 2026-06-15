@@ -75,12 +75,12 @@ export const autocompleteInputClassNames = defineVariants({
 });
 
 export const autocompleteListClassNames = defineVariants({
-  base: 'rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 shadow-sm',
+  base: 'rounded-md border border-neutral-200 bg-white text-sm text-neutral-950 shadow-sm data-[state=closed]:hidden',
   variants: {},
 });
 
 export const autocompleteOptionClassNames = defineVariants({
-  base: 'text-neutral-950 data-[highlighted]:font-medium data-[state=checked]:font-medium disabled:text-neutral-400',
+  base: 'text-neutral-950 data-[highlighted]:font-medium data-[state=checked]:font-medium data-[disabled]:text-neutral-400',
   variants: {},
 });
 
@@ -202,7 +202,7 @@ export const AutocompleteList = component('autocomplete-list', {
     });
 
     return (
-      <datalist
+      <div
         aria-labelledby={attrs['aria-labelledby']}
         class={cn(autocompleteListClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
@@ -210,10 +210,12 @@ export const AutocompleteList = component('autocomplete-list', {
         data-placeholder={attrs['data-placeholder']}
         data-required={attrs['data-required']}
         data-state={attrs['data-state']}
+        hidden={attrs.hidden}
         id={attrs.id}
+        role={attrs.role}
       >
         {props.children}
-      </datalist>
+      </div>
     );
   },
 });
@@ -240,19 +242,20 @@ export const AutocompleteOption = component('autocomplete-option', {
     });
 
     return (
-      <option
+      <div
+        aria-disabled={attrs['aria-disabled']}
+        aria-selected={attrs['aria-selected']}
         class={cn(autocompleteOptionClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
-        disabled={attrs.disabled}
         id={attrs.id}
         label={attrs.label}
-        selected={attrs.selected}
+        role={attrs.role}
         value={attrs.value}
       >
         {props.children ?? props.itemLabel ?? props.itemValue}
-      </option>
+      </div>
     );
   },
 });

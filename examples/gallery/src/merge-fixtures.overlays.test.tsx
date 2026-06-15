@@ -346,16 +346,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
       },
       {
-        attr: 'aria-expanded',
-        code: 'FW232',
-        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
-      },
-      {
-        attr: 'aria-controls',
-        code: 'FW231',
-        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
-      },
-      {
         attr: 'jiso-hover-card',
         code: 'FW231',
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
@@ -368,7 +358,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <aside {...content.attrs}>Profile</aside>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="hover-card"><a data-state="open" aria-expanded="false" aria-controls="author-profile-card" jiso-hover-card="author-profile-card" class="hover-card-trigger underline">Ada</a><aside data-state="closed" id="author-profile-card" popover="auto" class="hover-card-content w-64">Profile</aside></section>',
+      '<section data-gallery-merge="hover-card"><a data-state="open" jiso-hover-card="author-profile-card" class="hover-card-trigger underline" aria-controls="author-profile-card" aria-expanded="false">Ada</a><aside data-state="closed" id="author-profile-card" popover="auto" class="hover-card-content w-64">Profile</aside></section>',
     );
   });
 

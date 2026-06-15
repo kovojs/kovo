@@ -234,7 +234,10 @@ describe('gallery demo fixtures', () => {
         ],
       },
       {
-        contractSnippets: ['trigger-change, programmatic', 'Native select keyboard behavior'],
+        contractSnippets: [
+          'trigger-click, item-select, arrow-key, typeahead, programmatic',
+          'Arrow keys, Home, End, and typeahead move over enabled options; Escape closes',
+        ],
         forbiddenMarkers: [],
         formSnippets: [
           "form: 'gallery-select-form'",
@@ -247,6 +250,7 @@ describe('gallery demo fixtures', () => {
         styledRenderCalls: [
           'Select',
           'SelectTrigger',
+          'SelectHiddenInput',
           'SelectContent',
           'SelectItem',
           'SelectValue',
@@ -302,7 +306,7 @@ describe('gallery demo fixtures', () => {
     expect(alertDialog.html).toContain('command="request-close"');
   });
 
-  it('renders autocomplete fixture with native input and datalist wiring', () => {
+  it('renders autocomplete fixture with native input and ARIA listbox wiring', () => {
     const autocomplete = findFixture('/components/autocomplete');
 
     expect(autocomplete.html).toContain('data-gallery-demo="autocomplete"');
@@ -316,15 +320,15 @@ describe('gallery demo fixtures', () => {
     expect(autocomplete.html).toContain(
       'aria-activedescendant="gallery-autocomplete-list-option-1"',
     );
-    expect(autocomplete.html).toContain('list="gallery-autocomplete-list"');
     expect(autocomplete.html).toContain('id="gallery-autocomplete-form"');
     expect(autocomplete.html).toContain('form="gallery-autocomplete-form"');
     expect(autocomplete.html).toContain('name="gallery-plan-search"');
-    expect(autocomplete.html).toContain('<datalist');
+    expect(autocomplete.html).toContain('role="listbox"');
+    expect(autocomplete.html).toContain('role="option"');
     expect(autocomplete.html).toContain('id="gallery-autocomplete-list"');
     expect(autocomplete.html).toContain('data-highlighted="" data-state="checked"');
     expect(autocomplete.html).toContain('value="growth"');
-    expect(autocomplete.html).toContain('disabled');
+    expect(autocomplete.html).toContain('aria-disabled="true"');
     expect(autocomplete.html).toContain('id="gallery-autocomplete-value">Growth plan</span>');
   });
 
@@ -725,24 +729,25 @@ describe('gallery demo fixtures', () => {
     expect(scrollArea.html).toContain('data-disabled');
   });
 
-  it('renders select fixture with native select and option states', () => {
+  it('renders select fixture with custom listbox and hidden submitted value', () => {
     const select = findFixture('/components/select');
 
-    expect(select.html).toContain('<select');
     expect(select.html).toContain('id="gallery-select"');
     expect(select.html).toContain('data-ui-demo="select"');
     expect(select.html).toContain('id="gallery-select-form"');
+    expect(select.html).toContain('aria-haspopup="listbox"');
+    expect(select.html).toContain('role="listbox"');
+    expect(select.html).toContain('role="option"');
+    expect(select.html).toContain('id="gallery-select-hidden"');
     expect(select.html).toContain('form="gallery-select-form"');
-    expect(select.html).toContain('name="gallery-plan"');
+    expect(select.html).toContain('name="gallery-plan" type="hidden" value="growth"');
     expect(select.html).toContain('required');
     expect(select.html).toContain('aria-labelledby="gallery-select-label"');
     expect(select.html).toContain('value="growth"');
-    expect(select.html).toContain('selected');
-    expect(select.html).toContain('disabled');
-    expect(select.html).not.toMatch(/<select[^>]*\sdisabled(?:\s|>|=)/);
-    expect(select.html).not.toMatch(/value="starter"[^>]*\sselected(?:\s|>|=)/);
-    expect(select.html).toContain('<optgroup');
-    expect(select.html).toContain('label="Plans"');
+    expect(select.html).toContain('aria-selected="true"');
+    expect(select.html).toContain('aria-disabled="true"');
+    expect(select.html).not.toContain('<select');
+    expect(select.html).not.toContain('<optgroup');
     expect(select.html).toContain('id="gallery-select-value">Growth</span>');
   });
 
@@ -982,7 +987,7 @@ describe('gallery demo fixtures', () => {
 
     expect(select.html).toContain('data-ui-demo="select"');
     expect(select.html).toContain('rounded-md border border-neutral-300');
-    expect(select.html).toContain('<optgroup');
+    expect(select.html).toContain('role="listbox"');
     expect(select.html).toContain('Growth</span>');
 
     expect(sheet.html).toContain('data-ui-demo="sheet"');
@@ -1133,7 +1138,10 @@ const h3SearchSelectionSourceFixtures = [
   },
   {
     component: 'select',
-    contractSnippets: ['trigger-change, programmatic', 'Native select keyboard behavior'],
+    contractSnippets: [
+      'trigger-click, item-select, arrow-key, typeahead, programmatic',
+      'Arrow keys, Home, End, and typeahead move over enabled options; Escape closes',
+    ],
     formSnippets: [
       "form: 'gallery-select-form'",
       "name: 'gallery-plan'",
@@ -1141,7 +1149,14 @@ const h3SearchSelectionSourceFixtures = [
     ],
     functionName: 'SelectDemo',
     route: '/components/select',
-    styledRenderCalls: ['Select', 'SelectTrigger', 'SelectContent', 'SelectItem', 'SelectValue'],
+    styledRenderCalls: [
+      'Select',
+      'SelectTrigger',
+      'SelectHiddenInput',
+      'SelectContent',
+      'SelectItem',
+      'SelectValue',
+    ],
   },
 ] as const;
 

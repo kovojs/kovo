@@ -288,9 +288,11 @@ export function capturesUnserializableReferences(
   }
 
   const allowed = new Set([
+    'Object',
     'ctx',
     'event',
     'state',
+    'undefined',
     ...params.flatMap((param) => referenceRootsForElementParam(param)),
     ...(model?.namedImports.map((item) => item.localName) ?? []),
     ...(model?.moduleScopeBindings.map((item) => item.name) ?? []),

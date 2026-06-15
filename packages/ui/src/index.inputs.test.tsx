@@ -16,6 +16,7 @@ import {
   ScrollAreaViewport,
   Select,
   SelectContent,
+  SelectHiddenInput,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -119,7 +120,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(scrollAreaCornerClasses.join(' ')).toContain('absolute bottom-0 right-0');
   });
 
-  it('wraps the headless select primitive as styled native select markup', () => {
+  it('wraps the headless select primitive as styled trigger, listbox, and hidden input markup', () => {
     const items = [
       { label: 'Starter', value: 'starter' },
       { label: 'Growth', value: 'growth' },
@@ -155,6 +156,7 @@ describe('@jiso/ui styled package foundation', () => {
       id: 'plan',
       labelledBy: 'plan-label',
     });
+    const hiddenInput = SelectHiddenInput.definition.render({ ...state, id: 'plan-hidden' });
     const value = SelectValue.definition.render({ ...state, id: 'plan-value' });
 
     expect(SelectTrigger.name).toBe('select-trigger');
@@ -164,15 +166,20 @@ describe('@jiso/ui styled package foundation', () => {
     expect(root).toContain('data-invalid="" data-required="" data-state="closed" id="plan-root"');
     expect(trigger).toContain('aria-describedby="plan-help plan-error"');
     expect(trigger).toContain('aria-expanded="false"');
+    expect(trigger).toContain('aria-haspopup="listbox"');
     expect(trigger).toContain('aria-invalid="true"');
-    expect(trigger).toContain('form="checkout-form" id="plan" name="plan" required');
-    expect(trigger).toContain('<optgroup');
-    expect(trigger).toContain('label="Plans"');
-    expect(trigger).toContain('data-state="checked" label="Growth" selected value="growth"');
-    expect(trigger).toContain('data-disabled="" data-state="unchecked" disabled');
+    expect(trigger).toContain('id="plan" type="button"');
+    expect(trigger).toContain('role="listbox"');
+    expect(trigger).toContain('aria-selected="true"');
+    expect(trigger).toContain('data-state="checked" label="Growth" role="option" value="growth"');
+    expect(trigger).toContain('aria-disabled="true"');
+    expect(trigger).toContain('data-disabled="" data-state="unchecked"');
     expect(trigger).toContain('value="enterprise"');
-    expect(trigger).not.toMatch(/<select[^>]*\sdisabled(?:\s|>|=)/);
-    expect(trigger).not.toMatch(/value="starter"[^>]*\sselected(?:\s|>|=)/);
+    expect(trigger).not.toContain('<select');
+    expect(trigger).not.toContain('<optgroup');
+    expect(hiddenInput).toContain('form="checkout-form" id="plan-hidden"');
+    expect(hiddenInput).toContain('name="plan" type="hidden" value="growth"');
+    expect(hiddenInput).not.toContain('required');
     expect(value).toContain('id="plan-value">Growth</span>');
     expect(selectContentClasses.join(' ')).toContain('data-[state=closed]:hidden');
     expect(selectItemClasses.join(' ')).toContain('data-[state=checked]:font-medium');
@@ -242,7 +249,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(comboboxValueClasses.join(' ')).toContain('data-[placeholder]:text-neutral-500');
   });
 
-  it('wraps the headless autocomplete primitive as styled input and datalist markup', () => {
+  it('wraps the headless autocomplete primitive as styled input and listbox markup', () => {
     const items = [
       { label: 'Starter plan', value: 'starter' },
       { label: 'Growth plan', value: 'growth' },
@@ -289,13 +296,15 @@ describe('@jiso/ui styled package foundation', () => {
     expect(input).toContain('aria-activedescendant="plan-suggestions-option-1"');
     expect(input).toContain('autocomplete="off"');
     expect(input).toContain('form="plan-form"');
-    expect(input).toContain('list="plan-suggestions"');
     expect(input).toContain('role="combobox" type="text" value="gr"');
-    expect(list).toContain('<datalist');
+    expect(input).not.toContain('list="plan-suggestions"');
+    expect(list).toContain('role="listbox"');
     expect(list).toContain('aria-labelledby="plan-search-label"');
     expect(list).toContain('data-state="open" id="plan-suggestions"');
+    expect(list).toContain('role="option"');
+    expect(list).toContain('aria-selected="true"');
     expect(list).toContain('data-highlighted="" data-state="checked"');
-    expect(list).toContain('disabled');
+    expect(list).toContain('aria-disabled="true"');
     expect(value).toContain('id="plan-search-value">Growth plan</span>');
     expect(autocompleteListClasses.join(' ')).toContain('rounded-md border border-neutral-200');
     expect(autocompleteOptionClasses.join(' ')).toContain('data-[highlighted]:font-medium');

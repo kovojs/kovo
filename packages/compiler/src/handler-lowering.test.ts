@@ -223,6 +223,29 @@ export const CartBadge = component('cart-badge', {
     expect(clientSource).toContain('track(LABEL, event.type, ctx.state.count);');
   });
 
+  it('allows standard expression roots without treating them as captures', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  state: () => ({ value: '' }),
+  render: () => (
+    <button onClick={() => {
+      state.value = Object(event)['target']?.value?.toString?.() ?? undefined;
+    }}>Track</button>
+  ),
+});
+`,
+    });
+
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210']);
+    expect(clientSource).toContain(
+      "ctx.state.value = Object(event)['target']?.value?.toString?.() ?? undefined;",
+    );
+  });
+
   it('reports stable-name and serializability diagnostics for anonymous browser handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

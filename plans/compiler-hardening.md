@@ -278,19 +278,24 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
     in `packages/core/src/diagnostics.ts`; moved residual FW232 duplicate-attribute spans to the
     overriding attribute in `packages/compiler/src/validate/markup.ts`; made primitive handler lint
     default-on for event-shaped primitive handler names and guarded the real
-    `numberFieldKeyboardValueChange` helper.
-  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/scan/parse.test.ts src/attribute-merge.test.ts src/id-content-model.test.ts`,
-    `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts`,
-    `pnpm --filter @jiso/headless-ui exec vitest run
-    src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts
-    src/primitives/number-field.test.ts`, `pnpm exec vp run build`, and `pnpm run check` passed.
+    `numberFieldKeyboardValueChange` helper; allowed standard handler expression roots `Object` and
+    `undefined` so `Object(event)` guards and `state.value || undefined` do not trip FW201 as fake
+    captures.
+  - Evidence 2026-06-15: targeted compiler/core/headless checks passed:
+    `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts src/attribute-merge.test.ts src/id-content-model.test.ts`;
+    `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts`;
+    `pnpm --filter @jiso/headless-ui exec vitest run src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts src/primitives/number-field.test.ts`;
+    `pnpm --filter @jiso/compiler exec vitest run src/handler-lowering.test.ts`; `pnpm exec vp run build`;
+    and `pnpm run check`.
   - Gap 2026-06-15: the required closure gates are still red, so this checkbox stays open.
     `pnpm test` failed in existing Drizzle project extraction, gallery/UI fixture drift, commerce
     generated artifact drift, and CLI export snapshot buckets. After rebuilding `dist/`,
     `pnpm run check:fw` no longer fails the FW224/FW311 assertions, but still fails unrelated loader
     event-snapshot, starter `DomMorphTarget`, production-emit FW201 fixture, open render-equivalence,
-    and Drizzle conformance gates.
+    and Drizzle conformance gates. After the handler-root fix,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
+    advances past the FW201 diagnostics and stops at the open render-equivalence/lowered-TSX
+    assertion.
 
 ---
 

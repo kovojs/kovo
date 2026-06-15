@@ -114,6 +114,7 @@ import {
   ScrollAreaViewport,
   Select,
   SelectContent,
+  SelectHiddenInput,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -738,8 +739,8 @@ export function AutocompleteDemo(): string {
   return (
     <section data-gallery-demo="autocomplete">
       <p data-demo-summary="no-js">
-        Autocomplete keeps a native input and datalist pair for form submission and browser
-        suggestions.
+        Autocomplete keeps a native text input and ARIA listbox pair for form submission and
+        keyboard suggestions.
       </p>
       <label id="gallery-autocomplete-label" for="gallery-autocomplete-input">
         Plan search
@@ -2255,7 +2256,7 @@ export function SelectDemo(): string {
   return (
     <section data-gallery-demo="select">
       <p data-demo-summary="no-js">
-        Select keeps a real select control and option list for no-JS form submission.
+        Select keeps a custom trigger and listbox paired with a hidden submitted input.
       </p>
       <form id="gallery-select-form" method="post" action="/gallery/select" />
       <label id="gallery-select-label" for="gallery-select">
@@ -2285,6 +2286,10 @@ export function SelectDemo(): string {
                 id: 'gallery-select',
                 labelledBy: 'gallery-select-label',
               })}
+              {SelectHiddenInput.definition.render({
+                ...state,
+                id: 'gallery-select-hidden',
+              })}
               {SelectValue.definition.render({ ...state, id: 'gallery-select-value' })}
             </>
           ),
@@ -2292,9 +2297,9 @@ export function SelectDemo(): string {
         })}
       </div>
       {renderBehaviorContract({
-        changeReasons: 'trigger-change, programmatic',
+        changeReasons: 'trigger-click, item-select, arrow-key, typeahead, programmatic',
         dataState: 'open, closed, checked, unchecked, disabled',
-        keyboard: 'Native select keyboard behavior',
+        keyboard: 'Arrow keys, Home, End, and typeahead move over enabled options; Escape closes',
       })}
     </section>
   );

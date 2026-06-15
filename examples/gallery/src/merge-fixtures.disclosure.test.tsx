@@ -91,7 +91,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <div {...content.attrs}>Ships soon.</div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="accordion"><button data-state="open" aria-expanded="false" disabled type="button" aria-controls="gallery-accordion-shipping-panel" id="author-accordion-trigger" class="accordion-trigger font-medium">Shipping</button><div data-state="open" id="author-accordion-panel" aria-labelledby="gallery-accordion-shipping-trigger" role="group" class="accordion-panel px-3">Ships soon.</div></section>',
+      '<section data-gallery-merge="accordion"><button data-state="open" aria-expanded="false" disabled tabIndex="0" type="button" aria-controls="gallery-accordion-shipping-panel" id="author-accordion-trigger" class="accordion-trigger font-medium">Shipping</button><div data-state="open" id="author-accordion-panel" aria-labelledby="gallery-accordion-shipping-trigger" role="group" class="accordion-panel px-3">Ships soon.</div></section>',
     );
   });
 

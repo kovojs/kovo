@@ -400,6 +400,7 @@ export type {
 export {
   Select,
   SelectContent,
+  SelectHiddenInput,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -416,6 +417,7 @@ export {
 } from './select.js';
 export type {
   SelectContentProps,
+  SelectHiddenInputProps,
   SelectItemProps,
   SelectProps,
   SelectStateProps,
