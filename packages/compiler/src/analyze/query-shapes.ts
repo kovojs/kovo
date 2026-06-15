@@ -171,7 +171,7 @@ export function validateListBindingInQueryShapes(
 export function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
   return Object.entries(queryShapes).flatMap(([queryName, shape]) => [
     queryName,
-    ...queryShapeChildPaths(shape).flatMap((path) => [`${queryName}.${path}`, path]),
+    ...queryShapeChildPaths(shape).map((path) => `${queryName}.${path}`),
   ]);
 }
 

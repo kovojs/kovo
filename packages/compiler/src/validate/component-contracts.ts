@@ -258,7 +258,7 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
 
   for (const call of callExpressions(model).filter((item) => item.name === 'emit')) {
     const span = call.argumentSpans[1];
-    const paths = call.argumentObjectLiteralPaths[1] ?? [];
+    const paths = call.argumentPropertyAccesses[1]?.map((access) => access.path) ?? [];
     if (paths.length === 0) continue;
     if (!span) continue;
 

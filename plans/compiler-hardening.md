@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (9 / 32 findings closed)
+**Status:** open (10 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -147,8 +147,18 @@ src/compile-component.test.ts src/scan/parse.test.ts`, `pnpm --filter @jiso/comp
 src/state-events.test.ts src/scan/parse.test.ts`, `pnpm --filter @jiso/compiler exec tsc
 --noEmit`, and `pnpm exec vp check --fix` passed.
 
-- [ ] **FW320: drive event-payload overlap from value provenance, not bare leaf names** — `packages/compiler/src/validate/component-contracts.ts:114`, `analyze/query-shapes.ts:171` (SPEC §6.4/§7). Flag an emit field only when its **value** resolves to a property access rooted in a real query in scope; drop the unprefixed bare-leaf branch in `queryShapePaths`.
+- [x] **FW320: drive event-payload overlap from value provenance, not bare leaf names** — `packages/compiler/src/validate/component-contracts.ts:114`, `analyze/query-shapes.ts:171` (SPEC §6.4/§7). Flag an emit field only when its **value** resolves to a property access rooted in a real query in scope; drop the unprefixed bare-leaf branch in `queryShapePaths`.
   - Done = a renamed server value (`{ snapshotTotal: order.total }`) fires; a same-named client-intent key (`quantity`) does not. Prove: `pnpm test state-events`
+  - Evidence 2026-06-15: `packages/compiler/src/validate/component-contracts.ts` now checks
+    `emit(...)` payload value property accesses from the typed call model instead of object-literal
+    key paths, and `packages/compiler/src/analyze/query-shapes.ts` no longer expands query shapes
+    into unprefixed bare child paths.
+  - Evidence 2026-06-15: `packages/compiler/src/state-events.test.ts` covers a renamed
+    `{ snapshotTotal: order.total }` server value producing FW320 and a same-named `{ quantity }`
+    client-intent payload remaining clean.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/state-events.test.ts src/query-bindings.test.ts src/registry.test.ts`, `pnpm --filter
+@jiso/compiler exec tsc --noEmit`, and `pnpm exec vp check --fix` passed.
 
 - [ ] **FW221: scope IDREF resolution per component, not the module-wide flat id set** — `packages/compiler/src/validate/markup.ts:32` (SPEC §4.5). Resolve ids within each component's render-body span (iterate `model.components`) instead of over module-wide `model.jsxElements`. Requires tagging each `JsxElementModel` with its owning component (parser) or partitioning by render-body span.
   - Done = component A's `popovertarget="x"` is **not** satisfied by component B's `id="x"`. Prove: `pnpm test id-content-model`

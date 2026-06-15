@@ -102,11 +102,9 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart.events.tsx',
       queryShapes: {
-        productCard: {
-          product: {
-            id: 'string',
-            unitPrice: 'number',
-          },
+        product: {
+          id: 'string',
+          unitPrice: 'number',
         },
       },
       source: `
@@ -126,6 +124,53 @@ export function notifyPrice(product, emit) {
         length: 45,
       },
     ]);
+  });
+
+  it('reports FW320 when renamed event payload fields carry query values', () => {
+    const result = compileComponentModule({
+      fileName: 'order.events.tsx',
+      queryShapes: {
+        order: {
+          quantity: 'number',
+          total: 'number',
+        },
+      },
+      source: `
+export function notifyOrder(order, emit) {
+  emit('order:priced', { snapshotTotal: order.total });
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW320',
+        fileName: 'order.events.tsx',
+        message: `${fw320.message} order.total`,
+        severity: fw320.severity,
+        start: { column: 24, line: 3 },
+        length: 30,
+      },
+    ]);
+  });
+
+  it('does not report FW320 for same-named client intent payload fields', () => {
+    const result = compileComponentModule({
+      fileName: 'order.events.tsx',
+      queryShapes: {
+        order: {
+          quantity: 'number',
+          total: 'number',
+        },
+      },
+      source: `
+export function notifyIntent(quantity, emit) {
+  emit('order:quantity-changed', { quantity });
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('does not report FW320 for event payloads that carry client intent only', () => {
