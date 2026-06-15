@@ -680,6 +680,14 @@ describe('compiled interactive gallery demos', () => {
     expect(radioGroupState).toEqual({ value: 'email' });
 
     const scrollAreaState = {
+      dragging: false,
+      dragPointerStart: 0,
+      dragScrollTop: 0,
+      dragThumbSize: 28,
+      dragTrackSize: 72,
+      hasOverflowY: true,
+      hovering: false,
+      scrolling: false,
       scrollTop: 0,
       scrollY: 'start',
       thumbOffset: 0,
@@ -692,6 +700,14 @@ describe('compiled interactive gallery demos', () => {
       state: scrollAreaState,
     });
     expect(scrollAreaState).toEqual({
+      dragging: false,
+      dragPointerStart: 0,
+      dragScrollTop: 0,
+      dragThumbSize: 28,
+      dragTrackSize: 72,
+      hasOverflowY: true,
+      hovering: false,
+      scrolling: true,
       scrollTop: 1000000,
       scrollY: 'end',
       thumbOffset: 100,
@@ -715,12 +731,88 @@ describe('compiled interactive gallery demos', () => {
       state: scrollAreaState,
     });
     expect(scrollAreaState).toEqual({
+      dragging: false,
+      dragPointerStart: 0,
+      dragScrollTop: 0,
+      dragThumbSize: 28,
+      dragTrackSize: 72,
+      hasOverflowY: true,
+      hovering: false,
+      scrolling: true,
       scrollTop: 100,
       scrollY: 'middle',
       thumbOffset: 50,
       thumbSize: 33.33333333333333,
       verticalVisible: true,
     });
+    scrollAreaState.scrollTop = 0;
+    scrollAreaState.scrollY = 'start';
+    scrollAreaState.thumbOffset = 0;
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$div_pointerdown')(
+      pointerEvent('pointerdown', {
+        offsetY: 72,
+        target: { clientHeight: 72 },
+      }),
+      {
+        params: {},
+        signal,
+        state: scrollAreaState,
+      },
+    );
+    expect(scrollAreaState).toMatchObject({
+      hasOverflowY: true,
+      scrolling: true,
+      scrollTop: 188,
+      scrollY: 'end',
+      thumbOffset: 100,
+      verticalVisible: true,
+    });
+
+    scrollAreaState.scrollTop = 0;
+    scrollAreaState.scrollY = 'start';
+    scrollAreaState.thumbOffset = 0;
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$span_pointerdown')(
+      pointerEvent('pointerdown', {
+        clientY: 10,
+        target: {
+          clientHeight: 20,
+          parentElement: { clientHeight: 72 },
+        },
+      }),
+      {
+        params: {},
+        signal,
+        state: scrollAreaState,
+      },
+    );
+    expect(scrollAreaState).toMatchObject({
+      dragging: true,
+      dragPointerStart: 10,
+      dragScrollTop: 0,
+      dragThumbSize: 20,
+      dragTrackSize: 72,
+      scrolling: true,
+    });
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$span_pointermove')(
+      pointerEvent('pointermove', { clientY: 40 }),
+      {
+        params: {},
+        signal,
+        state: scrollAreaState,
+      },
+    );
+    expect(scrollAreaState).toMatchObject({
+      dragging: true,
+      scrollY: 'middle',
+      verticalVisible: true,
+    });
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$span_pointerup')(new Event('pointerup'), {
+      params: {},
+      signal,
+      state: scrollAreaState,
+    });
+    expect(scrollAreaState.dragging).toBe(false);
+    expect(scrollAreaState.scrolling).toBe(false);
 
     const selectState = { value: 'standard' };
     clientHandler(select, 'GallerySelectDemo$select_change')(changeEvent('express'), {
@@ -869,3 +961,23 @@ describe('compiled interactive gallery demos', () => {
     expect(toastState).toEqual({ open: true });
   });
 });
+
+function pointerEvent(
+  type: string,
+  options: {
+    clientX?: number;
+    clientY?: number;
+    offsetX?: number;
+    offsetY?: number;
+    target?: unknown;
+  },
+): Event {
+  const event = new Event(type, { cancelable: true });
+  for (const [key, value] of Object.entries(options)) {
+    Object.defineProperty(event, key, {
+      configurable: true,
+      value,
+    });
+  }
+  return event;
+}

@@ -63,6 +63,9 @@ const defaultDelegatedEvents = [
   'scroll',
   'focus',
   'blur',
+  'pointerdown',
+  'pointermove',
+  'pointerup',
 ] as const;
 
 /**

@@ -41,6 +41,9 @@ describe('inline loader source', () => {
         'scroll',
         'focus',
         'blur',
+        'pointerdown',
+        'pointermove',
+        'pointerup',
         'pointerover',
         'pointerout',
       ]);

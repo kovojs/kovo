@@ -7,7 +7,10 @@ import {
   scrollAreaScrollbarAttributes as exportedScrollAreaScrollbarAttributes,
   scrollAreaScrollbarState as exportedScrollAreaScrollbarState,
   scrollAreaThumbAttributes as exportedScrollAreaThumbAttributes,
+  scrollAreaThumbDrag as exportedScrollAreaThumbDrag,
+  scrollAreaThumbDragStart as exportedScrollAreaThumbDragStart,
   scrollAreaThumbGeometry as exportedScrollAreaThumbGeometry,
+  scrollAreaTrackPointerDown as exportedScrollAreaTrackPointerDown,
   scrollAreaViewportAttributes as exportedScrollAreaViewportAttributes,
   scrollAreaViewportScroll as exportedScrollAreaViewportScroll,
   scrollAreaViewportState as exportedScrollAreaViewportState,
@@ -19,7 +22,10 @@ import {
   scrollAreaScrollbarAttributes as primitiveScrollAreaScrollbarAttributes,
   scrollAreaScrollbarState as primitiveScrollAreaScrollbarState,
   scrollAreaThumbAttributes as primitiveScrollAreaThumbAttributes,
+  scrollAreaThumbDrag as primitiveScrollAreaThumbDrag,
+  scrollAreaThumbDragStart as primitiveScrollAreaThumbDragStart,
   scrollAreaThumbGeometry as primitiveScrollAreaThumbGeometry,
+  scrollAreaTrackPointerDown as primitiveScrollAreaTrackPointerDown,
   scrollAreaViewportAttributes as primitiveScrollAreaViewportAttributes,
   scrollAreaViewportScroll as primitiveScrollAreaViewportScroll,
   scrollAreaViewportState as primitiveScrollAreaViewportState,
@@ -31,7 +37,10 @@ import {
   scrollAreaScrollbarAttributes,
   scrollAreaScrollbarState,
   scrollAreaThumbAttributes,
+  scrollAreaThumbDrag,
+  scrollAreaThumbDragStart,
   scrollAreaThumbGeometry,
+  scrollAreaTrackPointerDown,
   scrollAreaViewportAttributes,
   scrollAreaViewportScroll,
   scrollAreaViewportState,
@@ -40,8 +49,18 @@ import {
 describe('headless-ui scroll-area primitive', () => {
   it('builds root and native viewport attributes', () => {
     expect(
-      scrollAreaRootAttributes({ dir: 'rtl', id: 'messages', scrollbars: 'vertical' }),
+      scrollAreaRootAttributes({
+        dir: 'rtl',
+        hasOverflowY: true,
+        hovering: true,
+        id: 'messages',
+        scrolling: true,
+        scrollbars: 'vertical',
+      }),
     ).toEqual({
+      'data-has-overflow-y': '',
+      'data-hovering': '',
+      'data-scrolling': '',
       'data-scrollbars': 'vertical',
       dir: 'rtl',
       id: 'messages',
@@ -300,6 +319,78 @@ describe('headless-ui scroll-area primitive', () => {
     });
   });
 
+  it('computes track-click target scroll offsets from pointer position', () => {
+    const event = scrollAreaPointerEvent({
+      clientY: 80,
+      currentTarget: { clientHeight: 100 },
+      offsetY: 80,
+    });
+    const result = scrollAreaTrackPointerDown(
+      event,
+      {
+        clientHeight: 100,
+        clientWidth: 100,
+        scrollHeight: 300,
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 100,
+      },
+      { orientation: 'vertical', scrollbars: 'vertical' },
+    );
+
+    expect(result).toMatchObject({
+      scrollTop: 190,
+      scrollY: 'middle',
+      scrollYRatio: 0.95,
+    });
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('computes thumb drag start and pointer-move scroll offsets', () => {
+    const viewport = {
+      clientHeight: 100,
+      clientWidth: 100,
+      scrollHeight: 300,
+      scrollLeft: 0,
+      scrollTop: 50,
+      scrollWidth: 100,
+    };
+    const start = scrollAreaThumbDragStart(
+      scrollAreaPointerEvent({
+        clientY: 25,
+        currentTarget: {
+          clientHeight: 25,
+          parentElement: { clientHeight: 100 },
+        },
+      }),
+      viewport,
+      { orientation: 'vertical', scrollbars: 'vertical' },
+    );
+
+    expect(start).toEqual({
+      pointerStart: 25,
+      scrollStart: 50,
+      thumbSize: 25,
+      trackSize: 100,
+    });
+
+    const dragEvent = scrollAreaPointerEvent({ clientY: 55 });
+    const result = scrollAreaThumbDrag(dragEvent, viewport, {
+      orientation: 'vertical',
+      pointerStart: start?.pointerStart ?? 0,
+      scrollStart: start?.scrollStart ?? 0,
+      scrollbars: 'vertical',
+      thumbSize: start?.thumbSize ?? 0,
+      trackSize: start?.trackSize ?? 0,
+    });
+
+    expect(result).toMatchObject({
+      scrollTop: 130,
+      scrollY: 'middle',
+    });
+    expect(dragEvent.defaultPrevented).toBe(true);
+  });
+
   it('reads delegated scroll events from the event target', () => {
     const result = scrollAreaViewportScroll(
       scrollAreaDelegatedScrollEvent({
@@ -371,6 +462,9 @@ describe('headless-ui scroll-area primitive', () => {
     expect(exportedScrollAreaScrollbarAttributes).toBe(scrollAreaScrollbarAttributes);
     expect(exportedScrollAreaThumbAttributes).toBe(scrollAreaThumbAttributes);
     expect(exportedScrollAreaThumbGeometry).toBe(scrollAreaThumbGeometry);
+    expect(exportedScrollAreaThumbDrag).toBe(scrollAreaThumbDrag);
+    expect(exportedScrollAreaThumbDragStart).toBe(scrollAreaThumbDragStart);
+    expect(exportedScrollAreaTrackPointerDown).toBe(scrollAreaTrackPointerDown);
     expect(exportedScrollAreaCornerAttributes).toBe(scrollAreaCornerAttributes);
     expect(exportedScrollAreaScrollbarState).toBe(scrollAreaScrollbarState);
     expect(exportedScrollAreaCornerState).toBe(scrollAreaCornerState);
@@ -382,6 +476,9 @@ describe('headless-ui scroll-area primitive', () => {
     expect(primitiveScrollAreaScrollbarAttributes).toBe(scrollAreaScrollbarAttributes);
     expect(primitiveScrollAreaThumbAttributes).toBe(scrollAreaThumbAttributes);
     expect(primitiveScrollAreaThumbGeometry).toBe(scrollAreaThumbGeometry);
+    expect(primitiveScrollAreaThumbDrag).toBe(scrollAreaThumbDrag);
+    expect(primitiveScrollAreaThumbDragStart).toBe(scrollAreaThumbDragStart);
+    expect(primitiveScrollAreaTrackPointerDown).toBe(scrollAreaTrackPointerDown);
     expect(primitiveScrollAreaCornerAttributes).toBe(scrollAreaCornerAttributes);
     expect(primitiveScrollAreaScrollbarState).toBe(scrollAreaScrollbarState);
     expect(primitiveScrollAreaCornerState).toBe(scrollAreaCornerState);
@@ -424,4 +521,54 @@ function scrollAreaDelegatedScrollEvent(
     readonly currentTarget: null;
     readonly target: Parameters<typeof scrollAreaViewportState>[0];
   };
+}
+
+function scrollAreaPointerEvent(options: {
+  clientX?: number;
+  clientY?: number;
+  currentTarget?: {
+    clientHeight?: number;
+    clientWidth?: number;
+    parentElement?: {
+      clientHeight?: number;
+      clientWidth?: number;
+    };
+  };
+  offsetX?: number;
+  offsetY?: number;
+}): Event & {
+  readonly clientX?: number;
+  readonly clientY?: number;
+  readonly currentTarget?: {
+    clientHeight?: number;
+    clientWidth?: number;
+    parentElement?: {
+      clientHeight?: number;
+      clientWidth?: number;
+    };
+  };
+  readonly offsetX?: number;
+  readonly offsetY?: number;
+} {
+  const event = new Event('pointerdown', { cancelable: true }) as Event & {
+    clientX?: number;
+    clientY?: number;
+    currentTarget?: {
+      clientHeight?: number;
+      clientWidth?: number;
+      parentElement?: {
+        clientHeight?: number;
+        clientWidth?: number;
+      };
+    };
+    offsetX?: number;
+    offsetY?: number;
+  };
+  for (const [key, value] of Object.entries(options)) {
+    Object.defineProperty(event, key, {
+      configurable: true,
+      value,
+    });
+  }
+  return event;
 }

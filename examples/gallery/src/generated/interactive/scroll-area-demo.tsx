@@ -2,6 +2,26 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryScrollAreaDemo$section_data_dragging_derive = derive(['state'], (state: any) =>
+  state.dragging ? '' : null,
+);
+export const GalleryScrollAreaDemo$section_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state: any) => (state.hasOverflowY ? '' : null),
+);
+export const GalleryScrollAreaDemo$section_data_hovering_derive = derive(['state'], (state: any) =>
+  state.hovering ? '' : null,
+);
+export const GalleryScrollAreaDemo$section_data_scrolling_derive = derive(['state'], (state: any) =>
+  state.scrolling ? '' : null,
+);
+export const GalleryScrollAreaDemo$div_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state: any) => (state.hasOverflowY ? '' : null),
+);
+export const GalleryScrollAreaDemo$div_data_scrolling_derive = derive(['state'], (state: any) =>
+  state.scrolling ? '' : null,
+);
 export const GalleryScrollAreaDemo$div_data_scroll_y_derive = derive(
   ['state'],
   (state: any) => state.scrollY,
@@ -10,21 +30,48 @@ export const GalleryScrollAreaDemo$div_scrollTop_derive = derive(
   ['state'],
   (state: any) => state.scrollTop,
 );
+export const GalleryScrollAreaDemo$div_data_has_overflow_y_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.hasOverflowY ? '' : null),
+);
+export const GalleryScrollAreaDemo$div_data_hovering_derive = derive(['state'], (state: any) =>
+  state.hovering ? '' : null,
+);
+export const GalleryScrollAreaDemo$div_data_scrolling_derive_2 = derive(['state'], (state: any) =>
+  state.scrolling ? '' : null,
+);
 export const GalleryScrollAreaDemo$div_data_state_derive = derive(['state'], (state: any) =>
-  state.verticalVisible ? 'visible' : 'hidden',
+  state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+    ? 'visible'
+    : 'hidden',
 );
 export const GalleryScrollAreaDemo$div_hidden_derive = derive(['state'], (state: any) =>
-  !state.verticalVisible ? '' : null,
+  !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging)) ? '' : null,
+);
+export const GalleryScrollAreaDemo$span_data_dragging_derive = derive(['state'], (state: any) =>
+  state.dragging ? '' : null,
+);
+export const GalleryScrollAreaDemo$span_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state: any) => (state.hasOverflowY ? '' : null),
+);
+export const GalleryScrollAreaDemo$span_data_hovering_derive = derive(['state'], (state: any) =>
+  state.hovering ? '' : null,
+);
+export const GalleryScrollAreaDemo$span_data_scrolling_derive = derive(['state'], (state: any) =>
+  state.scrolling ? '' : null,
 );
 export const GalleryScrollAreaDemo$span_data_scroll_position_derive = derive(
   ['state'],
   (state: any) => state.scrollY,
 );
 export const GalleryScrollAreaDemo$span_data_state_derive = derive(['state'], (state: any) =>
-  state.verticalVisible ? 'visible' : 'hidden',
+  state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+    ? 'visible'
+    : 'hidden',
 );
 export const GalleryScrollAreaDemo$span_hidden_derive = derive(['state'], (state: any) =>
-  !state.verticalVisible ? '' : null,
+  !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging)) ? '' : null,
 );
 export const GalleryScrollAreaDemo$span_style_derive = derive(
   ['state'],
@@ -43,7 +90,10 @@ import {
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
+  scrollAreaThumbDrag as _scrollAreaThumbDrag,
+  scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
+  scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportAttributes,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@jiso/headless-ui/primitives';
@@ -70,6 +120,14 @@ const TOGGLE_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryScrollAreaDemoState {
+  dragging: boolean;
+  dragPointerStart: number;
+  dragScrollTop: number;
+  dragThumbSize: number;
+  dragTrackSize: number;
+  hasOverflowY: boolean;
+  hovering: boolean;
+  scrolling: boolean;
   scrollTop: number;
   scrollY: 'end' | 'middle' | 'none' | 'start';
   thumbOffset: number;
@@ -81,6 +139,14 @@ export interface GalleryScrollAreaDemoState {
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
   state: () => ({
+    dragging: false,
+    dragPointerStart: 0,
+    dragScrollTop: 0,
+    dragThumbSize: 28,
+    dragTrackSize: 72,
+    hasOverflowY: true,
+    hovering: false,
+    scrolling: false,
     scrollTop: 0,
     scrollY: 'start' as const,
     thumbOffset: 0,
@@ -95,9 +161,19 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
       <section
         {...scrollAreaRootAttributes({ ...rootState, id: 'gallery-scroll-area-root' })}
         class={ROOT_CLASS}
+        data-dragging={state.dragging ? '' : null}
+        data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$section_data_dragging_derive"
         data-gallery-interactive="scroll-area"
+        data-has-overflow-y={state.hasOverflowY ? '' : null}
+        data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$section_data_has_overflow_y_derive"
+        data-hovering={state.hovering ? '' : null}
+        data-bind:data-hovering="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$section_data_hovering_derive"
+        data-scrolling={state.scrolling ? '' : null}
+        data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$section_data_scrolling_derive"
+        on:pointerenter="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$section_pointerenter"
+        on:pointerleave="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$section_pointerleave"
         fw-c="gallery-scroll-area-demo"
-        fw-state='{"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}'
+        fw-state='{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}'
       >
         <div
           {...scrollAreaViewportAttributes({
@@ -107,12 +183,16 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             scrollY: state.scrollY,
           })}
           class={VIEWPORT_CLASS}
+          data-has-overflow-y={state.hasOverflowY ? '' : null}
+          data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_has_overflow_y_derive"
+          data-scrolling={state.scrolling ? '' : null}
+          data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_scrolling_derive"
           data-scroll-y={state.scrollY}
-          data-bind:data-scroll-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_data_scroll_y_derive"
+          data-bind:data-scroll-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_scroll_y_derive"
           scrollTop={state.scrollTop}
-          data-bind:scrollTop="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_scrollTop_derive"
+          data-bind:scrollTop="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_scrollTop_derive"
           style="max-height: 72px; overflow: auto;"
-          on:scroll="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_scroll"
+          on:scroll="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_scroll"
         >
           <div style="min-height: 260px;">
             <p>Framework primitives keep native scrolling in charge.</p>
@@ -126,13 +206,24 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: 'gallery-scroll-area-scrollbar',
             orientation: 'vertical',
-            visible: state.verticalVisible,
+            visible: state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
           })}
           class={SCROLLBAR_CLASS}
-          data-state={state.verticalVisible ? 'visible' : 'hidden'}
-          data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_data_state_derive"
-          hidden={!state.verticalVisible}
-          data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_hidden_derive"
+          data-has-overflow-y={state.hasOverflowY ? '' : null}
+          data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_has_overflow_y_derive_2"
+          data-hovering={state.hovering ? '' : null}
+          data-bind:data-hovering="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_hovering_derive"
+          data-scrolling={state.scrolling ? '' : null}
+          data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_scrolling_derive_2"
+          data-state={
+            state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+              ? 'visible'
+              : 'hidden'
+          }
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_data_state_derive"
+          hidden={!(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))}
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_hidden_derive"
+          on:pointerdown="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$div_pointerdown"
         >
           <span
             {...scrollAreaThumbAttributes({
@@ -140,17 +231,35 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
               id: 'gallery-scroll-area-thumb',
               orientation: 'vertical',
               scrollPosition: state.scrollY,
-              visible: state.verticalVisible,
+              visible:
+                state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
             })}
             class={THUMB_CLASS}
+            data-dragging={state.dragging ? '' : null}
+            data-bind:data-dragging="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_data_dragging_derive"
+            data-has-overflow-y={state.hasOverflowY ? '' : null}
+            data-bind:data-has-overflow-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_data_has_overflow_y_derive"
+            data-hovering={state.hovering ? '' : null}
+            data-bind:data-hovering="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_data_hovering_derive"
+            data-scrolling={state.scrolling ? '' : null}
+            data-bind:data-scrolling="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_data_scrolling_derive"
             data-scroll-position={state.scrollY}
-            data-bind:data-scroll-position="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_data_scroll_position_derive"
-            data-state={state.verticalVisible ? 'visible' : 'hidden'}
-            data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_data_state_derive"
-            hidden={!state.verticalVisible}
-            data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_hidden_derive"
+            data-bind:data-scroll-position="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_data_scroll_position_derive"
+            data-state={
+              state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+                ? 'visible'
+                : 'hidden'
+            }
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_data_state_derive"
+            hidden={
+              !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
+            }
+            data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_hidden_derive"
             style={`height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`}
-            data-bind:style="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_style_derive"
+            data-bind:style="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_style_derive"
+            on:pointerdown="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_pointerdown"
+            on:pointermove="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_pointermove"
+            on:pointerup="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_pointerup"
           />
         </div>
         <div
@@ -164,12 +273,12 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
         <button
           aria-controls={viewportId}
           aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
-          data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$button_aria_pressed_derive"
+          data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$button_aria_pressed_derive"
           class={TOGGLE_CLASS}
           id="gallery-scroll-area-toggle"
-          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$button_click"
         >
-          <span data-bind="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_text_derive">
+          <span data-bind="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=a3339597#GalleryScrollAreaDemo$span_text_derive">
             {state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}
           </span>
         </button>

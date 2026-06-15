@@ -396,18 +396,22 @@ describe('compiled interactive gallery demos in the browser', () => {
     const { imports } = installGeneratedGalleryLoader(root);
 
     expect(root.getAttribute('fw-state')).toBe(
-      '{"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}',
+      '{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}',
     );
     expect(root.getAttribute('data-scrollbars')).toBe('vertical');
+    expect(root.getAttribute('data-has-overflow-y')).toBe('');
     expect(viewport.getAttribute('role')).toBe('region');
     expect(viewport.getAttribute('aria-label')).toBe('Release notes');
     expect(viewport.tabIndex).toBe(0);
     expect(viewport.scrollTop).toBe(0);
     expect(viewport.getAttribute('data-scroll-y')).toBe('start');
+    expect(viewport.getAttribute('data-has-overflow-y')).toBe('');
     expect(scrollbar.getAttribute('aria-hidden')).toBe('true');
     expect(scrollbar.getAttribute('data-orientation')).toBe('vertical');
-    expect(scrollbar.getAttribute('data-state')).toBe('visible');
+    expect(scrollbar.getAttribute('data-state')).toBe('hidden');
+    expect(scrollbar.hidden).toBe(true);
     expect(thumb.getAttribute('data-scroll-position')).toBe('start');
+    expect(thumb.hidden).toBe(true);
     expect(corner.hidden).toBe(true);
     expect(button.getAttribute('aria-controls')).toBe('gallery-scroll-area-viewport');
     expect(button.getAttribute('aria-pressed')).toBe('false');
@@ -431,9 +435,11 @@ describe('compiled interactive gallery demos in the browser', () => {
         '/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js',
       ]);
       expect(root.getAttribute('fw-state')).toContain('"scrollY":"end"');
+      expect(root.getAttribute('fw-state')).toContain('"scrolling":true');
       expect(currentViewport.scrollTop).toBeGreaterThan(0);
       expect(currentViewport.getAttribute('data-scroll-y')).toBe('end');
       expect(currentThumb.getAttribute('data-scroll-position')).toBe('end');
+      expect(currentThumb.hidden).toBe(false);
       expect(currentThumb.style.top).toBe('100%');
       expect(currentButton.getAttribute('aria-pressed')).toBe('true');
       expect(currentButton.textContent).toBe('Back to top');
@@ -445,10 +451,37 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toContain('"scrollY":"middle"');
+      expect(root.getAttribute('fw-state')).toContain('"hasOverflowY":true');
       expect(viewport.getAttribute('data-scroll-y')).toBe('middle');
       expect(thumb.getAttribute('data-scroll-position')).toBe('middle');
       expect(button.getAttribute('aria-pressed')).toBe('false');
       expect(output.textContent).toBe('middle');
+    });
+
+    Object.defineProperty(scrollbar, 'clientHeight', { configurable: true, value: 72 });
+    Object.defineProperty(thumb, 'clientHeight', { configurable: true, value: 20 });
+    thumb.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientY: 10,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toContain('"dragging":true');
+      expect(thumb.getAttribute('data-dragging')).toBe('');
+    });
+
+    thumb.dispatchEvent(
+      new PointerEvent('pointerup', {
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toContain('"dragging":false');
     });
 
     await expectNoAxeViolations(root);

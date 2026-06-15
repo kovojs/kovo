@@ -63,6 +63,7 @@ function installInlineJisoLoader(importModule) {
   const events = [
     'click', 'submit', 'input', 'change', 'keydown', 'keyup',
     'contextmenu', 'paste', 'cancel', 'beforetoggle', 'scroll', 'focus', 'blur',
+    'pointerdown', 'pointermove', 'pointerup',
   ];
   const doc = document;
   let idemCounter = 0;

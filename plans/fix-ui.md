@@ -739,7 +739,7 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     mutates only `ctx.state`, emits state derives for meter attributes/text, and the focused
     progress/meter browser and gallery client/compile/typecheck commands listed under `progress`
     passed.
-- [ ] **scroll-area** [P0]: the custom thumb does **not** track real scrolling — no `on:scroll` handler
+- [x] **scroll-area** [P0]: the custom thumb does **not** track real scrolling — no `on:scroll` handler
       on the viewport (and `scroll` doesn't bubble, so the loader needs direct attachment); thumb has no
       proportional size/transform; no thumb-drag or track-click; no `data-has-overflow-*`/auto-hide.
       Wire `scrollAreaViewportScroll` + add a thumb-geometry helper (size = clientH/scrollH, offset =
@@ -762,8 +762,19 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
     scroll-area`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
     --check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
-  - Remaining: thumb drag, track click, `data-has-overflow-*`, `data-scrolling`/auto-hide behavior, and
-    the Phase 4 `scroll-area.ts` checklist item are still open.
+  - Evidence 2026-06-15: the second scroll-area slice added `scrollAreaTrackPointerDown`,
+    `scrollAreaThumbDragStart`, and `scrollAreaThumbDrag`, delegated `pointerdown`/`pointermove`/
+    `pointerup` through the modular and inline loaders, and exposed `data-has-overflow-y`,
+    `data-scrolling`, `data-hovering`, and `data-dragging` state bindings in
+    `examples/gallery/src/interactive/scroll-area-demo.tsx`. The demo now auto-hides the decorative
+    scrollbar/thumb unless overflow is active and the area is hovered, scrolling, or dragging.
+  - Evidence 2026-06-15: generated `scroll-area-demo.client.js` imports the new primitive helpers,
+    mutates only `ctx.state`, and has no `Reflect`/`document`/`globalThis`/`setAttribute`/
+    `ctx.params` escape hatches. Verified by `pnpm --filter @jiso/runtime exec vitest run
+    src/index.test.ts src/inline-loader.test.ts src/inline-loader-triggers.test.ts`,
+    `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+    and `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t scroll-area`.
 - [ ] **toast** [P1]: a single static always-open toast — not the imperative push/stack/auto-dismiss
       (timeout 5000ms)/swipe/pause-on-hover/F6-viewport model of Base UI/Sonner; Escape-dismiss is dead
       (loader #2); live-region announcement is degraded (content pre-rendered). **Decision (locked
@@ -801,8 +812,12 @@ These are framework changes the demo rewrites depend on (not just demo edits):
       chosen; native range dropped as primary).
 - [ ] `select.ts`: custom button-trigger (`aria-haspopup=listbox`) + `role=listbox`/`role=option` popup
       primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` for keyboard + highlight).
-- [ ] `scroll-area.ts`: thumb-geometry helper + `data-has-overflow-*`/`data-scrolling`/`data-hovering` +
+- [x] `scroll-area.ts`: thumb-geometry helper + `data-has-overflow-*`/`data-scrolling`/`data-hovering` +
       thumb-drag/track-click handlers.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/scroll-area.ts` exports
+    `scrollAreaThumbGeometry`, `scrollAreaTrackPointerDown`, `scrollAreaThumbDragStart`, and
+    `scrollAreaThumbDrag`; `scrollAreaDataAttributes` emits overflow/scrolling/hovering data attrs.
+    Verified by `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`.
 - [ ] dialog/sheet/drawer: `closedby='any'` for light-dismissable variants (NOT alert-dialog) + a
       `showModal()`/`requestClose()` JS fallback for the `command`/`commandfor` invoker dependency.
 - [ ] toast: imperative push/stack/auto-dismiss demo + viewport landmark; add a timer affordance if the

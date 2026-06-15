@@ -5,7 +5,10 @@ import {
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
+  scrollAreaThumbDrag as _scrollAreaThumbDrag,
+  scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
+  scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportAttributes,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@jiso/headless-ui/primitives';
@@ -32,6 +35,14 @@ const TOGGLE_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryScrollAreaDemoState {
+  dragging: boolean;
+  dragPointerStart: number;
+  dragScrollTop: number;
+  dragThumbSize: number;
+  dragTrackSize: number;
+  hasOverflowY: boolean;
+  hovering: boolean;
+  scrolling: boolean;
   scrollTop: number;
   scrollY: 'end' | 'middle' | 'none' | 'start';
   thumbOffset: number;
@@ -43,6 +54,14 @@ export interface GalleryScrollAreaDemoState {
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
   state: () => ({
+    dragging: false,
+    dragPointerStart: 0,
+    dragScrollTop: 0,
+    dragThumbSize: 28,
+    dragTrackSize: 72,
+    hasOverflowY: true,
+    hovering: false,
+    scrolling: false,
     scrollTop: 0,
     scrollY: 'start' as const,
     thumbOffset: 0,
@@ -57,7 +76,18 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
       <section
         {...scrollAreaRootAttributes({ ...rootState, id: 'gallery-scroll-area-root' })}
         class={ROOT_CLASS}
+        data-dragging={state.dragging ? '' : null}
         data-gallery-interactive="scroll-area"
+        data-has-overflow-y={state.hasOverflowY ? '' : null}
+        data-hovering={state.hovering ? '' : null}
+        data-scrolling={state.scrolling ? '' : null}
+        onPointerEnter={() => {
+          state.hovering = true;
+        }}
+        onPointerLeave={() => {
+          state.hovering = false;
+          state.dragging = false;
+        }}
       >
         <div
           {...scrollAreaViewportAttributes({
@@ -67,6 +97,8 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             scrollY: state.scrollY,
           })}
           class={VIEWPORT_CLASS}
+          data-has-overflow-y={state.hasOverflowY ? '' : null}
+          data-scrolling={state.scrolling ? '' : null}
           data-scroll-y={state.scrollY}
           scrollTop={state.scrollTop}
           style="max-height: 72px; overflow: auto;"
@@ -82,6 +114,8 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             state.scrollY = result.scrollY;
             state.thumbOffset = geometry.offsetRatio * 100;
             state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
+            state.hasOverflowY = result.verticalVisible;
+            state.scrolling = true;
             state.verticalVisible = geometry.visible;
           }}
         >
@@ -97,11 +131,58 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: 'gallery-scroll-area-scrollbar',
             orientation: 'vertical',
-            visible: state.verticalVisible,
+            visible: state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
           })}
           class={SCROLLBAR_CLASS}
-          data-state={state.verticalVisible ? 'visible' : 'hidden'}
-          hidden={!state.verticalVisible}
+          data-has-overflow-y={state.hasOverflowY ? '' : null}
+          data-hovering={state.hovering ? '' : null}
+          data-scrolling={state.scrolling ? '' : null}
+          data-state={
+            state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+              ? 'visible'
+              : 'hidden'
+          }
+          hidden={!(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))}
+          onPointerDown={() => {
+            const result = _scrollAreaTrackPointerDown(
+              Object(event),
+              {
+                clientHeight: 72,
+                clientWidth: 240,
+                scrollHeight: 260,
+                scrollLeft: 0,
+                scrollTop: state.scrollTop,
+                scrollWidth: 240,
+              },
+              {
+                orientation: 'vertical',
+                scrollbars: 'vertical',
+              },
+            );
+            if (!result) return;
+
+            const geometry = _scrollAreaThumbGeometry(
+              {
+                clientHeight: 72,
+                clientWidth: 240,
+                scrollHeight: 260,
+                scrollLeft: 0,
+                scrollTop: result.scrollTop,
+                scrollWidth: 240,
+              },
+              {
+                orientation: 'vertical',
+                scrollbars: 'vertical',
+              },
+            );
+            state.scrollTop = result.scrollTop;
+            state.scrollY = result.scrollY;
+            state.thumbOffset = geometry.offsetRatio * 100;
+            state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
+            state.hasOverflowY = result.verticalVisible;
+            state.scrolling = true;
+            state.verticalVisible = geometry.visible;
+          }}
         >
           <span
             {...scrollAreaThumbAttributes({
@@ -109,13 +190,98 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
               id: 'gallery-scroll-area-thumb',
               orientation: 'vertical',
               scrollPosition: state.scrollY,
-              visible: state.verticalVisible,
+              visible:
+                state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
             })}
             class={THUMB_CLASS}
+            data-dragging={state.dragging ? '' : null}
+            data-has-overflow-y={state.hasOverflowY ? '' : null}
+            data-hovering={state.hovering ? '' : null}
+            data-scrolling={state.scrolling ? '' : null}
             data-scroll-position={state.scrollY}
-            data-state={state.verticalVisible ? 'visible' : 'hidden'}
-            hidden={!state.verticalVisible}
+            data-state={
+              state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+                ? 'visible'
+                : 'hidden'
+            }
+            hidden={
+              !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
+            }
             style={`height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`}
+            onPointerDown={() => {
+              const result = _scrollAreaThumbDragStart(
+                Object(event),
+                {
+                  clientHeight: 72,
+                  clientWidth: 240,
+                  scrollHeight: 260,
+                  scrollLeft: 0,
+                  scrollTop: state.scrollTop,
+                  scrollWidth: 240,
+                },
+                {
+                  orientation: 'vertical',
+                  scrollbars: 'vertical',
+                },
+              );
+              if (!result) return;
+
+              state.dragging = true;
+              state.dragPointerStart = result.pointerStart;
+              state.dragScrollTop = result.scrollStart;
+              state.dragThumbSize = result.thumbSize;
+              state.dragTrackSize = result.trackSize;
+              state.scrolling = true;
+            }}
+            onPointerMove={() => {
+              if (!state.dragging) return;
+              const result = _scrollAreaThumbDrag(
+                Object(event),
+                {
+                  clientHeight: 72,
+                  clientWidth: 240,
+                  scrollHeight: 260,
+                  scrollLeft: 0,
+                  scrollTop: state.scrollTop,
+                  scrollWidth: 240,
+                },
+                {
+                  orientation: 'vertical',
+                  pointerStart: state.dragPointerStart,
+                  scrollStart: state.dragScrollTop,
+                  scrollbars: 'vertical',
+                  thumbSize: state.dragThumbSize,
+                  trackSize: state.dragTrackSize,
+                },
+              );
+              if (!result) return;
+
+              const geometry = _scrollAreaThumbGeometry(
+                {
+                  clientHeight: 72,
+                  clientWidth: 240,
+                  scrollHeight: 260,
+                  scrollLeft: 0,
+                  scrollTop: result.scrollTop,
+                  scrollWidth: 240,
+                },
+                {
+                  orientation: 'vertical',
+                  scrollbars: 'vertical',
+                },
+              );
+              state.scrollTop = result.scrollTop;
+              state.scrollY = result.scrollY;
+              state.thumbOffset = geometry.offsetRatio * 100;
+              state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
+              state.hasOverflowY = result.verticalVisible;
+              state.scrolling = true;
+              state.verticalVisible = geometry.visible;
+            }}
+            onPointerUp={() => {
+              state.dragging = false;
+              state.scrolling = false;
+            }}
           />
         </div>
         <div
@@ -136,6 +302,7 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             state.scrollTop = nextAtEnd ? 1000000 : 0;
             state.scrollY = nextAtEnd ? 'end' : 'start';
             state.thumbOffset = nextAtEnd ? 100 : 0;
+            state.scrolling = true;
           }}
         >
           <span>{state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}</span>

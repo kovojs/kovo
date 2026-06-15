@@ -27,6 +27,9 @@ describe('runtime barrel loader smoke', () => {
       'scroll',
       'focus',
       'blur',
+      'pointerdown',
+      'pointermove',
+      'pointerup',
     ]);
     expect([...root.listeners.keys()]).toEqual([
       'click',
@@ -42,6 +45,9 @@ describe('runtime barrel loader smoke', () => {
       'scroll',
       'focus',
       'blur',
+      'pointerdown',
+      'pointermove',
+      'pointerup',
       'pointerover',
       'pointerout',
     ]);

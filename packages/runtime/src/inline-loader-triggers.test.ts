@@ -77,6 +77,9 @@ describe('inline loader execution triggers', () => {
           'scroll',
           'focus',
           'blur',
+          'pointerdown',
+          'pointermove',
+          'pointerup',
           'pointerover',
           'pointerout',
         ]);
