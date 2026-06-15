@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (24 / 32 findings closed)
+**Status:** complete (32 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -32,7 +32,7 @@ Self-contained, no cross-deps; do first.
 
 The keyed morph and template-stamp reconciler exist but no production seam constructs them. Highest leverage: Phase 2a is mostly wiring of code that already passes isolated tests.
 
-- [ ] **Finish production fragment morph wiring for the inline/raw-DOM apply seam** — `packages/runtime/src/response-fragment-apply.ts` still exposes the generated inline loader's raw DOM replacement path, and the checked-in `packages/runtime/src/inline-loader.ts` currently embeds that helper with `element.innerHTML = html` (SPEC §9.1, §4.4). The modular runtime and starter template already construct `DomMorphTarget`; finish the remaining raw DOM seam with an inline-budget-safe bridge to the same morph semantics: preserve activeElement focus/selection/scroll, reconcile keyed children by `fw-key`, and keep the generated bootstrap within the §4.4 4KB gzip budget.
+- [x] **Finish production fragment morph wiring for the inline/raw-DOM apply seam** — `packages/runtime/src/response-fragment-apply.ts` still exposes the generated inline loader's raw DOM replacement path, and the checked-in `packages/runtime/src/inline-loader.ts` currently embeds that helper with `element.innerHTML = html` (SPEC §9.1, §4.4). The modular runtime and starter template already construct `DomMorphTarget`; finish the remaining raw DOM seam with an inline-budget-safe bridge to the same morph semantics: preserve activeElement focus/selection/scroll, reconcile keyed children by `fw-key`, and keep the generated bootstrap within the §4.4 4KB gzip budget.
   - Done = an integration test drives a fragment apply through the _actually-installed_ inline loader (not a hand-built `DomMorphRoot`) and asserts focus + text selection survive; `innerHTML` no longer appears on any production fragment-replace path except non-production tests or explicitly documented fallback-only code.
   - Prove: `pnpm run check:inline-loader && pnpm test morph response-fragment && pnpm run test:browser`
   - Progress 2026-06-15: `packages/create-jiso/templates/src/client.ts` now imports
@@ -41,9 +41,20 @@ The keyed morph and template-stamp reconciler exist but no production seam const
   - Evidence 2026-06-15: `pnpm --filter @jiso/runtime run check:inline-loader` passed with the current
     bootstrap exactly at the SPEC §4.4 4096-byte gzip ceiling, so the remaining inline morph work must
     either reduce bootstrap size first or add a compact raw-DOM morph path with equivalent budget proof.
-  - Gap 2026-06-15: the runtime `response-fragment-apply.ts`/inline-loader replacement seam remains
-    open. A direct inline keyed-morph port exceeded the SPEC §4.4 gzip budget, so this checkbox stays
-    open until the inline-safe design is compact enough and proven by the full done criteria.
+  - Evidence 2026-06-15: `packages/runtime/src/response-fragment-apply.ts` now routes the generated
+    inline HTML adapter through a compact `fw-key` DOM morph instead of assigning replacement
+    `innerHTML`; it restores the captured active element and keyed `scrollTop` state after reorder.
+    `packages/runtime/src/inline-response-apply.ts` embeds that shared adapter in the generated
+    inline loader, and `packages/runtime/src/inline-loader.ts` was regenerated.
+  - Evidence 2026-06-15: `packages/runtime/src/inline-loader-response-apply.browser.test.ts` drives
+    an enhanced submit through the actually installed inline loader and proves keyed textarea
+    identity, focus, selection, keyed panel identity, keyed scroll, and updated label text survive the
+    fragment replace.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm --filter
+    @jiso/runtime exec vitest run`, `pnpm --filter @jiso/runtime exec tsc --noEmit`, `pnpm run
+    test:browser`, `pnpm test`, `pnpm exec tsc --noEmit`, and `pnpm run check:fw` passed; `node
+    --experimental-strip-types -e` measurement of `jisoLoaderSource` reported 4095 gzip bytes,
+    under the SPEC §4.4 budget.
 
 - [x] **Implement a DOM-backed keyed template-stamp reconciler** — `packages/runtime/src/query-bindings.ts:190` (the `isTemplateStampHost` guard) + `emit/client.ts` template-stamp plan (SPEC §4.8 step 3, §13.2). Invoke a real reconciler directly from `applyCompiledQueryUpdatePlan` (or at loader setup) instead of depending on a `reconcileTemplateStamp` method that only test fakes implement: index existing `[fw-key]` children, clone `<template fw-stamp>` for inserts, remove exits, reorder by key, run item-relative bindings — **reusing the same `fw-key` helper the morph uses** (§13.2 single keyed-identity contract). Keep the host-method interface only as an optional override seam.
   - Done = a jsdom test asserts a plain `<ul data-bind-list>` inserts / removes / reorders `<li fw-key>` and re-runs item-relative bindings after a query update — with no test-fake host.

@@ -4,6 +4,7 @@ import {
   applyHtmlResponseFragments,
   applyResponseFragment,
   applyResponseFragments,
+  type HtmlResponseFragmentApplyTarget,
 } from './response-fragment-apply.js';
 
 interface TestFragmentTarget {
@@ -76,15 +77,14 @@ describe('response fragment apply primitive', () => {
     expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
   });
 
-  it('shares the HTML fragment adapter used by the generated inline loader', () => {
+  it('shares the HTML append adapter used by the generated inline loader', () => {
     const targets = new Map([
-      ['replace-target', { innerHTML: '<p>old</p>', insertAdjacentHTML: expect.unreachable }],
       [
         'append-target',
         {
-          innerHTML: '<li>old</li>',
+          html: '<li>old</li>',
           insertAdjacentHTML(_position: 'beforeend', html: string) {
-            this.innerHTML += html;
+            this.html += html;
           },
         },
       ],
@@ -92,16 +92,14 @@ describe('response fragment apply primitive', () => {
 
     const applied = applyHtmlResponseFragments(
       [
-        { html: '<p>new</p>', target: 'replace-target' },
         { html: '<li>new</li>', mode: 'append', target: 'append-target' },
         { html: '<aside>ignored</aside>', target: 'missing-target' },
       ],
-      (target) => targets.get(target) ?? null,
+      (target) => (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null,
     );
 
-    expect(applied).toEqual(['replace-target', 'append-target']);
-    expect(targets.get('replace-target')?.innerHTML).toBe('<p>new</p>');
-    expect(targets.get('append-target')?.innerHTML).toBe('<li>old</li><li>new</li>');
+    expect(applied).toEqual(['append-target']);
+    expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
   });
 
   it('exports one shared decoded fragment primitive and HTML adapter', async () => {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { expectInlineResponseApplyParity } from './inline-loader-response-apply-fixture.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
+import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
 
 // SPEC.md §4.4/§9.1: the helper extracted into the inline loader owns the tiny
 // response-apply step that bridges decoded query chunks to modular `jiso:query`
@@ -21,10 +22,9 @@ describe('inline loader response apply runtime', () => {
     const dispatched: unknown[] = [];
     const targets = new Map([
       [
-        'replace-target',
+        'append-second-target',
         {
-          html: '',
-          innerHTML: '',
+          html: '<p>old</p>',
           insertAdjacentHTML(_position: 'beforeend', html: string) {
             this.html += html;
           },
@@ -46,6 +46,7 @@ describe('inline loader response apply runtime', () => {
       {
         fragments: [
           { html: '<p>replace</p>', target: 'replace-target' },
+          { html: '<p>second</p>', mode: 'append', target: 'append-second-target' },
           { html: '<li>new</li>', mode: 'append', target: 'append-target' },
           { html: '<p>ignored</p>', target: 'missing-target' },
         ],
@@ -56,7 +57,7 @@ describe('inline loader response apply runtime', () => {
           dispatched.push({ type, ...init });
         },
         findFragmentTarget(target) {
-          return targets.get(target) ?? null;
+          return (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null;
         },
       },
     );
@@ -69,8 +70,8 @@ describe('inline loader response apply runtime', () => {
         type: 'jiso:query',
       },
     ]);
-    expect(appliedFragments).toEqual(['replace-target', 'append-target']);
-    expect(targets.get('replace-target')?.innerHTML).toBe('<p>replace</p>');
+    expect(appliedFragments).toEqual(['append-second-target', 'append-target']);
+    expect(targets.get('append-second-target')?.html).toBe('<p>old</p><p>second</p>');
     expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');
   });
 });

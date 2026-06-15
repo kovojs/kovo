@@ -266,8 +266,8 @@ describe('inline loader parser parity', () => {
     expect(() =>
       assertMinifiedInlineJisoLoaderInstallerWireParserParity(
         minifiedInstaller.replace(
-          'function unescapeHtml(value){',
-          'function unescapeHtml(value){value=String(value);',
+          'function uh(value){',
+          'function uh(value){value=String(value);',
         ),
       ),
     ).toThrow('canonical minified wire parser helper closure exactly once; found 0');

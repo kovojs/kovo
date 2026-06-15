@@ -39,14 +39,15 @@ describe('inline loader response apply source', () => {
     expect(inlineResponseApplyReadableSource).not.toContain(
       'function applyInlineMutationResponseBody(',
     );
-    expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragment(');
-    expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragments(');
-    expect(inlineResponseApplyReadableSource).toContain('function applyHtmlResponseFragments(');
-    expect(inlineResponseApplyReadableSource).toContain('function dispatchInlineMutationQueries(');
-    expect(inlineResponseApplyReadableSource).toContain('function appendHtmlResponseFragment(');
-    expect(inlineResponseApplyReadableSource).toContain('function replaceHtmlResponseFragment(');
+    expect(inlineResponseApplyReadableSource).toContain('function p(');
+    expect(inlineResponseApplyReadableSource).toContain('function d(');
+    expect(inlineResponseApplyReadableSource).toContain('function m(');
+    expect(inlineResponseApplyReadableSource).toContain('function u(');
+    expect(inlineResponseApplyReadableSource).not.toContain('function applyResponseFragment(');
+    expect(inlineResponseApplyReadableSource).not.toContain('function dispatchInlineMutationQueries(');
+    expect(inlineResponseApplyReadableSource).not.toContain('element.innerHTML = html');
     expect(inlineResponseApplyReadableSource).toContain(
-      'return applyHtmlResponseFragments(chunks.fragments, (target) => options.findFragmentTarget(target));',
+      'return p(chunks.fragments, (target) => options.findFragmentTarget(target));',
     );
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);

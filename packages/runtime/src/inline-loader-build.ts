@@ -55,7 +55,7 @@ export function buildInlineJisoLoaderInstallerReadableSource(
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
-function installInlineJisoLoader(importModule) {
+function installInlineJisoLoader(im) {
   // SPEC.md §4.4: delegate (capture phase) every on:* event the document uses.
   // focus/blur have no bubble phase but DO run a capture phase at ancestors, so
   // capture-phase delegation reaches them; pointerenter/pointerleave never run a
@@ -66,151 +66,151 @@ function installInlineJisoLoader(importModule) {
     'pointerdown', 'pointermove', 'pointerup',
   ];
   const doc = document;
-  let idemCounter = 0;
-  const createInlineIdem = () =>
+  let ic = 0;
+  const ci = () =>
     crypto.randomUUID?.() ??
-    'idem_' + Date.now().toString(36) + '_' + (idemCounter += 1).toString(36);
-  const readStateHost = (element) => element.closest?.('[fw-state]') ?? element;
-  const readState = (element) => {
+    'idem_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
+  const rh = (el) => el.closest?.('[fw-state]') ?? el;
+  const rs = (el) => {
     try {
-      return JSON.parse(readStateHost(element)?.getAttribute('fw-state') ?? '{}');
+      return JSON.parse(rh(el)?.getAttribute('fw-state') ?? '{}');
     } catch {
       return {};
     }
   };
-  const queryAll = (root, selector) =>
+  const qa = (root, selector) =>
     root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
-  const valueAtPath = (value, path) =>
-    path.split('.').reduce((current, segment) => {
-      const key = segment.endsWith('?') ? segment.slice(0, -1) : segment;
-      return typeof current === 'object' && current !== null ? current[key] : undefined;
-    }, value);
-  const formatBoundValue = (value) =>
-    value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
-  const sameStateHost = (element, host) =>
-    element === host || !element.closest || element.closest('[fw-state]') === host;
-  const bindingAttrs = (element) =>
-    [...(element.attributes || [])].filter(
-      (attribute) => attribute.name.startsWith('data-bind:') && attribute.value,
+  const vp = (val, path) =>
+    path.split('.').reduce((cur, seg) => {
+      const key = seg.endsWith('?') ? seg.slice(0, -1) : seg;
+      return typeof cur === 'object' && cur !== null ? cur[key] : undefined;
+    }, val);
+  const fb = (val) =>
+    val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+  const sh = (el, host) =>
+    el === host || !el.closest || el.closest('[fw-state]') === host;
+  const ba = (el) =>
+    [...(el.attributes || [])].filter(
+      (attr) => attr.name.startsWith('data-bind:') && attr.value,
     );
-  const writeAttr = (element, name, value) => {
-    if ((name === 'checked' || name === 'indeterminate') && value === false) value = null;
-    if (value == null) element.removeAttribute?.(name);
-    else element.setAttribute?.(name, formatBoundValue(value));
-    if (name === 'value' && element.value !== undefined) {
-      if (value != null) element.value = formatBoundValue(value);
-      else if (element.localName != 'progress') element.value = '';
+  const wa = (el, name, val) => {
+    if ((name === 'checked' || name === 'indeterminate') && val === false) val = null;
+    if (val == null) el.removeAttribute?.(name);
+    else el.setAttribute?.(name, fb(val));
+    if (name === 'value' && el.value !== undefined) {
+      if (val != null) el.value = fb(val);
+      else if (el.localName != 'progress') el.value = '';
     }
-    if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
-      element.scrollLeft = Number(value) || 0;
+    if ((name === 'scrollLeft' || name === 'scrollleft') && el.scrollLeft !== undefined) {
+      el.scrollLeft = Number(val) || 0;
     }
-    if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
-      element.scrollTop = Number(value) || 0;
+    if ((name === 'scrollTop' || name === 'scrolltop') && el.scrollTop !== undefined) {
+      el.scrollTop = Number(val) || 0;
     }
-    if (name === 'checked' && element.checked !== undefined) element.checked = value != null;
-    if (name === 'indeterminate' && element.indeterminate !== undefined) {
-      element.indeterminate = value != null;
+    if (name === 'checked' && el.checked !== undefined) el.checked = val != null;
+    if (name === 'indeterminate' && el.indeterminate !== undefined) {
+      el.indeterminate = val != null;
     }
   };
-  const writeStateBinding = (element, path, boundAttribute, state) => {
+  const ws = (el, path, bt, state) => {
     if (!path?.startsWith('state.')) return;
-    const value = valueAtPath(state, path.slice('state.'.length));
-    if (boundAttribute) {
-      writeAttr(element, boundAttribute, value);
-    } else if (element.value !== undefined) {
-      element.value = formatBoundValue(value);
+    const val = vp(state, path.slice('state.'.length));
+    if (bt) {
+      wa(el, bt, val);
+    } else if (el.value !== undefined) {
+      el.value = fb(val);
     } else {
-      element.textContent = formatBoundValue(value);
+      el.textContent = fb(val);
     }
   };
-  const writeDerivedStateBinding = async (element, ref, boundAttribute, state) => {
-    const hashIndex = ref.lastIndexOf('#');
-    if (hashIndex <= 0 || hashIndex === ref.length - 1) return;
-    const mod = await importModule(ref.slice(0, hashIndex));
-    const derive = mod[ref.slice(hashIndex + 1)];
-    const value = derive?.run?.(state);
-    if (boundAttribute) {
-      writeAttr(element, boundAttribute, value);
-    } else if (element.value !== undefined) {
-      element.value = formatBoundValue(value);
+  const wd = async (el, ref, bt, state) => {
+    const hi = ref.lastIndexOf('#');
+    if (hi <= 0 || hi === ref.length - 1) return;
+    const mod = await im(ref.slice(0, hi));
+    const derive = mod[ref.slice(hi + 1)];
+    const val = derive?.run?.(state);
+    if (bt) {
+      wa(el, bt, val);
+    } else if (el.value !== undefined) {
+      el.value = fb(val);
     } else {
-      element.textContent = formatBoundValue(value);
+      el.textContent = fb(val);
     }
   };
-  const applyStateBindings = async (host, state) => {
-    const hostBinding = host.getAttribute?.('data-bind');
-    if (hostBinding?.includes('#')) await writeDerivedStateBinding(host, hostBinding, undefined, state);
-    else writeStateBinding(host, hostBinding, undefined, state);
-    for (const element of queryAll(host, '[data-bind]')) {
-      if (sameStateHost(element, host)) {
-        const binding = element.getAttribute('data-bind');
+  const as = async (host, state) => {
+    const hb = host.getAttribute?.('data-bind');
+    if (hb?.includes('#')) await wd(host, hb, undefined, state);
+    else ws(host, hb, undefined, state);
+    for (const el of qa(host, '[data-bind]')) {
+      if (sh(el, host)) {
+        const binding = el.getAttribute('data-bind');
         if (binding?.includes('#')) {
-          await writeDerivedStateBinding(element, binding, undefined, state);
+          await wd(el, binding, undefined, state);
         } else {
-          writeStateBinding(element, binding, undefined, state);
+          ws(el, binding, undefined, state);
         }
       }
     }
-    for (const element of [host, ...queryAll(host, '*')]) {
-      if (!sameStateHost(element, host)) continue;
-      for (const attribute of bindingAttrs(element)) {
-        if (attribute.value.includes('#')) {
-          await writeDerivedStateBinding(
-            element,
-            attribute.value,
-            attribute.name.slice('data-bind:'.length),
+    for (const el of [host, ...qa(host, '*')]) {
+      if (!sh(el, host)) continue;
+      for (const attr of ba(el)) {
+        if (attr.value.includes('#')) {
+          await wd(
+            el,
+            attr.value,
+            attr.name.slice('data-bind:'.length),
             state,
           );
           continue;
         }
-        writeStateBinding(
-          element,
-          attribute.value,
-          attribute.name.slice('data-bind:'.length),
+        ws(
+          el,
+          attr.value,
+          attr.name.slice('data-bind:'.length),
           state,
         );
       }
     }
   };
-  const readDeps = (value) =>
-    (value ?? '')
+  const rd = (val) =>
+    (val ?? '')
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
       .filter(Boolean);
-  const readTargets = () => [
+  const rt = () => [
     ...new Set(
       [...doc.querySelectorAll('[fw-deps]')]
-        .map((element) => {
-          const deps = readDeps(element.getAttribute('fw-deps'));
+        .map((el) => {
+          const deps = rd(el.getAttribute('fw-deps'));
           const target =
-            element.getAttribute('fw-fragment-target') ?? element.id ?? element.getAttribute('fw-c');
+            el.getAttribute('fw-fragment-target') ?? el.id ?? el.getAttribute('fw-c');
           return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
     )
   ];
-  const findFragmentTarget = (target) =>
+  const ft = (target) =>
     doc.querySelector('[fw-c="' + target + '"]') ??
     doc.getElementById(target) ??
     doc.querySelector('[fw-fragment-target="' + target + '"]');
-  for (const element of queryAll(
+  for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
   )) {
-    if (element.indeterminate !== undefined) element.indeterminate = true;
+    if (el.indeterminate !== undefined) el.indeterminate = true;
   }
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
-  const dispatchQueryEvent = (type, init) => {
+  const dq = (type, init) => {
     dispatchEvent(new CustomEvent(type, init));
   };
-  const applyResponseBody = (body) => {
+  const ab = (body) => {
     applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {
-      dispatchQueryEvent,
-      findFragmentTarget,
+      dispatchQueryEvent: dq,
+      findFragmentTarget: ft,
     });
   };
-  const fallbackSubmit = (form) => {
+  const fsb = (form) => {
     if (typeof form.submit === 'function') {
       form.submit();
       return;
@@ -218,30 +218,30 @@ function installInlineJisoLoader(importModule) {
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('fw-error', '');
   };
-  const hasAttribute = (form, name) => form.getAttribute?.(name) != null;
-  const isEnhancedForm = (form) =>
-    hasAttribute(form, 'enhance') ||
-    hasAttribute(form, 'data-enhance') ||
-    hasAttribute(form, 'data-mutation');
-  const submitEnhancedForm = (event, form) => {
+  const ha = (form, name) => form.getAttribute?.(name) != null;
+  const ief = (form) =>
+    ha(form, 'enhance') ||
+    ha(form, 'data-enhance') ||
+    ha(form, 'data-mutation');
+  const sef = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
       body: new FormData(form),
       headers: {
         Accept: 'text/vnd.jiso.fragment+html',
         'FW-Fragment': 'true',
-        'FW-Idem': createInlineIdem(),
-        'FW-Targets': readTargets().join('; '),
+        'FW-Idem': ci(),
+        'FW-Targets': rt().join('; '),
       },
       keepalive: true,
       method: (form.method || 'post').toUpperCase(),
     })
       .then((response) => response.text())
-      .then(applyResponseBody)
-      .catch(() => fallbackSubmit(form));
+      .then(ab)
+      .catch(() => fsb(form));
   };
-  const readParamTypes = (element) =>
-    (element.getAttribute('fw-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
+  const rp = (el) =>
+    (el.getAttribute('fw-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {
       const [name, type] = entry.split(':');
       if (name) types[name] = type;
       return types;
@@ -249,38 +249,38 @@ function installInlineJisoLoader(importModule) {
   const dispatch = async (event) => {
     if (event.type === 'submit') {
       const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]',);
-      if (form && isEnhancedForm(form)) {
-        submitEnhancedForm(event, form);
+      if (form && ief(form)) {
+        sef(event, form);
         return;
       }
     }
-    const element = event.target?.closest?.('[on\\:' + event.type + ']');
-    const refs = element?.getAttribute('on:' + event.type);
-    if (!element || !refs) return;
+    const el = event.target?.closest?.('[on\\:' + event.type + ']');
+    const refs = el?.getAttribute('on:' + event.type);
+    if (!el || !refs) return;
     const params = {};
-    const paramTypes = readParamTypes(element);
-    const state = readState(element);
-    const stateHost = readStateHost(element);
+    const pt = rp(el);
+    const state = rs(el);
+    const st = rh(el);
     const context = { params, state, signal: new AbortController().signal };
-    for (const attribute of element.attributes || []) {
-      if (!attribute.name.startsWith('data-p-')) continue;
-      const name = attribute.name
+    for (const attr of el.attributes || []) {
+      if (!attr.name.startsWith('data-p-')) continue;
+      const name = attr.name
         .slice('data-p-'.length)
         .replace(/-([a-z0-9])/g, (_match, char) => char.toUpperCase());
-      const type = paramTypes[name];
-      const value = attribute.value;
-      params[name] = type === 'number' ? Number(value) : type === 'boolean' ? value === 'true' : value;
+      const type = pt[name];
+      const val = attr.value;
+      params[name] = type === 'number' ? Number(val) : type === 'boolean' ? val === 'true' : val;
     }
     for (const ref of refs.split(/\s+/).filter(Boolean)) {
-      const hashIndex = ref.lastIndexOf('#');
-      if (hashIndex <= 0 || hashIndex === ref.length - 1) throw Error('Invalid handler reference: ' + ref);
-      const mod = await importModule(ref.slice(0, hashIndex));
-      const fn = mod[ref.slice(hashIndex + 1)];
+      const hi = ref.lastIndexOf('#');
+      if (hi <= 0 || hi === ref.length - 1) throw Error('Invalid handler reference: ' + ref);
+      const mod = await im(ref.slice(0, hi));
+      const fn = mod[ref.slice(hi + 1)];
       if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
       await fn(event, context);
     }
-    stateHost?.setAttribute?.('fw-state', JSON.stringify(state));
-    if (stateHost) await applyStateBindings(stateHost, state);
+    st?.setAttribute?.('fw-state', JSON.stringify(state));
+    if (st) await as(st, state);
   };
   const trigger = (type, target) => {
     void dispatch({ target, type });
@@ -293,18 +293,18 @@ function installInlineJisoLoader(importModule) {
     addEventListener(
       overType,
       (event) => {
-        const element = event.target?.closest?.('[on\\:' + enterType + ']');
-        if (!element || element.contains?.(event.relatedTarget)) return;
-        void dispatch({ relatedTarget: event.relatedTarget, target: element, type: enterType });
+        const el = event.target?.closest?.('[on\\:' + enterType + ']');
+        if (!el || el.contains?.(event.relatedTarget)) return;
+        void dispatch({ relatedTarget: event.relatedTarget, target: el, type: enterType });
       },
       { capture: true },
     );
   crossing('pointerover', 'pointerenter');
   crossing('pointerout', 'pointerleave');
-  doc.querySelectorAll('[on\\:load]').forEach((element) => trigger('load', element));
+  doc.querySelectorAll('[on\\:load]').forEach((el) => trigger('load', el));
   doc
     .querySelectorAll('[on\\:idle]')
-    .forEach((element) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', element)),);
+    .forEach((el) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),);
   if (globalThis.IntersectionObserver) {
     const observer = new IntersectionObserver((entries) =>
       entries.forEach((entry) => {
@@ -313,7 +313,7 @@ function installInlineJisoLoader(importModule) {
         trigger('visible', entry.target);
       }),
     );
-    doc.querySelectorAll('[on\\:visible]').forEach((element) => observer.observe(element));
+    doc.querySelectorAll('[on\\:visible]').forEach((el) => observer.observe(el));
   }
 }
 `;
@@ -323,7 +323,11 @@ export function buildInlineJisoLoaderInstallerSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
   assertDefaultInlineJisoLoaderInstallerHelperParity(source);
-  const installerSource = minifyInlineJavaScriptSource(source);
+  const installerInput =
+    source === inlineJisoLoaderInstallerReadableSource
+      ? compactInlineJisoLoaderInstallerLocalNames(source)
+      : source;
+  const installerSource = minifyInlineJavaScriptSource(installerInput);
   assertDefaultMinifiedInlineJisoLoaderInstallerHelperParity(source, installerSource);
   return installerSource;
 }
@@ -565,12 +569,60 @@ function assertMinifiedInlineJisoLoaderInstallerHelperParity(
   installerSource: string,
   helperSource: string,
 ): void {
-  assertInlineJisoLoaderInstallerHelperContains(
-    installerSource,
-    minifyInlineJavaScriptSource(extractInlineHelperReadableSourceForSpec(spec, helperSource)),
-    spec.minifiedParityLabel,
-    'minified',
+  const expectedSource = extractInlineHelperReadableSourceForSpec(spec, helperSource);
+  const expected = minifyInlineJavaScriptSource(expectedSource);
+  const compactExpected = minifyInlineJavaScriptSource(
+    compactInlineJisoLoaderInstallerLocalNames(expectedSource),
   );
+
+  if (
+    countSubstring(installerSource, expected) === 1 ||
+    countSubstring(installerSource, compactExpected) === 1
+  ) {
+    return;
+  }
+
+  throw new Error(
+    `Inline Jiso loader minified source must embed the ${spec.minifiedParityLabel} exactly once; found 0.`,
+  );
+}
+
+function compactInlineJisoLoaderInstallerLocalNames(source: string): string {
+  // SPEC.md §4.4: the generated bootstrap has a hard 4KB gzip ceiling. Keep
+  // source modules readable, then compact only closure-local helper names before
+  // the parse-checked minifier runs.
+  const replacements = new Map([
+    ['readMutationResponseBodyCore', 'rb'],
+    ['readMutationResponseElementChunks', 'rc'],
+    ['readFragmentChunksFromElements', 'rfs'],
+    ['readFragmentElementChunk', 'rf'],
+    ['readElementChunks', 're'],
+    ['matchingElementEnd', 'me'],
+    ['escapeRegExp', 'er'],
+    ['readAttribute', 'ra'],
+    ['unescapeHtml', 'uh'],
+    ['tagClose', 'tc'],
+    ['openingEnd', 'oe'],
+    ['closingTag', 'ct'],
+    ['elementTag', 'et'],
+    ['closeStart', 'cs'],
+    ['queryOptions', 'qo'],
+    ['fragmentOptions', 'fo'],
+    ['onMalformedQuery', 'oq'],
+    ['onMalformedFragment', 'of'],
+    ['onMalformed', 'om'],
+    ['element', 'el'],
+    ['current', 'cur'],
+    ['segment', 'seg'],
+    ['attribute', 'attr'],
+  ]);
+  let compacted = source;
+
+  for (const [from, to] of replacements) {
+    compacted = compacted.replaceAll(new RegExp(`\\b${from}\\b`, 'g'), to);
+  }
+
+  return compacted;
 }
 
 function assertInlineJisoLoaderInstallerHelperContains(

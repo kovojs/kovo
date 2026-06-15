@@ -20,7 +20,7 @@ describe('inline loader minified artifact', () => {
     expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
     expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
     expect(jisoLoaderSource).toMatch(
-      /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
+      /^\(function installInlineJisoLoader\(\w+\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
     );
   });
 
@@ -40,10 +40,10 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      "element.getAttribute('fw-fragment-target')??element.id??element.getAttribute('fw-c')",
+      "el.getAttribute('fw-fragment-target')??el.id??el.getAttribute('fw-c')",
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      "const findFragmentTarget=(target)=>doc.querySelector('[fw-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[fw-fragment-target=\"'+target+'\"]');",
+      "const ft=(target)=>doc.querySelector('[fw-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[fw-fragment-target=\"'+target+'\"]');",
     );
     expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
     expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
@@ -64,20 +64,21 @@ describe('inline loader minified artifact', () => {
       'function applyInlineMutationResponseBody(',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'const dispatchQueryEvent=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
+      'const dq=(type,init)=>{dispatchEvent(new CustomEvent(type,init));};',
     );
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueryEvent,findFragmentTarget,});',
+      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueryEvent:dq,findFragmentTarget:ft,});',
     );
+    expect(inlineJisoLoaderInstallerSource).toContain('function m(c,n)');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'function applyResponseFragments(fragments,options){const applied=[];for(const fragment of fragments)',
+      'return p(chunks.fragments,(target)=>options.findFragmentTarget(target))',
     );
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'return applyHtmlResponseFragments(chunks.fragments,(target)=>options.findFragmentTarget(target))',
-    );
+    expect(inlineJisoLoaderInstallerSource).toContain('function p(fs,f)');
+    expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-key')");
+    expect(inlineJisoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      'detail:{queries:queries.map((query)=>({attrs:query.attrs,content:query.content})),}',
+      'detail:{queries:chunks.queries.map((query)=>({attrs:query.attrs,content:query.content})),}',
     );
   });
 });

@@ -1410,12 +1410,90 @@ export async function executeInlineEnhancedFormLoaderFixture(
 ): Promise<InlineEnhancedFormLoaderFact> {
   const listeners = new Map<string, InlineEnhancedFormListenerFact>();
   const dispatched: InlineEnhancedFormEventFact[] = [];
-  const fragmentTarget = { innerHTML: '' };
-  const appendCalls: Array<[string, string]> = [];
-  const appendTarget = {
-    insertAdjacentHTML(position: string, html: string) {
+  class InlineFixtureText {
+    readonly text: string;
+
+    constructor(text: string) {
+      this.text = text;
+    }
+
+    get outerHTML(): string {
+      return this.text;
+    }
+
+    cloneNode(): InlineFixtureText {
+      return new InlineFixtureText(this.text);
+    }
+  }
+
+  class InlineFixtureElement {
+    readonly attributes: Array<{ name: string; value: string }> = [];
+    childNodes: Array<InlineFixtureElement | InlineFixtureText> = [];
+    children: InlineFixtureElement[] = [];
+    innerHTML = '';
+    isConnected = true;
+    private readonly tag: string;
+    readonly tagName: string;
+
+    constructor(tagName = 'DIV', tag = tagName.toLowerCase()) {
+      this.tagName = tagName;
+      this.tag = tag;
+    }
+
+    get outerHTML(): string {
+      return `<${this.tag}>${this.innerHTML}</${this.tag}>`;
+    }
+
+    cloneNode(): InlineFixtureElement {
+      const clone = new InlineFixtureElement(this.tagName, this.tag);
+      clone.replaceChildren(...this.childNodes.map((node) => node.cloneNode()));
+      return clone;
+    }
+
+    contains(): boolean {
+      return false;
+    }
+
+    getAttribute(): string | null {
+      return null;
+    }
+
+    hasAttribute(): boolean {
+      return false;
+    }
+
+    insertAdjacentHTML(position: string, html: string): void {
       appendCalls.push([position, html]);
-    },
+    }
+
+    querySelectorAll(): InlineFixtureElement[] {
+      return [];
+    }
+
+    removeAttribute(): void {}
+
+    replaceChildren(...nodes: Array<InlineFixtureElement | InlineFixtureText>): void {
+      this.childNodes = nodes;
+      this.children = nodes.filter((node): node is InlineFixtureElement => node instanceof InlineFixtureElement);
+      this.innerHTML = nodes.map((node) => node.outerHTML).join('');
+    }
+
+    replaceWith(node: InlineFixtureElement): void {
+      this.innerHTML = node.outerHTML;
+    }
+
+    setAttribute(): void {}
+  }
+
+  const appendCalls: Array<[string, string]> = [];
+  const fragmentTarget = new InlineFixtureElement();
+  const appendTarget = new InlineFixtureElement();
+  const readTemplateElement = (html: string): InlineFixtureElement | undefined => {
+    const match = /^<([a-z][\w:-]*)(?:\s[^>]*)?>([\s\S]*)<\/\1>$/i.exec(html.trim());
+    if (!match) return undefined;
+    const element = new InlineFixtureElement(match[1]?.toUpperCase() ?? 'DIV', match[1] ?? 'div');
+    element.replaceChildren(new InlineFixtureText(match[2] ?? ''));
+    return element;
   };
   const formData = { kind: 'form-data' };
   const fetchCalls: InlineEnhancedFormLoaderFact['fetchCalls'] = [];
@@ -1480,6 +1558,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
         };
       }
     },
+    Element: InlineFixtureElement,
     FormData: class FormData {
       constructor() {
         return formData;
@@ -1512,6 +1591,17 @@ export async function executeInlineEnhancedFormLoaderFixture(
       return true;
     },
     document: {
+      activeElement: null,
+      createElement(tag: string) {
+        if (tag !== 'template') return new InlineFixtureElement(tag.toUpperCase(), tag);
+        return {
+          content: { children: [] as InlineFixtureElement[] },
+          set innerHTML(html: string) {
+            const element = readTemplateElement(html);
+            this.content.children = element ? [element] : [];
+          },
+        };
+      },
       getElementById(id: string) {
         return id === 'cart-badge' ? fragmentTarget : null;
       },
