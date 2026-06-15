@@ -16,11 +16,11 @@ jobs:
           node-version: 24
       - run: vp install
       - run: vp check
+      - run: vp run build
       - run: vp exec pnpm --filter @jiso/site run build
       - run: vp exec playwright install --with-deps chromium
       - run: vp test
       - run: vp run browser
-      - run: vp run build
       - run: vp run p10-perf
       - run: vp run conformance
       - run: vp run fw-check
