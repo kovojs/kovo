@@ -1,11 +1,16 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
+  selectContentAttributes,
+  selectHiddenInputAttributes,
+  selectItemClick as _selectItemClick,
   selectItemAttributes,
+  selectKeyDown as _selectKeyDown,
+  selectMove as _selectMove,
   selectRootAttributes,
+  selectTriggerClick as _selectTriggerClick,
   selectTriggerAttributes,
   selectValueAttributes,
-  selectValueText,
   type SelectItem,
 } from '@jiso/headless-ui/primitives';
 
@@ -16,31 +21,38 @@ import {
 const ROOT_CLASS =
   'grid gap-2 text-sm text-neutral-950 data-[disabled]:opacity-50 data-[invalid]:text-red-950';
 const TRIGGER_CLASS =
-  'h-9 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
-const ITEM_CLASS = 'text-neutral-950 data-[state=checked]:font-medium disabled:text-neutral-400';
+  'inline-flex h-9 w-full items-center justify-between rounded-md border border-neutral-300 bg-white px-3 text-left text-sm text-neutral-950 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 aria-[invalid=true]:border-red-400 data-[placeholder]:text-neutral-500';
+const CONTENT_CLASS =
+  'grid gap-1 rounded-md border border-neutral-200 bg-white p-1 text-sm text-neutral-950 shadow-sm data-[state=closed]:hidden';
+const ITEM_CLASS =
+  'cursor-default rounded px-2 py-1 text-neutral-950 data-[highlighted]:bg-neutral-100 data-[state=checked]:font-medium data-[disabled]:cursor-not-allowed data-[disabled]:text-neutral-400';
 const VALUE_CLASS = 'text-sm text-neutral-700 data-[placeholder]:text-neutral-500';
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GallerySelectDemoState {
+  highlightedValue: string;
+  open: boolean;
   value: string;
 }
 
 const shippingOptions: readonly SelectItem[] = Object.freeze([
-  { label: 'Standard', value: 'standard' },
-  { label: 'Express', value: 'express' },
-  { disabled: true, label: 'Drone', value: 'drone' },
+  { id: 'gallery-select-option-standard', label: 'Standard', value: 'standard' },
+  { id: 'gallery-select-option-express', label: 'Express', value: 'express' },
+  { disabled: true, id: 'gallery-select-option-drone', label: 'Drone', value: 'drone' },
 ]);
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GallerySelectDemo = component('gallery-select-demo', {
-  state: () => ({ value: 'standard' }),
+  state: () => ({ highlightedValue: 'standard', open: false, value: 'standard' }),
   render: (_queries: Record<string, never>, state: GallerySelectDemoState) => {
     const selectState = {
       form: 'gallery-select-form',
+      highlightedValue: state.highlightedValue,
       items: shippingOptions,
+      listboxId: 'gallery-select-listbox',
       name: 'gallery-shipping-speed',
-      open: false,
+      open: state.open,
       required: true,
       value: state.value,
     };
@@ -52,70 +64,204 @@ export const GallerySelectDemo = component('gallery-select-demo', {
         data-gallery-interactive="select"
       >
         <form id="gallery-select-form" data-gallery-form="select" />
-        <label id="gallery-select-label" for="gallery-select-control" class={LABEL_CLASS}>
+        <label id="gallery-select-label" for="gallery-select-trigger" class={LABEL_CLASS}>
           Shipping speed
         </label>
-        <select
+        <input
+          {...selectHiddenInputAttributes(selectState)}
+          id="gallery-select-control"
+          value={state.value}
+        />
+        <button
           {...selectTriggerAttributes({
             ...selectState,
-            id: 'gallery-select-control',
+            id: 'gallery-select-trigger',
             labelledBy: 'gallery-select-label',
           })}
-          id="gallery-select-control"
+          id="gallery-select-trigger"
           class={TRIGGER_CLASS}
-          onChange={() => {
-            const delegatedEvent = event;
-            const target =
-              delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'target');
-            const nextValue =
-              target === null || target === undefined
-                ? state.value
-                : String(Reflect['get'](Object(target), 'value'));
-            const doc = Reflect['get'](globalThis, 'document');
-            const select = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-select-control')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="select-value"]')
-              : undefined;
-
-            if (nextValue === 'drone' || nextValue === state.value) {
-              if (select) select['value'] = state.value;
-              if (delegatedEvent !== undefined) {
-                Reflect['apply'](
-                  Reflect['get'](delegatedEvent, 'preventDefault'),
-                  delegatedEvent,
-                  [],
-                );
-              }
+          aria-expanded={String(state.open)}
+          data-state={state.open ? 'open' : 'closed'}
+          onClick={() => {
+            const result = _selectTriggerClick(Object(event), {
+              highlightedValue: state.highlightedValue,
+              items: [
+                { label: 'Standard', value: 'standard' },
+                { label: 'Express', value: 'express' },
+                { disabled: true, label: 'Drone', value: 'drone' },
+              ],
+              open: state.open,
+              value: state.value,
+            });
+            if (!result?.changed) return;
+            state.open = result.open;
+            state.highlightedValue = state.value;
+          }}
+          onKeyDown={() => {
+            const keyResult = _selectKeyDown(Object(event), {
+              highlightedValue: state.highlightedValue,
+              items: [
+                { label: 'Standard', value: 'standard' },
+                { label: 'Express', value: 'express' },
+                { disabled: true, label: 'Drone', value: 'drone' },
+              ],
+              open: state.open,
+              value: state.value,
+            });
+            if (!keyResult) return;
+            if ('open' in keyResult && typeof keyResult.open === 'object') {
+              state.value = keyResult.value.value ?? state.value;
+              state.highlightedValue = keyResult.value.value ?? state.highlightedValue;
+              state.open = keyResult.open.open;
               return;
             }
-
-            state.value = nextValue === 'express' ? 'express' : 'standard';
-            if (select) select['value'] = state.value;
-            if (output) output['textContent'] = state.value === 'express' ? 'Express' : 'Standard';
+            if ('open' in keyResult) {
+              state.open = keyResult.open;
+              if (keyResult.open) state.highlightedValue = state.value;
+              return;
+            }
+            if ('highlightedValue' in keyResult) {
+              state.highlightedValue = keyResult.highlightedValue ?? state.highlightedValue;
+              return;
+            }
+            if ('matchIndex' in keyResult) {
+              state.highlightedValue = keyResult.value ?? state.highlightedValue;
+              return;
+            }
           }}
         >
-          {shippingOptions.map((item) => (
-            <option
-              {...selectItemAttributes({
-                ...selectState,
-                itemDisabled: item.disabled === true,
-                itemLabel: item.label ?? item.value,
-                itemValue: item.value,
-              })}
-              class={ITEM_CLASS}
-            >
-              {item.label ?? item.value}
-            </option>
-          ))}
-        </select>
+          <span>{state.value === 'express' ? 'Express' : 'Standard'}</span>
+        </button>
+        <div
+          {...selectContentAttributes({
+            ...selectState,
+            id: 'gallery-select-listbox',
+            labelledBy: 'gallery-select-label',
+          })}
+          class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          hidden={!state.open}
+          onKeyDown={() => {
+            const move = _selectMove(
+              {
+                highlightedValue: state.highlightedValue,
+                items: [
+                  { label: 'Standard', value: 'standard' },
+                  { label: 'Express', value: 'express' },
+                  { disabled: true, label: 'Drone', value: 'drone' },
+                ],
+                open: state.open,
+                value: state.value,
+              },
+              Object(event).key,
+              { loop: true },
+            );
+            if (!move) return;
+            state.highlightedValue = move.highlightedValue ?? state.highlightedValue;
+          }}
+        >
+          <div
+            {...selectItemAttributes({
+              ...selectState,
+              id: 'gallery-select-option-standard',
+              itemLabel: 'Standard',
+              itemValue: 'standard',
+            })}
+            class={ITEM_CLASS}
+            aria-selected={state.value === 'standard' ? 'true' : 'false'}
+            data-highlighted={state.highlightedValue === 'standard' ? '' : null}
+            data-state={state.value === 'standard' ? 'checked' : 'unchecked'}
+            onClick={() => {
+              const result = _selectItemClick(Object(event), {
+                highlightedValue: state.highlightedValue,
+                items: [
+                  { label: 'Standard', value: 'standard' },
+                  { label: 'Express', value: 'express' },
+                  { disabled: true, label: 'Drone', value: 'drone' },
+                ],
+                open: state.open,
+                itemValue: 'standard',
+                value: state.value,
+              });
+              if (!result?.value.changed) return;
+              state.value = result.value.value ?? state.value;
+              state.highlightedValue = result.value.value ?? state.highlightedValue;
+              state.open = result.open.open;
+            }}
+          >
+            Standard
+          </div>
+          <div
+            {...selectItemAttributes({
+              ...selectState,
+              id: 'gallery-select-option-express',
+              itemLabel: 'Express',
+              itemValue: 'express',
+            })}
+            class={ITEM_CLASS}
+            aria-selected={state.value === 'express' ? 'true' : 'false'}
+            data-highlighted={state.highlightedValue === 'express' ? '' : null}
+            data-state={state.value === 'express' ? 'checked' : 'unchecked'}
+            onClick={() => {
+              const result = _selectItemClick(Object(event), {
+                highlightedValue: state.highlightedValue,
+                items: [
+                  { label: 'Standard', value: 'standard' },
+                  { label: 'Express', value: 'express' },
+                  { disabled: true, label: 'Drone', value: 'drone' },
+                ],
+                open: state.open,
+                itemValue: 'express',
+                value: state.value,
+              });
+              if (!result?.value.changed) return;
+              state.value = result.value.value ?? state.value;
+              state.highlightedValue = result.value.value ?? state.highlightedValue;
+              state.open = result.open.open;
+            }}
+          >
+            Express
+          </div>
+          <div
+            {...selectItemAttributes({
+              ...selectState,
+              id: 'gallery-select-option-drone',
+              itemDisabled: true,
+              itemLabel: 'Drone',
+              itemValue: 'drone',
+            })}
+            class={ITEM_CLASS}
+            aria-selected={state.value === 'drone' ? 'true' : 'false'}
+            data-highlighted={state.highlightedValue === 'drone' ? '' : null}
+            data-state={state.value === 'drone' ? 'checked' : 'unchecked'}
+            onClick={() => {
+              const result = _selectItemClick(Object(event), {
+                highlightedValue: state.highlightedValue,
+                items: [
+                  { label: 'Standard', value: 'standard' },
+                  { label: 'Express', value: 'express' },
+                  { disabled: true, label: 'Drone', value: 'drone' },
+                ],
+                open: state.open,
+                itemDisabled: true,
+                itemValue: 'drone',
+                value: state.value,
+              });
+              if (!result?.value.changed) return;
+              state.value = result.value.value ?? state.value;
+              state.highlightedValue = result.value.value ?? state.highlightedValue;
+              state.open = result.open.open;
+            }}
+          >
+            Drone
+          </div>
+        </div>
         <output
           {...selectValueAttributes(selectState)}
           class={VALUE_CLASS}
           data-demo-state="select-value"
         >
-          {selectValueText(selectState)}
+          {state.value === 'express' ? 'Express' : 'Standard'}
         </output>
       </section>
     );

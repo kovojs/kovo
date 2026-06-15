@@ -481,12 +481,21 @@ describe('compiled interactive gallery demos', () => {
     expect(select).toContain('data-gallery-interactive="select"');
     expect(select).toContain('id="gallery-select-form" data-gallery-form="select"');
     expect(select).toContain("form: 'gallery-select-form'");
-    expect(select).toContain('fw-state=\'{"value":"standard"}\'');
+    expect(select).toContain(
+      'fw-state=\'{"highlightedValue":"standard","open":false,"value":"standard"}\'',
+    );
+    expect(select).toContain('selectHiddenInputAttributes(selectState)');
     expect(select).toContain('selectTriggerAttributes({');
     expect(select).toContain('selectItemAttributes({');
     expect(select).toMatch(
-      /on:change="\/c\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js\?v=[0-9a-f]{8}#GallerySelectDemo\$select_change"/,
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js\?v=[0-9a-f]{8}#GallerySelectDemo\$button_click"/,
     );
+    expect(select).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js\?v=[0-9a-f]{8}#GallerySelectDemo\$button_keydown"/,
+    );
+    expect(select).toContain('selectContentAttributes({');
+    expect(select).toContain('selectItemClick as _selectItemClick');
+    expect(select).toContain('data-bind:aria-selected=');
 
     expect(sheet).toContain('data-gallery-interactive="sheet"');
     expect(sheet).toContain('data-side="right"');

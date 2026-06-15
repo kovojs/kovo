@@ -225,7 +225,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       };
     });
 
-    expect(cases).toHaveLength(135);
+    expect(cases).toHaveLength(136);
     expect(cases.some((testCase) => testCase.diagnostics > 0)).toBe(true);
     expect(cases.filter((testCase) => testCase.attrCount > 1).length).toBeGreaterThan(100);
     expect(
@@ -747,13 +747,18 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "scrollAreaViewportAttributes",
         },
         {
-          "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="selectContentAttributes" data-state="open" data-invalid="author-selectContentAttributes" data-required="author-selectContentAttributes" id="author-selectContentAttributes" aria-labelledby="author-aria-labelledby" class="primitive-selectContentAttributes author-selectContentAttributes">merged</div>",
+          "diagnostics": 3,
+          "html": "<div data-gallery-merge-builder="selectContentAttributes" data-state="open" data-invalid="author-selectContentAttributes" data-required="author-selectContentAttributes" role="presentation" id="author-selectContentAttributes" aria-labelledby="author-aria-labelledby" class="primitive-selectContentAttributes author-selectContentAttributes">merged</div>",
           "name": "selectContentAttributes",
         },
         {
-          "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="selectItemAttributes" data-state="checked" selected value="author-selectItemAttributes" label="author-selectItemAttributes" class="primitive-selectItemAttributes author-selectItemAttributes">merged</div>",
+          "diagnostics": 0,
+          "html": "<div data-gallery-merge-builder="selectHiddenInputAttributes" disabled name="author-selectHiddenInputAttributes" type="author-selectHiddenInputAttributes" value="author-selectHiddenInputAttributes" class="primitive-selectHiddenInputAttributes author-selectHiddenInputAttributes">merged</div>",
+          "name": "selectHiddenInputAttributes",
+        },
+        {
+          "diagnostics": 3,
+          "html": "<div data-gallery-merge-builder="selectItemAttributes" data-state="checked" data-highlighted="author-selectItemAttributes" aria-selected="false" role="presentation" id="author-selectItemAttributes" value="author-selectItemAttributes" label="author-selectItemAttributes" class="primitive-selectItemAttributes author-selectItemAttributes">merged</div>",
           "name": "selectItemAttributes",
         },
         {
@@ -762,8 +767,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "selectRootAttributes",
         },
         {
-          "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="false" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" name="author-selectTriggerAttributes" required class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
+          "diagnostics": 5,
+          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="false" aria-haspopup="author-aria" type="author-selectTriggerAttributes" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
           "name": "selectTriggerAttributes",
         },
         {

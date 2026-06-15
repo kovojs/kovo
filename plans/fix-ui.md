@@ -319,13 +319,33 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
         `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`
         and
         `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t command`.
-- [ ] **select** [P1]: demo is a **native `<select>`** (and the primitive itself targets a native
+- [x] **select** [P1]: demo is a **native `<select>`** (and the primitive itself targets a native
       `<select>`/`<optgroup>`), not the shadcn button+`role=listbox` popup. Even as native, the
       `onChange` hardcodes three outcomes and collapses anything but `'express'` to `'standard'`.
       **Decision (locked 2026-06-14): build the custom listbox** — re-author as a button trigger
       (`aria-haspopup=listbox`) + `role=listbox` popup of `role=option` items, backed by a new
       `select.ts` primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` machinery for
       keyboard + typeahead + highlight). See Phase 4 `select.ts`.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/select.ts` now exposes custom select
+    button/listbox/option attributes, `selectHiddenInputAttributes`, `setSelectOpen`,
+    `selectTriggerClick`, `selectItemClick`, `selectKeyDown`, `selectMove`, `selectTypeahead`, and
+    `selectOption`, while keeping `selectTriggerChange` for legacy native callers.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/select-demo.tsx` now renders a button
+    trigger, hidden submitted input, `role=listbox` popup, and `role=option` items. Generated
+    `select-demo.client.js` imports the custom select reducers, mutates only `ctx.state`, and has no
+    `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches or captured
+    `shippingOptions`.
+  - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/select.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec
+    vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t select`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/merge-fixtures.forms.test.tsx
+    src/merge-fixtures.idref-oracle.test.tsx`, `pnpm --filter @jiso/headless-ui exec tsc
+    --noEmit`, `pnpm --filter @jiso/ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery
+    exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
+    @jiso/example-gallery exec tsc --noEmit` passed.
 
 ### Selection controls
 
@@ -835,8 +855,11 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     keyboard, track-click, thumb-drag, large-step, and hidden-input helpers; verified by
     `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/slider.test.ts` and
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
-- [ ] `select.ts`: custom button-trigger (`aria-haspopup=listbox`) + `role=listbox`/`role=option` popup
+- [x] `select.ts`: custom button-trigger (`aria-haspopup=listbox`) + `role=listbox`/`role=option` popup
       primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` for keyboard + highlight).
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/select.ts` exports the custom listbox
+    attrs and reducers; verified by `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/select.test.ts` and `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
 - [x] `scroll-area.ts`: thumb-geometry helper + `data-has-overflow-*`/`data-scrolling`/`data-hovering` +
       thumb-drag/track-click handlers.
   - Evidence 2026-06-15: `packages/headless-ui/src/primitives/scroll-area.ts` exports

@@ -179,79 +179,97 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('updates native select value and display text through a generated change handler', async () => {
+  it('updates custom select listbox state and submitted value through generated handlers', async () => {
     const root = mountInteractiveDemo(GallerySelectDemo);
-    const select = required(root.querySelector<HTMLSelectElement>('#gallery-select-control'));
+    const input = required(root.querySelector<HTMLInputElement>('#gallery-select-control'));
+    const trigger = required(root.querySelector<HTMLButtonElement>('#gallery-select-trigger'));
+    const listbox = required(root.querySelector<HTMLElement>('#gallery-select-listbox'));
+    const standard = required(root.querySelector<HTMLElement>('#gallery-select-option-standard'));
+    const express = required(root.querySelector<HTMLElement>('#gallery-select-option-express'));
+    const drone = required(root.querySelector<HTMLElement>('#gallery-select-option-drone'));
     const form = required(root.querySelector<HTMLFormElement>('#gallery-select-form'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
     );
-    const disabled = required(select.querySelector<HTMLOptionElement>('option[value="drone"]'));
-    const standard = required(select.querySelector<HTMLOptionElement>('option[value="standard"]'));
-    const express = required(select.querySelector<HTMLOptionElement>('option[value="express"]'));
-    const { imports } = installGeneratedGalleryLoader(root, { events: ['change'] });
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe('{"value":"standard"}');
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"highlightedValue":"standard","open":false,"value":"standard"}',
+    );
     expect(form.dataset.galleryForm).toBe('select');
-    expect(select.name).toBe('gallery-shipping-speed');
-    expect(select.form).toBe(form);
-    expect(select.required).toBe(true);
-    expect(select.disabled).toBe(false);
-    expect(select.hasAttribute('disabled')).toBe(false);
-    expect(select.value).toBe('standard');
-    expect(select.getAttribute('aria-labelledby')).toBe('gallery-select-label');
-    expect(standard.selected).toBe(true);
-    expect(standard.hasAttribute('selected')).toBe(true);
-    expect(express.selected).toBe(false);
-    expect(express.hasAttribute('selected')).toBe(false);
-    expect(disabled.disabled).toBe(true);
+    expect(input.type).toBe('hidden');
+    expect(input.name).toBe('gallery-shipping-speed');
+    expect(input.form).toBe(form);
+    expect(input.value).toBe('standard');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.getAttribute('aria-controls')).toBe('gallery-select-listbox');
+    expect(listbox.getAttribute('role')).toBe('listbox');
+    expect(listbox.hidden).toBe(true);
+    expect(standard.getAttribute('role')).toBe('option');
+    expect(standard.getAttribute('aria-selected')).toBe('true');
+    expect(express.getAttribute('aria-selected')).toBe('false');
+    expect(drone.getAttribute('aria-disabled')).toBe('true');
     expect(output.textContent).toBe('Standard');
     expect(new FormData(form).get('gallery-shipping-speed')).toBe('standard');
 
-    select.value = 'express';
-    select.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    trigger.click();
 
     await vi.waitFor(() => {
-      const currentSelect = required(
-        root.querySelector<HTMLSelectElement>('#gallery-select-control'),
-      );
-      const currentOutput = required(
-        root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
-      );
-
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/select-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
-      expect(currentSelect.value).toBe('express');
-      expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
-      expect(currentOutput.textContent).toBe('Express');
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"standard","open":true,"value":"standard"}',
+      );
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(listbox.hidden).toBe(false);
+      expect(standard.getAttribute('data-highlighted')).toBe('');
     });
 
-    const currentSelect = required(
-      root.querySelector<HTMLSelectElement>('#gallery-select-control'),
-    );
-    currentSelect.value = 'drone';
-    const disabledChange = new Event('change', { bubbles: true, cancelable: true });
-    currentSelect.dispatchEvent(disabledChange);
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 
     await vi.waitFor(() => {
-      const restoredSelect = required(
-        root.querySelector<HTMLSelectElement>('#gallery-select-control'),
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"express","open":true,"value":"standard"}',
       );
-      const currentOutput = required(
-        root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
-      );
-
-      expect(disabledChange.defaultPrevented).toBe(true);
-      expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
-      expect(restoredSelect.value).toBe('express');
-      expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
-      expect(currentOutput.textContent).toBe('Express');
+      expect(express.getAttribute('data-highlighted')).toBe('');
     });
 
-    // SPEC §12.1: the select end-state after a canceled disabled change (labelled
-    // native select with grouped/disabled options) must stay axe-clean.
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"express","open":false,"value":"express"}',
+      );
+      expect(input.value).toBe('express');
+      expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(express.getAttribute('aria-selected')).toBe('true');
+      expect(output.textContent).toBe('Express');
+    });
+
+    trigger.click();
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"express","open":true,"value":"express"}',
+      );
+    });
+    const disabledClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    drone.dispatchEvent(disabledClick);
+
+    await vi.waitFor(() => {
+      expect(disabledClick.defaultPrevented).toBe(true);
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"express","open":true,"value":"express"}',
+      );
+      expect(input.value).toBe('express');
+      expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
+      expect(output.textContent).toBe('Express');
+    });
+
+    // SPEC §12.1: the select end-state after keyboard selection and a canceled
+    // disabled option click must stay axe-clean.
     await expectNoAxeViolations(root);
   });
 

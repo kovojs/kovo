@@ -814,20 +814,37 @@ describe('compiled interactive gallery demos', () => {
     expect(scrollAreaState.dragging).toBe(false);
     expect(scrollAreaState.scrolling).toBe(false);
 
-    const selectState = { value: 'standard' };
-    clientHandler(select, 'GallerySelectDemo$select_change')(changeEvent('express'), {
+    const selectState = { highlightedValue: 'standard', open: false, value: 'standard' };
+    clientHandler(select, 'GallerySelectDemo$button_click')(new Event('click', { cancelable: true }), {
       params: {},
       signal,
       state: selectState,
     });
-    expect(selectState).toEqual({ value: 'express' });
-    const disabledSelectEvent = changeEvent('drone');
-    clientHandler(select, 'GallerySelectDemo$select_change')(disabledSelectEvent, {
+    expect(selectState).toEqual({ highlightedValue: 'standard', open: true, value: 'standard' });
+    const selectArrowDown = keyEvent('ArrowDown');
+    clientHandler(select, 'GallerySelectDemo$button_keydown')(selectArrowDown, {
       params: {},
       signal,
       state: selectState,
     });
-    expect(selectState).toEqual({ value: 'express' });
+    expect(selectArrowDown.defaultPrevented).toBe(true);
+    expect(selectState).toEqual({ highlightedValue: 'express', open: true, value: 'standard' });
+    const selectEnter = keyEvent('Enter');
+    clientHandler(select, 'GallerySelectDemo$button_keydown')(selectEnter, {
+      params: {},
+      signal,
+      state: selectState,
+    });
+    expect(selectEnter.defaultPrevented).toBe(true);
+    expect(selectState).toEqual({ highlightedValue: 'express', open: false, value: 'express' });
+    selectState.open = true;
+    const disabledSelectEvent = new Event('click', { cancelable: true });
+    clientHandler(select, 'GallerySelectDemo$div_click_3')(disabledSelectEvent, {
+      params: {},
+      signal,
+      state: selectState,
+    });
+    expect(selectState).toEqual({ highlightedValue: 'express', open: true, value: 'express' });
     expect(disabledSelectEvent.defaultPrevented).toBe(true);
 
     const sliderState = {

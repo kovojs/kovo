@@ -137,6 +137,7 @@ export const primitiveAttributeBuilderNames = [
   'scrollAreaThumbAttributes',
   'scrollAreaViewportAttributes',
   'selectContentAttributes',
+  'selectHiddenInputAttributes',
   'selectItemAttributes',
   'selectRootAttributes',
   'selectTriggerAttributes',

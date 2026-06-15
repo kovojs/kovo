@@ -2,24 +2,40 @@ import { describe, expect, it } from 'vitest';
 
 import {
   selectContentAttributes as exportedSelectContentAttributes,
+  selectHiddenInputAttributes as exportedSelectHiddenInputAttributes,
+  selectItemClick as exportedSelectItemClick,
   selectItemAttributes as exportedSelectItemAttributes,
   selectItemSelected as exportedSelectItemSelected,
+  selectKeyDown as exportedSelectKeyDown,
+  selectMove as exportedSelectMove,
+  selectOption as exportedSelectOption,
   selectRootAttributes as exportedSelectRootAttributes,
+  selectTriggerClick as exportedSelectTriggerClick,
   selectTriggerAttributes as exportedSelectTriggerAttributes,
   selectTriggerChange as exportedSelectTriggerChange,
+  selectTypeahead as exportedSelectTypeahead,
   selectValueAttributes as exportedSelectValueAttributes,
   selectValueText as exportedSelectValueText,
+  setSelectOpen as exportedSetSelectOpen,
   setSelectValue as exportedSetSelectValue,
 } from '../index.js';
 import {
   selectContentAttributes,
+  selectHiddenInputAttributes,
+  selectItemClick,
   selectItemAttributes,
   selectItemSelected,
+  selectKeyDown,
+  selectMove,
+  selectOption,
   selectRootAttributes,
+  selectTriggerClick,
   selectTriggerAttributes,
   selectTriggerChange,
+  selectTypeahead,
   selectValueAttributes,
   selectValueText,
+  setSelectOpen,
   setSelectValue,
   type SelectItem,
 } from './select.js';
@@ -32,7 +48,7 @@ const colorItems: readonly SelectItem[] = Object.freeze([
 ]);
 
 describe('headless-ui select primitive', () => {
-  it('builds root and trigger attributes around a native select control', () => {
+  it('builds root and button trigger attributes for a custom listbox control', () => {
     expect(
       selectRootAttributes({
         id: 'color-root',
@@ -54,33 +70,47 @@ describe('headless-ui select primitive', () => {
         descriptionId: 'color-help',
         errorId: 'color-error',
         form: 'checkout',
+        highlightedValue: 'blue',
         id: 'color',
         invalid: true,
+        items: colorItems,
         labelledBy: 'color-label',
+        listboxId: 'color-list',
         name: 'color',
+        open: true,
         required: true,
         value: 'red',
       }),
     ).toEqual({
+      'aria-controls': 'color-list',
       'aria-describedby': 'color-help color-error',
-      'aria-expanded': 'false',
+      'aria-expanded': 'true',
+      'aria-haspopup': 'listbox',
       'aria-invalid': 'true',
       'aria-labelledby': 'color-label',
       'data-invalid': '',
       'data-required': '',
-      'data-state': 'closed',
-      form: 'checkout',
+      'data-state': 'open',
       id: 'color',
-      name: 'color',
-      required: true,
+      type: 'button',
     });
 
     expect(selectTriggerAttributes({ disabled: true })).toEqual({
       'aria-expanded': 'false',
+      'aria-haspopup': 'listbox',
       'data-disabled': '',
       'data-placeholder': '',
       'data-state': 'closed',
       disabled: true,
+      type: 'button',
+    });
+
+    expect(selectHiddenInputAttributes({ form: 'checkout', name: 'color', value: 'red' })).toEqual({
+      disabled: false,
+      form: 'checkout',
+      name: 'color',
+      type: 'hidden',
+      value: 'red',
     });
   });
 
@@ -94,17 +124,24 @@ describe('headless-ui select primitive', () => {
     expect(selectContentAttributes({ ...state, id: 'color-list' })).toEqual({
       'data-state': 'open',
       id: 'color-list',
+      role: 'listbox',
     });
     expect(selectItemAttributes({ ...state, itemLabel: 'Red', itemValue: 'red' })).toEqual({
+      'aria-selected': 'true',
       'data-state': 'checked',
       label: 'Red',
-      selected: true,
+      role: 'option',
       value: 'red',
     });
-    expect(selectItemAttributes({ ...state, itemValue: 'green' })).toEqual({
+    expect(
+      selectItemAttributes({ ...state, highlightedValue: 'green', itemValue: 'green' }),
+    ).toEqual({
+      'aria-disabled': 'true',
+      'aria-selected': 'false',
       'data-disabled': '',
+      'data-highlighted': '',
       'data-state': 'unchecked',
-      disabled: true,
+      role: 'option',
       value: 'green',
     });
     expect(selectValueAttributes({ ...state, id: 'color-value' })).toEqual({
@@ -126,13 +163,17 @@ describe('headless-ui select primitive', () => {
   it('omits inactive native boolean attributes from select and option records', () => {
     expect(selectTriggerAttributes({ disabled: false, id: 'color' })).toEqual({
       'aria-expanded': 'false',
+      'aria-haspopup': 'listbox',
       'data-placeholder': '',
       'data-state': 'closed',
       id: 'color',
+      type: 'button',
     });
 
     expect(selectItemAttributes({ itemDisabled: false, itemValue: 'red', value: 'blue' })).toEqual({
+      'aria-selected': 'false',
       'data-state': 'unchecked',
+      role: 'option',
       value: 'red',
     });
   });
@@ -184,6 +225,76 @@ describe('headless-ui select primitive', () => {
       value: 'red',
     });
     expect(callCount).toBe(0);
+  });
+
+  it('opens, closes, and selects custom listbox options through reducers', () => {
+    expect(setSelectOpen({ open: false }, true, 'trigger-click')).toMatchObject({
+      changed: true,
+      open: true,
+    });
+    expect(selectTriggerClick(new Event('click', { cancelable: true }), { open: false }))
+      .toMatchObject({
+        changed: true,
+        open: true,
+      });
+    expect(selectOption({ items: colorItems, open: true, value: 'red' }, 'blue')).toMatchObject({
+      open: { changed: true, open: false },
+      value: { changed: true, value: 'blue' },
+    });
+
+    const disabledClick = new Event('click', { cancelable: true });
+    const disabledResult = selectItemClick(disabledClick, {
+      items: colorItems,
+      itemValue: 'green',
+      open: true,
+      value: 'red',
+    });
+    expect(disabledResult?.value).toEqual({ changed: false, value: 'red' });
+    expect(disabledClick.defaultPrevented).toBe(true);
+  });
+
+  it('moves highlight and handles keyboard activation/typeahead for the custom listbox', () => {
+    expect(
+      selectMove({ highlightedValue: 'red', items: colorItems, value: 'red' }, 'ArrowDown', {
+        loop: true,
+      }),
+    ).toEqual({ highlightedIndex: 2, highlightedValue: 'blue' });
+
+    const openEvent = selectKeyEvent('ArrowDown');
+    expect(selectKeyDown(openEvent, { items: colorItems, open: false, value: 'red' })).toMatchObject({
+      changed: true,
+      open: true,
+    });
+    expect(openEvent.defaultPrevented).toBe(true);
+
+    expect(
+      selectKeyDown(selectKeyEvent('ArrowDown'), {
+        highlightedValue: 'red',
+        items: colorItems,
+        open: true,
+        value: 'red',
+      }),
+    ).toEqual({ highlightedIndex: 2, highlightedValue: 'blue' });
+
+    expect(
+      selectKeyDown(selectKeyEvent('Enter'), {
+        highlightedValue: 'blue',
+        items: colorItems,
+        open: true,
+        value: 'red',
+      }),
+    ).toMatchObject({
+      open: { changed: true, open: false },
+      value: { changed: true, value: 'blue' },
+    });
+
+    expect(
+      selectTypeahead(
+        { highlightedValue: 'red', items: colorItems, value: 'red' },
+        'b',
+        { now: 1000 },
+      ),
+    ).toMatchObject({ matchIndex: 2, value: 'blue' });
   });
 
   it('guards the primitive change handler when author behavior prevented default', () => {
@@ -253,6 +364,7 @@ describe('headless-ui select primitive', () => {
   it('returns frozen attribute records and exposes selection helpers', () => {
     expect(Object.isFrozen(selectRootAttributes())).toBe(true);
     expect(Object.isFrozen(selectTriggerAttributes())).toBe(true);
+    expect(Object.isFrozen(selectHiddenInputAttributes())).toBe(true);
     expect(Object.isFrozen(selectItemAttributes({ itemValue: 'red' }))).toBe(true);
     expect(selectItemSelected({ itemValue: 'red', value: 'red' })).toBe(true);
   });
@@ -260,13 +372,21 @@ describe('headless-ui select primitive', () => {
   it('is exported through the package root', () => {
     expect(exportedSelectRootAttributes).toBe(selectRootAttributes);
     expect(exportedSelectTriggerAttributes).toBe(selectTriggerAttributes);
+    expect(exportedSelectHiddenInputAttributes).toBe(selectHiddenInputAttributes);
     expect(exportedSelectContentAttributes).toBe(selectContentAttributes);
     expect(exportedSelectItemAttributes).toBe(selectItemAttributes);
     expect(exportedSelectValueAttributes).toBe(selectValueAttributes);
     expect(exportedSelectValueText).toBe(selectValueText);
     expect(exportedSelectItemSelected).toBe(selectItemSelected);
     expect(exportedSetSelectValue).toBe(setSelectValue);
+    expect(exportedSetSelectOpen).toBe(setSelectOpen);
     expect(exportedSelectTriggerChange).toBe(selectTriggerChange);
+    expect(exportedSelectTriggerClick).toBe(selectTriggerClick);
+    expect(exportedSelectItemClick).toBe(selectItemClick);
+    expect(exportedSelectKeyDown).toBe(selectKeyDown);
+    expect(exportedSelectMove).toBe(selectMove);
+    expect(exportedSelectTypeahead).toBe(selectTypeahead);
+    expect(exportedSelectOption).toBe(selectOption);
     expect(primitiveSelectRootAttributes).toBe(selectRootAttributes);
   });
 });
@@ -278,5 +398,11 @@ function selectChangeEvent(value: string): Event & {
     currentTarget: EventTarget & { value?: string };
   };
   Object.defineProperty(event, 'currentTarget', { value: { value } });
+  return event;
+}
+
+function selectKeyEvent(key: string): Event & { readonly key: string } {
+  const event = new Event('keydown', { cancelable: true }) as Event & { readonly key: string };
+  Object.defineProperty(event, 'key', { value: key });
   return event;
 }

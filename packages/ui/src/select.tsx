@@ -4,6 +4,7 @@ import {
   cn,
   defineVariants,
   selectContentAttributes,
+  selectHiddenInputAttributes,
   selectItemAttributes,
   selectRootAttributes,
   selectTriggerAttributes,
@@ -16,8 +17,10 @@ import {
 export interface SelectStateProps {
   disabled?: boolean;
   form?: string;
+  highlightedValue?: string;
   invalid?: boolean;
   items?: readonly HeadlessSelectItem[];
+  listboxId?: string;
   name?: string;
   open?: boolean;
   placeholder?: string;
@@ -38,6 +41,11 @@ export interface SelectTriggerProps extends SelectStateProps {
   errorId?: string;
   id?: string;
   labelledBy?: string;
+}
+
+export interface SelectHiddenInputProps extends SelectStateProps {
+  class?: ClassValue;
+  id?: string;
 }
 
 export interface SelectContentProps extends SelectStateProps {
@@ -96,9 +104,11 @@ export const Select = component('select', {
   render(props: SelectProps) {
     const attrs = selectRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
+      ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
@@ -129,10 +139,12 @@ export const SelectTrigger = component('select-trigger', {
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
       ...(props.form === undefined ? {} : { form: props.form }),
+      ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
+      ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
@@ -141,9 +153,11 @@ export const SelectTrigger = component('select-trigger', {
     });
 
     return (
-      <select
+      <button
         aria-describedby={attrs['aria-describedby']}
+        aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
+        aria-haspopup={attrs['aria-haspopup']}
         aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
         class={cn(selectTriggerClassNames(), props.class)}
@@ -153,13 +167,34 @@ export const SelectTrigger = component('select-trigger', {
         data-required={attrs['data-required']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
-        form={attrs.form}
         id={attrs.id}
-        name={attrs.name}
-        required={attrs.required}
+        type={attrs.type}
       >
         {props.children}
-      </select>
+      </button>
+    );
+  },
+});
+
+export const SelectHiddenInput = component('select-hidden-input', {
+  render(props: SelectHiddenInputProps) {
+    const attrs = selectHiddenInputAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
+      ...(props.name === undefined ? {} : { name: props.name }),
+      ...(props.value === undefined ? {} : { value: props.value }),
+    });
+
+    return (
+      <input
+        class={props.class}
+        disabled={attrs.disabled}
+        form={attrs.form}
+        id={props.id}
+        name={attrs.name}
+        type={attrs.type}
+        value={attrs.value}
+      />
     );
   },
 });
@@ -168,10 +203,12 @@ export const SelectContent = component('select-content', {
   render(props: SelectContentProps) {
     const attrs = selectContentAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
       ...(props.labelledBy === undefined ? {} : { labelledBy: props.labelledBy }),
+      ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
@@ -180,7 +217,7 @@ export const SelectContent = component('select-content', {
     });
 
     return (
-      <optgroup
+      <div
         aria-labelledby={attrs['aria-labelledby']}
         class={cn(selectContentClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
@@ -188,11 +225,12 @@ export const SelectContent = component('select-content', {
         data-placeholder={attrs['data-placeholder']}
         data-required={attrs['data-required']}
         data-state={attrs['data-state']}
+        hidden={attrs.hidden}
         id={attrs.id}
-        label={props.label}
+        role={attrs.role}
       >
         {props.children}
-      </optgroup>
+      </div>
     );
   },
 });
@@ -201,10 +239,12 @@ export const SelectItem = component('select-item', {
   render(props: SelectItemProps) {
     const attrs = selectItemAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
       ...(props.items === undefined ? {} : { items: props.items }),
+      ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
       itemValue: props.itemValue,
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.open === undefined ? {} : { open: props.open }),
@@ -214,17 +254,20 @@ export const SelectItem = component('select-item', {
     });
 
     return (
-      <option
+      <div
+        aria-disabled={attrs['aria-disabled']}
+        aria-selected={attrs['aria-selected']}
         class={cn(selectItemClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
+        data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
-        disabled={attrs.disabled}
+        id={attrs.id}
         label={attrs.label}
-        selected={attrs.selected}
+        role={attrs.role}
         value={attrs.value}
       >
         {props.children ?? props.itemLabel ?? props.itemValue}
-      </option>
+      </div>
     );
   },
 });
@@ -233,9 +276,11 @@ export const SelectValue = component('select-value', {
   render(props: SelectValueProps) {
     const attrs = selectValueAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
+      ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.open === undefined ? {} : { open: props.open }),
       ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),

@@ -681,7 +681,7 @@ describe('gallery G5 primitive merge fixtures', () => {
     );
   });
 
-  it('renders a golden select merge with native trigger and option scalars', () => {
+  it('renders a golden select merge with custom trigger and option scalars', () => {
     const state = {
       items: [
         { label: 'Starter', value: 'starter' },
@@ -747,11 +747,11 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <select {...trigger.attrs}>
-        <option {...option.attrs}>Growth</option>
-      </select>,
+      <button {...trigger.attrs}>
+        <div {...option.attrs}>Growth</div>
+      </button>,
     ).toBe(
-      '<select data-state="open" data-required="" aria-expanded="false" id="gallery-select" aria-labelledby="gallery-select-label" name="author-plan" required class="select-trigger min-w-40"><option data-state="checked" value="author-growth" label="Author Growth" class="select-option font-medium">Growth</option></select>',
+      '<button data-state="open" data-required="" aria-expanded="false" aria-haspopup="listbox" type="button" id="gallery-select" aria-labelledby="gallery-select-label" class="select-trigger min-w-40" name="author-plan"><div data-state="checked" aria-selected="true" role="option" value="author-growth" label="Author Growth" class="select-option font-medium">Growth</div></button>',
     );
   });
 
@@ -1159,16 +1159,16 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(
       <section data-gallery-merge="select-family">
         <div {...root.attrs}>
-          <select {...trigger.attrs}>
-            <option {...option.attrs}>Growth</option>
-          </select>
-          <span {...content.attrs}>
+          <button {...trigger.attrs}>
+            <div {...option.attrs}>Growth</div>
+          </button>
+          <div {...content.attrs}>
             <span {...value.attrs}>Choose a plan</span>
-          </span>
+          </div>
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="select-family"><div data-state="closed" data-disabled="" data-placeholder="author-placeholder" data-invalid="" data-required="" id="author-select-root" class="select-root grid"><select data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" aria-expanded="false" disabled id="gallery-select-trigger" aria-labelledby="gallery-select-label" aria-describedby="author-select-description" aria-invalid="true" name="author-plan" required class="select-trigger w-44"><option data-state="unchecked" data-disabled="" disabled value="author-growth" label="Growth" class="select-option font-medium" selected>Growth</option></select><span data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" id="gallery-select-content" aria-labelledby="author-select-label" class="select-content shadow"><span data-placeholder="author-placeholder" id="author-select-value" class="select-value text-muted">Choose a plan</span></span></div></section>',
+      '<section data-gallery-merge="select-family"><div data-state="closed" data-disabled="" data-placeholder="author-placeholder" data-invalid="" data-required="" id="author-select-root" class="select-root grid"><button data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" aria-expanded="false" aria-haspopup="listbox" type="button" disabled id="gallery-select-trigger" aria-labelledby="gallery-select-label" aria-describedby="author-select-description" aria-invalid="true" class="select-trigger w-44" name="author-plan"><div data-state="unchecked" data-disabled="" aria-selected="false" role="option" aria-disabled="true" value="author-growth" label="Growth" class="select-option font-medium" selected>Growth</div></button><div data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" role="listbox" id="gallery-select-content" aria-labelledby="author-select-label" hidden class="select-content shadow"><span data-placeholder="author-placeholder" id="author-select-value" class="select-value text-muted">Choose a plan</span></div></div></section>',
     );
   });
 
