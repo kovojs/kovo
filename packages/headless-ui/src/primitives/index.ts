@@ -392,6 +392,7 @@ export type {
 
 export {
   dropdownMenuContentAttributes,
+  dropdownMenuFocusElement,
   dropdownMenuGroupAttributes,
   dropdownMenuItemAttributes,
   dropdownMenuItemClick,
@@ -403,6 +404,7 @@ export {
   dropdownMenuSeparatorAttributes,
   dropdownMenuTriggerAttributes,
   dropdownMenuTriggerClick,
+  dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead,
   selectDropdownMenuItem,
   setDropdownMenuOpen,
@@ -411,6 +413,7 @@ export {
 export type {
   DropdownMenuChangeOptions,
   DropdownMenuContentAttributeOptions,
+  DropdownMenuFocusEvent,
   DropdownMenuGroupAttributeOptions,
   DropdownMenuItem,
   DropdownMenuItemAttributeOptions,

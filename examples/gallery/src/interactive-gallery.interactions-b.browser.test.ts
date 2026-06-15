@@ -936,6 +936,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const dropdownContent = required(
       dropdownRoot.querySelector<HTMLElement>('#gallery-dropdown-menu-content'),
     );
+    const duplicate = required(
+      dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-duplicate'),
+    );
     const rename = required(
       dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-rename'),
     );
@@ -969,13 +972,61 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       expect(dropdownTrigger.getAttribute('aria-expanded')).toBe('true');
       expect(dropdownContent.hidden).toBe(false);
+      expect(duplicate.getAttribute('data-highlighted')).toBe('');
+      expect(document.activeElement).toBe(duplicate);
     });
 
     // SPEC §12.1: the dropdown-menu open state (expanded trigger, visible role="menu"
     // with a disabled item) must stay axe-clean.
     await expectNoAxeViolations(dropdownRoot);
 
-    rename.focus();
+    duplicate.focus();
+    await userEvent.keyboard('{ArrowDown}');
+
+    await vi.waitFor(() => {
+      expect(dropdownRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"rename","open":true,"value":"duplicate"}',
+      );
+      expect(duplicate.getAttribute('data-highlighted')).toBeNull();
+      expect(rename.getAttribute('data-highlighted')).toBe('');
+      expect(archive.getAttribute('data-highlighted')).toBeNull();
+      expect(document.activeElement).toBe(rename);
+    });
+
+    await userEvent.keyboard('d');
+
+    await vi.waitFor(() => {
+      expect(dropdownRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"duplicate","open":true,"value":"duplicate"}',
+      );
+      expect(duplicate.getAttribute('data-highlighted')).toBe('');
+      expect(rename.getAttribute('data-highlighted')).toBeNull();
+      expect(document.activeElement).toBe(duplicate);
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    await vi.waitFor(() => {
+      expect(dropdownRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"duplicate","open":false,"value":"duplicate"}',
+      );
+      expect(dropdownTrigger.getAttribute('aria-expanded')).toBe('false');
+      expect(dropdownContent.hidden).toBe(true);
+      expect(document.activeElement).toBe(dropdownTrigger);
+    });
+
+    dropdownTrigger.focus();
+    await userEvent.keyboard('{ArrowUp}');
+
+    await vi.waitFor(() => {
+      expect(dropdownRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"rename","open":true,"value":"duplicate"}',
+      );
+      expect(dropdownTrigger.getAttribute('aria-expanded')).toBe('true');
+      expect(dropdownContent.hidden).toBe(false);
+      expect(document.activeElement).toBe(rename);
+    });
+
     await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {

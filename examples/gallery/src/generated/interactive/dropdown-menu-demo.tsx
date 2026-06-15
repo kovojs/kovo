@@ -2,6 +2,41 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryDropdownMenuDemo$section_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDropdownMenuDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
+  state.open ? 'true' : 'false',
+);
+export const GalleryDropdownMenuDemo$button_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDropdownMenuDemo$div_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDropdownMenuDemo$div_hidden_derive = derive(['state'], (state: any) =>
+  !state.open ? '' : null,
+);
+export const GalleryDropdownMenuDemo$button_data_highlighted_derive = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'duplicate' ? '' : null),
+);
+export const GalleryDropdownMenuDemo$button_data_state_derive_2 = derive(['state'], (state: any) =>
+  state.highlightedValue === 'duplicate' ? 'active' : 'inactive',
+);
+export const GalleryDropdownMenuDemo$button_tabIndex_derive = derive(['state'], (state: any) =>
+  state.highlightedValue === 'duplicate' ? 0 : -1,
+);
+export const GalleryDropdownMenuDemo$button_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'rename' ? '' : null),
+);
+export const GalleryDropdownMenuDemo$button_data_state_derive_3 = derive(['state'], (state: any) =>
+  state.highlightedValue === 'rename' ? 'active' : 'inactive',
+);
+export const GalleryDropdownMenuDemo$button_tabIndex_derive_2 = derive(['state'], (state: any) =>
+  state.highlightedValue === 'rename' ? 0 : -1,
+);
 export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
@@ -9,9 +44,17 @@ export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (sta
 import { component } from '@jiso/core';
 import {
   dropdownMenuContentAttributes,
+  dropdownMenuFocusElement as _dropdownMenuFocusElement,
   dropdownMenuItemAttributes,
+  dropdownMenuItemClick as _dropdownMenuItemClick,
+  dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown,
+  dropdownMenuKeyDown as _dropdownMenuKeyDown,
+  dropdownMenuMove as _dropdownMenuMove,
   dropdownMenuRootAttributes,
   dropdownMenuTriggerAttributes,
+  dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
+  dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
+  dropdownMenuTypeahead as _dropdownMenuTypeahead,
   type DropdownMenuItem,
 } from '@jiso/headless-ui/primitives';
 
@@ -56,6 +99,8 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
         {...dropdownMenuRootAttributes(menuState)}
         class="grid gap-2"
         data-gallery-interactive="dropdown-menu"
+        data-state={state.open ? 'open' : 'closed'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$section_data_state_derive"
         fw-c="gallery-dropdown-menu-demo"
         fw-state='{"highlightedValue":"duplicate","open":false,"value":"duplicate"}'
       >
@@ -63,14 +108,22 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
           {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
           class={TRIGGER_CLASS}
           id="gallery-dropdown-menu-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_click"
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_aria_expanded_derive"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_data_state_derive"
+          on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_click"
+          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_keydown"
         >
           Actions
         </button>
         <div
           {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
           class={CONTENT_CLASS}
-          on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$div_keydown"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$div_data_state_derive"
+          hidden={!state.open}
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$div_hidden_derive"
         >
           <button
             {...dropdownMenuItemAttributes({
@@ -80,7 +133,14 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemValue: 'duplicate',
             })}
             class={ITEM_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_click_2"
+            data-highlighted={state.highlightedValue === 'duplicate' ? '' : null}
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_data_highlighted_derive"
+            data-state={state.highlightedValue === 'duplicate' ? 'active' : 'inactive'}
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_data_state_derive_2"
+            tabIndex={state.highlightedValue === 'duplicate' ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_tabIndex_derive"
+            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_keydown_2"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_click_2"
           >
             Duplicate
           </button>
@@ -104,15 +164,21 @@ export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
               itemValue: 'rename',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$button_click_3"
+            data-highlighted={state.highlightedValue === 'rename' ? '' : null}
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_data_highlighted_derive_2"
+            data-state={state.highlightedValue === 'rename' ? 'active' : 'inactive'}
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_data_state_derive_3"
+            tabIndex={state.highlightedValue === 'rename' ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_tabIndex_derive_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_keydown_3"
+            on:click="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$button_click_3"
           >
             Rename
           </button>
         </div>
         <output
           data-demo-state="dropdown-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=ae55f97b#GalleryDropdownMenuDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js?v=997f2f9f#GalleryDropdownMenuDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

@@ -115,6 +115,22 @@ export type DropdownMenuPrimitiveAttributes = PrimitiveDataAttributes &
 export type DropdownMenuTriggerEvent = Event;
 export type DropdownMenuItemEvent = Event;
 export type DropdownMenuKeyboardEvent = Event & { readonly key: string };
+export type DropdownMenuFocusEvent = Event & {
+  readonly currentTarget?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+  readonly target?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+};
+export interface DropdownMenuFocusOptions {
+  defer?: boolean;
+  schedule?: (callback: () => void) => void;
+}
 
 export function dropdownMenuRootAttributes(
   options: DropdownMenuRootAttributeOptions = {},
@@ -358,6 +374,26 @@ export function dropdownMenuTriggerClick(
  * SPEC.md §4.6: chained primitive handlers run after author handlers and must
  * no-op when the author has already prevented the default action.
  */
+export function dropdownMenuTriggerKeyDown(
+  event: DropdownMenuKeyboardEvent,
+  state: DropdownMenuState,
+  options: DropdownMenuChangeOptions = {},
+): DropdownMenuOpenChangeResult | undefined {
+  if (event.defaultPrevented) return;
+  if (!dropdownMenuTriggerOpenKey(event.key)) return;
+
+  const result = setDropdownMenuOpen(state, true, 'arrow-key', options);
+  event.preventDefault();
+
+  return result;
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
 export function dropdownMenuItemClick(
   event: DropdownMenuItemEvent,
   state: DropdownMenuItemAttributeOptions,
@@ -421,6 +457,28 @@ export function dropdownMenuKeyDown(
   return undefined;
 }
 
+export function dropdownMenuFocusElement(
+  event: DropdownMenuFocusEvent,
+  id: string | undefined,
+  options: DropdownMenuFocusOptions = {},
+): boolean {
+  if (!id) return false;
+
+  const ownerDocument = event.currentTarget?.ownerDocument ?? event.target?.ownerDocument;
+  const target = ownerDocument?.getElementById?.(id);
+  if (typeof (target as { focus?: unknown } | undefined)?.focus !== 'function') return false;
+
+  const focus = () => {
+    (target as { focus(): void }).focus();
+  };
+  if (options.defer === true) {
+    (options.schedule ?? ((callback) => setTimeout(callback, 0)))(focus);
+  } else {
+    focus();
+  }
+  return true;
+}
+
 function dropdownMenuDataAttributes(state: DropdownMenuState): PrimitiveDataAttributes {
   return mergeDataAttributes(openState(state.open === true), dataDisabled(state.disabled === true));
 }
@@ -448,4 +506,14 @@ function dropdownMenuItemDisabled(
 
 function dropdownMenuItemActivationKey(key: string): boolean {
   return key === 'Enter' || key === ' ' || key === 'Spacebar';
+}
+
+function dropdownMenuTriggerOpenKey(key: string): boolean {
+  return (
+    key === 'Enter' ||
+    key === ' ' ||
+    key === 'Spacebar' ||
+    key === 'ArrowDown' ||
+    key === 'ArrowUp'
+  );
 }

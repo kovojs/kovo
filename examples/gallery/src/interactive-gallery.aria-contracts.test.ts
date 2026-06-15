@@ -132,34 +132,74 @@ describe('compiled interactive gallery demos', () => {
         signal,
         state: dropdownState,
       });
-      expect(element(document, 'gallery-dropdown-menu-trigger').attrs['aria-expanded']).toBe(
-        'true',
+      expect(dropdownState).toEqual({
+        highlightedValue: 'duplicate',
+        open: true,
+        value: 'duplicate',
+      });
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_aria_expanded_derive', dropdownState),
+      ).toBe('true');
+      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$div_hidden_derive', dropdownState)).toBeNull();
+      expect(
+        deriveRun(
+          dropdownMenu,
+          'GalleryDropdownMenuDemo$button_data_highlighted_derive',
+          dropdownState,
+        ),
+      ).toBe('');
+      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$output_text_derive', dropdownState)).toBe(
+        'open',
       );
-      expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(false);
-      expect(selector(document, '[data-demo-state="dropdown-open"]').textContent).toBe('open');
-      const dropdownKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
-        key: 'Enter',
-      });
-      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown')(dropdownKeyboardEvent, {
-        params: {},
-        signal,
-        state: dropdownState,
-      });
-      expect(dropdownKeyboardEvent.defaultPrevented).toBe(true);
-      expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(true);
-      expect(element(document, 'gallery-dropdown-menu-rename').attrs['data-highlighted']).toBe('');
-      expect(selector(document, '[data-demo-state="dropdown-value"]').textContent).toBe('rename');
 
-      dropdownState.open = true;
-      element(document, 'gallery-dropdown-menu-content').hidden = false;
-      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click_3')(new Event('click'), {
+      const dropdownMoveEvent = keyEvent('ArrowDown');
+      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown_2')(dropdownMoveEvent, {
         params: {},
         signal,
         state: dropdownState,
       });
-      expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(true);
-      expect(element(document, 'gallery-dropdown-menu-rename').attrs['data-highlighted']).toBe('');
-      expect(selector(document, '[data-demo-state="dropdown-value"]').textContent).toBe('rename');
+      expect(dropdownMoveEvent.defaultPrevented).toBe(true);
+      expect(dropdownState).toEqual({
+        highlightedValue: 'rename',
+        open: true,
+        value: 'duplicate',
+      });
+      expect(
+        deriveRun(
+          dropdownMenu,
+          'GalleryDropdownMenuDemo$button_data_highlighted_derive',
+          dropdownState,
+        ),
+      ).toBeNull();
+      expect(
+        deriveRun(
+          dropdownMenu,
+          'GalleryDropdownMenuDemo$button_data_highlighted_derive_2',
+          dropdownState,
+        ),
+      ).toBe('');
+      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_tabIndex_derive', dropdownState)).toBe(
+        -1,
+      );
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_tabIndex_derive_2', dropdownState),
+      ).toBe(0);
+
+      const dropdownEnterEvent = keyEvent('Enter');
+      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown_3')(dropdownEnterEvent, {
+        params: {},
+        signal,
+        state: dropdownState,
+      });
+      expect(dropdownEnterEvent.defaultPrevented).toBe(true);
+      expect(dropdownState).toEqual({ highlightedValue: 'rename', open: false, value: 'rename' });
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_aria_expanded_derive', dropdownState),
+      ).toBe('false');
+      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$div_hidden_derive', dropdownState)).toBe('');
+      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$output_text_derive', dropdownState)).toBe(
+        'closed',
+      );
 
       const menubar = evaluateClientModule('menubar-demo.client.js', { document });
       const menubarState = { activeValue: 'file', openValue: '', value: 'new' };

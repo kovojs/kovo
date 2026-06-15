@@ -350,6 +350,57 @@ describe('compiled interactive gallery demos', () => {
       open: true,
       value: 'duplicate',
     });
+    const dropdownMoveEvent = keyEvent('ArrowDown');
+    clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown_2')(dropdownMoveEvent, {
+      params: {},
+      signal,
+      state: dropdownMenuState,
+    });
+    expect(dropdownMoveEvent.defaultPrevented).toBe(true);
+    expect(dropdownMenuState).toEqual({
+      highlightedValue: 'rename',
+      open: true,
+      value: 'duplicate',
+    });
+    const dropdownTypeaheadEvent = keyEvent('d');
+    clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown_3')(
+      dropdownTypeaheadEvent,
+      {
+        params: {},
+        signal,
+        state: dropdownMenuState,
+      },
+    );
+    expect(dropdownTypeaheadEvent.defaultPrevented).toBe(true);
+    expect(dropdownMenuState).toEqual({
+      highlightedValue: 'duplicate',
+      open: true,
+      value: 'duplicate',
+    });
+    const dropdownEscapeEvent = keyEvent('Escape');
+    clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown_2')(dropdownEscapeEvent, {
+      params: {},
+      signal,
+      state: dropdownMenuState,
+    });
+    expect(dropdownEscapeEvent.defaultPrevented).toBe(true);
+    expect(dropdownMenuState).toEqual({
+      highlightedValue: 'duplicate',
+      open: false,
+      value: 'duplicate',
+    });
+    const dropdownTriggerKeyEvent = keyEvent('ArrowUp');
+    clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown')(dropdownTriggerKeyEvent, {
+      params: {},
+      signal,
+      state: dropdownMenuState,
+    });
+    expect(dropdownTriggerKeyEvent.defaultPrevented).toBe(true);
+    expect(dropdownMenuState).toEqual({
+      highlightedValue: 'rename',
+      open: true,
+      value: 'duplicate',
+    });
     clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click_3')(new Event('click'), {
       params: {},
       signal,

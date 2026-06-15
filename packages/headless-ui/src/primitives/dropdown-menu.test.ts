@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dropdownMenuContentAttributes as exportedDropdownMenuContentAttributes,
+  dropdownMenuFocusElement as exportedDropdownMenuFocusElement,
   dropdownMenuGroupAttributes as exportedDropdownMenuGroupAttributes,
   dropdownMenuItemAttributes as exportedDropdownMenuItemAttributes,
   dropdownMenuItemClick as exportedDropdownMenuItemClick,
@@ -13,6 +14,7 @@ import {
   dropdownMenuSeparatorAttributes as exportedDropdownMenuSeparatorAttributes,
   dropdownMenuTriggerAttributes as exportedDropdownMenuTriggerAttributes,
   dropdownMenuTriggerClick as exportedDropdownMenuTriggerClick,
+  dropdownMenuTriggerKeyDown as exportedDropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as exportedDropdownMenuTypeahead,
   selectDropdownMenuItem as exportedSelectDropdownMenuItem,
   setDropdownMenuOpen as exportedSetDropdownMenuOpen,
@@ -20,6 +22,7 @@ import {
 } from '../index.js';
 import {
   dropdownMenuContentAttributes,
+  dropdownMenuFocusElement,
   dropdownMenuGroupAttributes,
   dropdownMenuItemAttributes,
   dropdownMenuItemClick,
@@ -31,6 +34,7 @@ import {
   dropdownMenuSeparatorAttributes,
   dropdownMenuTriggerAttributes,
   dropdownMenuTriggerClick,
+  dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead,
   selectDropdownMenuItem,
   setDropdownMenuOpen,
@@ -470,6 +474,15 @@ describe('headless-ui dropdown-menu primitive', () => {
     expect(triggerResult).toMatchObject({ changed: true, open: true });
     expect(reasons).toEqual(['trigger-click']);
 
+    const triggerKeyEvent = keydownEvent('Enter');
+    expect(dropdownMenuTriggerKeyDown(triggerKeyEvent, { open: false })).toEqual({
+      changed: true,
+      detail: expect.objectContaining({ reason: 'arrow-key', value: true }),
+      open: true,
+    });
+    expect(triggerKeyEvent.defaultPrevented).toBe(true);
+    expect(dropdownMenuTriggerKeyDown(keydownEvent('Tab'), { open: false })).toBeUndefined();
+
     const disabledEvent = new Event('click', { cancelable: true });
     const disabledResult = dropdownMenuTriggerClick(disabledEvent, {
       disabled: true,
@@ -513,8 +526,88 @@ describe('headless-ui dropdown-menu primitive', () => {
     expect(dropdownMenuKeyDown(keydownEvent('Enter'), { open: true })).toBeUndefined();
   });
 
+  it('focuses menu elements through the event ownerDocument without global DOM access', () => {
+    let focusCount = 0;
+    const ownerDocument = {
+      getElementById(id: string) {
+        return id === 'team-item'
+          ? {
+              focus() {
+                focusCount += 1;
+              },
+            }
+          : undefined;
+      },
+    };
+    const event = {
+      currentTarget: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+    const delegatedEvent = {
+      currentTarget: null,
+      target: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: null;
+      target: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+
+    expect(dropdownMenuFocusElement(event, 'team-item')).toBe(true);
+    expect(dropdownMenuFocusElement(delegatedEvent, 'team-item')).toBe(true);
+    expect(dropdownMenuFocusElement(event, 'missing')).toBe(false);
+    expect(focusCount).toBe(2);
+  });
+
+  it('can defer focus until after reactive state bindings commit', () => {
+    let deferredFocusCount = 0;
+    const scheduled: Array<() => void> = [];
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'team-item'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: {
+        ownerDocument: {
+          getElementById(id: string): unknown;
+        };
+      };
+    };
+
+    expect(
+      dropdownMenuFocusElement(event, 'team-item', {
+        defer: true,
+        schedule(callback) {
+          scheduled.push(callback);
+        },
+      }),
+    ).toBe(true);
+    expect(deferredFocusCount).toBe(0);
+
+    scheduled.forEach((callback) => callback());
+    expect(deferredFocusCount).toBe(1);
+  });
+
   it('exports dropdown-menu helpers from package and primitives barrels', () => {
     expect(exportedDropdownMenuContentAttributes).toBe(dropdownMenuContentAttributes);
+    expect(exportedDropdownMenuFocusElement).toBe(dropdownMenuFocusElement);
     expect(exportedDropdownMenuGroupAttributes).toBe(dropdownMenuGroupAttributes);
     expect(exportedDropdownMenuItemAttributes).toBe(dropdownMenuItemAttributes);
     expect(exportedDropdownMenuItemClick).toBe(dropdownMenuItemClick);
@@ -526,6 +619,7 @@ describe('headless-ui dropdown-menu primitive', () => {
     expect(exportedDropdownMenuSeparatorAttributes).toBe(dropdownMenuSeparatorAttributes);
     expect(exportedDropdownMenuTriggerAttributes).toBe(dropdownMenuTriggerAttributes);
     expect(exportedDropdownMenuTriggerClick).toBe(dropdownMenuTriggerClick);
+    expect(exportedDropdownMenuTriggerKeyDown).toBe(dropdownMenuTriggerKeyDown);
     expect(exportedDropdownMenuTypeahead).toBe(dropdownMenuTypeahead);
     expect(exportedSelectDropdownMenuItem).toBe(selectDropdownMenuItem);
     expect(exportedSetDropdownMenuOpen).toBe(setDropdownMenuOpen);

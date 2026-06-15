@@ -22,6 +22,7 @@ describe('compiled interactive gallery demos', () => {
     const dialog = readGenerated('dialog-demo.tsx');
     const drawer = readGenerated('drawer-demo.tsx');
     const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
+    const dropdownMenuClient = readGenerated('dropdown-menu-demo.client.js');
     const field = readGenerated('field-demo.tsx');
     const fieldClient = readGenerated('field-demo.client.js');
     const hoverCard = readGenerated('hover-card-demo.tsx');
@@ -284,14 +285,44 @@ describe('compiled interactive gallery demos', () => {
       'fw-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
     );
     expect(dropdownMenu).toContain('dropdownMenuContentAttributes({');
+    expect(dropdownMenu).toContain('dropdownMenuFocusElement as _dropdownMenuFocusElement');
+    expect(dropdownMenu).toContain('dropdownMenuItemClick as _dropdownMenuItemClick');
+    expect(dropdownMenu).toContain('dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown');
+    expect(dropdownMenu).toContain('dropdownMenuMove as _dropdownMenuMove');
+    expect(dropdownMenu).toContain('dropdownMenuTriggerClick as _dropdownMenuTriggerClick');
+    expect(dropdownMenu).toContain('dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown');
+    expect(dropdownMenu).toContain('dropdownMenuTypeahead as _dropdownMenuTypeahead');
+    expect(dropdownMenu).toContain('data-bind:aria-expanded=');
+    expect(dropdownMenu).toContain('data-bind:data-state=');
+    expect(dropdownMenu).toContain('data-bind:data-highlighted=');
+    expect(dropdownMenu).toContain('data-bind:hidden=');
+    expect(dropdownMenu).toContain('data-bind:tabIndex=');
+    expect(dropdownMenuClient).toContain('dropdownMenuFocusElement as _dropdownMenuFocusElement');
+    expect(dropdownMenuClient).toContain('dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown');
+    expect(dropdownMenuClient).toContain(
+      'dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown',
+    );
+    expect(dropdownMenuClient).toContain('dropdownMenuTypeahead as _dropdownMenuTypeahead');
+    expect(dropdownMenuClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(dropdownMenu).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_click"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$div_keydown"/,
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_keydown"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_keydown"/,
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_keydown_2"/,
+    );
+    expect(dropdownMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_click_2"/,
+    );
+    expect(dropdownMenu).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_keydown_3"/,
+    );
+    expect(dropdownMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_click_3"/,
     );
 
     expect(field).toContain('data-gallery-interactive="field"');

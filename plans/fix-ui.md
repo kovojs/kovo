@@ -226,12 +226,34 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Menus (all keyboard-first; all currently broken)
 
-- [ ] **dropdown-menu** [P1]: trigger has no `onKeyDown` (Enter/Space/ArrowDown/Up should open + move
+- [x] **dropdown-menu** [P1]: trigger has no `onKeyDown` (Enter/Space/ArrowDown/Up should open + move
       focus into menu); once open, ArrowDown/Up/Home/End/typeahead don't move highlight/focus (stays on
       trigger). Wire `dropdownMenuKeyDown`/`dropdownMenuMove`/`dropdownMenuTypeahead`,
       `dropdownMenuItemKeyDown`; move focus into `role=menu` on open and highlight first enabled item;
       Escape/Tab close + restore focus. Styled `@jiso/ui/dropdown-menu.tsx` is stateless SSR — all
       behavior is demo-authored.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/dropdown-menu.ts` exports
+    `dropdownMenuTriggerKeyDown` and deferred `dropdownMenuFocusElement`; primitive coverage verifies
+    trigger keyboard open, item activation, movement/typeahead, cancelability, ownerDocument fallback,
+    deferred focus scheduling, and barrel exports.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/dropdown-menu-demo.tsx` now calls
+    `_dropdownMenuTriggerClick`, `_dropdownMenuTriggerKeyDown`, `_dropdownMenuItemKeyDown`,
+    `_dropdownMenuKeyDown`, `_dropdownMenuMove`, `_dropdownMenuTypeahead`, and
+    `_dropdownMenuItemClick`, with state-bound `aria-expanded`, `data-state`, `hidden`,
+    `data-highlighted`, `tabIndex`, and output text.
+  - Evidence 2026-06-15: generated `dropdown-menu-demo.client.js` mutates only `ctx.state`, imports
+    the dropdown reducers/focus helper, and `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"`
+    against the authored and generated dropdown files found no matches.
+  - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/dropdown-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+    "dropdown"`; `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts
+    --run src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
+    tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
+    scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [ ] **context-menu** [P1]: `onContextMenu` open never fires (loader #2) and the menu has **no
       arrow/typeahead nav and no Escape handler at all**; anchoring is static `data-anchor-x/y=24/40`.
       Wire `contextMenuKeyDown/Move/Typeahead`, read `event.clientX/Y` via `contextMenuPointFromEvent`
