@@ -101,6 +101,7 @@ export interface JsxAttributeModel {
   // name, so lowering/emit never re-derive either from the raw snippet.
   expressionIsBareIdentifier?: boolean;
   expressionBareIdentifierName?: string;
+  expressionObjectEntries?: readonly ObjectLiteralEntry[];
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionReferences?: readonly string[];
   expressionStart?: number;
@@ -110,6 +111,15 @@ export interface JsxAttributeModel {
   start: number;
   value?: string;
   zeroArgArrow?: ZeroArgArrowModel;
+}
+
+export interface JsxSpreadAttributeModel {
+  end: number;
+  expression: string;
+  expressionBareIdentifierName?: string;
+  expressionIsBareIdentifier?: boolean;
+  objectEntries?: readonly ObjectLiteralEntry[];
+  start: number;
 }
 
 export interface JsxElementModel {
@@ -125,6 +135,7 @@ export interface JsxElementModel {
   openingTagNameStart: number;
   selfClosing: boolean;
   selfClosingSlashHasLeadingWhitespace: boolean;
+  spreadAttributes: readonly JsxSpreadAttributeModel[];
   start: number;
   tag: string;
 }
@@ -1293,6 +1304,29 @@ function jsxElementModel(
       openingElement,
       node,
     ),
+    spreadAttributes: openingElement.attributes.properties.flatMap((property) => {
+      if (!ts.isJsxSpreadAttribute(property)) return [];
+
+      const expression = property.expression;
+      const unwrapped = unwrapExpression(expression);
+      const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
+      return [
+        {
+          end: property.getEnd(),
+          expression: source.slice(expression.getStart(sourceFile), expression.getEnd()).trim(),
+          ...(bareIdentifierName === undefined
+            ? {}
+            : {
+                expressionBareIdentifierName: bareIdentifierName,
+                expressionIsBareIdentifier: true,
+              }),
+          ...(ts.isObjectLiteralExpression(expression)
+            ? { objectEntries: objectLiteralEntries(sourceFile, source, expression) }
+            : {}),
+          start: property.getStart(sourceFile),
+        },
+      ];
+    }),
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
   };
@@ -1591,6 +1625,9 @@ function jsxAttributeExpression(
     ...(bareIdentifierName === undefined
       ? {}
       : { expressionBareIdentifierName: bareIdentifierName }),
+    ...(ts.isObjectLiteralExpression(unwrapped)
+      ? { expressionObjectEntries: objectLiteralEntries(sourceFile, source, unwrapped) }
+      : {}),
     expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
     expressionReferences: referenceIdentifiers(initializer.expression),
     expressionStart,

@@ -13,6 +13,7 @@ import {
 import { lowerInlineAttributeDerives } from './lower/inline-derives.js';
 import { navigationHrefLowering, navigationLinkLowering } from './lower/navigation.js';
 import { platformBehaviorLowering } from './lower/platform.js';
+import { lowerPrimitiveAttributeSpreads } from './lower/primitive-spreads.js';
 import { viewTransitionLowering } from './lower/view-transitions.js';
 import {
   inferComponentName,
@@ -61,6 +62,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
+  const primitiveSpreadLowering = lowerPrimitiveAttributeSpreads(originalState.model);
   const viewTransitions = viewTransitionLowering(originalState.model);
   const platformLowering = platformBehaviorLowering(originalState.model);
   const linkReplacements = navigationLinkLowering(originalState.model);
@@ -73,6 +75,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const modelPatch = applyModelPatchPass(
     originalState,
     [
+      ...primitiveSpreadLowering.replacements,
       ...viewTransitions.replacements,
       ...platformLowering.replacements,
       ...linkReplacements,

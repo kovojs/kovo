@@ -105,4 +105,32 @@ export const PrimitiveMerge = component('primitive-merge', {
 
     expect(result.diagnostics).toEqual([]);
   });
+
+  it('reports merge diagnostics after static primitive attr spread lowering', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-merge.tsx',
+      source: `
+export const PrimitiveMerge = component('primitive-merge', {
+  render: () => (
+    <button
+      {...{
+        role: 'button',
+        'data-bind': 'cart.count',
+      }}
+      role="link"
+      data-bind="cart.total"
+    >
+      Toggle
+    </button>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW232', 'FW233']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      'Author overrides a primitive-owned ARIA or state attribute. role',
+      'Two writers target the same binding slot. data-bind',
+    ]);
+  });
 });

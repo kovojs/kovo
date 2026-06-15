@@ -363,6 +363,126 @@ export const CartActions = component('cart-actions', {
     expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
   });
 
+  it('expands static primitive attr spreads before chaining lowered author handlers', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <button
+      {...{
+        'on:click': '/c/primitives/toggle.client.js#toggleTriggerClick',
+        'data-state': 'off',
+        role: 'button',
+      }}
+      onClick={() => state.count += item.quantity}
+    >
+      Add one
+    </button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toMatch(
+      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
+    );
+    expect(serverSource).toContain('data-state="off"');
+    expect(serverSource).toContain('role="button"');
+    expect(serverSource).not.toContain('{...{');
+    expect(serverSource).not.toContain('onClick=');
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).toContain('fw-param-types="quantity:number"');
+    expect(clientSource).toContain(
+      'export const CartActions$button_click = handler((_event, ctx) => {',
+    );
+    expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
+  });
+
+  it('lowers asChild primitive wrappers onto the behavior-attribute merge path', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <Tooltip.Trigger
+      asChild
+      attrs={{
+        'on:click': '/c/primitives/tooltip.client.js#tooltipTriggerClick',
+        'data-state': 'closed',
+        role: 'button',
+      }}
+    >
+      <button onClick={() => state.count += item.quantity}>Open</button>
+    </Tooltip.Trigger>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toMatch(
+      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
+    );
+    expect(serverSource).toContain('data-state="closed"');
+    expect(serverSource).toContain('role="button"');
+    expect(serverSource).not.toContain('Tooltip.Trigger');
+    expect(serverSource).not.toContain('asChild');
+    expect(serverSource).not.toContain('onClick=');
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).toContain('fw-param-types="quantity:number"');
+  });
+
+  it('lowers attrs-function primitive wrappers onto the behavior-attribute merge path', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <Tooltip.Trigger
+      attrs={{
+        'on:click': '/c/primitives/tooltip.client.js#tooltipTriggerClick',
+        'data-state': 'closed',
+        role: 'button',
+      }}
+    >
+      {(attrs) => (
+        <button {...attrs} onClick={() => state.count += item.quantity}>Open</button>
+      )}
+    </Tooltip.Trigger>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toMatch(
+      /on:click="\/c\/components\/cart\/cart-actions\.client\.js\?v=[0-9a-f]{8}#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
+    );
+    expect(serverSource).toContain('data-state="closed"');
+    expect(serverSource).toContain('role="button"');
+    expect(serverSource).not.toContain('Tooltip.Trigger');
+    expect(serverSource).not.toContain('{(attrs)');
+    expect(serverSource).not.toContain('{...attrs}');
+    expect(serverSource).not.toContain('onClick=');
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).toContain('fw-param-types="quantity:number"');
+  });
+
   it('declares boolean coercion for boolean-ish captured handler params', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',

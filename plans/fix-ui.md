@@ -254,10 +254,23 @@ The demos use the low-level `*Attributes()` plain-function spelling, which yield
     src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec vitest run
     src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts`,
     and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
-- [ ] **Lower attrs-function and `asChild` primitive composition sugar onto the behavior-attribute
+- [x] **Lower attrs-function and `asChild` primitive composition sugar onto the behavior-attribute
       merge path.** The verified behavior-attribute form now provides the underlying §4.6
       author-first chain; the remaining work is parser/lowering support for proving the render-prop
       and single-child `asChild` shapes before emission.
+  - Evidence 2026-06-15: `packages/compiler/src/scan/parse.ts` now records JSX spread attributes,
+    object-literal attr records, and bare identifier spread facts;
+    `packages/compiler/src/lower/primitive-spreads.ts` lowers static primitive attr records from
+    direct object spreads,
+    single-child `asChild` wrappers, and attrs-function children that spread the passed `attrs`
+    identifier onto the real child element before handler lowering.
+  - Evidence 2026-06-15: `packages/compiler/src/handler-lowering.test.ts` proves static primitive
+    `on:*` refs from direct spreads, `asChild`, and attrs-function wrappers chain after lowered author
+    JSX handlers with SPEC §4.6 author-first ordering; `packages/compiler/src/attribute-merge.test.ts`
+    proves FW232/FW233 diagnostics run after static primitive attr spread lowering.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/handler-lowering.test.ts
+    src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts
+    src/scan/parse.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
 ## Phase 3 — Per-component demo rewrites (use the primitives + declarative state)
 
