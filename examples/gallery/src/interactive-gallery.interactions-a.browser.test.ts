@@ -524,8 +524,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('updates checkbox-group ARIA, roving tabindex, and native checked state', async () => {
+  it('updates checkbox-group ARIA, parent mixed state, and native checked state', async () => {
     const root = mountInteractiveDemo(GalleryCheckboxGroupDemo);
+    const all = required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-all'));
     const updates = required(
       root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
     );
@@ -544,29 +545,17 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(updates.checked).toBe(true);
     expect(updates.getAttribute('aria-checked')).toBe('true');
     expect(updates.tabIndex).toBe(0);
+    expect(all.getAttribute('aria-checked')).toBe('mixed');
+    expect(all.indeterminate).toBe(true);
+    expect(all.checked).toBe(false);
     expect(billing.checked).toBe(false);
     expect(billing.getAttribute('aria-checked')).toBe('false');
-    expect(billing.tabIndex).toBe(-1);
-
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
-
-    await vi.waitFor(() => {
-      const currentUpdates = required(
-        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
-      );
-      const currentBilling = required(
-        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing'),
-      );
-
-      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"updates"}');
-      expect(currentUpdates.tabIndex).toBe(-1);
-      expect(currentBilling.tabIndex).toBe(0);
-      expect(document.activeElement).toBe(currentBilling);
-    });
+    expect(billing.tabIndex).toBe(0);
 
     required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing')).click();
 
     await vi.waitFor(() => {
+      const currentAll = required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-all'));
       const currentUpdates = required(
         root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
       );
@@ -580,6 +569,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe(
         '{"activeValue":"billing","value":"updates,billing"}',
       );
+      expect(currentAll.getAttribute('aria-checked')).toBe('true');
+      expect(currentAll.indeterminate).toBe(false);
+      expect(currentAll.checked).toBe(true);
       expect(currentUpdates.checked).toBe(true);
       expect(currentBilling.checked).toBe(true);
       expect(currentBilling.getAttribute('aria-checked')).toBe('true');
@@ -587,8 +579,17 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(new FormData(form).getAll('gallery-notifications')).toEqual(['updates', 'billing']);
     });
 
-    // SPEC §12.1: the checkbox-group multi-checked/roving state after keyboard move and
-    // toggle must stay axe-clean.
+    all.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":""}');
+      expect(all.getAttribute('aria-checked')).toBe('false');
+      expect(all.indeterminate).toBe(false);
+      expect(all.checked).toBe(false);
+      expect(new FormData(form).getAll('gallery-notifications')).toEqual([]);
+    });
+
+    // SPEC §12.1: the checkbox-group multi-checked and parent unchecked states must stay axe-clean.
     await expectNoAxeViolations(root);
   });
 

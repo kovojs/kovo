@@ -1,10 +1,12 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import {
+  checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
+  checkboxTriggerClick as _checkboxTriggerClick,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox-group.tsx)
@@ -55,100 +57,73 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         })}
         class={ROOT_CLASS}
         data-gallery-interactive="checkbox-group"
-        onKeyDown={() => {
-          if (
-            event &&
-            Object(event)['key'] !== 'ArrowDown' &&
-            Object(event)['key'] !== 'ArrowLeft' &&
-            Object(event)['key'] !== 'ArrowRight' &&
-            Object(event)['key'] !== 'ArrowUp' &&
-            Object(event)['key'] !== 'End' &&
-            Object(event)['key'] !== 'Home'
-          ) {
-            return;
-          }
-          if (event) Object(event)['preventDefault']?.call(event);
-          state.activeValue = state.activeValue === 'updates' ? 'billing' : 'updates';
-          const doc = Reflect['get'](globalThis, 'document');
-          const updates = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-checkbox-group-updates')
-            : undefined;
-          const billing = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-checkbox-group-billing')
-            : undefined;
-
-          if (updates) updates['tabIndex'] = state.activeValue === 'updates' ? 0 : -1;
-          if (billing) {
-            billing['tabIndex'] = state.activeValue === 'billing' ? 0 : -1;
-            if (state.activeValue === 'billing') Object(billing)['focus']?.call(billing);
-          }
-          if (updates && state.activeValue === 'updates') Object(updates)['focus']?.call(updates);
-        }}
       >
         <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
         <h3 id="gallery-checkbox-group-label" class="text-sm font-medium">
           Notifications
         </h3>
+        <label class={ITEM_CLASS}>
+          <input
+            aria-checked={
+              state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed'
+            }
+            checked={state.value === 'updates,billing'}
+            class={CONTROL_CLASS}
+            data-state={
+              state.value === 'updates,billing'
+                ? 'checked'
+                : state.value === ''
+                  ? 'unchecked'
+                  : 'indeterminate'
+            }
+            id="gallery-checkbox-group-all"
+            indeterminate={state.value !== '' && state.value !== 'updates,billing'}
+            onClick={() => {
+              const result = _checkboxTriggerClick(Object(event), {
+                checked:
+                  state.value === 'updates,billing'
+                    ? true
+                    : state.value === ''
+                      ? false
+                      : 'indeterminate',
+              });
+              if (!result) return;
+              state.value = result.checked === true ? 'updates,billing' : '';
+            }}
+            type="checkbox"
+          />
+          <span class={LABEL_CLASS}>All notifications</span>
+        </label>
         <div {...checkboxGroupItemAttributes(updatesState)} class={ITEM_CLASS}>
           <input
             {...checkboxGroupControlAttributes({
               ...updatesState,
               controlId: 'gallery-checkbox-group-updates',
             })}
+            aria-checked={String(state.value === 'updates' || state.value === 'updates,billing')}
+            checked={state.value === 'updates' || state.value === 'updates,billing'}
             class={CONTROL_CLASS}
+            data-state={
+              state.value === 'updates' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
             onClick={() => {
-              state.value =
-                state.value === 'updates,billing'
-                  ? 'billing'
-                  : state.value === 'updates'
-                    ? ''
-                    : state.value === 'billing'
-                      ? 'updates,billing'
-                      : 'updates';
-              const doc = Reflect['get'](globalThis, 'document');
-              const updates = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-checkbox-group-updates')
-                : undefined;
-              const billing = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-checkbox-group-billing')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(
-                    doc,
-                    '[data-demo-state="checkbox-group-value"]',
-                  )
-                : undefined;
-              const updatesChecked = state.value === 'updates' || state.value === 'updates,billing';
-              const billingChecked = state.value === 'billing' || state.value === 'updates,billing';
-
-              if (updates) {
-                updates['checked'] = updatesChecked;
-                Object(updates)['setAttribute']?.call(
-                  updates,
-                  'aria-checked',
-                  updatesChecked ? 'true' : 'false',
-                );
-                Object(updates)['setAttribute']?.call(
-                  updates,
-                  'data-state',
-                  updatesChecked ? 'checked' : 'unchecked',
-                );
-              }
-              if (billing) {
-                billing['checked'] = billingChecked;
-                Object(billing)['setAttribute']?.call(
-                  billing,
-                  'aria-checked',
-                  billingChecked ? 'true' : 'false',
-                );
-                Object(billing)['setAttribute']?.call(
-                  billing,
-                  'data-state',
-                  billingChecked ? 'checked' : 'unchecked',
-                );
-              }
-              if (output) output['textContent'] = state.value || 'none';
+              const result = _checkboxGroupItemClick(Object(event), {
+                itemValue: 'updates',
+                items: [{ value: 'updates' }, { value: 'billing' }],
+                value:
+                  state.value === 'updates,billing'
+                    ? ['updates', 'billing']
+                    : state.value === ''
+                      ? []
+                      : [state.value],
+              });
+              if (!result) return;
+              state.activeValue = 'updates';
+              state.value = result.value.toString();
             }}
+            tabIndex={0}
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -156,6 +131,11 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               controlId: 'gallery-checkbox-group-updates',
             })}
             class={LABEL_CLASS}
+            data-state={
+              state.value === 'updates' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
           >
             Product updates
           </label>
@@ -166,60 +146,30 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               ...billingState,
               controlId: 'gallery-checkbox-group-billing',
             })}
+            aria-checked={String(state.value === 'billing' || state.value === 'updates,billing')}
+            checked={state.value === 'billing' || state.value === 'updates,billing'}
             class={CONTROL_CLASS}
+            data-state={
+              state.value === 'billing' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
             onClick={() => {
-              state.value =
-                state.value === 'updates,billing'
-                  ? 'updates'
-                  : state.value === 'billing'
-                    ? ''
-                    : state.value === 'updates'
-                      ? 'updates,billing'
-                      : 'billing';
-              const doc = Reflect['get'](globalThis, 'document');
-              const updates = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-checkbox-group-updates')
-                : undefined;
-              const billing = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-checkbox-group-billing')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(
-                    doc,
-                    '[data-demo-state="checkbox-group-value"]',
-                  )
-                : undefined;
-              const updatesChecked = state.value === 'updates' || state.value === 'updates,billing';
-              const billingChecked = state.value === 'billing' || state.value === 'updates,billing';
-
-              if (updates) {
-                updates['checked'] = updatesChecked;
-                Object(updates)['setAttribute']?.call(
-                  updates,
-                  'aria-checked',
-                  updatesChecked ? 'true' : 'false',
-                );
-                Object(updates)['setAttribute']?.call(
-                  updates,
-                  'data-state',
-                  updatesChecked ? 'checked' : 'unchecked',
-                );
-              }
-              if (billing) {
-                billing['checked'] = billingChecked;
-                Object(billing)['setAttribute']?.call(
-                  billing,
-                  'aria-checked',
-                  billingChecked ? 'true' : 'false',
-                );
-                Object(billing)['setAttribute']?.call(
-                  billing,
-                  'data-state',
-                  billingChecked ? 'checked' : 'unchecked',
-                );
-              }
-              if (output) output['textContent'] = state.value || 'none';
+              const result = _checkboxGroupItemClick(Object(event), {
+                itemValue: 'billing',
+                items: [{ value: 'updates' }, { value: 'billing' }],
+                value:
+                  state.value === 'updates,billing'
+                    ? ['updates', 'billing']
+                    : state.value === ''
+                      ? []
+                      : [state.value],
+              });
+              if (!result) return;
+              state.activeValue = 'billing';
+              state.value = result.value.toString();
             }}
+            tabIndex={0}
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -227,6 +177,11 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               controlId: 'gallery-checkbox-group-billing',
             })}
             class={LABEL_CLASS}
+            data-state={
+              state.value === 'billing' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
           >
             Billing notices
           </label>

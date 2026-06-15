@@ -148,25 +148,20 @@ describe('compiled interactive gallery demos', () => {
     expect(checkboxState).toEqual({ checked: true });
 
     const checkboxGroupState = { activeValue: 'updates', value: 'updates' };
-    const checkboxGroupKeyboardEvent = keyEvent('ArrowRight');
-    clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$section_keydown')(
-      checkboxGroupKeyboardEvent,
-      {
-        params: {},
-        signal,
-        state: checkboxGroupState,
-      },
-    );
-    expect(checkboxGroupKeyboardEvent.defaultPrevented).toBe(true);
-    expect(checkboxGroupState).toEqual({ activeValue: 'billing', value: 'updates' });
     clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: checkboxGroupState,
+    });
+    expect(checkboxGroupState).toEqual({ activeValue: 'updates', value: '' });
+    clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_3')(new Event('click'), {
       params: {},
       signal,
       state: checkboxGroupState,
     });
     expect(checkboxGroupState).toEqual({
       activeValue: 'billing',
-      value: 'updates,billing',
+      value: 'billing',
     });
 
     const comboboxState = { highlightedValue: 'austin', open: false, value: 'austin' };

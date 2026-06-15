@@ -90,22 +90,39 @@ describe('compiled interactive gallery demos', () => {
 
       const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js', { document });
       const checkboxState = { activeValue: 'updates', value: 'updates' };
-      clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_2')(new Event('click'), {
+      clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_3')(new Event('click'), {
         params: {},
         signal,
         state: checkboxState,
       });
-      expect(checkboxState).toEqual({ activeValue: 'updates', value: 'updates,billing' });
-      expect(element(document, 'gallery-checkbox-group-billing')).toMatchObject({
-        checked: true,
-      });
-      expect(element(document, 'gallery-checkbox-group-billing').attrs).toMatchObject({
-        'aria-checked': 'true',
-        'data-state': 'checked',
-      });
-      expect(selector(document, '[data-demo-state="checkbox-group-value"]').textContent).toBe(
-        'updates,billing',
-      );
+      expect(checkboxState).toEqual({ activeValue: 'billing', value: 'updates,billing' });
+      expect(
+        deriveRun(
+          checkboxGroup,
+          'GalleryCheckboxGroupDemo$input_aria_checked_derive',
+          checkboxState,
+        ),
+      ).toBe('true');
+      expect(
+        deriveRun(checkboxGroup, 'GalleryCheckboxGroupDemo$input_checked_derive', checkboxState),
+      ).toBe('');
+      expect(
+        deriveRun(
+          checkboxGroup,
+          'GalleryCheckboxGroupDemo$input_indeterminate_derive',
+          checkboxState,
+        ),
+      ).toBe(false);
+      expect(
+        deriveRun(
+          checkboxGroup,
+          'GalleryCheckboxGroupDemo$input_aria_checked_derive_3',
+          checkboxState,
+        ),
+      ).toBe('true');
+      expect(
+        deriveRun(checkboxGroup, 'GalleryCheckboxGroupDemo$output_text_derive', checkboxState),
+      ).toBe('updates,billing');
 
       const dropdownMenu = evaluateClientModule('dropdown-menu-demo.client.js', { document });
       const dropdownState = { highlightedValue: 'duplicate', open: false, value: 'duplicate' };

@@ -109,11 +109,13 @@ describe('compiled interactive gallery demos', () => {
     expect(checkboxGroup).toContain('id="gallery-checkbox-group-form"');
     expect(checkboxGroup).toContain("form: 'gallery-checkbox-group-form'");
     expect(checkboxGroup).toContain('checkboxGroupControlAttributes({');
-    expect(checkboxGroup).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$section_keydown"/,
-    );
+    expect(checkboxGroup).toContain('id="gallery-checkbox-group-all"');
+    expect(checkboxGroup).toContain('data-bind:indeterminate=');
     expect(checkboxGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$input_click_2"/,
+    );
+    expect(checkboxGroup).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$input_click_3"/,
     );
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');

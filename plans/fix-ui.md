@@ -340,10 +340,28 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.interactions-b.browser.test.ts -t radio-group`, and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
-- [ ] **checkbox-group** [P2]: click-toggle works (imperative stamps), but the `onKeyDown` invents
+- [x] **checkbox-group** [P2]: click-toggle works (imperative stamps), but the `onKeyDown` invents
       arrow-roving (wrong model — checkboxes are each Tab-focusable + Space) and is a blind 2-state flip.
       Drop the arrow-roving (or route through `checkboxGroupKeyDown`); refactor clicks to
       `checkboxGroupItemClick`. Demonstrate the indeterminate parent affordance.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/checkbox-group-demo.tsx` removed the
+    root Arrow-key roving handler, keeps both item checkboxes as normal Tab stops, routes item clicks
+    through `_checkboxGroupItemClick`, and adds a parent "All notifications" checkbox whose
+    `aria-checked`, native `checked`, native `indeterminate`, and `data-state` derive from the group
+    value.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/checkbox-group-demo.client.js` imports
+    `_checkboxGroupItemClick`/`_checkboxTriggerClick`, emits state derives for item, label, output, and
+    parent mixed-state bindings, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated checkbox-group files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox-group"`,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
+    and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **toggle-group** [P1]: click-toggle works; `onKeyDown` hardcodes bold↔italic ignoring the key and
       the disabled 'strike' middle item. Wire `toggleGroupKeyDown`/`toggleGroupMoveFocus`; route clicks
       through `toggleGroupItemClick`.

@@ -2,6 +2,49 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryCheckboxGroupDemo$input_aria_checked_derive = derive(['state'], (state: any) =>
+  state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed',
+);
+export const GalleryCheckboxGroupDemo$input_checked_derive = derive(['state'], (state: any) =>
+  state.value === 'updates,billing' ? '' : null,
+);
+export const GalleryCheckboxGroupDemo$input_data_state_derive = derive(['state'], (state: any) =>
+  state.value === 'updates,billing'
+    ? 'checked'
+    : state.value === ''
+      ? 'unchecked'
+      : 'indeterminate',
+);
+export const GalleryCheckboxGroupDemo$input_indeterminate_derive = derive(
+  ['state'],
+  (state: any) => state.value !== '' && state.value !== 'updates,billing',
+);
+export const GalleryCheckboxGroupDemo$input_aria_checked_derive_2 = derive(
+  ['state'],
+  (state: any) => String(state.value === 'updates' || state.value === 'updates,billing'),
+);
+export const GalleryCheckboxGroupDemo$input_checked_derive_2 = derive(['state'], (state: any) =>
+  state.value === 'updates' || state.value === 'updates,billing' ? '' : null,
+);
+export const GalleryCheckboxGroupDemo$input_data_state_derive_2 = derive(['state'], (state: any) =>
+  state.value === 'updates' || state.value === 'updates,billing' ? 'checked' : 'unchecked',
+);
+export const GalleryCheckboxGroupDemo$label_data_state_derive = derive(['state'], (state: any) =>
+  state.value === 'updates' || state.value === 'updates,billing' ? 'checked' : 'unchecked',
+);
+export const GalleryCheckboxGroupDemo$input_aria_checked_derive_3 = derive(
+  ['state'],
+  (state: any) => String(state.value === 'billing' || state.value === 'updates,billing'),
+);
+export const GalleryCheckboxGroupDemo$input_checked_derive_3 = derive(['state'], (state: any) =>
+  state.value === 'billing' || state.value === 'updates,billing' ? '' : null,
+);
+export const GalleryCheckboxGroupDemo$input_data_state_derive_3 = derive(['state'], (state: any) =>
+  state.value === 'billing' || state.value === 'updates,billing' ? 'checked' : 'unchecked',
+);
+export const GalleryCheckboxGroupDemo$label_data_state_derive_2 = derive(['state'], (state: any) =>
+  state.value === 'billing' || state.value === 'updates,billing' ? 'checked' : 'unchecked',
+);
 export const GalleryCheckboxGroupDemo$output_text_derive = derive(
   ['state'],
   (state: any) => state.value || 'none',
@@ -9,10 +52,12 @@ export const GalleryCheckboxGroupDemo$output_text_derive = derive(
 
 import { component } from '@jiso/core';
 import {
+  checkboxGroupItemClick as _checkboxGroupItemClick,
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
   checkboxGroupLabelAttributes,
   checkboxGroupRootAttributes,
+  checkboxTriggerClick as _checkboxTriggerClick,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox-group.tsx)
@@ -63,7 +108,6 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         })}
         class={ROOT_CLASS}
         data-gallery-interactive="checkbox-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=8e8ca5ed#GalleryCheckboxGroupDemo$section_keydown"
         fw-c="gallery-checkbox-group-demo"
         fw-state='{"activeValue":"updates","value":"updates"}'
       >
@@ -71,14 +115,50 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         <h3 id="gallery-checkbox-group-label" class="text-sm font-medium">
           Notifications
         </h3>
+        <label class={ITEM_CLASS}>
+          <input
+            aria-checked={
+              state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed'
+            }
+            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_aria_checked_derive"
+            checked={state.value === 'updates,billing'}
+            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_checked_derive"
+            class={CONTROL_CLASS}
+            data-state={
+              state.value === 'updates,billing'
+                ? 'checked'
+                : state.value === ''
+                  ? 'unchecked'
+                  : 'indeterminate'
+            }
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_data_state_derive"
+            id="gallery-checkbox-group-all"
+            indeterminate={state.value !== '' && state.value !== 'updates,billing'}
+            data-bind:indeterminate="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_indeterminate_derive"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_click"
+            type="checkbox"
+          />
+          <span class={LABEL_CLASS}>All notifications</span>
+        </label>
         <div {...checkboxGroupItemAttributes(updatesState)} class={ITEM_CLASS}>
           <input
             {...checkboxGroupControlAttributes({
               ...updatesState,
               controlId: 'gallery-checkbox-group-updates',
             })}
+            aria-checked={String(state.value === 'updates' || state.value === 'updates,billing')}
+            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_aria_checked_derive_2"
+            checked={state.value === 'updates' || state.value === 'updates,billing'}
+            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_checked_derive_2"
             class={CONTROL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=8e8ca5ed#GalleryCheckboxGroupDemo$input_click"
+            data-state={
+              state.value === 'updates' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_data_state_derive_2"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_click_2"
+            tabIndex={0}
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -86,6 +166,12 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               controlId: 'gallery-checkbox-group-updates',
             })}
             class={LABEL_CLASS}
+            data-state={
+              state.value === 'updates' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$label_data_state_derive"
           >
             Product updates
           </label>
@@ -96,8 +182,19 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               ...billingState,
               controlId: 'gallery-checkbox-group-billing',
             })}
+            aria-checked={String(state.value === 'billing' || state.value === 'updates,billing')}
+            data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_aria_checked_derive_3"
+            checked={state.value === 'billing' || state.value === 'updates,billing'}
+            data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_checked_derive_3"
             class={CONTROL_CLASS}
-            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=8e8ca5ed#GalleryCheckboxGroupDemo$input_click_2"
+            data-state={
+              state.value === 'billing' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_data_state_derive_3"
+            on:click="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$input_click_3"
+            tabIndex={0}
           />
           <label
             {...checkboxGroupLabelAttributes({
@@ -105,6 +202,12 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
               controlId: 'gallery-checkbox-group-billing',
             })}
             class={LABEL_CLASS}
+            data-state={
+              state.value === 'billing' || state.value === 'updates,billing'
+                ? 'checked'
+                : 'unchecked'
+            }
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$label_data_state_derive_2"
           >
             Billing notices
           </label>
@@ -112,7 +215,7 @@ export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo',
         <output
           class="text-xs text-neutral-500"
           data-demo-state="checkbox-group-value"
-          data-bind="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=8e8ca5ed#GalleryCheckboxGroupDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js?v=a3e7498f#GalleryCheckboxGroupDemo$output_text_derive"
         >
           {state.value || 'none'}
         </output>
