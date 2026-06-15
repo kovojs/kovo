@@ -62,8 +62,9 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
   status: 422 | 429;
 }
 
-export interface MutationSuccess<Value> {
+export interface MutationSuccess<Value, Input = unknown> {
   changes: ChangeRecord[];
+  input: Input;
   rerunQueryInstances?: QueryRerun[];
   rerunQueries: string[];
   ok: true;
@@ -71,7 +72,7 @@ export interface MutationSuccess<Value> {
   value: Value;
 }
 
-export type MutationResult<Value> = MutationFail | MutationSuccess<Value>;
+export type MutationResult<Value, Input = unknown> = MutationFail | MutationSuccess<Value, Input>;
 
 export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
   fail<const Code extends Extract<keyof Errors, string>>(
@@ -264,7 +265,7 @@ export async function runMutation<
   rawInput: unknown,
   request: Request,
   options: RunMutationOptions<Request> = {},
-): Promise<MutationResult<Value>> {
+): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const csrf = mutationCsrfOptions(definition, options.csrf);
   if (csrf === undefined || (csrf !== false && !validateCsrfToken(rawInput, request, csrf))) {
     return {
@@ -344,16 +345,29 @@ export async function runMutation<
     ...manualInvalidations,
   ];
   const rerunQueryInstances = queriesToRerun(definition.registry?.queries ?? [], changes, input);
-  return {
-    changes,
-    ok: true,
-    ...(Object.keys(responseHeaders).length > 0 ? { responseHeaders } : {}),
-    ...(rerunQueryInstances.some((query) => query.instanceKey !== undefined)
-      ? { rerunQueryInstances }
-      : {}),
-    rerunQueries: [...new Set(rerunQueryInstances.map((query) => query.key))],
-    value,
-  };
+  return mutationSuccess(
+    {
+      changes,
+      ok: true,
+      ...(Object.keys(responseHeaders).length > 0 ? { responseHeaders } : {}),
+      ...(rerunQueryInstances.some((query) => query.instanceKey !== undefined)
+        ? { rerunQueryInstances }
+        : {}),
+      rerunQueries: [...new Set(rerunQueryInstances.map((query) => query.key))],
+      value,
+    },
+    input,
+  );
+}
+
+function mutationSuccess<Value, Input>(
+  result: Omit<MutationSuccess<Value, Input>, 'input'>,
+  input: Input,
+): MutationSuccess<Value, Input> {
+  return Object.defineProperty(result, 'input', {
+    enumerable: false,
+    value: input,
+  }) as MutationSuccess<Value, Input>;
 }
 
 class MutationRollback extends Error {
@@ -744,6 +758,8 @@ function asciiJsonHeaderValue(value: unknown): string {
 }
 
 function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: unknown): unknown {
+  if (Object.hasOwn(result, 'input')) return result.input;
+
   return result.changes.find((change) => change.input !== undefined)?.input ?? rawInput;
 }
 

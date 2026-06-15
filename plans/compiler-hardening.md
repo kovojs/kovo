@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (18 / 32 findings closed)
+**Status:** open (19 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -262,7 +262,9 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
 - [x] **CSS scope-fallback: depth-aware selector splitter** — `packages/compiler/src/css.ts:145` (SPEC §13.1). Replace `selector.split(',')` with a splitter that breaks only on top-level commas (track `()`/`[]`/quotes); recurse into nested `&` blocks with the same host-prefix + donut `:not(...)`. Prove: `pnpm test css` (add `:is()`/`[data-x="a,b"]`/`&`-nesting fixtures)
   - Evidence 2026-06-15: `packages/compiler/src/css.ts` now uses a depth-aware selector-list splitter and resolves nested selectors under parent selectors; `packages/compiler/src/css.test.ts` covers `:is(.primary, .secondary)`, `[data-label="a,b"]`, and nested `&` selectors with the host prefix plus donut exclusion preserved.
   - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/css.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
-- [ ] **Thread validated coerced input onto `MutationSuccess`** — `packages/server/src/mutation.ts:746` (SPEC §10.3). Render reruns from the parsed input, not `change.input ?? rawInput`, so render-time and scheduled instance keys derive from the same coerced input. Prove: server mutation suite.
+- [x] **Thread validated coerced input onto `MutationSuccess`** — `packages/server/src/mutation.ts:746` (SPEC §10.3). Render reruns from the parsed input, not `change.input ?? rawInput`, so render-time and scheduled instance keys derive from the same coerced input. Prove: server mutation suite.
+  - Evidence 2026-06-15: `packages/server/src/mutation.ts` now attaches the parsed schema input to `MutationSuccess` and enhanced mutation rendering reads that input before falling back to legacy change/raw-input inference; `packages/server/src/mutation-response.test.ts` covers a `FormData` numeric input plus manual invalidation with no change-record input and proves the keyed query chunk rerenders from numeric `cartId: 2`.
+  - Verified 2026-06-15: `pnpm --filter @jiso/server exec vitest run src/mutation-response.test.ts`; `pnpm --filter @jiso/server exec tsc --noEmit`; `pnpm exec vp check`.
 - [ ] **`<Link>` lowering: self-closing + dynamic-target** — `packages/compiler/src/lower/navigation.ts:13` (SPEC §6.4). Remove the `!selfClosing` filter; route static-`to` Links through FW220; lower non-static `to` to a resolved `<a href>` or diagnose. Prove: `pnpm test navigation-lowering`
 - [ ] **JSX comment→attribute attachment: structural, not char-class gap** — `packages/compiler/src/scan/parse.ts:1503` (SPEC §5.2 rule 8). Associate a justification comment with the opening element it directly precedes via the ts tree, not `isAttachedJsxCommentGap`'s permissive regex. Prove: `pnpm test execution-triggers scan/parse`
 - [ ] **Remove dead snippet-reparse exports; FW311 help text; FW224 message scope; FW232 placement; primitive-handler-lint default-on** — bundle the remaining audit lows (`scan/parse.ts:462`, `core/diagnostics.ts` FW311, `markup.ts` FW224/FW232, `headless-ui/.../primitive-handler-lint.ts`). Each: tighten the rule or wording to match SPEC; add the asserting test. Prove: `pnpm test` + `pnpm run check:fw`

@@ -177,6 +177,40 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('routes manual invalidation reruns from schema-coerced mutation input', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      instanceKey: (input) => `cart:${(input as { cartId: number }).cartId}`,
+      load: (input) => ({
+        cartId: (input as { cartId: number }).cartId,
+        type: typeof (input as { cartId: unknown }).cartId,
+      }),
+      reads: [cart],
+    });
+    const refreshCart = mutation('cart/refresh', {
+      input: s.object({ cartId: s.number().int().min(1) }),
+      registry: {
+        queries: [cartQuery],
+      },
+      handler(input, _request, context) {
+        context.invalidate(cart);
+        return input.cartId;
+      },
+    });
+    const form = new FormData();
+    form.set('cartId', '2');
+
+    await expect(
+      renderMutationResponse(refreshCart, {
+        rawInput: form,
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<fw-query name="cart" key="cart:2">{"cartId":2,"type":"number"}</fw-query>',
+      status: 200,
+    });
+  });
+
   it('delivers late stylesheets with enhanced mutation fragments', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
