@@ -64,12 +64,6 @@ export const GalleryPureMarkupDemo = component('gallery-pure-markup-demo', {
             type="button"
             onClick={() => {
               state.submitted = true;
-              const doc = Reflect['get'](globalThis, 'document');
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="pure-markup-submit"]')
-                : undefined;
-
-              if (output) output['textContent'] = 'confirmed';
             }}
           >
             Confirm

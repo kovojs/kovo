@@ -28,13 +28,31 @@ Done when:
     Playwright verification passed `switch`, `toggle`, `disclosure`, and `checkbox` state, ARIA,
     `data-state`, native `checked`/`hidden`, and text-output assertions against the unmodified static
     export.
-- [ ] **Primitive-driven:** no demo contains hand-rolled `Reflect['get'](globalThis,'document')`
+- [x] **Primitive-driven:** no demo contains hand-rolled `Reflect['get'](globalThis,'document')`
       keyboard logic or hardcoded element-id/state-value scripts; each reads `event.key` via the chained
       primitive reducer (`tabsKeyDown`, `comboboxKeyDown`, `radioGroupKeyDown`, …).
-- [ ] **Per-component parity:** all 35 components reach their committed status — the 15 `broken` become
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/pure-markup-demo.tsx` now mutates only
+    `state.submitted`; regenerated `pure-markup-demo.client.js` relies on the existing state-bound
+    output derive instead of querying/mutating DOM.
+  - Evidence 2026-06-15: `rg "Reflect|getElementById|setAttribute|globalThis|ctx\\.params"
+    examples/gallery/src/interactive examples/gallery/src/generated/interactive -g "*-demo.tsx"
+    -g "*-demo.client.js"` and `rg -n "document" examples/gallery/src/interactive
+    examples/gallery/src/generated/interactive -g "*-demo.tsx" -g "*-demo.client.js"` found no
+    matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.compile.test.ts src/interactive-gallery.client-behavior.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
+    and `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t "pure markup"` passed.
+- [x] **Per-component parity:** all 35 components reach their committed status — the 15 `broken` become
       functional; the locked-scope items land (custom `select`/`slider`, imperative `toast`,
       directional-sheet `drawer`, documented-native `progress`/`meter`); `partial` items close their
       listed gaps.
+  - Evidence 2026-06-15: `rg -n "^- \\[ \\]" plans/fix-ui.md` now shows no remaining Phase 3 or
+    Phase 4 component-family checklist items; only framework sugar and Phase 5 verification hardening
+    items remain open.
+  - Evidence 2026-06-15: the generated gallery compile/client-behavior tests and pure-markup browser
+    smoke listed under **Primitive-driven** passed after the final component cleanup.
 - [ ] **Regression-proof:** the no-shim static-export Playwright harness is a CI gate asserting the
       **model contracts** (ArrowRight roving, Home/End, typeahead, Escape, focus-into-menu, hover-open,
       …) — not the old canned behavior — with axe clean on real interactive end-states; `vp check` and
@@ -1072,9 +1090,14 @@ These are framework changes the demo rewrites depend on (not just demo edits):
       typeahead, Escape, focus-into-menu, etc.).
 - [ ] **Keep axe coverage on the real interactive end-states** (open menu with focus moved, expanded
       accordion via keyboard, etc.) — extend `interactive-gallery.axe.browser.test.ts`.
-- [ ] **Primitive unit tests already exist and pass** — they are not the gap; the gap is the demos and
+- [x] **Primitive unit tests already exist and pass** — they are not the gap; the gap is the demos and
       the framework wiring. Add tests that the demos actually call the primitives (or that the chained
       `on:*` refs are present in emitted HTML).
+  - Evidence 2026-06-15: `examples/gallery/src/interactive-gallery.compile.test.ts` asserts each
+    rewritten generated demo imports/calls the expected primitive reducers or emits the relevant
+    chained `on:*` handler refs, and asserts the generated clients no longer contain DOM escape hatches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.compile.test.ts` passed.
 
 ## Sequencing & ownership
 
