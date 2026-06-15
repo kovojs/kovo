@@ -104,7 +104,16 @@ function installInlineJisoLoader(importModule) {
       element.textContent = formatBoundValue(value);
     }
   };
-  const applyStateBindings = (host, state) => {
+  const writeDerivedStateBinding = async (element, ref, boundAttribute, state) => {
+    const hashIndex = ref.lastIndexOf('#');
+    if (hashIndex <= 0 || hashIndex === ref.length - 1) return;
+    const mod = await importModule(ref.slice(0, hashIndex));
+    const derive = mod[ref.slice(hashIndex + 1)];
+    const value = derive?.run?.(state);
+    if (value == null) element.removeAttribute?.(boundAttribute);
+    else element.setAttribute?.(boundAttribute, formatBoundValue(value));
+  };
+  const applyStateBindings = async (host, state) => {
     writeStateBinding(host, host.getAttribute?.('data-bind'), undefined, state);
     for (const element of queryAll(host, '[data-bind]')) {
       if (sameStateHost(element, host)) {
@@ -114,6 +123,15 @@ function installInlineJisoLoader(importModule) {
     for (const element of [host, ...queryAll(host, '*')]) {
       if (!sameStateHost(element, host)) continue;
       for (const attribute of bindingAttrs(element)) {
+        if (attribute.value.includes('#')) {
+          await writeDerivedStateBinding(
+            element,
+            attribute.value,
+            attribute.name.slice('data-bind:'.length),
+            state,
+          );
+          continue;
+        }
         writeStateBinding(
           element,
           attribute.value,
@@ -225,7 +243,7 @@ function installInlineJisoLoader(importModule) {
       await fn(event, context);
     }
     stateHost?.setAttribute?.('fw-state', JSON.stringify(state));
-    if (stateHost) applyStateBindings(stateHost, state);
+    if (stateHost) await applyStateBindings(stateHost, state);
   };
   const trigger = (type, target) => {
     void dispatch({ target, type });

@@ -95,7 +95,7 @@ async function dispatchDelegatedEventForElement(
   } finally {
     handlerContext.commit();
     if (supportsQueryBindings(stateHost)) {
-      applyStateBindings(stateHost, handlerContext.context.state);
+      await applyStateBindings(stateHost, handlerContext.context.state, { importModule });
     }
   }
 }

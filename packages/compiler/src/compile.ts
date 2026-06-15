@@ -16,7 +16,9 @@ import { platformBehaviorLowering } from './lower/platform.js';
 import { viewTransitionLowering } from './lower/view-transitions.js';
 import {
   inferComponentName,
+  jsxElements,
   parseComponentModule as parseComponentModuleModel,
+  type ComponentModuleModel,
 } from './scan/parse.js';
 import {
   applyModelPatchPass,
@@ -30,7 +32,8 @@ import {
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import type { CompileComponentOptions, CompileResult } from './types.js';
+import { escapeAttribute, type SourceReplacement } from './shared.js';
+import type { CompileComponentOptions, CompileResult, StateDeriveFact } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
@@ -102,7 +105,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   });
   const fileNames = compileArtifactFileNames(options.fileName);
 
-  const clientSource = emitClientModule(handlers, queryUpdatePlans, componentName);
+  const clientSource = emitClientModule(
+    handlers,
+    queryUpdatePlans,
+    deriveLowering.stateDerives,
+    componentName,
+  );
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
@@ -114,7 +122,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssAssets = cssSource
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
-  const serverRenderReplacements = serverRenderLowering(versionedHandlers, model);
+  const serverRenderReplacements = [
+    ...serverRenderLowering(versionedHandlers, model),
+    ...versionStateDeriveReferences(model, deriveLowering.stateDerives, clientHref),
+  ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
   const serverModule = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
@@ -143,6 +154,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...(cssSource ? [{ fileName: fileNames.css, kind: 'css' as const, source: cssSource }] : []),
       { fileName: fileNames.registry, kind: 'registry', source: registrySource },
     ],
+    clientExports: [
+      ...versionedHandlers.map((handler) => handler.exportName),
+      ...deriveLowering.stateDerives.map((derive) => derive.exportName),
+    ],
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
@@ -153,6 +168,34 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     updateCoverage,
     viewTransitions: viewTransitions.stamps,
   };
+}
+
+function versionStateDeriveReferences(
+  model: ComponentModuleModel,
+  stateDerives: readonly StateDeriveFact[],
+  clientHref: string,
+): SourceReplacement[] {
+  if (stateDerives.length === 0) return [];
+
+  const derivesByPlaceholder = new Map(stateDerives.map((derive) => [derive.placeholder, derive]));
+  const replacements: SourceReplacement[] = [];
+
+  for (const element of jsxElements(model)) {
+    for (const attribute of element.attributes) {
+      if (!attribute.name.startsWith('data-bind:') || !attribute.value) continue;
+
+      const derive = derivesByPlaceholder.get(attribute.value);
+      if (!derive) continue;
+
+      replacements.push({
+        end: attribute.end,
+        replacement: `${attribute.name}="${escapeAttribute(`${clientHref}#${derive.exportName}`)}"`,
+        start: attribute.start,
+      });
+    }
+  }
+
+  return replacements;
 }
 
 export function assertFixpoint(result: CompileResult): void {
@@ -185,7 +228,7 @@ export function collectMinifierReservedNames(
   const items = Array.isArray(results) ? results : [results];
 
   for (const result of items) {
-    for (const exportName of result.handlerExports) reserved.add(exportName);
+    for (const exportName of result.clientExports) reserved.add(exportName);
   }
 
   return [...reserved].sort();

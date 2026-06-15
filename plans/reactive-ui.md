@@ -1,6 +1,7 @@
 # Reactive UI: island-local state → DOM update plan (Jiso §4.8 for `state`)
 
-Status: **open — design complete, not started.** Created 2026-06-14. Split out of `plans/fix-ui.md`
+Status: **open — runtime state bindings and state attribute derives implemented; coverage diagnostics
+and demo migration remain.** Created 2026-06-14. Split out of `plans/fix-ui.md`
 Phase 1 (the long pole). `SPEC.md` is the source of truth; cite §4.8 (the update plan), §4.4 (the
 loader's responsibilities), §4.9 (update coverage), §6.2 (binding type-checks). This is the framework
 subsystem that makes a component's DOM update when its own island-local `state` changes — today that
@@ -111,8 +112,11 @@ ambiguity (query vs state root) proves messy.
       `data-bind`/`data-bind:<attr>` + named derives. Do **not** early-return on "no queries".
 - [ ] Reject or classify mixed query+state expressions as unhandled coverage in Phase 1; do not emit a
       single-input derive for an expression that depends on two update sources.
-- [ ] Lower boolean-presence attributes through null-removing derives instead of direct path bindings
+- [x] Lower boolean-presence attributes through null-removing derives instead of direct path bindings
       that would serialize `false` as a still-present attribute.
+  - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` routes state-only
+    boolean-presence attribute expressions through derives that return `""` or `null`; the focused
+    compiler vitest command below passed.
 - [ ] **Spread caveat (the switch bug).** `{...switchRootAttributes({ checked: state.checked })}`
       hides the `state` dependency behind an opaque helper call — the compiler cannot see it. Phase 1
       handles this by **migrating the 4 target demos** to bind state-dependent attributes as direct
@@ -139,38 +143,51 @@ ambiguity (query vs state root) proves messy.
 
 ### D4. Emit — derives + island wiring
 
-- [ ] `emit/server.ts`: emit the `data-bind`/`data-bind:<attr>` attributes on the lowered element; mark
+- [x] `emit/server.ts`: emit the `data-bind`/`data-bind:<attr>` attributes on the lowered element; mark
       the island host so the loader can scope the walk (the island already carries `fw-c` + `fw-state`;
       reuse, do not add a second marker — SPEC §4.6 "one element = one island").
-- [ ] `emit/client.ts`: emit state derives as client-module exports (same module the handlers live in;
+- [x] `emit/client.ts`: emit state derives as client-module exports (same module the handlers live in;
       `input: 'state'`).
-- [ ] Do **not** add a `statePlans` bootstrap object. The inline and full loaders self-discover state
+- [x] Do **not** add a `statePlans` bootstrap object. The inline and full loaders self-discover state
       bindings by walking `[data-bind]` / `[data-bind:*]` under the mutated `[fw-state]` host, keeping
       SPEC §4.8's DOM-as-plan contract intact.
+  - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts server
+    `data-bind:<attr>` refs, client derive exports, no `queryUpdatePlans`, no coverage facts, and
+    fixpoint for a state-only component; `packages/compiler/src/compile.ts` versions state derive refs
+    to the client module URL without adding a runtime `statePlans` artifact.
 
 ### D5. Loader — apply state bindings on mutation (SPEC §4.4 responsibility)
 
 The loader that runs in the gallery is the **inline 4KB loader**; it currently applies no update plan
 at all. Two sub-decisions:
 
-- [ ] **Where application lives.** SPEC §4.4 makes update-plan walking a loader responsibility, so add a
+- [x] **Where application lives.** SPEC §4.4 makes update-plan walking a loader responsibility, so add a
       minimal **state-binding walk** to the inline loader's `dispatch`: after
       `stateHost.setAttribute('fw-state', …)`, walk `stateHost`'s subtree for `[data-bind]` /
       `[data-bind:*]` whose path roots in `state`, recompute from the new state object, and set
       `textContent` / `setAttribute`. Pure-path bindings apply inline; **derive-backed** bindings
       lazy-`import()` the derive module (SPEC §4.8 "loads lazily on first relevant change"), keeping the
       always-loaded path small.
-- [ ] **Gzip budget.** The inline loader has a 4KB gzip budget (`inlineJisoLoaderGzipByteBudget`); Phase
+- [x] **Gzip budget.** The inline loader has a 4KB gzip budget (`inlineJisoLoaderGzipByteBudget`); Phase
       0 left ~0.8KB headroom. Keep the inline walker to simple paths + a lazy derive hook; if it doesn't
       fit, lazy-load the whole state-apply module on first state mutation. Re-run the parity `--check`
       and budget assertion (`pnpm --filter @jiso/runtime build:inline-loader`).
-- [ ] **Reuse, don't fork.** Factor the `applyQueryBindings` core in `query-bindings.ts` so the
+- [x] **Reuse, don't fork.** Factor the `applyQueryBindings` core in `query-bindings.ts` so the
       walk/format logic is shared and parameterized by a value resolver (`query` vs `state`); the full
       bootstrap loader gets the same state application for free.
-- [ ] **Scope + identity.** Apply scoped to the mutated island's `fw-state` host subtree (not the whole
+- [x] **Scope + identity.** Apply scoped to the mutated island's `fw-state` host subtree (not the whole
       document), and skip bindings whose closest `[fw-state]` is a nested island rather than the
       mutated host. Respect `?.` empty semantics (text → empty string, attribute → remove) exactly as
       the server renderer does (SPEC §4.8 FW222 drift rule).
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts` exposes async
+    `applyStateBindings` with pure path and lazy derive-backed attribute support;
+    `packages/runtime/src/handlers.ts` awaits it after delegated handler commits;
+    `packages/runtime/src/inline-loader-build.ts` applies pure and derive-backed state bindings after
+    writing `fw-state`, and `packages/runtime/src/inline-loader.ts` was regenerated.
+  - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
+    src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed 37
+    tests; `pnpm --filter @jiso/runtime check:inline-loader` passed; `pnpm --filter @jiso/runtime
+    exec tsc --noEmit` passed.
 
 ### D6. Coverage — §4.9 exhaustiveness for state
 
@@ -216,15 +233,27 @@ at all. Two sub-decisions:
   - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
     src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts` passed
     29 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
-- [ ] **S2b — Lowering, attribute derives** (D2): state-only attribute expressions lower to
+- [x] **S2b — Lowering, attribute derives** (D2): state-only attribute expressions lower to
       derive-backed `data-bind:<attr>`/client exports without emitting a runtime `statePlans` artifact;
       boolean-presence attributes remove on false/null rather than serializing `"false"`.
+  - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` emits state-only attribute
+    derives as `data-bind:<attr>` placeholders, wraps boolean-presence expressions with
+    `""`/`null` semantics, and leaves mixed query+state expressions unlowered; `packages/compiler/src/
+    emit/client.ts` emits `derive(["state"], ...)` exports; `packages/compiler/src/compile.ts`
+    versions those refs to `/c/*.client.js?v=...#export`.
+  - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts
+    src/handler-lowering.test.ts` passed 55 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit`
+    passed.
 - [ ] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
       output only; tests prove no emitted runtime `statePlans` artifact is required.
-- [ ] **S4 — Emit** (D4): server attributes + client derives; fixpoint/IR parity holds
-      (`assertFixpoint`/`assertRenderEquivalence` in the gallery emit path).
-- [ ] **S5 — Loader application** (D5): wire the walk into the inline loader `dispatch`; regenerate
+- [x] **S4a — Compiler emit** (D4): server attributes + client derives; component-level fixpoint
+      holds for state attribute derives.
+- [ ] **S4b — Gallery emit parity** (D4): `assertFixpoint`/`assertRenderEquivalence` holds in the
+      gallery emit path after the target demos are migrated.
+- [x] **S5 — Loader application** (D5): wire the walk into the inline loader `dispatch`; regenerate
       `inline-loader.ts`; budget + parity `--check` green.
+  - Evidence 2026-06-15: same S2b and D5 evidence above.
 - [ ] **S6 — Coverage gate** (D6): FW311-for-state diagnostic + tests.
 - [ ] **S7 — Migrate the 4 target demos** to declarative state binding (drop the helper-spread for
       state-dependent attrs where spec-conformant): `switch`, `toggle`, `disclosure`, `checkbox`.
@@ -257,8 +286,13 @@ at all. Two sub-decisions:
   - Evidence 2026-06-15: `packages/runtime/src/query-bindings.test.ts` asserts
     `state.deal.contact?.name` renders text as `''` and removes `aria-label`; the focused runtime
     vitest command above passed.
-- [ ] Boolean-presence attributes such as `hidden` are added/removed via derives; no test accepts
+- [x] Boolean-presence attributes such as `hidden` are added/removed via derives; no test accepts
       `hidden="false"` as a passing update.
+  - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts `hidden={!state.open}`
+    lowers to `derive(["state"], (state) => ((!state.open) ? "" : null))`; `packages/runtime/src/
+    query-bindings.test.ts` and `packages/runtime/src/inline-loader-delegated.test.ts` assert
+    derive-backed `data-bind:hidden` removes `hidden` when the derive returns `null` and sets it when
+    the derive returns `""`; the focused compiler/runtime vitest commands above passed.
 - [ ] Mixed query+state expressions are rejected or reported as unhandled coverage until multi-input
       derives are designed.
 - [x] Chained handlers update DOM from the final `ctx.state` value after all handler refs run.

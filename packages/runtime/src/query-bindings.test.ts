@@ -215,7 +215,7 @@ describe('query binding helpers', () => {
     expect(host.getAttribute('aria-label')).toBeNull();
   });
 
-  it('applies same-island state bindings without query dependencies', () => {
+  it('applies same-island state bindings without query dependencies', async () => {
     const host = new FakeStatefulBindingElement({
       'data-bind:data-state': 'state.status',
       'fw-state': '{"status":"idle"}',
@@ -232,17 +232,15 @@ describe('query binding helpers', () => {
       { parent: host },
     );
 
-    expect(applyStateBindings(host, { count: 2, label: 'Ready', status: 'open' })).toEqual([
-      'state.count',
-      'state.status',
-      'state.label',
-    ]);
+    await expect(
+      applyStateBindings(host, { count: 2, label: 'Ready', status: 'open' }),
+    ).resolves.toEqual(['state.count', 'state.status', 'state.label']);
     expect(count.textContent).toBe('2');
     expect(host.getAttribute('data-state')).toBe('open');
     expect(label.getAttribute('aria-label')).toBe('Ready');
   });
 
-  it('keeps state binding walks scoped to the nearest state host', () => {
+  it('keeps state binding walks scoped to the nearest state host', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"count":0}' });
     const count = new FakeStatefulBindingElement(
       { 'data-bind': 'state.count' },
@@ -257,12 +255,12 @@ describe('query binding helpers', () => {
       { parent: nestedHost, textContent: '100' },
     );
 
-    expect(applyStateBindings(host, { count: 1 })).toEqual(['state.count']);
+    await expect(applyStateBindings(host, { count: 1 })).resolves.toEqual(['state.count']);
     expect(count.textContent).toBe('1');
     expect(nestedCount.textContent).toBe('100');
   });
 
-  it('applies optional state path empty semantics to text and attributes', () => {
+  it('applies optional state path empty semantics to text and attributes', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"deal":{}}' });
     const name = new FakeStatefulBindingElement(
       { 'data-bind': 'state.deal.contact?.name' },
@@ -276,12 +274,38 @@ describe('query binding helpers', () => {
       { parent: host },
     );
 
-    expect(applyStateBindings(host, { deal: { contact: null } })).toEqual([
+    await expect(applyStateBindings(host, { deal: { contact: null } })).resolves.toEqual([
       'state.deal.contact?.name',
       'state.deal.contact?.name',
     ]);
     expect(name.textContent).toBe('');
     expect(label.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('lazy-imports state derive attribute bindings and removes empty results', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"open":false}' });
+    const panel = new FakeStatefulBindingElement(
+      {
+        'data-bind:hidden': '/c/disclosure.client.js#Disclosure$panel_hidden_derive',
+        hidden: '',
+      },
+      { parent: host },
+    );
+    const importModule = async () => ({
+      Disclosure$panel_hidden_derive: {
+        run(value: unknown) {
+          return (value as { open: boolean }).open ? null : '';
+        },
+      },
+    });
+
+    await expect(applyStateBindings(host, { open: true }, { importModule })).resolves.toEqual([
+      '/c/disclosure.client.js#Disclosure$panel_hidden_derive',
+    ]);
+    expect(panel.getAttribute('hidden')).toBeNull();
+
+    await applyStateBindings(host, { open: false }, { importModule });
+    expect(panel.getAttribute('hidden')).toBe('');
   });
 
   it('detects query binding roots by selector support', () => {

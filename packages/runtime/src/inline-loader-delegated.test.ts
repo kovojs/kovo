@@ -116,6 +116,13 @@ describe('inline loader delegated handlers', () => {
         },
         { parent: host },
       );
+      const panel = new FakeStatefulBindingElement(
+        {
+          'data-bind:hidden': '/c/cart.js#panelHidden',
+          hidden: '',
+        },
+        { parent: host },
+      );
       const nestedHost = new FakeStatefulBindingElement(
         { 'fw-state': '{"count":100}' },
         { parent: host },
@@ -133,7 +140,15 @@ describe('inline loader delegated handlers', () => {
           ctx.state.status = 'open';
         },
       );
-      const importModule = vi.fn(async () => ({ add, finish }));
+      const importModule = vi.fn(async () => ({
+        add,
+        finish,
+        panelHidden: {
+          run(value: unknown) {
+            return (value as { status?: string }).status === 'open' ? null : '';
+          },
+        },
+      }));
 
       await dispatchInlineDelegatedClick(host, importModule, installSource);
 
@@ -141,6 +156,7 @@ describe('inline loader delegated handlers', () => {
       expect(host.getAttribute('data-state')).toBe('open');
       expect(count.textContent).toBe('2');
       expect(label.getAttribute('aria-label')).toBe('Ready');
+      expect(panel.getAttribute('hidden')).toBeNull();
       expect(nestedCount.textContent).toBe('100');
     },
   );

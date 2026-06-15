@@ -115,6 +115,7 @@ export {
 } from './query-bindings.js';
 export type {
   AppliedCompiledQueryUpdatePlan,
+  ApplyStateBindingsOptions,
   CompiledQueryDerive,
   CompiledQueryStamp,
   CompiledQueryTemplateStamp,

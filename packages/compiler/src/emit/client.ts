@@ -9,16 +9,19 @@ import type {
   QueryStampFact,
   QueryTemplateStampFact,
   QueryUpdatePlanFact,
+  StateDeriveFact,
 } from '../types.js';
 
 export function emitClientModule(
   handlers: HandlerLowering[],
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
+  stateDerives: readonly StateDeriveFact[],
   componentName: string,
 ): string {
   const imports = [
     ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
-    ...(queryUpdatePlans.some(
+    ...(stateDerives.length > 0 ||
+    queryUpdatePlans.some(
       (plan) => (plan.derives?.length ?? 0) > 0 || (plan.stamps?.length ?? 0) > 0,
     )
       ? ['derive']
@@ -35,12 +38,17 @@ export function emitClientModule(
         )
         .join('\n')
     : '';
+  const stateDeriveExports = stateDerives.map(emitStateDeriveExport).join('\n');
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
-  const exports = [handlerExports, queryPlanExport].filter(Boolean).join('\n\n');
+  const exports = [handlerExports, stateDeriveExports, queryPlanExport].filter(Boolean).join('\n\n');
 
   return `${compilerIrHeader}
 ${importLine}${exports || '// no client handlers emitted'}
 `;
+}
+
+function emitStateDeriveExport(deriveFact: StateDeriveFact): string {
+  return `export const ${deriveFact.exportName} = derive(["state"], (state) => ${deriveFact.expression});`;
 }
 
 function emitHandlerBody(handler: HandlerLowering): string {

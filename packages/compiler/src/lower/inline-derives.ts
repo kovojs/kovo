@@ -13,7 +13,7 @@ import {
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
-import type { CompileComponentOptions } from '../types.js';
+import type { CompileComponentOptions, StateDeriveFact } from '../types.js';
 
 type InlineDeriveLoweringOptions = Pick<
   CompileComponentOptions,
@@ -25,11 +25,13 @@ interface InlineAttributeDerive {
   baseName: string;
   expression: string;
   query: string;
+  source: 'query' | 'state';
 }
 
 interface InlineAttributeDeriveLowering {
   prefix: string;
   replacements: SourceReplacement[];
+  stateDerives: StateDeriveFact[];
 }
 
 export function lowerInlineAttributeDerives(
@@ -41,6 +43,7 @@ export function lowerInlineAttributeDerives(
 
   const replacements: SourceReplacement[] = [];
   const deriveExports: string[] = [];
+  const stateDerives: StateDeriveFact[] = [];
   const nameCounts = new Map<string, number>();
 
   for (const element of jsxElements(model)) {
@@ -62,13 +65,31 @@ export function lowerInlineAttributeDerives(
     nameCounts.set(candidate.baseName, count + 1);
     const exportName = count === 0 ? candidate.baseName : `${candidate.baseName}_${count + 1}`;
     const stampName = `${candidate.query}.${exportName}`;
+    const expression =
+      candidate.source === 'state'
+        ? deriveExpression(candidate.attribute, candidate.expression)
+        : candidate.expression.trim();
 
     deriveExports.push(
-      `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${candidate.query}) => ${candidate.expression});`,
+      `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${candidate.query}) => ${expression});`,
     );
+    if (candidate.source === 'state') {
+      stateDerives.push({
+        attr: candidate.attribute.name,
+        expression,
+        exportName,
+        input: 'state',
+        name: exportName,
+        param: 'state',
+        placeholder: stampName,
+      });
+    }
     replacements.push({
       end: candidate.attribute.end,
-      replacement: `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
+      replacement:
+        candidate.source === 'state'
+          ? `${stateBindingAttributeName(candidate.attribute.name)}="${escapeAttribute(stampName)}"`
+          : `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
       start: candidate.attribute.start,
     });
   }
@@ -99,6 +120,7 @@ export function lowerInlineAttributeDerives(
     return {
       prefix: '',
       replacements,
+      stateDerives,
     };
   }
 
@@ -107,6 +129,7 @@ export function lowerInlineAttributeDerives(
   return {
     prefix,
     replacements,
+    stateDerives,
   };
 }
 
@@ -124,9 +147,16 @@ function inlineAttributeDerive(
       .map((path) => queryNameFromPath(path.path))
       .filter((query): query is string => query !== null && knownQueries.has(query)),
   );
-  if (queryRoots.size !== 1) return null;
+  const roots = new Set(
+    (attribute.expressionPropertyAccesses ?? [])
+      .map((path) => queryNameFromPath(path.path))
+      .filter((root): root is string => root !== null),
+  );
+  const stateOnly = roots.size > 0 && [...roots].every((root) => root === 'state');
+  if (queryRoots.size !== 1 && !stateOnly) return null;
+  if (queryRoots.size > 0 && roots.has('state')) return null;
 
-  const query = [...queryRoots][0];
+  const query = stateOnly ? 'state' : [...queryRoots][0];
   if (!query) return null;
 
   return {
@@ -134,6 +164,7 @@ function inlineAttributeDerive(
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attribute.name)}_derive`,
     expression: attribute.expression.trim(),
     query,
+    source: stateOnly ? 'state' : 'query',
   };
 }
 
@@ -235,6 +266,26 @@ function innermostContainingElement(
 function isBindingAttributeName(name: string): boolean {
   return name === 'data-bind' || name.startsWith('data-bind:') || name === 'data-bind-list';
 }
+
+function stateBindingAttributeName(name: string): string {
+  return `data-bind:${name}`;
+}
+
+function deriveExpression(attribute: JsxAttributeModel, expression: string): string {
+  const trimmed = expression.trim();
+  return booleanPresenceAttributes.has(attribute.name) ? `((${trimmed}) ? "" : null)` : trimmed;
+}
+
+const booleanPresenceAttributes = new Set([
+  'checked',
+  'disabled',
+  'hidden',
+  'multiple',
+  'open',
+  'readonly',
+  'required',
+  'selected',
+]);
 
 function isStatePath(path: string): boolean {
   return path.startsWith('state.');

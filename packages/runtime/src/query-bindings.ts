@@ -70,6 +70,10 @@ export interface ApplyQueryBindingsOptions {
   bindingIndex?: QueryBindingIndex;
 }
 
+export interface ApplyStateBindingsOptions extends ApplyQueryBindingsOptions {
+  importModule?: (url: string) => Promise<Record<string, unknown>>;
+}
+
 export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {}
 
 export function createQueryBindingIndex(root: QueryBindingRoot): QueryBindingIndex {
@@ -90,9 +94,10 @@ export function applyQueryBindings(
 export function applyStateBindings(
   root: QueryBindingRoot,
   state: unknown,
-  options: ApplyQueryBindingsOptions = {},
-): string[] {
-  return applyRootBindings(root, 'state', state, { ...options, scopeRoot: root });
+  options: ApplyStateBindingsOptions = {},
+): Promise<string[]> {
+  const applied = applyRootBindings(root, 'state', state, { ...options, scopeRoot: root });
+  return applyStateDeriveBindings(root, state, applied, options);
 }
 
 interface ApplyRootBindingsOptions extends ApplyQueryBindingsOptions {
@@ -266,6 +271,57 @@ function attributeBindingElements(
   }
 
   return elements;
+}
+
+async function applyStateDeriveBindings(
+  root: QueryBindingRoot,
+  state: unknown,
+  applied: string[],
+  options: ApplyStateBindingsOptions,
+): Promise<string[]> {
+  const importModule = options.importModule;
+  if (!importModule) return applied;
+
+  for (const element of attributeBindingElements(root, { ...options, scopeRoot: root })) {
+    if (!elementBelongsToScope(element, root)) continue;
+
+    for (const attribute of bindingAttributes(element)) {
+      const ref = parseDeriveReference(attribute.value);
+      if (!ref) continue;
+
+      const mod = await importModule(ref.url);
+      const derive = mod[ref.exportName];
+      const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
+      const boundAttribute = attribute.name.slice('data-bind:'.length);
+      if (value === undefined || value === null) {
+        element.removeAttribute?.(boundAttribute);
+      } else {
+        element.setAttribute?.(boundAttribute, formatBoundValue(value));
+      }
+      applied.push(attribute.value);
+    }
+  }
+
+  return applied;
+}
+
+function isRunnableDerive(value: unknown): value is { run(value: unknown): unknown } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'run' in value &&
+    typeof value.run === 'function'
+  );
+}
+
+function parseDeriveReference(value: string): { exportName: string; url: string } | null {
+  const hashIndex = value.lastIndexOf('#');
+  if (hashIndex <= 0 || hashIndex === value.length - 1) return null;
+
+  return {
+    exportName: value.slice(hashIndex + 1),
+    url: value.slice(0, hashIndex),
+  };
 }
 
 function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown): boolean {

@@ -78,6 +78,28 @@ export const CartDrawer = component('cart-drawer', {
     ]);
   });
 
+  it('collects state derive export names for minifier preservation', () => {
+    const disclosure = compileComponentModule({
+      fileName: 'disclosure-demo.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const DisclosureDemo = component('disclosure-demo', {
+  state: () => ({ open: false }),
+  render: (_queries, state) => (
+    <section hidden={!state.open}>Panel</section>
+  ),
+});
+`,
+    });
+
+    expect(disclosure.handlerExports).toEqual([]);
+    expect(disclosure.clientExports).toEqual(['DisclosureDemo$section_hidden_derive']);
+    expect(collectMinifierReservedNames(disclosure)).toEqual([
+      'DisclosureDemo$section_hidden_derive',
+    ]);
+  });
+
   it('reports FW210 for anonymous handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

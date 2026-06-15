@@ -75,6 +75,46 @@ export const Counter = component('counter', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers state-only attribute expressions to versioned derive bindings', () => {
+    const result = compileComponentModule({
+      fileName: 'disclosure-demo.tsx',
+      source: `
+export const DisclosureDemo = component('disclosure-demo', {
+  state: () => ({ open: false }),
+  render: (_queries, state) => (
+    <disclosure-demo>
+      <button aria-expanded={state.open ? 'true' : 'false'}>Toggle</button>
+      <section hidden={!state.open}>Panel</section>
+    </disclosure-demo>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain(
+      'data-bind:aria-expanded="/c/disclosure-demo.client.js?v=',
+    );
+    expect(serverSource).toContain('#DisclosureDemo$button_aria_expanded_derive');
+    expect(serverSource).toContain('data-bind:hidden="/c/disclosure-demo.client.js?v=');
+    expect(serverSource).toContain('#DisclosureDemo$section_hidden_derive');
+    expect(serverSource).not.toContain('data-derive=');
+    expect(serverSource).not.toContain('hidden={!state.open}');
+    expect(clientSource).toContain("import { derive } from '@jiso/runtime';");
+    expect(clientSource).toContain(
+      `export const DisclosureDemo$button_aria_expanded_derive = derive(["state"], (state) => state.open ? 'true' : 'false');`,
+    );
+    expect(clientSource).toContain(
+      `export const DisclosureDemo$section_hidden_derive = derive(["state"], (state) => ((!state.open) ? "" : null));`,
+    );
+    expect(clientSource).not.toContain('queryUpdatePlans');
+    expect(result.queryUpdatePlans).toEqual([]);
+    expect(result.updateCoverage).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('rejects query declarations that collide with the reserved state binding root', () => {
     const result = compileComponentModule({
       fileName: 'bad-state-query.tsx',

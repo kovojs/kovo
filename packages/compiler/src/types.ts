@@ -70,6 +70,7 @@ export interface CompileArtifactFileNames {
 }
 
 export interface CompileResult {
+  clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
   diagnostics: readonly CompilerDiagnostic[];
@@ -154,6 +155,7 @@ export function elementParamNameFromAttribute(attributeName: string): string {
 
 export function createEmptyCompileResult(): CompileResult {
   return {
+    clientExports: [],
     componentGraphFacts: [],
     cssAssets: [],
     diagnostics: [],
@@ -210,6 +212,16 @@ export interface QueryDeriveFact {
   name: string;
   param: string;
   selector: string;
+}
+
+export interface StateDeriveFact {
+  attr: string;
+  expression: string;
+  exportName: string;
+  input: 'state';
+  name: string;
+  param: 'state';
+  placeholder: string;
 }
 
 export interface QueryStampFact {
