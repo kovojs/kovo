@@ -703,6 +703,26 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       proportional size/transform; no thumb-drag or track-click; no `data-has-overflow-*`/auto-hide.
       Wire `scrollAreaViewportScroll` + add a thumb-geometry helper (size = clientH/scrollH, offset =
       ratio) + drag/track-click handlers (Radix `getThumbSize`/`getThumbOffset` math).
+  - Evidence 2026-06-15: the first scroll-area slice added `scroll` to the modular and inline loader
+    delegated event sets, added `scrollTop`/`scrollLeft` live-property binding parity, added
+    `scrollAreaThumbGeometry`, and rewrote `examples/gallery/src/interactive/scroll-area-demo.tsx` so
+    viewport `data-scroll-y`/`scrollTop`, thumb `data-scroll-position`/style, button pressed state/text,
+    and output text are state-bound. The generated scroll-area client imports
+    `_scrollAreaViewportScroll`/`_scrollAreaThumbGeometry`, mutates only `ctx.state`, and contains no
+    DOM escape hatches.
+  - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
+    src/query-bindings.test.ts src/index.test.ts src/inline-loader.test.ts
+    src/inline-loader-triggers.test.ts src/loader-query-hydration.test.ts`,
+    `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm --filter @jiso/runtime exec tsc
+    --noEmit`, `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`,
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec
+    vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+    scroll-area`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
+    --check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
+  - Remaining: thumb drag, track click, `data-has-overflow-*`, `data-scrolling`/auto-hide behavior, and
+    the Phase 4 `scroll-area.ts` checklist item are still open.
 - [ ] **toast** [P1]: a single static always-open toast — not the imperative push/stack/auto-dismiss
       (timeout 5000ms)/swipe/pause-on-hover/F6-viewport model of Base UI/Sonner; Escape-dismiss is dead
       (loader #2); live-region announcement is degraded (content pre-rendered). **Decision (locked

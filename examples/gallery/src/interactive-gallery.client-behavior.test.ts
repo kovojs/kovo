@@ -658,13 +658,48 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(radioGroupState).toEqual({ value: 'email' });
 
-    const scrollAreaState = { position: 'top' };
+    const scrollAreaState = {
+      scrollTop: 0,
+      scrollY: 'start',
+      thumbOffset: 0,
+      thumbSize: 28,
+      verticalVisible: true,
+    };
     clientHandler(scrollArea, 'GalleryScrollAreaDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: scrollAreaState,
     });
-    expect(scrollAreaState).toEqual({ position: 'end' });
+    expect(scrollAreaState).toEqual({
+      scrollTop: 1000000,
+      scrollY: 'end',
+      thumbOffset: 100,
+      thumbSize: 28,
+      verticalVisible: true,
+    });
+    const scrollEvent = new Event('scroll');
+    Object.defineProperty(scrollEvent, 'target', {
+      value: {
+        clientHeight: 100,
+        clientWidth: 100,
+        scrollHeight: 300,
+        scrollLeft: 0,
+        scrollTop: 100,
+        scrollWidth: 100,
+      },
+    });
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$div_scroll')(scrollEvent, {
+      params: {},
+      signal,
+      state: scrollAreaState,
+    });
+    expect(scrollAreaState).toEqual({
+      scrollTop: 100,
+      scrollY: 'middle',
+      thumbOffset: 50,
+      thumbSize: 33.33333333333333,
+      verticalVisible: true,
+    });
 
     const selectState = { value: 'standard' };
     clientHandler(select, 'GallerySelectDemo$select_change')(changeEvent('express'), {

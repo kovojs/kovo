@@ -24,6 +24,7 @@ describe('runtime barrel loader smoke', () => {
       'paste',
       'cancel',
       'beforetoggle',
+      'scroll',
       'focus',
       'blur',
     ]);
@@ -38,6 +39,7 @@ describe('runtime barrel loader smoke', () => {
       'paste',
       'cancel',
       'beforetoggle',
+      'scroll',
       'focus',
       'blur',
       'pointerover',

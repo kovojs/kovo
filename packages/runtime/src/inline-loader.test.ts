@@ -37,6 +37,8 @@ describe('inline loader source', () => {
         'contextmenu',
         'paste',
         'cancel',
+        'beforetoggle',
+        'scroll',
         'focus',
         'blur',
         'pointerover',

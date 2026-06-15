@@ -9,6 +9,8 @@ export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
   checked?: boolean;
   indeterminate?: boolean;
+  scrollLeft?: number;
+  scrollTop?: number;
   textContent?: string | null;
   value?: string;
 }
@@ -366,6 +368,12 @@ function removeBoundAttribute(element: QueryBindingElement, name: string): void 
   if (name === 'value' && element.value !== undefined) {
     element.value = '';
   }
+  if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
+    element.scrollLeft = 0;
+  }
+  if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
+    element.scrollTop = 0;
+  }
   if (name === 'checked' && element.checked !== undefined) {
     element.checked = false;
   }
@@ -384,6 +392,12 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   element.setAttribute?.(name, rendered);
   if (name === 'value' && element.value !== undefined) {
     element.value = rendered;
+  }
+  if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
+    element.scrollLeft = Number(value) || 0;
+  }
+  if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
+    element.scrollTop = Number(value) || 0;
   }
   if (name === 'checked' && element.checked !== undefined) {
     element.checked = true;

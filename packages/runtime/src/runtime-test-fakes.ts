@@ -245,13 +245,22 @@ export class FakeQueryBindingElement {
   attributes: { name: string; value: string }[];
   checked?: boolean;
   indeterminate?: boolean;
+  scrollLeft?: number;
+  scrollTop?: number;
   textContent: string | null;
   value?: string;
 
   constructor(
     pathOrAttributes: string | Record<string, string>,
     options:
-      | { checked?: boolean; indeterminate?: boolean; textContent?: string | null; value?: string }
+      | {
+          checked?: boolean;
+          indeterminate?: boolean;
+          scrollLeft?: number;
+          scrollTop?: number;
+          textContent?: string | null;
+          value?: string;
+        }
       | string = {},
   ) {
     this.attributes =
@@ -265,6 +274,12 @@ export class FakeQueryBindingElement {
     }
     if (normalizedOptions.indeterminate !== undefined) {
       this.indeterminate = normalizedOptions.indeterminate;
+    }
+    if (normalizedOptions.scrollLeft !== undefined) {
+      this.scrollLeft = normalizedOptions.scrollLeft;
+    }
+    if (normalizedOptions.scrollTop !== undefined) {
+      this.scrollTop = normalizedOptions.scrollTop;
     }
     if (normalizedOptions.value !== undefined) {
       this.value = normalizedOptions.value;
@@ -310,6 +325,8 @@ export class FakeStatefulBindingElement extends FakeQueryBindingElement {
       checked?: boolean;
       indeterminate?: boolean;
       parent?: FakeStatefulBindingElement;
+      scrollLeft?: number;
+      scrollTop?: number;
       textContent?: string | null;
       value?: string;
     } = {},

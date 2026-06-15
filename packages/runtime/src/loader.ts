@@ -60,6 +60,7 @@ const defaultDelegatedEvents = [
   'paste',
   'cancel',
   'beforetoggle',
+  'scroll',
   'focus',
   'blur',
 ] as const;

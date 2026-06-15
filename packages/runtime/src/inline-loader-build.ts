@@ -62,7 +62,7 @@ function installInlineJisoLoader(importModule) {
   // capture phase at ancestors, so they are synthesized below from pointerover/out.
   const events = [
     'click', 'submit', 'input', 'change', 'keydown', 'keyup',
-    'contextmenu', 'paste', 'cancel', 'beforetoggle', 'focus', 'blur',
+    'contextmenu', 'paste', 'cancel', 'beforetoggle', 'scroll', 'focus', 'blur',
   ];
   const doc = document;
   let idemCounter = 0;
@@ -98,6 +98,12 @@ function installInlineJisoLoader(importModule) {
     else element.setAttribute?.(name, formatBoundValue(value));
     if (name === 'value' && element.value !== undefined) {
       element.value = value == null ? '' : formatBoundValue(value);
+    }
+    if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {
+      element.scrollLeft = Number(value) || 0;
+    }
+    if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
+      element.scrollTop = Number(value) || 0;
     }
     if (name === 'checked' && element.checked !== undefined) element.checked = value != null;
     if (name === 'indeterminate' && element.indeterminate !== undefined) {

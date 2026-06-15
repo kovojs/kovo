@@ -59,6 +59,10 @@ export interface ScrollAreaViewportTarget {
   readonly scrollWidth: number;
 }
 
+export interface ScrollAreaThumbGeometryOptions extends ScrollAreaState {
+  orientation?: ScrollAreaOrientation;
+}
+
 export interface ScrollAreaViewportComputedState {
   readonly cornerVisible: boolean;
   readonly horizontalVisible: boolean;
@@ -75,8 +79,16 @@ export interface ScrollAreaViewportComputedState {
 
 export type ScrollAreaViewportScrollResult = ScrollAreaViewportComputedState;
 
+export interface ScrollAreaThumbGeometry {
+  readonly offsetRatio: number;
+  readonly scrollPosition: ScrollAreaScrollPosition;
+  readonly sizeRatio: number;
+  readonly visible: boolean;
+}
+
 export type ScrollAreaViewportScrollEvent = Event & {
   readonly currentTarget: ScrollAreaViewportTarget | null;
+  readonly target?: Partial<ScrollAreaViewportTarget> | null;
 };
 
 export function scrollAreaRootAttributes(
@@ -208,6 +220,30 @@ export function scrollAreaViewportState(
   });
 }
 
+export function scrollAreaThumbGeometry(
+  target: ScrollAreaViewportTarget,
+  options: ScrollAreaThumbGeometryOptions = {},
+): ScrollAreaThumbGeometry {
+  const orientation = scrollAreaOrientation(options.orientation);
+  const viewport = scrollAreaViewportState(target, options);
+  const clientSize =
+    orientation === 'vertical'
+      ? finiteScrollNumber(target.clientHeight)
+      : finiteScrollNumber(target.clientWidth);
+  const scrollSize =
+    orientation === 'vertical'
+      ? finiteScrollNumber(target.scrollHeight)
+      : finiteScrollNumber(target.scrollWidth);
+  const visible = orientation === 'vertical' ? viewport.verticalVisible : viewport.horizontalVisible;
+
+  return Object.freeze({
+    offsetRatio: orientation === 'vertical' ? viewport.scrollYRatio : viewport.scrollXRatio,
+    scrollPosition: orientation === 'vertical' ? viewport.scrollY : viewport.scrollX,
+    sizeRatio: visible && scrollSize > 0 ? Math.min(1, Math.max(0, clientSize / scrollSize)) : 0,
+    visible,
+  });
+}
+
 /**
  * @jisoPrimitiveHandler
  *
@@ -220,9 +256,31 @@ export function scrollAreaViewportScroll(
 ): ScrollAreaViewportScrollResult | undefined {
   if (event.defaultPrevented) return;
 
-  if (event.currentTarget === null) return;
+  const target = scrollAreaViewportEventTarget(event);
+  if (target === undefined) return;
 
-  return scrollAreaViewportState(event.currentTarget, state);
+  return scrollAreaViewportState(target, state);
+}
+
+function scrollAreaViewportEventTarget(
+  event: ScrollAreaViewportScrollEvent,
+): ScrollAreaViewportTarget | undefined {
+  if (isScrollAreaViewportTarget(event.target)) return event.target;
+  if (isScrollAreaViewportTarget(event.currentTarget)) return event.currentTarget;
+  return undefined;
+}
+
+function isScrollAreaViewportTarget(value: unknown): value is ScrollAreaViewportTarget {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as ScrollAreaViewportTarget).clientHeight === 'number' &&
+    typeof (value as ScrollAreaViewportTarget).clientWidth === 'number' &&
+    typeof (value as ScrollAreaViewportTarget).scrollHeight === 'number' &&
+    typeof (value as ScrollAreaViewportTarget).scrollLeft === 'number' &&
+    typeof (value as ScrollAreaViewportTarget).scrollTop === 'number' &&
+    typeof (value as ScrollAreaViewportTarget).scrollWidth === 'number'
+  );
 }
 
 function scrollAreaDataAttributes(state: ScrollAreaState): PrimitiveDataAttributes {

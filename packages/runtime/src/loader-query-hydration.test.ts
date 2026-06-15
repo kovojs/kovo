@@ -53,6 +53,8 @@ describe('loader query hydration', () => {
       'contextmenu',
       'paste',
       'cancel',
+      'beforetoggle',
+      'scroll',
       'focus',
       'blur',
       'pointerover',

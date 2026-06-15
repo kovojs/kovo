@@ -124,6 +124,8 @@ export function evaluateClientModule(
     _popoverBeforeToggle: headlessPrimitives.popoverBeforeToggle,
     _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
     _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
+    _scrollAreaThumbGeometry: headlessPrimitives.scrollAreaThumbGeometry,
+    _scrollAreaViewportScroll: headlessPrimitives.scrollAreaViewportScroll,
     _switchTriggerClick: headlessPrimitives.switchTriggerClick,
     _tabsKeyDown: headlessPrimitives.tabsKeyDown,
     _tabsTriggerClick: headlessPrimitives.tabsTriggerClick,

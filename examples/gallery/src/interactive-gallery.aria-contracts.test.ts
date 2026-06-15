@@ -241,25 +241,47 @@ describe('compiled interactive gallery demos', () => {
       expect(navClick.defaultPrevented).toBe(true);
       expect(selector(document, '[data-demo-state="navigation-value"]').textContent).toBe('docs');
 
-      const scrollArea = evaluateClientModule('scroll-area-demo.client.js', { document });
-      const scrollAreaState = { position: 'top' };
+      const scrollArea = evaluateClientModule('scroll-area-demo.client.js');
+      const scrollAreaState = {
+        scrollTop: 0,
+        scrollY: 'start',
+        thumbOffset: 0,
+        thumbSize: 28,
+        verticalVisible: true,
+      };
       clientHandler(scrollArea, 'GalleryScrollAreaDemo$button_click')(new Event('click'), {
         params: {},
         signal,
         state: scrollAreaState,
       });
-      expect(scrollAreaState).toEqual({ position: 'end' });
-      expect(element(document, 'gallery-scroll-area-viewport')).toMatchObject({
-        scrollTop: 160,
+      expect(scrollAreaState).toMatchObject({
+        scrollTop: 1000000,
+        scrollY: 'end',
+        thumbOffset: 100,
       });
-      expect(element(document, 'gallery-scroll-area-viewport').attrs['data-scroll-y']).toBe('end');
-      expect(element(document, 'gallery-scroll-area-thumb').attrs['data-scroll-position']).toBe(
-        'end',
-      );
-      expect(element(document, 'gallery-scroll-area-toggle').attrs['aria-pressed']).toBe('true');
-      expect(selector(document, '[data-demo-state="scroll-area-position"]').textContent).toBe(
-        'end',
-      );
+
+      const scrollEvent = new Event('scroll');
+      Object.defineProperty(scrollEvent, 'target', {
+        value: {
+          clientHeight: 100,
+          clientWidth: 100,
+          scrollHeight: 300,
+          scrollLeft: 0,
+          scrollTop: 100,
+          scrollWidth: 100,
+        },
+      });
+      clientHandler(scrollArea, 'GalleryScrollAreaDemo$div_scroll')(scrollEvent, {
+        params: {},
+        signal,
+        state: scrollAreaState,
+      });
+      expect(scrollAreaState).toMatchObject({
+        scrollTop: 100,
+        scrollY: 'middle',
+        thumbOffset: 50,
+        verticalVisible: true,
+      });
 
       const command = evaluateClientModule('command-demo.client.js', { document });
       const commandState = {

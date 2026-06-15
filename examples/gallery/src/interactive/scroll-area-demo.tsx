@@ -5,7 +5,9 @@ import {
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
+  scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaViewportAttributes,
+  scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/scroll-area.tsx)
@@ -23,25 +25,33 @@ const VIEWPORT_CLASS =
 const SCROLLBAR_CLASS =
   'absolute flex touch-none select-none bg-neutral-100 p-0.5 transition-colors data-[orientation=vertical]:inset-y-0 data-[orientation=vertical]:right-0 data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:inset-x-0 data-[orientation=horizontal]:bottom-0 data-[orientation=horizontal]:h-2.5 data-[state=hidden]:opacity-0';
 const THUMB_CLASS =
-  'relative flex-1 rounded-full bg-neutral-400 data-[orientation=vertical]:min-h-8 data-[orientation=horizontal]:min-w-8 data-[state=hidden]:opacity-0';
+  'absolute left-0 right-0 rounded-full bg-neutral-400 transition-[top,height,width] data-[orientation=vertical]:min-h-8 data-[orientation=horizontal]:min-w-8 data-[state=hidden]:opacity-0';
 const CORNER_CLASS =
   'absolute bottom-0 right-0 h-2.5 w-2.5 bg-neutral-100 data-[state=hidden]:hidden';
 const TOGGLE_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryScrollAreaDemoState {
-  position: 'end' | 'top';
+  scrollTop: number;
+  scrollY: 'end' | 'middle' | 'none' | 'start';
+  thumbOffset: number;
+  thumbSize: number;
+  verticalVisible: boolean;
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
-  state: () => ({ position: 'top' }),
+  state: () => ({
+    scrollTop: 0,
+    scrollY: 'start' as const,
+    thumbOffset: 0,
+    thumbSize: 28,
+    verticalVisible: true,
+  }),
   render: (_queries: Record<string, never>, state: GalleryScrollAreaDemoState) => {
     const rootState = { scrollbars: 'vertical' as const };
     const viewportId = 'gallery-scroll-area-viewport';
-    const atEnd = state.position === 'end';
-    const scrollY = state.position === 'top' ? 'start' : 'end';
 
     return (
       <section
@@ -54,10 +64,26 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: viewportId,
             label: 'Release notes',
-            scrollY,
+            scrollY: state.scrollY,
           })}
           class={VIEWPORT_CLASS}
+          data-scroll-y={state.scrollY}
+          scrollTop={state.scrollTop}
           style="max-height: 72px; overflow: auto;"
+          onScroll={() => {
+            const result = _scrollAreaViewportScroll(Object(event), { scrollbars: 'vertical' });
+            if (!result) return;
+
+            const geometry = _scrollAreaThumbGeometry(Object(event)['target'], {
+              orientation: 'vertical',
+              scrollbars: 'vertical',
+            });
+            state.scrollTop = result.scrollTop;
+            state.scrollY = result.scrollY;
+            state.thumbOffset = geometry.offsetRatio * 100;
+            state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
+            state.verticalVisible = geometry.visible;
+          }}
         >
           <div style="min-height: 260px;">
             <p>Framework primitives keep native scrolling in charge.</p>
@@ -71,19 +97,25 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: 'gallery-scroll-area-scrollbar',
             orientation: 'vertical',
-            visible: true,
+            visible: state.verticalVisible,
           })}
           class={SCROLLBAR_CLASS}
+          data-state={state.verticalVisible ? 'visible' : 'hidden'}
+          hidden={!state.verticalVisible}
         >
           <span
             {...scrollAreaThumbAttributes({
               ...rootState,
               id: 'gallery-scroll-area-thumb',
               orientation: 'vertical',
-              scrollPosition: scrollY,
-              visible: true,
+              scrollPosition: state.scrollY,
+              visible: state.verticalVisible,
             })}
             class={THUMB_CLASS}
+            data-scroll-position={state.scrollY}
+            data-state={state.verticalVisible ? 'visible' : 'hidden'}
+            hidden={!state.verticalVisible}
+            style={`height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`}
           />
         </div>
         <div
@@ -96,52 +128,19 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
         />
         <button
           aria-controls={viewportId}
-          aria-pressed={String(atEnd)}
+          aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
           class={TOGGLE_CLASS}
           id="gallery-scroll-area-toggle"
           onClick={() => {
-            state.position = state.position === 'top' ? 'end' : 'top';
-            const nextAtEnd = state.position === 'end';
-            const doc = Reflect['get'](globalThis, 'document');
-            const viewport = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-scroll-area-viewport')
-              : undefined;
-            const thumb = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-scroll-area-thumb')
-              : undefined;
-            const button = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-scroll-area-toggle')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="scroll-area-position"]')
-              : undefined;
-            const scrollTop = state.position === 'end' ? 160 : 0;
-
-            if (viewport) {
-              viewport['scrollTop'] = scrollTop;
-              Object(viewport)['setAttribute']?.call(
-                viewport,
-                'data-scroll-y',
-                state.position === 'top' ? 'start' : 'end',
-              );
-            }
-            if (thumb) {
-              Object(thumb)['setAttribute']?.call(
-                thumb,
-                'data-scroll-position',
-                state.position === 'top' ? 'start' : 'end',
-              );
-            }
-            if (button) {
-              Object(button)['setAttribute']?.call(button, 'aria-pressed', String(nextAtEnd));
-              button['textContent'] = nextAtEnd ? 'Back to top' : 'Jump to end';
-            }
-            if (output) output['textContent'] = state.position;
+            const nextAtEnd = state.scrollY !== 'end';
+            state.scrollTop = nextAtEnd ? 1000000 : 0;
+            state.scrollY = nextAtEnd ? 'end' : 'start';
+            state.thumbOffset = nextAtEnd ? 100 : 0;
           }}
         >
-          {atEnd ? 'Back to top' : 'Jump to end'}
+          <span>{state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}</span>
         </button>
-        <output data-demo-state="scroll-area-position">{state.position}</output>
+        <output data-demo-state="scroll-area-position">{state.scrollY}</output>
       </section>
     );
   },

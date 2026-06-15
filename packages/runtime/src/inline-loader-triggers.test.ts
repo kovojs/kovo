@@ -73,6 +73,8 @@ describe('inline loader execution triggers', () => {
           'contextmenu',
           'paste',
           'cancel',
+          'beforetoggle',
+          'scroll',
           'focus',
           'blur',
           'pointerover',

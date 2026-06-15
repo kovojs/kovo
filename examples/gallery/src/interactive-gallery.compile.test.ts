@@ -424,9 +424,17 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(scrollArea).toContain('data-gallery-interactive="scroll-area"');
-    expect(scrollArea).toContain('fw-state=\'{"position":"top"}\'');
+    expect(scrollArea).toContain(
+      'fw-state=\'{"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}\'',
+    );
     expect(scrollArea).toContain('scrollAreaViewportAttributes({');
     expect(scrollArea).toContain('scrollAreaThumbAttributes({');
+    expect(scrollArea).toContain('scrollAreaViewportScroll as _scrollAreaViewportScroll');
+    expect(scrollArea).toContain('data-bind:scrollTop=');
+    expect(scrollArea).toContain('data-bind:style=');
+    expect(scrollArea).toMatch(
+      /on:scroll="\/c\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js\?v=[0-9a-f]{8}#GalleryScrollAreaDemo\$div_scroll"/,
+    );
     expect(scrollArea).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/scroll-area-demo\.client\.js\?v=[0-9a-f]{8}#GalleryScrollAreaDemo\$button_click"/,
     );

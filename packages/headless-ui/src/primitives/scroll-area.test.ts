@@ -7,6 +7,7 @@ import {
   scrollAreaScrollbarAttributes as exportedScrollAreaScrollbarAttributes,
   scrollAreaScrollbarState as exportedScrollAreaScrollbarState,
   scrollAreaThumbAttributes as exportedScrollAreaThumbAttributes,
+  scrollAreaThumbGeometry as exportedScrollAreaThumbGeometry,
   scrollAreaViewportAttributes as exportedScrollAreaViewportAttributes,
   scrollAreaViewportScroll as exportedScrollAreaViewportScroll,
   scrollAreaViewportState as exportedScrollAreaViewportState,
@@ -18,6 +19,7 @@ import {
   scrollAreaScrollbarAttributes as primitiveScrollAreaScrollbarAttributes,
   scrollAreaScrollbarState as primitiveScrollAreaScrollbarState,
   scrollAreaThumbAttributes as primitiveScrollAreaThumbAttributes,
+  scrollAreaThumbGeometry as primitiveScrollAreaThumbGeometry,
   scrollAreaViewportAttributes as primitiveScrollAreaViewportAttributes,
   scrollAreaViewportScroll as primitiveScrollAreaViewportScroll,
   scrollAreaViewportState as primitiveScrollAreaViewportState,
@@ -29,6 +31,7 @@ import {
   scrollAreaScrollbarAttributes,
   scrollAreaScrollbarState,
   scrollAreaThumbAttributes,
+  scrollAreaThumbGeometry,
   scrollAreaViewportAttributes,
   scrollAreaViewportScroll,
   scrollAreaViewportState,
@@ -263,6 +266,59 @@ describe('headless-ui scroll-area primitive', () => {
     });
   });
 
+  it('derives proportional thumb geometry from native viewport state', () => {
+    expect(
+      scrollAreaThumbGeometry({
+        clientHeight: 100,
+        clientWidth: 200,
+        scrollHeight: 400,
+        scrollLeft: 0,
+        scrollTop: 150,
+        scrollWidth: 200,
+      }),
+    ).toEqual({
+      offsetRatio: 0.5,
+      scrollPosition: 'middle',
+      sizeRatio: 0.25,
+      visible: true,
+    });
+
+    expect(
+      scrollAreaThumbGeometry({
+        clientHeight: 100,
+        clientWidth: 200,
+        scrollHeight: 100,
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 200,
+      }),
+    ).toEqual({
+      offsetRatio: 0,
+      scrollPosition: 'none',
+      sizeRatio: 0,
+      visible: false,
+    });
+  });
+
+  it('reads delegated scroll events from the event target', () => {
+    const result = scrollAreaViewportScroll(
+      scrollAreaDelegatedScrollEvent({
+        clientHeight: 100,
+        clientWidth: 100,
+        scrollHeight: 300,
+        scrollLeft: 0,
+        scrollTop: 100,
+        scrollWidth: 100,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      scrollY: 'middle',
+      scrollYRatio: 0.5,
+      verticalVisible: true,
+    });
+  });
+
   it('guards the primitive scroll handler when author behavior prevented default', () => {
     const event = scrollAreaScrollEvent({
       clientHeight: 100,
@@ -282,6 +338,18 @@ describe('headless-ui scroll-area primitive', () => {
     expect(Object.isFrozen(scrollAreaViewportAttributes())).toBe(true);
     expect(Object.isFrozen(scrollAreaScrollbarAttributes())).toBe(true);
     expect(Object.isFrozen(scrollAreaThumbAttributes())).toBe(true);
+    expect(
+      Object.isFrozen(
+        scrollAreaThumbGeometry({
+          clientHeight: 100,
+          clientWidth: 100,
+          scrollHeight: 100,
+          scrollLeft: 0,
+          scrollTop: 0,
+          scrollWidth: 100,
+        }),
+      ),
+    ).toBe(true);
     expect(Object.isFrozen(scrollAreaCornerAttributes())).toBe(true);
     expect(
       Object.isFrozen(
@@ -302,6 +370,7 @@ describe('headless-ui scroll-area primitive', () => {
     expect(exportedScrollAreaViewportAttributes).toBe(scrollAreaViewportAttributes);
     expect(exportedScrollAreaScrollbarAttributes).toBe(scrollAreaScrollbarAttributes);
     expect(exportedScrollAreaThumbAttributes).toBe(scrollAreaThumbAttributes);
+    expect(exportedScrollAreaThumbGeometry).toBe(scrollAreaThumbGeometry);
     expect(exportedScrollAreaCornerAttributes).toBe(scrollAreaCornerAttributes);
     expect(exportedScrollAreaScrollbarState).toBe(scrollAreaScrollbarState);
     expect(exportedScrollAreaCornerState).toBe(scrollAreaCornerState);
@@ -312,6 +381,7 @@ describe('headless-ui scroll-area primitive', () => {
     expect(primitiveScrollAreaViewportAttributes).toBe(scrollAreaViewportAttributes);
     expect(primitiveScrollAreaScrollbarAttributes).toBe(scrollAreaScrollbarAttributes);
     expect(primitiveScrollAreaThumbAttributes).toBe(scrollAreaThumbAttributes);
+    expect(primitiveScrollAreaThumbGeometry).toBe(scrollAreaThumbGeometry);
     expect(primitiveScrollAreaCornerAttributes).toBe(scrollAreaCornerAttributes);
     expect(primitiveScrollAreaScrollbarState).toBe(scrollAreaScrollbarState);
     expect(primitiveScrollAreaCornerState).toBe(scrollAreaCornerState);
@@ -332,5 +402,26 @@ function scrollAreaScrollEvent(
   });
   return event as Event & {
     readonly currentTarget: Parameters<typeof scrollAreaViewportState>[0];
+  };
+}
+
+function scrollAreaDelegatedScrollEvent(
+  target: Parameters<typeof scrollAreaViewportState>[0],
+): Event & {
+  readonly currentTarget: null;
+  readonly target: Parameters<typeof scrollAreaViewportState>[0];
+} {
+  const event = new Event('scroll', { cancelable: true });
+  Object.defineProperty(event, 'currentTarget', {
+    configurable: true,
+    value: null,
+  });
+  Object.defineProperty(event, 'target', {
+    configurable: true,
+    value: target,
+  });
+  return event as Event & {
+    readonly currentTarget: null;
+    readonly target: Parameters<typeof scrollAreaViewportState>[0];
   };
 }

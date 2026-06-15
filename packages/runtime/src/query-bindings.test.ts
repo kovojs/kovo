@@ -375,6 +375,32 @@ describe('query binding helpers', () => {
     expect(input.value).toBe('');
   });
 
+  it('reflects state-derived scroll attribute bindings to live scroll properties', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"scrollTop":0}' });
+    const viewport = new FakeStatefulBindingElement(
+      {
+        'data-bind:scrollleft': 'state.scrollLeft',
+        'data-bind:scrolltop': 'state.scrollTop',
+      },
+      { parent: host, scrollLeft: 0, scrollTop: 0 },
+    );
+
+    await expect(applyStateBindings(host, { scrollLeft: 12, scrollTop: 160 })).resolves.toEqual([
+      'state.scrollLeft',
+      'state.scrollTop',
+    ]);
+    expect(viewport.getAttribute('scrollleft')).toBe('12');
+    expect(viewport.scrollLeft).toBe(12);
+    expect(viewport.getAttribute('scrolltop')).toBe('160');
+    expect(viewport.scrollTop).toBe(160);
+
+    await applyStateBindings(host, { scrollLeft: undefined, scrollTop: undefined });
+    expect(viewport.getAttribute('scrollleft')).toBeNull();
+    expect(viewport.scrollLeft).toBe(0);
+    expect(viewport.getAttribute('scrolltop')).toBeNull();
+    expect(viewport.scrollTop).toBe(0);
+  });
+
   it('reflects state-derived indeterminate bindings to the live input property', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"checked":"indeterminate"}' });
     const input = new FakeStatefulBindingElement(

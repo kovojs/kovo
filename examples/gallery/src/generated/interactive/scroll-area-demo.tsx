@@ -1,12 +1,51 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/scroll-area-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryScrollAreaDemo$div_data_scroll_y_derive = derive(
+  ['state'],
+  (state: any) => state.scrollY,
+);
+export const GalleryScrollAreaDemo$div_scrollTop_derive = derive(
+  ['state'],
+  (state: any) => state.scrollTop,
+);
+export const GalleryScrollAreaDemo$div_data_state_derive = derive(['state'], (state: any) =>
+  state.verticalVisible ? 'visible' : 'hidden',
+);
+export const GalleryScrollAreaDemo$div_hidden_derive = derive(['state'], (state: any) =>
+  !state.verticalVisible ? '' : null,
+);
+export const GalleryScrollAreaDemo$span_data_scroll_position_derive = derive(
+  ['state'],
+  (state: any) => state.scrollY,
+);
+export const GalleryScrollAreaDemo$span_data_state_derive = derive(['state'], (state: any) =>
+  state.verticalVisible ? 'visible' : 'hidden',
+);
+export const GalleryScrollAreaDemo$span_hidden_derive = derive(['state'], (state: any) =>
+  !state.verticalVisible ? '' : null,
+);
+export const GalleryScrollAreaDemo$span_style_derive = derive(
+  ['state'],
+  (state: any) => `height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`,
+);
+export const GalleryScrollAreaDemo$button_aria_pressed_derive = derive(['state'], (state: any) =>
+  state.scrollY === 'end' ? 'true' : 'false',
+);
+export const GalleryScrollAreaDemo$span_text_derive = derive(['state'], (state: any) =>
+  state.scrollY === 'end' ? 'Back to top' : 'Jump to end',
+);
+
 import { component } from '@jiso/core';
 import {
   scrollAreaCornerAttributes,
   scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
+  scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaViewportAttributes,
+  scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/scroll-area.tsx)
@@ -24,25 +63,33 @@ const VIEWPORT_CLASS =
 const SCROLLBAR_CLASS =
   'absolute flex touch-none select-none bg-neutral-100 p-0.5 transition-colors data-[orientation=vertical]:inset-y-0 data-[orientation=vertical]:right-0 data-[orientation=vertical]:w-2.5 data-[orientation=horizontal]:inset-x-0 data-[orientation=horizontal]:bottom-0 data-[orientation=horizontal]:h-2.5 data-[state=hidden]:opacity-0';
 const THUMB_CLASS =
-  'relative flex-1 rounded-full bg-neutral-400 data-[orientation=vertical]:min-h-8 data-[orientation=horizontal]:min-w-8 data-[state=hidden]:opacity-0';
+  'absolute left-0 right-0 rounded-full bg-neutral-400 transition-[top,height,width] data-[orientation=vertical]:min-h-8 data-[orientation=horizontal]:min-w-8 data-[state=hidden]:opacity-0';
 const CORNER_CLASS =
   'absolute bottom-0 right-0 h-2.5 w-2.5 bg-neutral-100 data-[state=hidden]:hidden';
 const TOGGLE_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryScrollAreaDemoState {
-  position: 'end' | 'top';
+  scrollTop: number;
+  scrollY: 'end' | 'middle' | 'none' | 'start';
+  thumbOffset: number;
+  thumbSize: number;
+  verticalVisible: boolean;
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
-  state: () => ({ position: 'top' }),
+  state: () => ({
+    scrollTop: 0,
+    scrollY: 'start' as const,
+    thumbOffset: 0,
+    thumbSize: 28,
+    verticalVisible: true,
+  }),
   render: (_queries: Record<string, never>, state: GalleryScrollAreaDemoState) => {
     const rootState = { scrollbars: 'vertical' as const };
     const viewportId = 'gallery-scroll-area-viewport';
-    const atEnd = state.position === 'end';
-    const scrollY = state.position === 'top' ? 'start' : 'end';
 
     return (
       <section
@@ -50,17 +97,22 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="scroll-area"
         fw-c="gallery-scroll-area-demo"
-        fw-state='{"position":"top"}'
+        fw-state='{"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}'
       >
         <div
           {...scrollAreaViewportAttributes({
             ...rootState,
             id: viewportId,
             label: 'Release notes',
-            scrollY,
+            scrollY: state.scrollY,
           })}
           class={VIEWPORT_CLASS}
+          data-scroll-y={state.scrollY}
+          data-bind:data-scroll-y="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_data_scroll_y_derive"
+          scrollTop={state.scrollTop}
+          data-bind:scrollTop="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_scrollTop_derive"
           style="max-height: 72px; overflow: auto;"
+          on:scroll="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_scroll"
         >
           <div style="min-height: 260px;">
             <p>Framework primitives keep native scrolling in charge.</p>
@@ -74,19 +126,31 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
             ...rootState,
             id: 'gallery-scroll-area-scrollbar',
             orientation: 'vertical',
-            visible: true,
+            visible: state.verticalVisible,
           })}
           class={SCROLLBAR_CLASS}
+          data-state={state.verticalVisible ? 'visible' : 'hidden'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_data_state_derive"
+          hidden={!state.verticalVisible}
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$div_hidden_derive"
         >
           <span
             {...scrollAreaThumbAttributes({
               ...rootState,
               id: 'gallery-scroll-area-thumb',
               orientation: 'vertical',
-              scrollPosition: scrollY,
-              visible: true,
+              scrollPosition: state.scrollY,
+              visible: state.verticalVisible,
             })}
             class={THUMB_CLASS}
+            data-scroll-position={state.scrollY}
+            data-bind:data-scroll-position="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_data_scroll_position_derive"
+            data-state={state.verticalVisible ? 'visible' : 'hidden'}
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_data_state_derive"
+            hidden={!state.verticalVisible}
+            data-bind:hidden="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_hidden_derive"
+            style={`height: ${state.thumbSize}%; top: ${state.thumbOffset}%;`}
+            data-bind:style="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_style_derive"
           />
         </div>
         <div
@@ -99,15 +163,18 @@ export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
         />
         <button
           aria-controls={viewportId}
-          aria-pressed={String(atEnd)}
+          aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
+          data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$button_aria_pressed_derive"
           class={TOGGLE_CLASS}
           id="gallery-scroll-area-toggle"
-          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=00e96f2c#GalleryScrollAreaDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$button_click"
         >
-          {atEnd ? 'Back to top' : 'Jump to end'}
+          <span data-bind="/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js?v=53b1aab6#GalleryScrollAreaDemo$span_text_derive">
+            {state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}
+          </span>
         </button>
-        <output data-demo-state="scroll-area-position" data-bind="state.position">
-          {state.position}
+        <output data-demo-state="scroll-area-position" data-bind="state.scrollY">
+          {state.scrollY}
         </output>
       </section>
     );
