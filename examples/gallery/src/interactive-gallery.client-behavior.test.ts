@@ -588,11 +588,14 @@ describe('compiled interactive gallery demos', () => {
     expect(progressState).toEqual({ value: null });
 
     const radioGroupState = { value: 'email' };
-    clientHandler(radioGroup, 'GalleryRadioGroupDemo$div_keydown')(new Event('keydown'), {
-      params: {},
-      signal,
-      state: radioGroupState,
-    });
+    clientHandler(radioGroup, 'GalleryRadioGroupDemo$div_keydown')(
+      Object.assign(new Event('keydown'), { key: 'ArrowRight' }),
+      {
+        params: {},
+        signal,
+        state: radioGroupState,
+      },
+    );
     expect(radioGroupState).toEqual({ value: 'sms' });
     clientHandler(radioGroup, 'GalleryRadioGroupDemo$input_click')(new Event('click'), {
       params: {},

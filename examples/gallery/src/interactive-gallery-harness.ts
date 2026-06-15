@@ -99,6 +99,8 @@ export function evaluateClientModule(
     exports,
     handler: (fn: ClientExports[string]) => fn,
     ...headlessPrimitives,
+    _radioGroupItemClick: headlessPrimitives.radioGroupItemClick,
+    _radioGroupKeyDown: headlessPrimitives.radioGroupKeyDown,
     _tabsKeyDown: headlessPrimitives.tabsKeyDown,
     _tabsTriggerClick: headlessPrimitives.tabsTriggerClick,
     ...globals,

@@ -2,7 +2,9 @@
 import { component } from '@jiso/core';
 import {
   radioGroupItemAttributes,
+  radioGroupItemClick as _radioGroupItemClick,
   radioGroupLabelAttributes,
+  radioGroupKeyDown as _radioGroupKeyDown,
   radioGroupRadioAttributes,
   radioGroupRootAttributes,
 } from '@jiso/headless-ui/primitives';
@@ -54,125 +56,93 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
         class={ROOT_CLASS}
         data-gallery-interactive="radio-group"
         onKeyDown={() => {
-          state.value = state.value === 'email' ? 'sms' : 'email';
-          const doc = Reflect['get'](globalThis, 'document');
-          const email = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email')
-            : undefined;
-          const sms = doc
-            ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-sms')
-            : undefined;
-          const output = doc
-            ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="radio-value"]')
-            : undefined;
-
-          if (email) {
-            email['checked'] = state.value === 'email';
-            email['tabIndex'] = state.value === 'email' ? 0 : -1;
-            Object(email)['setAttribute']?.call(
-              email,
-              'aria-checked',
-              state.value === 'email' ? 'true' : 'false',
-            );
-          }
-          if (sms) {
-            sms['checked'] = state.value === 'sms';
-            sms['tabIndex'] = state.value === 'sms' ? 0 : -1;
-            Object(sms)['setAttribute']?.call(
-              sms,
-              'aria-checked',
-              state.value === 'sms' ? 'true' : 'false',
-            );
-          }
-          if (output) output['textContent'] = state.value;
+          const result = _radioGroupKeyDown(Object(event), {
+            items: [{ value: 'email' }, { disabled: true, value: 'phone' }, { value: 'sms' }],
+            value: state.value,
+          });
+          if (!result) return;
+          state.value = result.value ?? state.value;
         }}
       >
         <form id="gallery-radio-form" data-gallery-form="radio-group" />
         <h3 id="gallery-radio-group-label" class="text-sm font-medium">
           Contact channel
         </h3>
-        <div {...radioGroupItemAttributes(emailState)} class={ITEM_CLASS}>
+        <div
+          {...radioGroupItemAttributes(emailState)}
+          class={ITEM_CLASS}
+          data-state={state.value === 'email' ? 'checked' : 'unchecked'}
+        >
           <input
             {...radioGroupRadioAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
+            aria-checked={String(state.value === 'email')}
+            checked={state.value === 'email'}
             class={RADIO_CLASS}
+            data-state={state.value === 'email' ? 'checked' : 'unchecked'}
             onClick={() => {
-              state.value = 'email';
-              const doc = Reflect['get'](globalThis, 'document');
-              const email = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email')
-                : undefined;
-              const sms = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-sms')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="radio-value"]')
-                : undefined;
-
-              if (email) {
-                email['checked'] = true;
-                email['tabIndex'] = 0;
-                Object(email)['setAttribute']?.call(email, 'aria-checked', 'true');
-              }
-              if (sms) {
-                sms['checked'] = false;
-                sms['tabIndex'] = -1;
-                Object(sms)['setAttribute']?.call(sms, 'aria-checked', 'false');
-              }
-              if (output) output['textContent'] = 'email';
+              const result = _radioGroupItemClick(Object(event), {
+                itemValue: 'email',
+                value: state.value,
+              });
+              if (!result) return;
+              state.value = result.value ?? state.value;
             }}
+            tabIndex={state.value === 'email' ? 0 : -1}
           />
           <label
             {...radioGroupLabelAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
             class={LABEL_CLASS}
+            data-state={state.value === 'email' ? 'checked' : 'unchecked'}
           >
             Email
           </label>
         </div>
-        <div {...radioGroupItemAttributes(phoneState)} class={ITEM_CLASS}>
+        <div
+          {...radioGroupItemAttributes(phoneState)}
+          class={ITEM_CLASS}
+          data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
+        >
           <input
             {...radioGroupRadioAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
+            aria-checked={String(state.value === 'phone')}
+            checked={state.value === 'phone'}
             class={RADIO_CLASS}
+            data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
+            tabIndex={-1}
           />
           <label
             {...radioGroupLabelAttributes({ ...phoneState, controlId: 'gallery-radio-phone' })}
             class={LABEL_CLASS}
+            data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
           >
             Phone
           </label>
         </div>
-        <div {...radioGroupItemAttributes(smsState)} class={ITEM_CLASS}>
+        <div
+          {...radioGroupItemAttributes(smsState)}
+          class={ITEM_CLASS}
+          data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
+        >
           <input
             {...radioGroupRadioAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
+            aria-checked={String(state.value === 'sms')}
+            checked={state.value === 'sms'}
             class={RADIO_CLASS}
+            data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
             onClick={() => {
-              state.value = 'sms';
-              const doc = Reflect['get'](globalThis, 'document');
-              const email = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email')
-                : undefined;
-              const sms = doc
-                ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-sms')
-                : undefined;
-              const output = doc
-                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="radio-value"]')
-                : undefined;
-
-              if (email) {
-                email['checked'] = false;
-                email['tabIndex'] = -1;
-                Object(email)['setAttribute']?.call(email, 'aria-checked', 'false');
-              }
-              if (sms) {
-                sms['checked'] = true;
-                sms['tabIndex'] = 0;
-                Object(sms)['setAttribute']?.call(sms, 'aria-checked', 'true');
-              }
-              if (output) output['textContent'] = 'sms';
+              const result = _radioGroupItemClick(Object(event), {
+                itemValue: 'sms',
+                value: state.value,
+              });
+              if (!result) return;
+              state.value = result.value ?? state.value;
             }}
+            tabIndex={state.value === 'sms' ? 0 : -1}
           />
           <label
             {...radioGroupLabelAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
             class={LABEL_CLASS}
+            data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
           >
             SMS
           </label>

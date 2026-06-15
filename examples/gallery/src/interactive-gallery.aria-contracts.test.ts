@@ -71,19 +71,15 @@ describe('compiled interactive gallery demos', () => {
 
       const radioGroup = evaluateClientModule('radio-group-demo.client.js', { document });
       const radioState = { value: 'email' };
-      clientHandler(radioGroup, 'GalleryRadioGroupDemo$div_keydown')(new Event('keydown'), {
-        params: {},
-        signal,
-        state: radioState,
-      });
+      clientHandler(radioGroup, 'GalleryRadioGroupDemo$div_keydown')(
+        Object.assign(new Event('keydown'), { key: 'ArrowRight' }),
+        {
+          params: {},
+          signal,
+          state: radioState,
+        },
+      );
       expect(radioState).toEqual({ value: 'sms' });
-      expect(element(document, 'gallery-radio-email')).toMatchObject({
-        checked: false,
-        tabIndex: -1,
-      });
-      expect(element(document, 'gallery-radio-email').attrs['aria-checked']).toBe('false');
-      expect(element(document, 'gallery-radio-sms')).toMatchObject({ checked: true, tabIndex: 0 });
-      expect(selector(document, '[data-demo-state="radio-value"]').textContent).toBe('sms');
 
       const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js', { document });
       const checkboxState = { activeValue: 'updates', value: 'updates' };

@@ -281,9 +281,24 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 - [ ] **checkbox** [P1]: Phase 1 now updates `aria-checked`, `data-state`, native `checked`, and
       `<output>` from the indeterminate initial state on click. Remaining parity work:
       `checkboxTriggerClick`/`applyCheckboxIndeterminate` and fuller checkbox model coverage.
-- [ ] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
+- [x] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
       every key (Tab/typing flip it) and never wraps/skips disabled; per-item `onClick` is hardcoded
       one-directional and native `checked` desyncs from stamped `aria-checked`. Wire `radioGroupKeyDown` + `radioGroupItemClick`; maintain roving `tabindex` via `radioGroupItemTabIndex`.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/radio-group-demo.tsx` now calls
+    `_radioGroupKeyDown`/`_radioGroupItemClick`, mutates only `state.value`, and exposes item/input/
+    label `data-state`, input `aria-checked`, native `checked`, and roving `tabIndex` as state-bound
+    TSX attributes.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/radio-group-demo.client.js` imports the reducer helpers,
+    mutates only `ctx.state`, emits state derives for radio attributes, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated radio-group files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t radio-group`, and
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [ ] **checkbox-group** [P2]: click-toggle works (imperative stamps), but the `onKeyDown` invents
       arrow-roving (wrong model — checkboxes are each Tab-focusable + Space) and is a blind 2-state flip.
       Drop the arrow-roving (or route through `checkboxGroupKeyDown`); refactor clicks to

@@ -1,74 +1,84 @@
 // @jiso-ir
-import { handler } from '@jiso/runtime';
+import { derive, handler } from '@jiso/runtime';
 
-export const GalleryRadioGroupDemo$div_keydown = handler((_event, ctx) => {
-  ctx.state.value = ctx.state.value === 'email' ? 'sms' : 'email';
-  const doc = Reflect['get'](globalThis, 'document');
-  const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;
-  const sms = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-sms') : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="radio-value"]')
-    : undefined;
+import {
+  radioGroupItemClick as _radioGroupItemClick,
+  radioGroupKeyDown as _radioGroupKeyDown,
+} from '@jiso/headless-ui/primitives';
 
-  if (email) {
-    email['checked'] = ctx.state.value === 'email';
-    email['tabIndex'] = ctx.state.value === 'email' ? 0 : -1;
-    Object(email)['setAttribute']?.call(
-      email,
-      'aria-checked',
-      ctx.state.value === 'email' ? 'true' : 'false',
-    );
-  }
-  if (sms) {
-    sms['checked'] = ctx.state.value === 'sms';
-    sms['tabIndex'] = ctx.state.value === 'sms' ? 0 : -1;
-    Object(sms)['setAttribute']?.call(
-      sms,
-      'aria-checked',
-      ctx.state.value === 'sms' ? 'true' : 'false',
-    );
-  }
-  if (output) output['textContent'] = ctx.state.value;
+export const GalleryRadioGroupDemo$div_keydown = handler((event, ctx) => {
+  const result = _radioGroupKeyDown(Object(event), {
+    items: [{ value: 'email' }, { disabled: true, value: 'phone' }, { value: 'sms' }],
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  ctx.state.value = result.value ?? ctx.state.value;
 });
-export const GalleryRadioGroupDemo$input_click = handler((_event, ctx) => {
-  ctx.state.value = 'email';
-  const doc = Reflect['get'](globalThis, 'document');
-  const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;
-  const sms = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-sms') : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="radio-value"]')
-    : undefined;
-
-  if (email) {
-    email['checked'] = true;
-    email['tabIndex'] = 0;
-    Object(email)['setAttribute']?.call(email, 'aria-checked', 'true');
-  }
-  if (sms) {
-    sms['checked'] = false;
-    sms['tabIndex'] = -1;
-    Object(sms)['setAttribute']?.call(sms, 'aria-checked', 'false');
-  }
-  if (output) output['textContent'] = 'email';
+export const GalleryRadioGroupDemo$input_click = handler((event, ctx) => {
+  const result = _radioGroupItemClick(Object(event), {
+    itemValue: 'email',
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  ctx.state.value = result.value ?? ctx.state.value;
 });
-export const GalleryRadioGroupDemo$input_click_2 = handler((_event, ctx) => {
-  ctx.state.value = 'sms';
-  const doc = Reflect['get'](globalThis, 'document');
-  const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;
-  const sms = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-sms') : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="radio-value"]')
-    : undefined;
-
-  if (email) {
-    email['checked'] = false;
-    email['tabIndex'] = -1;
-    Object(email)['setAttribute']?.call(email, 'aria-checked', 'false');
-  }
-  if (sms) {
-    sms['checked'] = true;
-    sms['tabIndex'] = 0;
-    Object(sms)['setAttribute']?.call(sms, 'aria-checked', 'true');
-  }
-  if (output) output['textContent'] = 'sms';
+export const GalleryRadioGroupDemo$input_click_2 = handler((event, ctx) => {
+  const result = _radioGroupItemClick(Object(event), {
+    itemValue: 'sms',
+    value: ctx.state.value,
+  });
+  if (!result) return;
+  ctx.state.value = result.value ?? ctx.state.value;
 });
+
+export const GalleryRadioGroupDemo$div_data_state_derive = derive(['state'], (state) =>
+  state.value === 'email' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$input_aria_checked_derive = derive(['state'], (state) =>
+  String(state.value === 'email'),
+);
+export const GalleryRadioGroupDemo$input_checked_derive = derive(['state'], (state) =>
+  state.value === 'email' ? '' : null,
+);
+export const GalleryRadioGroupDemo$input_data_state_derive = derive(['state'], (state) =>
+  state.value === 'email' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$input_tabIndex_derive = derive(['state'], (state) =>
+  state.value === 'email' ? 0 : -1,
+);
+export const GalleryRadioGroupDemo$label_data_state_derive = derive(['state'], (state) =>
+  state.value === 'email' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$div_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'phone' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$input_aria_checked_derive_2 = derive(['state'], (state) =>
+  String(state.value === 'phone'),
+);
+export const GalleryRadioGroupDemo$input_checked_derive_2 = derive(['state'], (state) =>
+  state.value === 'phone' ? '' : null,
+);
+export const GalleryRadioGroupDemo$input_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'phone' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$label_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'phone' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$div_data_state_derive_3 = derive(['state'], (state) =>
+  state.value === 'sms' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$input_aria_checked_derive_3 = derive(['state'], (state) =>
+  String(state.value === 'sms'),
+);
+export const GalleryRadioGroupDemo$input_checked_derive_3 = derive(['state'], (state) =>
+  state.value === 'sms' ? '' : null,
+);
+export const GalleryRadioGroupDemo$input_data_state_derive_3 = derive(['state'], (state) =>
+  state.value === 'sms' ? 'checked' : 'unchecked',
+);
+export const GalleryRadioGroupDemo$input_tabIndex_derive_2 = derive(['state'], (state) =>
+  state.value === 'sms' ? 0 : -1,
+);
+export const GalleryRadioGroupDemo$label_data_state_derive_3 = derive(['state'], (state) =>
+  state.value === 'sms' ? 'checked' : 'unchecked',
+);
