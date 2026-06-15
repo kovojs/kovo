@@ -246,7 +246,12 @@ at all. Two sub-decisions:
     `packages/runtime/src/inline-loader-delegated.test.ts` both assert a descendant `[fw-state]`
     binding keeps its stale child value when the ancestor host applies state bindings; the focused
     runtime vitest command above passed.
-- [ ] A query named `state` is rejected before emission.
+- [x] A query named `state` is rejected before emission.
+  - Evidence 2026-06-15: `packages/core/src/diagnostics.ts` defines FW304 for reserved query names;
+    `packages/compiler/src/validate/component-contracts.ts` rejects `queries: { state: ... }` via the
+    normal validation pipeline; `packages/compiler/src/state-bindings.test.ts` covers the diagnostic.
+    Verification: `pnpm --filter @jiso/compiler exec vitest run src/state-bindings.test.ts` passed
+    4 tests; `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts` passed 3 tests.
 - [x] Optional state paths use the same `?.` empty semantics as query paths (text → empty string,
       attribute → remove).
   - Evidence 2026-06-15: `packages/runtime/src/query-bindings.test.ts` asserts

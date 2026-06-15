@@ -24,6 +24,7 @@ export type DiagnosticCode =
   | 'FW301'
   | 'FW302'
   | 'FW303'
+  | 'FW304'
   | 'FW310'
   | 'FW311'
   | 'FW320'
@@ -222,6 +223,11 @@ export const diagnosticDefinitions = {
     code: 'FW303',
     severity: 'error',
     message: 'Fragment target render input is not declared as query data or stamped props.',
+  },
+  FW304: {
+    code: 'FW304',
+    severity: 'error',
+    message: 'Reserved query name is not allowed.',
   },
   FW310: {
     code: 'FW310',

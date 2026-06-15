@@ -9,6 +9,7 @@ import {
   validateEventPayloads,
   validateFragmentTargetChildren,
   validateFragmentTargetInputs,
+  validateReservedQueryNames,
   validateServerFactsInLocalState,
 } from './component-contracts.js';
 import { validateEventTriggerNames } from './event-triggers.js';
@@ -36,6 +37,7 @@ type CompilerValidator = (context: ValidatorContext) => readonly CompilerDiagnos
 
 const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateServerFactsInLocalState(source, model, options.fileName),
+  ({ model, options, source }) => validateReservedQueryNames(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),

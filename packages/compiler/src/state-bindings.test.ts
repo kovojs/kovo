@@ -74,4 +74,25 @@ export const Counter = component('counter', {
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('rejects query declarations that collide with the reserved state binding root', () => {
+    const result = compileComponentModule({
+      fileName: 'bad-state-query.tsx',
+      source: `
+export const BadStateQuery = component('bad-state-query', {
+  queries: { state: stateQuery },
+  render: () => <bad-state-query />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW304',
+        fileName: 'bad-state-query.tsx',
+        message: 'Reserved query name is not allowed. state',
+        severity: 'error',
+      },
+    ]);
+  });
 });

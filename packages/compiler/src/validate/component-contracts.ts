@@ -60,6 +60,21 @@ export function validateServerFactsInLocalState(
     : [];
 }
 
+export function validateReservedQueryNames(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  return componentOptionObjectKeys(model, 'queries').includes('state')
+    ? [
+        {
+          ...diagnosticFor(fileName, 'FW304', source),
+          message: `${diagnosticDefinitions.FW304.message} state`,
+        },
+      ]
+    : [];
+}
+
 export function validateFragmentTargetInputs(
   source: string,
   model: ComponentModuleModel,

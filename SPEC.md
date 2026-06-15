@@ -948,7 +948,9 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW234 | error      | Package component prefix registration conflict or reservation violation (§6.1.1)                              |
 | FW235 | error      | App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR (§5.2)  |
 | FW301 | lint       | Server fact in island-local state                                                                             |
-| FW302 | lint       | Isomorphic island — justification comment required (the sanctioned SPA-creep escape, §4.8)                    |
+| FW302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                            |
+| FW303 | error      | Fragment-target render input is not declared as query data or stamped props (§4.5)                            |
+| FW304 | error      | Reserved query name such as `state` is not allowed (§4.8 binding roots)                                       |
 | FW310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)                                    |
 | FW311 | warn       | Query-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)               |
 | FW320 | lint       | Event payload overlaps query data — use a transform                                                           |
