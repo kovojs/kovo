@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   diagnosticsForQueryFacts,
-  extractQueryFactsFromProject,
   extractTouchGraphFromProject,
 } from '../../../packages/drizzle/src/static.js';
+
+import { extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('does not fabricate project query facts from untyped query-loader receiver names', () => {

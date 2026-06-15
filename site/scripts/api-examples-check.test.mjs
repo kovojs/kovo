@@ -1,6 +1,11 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { collectApiExamples, extractExampleBlocks } from './api-examples-check.mjs';
+import { generateApiReference } from './api-ref.mjs';
 
 /**
  * The `@example` gate must extract only the example blocks the generator marks
@@ -43,16 +48,23 @@ describe('api-examples extractor', () => {
     expect(extractExampleBlocks(onlySignature)).toHaveLength(0);
   });
 
-  it('collects examples from the generated pages with stable ids', () => {
-    const examples = collectApiExamples();
-    expect(examples.length).toBeGreaterThan(0);
-    // Every example is a non-empty TS block keyed by `<slug>__<heading>__<n>`.
-    for (const example of examples) {
-      expect(example.id).toMatch(/^[\w-]+__[\w-]+__\d+$/);
-      expect(example.code.trim().length).toBeGreaterThan(0);
+  it('collects examples from the generated pages with stable ids', async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), 'jiso-api-examples-'));
+
+    try {
+      await generateApiReference({ outDir });
+      const examples = collectApiExamples(outDir);
+      expect(examples.length).toBeGreaterThan(0);
+      // Every example is a non-empty TS block keyed by `<slug>__<heading>__<n>`.
+      for (const example of examples) {
+        expect(example.id).toMatch(/^[\w-]+__[\w-]+__\d+$/);
+        expect(example.code.trim().length).toBeGreaterThan(0);
+      }
+      // The `component` export's example is present and imports the real export.
+      const component = examples.find((example) => example.id.startsWith('core__component__'));
+      expect(component?.code).toContain("from '@jiso/core'");
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
     }
-    // The `component` export's example is present and imports the real export.
-    const component = examples.find((example) => example.id.startsWith('core__component__'));
-    expect(component?.code).toContain("from '@jiso/core'");
   });
 });

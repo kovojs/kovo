@@ -6,9 +6,10 @@ import { customType, text } from 'drizzle-orm/pg-core';
 import {
   diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
-  extractQueryFactsFromProject,
   extractTouchGraphFromProject,
 } from '../../../packages/drizzle/src/static.js';
+
+import { extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('pins real Drizzle project read sources from write call AST', () => {

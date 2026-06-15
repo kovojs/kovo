@@ -3,13 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 
 import {
-  extractQueryFactsFromProject,
   extractTouchGraphFromProject,
   jiso,
   serializeTouchGraph,
 } from '../../../packages/drizzle/src/static.js';
 
-import { drizzleSymbol } from './test-helpers.js';
+import { drizzleSymbol, extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {

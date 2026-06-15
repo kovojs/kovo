@@ -4,10 +4,9 @@ import { eq, gt, inArray } from 'drizzle-orm';
 import { alias, boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import * as pg from 'drizzle-orm/pg-core';
 
-import {
-  extractQueryFactsFromProject,
-  extractTouchGraphFromProject,
-} from '../../../packages/drizzle/src/static.js';
+import { extractTouchGraphFromProject } from '../../../packages/drizzle/src/static.js';
+
+import { extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('imports the pinned real Drizzle Postgres subset used by extraction examples', () => {

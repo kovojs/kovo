@@ -195,7 +195,12 @@ function staticExportFilePath(root: string, requestUrl: string): string | null {
 }
 
 function ignoredMissingAssetUrl(url: string): boolean {
-  return url.endsWith('/favicon.ico') || /\/fonts\/[^/]+\.woff2$/.test(url);
+  return (
+    url.endsWith('/favicon.ico') ||
+    (url.endsWith('/assets/site.css') &&
+      !existsSync(join(galleryRoot, '../../site/dist-css/assets/site.css'))) ||
+    /\/fonts\/[^/]+\.woff2$/.test(url)
+  );
 }
 
 async function closeServer(server: Server | undefined): Promise<void> {

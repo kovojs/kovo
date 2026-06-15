@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  extractQueryFactsFromProject,
-  extractTouchGraphFromProject,
-} from '../../../packages/drizzle/src/static.js';
+import { extractTouchGraphFromProject } from '../../../packages/drizzle/src/static.js';
+
+import { extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('pins real Drizzle materialized-view refresh as an explicit FW406 write surface', () => {

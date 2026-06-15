@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
-  extractQueryFactsFromProject,
   extractTouchGraphFromProject,
 } from '../../../packages/drizzle/src/static.js';
+
+import { extractQueryFactsFromProject } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('pins project domain action namespace spreads for exported write variables', () => {
