@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (4 / 32 findings closed)
+**Status:** open (5 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -73,8 +73,16 @@ Localized to `analyze/query-updates.ts`, `lower/inline-derives.ts`, `lower/view-
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
 src/query-coverage.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
-- [ ] **Produce the `fragment` coverage status** — `packages/compiler/src/analyze/query-updates.ts:122`, `validate/component-contracts.ts:191` (SPEC §4.9 status table). Add a `fragment` branch (gated on `fragmentTarget: true`, mirroring the `isomorphic` branch) before the UNHANDLED sweep so query positions inside a fragment target are covered (1 RTT, declared) instead of emitting a spurious build-blocking FW311. Restrict to **query** paths — state reads still fall to UNHANDLED.
+- [x] **Produce the `fragment` coverage status** — `packages/compiler/src/analyze/query-updates.ts:122`, `validate/component-contracts.ts:191` (SPEC §4.9 status table). Add a `fragment` branch (gated on `fragmentTarget: true`, mirroring the `isomorphic` branch) before the UNHANDLED sweep so query positions inside a fragment target are covered (1 RTT, declared) instead of emitting a spurious build-blocking FW311. Restrict to **query** paths — state reads still fall to UNHANDLED.
   - Done = a `fragmentTarget: true` component with a query read reports `status:'fragment'` and no FW311; existing fragment-target tests stop wrapping reads in `renderOnce(...)` to dodge it. Prove: `pnpm test query-coverage fragment-targets`
+  - Evidence 2026-06-15: `packages/compiler/src/analyze/query-updates.ts` now emits `fragment`
+    coverage for query expression paths when `fragmentTarget: true` before the UNHANDLED sweep, while
+    leaving state expression paths to the existing UNHANDLED logic.
+  - Evidence 2026-06-15: `packages/compiler/src/query-coverage.test.ts` covers a fragment-target
+    `className={cart.count > 5 ? ...}` query read producing `status: 'fragment'` without FW311 and a
+    fragment-target `state.open` expression still producing FW311.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/query-coverage.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
 - [ ] **Lower every derivable attribute per element; handle dynamic `viewTransitionName`** — `packages/compiler/src/lower/inline-derives.ts:62` and `packages/compiler/src/lower/view-transitions.ts:18` (SPEC §4.8 #2, §4.2). Drop the `candidates.length !== 1` cap so two bound attributes on one element both lower to named derives. In view-transitions, handle the `expression` form (not just string `value`): lower a dynamic name to the `view-transition-name` **style** channel (one merged `style`, never a duplicate attribute and never a bogus `viewTransitionName` attr), or emit an explicit diagnostic if out of v1 scope — never silently leak raw JSX.
   - Done = `<button aria-expanded={…} aria-busy={…}>` emits two `data-bind:*`; `viewTransitionName={q.slug}` produces a stamp or a diagnostic, not leaked JSX. Prove: `pnpm test query-update-plans view-transitions`

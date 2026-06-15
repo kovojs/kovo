@@ -350,6 +350,61 @@ export const CartBadge = component('cart-badge', {
     );
   });
 
+  it('classifies fragment-target query expressions as fragment-covered without FW311', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  queries: { cart: {} },
+  render: () => (
+    <cart-row className={cart.count > 5 ? 'full' : 'empty'}>Cart</cart-row>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual({
+      componentName: 'CartRow',
+      detail: 'declared fragment target',
+      position: 'expression',
+      query: 'cart.count',
+      status: 'fragment',
+    });
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'FW311' }));
+  });
+
+  it('does not classify fragment-target state expressions as fragment-covered', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  state: () => ({ open: false }),
+  render: (_queries, state) => (
+    <cart-row className={state.open ? 'open' : 'closed'}>Cart</cart-row>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'CartRow',
+        query: 'state.open',
+        source: 'state',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'FW311',
+        message:
+          'Query/state-dependent DOM position has no update status. CartRow state.open expression',
+      }),
+    );
+  });
+
   it('reports FW311 positions in author coordinates after navigation and derive lowerings', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
