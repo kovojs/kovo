@@ -1,124 +1,52 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryTooltipDemo$button_blur = handler((event, ctx) => {
-  ctx.state.open = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-tooltip]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-    : undefined;
+import {
+  tooltipEscapeKeyDown as _tooltipEscapeKeyDown,
+  tooltipTriggerBlur as _tooltipTriggerBlur,
+  tooltipTriggerFocus as _tooltipTriggerFocus,
+  tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
+  tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
+} from '@jiso/headless-ui/primitives';
 
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-    Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');
-  }
-  if (content) {
-    Object(content)['hidePopover']?.call(content);
-    content['hidden'] = true;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-  }
-  if (output) output['textContent'] = 'closed';
+export const GalleryTooltipDemo$button_blur = handler((event, ctx) => {
+  const result = _tooltipTriggerBlur(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryTooltipDemo$button_focus = handler((event, ctx) => {
-  ctx.state.open = true;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-tooltip]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-describedby', 'gallery-tooltip-content');
-  }
-  if (content) {
-    content['hidden'] = false;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-    Object(content)['showPopover']?.call(content);
-  }
-  if (output) output['textContent'] = 'open';
+  const result = _tooltipTriggerFocus(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryTooltipDemo$button_keydown = handler((event, ctx) => {
-  if (!event || Reflect['get'](event, 'key') !== 'Escape') return;
-
-  ctx.state.open = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = Reflect['get'](event, 'target');
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-tooltip]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-    Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');
-  }
-  if (content) {
-    Object(content)['hidePopover']?.call(content);
-    content['hidden'] = true;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-  }
-  if (output) output['textContent'] = 'closed';
+  const result = _tooltipEscapeKeyDown(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryTooltipDemo$button_pointerenter = handler((event, ctx) => {
-  ctx.state.open = true;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-tooltip]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-    Object(trigger)['setAttribute']?.call(trigger, 'aria-describedby', 'gallery-tooltip-content');
-  }
-  if (content) {
-    content['hidden'] = false;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-    Object(content)['showPopover']?.call(content);
-  }
-  if (output) output['textContent'] = 'open';
+  const result = _tooltipTriggerPointerEnter(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 export const GalleryTooltipDemo$button_pointerleave = handler((event, ctx) => {
-  ctx.state.open = false;
-  const doc = Reflect['get'](globalThis, 'document');
-  const target = event ? Reflect['get'](event, 'target') : undefined;
-  const trigger = target ? Object(target)['closest']?.call(target, '[jiso-tooltip]') : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-    : undefined;
-
-  if (trigger) {
-    Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-    Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');
-  }
-  if (content) {
-    Object(content)['hidePopover']?.call(content);
-    content['hidden'] = true;
-    Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-  }
-  if (output) output['textContent'] = 'closed';
+  const result = _tooltipTriggerPointerLeave(Object(event), { open: ctx.state.open });
+  if (!result) return;
+  ctx.state.open = result.open;
 });
 
+export const GalleryTooltipDemo$button_aria_describedby_derive = derive(['state'], (state) =>
+  state.open ? 'gallery-tooltip-content' : null,
+);
+export const GalleryTooltipDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$span_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$span_hidden_derive = derive(['state'], (state) =>
+  !state.open ? '' : null,
+);
 export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );

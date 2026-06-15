@@ -588,7 +588,6 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/tooltip': [
     'jiso-tooltip="gallery-tooltip-content"',
     'aria-describedby="gallery-tooltip-content"',
-    'popover="manual"',
     'role="tooltip"',
   ],
 };

@@ -40,6 +40,7 @@ describe('compiled interactive gallery demos', () => {
     const tabs = readGenerated('tabs-demo.tsx');
     const toolbar = readGenerated('toolbar-demo.tsx');
     const tooltip = readGenerated('tooltip-demo.tsx');
+    const tooltipClient = readGenerated('tooltip-demo.client.js');
     const toggleGroup = readGenerated('toggle-group-demo.tsx');
     const toggleGroupClient = readGenerated('toggle-group-demo.client.js');
     const toast = readGenerated('toast-demo.tsx');
@@ -482,6 +483,16 @@ describe('compiled interactive gallery demos', () => {
     expect(tooltip).toContain('data-gallery-interactive="tooltip"');
     expect(tooltip).toContain('fw-state=\'{"open":false}\'');
     expect(tooltip).toContain('tooltipTriggerAttributes({ contentId, open: state.open })');
+    expect(tooltip).toContain('tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter');
+    expect(tooltip).toContain('data-bind:aria-describedby=');
+    expect(tooltip).toContain('data-bind:data-state=');
+    expect(tooltip).toContain('data-bind:hidden=');
+    expect(tooltip).not.toContain('popover=');
+    expect(tooltipClient).toContain('tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter');
+    expect(tooltipClient).toContain('tooltipEscapeKeyDown as _tooltipEscapeKeyDown');
+    expect(tooltipClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(tooltip).toMatch(
       /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTooltipDemo\$button_focus"/,
     );

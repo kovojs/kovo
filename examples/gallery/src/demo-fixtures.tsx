@@ -2731,7 +2731,7 @@ export function TooltipDemo(): string {
   return (
     <section data-gallery-demo="tooltip">
       <p data-demo-summary="no-js">
-        Tooltip uses package-prefixed behavior attributes and a manual popover content node.
+        Tooltip uses package-prefixed behavior attributes and a hidden content node.
       </p>
       <div data-ui-demo="tooltip">
         {Tooltip.definition.render({

@@ -242,7 +242,7 @@ export const h1PlatformAudit = {
   },
   tooltip: {
     primitive: 'tooltip',
-    concerns: [popoverTopLayerConcern, floatingAnchorFallbackConcern, sharedLayerAnimationConcern],
+    concerns: [floatingAnchorFallbackConcern, sharedLayerAnimationConcern],
     specSections: ['SPEC.md §1.3', 'SPEC.md §5.2.4'],
   },
 } as const satisfies Record<HeadlessUiH1Primitive, PrimitivePlatformAudit>;

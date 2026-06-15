@@ -119,6 +119,11 @@ export function evaluateClientModule(
     _toggleGroupKeyDown: headlessPrimitives.toggleGroupKeyDown,
     _toggleTriggerClick: headlessPrimitives.toggleTriggerClick,
     _toolbarKeyDown: headlessPrimitives.toolbarKeyDown,
+    _tooltipEscapeKeyDown: headlessPrimitives.tooltipEscapeKeyDown,
+    _tooltipTriggerBlur: headlessPrimitives.tooltipTriggerBlur,
+    _tooltipTriggerFocus: headlessPrimitives.tooltipTriggerFocus,
+    _tooltipTriggerPointerEnter: headlessPrimitives.tooltipTriggerPointerEnter,
+    _tooltipTriggerPointerLeave: headlessPrimitives.tooltipTriggerPointerLeave,
     ...globals,
   });
 

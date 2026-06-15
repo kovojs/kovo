@@ -847,13 +847,13 @@ describe('gallery demo fixtures', () => {
     expect(toast.html).toContain('role="alert"');
   });
 
-  it('renders tooltip fixture with package-prefixed behavior and popover content', () => {
+  it('renders tooltip fixture with package-prefixed behavior and hidden content', () => {
     const tooltip = findFixture('/components/tooltip');
 
     expect(tooltip.html).toContain('jiso-tooltip="gallery-tooltip-content"');
     expect(tooltip.html).toContain('aria-describedby="gallery-tooltip-content"');
     expect(tooltip.html).toContain('id="gallery-tooltip-content"');
-    expect(tooltip.html).toContain('popover="manual"');
+    expect(tooltip.html).not.toContain('popover="manual"');
     expect(tooltip.html).toContain('role="tooltip"');
   });
 

@@ -2,8 +2,13 @@
 import { component } from '@jiso/core';
 import {
   tooltipContentAttributes,
+  tooltipEscapeKeyDown as _tooltipEscapeKeyDown,
   tooltipRootAttributes,
   tooltipTriggerAttributes,
+  tooltipTriggerBlur as _tooltipTriggerBlur,
+  tooltipTriggerFocus as _tooltipTriggerFocus,
+  tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
+  tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/tooltip.tsx)
@@ -36,145 +41,42 @@ export const GalleryTooltipDemo = component('gallery-tooltip-demo', {
         <button
           {...tooltipTriggerAttributes({ contentId, open: state.open })}
           class={TRIGGER_CLASS}
+          aria-describedby={state.open ? 'gallery-tooltip-content' : null}
+          data-state={state.open ? 'open' : 'closed'}
           onBlur={() => {
-            state.open = false;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-tooltip]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-              Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');
-            }
-            if (content) {
-              Object(content)['hidePopover']?.call(content);
-              content['hidden'] = true;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-            }
-            if (output) output['textContent'] = 'closed';
+            const result = _tooltipTriggerBlur(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onFocus={() => {
-            state.open = true;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-tooltip]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-              Object(trigger)['setAttribute']?.call(
-                trigger,
-                'aria-describedby',
-                'gallery-tooltip-content',
-              );
-            }
-            if (content) {
-              content['hidden'] = false;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-              Object(content)['showPopover']?.call(content);
-            }
-            if (output) output['textContent'] = 'open';
+            const result = _tooltipTriggerFocus(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onKeyDown={() => {
-            if (!event || Reflect['get'](event, 'key') !== 'Escape') return;
-
-            state.open = false;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = Reflect['get'](event, 'target');
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-tooltip]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-              Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');
-            }
-            if (content) {
-              Object(content)['hidePopover']?.call(content);
-              content['hidden'] = true;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-            }
-            if (output) output['textContent'] = 'closed';
+            const result = _tooltipEscapeKeyDown(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onPointerEnter={() => {
-            state.open = true;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-tooltip]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'open');
-              Object(trigger)['setAttribute']?.call(
-                trigger,
-                'aria-describedby',
-                'gallery-tooltip-content',
-              );
-            }
-            if (content) {
-              content['hidden'] = false;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'open');
-              Object(content)['showPopover']?.call(content);
-            }
-            if (output) output['textContent'] = 'open';
+            const result = _tooltipTriggerPointerEnter(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
           onPointerLeave={() => {
-            state.open = false;
-            const doc = Reflect['get'](globalThis, 'document');
-            const target = event ? Reflect['get'](event, 'target') : undefined;
-            const trigger = target
-              ? Object(target)['closest']?.call(target, '[jiso-tooltip]')
-              : undefined;
-            const content = doc
-              ? Object(doc)['getElementById']?.call(doc, 'gallery-tooltip-content')
-              : undefined;
-            const output = doc
-              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="tooltip-open"]')
-              : undefined;
-
-            if (trigger) {
-              Object(trigger)['setAttribute']?.call(trigger, 'data-state', 'closed');
-              Object(trigger)['removeAttribute']?.call(trigger, 'aria-describedby');
-            }
-            if (content) {
-              Object(content)['hidePopover']?.call(content);
-              content['hidden'] = true;
-              Object(content)['setAttribute']?.call(content, 'data-state', 'closed');
-            }
-            if (output) output['textContent'] = 'closed';
+            const result = _tooltipTriggerPointerLeave(Object(event), { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
         >
           Shipping code
         </button>
-        <span {...tooltipContentAttributes({ contentId, open: state.open })} class={CONTENT_CLASS}>
+        <span
+          {...tooltipContentAttributes({ contentId, open: state.open })}
+          class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          hidden={!state.open}
+        >
           Use the code printed on the packing slip.
         </span>
         <output data-demo-state="tooltip-open">{state.open ? 'open' : 'closed'}</output>

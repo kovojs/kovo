@@ -1,7 +1,7 @@
 # Fix UI: make gallery components behave like their base-ui / shadcn models
 
-Status: **open — Phase 0 done; Phase 1 target reactive migration verified; Phase 2 tabs pattern
-landed; remaining primitive behavior and per-component parity remain.**
+Status: **open — Phase 0 done; Phase 1 target reactive migration verified; Phase 2 explicit-reducer
+pattern is landing across demos; remaining primitive behavior and per-component parity remain.**
 Created 2026-06-14. `SPEC.md` is the source of truth for framework behavior; this file is the active
 remediation ledger for the `@jiso/headless-ui` (modeled on **Base UI**) and `@jiso/ui` (modeled on
 **shadcn/ui**, i.e. Radix) component layers as exercised by `examples/gallery`.
@@ -537,11 +537,38 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Overlays — hover
 
-- [ ] **tooltip** [P0 hover]: opens on focus (works) but **never on hover** — wired to
+- [x] **tooltip** [P0 hover]: opens on focus (works) but **never on hover** — wired to
       `pointerenter/leave` (non-delegable, Phase 0). Re-author hover on `pointerover/pointerout` (or
       `mouseover/mouseout`). Also: no open delay (Base UI 600ms), not positioned/hoverable, and
       `showPopover()`/`hidePopover()` are called unguarded (can throw `InvalidStateError`) while also
       toggling `hidden` + a `data-[state]` class — pick **one** visibility mechanism.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/tooltip.ts` now uses `hidden` +
+    `data-state` + `role="tooltip"` only; tooltip content no longer emits `popover`, and the platform
+    audit treats tooltip separately from popover-backed content.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/tooltip-demo.tsx` calls
+    `_tooltipTriggerPointerEnter`, `_tooltipTriggerPointerLeave`, `_tooltipTriggerFocus`,
+    `_tooltipTriggerBlur`, and `_tooltipEscapeKeyDown`; the handlers mutate only `state.open`, while
+    trigger `aria-describedby`/`data-state`, content `data-state`/`hidden`, and output text are
+    state-bound TSX.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/tooltip-demo.client.js` imports the tooltip primitive
+    reducers, emits derives for `aria-describedby`, `data-state`, `hidden`, and output text, and captures
+    no local `contentId` in the client derive.
+  - Evidence 2026-06-15: `rg
+    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params|showPopover|hidePopover|popover"`
+    against the authored tooltip demo, generated tooltip files, tooltip primitive, and tooltip primitive
+    test found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/tooltip.test.ts src/platform-audit.test.ts`, `pnpm --filter @jiso/headless-ui exec
+    tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/demo-fixtures.test.ts -t
+    "renders tooltip fixture"`, `pnpm --filter @jiso/example-gallery exec vitest --config
+    vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t tooltip`,
+    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, `pnpm --filter @jiso/ui exec vitest run
+    src/index.markup.test.tsx`, `pnpm --filter @jiso/ui exec tsc --noEmit`, and `git diff --check`
+    passed.
 - [ ] **hover-card** [P0 hover + P1 ARIA]: same hover gap; additionally the trigger exposes
       `aria-expanded`/`aria-controls`, but Radix/Base UI do **not** treat a hover card as a disclosure —
       drop them from `hoverCardTriggerAttributes`. Wire the existing `hoverCardContentPointerEnter/Leave`
@@ -551,6 +578,12 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     no longer writes those attributes imperatively, regenerated hover-card artifacts contain neither
     attribute, and the browser hover-card test asserts they remain absent through pointer/focus/Escape
     interactions. The P0 hoverability/delay work remains open, so this checkbox stays open.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/demo-fixtures.test.ts src/behavior-contracts.test.ts` still fails outside the tooltip slice:
+    `/components/hover-card` rendered HTML omits `aria-controls` while the stale static visual fixture
+    and behavior-contract snippet still expect it. Keep the hover-card item open until that fixture/contract
+    is reconciled with the P1 ARIA decision and the remaining hoverability/delay work.
 
 ### Overlays — native dialog family (open/close work via native `<dialog command>`; gaps are dismissal/state/fallback)
 

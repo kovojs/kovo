@@ -39,7 +39,7 @@ runs axe there. Concretely, the suite asserts axe-clean for, among others:
 - **Static styled tier** — alert, avatar, badge, breadcrumb, button, card, kbd, separator, skeleton,
   table, all axe-clean as rendered.
 
-For native top-layer content (`<dialog>` promoted via `showModal`, `popover="manual"` content), the
+For native top-layer content (`<dialog>` promoted via `showModal`, popover-backed content), the
 suite verifies that axe descends into the promoted subtree rather than passing vacuously against a
 hidden node — the assertion is anchored to a genuinely visible, active element.
 

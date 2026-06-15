@@ -24,7 +24,7 @@ import {
 } from './tooltip.js';
 
 describe('headless-ui tooltip primitive', () => {
-  it('builds root, trigger, and native popover content attributes', () => {
+  it('builds root, trigger, and tooltip content attributes', () => {
     expect(tooltipRootAttributes({ open: true })).toEqual({
       'data-state': 'open',
     });
@@ -53,14 +53,12 @@ describe('headless-ui tooltip primitive', () => {
       'data-state': 'open',
       hidden: false,
       id: 'pricing-tip',
-      popover: 'manual',
       role: 'tooltip',
     });
     expect(tooltipContentAttributes({ contentId: 'pricing-tip', open: false })).toEqual({
       'data-state': 'closed',
       hidden: true,
       id: 'pricing-tip',
-      popover: 'manual',
       role: 'tooltip',
     });
   });

@@ -1233,7 +1233,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
-  it('shows and hides a generated tooltip through browser-visible ARIA and popover state', async () => {
+  it('shows and hides a generated tooltip through browser-visible ARIA and hidden state', async () => {
     const root = mountInteractiveDemo(GalleryTooltipDemo);
     const button = required(root.querySelector<HTMLButtonElement>('[jiso-tooltip]'));
     const content = required(root.querySelector<HTMLElement>('#gallery-tooltip-content'));
@@ -1248,9 +1248,8 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(button.getAttribute('jiso-tooltip')).toBe('gallery-tooltip-content');
     expect(button.getAttribute('aria-describedby')).toBeNull();
     expect(content.getAttribute('role')).toBe('tooltip');
-    expect(content.getAttribute('popover')).toBe('manual');
+    expect(content.hasAttribute('popover')).toBe(false);
     expect(content.hidden).toBe(true);
-    expect(content.matches(':popover-open')).toBe(false);
     expect(output.textContent).toBe('closed');
 
     button.dispatchEvent(new Event('pointerenter', { bubbles: true }));
@@ -1263,13 +1262,11 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(button.getAttribute('aria-describedby')).toBe('gallery-tooltip-content');
       expect(content.hidden).toBe(false);
       expect(content.getAttribute('data-state')).toBe('open');
-      expect(content.matches(':popover-open')).toBe(true);
       expect(output.textContent).toBe('open');
     });
 
     // SPEC §12.1: the tooltip open state (trigger aria-describedby pointing at the visible
-    // role=tooltip content, content :popover-open) must stay axe-clean. The tooltip content is a
-    // popover="manual" DOM child of root, so axe.run(root) descends into it.
+    // role=tooltip content) must stay axe-clean.
     await expectNoAxeViolations(root);
 
     button.dispatchEvent(new Event('pointerleave', { bubbles: true }));
@@ -1278,7 +1275,6 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
       expect(button.getAttribute('aria-describedby')).toBeNull();
       expect(content.hidden).toBe(true);
-      expect(content.matches(':popover-open')).toBe(false);
       expect(output.textContent).toBe('closed');
     });
 
@@ -1287,7 +1283,6 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":true}');
       expect(content.hidden).toBe(false);
-      expect(content.matches(':popover-open')).toBe(true);
     });
 
     await userEvent.keyboard('{Escape}');
@@ -1296,7 +1291,6 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
       expect(button.getAttribute('aria-describedby')).toBeNull();
       expect(content.hidden).toBe(true);
-      expect(content.matches(':popover-open')).toBe(false);
     });
   });
 

@@ -70,7 +70,6 @@ export function tooltipContentAttributes(
     ...openState(options.open),
     hidden: !options.open,
     ...(options.contentId === undefined ? {} : { id: options.contentId }),
-    popover: 'manual',
     role: 'tooltip',
   });
 }

@@ -28,7 +28,7 @@ describe('headless-ui F5 platform audit', () => {
     expect(primitiveUsesNativeMechanism('alert-dialog', 'invoker-command')).toBe(true);
 
     expect(primitiveUsesNativeMechanism('popover', 'html-popover')).toBe(true);
-    expect(primitiveUsesNativeMechanism('tooltip', 'html-popover')).toBe(true);
+    expect(primitiveUsesNativeMechanism('tooltip', 'html-popover')).toBe(false);
     expect(primitiveUsesNativeMechanism('hover-card', 'html-popover')).toBe(true);
 
     expect(primitiveUsesNativeMechanism('collapsible', 'html-details')).toBe(true);

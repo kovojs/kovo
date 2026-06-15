@@ -436,6 +436,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(PopoverContent.definition.render({ contentId: 'filters', open: true })).toContain(
       'popover="auto"',
     );
+    expect(TooltipContent.definition.render({ contentId: 'tip', open: true })).not.toContain(
+      'popover=',
+    );
     expect(
       TooltipTrigger.definition.render({ children: 'Help', contentId: 'tip', open: true }),
     ).toContain('jiso-tooltip="tip"');
