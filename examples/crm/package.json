@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vp build",
+    "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
+    "start": "node scripts/serve.mjs",
+    "static": "vp run export",
     "test": "vitest --run"
   },
   "dependencies": {
@@ -18,7 +22,11 @@
   "devDependencies": {
     "@jiso/compiler": "workspace:*",
     "@jiso/test": "workspace:*",
+    "@tailwindcss/vite": "^4.3.0",
     "fw": "workspace:*",
+    "tailwindcss": "^4.3.0",
+    "vite": "8.0.16",
+    "vite-plus": "^0.1.24",
     "vitest": "4.1.8"
   }
 }
