@@ -38,12 +38,6 @@ export function lowerInlineAttributeDerives(
   options: InlineDeriveLoweringOptions,
 ): InlineAttributeDeriveLowering {
   const knownQueries = knownQueryNames(model, options);
-  if (knownQueries.size === 0) {
-    return {
-      prefix: '',
-      replacements: [],
-    };
-  }
 
   const replacements: SourceReplacement[] = [];
   const deriveExports: string[] = [];
@@ -169,7 +163,9 @@ function inlineTextBinding(
   const expression = soleJsxExpressionChild(element, model)?.solePropertyAccessPath ?? null;
   if (!expression) return null;
 
-  return queryPathUsesKnownQuery(expression, knownQueries) ? expression : null;
+  return queryPathUsesKnownQuery(expression, knownQueries) || isStatePath(expression)
+    ? expression
+    : null;
 }
 
 function inlineMixedTextBinding(
@@ -202,7 +198,7 @@ function soleKnownQueryPath(
   const path = expression.solePropertyAccessPath ?? null;
   if (!path) return null;
 
-  return queryPathUsesKnownQuery(path, knownQueries) ? path : null;
+  return queryPathUsesKnownQuery(path, knownQueries) || isStatePath(path) ? path : null;
 }
 
 function isJsxAttributeExpression(
@@ -238,6 +234,10 @@ function innermostContainingElement(
 
 function isBindingAttributeName(name: string): boolean {
   return name === 'data-bind' || name.startsWith('data-bind:') || name === 'data-bind-list';
+}
+
+function isStatePath(path: string): boolean {
+  return path === 'state' || path.startsWith('state.');
 }
 
 function sanitizeIdentifier(value: string): string {

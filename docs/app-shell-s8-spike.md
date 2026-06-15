@@ -2,7 +2,9 @@
 
 Date: 2026-06-11
 
-Status: bounded proof passed for the request-shell wire path; R3 can proceed with the closed `Request -> Response` shell shape from `plans/app-shell.md`.
+Status: bounded proof passed for the request-shell wire path; R3 proceeded with the closed
+`Request -> Response` shell shape from the archived `plans/app-shell.md` ledger listed in
+`plans/archive.md`.
 
 ## What Was Proven
 
@@ -23,7 +25,10 @@ The conformance test parses the pinned `fixtures/wire/*.http` transcripts and se
 - typed read: `GET /_q/product?id=p1`
 - deferred stream: `GET /products/p1`
 
-The deferred stream test additionally inspects the raw chunked transfer body and requires two application chunks: the shell before `--jiso-boundary`, then the deferred query/fragment payload. This is the S8 evidence for the SPEC §13.3 placement concern named in `plans/app-shell.md`.
+The deferred stream test additionally inspects the raw chunked transfer body and requires two
+application chunks: the shell before `--jiso-boundary`, then the deferred query/fragment payload.
+This is the S8 evidence for the SPEC §13.3 placement concern named in the archived
+`plans/app-shell.md` ledger.
 
 The `/c/` path is covered by a versioned module request to `/c/cart.client.js?v=s8`, served through the same prototype dispatch path. The test fetches the module over real HTTP, verifies the immutable-module response headers, then imports the fetched source as a JavaScript module to prove the first-interaction load path. There is no existing pinned `fixtures/wire` transcript for `/c/`; R3/R5 should add one when the production module registry lands.
 

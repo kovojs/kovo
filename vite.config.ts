@@ -116,7 +116,6 @@ export default defineConfig({
         input: [
           { auto: true },
           { pattern: 'SPEC.md', base: 'workspace' },
-          { pattern: 'plans/v1-cleanup.md', base: 'workspace' },
           { pattern: 'AGENTS.md', base: 'workspace' },
           { pattern: '.github/workflows/ci.yml', base: 'workspace' },
           { pattern: 'docs/**', base: 'workspace' },

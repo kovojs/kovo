@@ -3,10 +3,9 @@
 ## Framework Source of Truth
 
 - Treat `SPEC.md` as the normative source of truth for how the Jiso framework should behave.
-- Use active files under `plans/` as the implementation roadmap and sequencing plan. The v1
-  closeout roadmap is archived; `plans/v1-cleanup.md` is the active v1 follow-up ledger. If a plan
-  conflicts with `SPEC.md`, follow `SPEC.md` for behavior and update the plan or ask before coding
-  through the conflict.
+- Use active files under `plans/` as the implementation roadmap and sequencing plan. Completed or
+  retired ledgers are listed in `plans/archive.md`; if a plan conflicts with `SPEC.md`, follow
+  `SPEC.md` for behavior and update the plan or ask before coding through the conflict.
 - When implementing or reviewing framework behavior, cite the relevant `SPEC.md` section in comments, tests, diagnostics, or handoff notes where that context would prevent ambiguity.
 - Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR FW235.
 
