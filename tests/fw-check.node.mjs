@@ -985,7 +985,7 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
 void test('P1 compiler emits FW311 update coverage facts', async () => {
   assert.equal(
     diagnosticDefinitions.FW311.message,
-    'Query-dependent DOM position has no update status.',
+    'Query/state-dependent DOM position has no update status.',
   );
   const result = compileComponentModule({
     fileName: 'components/cart/cart-badge.tsx',
@@ -1930,7 +1930,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   );
   assert.equal(
     diagnosticDefinitions.FW311.message,
-    'Query-dependent DOM position has no update status.',
+    'Query/state-dependent DOM position has no update status.',
   );
   assert.deepEqual(fact.coverage.diagnostics, [
     {

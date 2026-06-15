@@ -22,7 +22,16 @@ export const SwitchDemo = component('switch-demo', {
 
     expect(serverSource).toContain('<output data-bind="state.checked">{state.checked}</output>');
     expect(result.queryUpdatePlans).toEqual([]);
-    expect(result.updateCoverage).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'SwitchDemo',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'state.checked',
+        source: 'state',
+        status: 'plan',
+      },
+    ]);
     expect(clientSource).not.toContain('queryUpdatePlans');
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -48,7 +57,16 @@ export const ToggleDemo = component('toggle-demo', {
       'Toggle is <span data-bind="state.pressed">{state.pressed}</span>',
     );
     expect(result.queryUpdatePlans).toEqual([]);
-    expect(result.updateCoverage).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'ToggleDemo',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'state.pressed',
+        source: 'state',
+        status: 'plan',
+      },
+    ]);
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -70,7 +88,16 @@ export const Counter = component('counter', {
     });
 
     expect(result.queryUpdatePlans).toEqual([]);
-    expect(result.updateCoverage).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'Counter',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'state.count',
+        source: 'state',
+        status: 'plan',
+      },
+    ]);
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -110,9 +137,116 @@ export const DisclosureDemo = component('disclosure-demo', {
     );
     expect(clientSource).not.toContain('queryUpdatePlans');
     expect(result.queryUpdatePlans).toEqual([]);
-    expect(result.updateCoverage).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'DisclosureDemo',
+        detail: 'data-bind:aria-expanded',
+        position: 'attribute',
+        query: 'state.DisclosureDemo$button_aria_expanded_derive',
+        source: 'state',
+        status: 'plan',
+      },
+      {
+        componentName: 'DisclosureDemo',
+        detail: 'data-bind:hidden',
+        position: 'attribute',
+        query: 'state.DisclosureDemo$section_hidden_derive',
+        source: 'state',
+        status: 'plan',
+      },
+    ]);
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('reports unhandled state and mixed query/state render expressions as FW311', () => {
+    const result = compileComponentModule({
+      fileName: 'mixed-state.tsx',
+      source: `
+export const MixedState = component('mixed-state', {
+  queries: { cart: {} },
+  state: () => ({ open: false }),
+  render: (_queries, state) => (
+    <mixed-state>
+      <span className={state.open ? 'open' : 'closed'}>State</span>
+      <button title={state.open && cart.count > 0 ? 'ready' : 'waiting'}>Checkout</button>
+    </mixed-state>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'MixedState',
+        detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
+        position: 'expression',
+        query: 'state.open',
+        source: 'state',
+        sourceSpan: { length: 30, start: 187 },
+        status: 'UNHANDLED',
+      },
+      {
+        componentName: 'MixedState',
+        detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
+        position: 'expression',
+        query: 'state.open',
+        source: 'state',
+        sourceSpan: { length: 50, start: 253 },
+        status: 'UNHANDLED',
+      },
+    ]);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW311',
+        fileName: 'mixed-state.tsx',
+        length: 30,
+        message:
+          'Query/state-dependent DOM position has no update status. MixedState state.open expression',
+        severity: 'warn',
+        start: { column: 24, line: 7 },
+      },
+      {
+        code: 'FW311',
+        fileName: 'mixed-state.tsx',
+        length: 50,
+        message:
+          'Query/state-dependent DOM position has no update status. MixedState state.open expression',
+        severity: 'warn',
+        start: { column: 22, line: 8 },
+      },
+    ]);
+  });
+
+  it('classifies renderOnce state reads without emitting a runtime state plan', () => {
+    const result = compileComponentModule({
+      fileName: 'state-once.tsx',
+      source: `
+export const StateOnce = component('state-once', {
+  state: () => ({ tone: 'calm' }),
+  render: (_queries, state) => (
+    <state-once>
+      <span className={renderOnce(state.tone)}>Tone</span>
+    </state-once>
+  ),
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(result.queryUpdatePlans).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'StateOnce',
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: 'state.tone',
+        source: 'state',
+        status: 'renderOnce',
+      },
+    ]);
+    expect(clientSource).not.toContain('statePlans');
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('rejects query declarations that collide with the reserved state binding root', () => {

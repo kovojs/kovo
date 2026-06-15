@@ -1441,12 +1441,12 @@ describe('@jiso/test package subpath exports', () => {
     ).toMatchObject([{ code: 'FW310', target: 'cart/add -> cart' }]);
     expect(
       fwCheckDiagnosticAssertionFacts(
-        'fw-check/v1\nWARN FW311 component=Cart query=cart.count position="conditional <dot>" Query-dependent DOM position has no update status.\n',
+        'fw-check/v1\nWARN FW311 component=Cart query=cart.count position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
       ),
     ).toEqual([
       {
         code: 'FW311',
-        message: 'Query-dependent DOM position has no update status.',
+        message: 'Query/state-dependent DOM position has no update status.',
         properties: {
           component: 'Cart',
           position: 'conditional <dot>',

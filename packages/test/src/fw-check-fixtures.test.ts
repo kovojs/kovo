@@ -40,7 +40,7 @@ describe('@jiso/test fw-check fixture seam', () => {
     const output = [
       'fw-check/v1',
       'WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.',
-      'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.',
+      'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.',
       'COVERAGE component=OrderHistory query=orderHistory position=undefined status=fragment detail="text binding"',
       'WARN UNGUARDED cart/add mutation is reachable without an auth guard.',
       'WARN UNGUARDED page /admin is reachable without an auth guard.',
@@ -59,13 +59,13 @@ describe('@jiso/test fw-check fixture seam', () => {
       },
       {
         code: 'FW311',
-        message: 'Query-dependent DOM position has no update status.',
+        message: 'Query/state-dependent DOM position has no update status.',
         properties: {
           component: 'CartBadge',
           position: 'conditional <dot>',
           query: 'cart.discount',
         },
-        raw: 'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.',
+        raw: 'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.',
         severity: 'WARN',
         target: '',
       },
@@ -116,7 +116,7 @@ describe('@jiso/test fw-check fixture seam', () => {
       },
       {
         code: 'FW311',
-        message: 'Query-dependent DOM position has no update status.',
+        message: 'Query/state-dependent DOM position has no update status.',
         properties: {
           component: 'CartBadge',
           position: 'conditional <dot>',

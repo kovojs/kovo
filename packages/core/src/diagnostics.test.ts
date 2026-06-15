@@ -180,7 +180,7 @@ describe('diagnostic registry', () => {
         },
         "FW311": {
           "code": "FW311",
-          "message": "Query-dependent DOM position has no update status.",
+          "message": "Query/state-dependent DOM position has no update status.",
           "severity": "warn",
         },
         "FW320": {

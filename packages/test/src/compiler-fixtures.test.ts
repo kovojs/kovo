@@ -50,6 +50,7 @@ describe('@jiso/test compiler fixture facts', () => {
           detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
           position: 'expression',
           query: 'cart.discount',
+          source: 'query',
           sourceSpan: { length: 13, start: 355 },
           status: 'UNHANDLED',
         },
@@ -60,6 +61,7 @@ describe('@jiso/test compiler fixture facts', () => {
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'cart.discount',
+        source: 'query',
         status: 'UNHANDLED',
       },
     ]);

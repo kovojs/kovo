@@ -238,7 +238,7 @@ describe('@jiso/test graph fixture seam', () => {
               output: [
                 'fw-check/v1',
                 'WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.',
-                'WARN FW311 component=CartBadge query=cart.discount status=UNHANDLED Query-dependent DOM position has no update status.',
+                'WARN FW311 component=CartBadge query=cart.discount status=UNHANDLED Query/state-dependent DOM position has no update status.',
                 'COVERAGE component=OrderHistory query=orderHistory status=fragment',
               ].join('\n'),
             },

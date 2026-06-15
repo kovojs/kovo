@@ -297,15 +297,15 @@ On change, the loader keys existing `[fw-key]` children against the new array: c
 
 ### 4.9 Update coverage (exhaustiveness)
 
-§10.6 proves every invalidated query has an optimistic story; this is the same theorem one hop further down the dataflow: **every query-dependent position in rendered output must have a declared update status**, or the page renders data it will never refresh — the silent-staleness bug §10.6 exists to kill, recurring on the client side of the wire. The framework rejected runtime dependency tracking (§3.1), and the thing removed was also the thing that guaranteed coverage in SPA frameworks; a static plan needs a static completeness proof.
+§10.6 proves every invalidated query has an optimistic story; this is the same theorem one hop further down the dataflow: **every query- or island-local-state-dependent position in rendered output must have a declared update status**, or the page renders data it will never refresh — the silent-staleness bug §10.6 exists to kill, recurring on the client side of the wire. The framework rejected runtime dependency tracking (§3.1), and the thing removed was also the thing that guaranteed coverage in SPA frameworks; a static plan needs a static completeness proof.
 
-During lowering, the compiler classifies every render-output position that reads query data:
+During lowering, the compiler classifies every render-output position that reads query data or island-local state:
 
 | Status       | Meaning                                                                         | Latency                           |
 | ------------ | ------------------------------------------------------------------------------- | --------------------------------- |
 | `plan`       | lowered to a binding, derive, or stamp (§4.8)                                   | instant; participates in optimism |
 | `isomorphic` | island self-renders on change (§4.8, FW302)                                     | instant; costs the render module  |
-| `fragment`   | inside a `fragmentTarget` — server re-renders it on mutation responses (§9.1)   | 1 RTT — **no optimistic update**  |
+| `fragment`   | inside a `fragmentTarget` — server re-renders query-backed output on mutation responses (§9.1); not a state remedy unless a later SPEC defines how client-private state participates in server fragments | 1 RTT — **no optimistic update**  |
 | `renderOnce` | declared immutable for the document's lifetime (suppression recorded in source) | never                             |
 
 A position fitting none of these is **FW311**. The teaching error shows the classification, why the position exceeds the plan grammar, and the fix menu — extract a derive, lower to a CSS/attribute toggle, `fragmentTarget: true`, `isomorphic: true`, or declare `renderOnce`:
@@ -461,7 +461,7 @@ ERROR FW234 package component prefix conflict.
 | Stamp lists           | query result element type           | `data-bind-list` paths are arrays; item-relative paths exist on the element type; `fw-key` names a real field (§4.8)                 |
 | Slots / children      | hoisted component refs (§4.5)       | fragment-target children lower to component references with serializable props (FW230)                                               |
 | Query args            | query `args` schema (§10.2)         | components bind args from their own props; coercion declared once; instance keys typed end-to-end (store, wire, optimism)            |
-| Update coverage       | render-output classification (§4.9) | every query-dependent DOM position has a status — `plan` / `isomorphic` / `fragment` / `renderOnce`; none is FW311                   |
+| Update coverage       | render-output classification (§4.9) | every query/state-dependent DOM position has a status — `plan` / `isomorphic` / `fragment` / `renderOnce`; none is FW311             |
 | Opaque projections    | declared output schema (§10.2)      | `sql<T>`/raw projections carry `s.*` output schemas (FW410); observed result shape runtime-verified (§11.2)                          |
 
 ### 6.3 Example: end-to-end mutation typing
@@ -952,7 +952,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW303 | error      | Fragment-target render input is not declared as query data or stamped props (§4.5)                            |
 | FW304 | error      | Reserved query name such as `state` is not allowed (§4.8 binding roots)                                       |
 | FW310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)                                    |
-| FW311 | warn       | Query-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)               |
+| FW311 | warn       | Query/state-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)         |
 | FW320 | lint       | Event payload overlaps query data — use a transform                                                           |
 | FW330 | lint       | Direct db access in a mutation handler — route through domain                                                 |
 | FW402 | error      | Write touched an undeclared domain (silent stale UI)                                                          |
@@ -1095,7 +1095,7 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 5. **Coverage:** every (mutation × query) pair in the reference commerce app has an explicit optimistic status — hand-written transform or declared `'await-fragment'` — with zero unhandled FW310s. (The v2 target: derivation handles ≥70% of pairs, every punt naming its reason.)
 6. **Navigation typed:** every literal href/redirect in the commerce app resolves against the route registry (zero FW220/FW221); renaming a route path turns every consumer red under `vp check` — the navigation mirror of the column-rename proof (§6.2).
 7. **Declared execution only:** `grep -r "on:load" app/` returns only FW211-justified sites and isomorphic islands only FW302-justified ones — the eager-JS mirror of the `invalidate()` criterion (#4).
-8. **Update coverage:** every query-dependent DOM position in the commerce app has an explicit status (`plan` / `isomorphic` / `fragment` / `renderOnce`) with zero unhandled FW311s — the client-side mirror of criterion 5.
+8. **Update coverage:** every query/state-dependent DOM position in the commerce app has an explicit status (`plan` / `isomorphic` / `fragment` / `renderOnce`) with zero unhandled FW311s — the client-side mirror of criterion 5.
 
 ---
 

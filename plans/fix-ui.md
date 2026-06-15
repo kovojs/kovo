@@ -1,9 +1,9 @@
 # Fix UI: make gallery components behave like their base-ui / shadcn models
 
-Status: **open — diagnosis complete, no fixes landed yet.** Created 2026-06-14. `SPEC.md` is the
-source of truth for framework behavior; this file is the active remediation ledger for the
-`@jiso/headless-ui` (modeled on **Base UI**) and `@jiso/ui` (modeled on **shadcn/ui**, i.e. Radix)
-component layers as exercised by `examples/gallery`.
+Status: **open — Phase 0 done; Phase 1 compiler/runtime/coverage landed, demo migration remains.**
+Created 2026-06-14. `SPEC.md` is the source of truth for framework behavior; this file is the active
+remediation ledger for the `@jiso/headless-ui` (modeled on **Base UI**) and `@jiso/ui` (modeled on
+**shadcn/ui**, i.e. Radix) component layers as exercised by `examples/gallery`.
 
 ## Goal
 
@@ -151,14 +151,18 @@ The central gap (SPEC §4.8: "island-local state; same machinery, two data sourc
 subsystem — compiler lowering + analysis + emit, loader application within the 4KB budget, and the §4.9
 coverage gate. **Fleshed out as a standalone plan: `plans/reactive-ui.md`.** Summary of scope:
 
-- [ ] **Compiler** — lower `state.*` JSX reads to `data-bind`/`data-bind:<attr>` + named derives
+- [x] **Compiler** — lower `state.*` JSX reads to `data-bind`/`data-bind:<attr>` + named derives
       (`input: 'state'`), mirroring the query path (`lower/inline-derives.ts`,
       `analyze/query-updates.ts`); add state binding/coverage facts for diagnostics and `fw explain`
       only, not a runtime `statePlans` artifact.
-- [ ] **Loader** — apply state bindings after writing `fw-state` (walk `[data-bind]` under the nearest
+- [x] **Loader** — apply state bindings after writing `fw-state` (walk `[data-bind]` under the nearest
       `[fw-state]` host, reuse `query-bindings.ts` with a `state` resolver, lazy-load derives when
       compiler-emitted state derives land), within the inline-loader gzip budget.
-- [ ] **Coverage** — extend the §4.9 / FW311 exhaustiveness check to state reads.
+  - Evidence 2026-06-15: see `plans/reactive-ui.md` S1/S2/S4/S5 evidence and commits through the
+    state attribute derive/runtime application checkpoint.
+- [x] **Coverage** — extend the §4.9 / FW311 exhaustiveness check to state reads.
+  - Evidence 2026-06-15: see `plans/reactive-ui.md` S3/S6 evidence; FW311 and SPEC §4.9 are broadened
+    to query/state-dependent DOM positions, with CLI/check fixture coverage for `source=state`.
 - [ ] **Migrate** `switch`/`toggle`/`disclosure`/`checkbox` to declarative state binding (handlers
       reduce to a state mutation); verify in the no-shim harness; imperative demos unaffected.
 

@@ -128,9 +128,7 @@ export function collectQueryUpdateCoverage(
   const coveredPaths = new Set<string>();
   const knownQueries = knownQueryNames(model, options);
 
-  for (const binding of dataBindAttributes(model).filter(
-    (item) => item.query !== null && item.query !== 'state',
-  )) {
+  for (const binding of dataBindAttributes(model).filter((item) => item.query !== null)) {
     const path = binding.path;
     const query = binding.query;
     if (!query) continue;
@@ -140,12 +138,15 @@ export function collectQueryUpdateCoverage(
       detail: binding.name,
       position: binding.name === 'data-bind' ? 'binding' : 'attribute',
       query: path,
+      ...(query === 'state' ? { source: 'state' as const } : {}),
       status: 'plan',
     });
-    coveredPaths.add(path);
+    coveredPaths.add(coveragePathKey(query === 'state' ? 'state' : 'query', path));
   }
 
   for (const stamp of collectDataBindListStamps(model)) {
+    if (queryNameFromPath(stamp.list) === 'state') continue;
+
     facts.push({
       componentName,
       detail: 'data-bind-list',
@@ -153,7 +154,7 @@ export function collectQueryUpdateCoverage(
       query: stamp.list,
       status: 'plan',
     });
-    coveredPaths.add(stamp.list);
+    coveredPaths.add(coveragePathKey('query', stamp.list));
   }
 
   for (const path of renderOnceQueryPaths(model, knownQueries)) {
@@ -164,13 +165,25 @@ export function collectQueryUpdateCoverage(
       query: path,
       status: 'renderOnce',
     });
-    coveredPaths.add(path);
+    coveredPaths.add(coveragePathKey('query', path));
+  }
+
+  for (const path of renderOnceStatePaths(model)) {
+    facts.push({
+      componentName,
+      detail: 'declared renderOnce',
+      position: 'expression',
+      query: path,
+      source: 'state',
+      status: 'renderOnce',
+    });
+    coveredPaths.add(coveragePathKey('state', path));
   }
 
   if (componentOptionStaticValue(model, 'isomorphic') === true) {
     for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
       const path = expression.path;
-      if (coveredPaths.has(path)) continue;
+      if (coveredPaths.has(coveragePathKey('query', path))) continue;
 
       facts.push({
         componentName,
@@ -179,13 +192,28 @@ export function collectQueryUpdateCoverage(
         query: path,
         status: 'isomorphic',
       });
-      coveredPaths.add(path);
+      coveredPaths.add(coveragePathKey('query', path));
+    }
+
+    for (const expression of jsxStateExpressionPaths(model)) {
+      const path = expression.path;
+      if (coveredPaths.has(coveragePathKey('state', path))) continue;
+
+      facts.push({
+        componentName,
+        detail: 'declared isomorphic island',
+        position: 'expression',
+        query: path,
+        source: 'state',
+        status: 'isomorphic',
+      });
+      coveredPaths.add(coveragePathKey('state', path));
     }
   }
 
   for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
     const path = expression.path;
-    if (coveredPaths.has(path)) continue;
+    if (coveredPaths.has(coveragePathKey('query', path))) continue;
 
     facts.push({
       componentName,
@@ -195,7 +223,21 @@ export function collectQueryUpdateCoverage(
       sourceSpan: { length: expression.end - expression.start, start: expression.start },
       status: 'UNHANDLED',
     });
-    coveredPaths.add(path);
+  }
+
+  for (const expression of jsxStateExpressionPaths(model)) {
+    const path = expression.path;
+    if (coveredPaths.has(coveragePathKey('state', path))) continue;
+
+    facts.push({
+      componentName,
+      detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
+      position: 'expression',
+      query: path,
+      source: 'state',
+      sourceSpan: { length: expression.end - expression.start, start: expression.start },
+      status: 'UNHANDLED',
+    });
   }
 
   return dedupeBy(facts, updateCoverageKey);
@@ -296,6 +338,21 @@ function renderOnceQueryPaths(
   return [...new Set(paths)];
 }
 
+function renderOnceStatePaths(model: ComponentModuleModel): string[] {
+  const paths: string[] = [];
+
+  for (const call of callExpressions(model).filter((item) => item.name === 'renderOnce')) {
+    paths.push(
+      ...call.argumentPropertyAccesses
+        .flat()
+        .map((access) => access.path)
+        .filter(isStatePath),
+    );
+  }
+
+  return [...new Set(paths)];
+}
+
 function jsxQueryExpressionPaths(
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
@@ -315,8 +372,35 @@ function jsxQueryExpressionPaths(
     .filter((expression) => queryPathUsesKnownQuery(expression.path, knownQueries));
 }
 
+function jsxStateExpressionPaths(model: ComponentModuleModel): QueryPathExpressionFact[] {
+  return jsxExpressions(model)
+    .flatMap((expression) => {
+      const statePaths = [...new Set(expression.propertyAccesses.map((path) => path.path))].filter(
+        isStatePath,
+      );
+      return statePaths.map((path) => ({
+        end: expression.end,
+        path,
+        start: expression.start,
+      }));
+    });
+}
+
 function updateCoverageKey(fact: QueryUpdateCoverageFact): string {
-  return [fact.componentName, fact.query, fact.position, fact.status, fact.detail ?? ''].join('\0');
+  return [
+    fact.componentName,
+    fact.source ?? 'query',
+    fact.query,
+    fact.position,
+    fact.status,
+    fact.detail ?? '',
+    fact.sourceSpan?.start ?? '',
+    fact.sourceSpan?.length ?? '',
+  ].join('\0');
+}
+
+function coveragePathKey(source: 'query' | 'state', path: string): string {
+  return `${source}\0${path}`;
 }
 
 function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
@@ -448,4 +532,8 @@ function isWithinElement(candidate: JsxElementModel, container: JsxElementModel)
 
 function isBindingAttribute(name: string): boolean {
   return name === 'data-bind' || name.startsWith('data-bind:');
+}
+
+function isStatePath(path: string): boolean {
+  return path.startsWith('state.');
 }

@@ -230,7 +230,7 @@ function parseTargetAndMessage(code: string, detail: string): { message: string;
   }
 
   if (code === 'FW311') {
-    const message = 'Query-dependent DOM position has no update status.';
+    const message = 'Query/state-dependent DOM position has no update status.';
     return detail === message ? { message, target: '' } : { message: detail, target: '' };
   }
 

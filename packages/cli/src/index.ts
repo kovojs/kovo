@@ -2014,6 +2014,7 @@ function updateCoverageLine(fact: UpdateCoverageFact): string {
       'WARN FW311',
       `component=${fact.component}`,
       `query=${fact.query}`,
+      fact.source ? `source=${fact.source}` : '',
       `position=${JSON.stringify(fact.position)}`,
       diagnosticDefinitions.FW311.message,
       fact.detail ?? '',
@@ -2026,6 +2027,7 @@ function updateCoverageLine(fact: UpdateCoverageFact): string {
     'COVERAGE',
     `component=${fact.component}`,
     `query=${fact.query}`,
+    fact.source ? `source=${fact.source}` : '',
     `position=${JSON.stringify(fact.position)}`,
     `status=${fact.status}`,
     fact.detail ? `detail=${JSON.stringify(fact.detail)}` : '',
@@ -2071,6 +2073,7 @@ function compareUpdateCoverage(left: UpdateCoverageFact, right: UpdateCoverageFa
   return (
     left.component.localeCompare(right.component) ||
     left.query.localeCompare(right.query) ||
+    (left.source ?? '').localeCompare(right.source ?? '') ||
     left.position.localeCompare(right.position) ||
     left.status.localeCompare(right.status)
   );

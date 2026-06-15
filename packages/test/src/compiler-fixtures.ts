@@ -28,6 +28,7 @@ export interface CompilerUpdateCoverageLike {
   detail?: string;
   position: string;
   query: string;
+  source?: string;
   status: string;
   [field: string]: unknown;
 }
@@ -37,6 +38,7 @@ export interface CompilerUpdateCoverageFact {
   detail?: string;
   position: string;
   query: string;
+  source?: string;
   status: string;
 }
 
@@ -348,6 +350,7 @@ export function compilerUpdateCoverageFacts(
     ...(entry.detail === undefined ? {} : { detail: entry.detail }),
     position: entry.position,
     query: entry.query,
+    ...(entry.source === undefined ? {} : { source: entry.source }),
     status: entry.status,
   }));
 }

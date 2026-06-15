@@ -71,10 +71,31 @@ describe('fw check', () => {
       output: [
         'fw-check/v1',
         'COVERAGE component=CartBadge query=cart.count position="text" status=plan detail="text binding"',
-        'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.',
+        'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.',
         'COVERAGE component=CartDrawer query=cart position="root" status=fragment',
         '',
       ].join('\n'),
+    });
+  });
+
+  it('prints state update coverage source markers when present', () => {
+    expect(
+      fwCheck({
+        updateCoverage: [
+          {
+            component: 'SwitchDemo',
+            detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
+            position: 'expression',
+            query: 'state.checked',
+            source: 'state',
+            status: 'UNHANDLED',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'fw-check/v1\nWARN FW311 component=SwitchDemo query=state.checked source=state position="expression" Query/state-dependent DOM position has no update status. state expression has no data-bind, renderOnce, or isomorphic status\n',
     });
   });
 
@@ -874,7 +895,7 @@ describe('fw check', () => {
     }
 
     expect(output).toBe(
-      'fw-check/v1\nWARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.\n',
+      'fw-check/v1\nWARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
     );
   });
 

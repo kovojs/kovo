@@ -237,7 +237,7 @@ export const diagnosticDefinitions = {
   FW311: {
     code: 'FW311',
     severity: 'warn',
-    message: 'Query-dependent DOM position has no update status.',
+    message: 'Query/state-dependent DOM position has no update status.',
   },
   FW320: {
     code: 'FW320',

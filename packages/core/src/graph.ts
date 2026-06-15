@@ -194,6 +194,7 @@ export interface UpdateCoverageFact {
   detail?: string;
   position: string;
   query: string;
+  source?: 'query' | 'state';
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
 

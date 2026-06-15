@@ -106,12 +106,16 @@ ambiguity (query vs state root) proves messy.
 
 ### D2. Lowering — emit state bindings/derives
 
-- [ ] Add `state` expression detection alongside the query path in `scan/parse.ts` / a new
+- [x] Add `state` expression detection alongside the query path in `scan/parse.ts` / a new
       `lower/inline-state-derives.ts` (mirror `lower/inline-derives.ts`): recognize JSX text and
       attribute expressions whose only reactive root is `state`, and lower them to
       `data-bind`/`data-bind:<attr>` + named derives. Do **not** early-return on "no queries".
-- [ ] Reject or classify mixed query+state expressions as unhandled coverage in Phase 1; do not emit a
+- [x] Reject or classify mixed query+state expressions as unhandled coverage in Phase 1; do not emit a
       single-input derive for an expression that depends on two update sources.
+  - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` lowers state-only text and
+    attribute expressions without requiring queries and refuses mixed query+state attribute derives;
+    `packages/compiler/src/state-bindings.test.ts` covers state text, state attribute derives, and
+    mixed query+state FW311 coverage.
 - [x] Lower boolean-presence attributes through null-removing derives instead of direct path bindings
       that would serialize `false` as a still-present attribute.
   - Evidence 2026-06-15: `packages/compiler/src/lower/inline-derives.ts` routes state-only
@@ -126,20 +130,28 @@ ambiguity (query vs state root) proves messy.
       lint-visible; do not normalize a FW232 violation as the long-term shape. The general "make
       primitive composition emit the bindings" is Phase 2 of `plans/fix-ui.md` (§4.6 attrs-function
       chaining), out of scope here unless required for spec-conformant acceptance.
-- [ ] Classification mirrors §4.8: sole-text-child expression → stamp that element; mixed content →
+- [x] Classification mirrors §4.8: sole-text-child expression → stamp that element; mixed content →
       synthesized `<span data-bind>` (reported in `fw explain`); attribute position → named derive.
+  - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts sole state text
+    becomes `data-bind`, mixed state text gets a synthesized `<span data-bind>`, and state attributes
+    lower to client-module derive exports referenced by `data-bind:<attr>`.
 
 ### D3. Analysis — state binding facts, not a runtime plan
 
-- [ ] Add state binding/coverage facts in `analyze/query-updates.ts` or a sibling
+- [x] Add state binding/coverage facts in `analyze/query-updates.ts` or a sibling
       `analyze/state-updates.ts` for type-checking, diagnostics, and `fw explain` only. Do **not** emit
       or depend on a separate runtime `StateUpdatePlanFact`; SPEC §4.8 says the DOM is the plan and
       there is no separate compiled-plan artifact.
-- [ ] Runtime identity for state updates is the nearest `[fw-state]` host, not `fw-c`: SPEC §4.2 allows
+- [x] Runtime identity for state updates is the nearest `[fw-state]` host, not `fw-c`: SPEC §4.2 allows
       omitting `fw-c` when the host tag spells the component name, and nested stateful islands must not
       be updated by an ancestor's state mutation.
-- [ ] Defer `data-bind-list="state.items"` until after scalar state bindings are proven. When it lands,
+- [x] Defer `data-bind-list="state.items"` until after scalar state bindings are proven. When it lands,
       reuse `fw-key` reconciliation and item-relative binding semantics verbatim.
+  - Evidence 2026-06-15: `packages/compiler/src/analyze/query-updates.ts` emits `source: "state"`
+    coverage facts for state `data-bind`/`data-bind:<attr>`, `renderOnce(state.*)`, isomorphic state
+    reads, and unhandled state reads, while still skipping `data-bind-list` state stamps in Phase 1;
+    `packages/core/src/graph.ts`, `packages/cli/src/index.ts`, and `packages/test/src/
+    compiler-fixtures.ts` preserve/print the optional coverage source for explain/check surfaces.
 
 ### D4. Emit — derives + island wiring
 
@@ -152,7 +164,7 @@ ambiguity (query vs state root) proves messy.
       bindings by walking `[data-bind]` / `[data-bind:*]` under the mutated `[fw-state]` host, keeping
       SPEC §4.8's DOM-as-plan contract intact.
   - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` asserts server
-    `data-bind:<attr>` refs, client derive exports, no `queryUpdatePlans`, no coverage facts, and
+    `data-bind:<attr>` refs, client derive exports, no `queryUpdatePlans`, state coverage facts, and
     fixpoint for a state-only component; `packages/compiler/src/compile.ts` versions state derive refs
     to the client module URL without adding a runtime `statePlans` artifact.
 
@@ -191,16 +203,21 @@ at all. Two sub-decisions:
 
 ### D6. Coverage — §4.9 exhaustiveness for state
 
-- [ ] Extend `collectQueryUpdateCoverage` (FW311 / §4.9) to flag a JSX read of `state.*` in a DOM
+- [x] Extend `collectQueryUpdateCoverage` (FW311 / §4.9) to flag a JSX read of `state.*` in a DOM
       position that did **not** lower to a binding/derive (so nothing a handler mutates silently goes
       stale — this is exactly what hid the switch `<output>` bug). Decide FW311-extension vs. a
       state-specific sibling code; wire the diagnostic + fix-menu message (extract a named derive / bind
       directly).
-- [ ] Before landing the diagnostic, resolve the SPEC wording mismatch: §4.9 and the FW311 table
+- [x] Before landing the diagnostic, resolve the SPEC wording mismatch: §4.9 and the FW311 table
       currently say "query-dependent" output. Preferred change is to broaden FW311 to
       query/state-dependent DOM positions while documenting that state positions have Phase 1 statuses
       `plan`, `isomorphic`, or `renderOnce`; `fragment` is not a state remedy unless SPEC later defines
       how client-private state participates in server fragments.
+  - Evidence 2026-06-15: `SPEC.md` §4.9 and the FW311 table now say query/state-dependent output and
+    document the state/fragment caveat; `packages/core/src/diagnostics.ts` broadens FW311; `packages/
+    compiler/src/state-bindings.test.ts` covers unhandled state reads, mixed query+state reads, and
+    `renderOnce(state.*)` coverage; `packages/cli/src/index.fw-check.test.ts` covers `source=state`
+    FW311 output.
 
 ### D7. Backward compatibility with the imperative demos
 
@@ -245,8 +262,10 @@ at all. Two sub-decisions:
     src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts
     src/handler-lowering.test.ts` passed 55 tests; `pnpm --filter @jiso/compiler exec tsc --noEmit`
     passed.
-- [ ] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
+- [x] **S3 — Analysis + coverage facts** (D3): state binding/coverage facts for diagnostics and explain
       output only; tests prove no emitted runtime `statePlans` artifact is required.
+  - Evidence 2026-06-15: same D3/D6 evidence above; `packages/compiler/src/state-bindings.test.ts`
+    asserts state plan, renderOnce, and UNHANDLED facts without `queryUpdatePlans` or `statePlans`.
 - [x] **S4a — Compiler emit** (D4): server attributes + client derives; component-level fixpoint
       holds for state attribute derives.
 - [ ] **S4b — Gallery emit parity** (D4): `assertFixpoint`/`assertRenderEquivalence` holds in the
@@ -254,7 +273,14 @@ at all. Two sub-decisions:
 - [x] **S5 — Loader application** (D5): wire the walk into the inline loader `dispatch`; regenerate
       `inline-loader.ts`; budget + parity `--check` green.
   - Evidence 2026-06-15: same S2b and D5 evidence above.
-- [ ] **S6 — Coverage gate** (D6): FW311-for-state diagnostic + tests.
+- [x] **S6 — Coverage gate** (D6): FW311-for-state diagnostic + tests.
+  - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+    src/state-bindings.test.ts src/query-coverage.test.ts src/stamps.test.ts src/vite.test.ts` passed
+    45 tests; `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts` passed 3 tests;
+    `pnpm --filter fw exec vitest run src/index.fw-check.test.ts` passed 47 tests; `pnpm exec vitest
+    run packages/test/src/compiler-fixtures.test.ts packages/test/src/fw-check-fixtures.test.ts
+    packages/test/src/package-exports.test.ts` passed 17 tests; compiler, `@jiso/test`, and `fw`
+    `tsc --noEmit` passed.
 - [ ] **S7 — Migrate the 4 target demos** to declarative state binding (drop the helper-spread for
       state-dependent attrs where spec-conformant): `switch`, `toggle`, `disclosure`, `checkbox`.
       Handler bodies reduce to the state mutation (+ the primitive's `*TriggerClick` for the change
@@ -293,8 +319,11 @@ at all. Two sub-decisions:
     query-bindings.test.ts` and `packages/runtime/src/inline-loader-delegated.test.ts` assert
     derive-backed `data-bind:hidden` removes `hidden` when the derive returns `null` and sets it when
     the derive returns `""`; the focused compiler/runtime vitest commands above passed.
-- [ ] Mixed query+state expressions are rejected or reported as unhandled coverage until multi-input
+- [x] Mixed query+state expressions are rejected or reported as unhandled coverage until multi-input
       derives are designed.
+  - Evidence 2026-06-15: `packages/compiler/src/state-bindings.test.ts` covers
+    `title={state.open && cart.count > 0 ? ...}` as FW311 state coverage instead of a single-input
+    derive.
 - [x] Chained handlers update DOM from the final `ctx.state` value after all handler refs run.
   - Evidence 2026-06-15: `packages/runtime/src/handlers.test.ts` asserts modular delegated handlers
     update `data-bind="state.count"` after two chained refs mutate one context; `packages/runtime/src/
