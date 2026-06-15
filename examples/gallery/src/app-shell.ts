@@ -36,6 +36,10 @@ const galleryHeadlessUiClientModuleHrefMap = registerHeadlessUiClientModules();
 export const galleryHeadlessUiClientModuleHrefs = Object.freeze([
   ...galleryHeadlessUiClientModuleHrefMap.values(),
 ]);
+export const galleryInteractiveSupportClientModuleHrefs = Object.freeze([
+  galleryRuntimeModuleHref,
+  ...galleryHeadlessUiClientModuleHrefs,
+]);
 const galleryHeadlessPrimitivesModuleHref = galleryHeadlessUiClientModuleHrefMap.get(
   galleryHeadlessPrimitivesModulePath,
 );
@@ -55,8 +59,7 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
   // Include the shared runtime module first so the static export writes it (the demo modules
   // import it), then the primitive modules imported by generated handlers, before demo handlers.
   modulepreloads: [
-    galleryRuntimeModuleHref,
-    ...galleryHeadlessUiClientModuleHrefs,
+    ...galleryInteractiveSupportClientModuleHrefs,
     ...galleryInteractiveClientModuleHrefs,
   ],
   page() {

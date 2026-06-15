@@ -3,10 +3,13 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import ts from 'typescript';
+
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
+const headlessUiSourceRoot = path.join(repoRoot, 'packages/headless-ui/src');
 const defaultServerAppShellClientModulesPath = path.join(
   repoRoot,
   'dist/server/src/api/app-shell/client-modules.mjs',
@@ -25,10 +28,15 @@ export async function createSiteDistApp({
   assertSiteAppShellServerApi(serverApi);
   const clientModules = serverApi.createMemoryVersionedClientModuleRegistry();
   const moduleHrefs = registerPublicClientModules(clientModules, publicDir);
+  const gallerySupport = registerGalleryInteractiveSupportClientModules(clientModules);
   // The folded component pages reference the gallery's compiled interactive
   // client modules (/c/examples/gallery/.../<name>.client.js?v=…). Register them
   // so the static-export replay can serve and copy them (else FW229).
-  registerGalleryInteractiveClientModules(clientModules);
+  mergeModuleHrefs(moduleHrefs, gallerySupport.moduleHrefs);
+  mergeModuleHrefs(
+    moduleHrefs,
+    registerGalleryInteractiveClientModules(clientModules, gallerySupport),
+  );
 
   return serverApi.createApp({
     clientModules,
@@ -136,27 +144,96 @@ function registerPublicClientModules(clientModules, publicDir) {
   return hrefs;
 }
 
+function registerGalleryInteractiveSupportClientModules(clientModules) {
+  const moduleHrefs = new Map();
+  const runtimeSource = [
+    'export const derive = (inputs, run) => ({ inputs, run });',
+    'export const handler = (fn) => fn;',
+    '',
+  ].join('\n');
+  const runtimePath = '/c/examples/gallery/src/generated/jiso-runtime.client.js';
+  const runtimeHref = clientModules.put({
+    path: runtimePath,
+    source: runtimeSource,
+    version: contentHash(runtimeSource).slice(0, 8),
+  });
+  moduleHrefs.set(runtimePath, runtimeHref);
+
+  for (const directory of ['lib', 'primitives']) {
+    for (const entry of sortedDirectoryEntries(path.join(headlessUiSourceRoot, directory))) {
+      if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
+
+      const sourcePath = path.join(headlessUiSourceRoot, directory, entry.name);
+      const pathName = `/c/packages/headless-ui/src/${directory}/${entry.name.replace(
+        /\.ts$/,
+        '.js',
+      )}`;
+      const source = readFileSync(sourcePath, 'utf8');
+      const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+          importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+          module: ts.ModuleKind.ES2022,
+          target: ts.ScriptTarget.ES2022,
+        },
+        fileName: entry.name,
+      }).outputText;
+      const href = clientModules.put({
+        path: pathName,
+        source: transpiled,
+        version: contentHash(transpiled).slice(0, 8),
+      });
+      moduleHrefs.set(pathName, href);
+    }
+  }
+
+  const primitivesHref = moduleHrefs.get('/c/packages/headless-ui/src/primitives/index.js');
+  if (primitivesHref === undefined) {
+    throw new Error('site app shell: missing gallery headless UI primitives client module.');
+  }
+
+  return { moduleHrefs, primitivesHref, runtimeHref };
+}
+
 /** Register the compiled interactive-gallery client modules with the same path
  * + version the folded component pages reference. Mirrors the version-extraction
  * in examples/gallery/src/app-shell.ts (the version lives in the generated
- * server markup's on:click href). */
-function registerGalleryInteractiveClientModules(clientModules) {
+ * server markup's on:click href). SPEC §4.4 makes load-bearing import maps a
+ * non-goal, so rewrite generated bare package imports to registered /c/ URLs. */
+function registerGalleryInteractiveClientModules(clientModules, support) {
   const generatedDir = path.join(repoRoot, 'examples/gallery/src/generated/interactive');
-  if (!existsSync(generatedDir)) return;
+  const hrefs = new Map();
+  if (!existsSync(generatedDir)) return hrefs;
 
   for (const entry of sortedDirectoryEntries(generatedDir)) {
     if (!entry.name.endsWith('.client.js')) continue;
 
     const name = entry.name.replace(/\.client\.js$/, '');
-    const source = readFileSync(path.join(generatedDir, entry.name), 'utf8');
+    const source = rewriteGalleryClientImports(
+      readFileSync(path.join(generatedDir, entry.name), 'utf8'),
+      support,
+    );
     const serverTsx = readFileSync(path.join(generatedDir, `${name}.tsx`), 'utf8');
     const pathName = `/c/examples/gallery/src/generated/interactive/${name}.client.js`;
-    clientModules.put({
+    const href = clientModules.put({
       path: pathName,
       source,
       version: galleryInteractiveClientModuleVersion(serverTsx, pathName, name),
     });
+    hrefs.set(pathName, href);
   }
+
+  return hrefs;
+}
+
+function rewriteGalleryClientImports(source, support) {
+  return source
+    .replaceAll("from '@jiso/runtime';", `from '${support.runtimeHref}';`)
+    .replaceAll('from "@jiso/headless-ui/primitives";', `from '${support.primitivesHref}';`)
+    .replaceAll("from '@jiso/headless-ui/primitives';", `from '${support.primitivesHref}';`);
+}
+
+function mergeModuleHrefs(target, source) {
+  for (const [pathName, href] of source) target.set(pathName, href);
 }
 
 function galleryInteractiveClientModuleVersion(serverTsx, modulePath, name) {

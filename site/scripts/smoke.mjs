@@ -147,6 +147,17 @@ try {
     ),
     'JS: interactive gallery client module loads on interaction',
   );
+  await page.goto(`${origin}/gallery/components/toggle/`, { waitUntil: 'networkidle' });
+  const toggleButton = page.locator('#toggle-demo button[on\\:click*="toggle-demo.client.js"]');
+  await toggleButton.click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#toggle-demo [data-demo-state="pressed"]')?.textContent === 'pressed',
+  );
+  check(
+    galleryScripts.includes('/c/examples/gallery/src/generated/interactive/toggle-demo.client.js'),
+    'JS: folded toggle gallery page runs the compiled handler',
+  );
 
   // Examples: each app loads as a static export inside the docs page's sandboxed
   // iframe, and its authored source renders beside it in the tabbed panel.

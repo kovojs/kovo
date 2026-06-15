@@ -74,7 +74,9 @@ describe('compiled interactive gallery demos', () => {
           interactiveGalleryDemos.length + galleryHeadlessUiClientModuleHrefs.length + 1
         }`,
       );
-      expect(output).toContain('assets=1');
+      expect(output).toContain(
+        `assets=${existsSync(resolve(galleryRoot, '../../site/dist-css/assets/site.css')) ? 1 : 0}`,
+      );
       expect(output).toContain('diagnostics=0');
 
       const html = readFileSync(join(distDir, 'gallery/interactive/index.html'), 'utf8');

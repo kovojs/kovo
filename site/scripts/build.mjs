@@ -142,6 +142,7 @@ async function loadGalleryData() {
     const appShell = await vite.ssrLoadModule('/examples/gallery/src/app-shell.ts');
     return {
       clientHrefs: appShell.galleryInteractiveClientModuleHrefs,
+      supportClientHrefs: appShell.galleryInteractiveSupportClientModuleHrefs,
       galleryRoutes: gallery.galleryRoutes,
       interactiveDemos: interactive.interactiveGalleryDemos,
     };
@@ -285,7 +286,8 @@ async function main() {
 
   const sections = [];
   for (const section of SECTIONS) sections.push(await loadSection(section));
-  const { clientHrefs, galleryRoutes, interactiveDemos } = await loadGalleryData();
+  const { clientHrefs, galleryRoutes, interactiveDemos, supportClientHrefs } =
+    await loadGalleryData();
   // Map gallery component → its compiled interactive demo. Demo names are the
   // component plus a `-demo` suffix; client-module hrefs are index-aligned with
   // the demo list (examples/gallery/src/app-shell.ts). pure-markup-demo has no
@@ -293,7 +295,11 @@ async function main() {
   const interactiveByComponent = new Map(
     interactiveDemos.map((demo, index) => [
       demo.name.replace(/-demo$/, ''),
-      { modulepreloads: [clientHrefs[index]], name: demo.name, render: demo.render },
+      {
+        modulepreloads: [...supportClientHrefs, clientHrefs[index]],
+        name: demo.name,
+        render: demo.render,
+      },
     ]),
   );
   const routeManifest = [];

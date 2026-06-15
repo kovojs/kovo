@@ -172,12 +172,8 @@ export function renderDocument({
 }) {
   // Interactive gallery demos compile to versioned /c/ client modules; preload
   // them so the inline loader's first dispatch (SPEC §4.4) imports from cache.
-  // The modules import `handler` from the bare specifier `@jiso/runtime`, so an
-  // import map (before the preloads, per the import-maps spec) resolves it to
-  // the browser shim. Only emitted when a page actually has interactive demos.
-  const importMap = modulepreloads.length
-    ? '<script type="importmap">{"imports":{"@jiso/runtime":"/c/jiso-runtime.js"}}</script>\n    '
-    : '';
+  // The site export rewrites generated bare package imports to full /c/ URLs,
+  // matching SPEC §4.4's no-load-bearing-import-maps contract.
   const preloadLinks = modulepreloads
     .map((href) => `<link rel="modulepreload" href="${escapeHtml(href)}" />`)
     .join('\n    ');
@@ -192,7 +188,7 @@ export function renderDocument({
     <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/assets/site.css" />
-    ${importMap}${preloadLinks ? `${preloadLinks}\n    ` : ''}<script>${jisoLoaderSource}</script>
+    ${preloadLinks ? `${preloadLinks}\n    ` : ''}<script>${jisoLoaderSource}</script>
   </head>
   <body class="font-sans antialiased">
     ${chromeless ? '' : SiteHeader.definition.render({}, {}, { activePath: path })}

@@ -100,6 +100,7 @@ describe('site app-shell export adoption', () => {
     expect(codeModuleHref).toBeTruthy();
     expect(shellHtml).toContain(`<script type="module" src="${searchModuleHref}"></script>`);
     expect(shellHtml).toContain(`<link rel="modulepreload" href="${themeModuleHref}">`);
+    expect(shellHtml).not.toContain('type="importmap"');
     expect(shellHtml).toContain('<script src="/c/code.js"></script>');
     expect(shellHtml).toContain('<a href="/c/search.js">source example</a>');
     expect(shellHtml).toContain('Docs mention /c/theme.js as a static-host path.');
@@ -132,6 +133,7 @@ describe('site app-shell export adoption', () => {
     expect(exportedIndex).toContain('/c/code.js?v=site-r7-');
     expect(exportedIndex).toContain(`<script type="module" src="${searchModuleHref}"></script>`);
     expect(exportedIndex).toContain(`<link rel="modulepreload" href="${themeModuleHref}">`);
+    expect(exportedIndex).not.toContain('type="importmap"');
     expect(exportedIndex).toContain('<script src="/c/code.js"></script>');
     expect(exportedIndex).toContain('<a href="/c/search.js">source example</a>');
     expect(exportedIndex).toContain('Docs mention /c/theme.js as a static-host path.');
@@ -151,6 +153,86 @@ describe('site app-shell export adoption', () => {
     expect(exportedCodeModule).toBe(
       'export function copy() { document.body.dataset.copied = ""; }\n',
     );
+  });
+
+  it('serves folded gallery client modules with concrete static support imports', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-gallery-modules-'));
+    const distDir = path.join(root, 'dist-source');
+    const publicDir = path.join(root, 'public');
+    const outDir = path.join(root, 'dist-out');
+
+    await mkdir(path.join(distDir, 'gallery', 'components', 'toggle'), { recursive: true });
+    await mkdir(publicDir, { recursive: true });
+    await writeFile(
+      path.join(distDir, 'gallery', 'components', 'toggle', 'index.html'),
+      [
+        '<!doctype html><html><head>',
+        '<link rel="modulepreload" href="/c/examples/gallery/src/generated/jiso-runtime.client.js">',
+        '<link rel="modulepreload" href="/c/packages/headless-ui/src/primitives/index.js">',
+        '<link rel="modulepreload" href="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js">',
+        '</head><body>',
+        '<button on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$button_click">Toggle</button>',
+        '</body></html>',
+      ].join(''),
+    );
+
+    const serverApi = { ...serverAppShellClientModules, ...serverAppShellCore };
+    const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
+    const handler = serverApi.createRequestHandler(app);
+    const response = await handler(new Request('https://jiso.test/gallery/components/toggle'));
+    const html = await response.text();
+    const runtimeHref =
+      html.match(
+        /\/c\/examples\/gallery\/src\/generated\/jiso-runtime\.client\.js\?v=[a-f0-9]+/,
+      )?.[0] ?? '';
+    const primitivesHref =
+      html.match(/\/c\/packages\/headless-ui\/src\/primitives\/index\.js\?v=[a-f0-9]+/)?.[0] ?? '';
+    const toggleHref =
+      html.match(
+        /\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-demo\.client\.js\?v=[a-f0-9]+/,
+      )?.[0] ?? '';
+
+    expect(response.status).toBe(200);
+    expect(runtimeHref).toBeTruthy();
+    expect(primitivesHref).toBeTruthy();
+    expect(toggleHref).toBeTruthy();
+    expect(html).toContain(`<link rel="modulepreload" href="${runtimeHref}">`);
+    expect(html).toContain(`<link rel="modulepreload" href="${primitivesHref}">`);
+    expect(html).toContain(`<link rel="modulepreload" href="${toggleHref}">`);
+    expect(html).toContain(`on:click="${toggleHref}#GalleryToggleDemo$button_click"`);
+
+    const toggleModule = await handler(new Request(`https://jiso.test${toggleHref}`)).then(
+      (moduleResponse) => moduleResponse.text(),
+    );
+    const primitivesModule = await handler(new Request(`https://jiso.test${primitivesHref}`)).then(
+      (moduleResponse) => moduleResponse.text(),
+    );
+    expect(toggleModule).not.toContain('@jiso/runtime');
+    expect(toggleModule).not.toContain('@jiso/headless-ui/primitives');
+    expect(toggleModule).toContain(`from '${runtimeHref}';`);
+    expect(toggleModule).toContain(`from '${primitivesHref}';`);
+    expect(primitivesModule).toContain("from './toggle.js';");
+
+    const result = await serverAppShellStaticExport.exportStaticApp(app, { outDir });
+    const exportedToggleModule = await readFile(
+      path.join(
+        outDir,
+        'c',
+        'examples',
+        'gallery',
+        'src',
+        'generated',
+        'interactive',
+        'toggle-demo.client.js',
+      ),
+      'utf8',
+    );
+
+    expect(result.clientModules.map((artifact) => artifact.path)).toContain(
+      '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js',
+    );
+    expect(exportedToggleModule).not.toContain('@jiso/runtime');
+    expect(exportedToggleModule).not.toContain('@jiso/headless-ui/primitives');
   });
 
   it('exports docs HTML when the public client module directory is absent', async () => {
