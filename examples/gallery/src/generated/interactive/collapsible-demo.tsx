@@ -1,9 +1,28 @@
 // @jiso-ir - lowered from examples/gallery/src/interactive/collapsible-demo.tsx by @jiso/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit:interactive-gallery`.
 /** @jsxImportSource @jiso/server */
+import { derive } from '@jiso/runtime';
+
+export const GalleryCollapsibleDemo$details_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryCollapsibleDemo$details_open_derive = derive(['state'], (state: any) =>
+  state.open ? '' : null,
+);
+export const GalleryCollapsibleDemo$summary_aria_expanded_derive = derive(['state'], (state: any) =>
+  String(state.open),
+);
+export const GalleryCollapsibleDemo$summary_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryCollapsibleDemo$div_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+
 import { component } from '@jiso/core';
 import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
+  collapsibleTriggerClick as _collapsibleTriggerClick,
   collapsibleTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -33,19 +52,29 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
         {...collapsibleRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="collapsible"
+        data-state={state.open ? 'open' : 'closed'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$details_data_state_derive"
+        open={state.open}
+        data-bind:open="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$details_open_derive"
         fw-c="gallery-collapsible-demo"
         fw-state='{"open":false}'
       >
         <summary
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
+          aria-expanded={String(state.open)}
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$summary_aria_expanded_derive"
           class={TRIGGER_CLASS}
-          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=dea3c593#GalleryCollapsibleDemo$summary_click"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$summary_data_state_derive"
+          on:click="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$summary_click"
         >
           Release notes
         </summary>
         <div
           {...collapsibleContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js?v=cd48c2ed#GalleryCollapsibleDemo$div_data_state_derive"
         >
           Added browser-backed compiled coverage.
         </div>

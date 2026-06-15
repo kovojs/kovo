@@ -3,6 +3,7 @@ import { component } from '@jiso/core';
 import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
+  collapsibleTriggerClick as _collapsibleTriggerClick,
   collapsibleTriggerAttributes,
 } from '@jiso/headless-ui/primitives';
 
@@ -32,12 +33,19 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
         {...collapsibleRootAttributes({ open: state.open })}
         class={ROOT_CLASS}
         data-gallery-interactive="collapsible"
+        data-state={state.open ? 'open' : 'closed'}
+        open={state.open}
       >
         <summary
           {...collapsibleTriggerAttributes({ contentId, open: state.open })}
+          aria-expanded={String(state.open)}
           class={TRIGGER_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
           onClick={() => {
-            state.open = !state.open;
+            const result = _collapsibleTriggerClick(Object(event), { open: state.open });
+            if (!result) return;
+            Object(event)['preventDefault']?.call(event);
+            state.open = result.open;
           }}
         >
           Release notes
@@ -45,6 +53,7 @@ export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
         <div
           {...collapsibleContentAttributes({ contentId, open: state.open })}
           class={CONTENT_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
         >
           Added browser-backed compiled coverage.
         </div>

@@ -431,10 +431,26 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       `accordionKeyDown` + roving `tabindex` to `accordion.ts` (mirror `tabsKeyDown`/`tabsMoveFocus`),
       then wire it. Click-toggle works but also stamp `data-state` (currently only `aria-expanded` +
       `hidden`, so `data-[state=open]` trigger styling goes stale).
-- [ ] **collapsible** [P2]: native `<details>/<summary>` toggles fine, but `aria-expanded`/`data-state`
+- [x] **collapsible** [P2]: native `<details>/<summary>` toggles fine, but `aria-expanded`/`data-state`
       on the summary never update (Phase-1 gap) and `data-[state=closed]:hidden` is dead on native
       `<details>`. Either sync `aria-expanded`/`data-state` from the native toggle, or move to the
       button+panel model; drop the inert `data-state` CSS hook.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/collapsible-demo.tsx` now routes summary
+    clicks through `_collapsibleTriggerClick`, prevents the native default toggle after the reducer
+    returns, and keeps `<details open>`, root/summary/content `data-state`, and summary
+    `aria-expanded` as state-bound TSX.
+  - Evidence 2026-06-15: regenerated
+    `examples/gallery/src/generated/interactive/collapsible-demo.client.js` imports
+    `_collapsibleTriggerClick`, emits derives for `open`, `aria-expanded`, and `data-state`, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated collapsible files found no matches.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
+    `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+    -t "collapsible"`, `pnpm --filter @jiso/example-gallery exec node
+    scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter @jiso/example-gallery exec tsc
+    --noEmit` passed.
 
 ### Inputs
 
