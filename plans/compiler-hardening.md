@@ -313,15 +313,27 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
     `pnpm --filter @jiso/headless-ui exec vitest run src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts src/primitives/number-field.test.ts`;
     `pnpm --filter @jiso/compiler exec vitest run src/handler-lowering.test.ts`; `pnpm exec vp run build`;
     and `pnpm run check`.
-  - Gap 2026-06-15: the required closure gates are still red, so this checkbox stays open.
-    `pnpm test` failed in existing Drizzle project extraction, gallery/UI fixture drift, commerce
-    generated artifact drift, and CLI export snapshot buckets. After rebuilding `dist/`,
-    `pnpm run check:fw` no longer fails the FW224/FW311 assertions, but still fails unrelated loader
-    event-snapshot, starter `DomMorphTarget`, production-emit FW201 fixture, open render-equivalence,
-    and Drizzle conformance gates. After the handler-root fix,
-    `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
-    advances past the FW201 diagnostics and stops at the open render-equivalence/lowered-TSX
-    assertion.
+  - Progress 2026-06-15: broad-gate fixture drift was tightened: CLI static-export fixtures now
+    include the closed app aggregate `diagnostics` field; loader acceptance snapshots include the
+    full delegated lifecycle listener set; starter and generated-module VM fixtures expose the
+    runtime morph/import surface used by the current templates; the Vite production-emit fixture
+    uses a named import for handler lowering; and Drizzle project extraction anchors virtual
+    source files under `packages/drizzle` so root-launched and package-launched Vitest resolve the
+    same Drizzle dependency graph.
+  - Evidence 2026-06-15: `pnpm test` passed (316 files / 2410 tests);
+    `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts
+    packages/drizzle/src/index.query-loader-config.test.ts
+    packages/drizzle/src/index.query-loader-receivers.test.ts
+    packages/drizzle/src/index.serialization.test.ts
+    packages/drizzle/src/index.conditional-approximation.test.ts
+    packages/drizzle/src/index.write-callbacks-aliases.test.ts
+    packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/runtime-surface.test.ts`
+    passed from the repo root; the same eight files passed with `pnpm --filter @jiso/drizzle exec
+    vitest run ...`; `pnpm --filter @jiso/drizzle exec tsc --noEmit`, `pnpm --filter fw exec tsc
+    --noEmit`, `pnpm --filter @jiso/test exec tsc --noEmit`, and `git diff --check` passed.
+  - Gap 2026-06-15: the checkbox stays open because the requested `pnpm run check:fw` closure
+    gate still fails at the separate Phase 6 render-equivalence item (`P1 render-equivalence gate
+    remains represented`: `checkCount: 0`, no authored-vs-lowered differential yet).
 
 ---
 

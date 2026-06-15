@@ -370,6 +370,7 @@ export async function viteProductionEmitContractFact(
 
 const productCardSourceFixture = `
 import { component } from '@jiso/core';
+import { addToCart } from './cart-actions';
 
 export const ProductCard = component('product-card', {
   render: () => (

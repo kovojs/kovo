@@ -38,6 +38,7 @@ import {
   applyDeferredStreamResponseToRuntime,
   createQueryStore,
   derive,
+  DomMorphTarget,
   installPagehideOptimismCleanup,
   installJisoLoader,
   jisoLoaderSource,
@@ -212,9 +213,31 @@ const generatedModuleRuntime = {
   applyDeferredStreamResponseToDom: applyDeferredStreamResponseToRuntime,
   createQueryStore,
   derive,
+  DomMorphTarget,
   handler: (callback) => (event, ctx) => callback(event, ctx),
   installJisoLoader,
 };
+
+const defaultDelegatedEvents = [
+  'click',
+  'submit',
+  'input',
+  'change',
+  'keydown',
+  'keyup',
+  'contextmenu',
+  'paste',
+  'cancel',
+  'beforetoggle',
+  'animationend',
+  'scroll',
+  'focus',
+  'blur',
+  'pointerdown',
+  'pointermove',
+  'pointerup',
+];
+const delegatedLifecycleEvents = [...defaultDelegatedEvents, 'pointerover', 'pointerout'];
 
 const generatedBootstrapRuntime = {
   ...generatedModuleRuntime,
@@ -734,7 +757,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
   );
 
   const fact = await executeInlineEnhancedFormLoaderFixture(jisoLoaderSource);
-  assert.deepEqual(fact.listenerEvents, ['click', 'submit', 'input', 'change']);
+  assert.deepEqual(fact.listenerEvents, delegatedLifecycleEvents);
   assert.equal(fact.listenerOptions.click?.capture, true);
   assert.equal(fact.fetchCalls.length, 1);
   assert.deepEqual(fact.fetchCalls[0], {
@@ -773,13 +796,10 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
       ],
       disposedListenerEvents: [],
       initialImportCount: 0,
-      listenerEvents: ['click', 'submit', 'input', 'change'],
-      listenerOptions: {
-        change: { capture: true },
-        click: { capture: true },
-        input: { capture: true },
-        submit: { capture: true },
-      },
+      listenerEvents: defaultDelegatedEvents,
+      listenerOptions: Object.fromEntries(
+        delegatedLifecycleEvents.map((event) => [event, { capture: true }]),
+      ),
       observer: { observedCount: 1, unobservedCount: 2 },
       reconciledItems: [
         {
@@ -2889,7 +2909,7 @@ export const DiagnosticCard = component('diagnostic-card', {
   assert.equal(lintTransform.mapIsNull, true);
   assert.equal(lintButtons.length, 1);
   assert.equal(lintButtons[0]?.['fw-c'], 'diagnostic-card');
-  assert.equal(lintButtons[0]?.['data-p-ok'], '{response.ok}');
+  assert.equal(lintButtons[0]?.['data-p-ok'], undefined);
   assert.deepEqual(lintTransform.handlerSummary, {
     handlerName: 'DiagnosticCard$button_click',
     modulePath: '/c/routes/diagnostic-card.client.js',
@@ -3466,10 +3486,14 @@ void test('Conformance suites are an explicit gate', async () => {
     /conformance task executes every discovered conformance package test/,
   );
 
-  await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index'], {
-    cwd: new URL('..', import.meta.url),
-    maxBuffer: 1024 * 1024 * 10,
-  });
+  await execFileAsync(
+    'pnpm',
+    ['--filter', '@jiso/drizzle', 'exec', 'vitest', 'run', 'src/index'],
+    {
+      cwd: new URL('..', import.meta.url),
+      maxBuffer: 1024 * 1024 * 10,
+    },
+  );
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {

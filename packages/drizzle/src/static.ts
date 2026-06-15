@@ -17,6 +17,8 @@ export type {
   TouchSite,
   UnresolvedWriteSite,
 } from '@jiso/core';
+import { dirname, isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
@@ -136,6 +138,7 @@ const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
 const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
+const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
 
 export type QueryShape =
   | 'array'
@@ -356,7 +359,9 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
   });
 
   const sourceFiles = options.files.map((file) =>
-    project.createSourceFile(file.fileName, file.source, { overwrite: true }),
+    project.createSourceFile(projectSourceFileName(file.fileName), file.source, {
+      overwrite: true,
+    }),
   );
   const tableNamesBySymbol = new Map(projectTableNamesBySymbol(sourceFiles));
   const conditionalTableTargetsBySyntheticName = appendProjectConditionalTableNames(
@@ -375,6 +380,13 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
     sourceFiles,
     tableNamesBySymbol,
   };
+}
+
+function projectSourceFileName(fileName: string): string {
+  // SPEC §11.1: project-mode receiver proof depends on TypeScript resolving Drizzle package
+  // symbols. Anchor virtual source files under this package so root-launched and package-launched
+  // Vitest runs resolve the same peer/dev dependency graph.
+  return isAbsolute(fileName) ? fileName : join(DRIZZLE_STATIC_PROJECT_ROOT, fileName);
 }
 
 function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {

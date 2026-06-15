@@ -657,12 +657,35 @@ export async function executeStarterClientTemplate(
     },
   };
   const runtime = {
+    applyDeferredStreamResponseToRuntime(options: unknown) {
+      deferredApplications.push(options);
+      return { applied: true };
+    },
     applyDeferredStreamResponseToDom(options: unknown) {
       deferredApplications.push(options);
       return { applied: true };
     },
     createQueryStore() {
       return queryStore;
+    },
+    DomMorphTarget: class StarterDomMorphTarget {
+      element: StarterClientElement;
+
+      constructor(element: StarterClientElement) {
+        this.element = element;
+      }
+
+      appendHtml(html: string) {
+        this.element.insertAdjacentHTML('beforeend', html);
+      }
+
+      readHtml() {
+        return this.element.innerHTML;
+      }
+
+      replaceWithHtml(html: string) {
+        this.element.innerHTML = html;
+      }
     },
     installJisoLoader(options: unknown) {
       loaderInstalls.push(options);

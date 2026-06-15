@@ -630,15 +630,30 @@ const rewriteGeneratedRuntimeImports = (source: string): string =>
     },
   );
 
+const rewriteGeneratedNamedImportsToGlobals = (source: string): string =>
+  source.replace(
+    /import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];\n?/g,
+    (_match, names: string) => {
+      const bindings = names
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .map((name) => {
+          const alias = /\s+as\s+/.test(name) ? name.split(/\s+as\s+/) : undefined;
+          return alias ? `${alias[0]?.trim()}: ${alias[1]?.trim()}` : name;
+        })
+        .join(', ');
+      return `const { ${bindings} } = globalThis;\n`;
+    },
+  );
+
 export function executeGeneratedClientModule(
   source: string,
   options: ExecuteGeneratedClientModuleOptions,
 ): Record<string, unknown> {
   const exports: Record<string, unknown> = {};
-  const moduleSource = rewriteGeneratedRuntimeImports(source).replace(
-    /export const ([A-Za-z_$][\w$]*)/g,
-    'const $1 = exports.$1',
-  );
+  const moduleSource = rewriteGeneratedNamedImportsToGlobals(rewriteGeneratedRuntimeImports(source))
+    .replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');
 
   runInNewContext(moduleSource, {
     ...options.context,
