@@ -1045,6 +1045,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     const content = required(
       contextRoot.querySelector<HTMLElement>('#gallery-context-menu-content'),
     );
+    const copy = required(
+      contextRoot.querySelector<HTMLButtonElement>('#gallery-context-menu-copy'),
+    );
+    const deleteItem = required(
+      contextRoot.querySelector<HTMLButtonElement>('#gallery-context-menu-delete'),
+    );
     const inspect = required(
       contextRoot.querySelector<HTMLButtonElement>('#gallery-context-menu-inspect'),
     );
@@ -1059,30 +1065,95 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(content.hidden).toBe(true);
     expect(content.getAttribute('data-anchor-x')).toBe('24');
     expect(content.getAttribute('data-anchor-y')).toBe('40');
+    expect(deleteItem.getAttribute('aria-disabled')).toBe('true');
 
-    trigger.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    trigger.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 72,
+        clientY: 96,
+      }),
+    );
 
     await vi.waitFor(() => {
       expect(contextLoader.imports.at(-1)).toBe(
         '/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js',
       );
       expect(contextRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"copy","open":true,"value":"copy"}',
+        '{"highlightedValue":"copy","open":true,"point":{"x":72,"y":96},"value":"copy"}',
       );
       expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(content.getAttribute('data-anchor-x')).toBe('72');
+      expect(content.getAttribute('data-anchor-y')).toBe('96');
       expect(content.hidden).toBe(false);
+      expect(copy.getAttribute('data-highlighted')).toBe('');
+      expect(document.activeElement).toBe(copy);
     });
 
     // SPEC §12.1: the context-menu open state (anchored, visible role="menu" with a
     // disabled item) must stay axe-clean.
     await expectNoAxeViolations(contextRoot);
 
-    inspect.focus();
+    await userEvent.keyboard('{ArrowDown}');
+
+    await vi.waitFor(() => {
+      expect(contextRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"inspect","open":true,"point":{"x":72,"y":96},"value":"copy"}',
+      );
+      expect(copy.getAttribute('data-highlighted')).toBeNull();
+      expect(inspect.getAttribute('data-highlighted')).toBe('');
+      expect(deleteItem.getAttribute('data-highlighted')).toBeNull();
+      expect(document.activeElement).toBe(inspect);
+    });
+
+    await userEvent.keyboard('c');
+
+    await vi.waitFor(() => {
+      expect(contextRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"copy","open":true,"point":{"x":72,"y":96},"value":"copy"}',
+      );
+      expect(copy.getAttribute('data-highlighted')).toBe('');
+      expect(inspect.getAttribute('data-highlighted')).toBeNull();
+      expect(document.activeElement).toBe(copy);
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    await vi.waitFor(() => {
+      expect(contextRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"copy","open":false,"point":{"x":72,"y":96},"value":"copy"}',
+      );
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(content.hidden).toBe(true);
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    trigger.focus();
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'F10',
+        shiftKey: true,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(contextRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"copy","open":true,"point":{"x":72,"y":96},"value":"copy"}',
+      );
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(content.hidden).toBe(false);
+      expect(document.activeElement).toBe(copy);
+    });
+
+    await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{Space}');
 
     await vi.waitFor(() => {
       expect(contextRoot.getAttribute('fw-state')).toBe(
-        '{"highlightedValue":"inspect","open":false,"value":"inspect"}',
+        '{"highlightedValue":"inspect","open":false,"point":{"x":72,"y":96},"value":"inspect"}',
       );
       expect(content.hidden).toBe(true);
       expect(contextValue.textContent).toBe('inspect');

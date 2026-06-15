@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   contextMenuContentAttributes as exportedContextMenuContentAttributes,
+  contextMenuFocusElement as exportedContextMenuFocusElement,
   contextMenuGroupAttributes as exportedContextMenuGroupAttributes,
   contextMenuItemAttributes as exportedContextMenuItemAttributes,
   contextMenuItemClick as exportedContextMenuItemClick,
@@ -22,6 +23,7 @@ import {
 } from '../index.js';
 import {
   contextMenuContentAttributes,
+  contextMenuFocusElement,
   contextMenuGroupAttributes,
   contextMenuItemAttributes,
   contextMenuItemClick,
@@ -478,6 +480,7 @@ describe('headless-ui context-menu primitive', () => {
       detail: expect.objectContaining({ reason: 'keyboard-open', value: true }),
       open: true,
     });
+    expect(keyboardEvent.defaultPrevented).toBe(true);
 
     const disabledEvent = contextmenuEvent(0, 0);
     const disabledResult = contextMenuTriggerContextMenu(disabledEvent, {
@@ -519,8 +522,88 @@ describe('headless-ui context-menu primitive', () => {
     expect(contextMenuPointFromEvent(contextmenuEvent(4, 8))).toEqual({ x: 4, y: 8 });
   });
 
+  it('focuses context menu elements through delegated event ownerDocument access', () => {
+    let focusCount = 0;
+    const ownerDocument = {
+      getElementById(id: string) {
+        return id === 'cut-item'
+          ? {
+              focus() {
+                focusCount += 1;
+              },
+            }
+          : undefined;
+      },
+    };
+    const directEvent = {
+      currentTarget: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+    const delegatedEvent = {
+      currentTarget: null,
+      target: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: null;
+      target: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+
+    expect(contextMenuFocusElement(directEvent, 'cut-item')).toBe(true);
+    expect(contextMenuFocusElement(delegatedEvent, 'cut-item')).toBe(true);
+    expect(contextMenuFocusElement(directEvent, 'missing')).toBe(false);
+    expect(focusCount).toBe(2);
+  });
+
+  it('can defer context menu focus until after reactive state bindings commit', () => {
+    let deferredFocusCount = 0;
+    const scheduled: Array<() => void> = [];
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'cut-item'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: {
+        ownerDocument: {
+          getElementById(id: string): unknown;
+        };
+      };
+    };
+
+    expect(
+      contextMenuFocusElement(event, 'cut-item', {
+        defer: true,
+        schedule(callback) {
+          scheduled.push(callback);
+        },
+      }),
+    ).toBe(true);
+    expect(deferredFocusCount).toBe(0);
+
+    scheduled.forEach((callback) => callback());
+    expect(deferredFocusCount).toBe(1);
+  });
+
   it('exports context-menu helpers from package and primitives barrels', () => {
     expect(exportedContextMenuContentAttributes).toBe(contextMenuContentAttributes);
+    expect(exportedContextMenuFocusElement).toBe(contextMenuFocusElement);
     expect(exportedContextMenuGroupAttributes).toBe(contextMenuGroupAttributes);
     expect(exportedContextMenuItemAttributes).toBe(contextMenuItemAttributes);
     expect(exportedContextMenuItemClick).toBe(contextMenuItemClick);

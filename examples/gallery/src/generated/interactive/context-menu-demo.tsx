@@ -2,6 +2,47 @@
 /** @jsxImportSource @jiso/server */
 import { derive } from '@jiso/runtime';
 
+export const GalleryContextMenuDemo$section_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryContextMenuDemo$div_aria_expanded_derive = derive(['state'], (state: any) =>
+  state.open ? 'true' : 'false',
+);
+export const GalleryContextMenuDemo$div_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryContextMenuDemo$div_data_anchor_x_derive = derive(['state'], (state: any) =>
+  String(state.point.x),
+);
+export const GalleryContextMenuDemo$div_data_anchor_y_derive = derive(['state'], (state: any) =>
+  String(state.point.y),
+);
+export const GalleryContextMenuDemo$div_data_state_derive_2 = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryContextMenuDemo$div_hidden_derive = derive(['state'], (state: any) =>
+  !state.open ? '' : null,
+);
+export const GalleryContextMenuDemo$button_data_highlighted_derive = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'copy' ? '' : null),
+);
+export const GalleryContextMenuDemo$button_data_state_derive = derive(['state'], (state: any) =>
+  state.highlightedValue === 'copy' ? 'active' : 'inactive',
+);
+export const GalleryContextMenuDemo$button_tabIndex_derive = derive(['state'], (state: any) =>
+  state.highlightedValue === 'copy' ? 0 : -1,
+);
+export const GalleryContextMenuDemo$button_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'inspect' ? '' : null),
+);
+export const GalleryContextMenuDemo$button_data_state_derive_2 = derive(['state'], (state: any) =>
+  state.highlightedValue === 'inspect' ? 'active' : 'inactive',
+);
+export const GalleryContextMenuDemo$button_tabIndex_derive_2 = derive(['state'], (state: any) =>
+  state.highlightedValue === 'inspect' ? 0 : -1,
+);
 export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
@@ -9,10 +50,19 @@ export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (stat
 import { component } from '@jiso/core';
 import {
   contextMenuContentAttributes,
+  contextMenuFocusElement as _contextMenuFocusElement,
   contextMenuItemAttributes,
+  contextMenuItemClick as _contextMenuItemClick,
+  contextMenuItemKeyDown as _contextMenuItemKeyDown,
+  contextMenuKeyDown as _contextMenuKeyDown,
+  contextMenuMove as _contextMenuMove,
   contextMenuRootAttributes,
   contextMenuTriggerAttributes,
+  contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
+  contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
+  contextMenuTypeahead as _contextMenuTypeahead,
   type ContextMenuItem,
+  type ContextMenuPoint,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/context-menu.tsx)
@@ -29,6 +79,7 @@ const ITEM_CLASS =
 export interface GalleryContextMenuDemoState {
   highlightedValue: string;
   open: boolean;
+  point: ContextMenuPoint;
   value: string;
 }
 
@@ -41,14 +92,14 @@ const contextItems: readonly ContextMenuItem[] = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
-  state: () => ({ highlightedValue: 'copy', open: false, value: 'copy' }),
+  state: () => ({ highlightedValue: 'copy', open: false, point: { x: 24, y: 40 }, value: 'copy' }),
   render: (_queries: Record<string, never>, state: GalleryContextMenuDemoState) => {
     const contentId = 'gallery-context-menu-content';
     const menuState = {
       highlightedValue: state.highlightedValue,
       items: contextItems,
       open: state.open,
-      point: { x: 24, y: 40 },
+      point: state.point,
     };
 
     return (
@@ -56,15 +107,21 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
         {...contextMenuRootAttributes(menuState)}
         class="grid gap-2"
         data-gallery-interactive="context-menu"
+        data-state={state.open ? 'open' : 'closed'}
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$section_data_state_derive"
         fw-c="gallery-context-menu-demo"
-        fw-state='{"highlightedValue":"copy","open":false,"value":"copy"}'
+        fw-state='{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}'
       >
         <div
           {...contextMenuTriggerAttributes({ ...menuState, contentId })}
+          aria-expanded={state.open ? 'true' : 'false'}
+          data-bind:aria-expanded="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_aria_expanded_derive"
           class={TRIGGER_CLASS}
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_data_state_derive"
           id="gallery-context-menu-trigger"
-          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$div_contextmenu"
-          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$div_keydown"
+          on:contextmenu="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_contextmenu"
+          on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_keydown"
           tabIndex="0"
         >
           Right click target
@@ -72,6 +129,14 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
         <div
           {...contextMenuContentAttributes({ ...menuState, id: contentId })}
           class={CONTENT_CLASS}
+          data-anchor-x={String(state.point.x)}
+          data-bind:data-anchor-x="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_data_anchor_x_derive"
+          data-anchor-y={String(state.point.y)}
+          data-bind:data-anchor-y="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_data_anchor_y_derive"
+          data-state={state.open ? 'open' : 'closed'}
+          data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_data_state_derive_2"
+          hidden={!state.open}
+          data-bind:hidden="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$div_hidden_derive"
         >
           <button
             {...contextMenuItemAttributes({
@@ -81,6 +146,14 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemValue: 'copy',
             })}
             class={ITEM_CLASS}
+            data-highlighted={state.highlightedValue === 'copy' ? '' : null}
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_data_highlighted_derive"
+            data-state={state.highlightedValue === 'copy' ? 'active' : 'inactive'}
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_data_state_derive"
+            tabIndex={state.highlightedValue === 'copy' ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_tabIndex_derive"
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_keydown"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_click"
           >
             Copy link
           </button>
@@ -104,15 +177,21 @@ export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
               itemValue: 'inspect',
             })}
             class={ITEM_CLASS}
-            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$button_keydown"
-            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$button_click"
+            data-highlighted={state.highlightedValue === 'inspect' ? '' : null}
+            data-bind:data-highlighted="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_data_highlighted_derive_2"
+            data-state={state.highlightedValue === 'inspect' ? 'active' : 'inactive'}
+            data-bind:data-state="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_data_state_derive_2"
+            tabIndex={state.highlightedValue === 'inspect' ? 0 : -1}
+            data-bind:tabIndex="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_tabIndex_derive_2"
+            on:keydown="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_keydown_2"
+            on:click="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$button_click_2"
           >
             Inspect
           </button>
         </div>
         <output
           data-demo-state="context-open"
-          data-bind="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=16f423e7#GalleryContextMenuDemo$output_text_derive"
+          data-bind="/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js?v=80bcfabc#GalleryContextMenuDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

@@ -285,6 +285,7 @@ export type {
 
 export {
   contextMenuContentAttributes,
+  contextMenuFocusElement,
   contextMenuGroupAttributes,
   contextMenuItemAttributes,
   contextMenuItemClick,
@@ -306,6 +307,8 @@ export {
 export type {
   ContextMenuChangeOptions,
   ContextMenuContentAttributeOptions,
+  ContextMenuFocusEvent,
+  ContextMenuFocusOptions,
   ContextMenuGroupAttributeOptions,
   ContextMenuItem,
   ContextMenuItemAttributeOptions,

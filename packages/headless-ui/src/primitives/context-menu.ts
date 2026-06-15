@@ -125,6 +125,22 @@ export type ContextMenuKeyboardEvent = Event & {
   readonly key: string;
   readonly shiftKey?: boolean;
 };
+export type ContextMenuFocusEvent = Event & {
+  readonly currentTarget?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+  readonly target?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+};
+export interface ContextMenuFocusOptions {
+  defer?: boolean;
+  schedule?: (callback: () => void) => void;
+}
 
 export function contextMenuRootAttributes(
   options: ContextMenuRootAttributeOptions = {},
@@ -418,7 +434,7 @@ export function contextMenuTriggerKeyDown(
   if (event.key !== 'ContextMenu' && !(event.shiftKey === true && event.key === 'F10')) return;
 
   const result = setContextMenuOpen(state, true, 'keyboard-open', options);
-  if (!result.changed) {
+  if (result.changed) {
     event.preventDefault();
   }
 
@@ -490,6 +506,28 @@ export function contextMenuKeyDown(
 
 export function contextMenuPointFromEvent(event: ContextMenuTriggerEvent): ContextMenuPoint {
   return { x: event.clientX ?? 0, y: event.clientY ?? 0 };
+}
+
+export function contextMenuFocusElement(
+  event: ContextMenuFocusEvent,
+  id: string | undefined,
+  options: ContextMenuFocusOptions = {},
+): boolean {
+  if (!id) return false;
+
+  const ownerDocument = event.currentTarget?.ownerDocument ?? event.target?.ownerDocument;
+  const target = ownerDocument?.getElementById?.(id);
+  if (typeof (target as { focus?: unknown } | undefined)?.focus !== 'function') return false;
+
+  const focus = () => {
+    (target as { focus(): void }).focus();
+  };
+  if (options.defer === true) {
+    (options.schedule ?? ((callback) => setTimeout(callback, 0)))(focus);
+  } else {
+    focus();
+  }
+  return true;
 }
 
 function contextMenuDataAttributes(state: ContextMenuState): PrimitiveDataAttributes {

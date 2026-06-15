@@ -276,30 +276,89 @@ describe('compiled interactive gallery demos', () => {
       value: 'invite',
     });
 
-    const contextMenuState = { highlightedValue: 'copy', open: false, value: 'copy' };
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$div_contextmenu')(new Event('contextmenu'), {
+    const contextMenuState = {
+      highlightedValue: 'copy',
+      open: false,
+      point: { x: 24, y: 40 },
+      value: 'copy',
+    };
+    const contextOpenEvent = Object.assign(new Event('contextmenu', { cancelable: true }), {
+      clientX: 80,
+      clientY: 120,
+    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$div_contextmenu')(contextOpenEvent, {
       params: {},
       signal,
       state: contextMenuState,
     });
-    expect(contextMenuState).toEqual({ highlightedValue: 'copy', open: true, value: 'copy' });
-    const contextKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
-      key: ' ',
+    expect(contextMenuState).toEqual({
+      highlightedValue: 'copy',
+      open: true,
+      point: { x: 80, y: 120 },
+      value: 'copy',
     });
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown')(contextKeyboardEvent, {
+    expect(contextOpenEvent.defaultPrevented).toBe(true);
+
+    const contextMoveEvent = keyEvent('ArrowDown');
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown')(contextMoveEvent, {
       params: {},
       signal,
       state: contextMenuState,
     });
-    expect(contextKeyboardEvent.defaultPrevented).toBe(true);
+    expect(contextMoveEvent.defaultPrevented).toBe(true);
     expect(contextMenuState).toEqual({
       highlightedValue: 'inspect',
-      open: false,
-      value: 'inspect',
+      open: true,
+      point: { x: 80, y: 120 },
+      value: 'copy',
     });
 
-    contextMenuState.open = true;
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_click')(new Event('click'), {
+    const contextTypeaheadEvent = keyEvent('c');
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown_2')(contextTypeaheadEvent, {
+      params: {},
+      signal,
+      state: contextMenuState,
+    });
+    expect(contextTypeaheadEvent.defaultPrevented).toBe(true);
+    expect(contextMenuState).toEqual({
+      highlightedValue: 'copy',
+      open: true,
+      point: { x: 80, y: 120 },
+      value: 'copy',
+    });
+
+    const contextEscapeEvent = keyEvent('Escape');
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown')(contextEscapeEvent, {
+      params: {},
+      signal,
+      state: contextMenuState,
+    });
+    expect(contextEscapeEvent.defaultPrevented).toBe(true);
+    expect(contextMenuState).toEqual({
+      highlightedValue: 'copy',
+      open: false,
+      point: { x: 80, y: 120 },
+      value: 'copy',
+    });
+
+    const contextTriggerKeyEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'F10',
+      shiftKey: true,
+    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$div_keydown')(contextTriggerKeyEvent, {
+      params: {},
+      signal,
+      state: contextMenuState,
+    });
+    expect(contextTriggerKeyEvent.defaultPrevented).toBe(true);
+    expect(contextMenuState).toEqual({
+      highlightedValue: 'copy',
+      open: true,
+      point: { x: 80, y: 120 },
+      value: 'copy',
+    });
+
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
       state: contextMenuState,
@@ -307,6 +366,7 @@ describe('compiled interactive gallery demos', () => {
     expect(contextMenuState).toEqual({
       highlightedValue: 'inspect',
       open: false,
+      point: { x: 80, y: 120 },
       value: 'inspect',
     });
 

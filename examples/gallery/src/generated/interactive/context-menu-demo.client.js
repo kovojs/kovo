@@ -1,77 +1,301 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
-  ctx.state.open = true;
-  const doc = Reflect['get'](globalThis, 'document');
-  const trigger = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-context-menu-trigger')
-    : undefined;
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-context-menu-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="context-open"]')
-    : undefined;
+import {
+  contextMenuFocusElement as _contextMenuFocusElement,
+  contextMenuItemClick as _contextMenuItemClick,
+  contextMenuItemKeyDown as _contextMenuItemKeyDown,
+  contextMenuKeyDown as _contextMenuKeyDown,
+  contextMenuMove as _contextMenuMove,
+  contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
+  contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
+  contextMenuTypeahead as _contextMenuTypeahead,
+} from '@jiso/headless-ui/primitives';
 
-  if (event) Object(event)['preventDefault']?.call(event);
-  if (trigger) Object(trigger)['setAttribute']?.call(trigger, 'aria-expanded', 'true');
-  if (content) content['hidden'] = false;
-  if (output) output['textContent'] = 'open';
+export const GalleryContextMenuDemo$div_contextmenu = handler((event, ctx) => {
+  const result = _contextMenuTriggerContextMenu(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (!result?.changed) return;
+  ctx.state.open = result.open;
+  ctx.state.point = result.point ?? ctx.state.point;
+  ctx.state.highlightedValue = 'copy';
+  if (result.open)
+    _contextMenuFocusElement(Object(event), 'gallery-context-menu-copy', { defer: true });
 });
 export const GalleryContextMenuDemo$div_keydown = handler((event, ctx) => {
-  if (
-    event &&
-    Object(event)['key'] !== 'ContextMenu' &&
-    !(Object(event)['shiftKey'] === true && Object(event)['key'] === 'F10')
-  )
-    return;
-
-  ctx.state.open = true;
-  const doc = Reflect['get'](globalThis, 'document');
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-context-menu-content')
-    : undefined;
-  if (content) content['hidden'] = false;
+  const result = _contextMenuTriggerKeyDown(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (!result?.changed) return;
+  ctx.state.open = result.open;
+  ctx.state.point = result.point ?? ctx.state.point;
+  ctx.state.highlightedValue = 'copy';
+  if (result.open)
+    _contextMenuFocusElement(Object(event), 'gallery-context-menu-copy', { defer: true });
 });
 export const GalleryContextMenuDemo$button_keydown = handler((event, ctx) => {
-  if (
-    event &&
-    Object(event)['key'] !== 'Enter' &&
-    Object(event)['key'] !== ' ' &&
-    Object(event)['key'] !== 'Spacebar'
-  )
+  const result = _contextMenuItemKeyDown(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    itemValue: 'copy',
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (result?.selected) {
+    ctx.state.open = result.open.open;
+    ctx.state.highlightedValue = result.value;
+    ctx.state.value = result.value;
+    _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
     return;
+  }
 
-  if (event) Object(event)['preventDefault']?.call(event);
-  ctx.state.open = false;
-  ctx.state.highlightedValue = 'inspect';
-  ctx.state.value = 'inspect';
-  const doc = Reflect['get'](globalThis, 'document');
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-context-menu-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="context-value"]')
-    : undefined;
-  if (content) content['hidden'] = true;
-  if (output) output['textContent'] = 'inspect';
+  const keyResult = _contextMenuKeyDown(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (keyResult?.changed) {
+    ctx.state.open = keyResult.open;
+    if (!keyResult.open) _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+    return;
+  }
+
+  const move = _contextMenuMove(
+    {
+      highlightedValue: ctx.state.highlightedValue,
+      items: [
+        { label: 'Copy link', value: 'copy' },
+        { disabled: true, label: 'Delete', value: 'delete' },
+        { label: 'Inspect', value: 'inspect' },
+      ],
+      open: ctx.state.open,
+      point: ctx.state.point,
+    },
+    Object(event).key,
+    { loop: true },
+  );
+  if (move) {
+    Object(event).preventDefault?.();
+    ctx.state.highlightedValue = move.highlightedValue ?? ctx.state.highlightedValue;
+    _contextMenuFocusElement(
+      Object(event),
+      ctx.state.highlightedValue === 'inspect'
+        ? 'gallery-context-menu-inspect'
+        : 'gallery-context-menu-copy',
+    );
+    return;
+  }
+
+  const typeahead = _contextMenuTypeahead(
+    {
+      highlightedValue: ctx.state.highlightedValue,
+      items: [
+        { label: 'Copy link', value: 'copy' },
+        { disabled: true, label: 'Delete', value: 'delete' },
+        { label: 'Inspect', value: 'inspect' },
+      ],
+      open: ctx.state.open,
+      point: ctx.state.point,
+    },
+    Object(event).key,
+    { now: 0, loop: true },
+  );
+  if (typeahead.highlightedValue === ctx.state.highlightedValue) return;
+  Object(event).preventDefault?.();
+  ctx.state.highlightedValue = typeahead.highlightedValue ?? ctx.state.highlightedValue;
+  _contextMenuFocusElement(
+    Object(event),
+    ctx.state.highlightedValue === 'inspect'
+      ? 'gallery-context-menu-inspect'
+      : 'gallery-context-menu-copy',
+  );
 });
-export const GalleryContextMenuDemo$button_click = handler((_event, ctx) => {
-  ctx.state.open = false;
-  ctx.state.highlightedValue = 'inspect';
-  ctx.state.value = 'inspect';
-  const doc = Reflect['get'](globalThis, 'document');
-  const content = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-context-menu-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="context-value"]')
-    : undefined;
-  if (content) content['hidden'] = true;
-  if (output) output['textContent'] = 'inspect';
+export const GalleryContextMenuDemo$button_click = handler((event, ctx) => {
+  const result = _contextMenuItemClick(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    itemValue: 'copy',
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (!result?.selected) return;
+  ctx.state.open = result.open.open;
+  ctx.state.highlightedValue = result.value;
+  ctx.state.value = result.value;
+  _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+});
+export const GalleryContextMenuDemo$button_keydown_2 = handler((event, ctx) => {
+  const result = _contextMenuItemKeyDown(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    itemValue: 'inspect',
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (result?.selected) {
+    ctx.state.open = result.open.open;
+    ctx.state.highlightedValue = result.value;
+    ctx.state.value = result.value;
+    _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+    return;
+  }
+
+  const keyResult = _contextMenuKeyDown(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (keyResult?.changed) {
+    ctx.state.open = keyResult.open;
+    if (!keyResult.open) _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+    return;
+  }
+
+  const move = _contextMenuMove(
+    {
+      highlightedValue: ctx.state.highlightedValue,
+      items: [
+        { label: 'Copy link', value: 'copy' },
+        { disabled: true, label: 'Delete', value: 'delete' },
+        { label: 'Inspect', value: 'inspect' },
+      ],
+      open: ctx.state.open,
+      point: ctx.state.point,
+    },
+    Object(event).key,
+    { loop: true },
+  );
+  if (move) {
+    Object(event).preventDefault?.();
+    ctx.state.highlightedValue = move.highlightedValue ?? ctx.state.highlightedValue;
+    _contextMenuFocusElement(
+      Object(event),
+      ctx.state.highlightedValue === 'inspect'
+        ? 'gallery-context-menu-inspect'
+        : 'gallery-context-menu-copy',
+    );
+    return;
+  }
+
+  const typeahead = _contextMenuTypeahead(
+    {
+      highlightedValue: ctx.state.highlightedValue,
+      items: [
+        { label: 'Copy link', value: 'copy' },
+        { disabled: true, label: 'Delete', value: 'delete' },
+        { label: 'Inspect', value: 'inspect' },
+      ],
+      open: ctx.state.open,
+      point: ctx.state.point,
+    },
+    Object(event).key,
+    { now: 0, loop: true },
+  );
+  if (typeahead.highlightedValue === ctx.state.highlightedValue) return;
+  Object(event).preventDefault?.();
+  ctx.state.highlightedValue = typeahead.highlightedValue ?? ctx.state.highlightedValue;
+  _contextMenuFocusElement(
+    Object(event),
+    ctx.state.highlightedValue === 'inspect'
+      ? 'gallery-context-menu-inspect'
+      : 'gallery-context-menu-copy',
+  );
+});
+export const GalleryContextMenuDemo$button_click_2 = handler((event, ctx) => {
+  const result = _contextMenuItemClick(Object(event), {
+    highlightedValue: ctx.state.highlightedValue,
+    itemValue: 'inspect',
+    items: [
+      { label: 'Copy link', value: 'copy' },
+      { disabled: true, label: 'Delete', value: 'delete' },
+      { label: 'Inspect', value: 'inspect' },
+    ],
+    open: ctx.state.open,
+    point: ctx.state.point,
+  });
+  if (!result?.selected) return;
+  ctx.state.open = result.open.open;
+  ctx.state.highlightedValue = result.value;
+  ctx.state.value = result.value;
+  _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
 });
 
+export const GalleryContextMenuDemo$section_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryContextMenuDemo$div_aria_expanded_derive = derive(['state'], (state) =>
+  state.open ? 'true' : 'false',
+);
+export const GalleryContextMenuDemo$div_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryContextMenuDemo$div_data_anchor_x_derive = derive(['state'], (state) =>
+  String(state.point.x),
+);
+export const GalleryContextMenuDemo$div_data_anchor_y_derive = derive(['state'], (state) =>
+  String(state.point.y),
+);
+export const GalleryContextMenuDemo$div_data_state_derive_2 = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryContextMenuDemo$div_hidden_derive = derive(['state'], (state) =>
+  !state.open ? '' : null,
+);
+export const GalleryContextMenuDemo$button_data_highlighted_derive = derive(['state'], (state) =>
+  state.highlightedValue === 'copy' ? '' : null,
+);
+export const GalleryContextMenuDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.highlightedValue === 'copy' ? 'active' : 'inactive',
+);
+export const GalleryContextMenuDemo$button_tabIndex_derive = derive(['state'], (state) =>
+  state.highlightedValue === 'copy' ? 0 : -1,
+);
+export const GalleryContextMenuDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
+  state.highlightedValue === 'inspect' ? '' : null,
+);
+export const GalleryContextMenuDemo$button_data_state_derive_2 = derive(['state'], (state) =>
+  state.highlightedValue === 'inspect' ? 'active' : 'inactive',
+);
+export const GalleryContextMenuDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
+  state.highlightedValue === 'inspect' ? 0 : -1,
+);
 export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );

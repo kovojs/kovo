@@ -254,10 +254,33 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
     tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
     scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
-- [ ] **context-menu** [P1]: `onContextMenu` open never fires (loader #2) and the menu has **no
+- [x] **context-menu** [P1]: `onContextMenu` open never fires (loader #2) and the menu has **no
       arrow/typeahead nav and no Escape handler at all**; anchoring is static `data-anchor-x/y=24/40`.
       Wire `contextMenuKeyDown/Move/Typeahead`, read `event.clientX/Y` via `contextMenuPointFromEvent`
       to anchor at the cursor, add Escape + focus-into-menu.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/context-menu.ts` now exports
+    deferred `contextMenuFocusElement` and prevents default on keyboard-open; primitive coverage verifies
+    contextmenu coordinates, keyboard open, item activation, movement/typeahead, Escape close,
+    delegated ownerDocument focus, deferred focus scheduling, and barrel exports.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/context-menu-demo.tsx` now calls
+    `_contextMenuTriggerContextMenu`, `_contextMenuTriggerKeyDown`, `_contextMenuItemKeyDown`,
+    `_contextMenuKeyDown`, `_contextMenuMove`, `_contextMenuTypeahead`, and `_contextMenuItemClick`,
+    with state-bound `aria-expanded`, `data-state`, `hidden`, `data-anchor-x/y`, `data-highlighted`,
+    `tabIndex`, and output text.
+  - Evidence 2026-06-15: generated `context-menu-demo.client.js` mutates only `ctx.state`, carries the
+    pointer anchor in `state.point`, imports the context-menu reducers/focus helper, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated context-menu files found no matches.
+  - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/context-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`;
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.interactions-b.browser.test.ts -t "dropdown and context"`;
+    `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
+    tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
+    scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [ ] **menubar** [P1]: section `onKeyDown` is a stub that ignores the key and hardcodes File→Edit;
       Edit is fully inert (no handler); no ArrowLeft/Right roving, no ArrowDown-to-open, no Escape, no
       "switch open menu while arrowing the bar." Wire `menubarMove`/`menubarKeyDown`/`menubarItemKeyDown`

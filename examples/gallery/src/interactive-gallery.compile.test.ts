@@ -18,6 +18,7 @@ describe('compiled interactive gallery demos', () => {
     const command = readGenerated('command-demo.tsx');
     const commandClient = readGenerated('command-demo.client.js');
     const contextMenu = readGenerated('context-menu-demo.tsx');
+    const contextMenuClient = readGenerated('context-menu-demo.client.js');
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
     const drawer = readGenerated('drawer-demo.tsx');
@@ -219,9 +220,31 @@ describe('compiled interactive gallery demos', () => {
 
     expect(contextMenu).toContain('data-gallery-interactive="context-menu"');
     expect(contextMenu).toContain(
-      'fw-state=\'{"highlightedValue":"copy","open":false,"value":"copy"}\'',
+      'fw-state=\'{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}\'',
     );
     expect(contextMenu).toContain('contextMenuTriggerAttributes({');
+    expect(contextMenu).toContain('contextMenuFocusElement as _contextMenuFocusElement');
+    expect(contextMenu).toContain('contextMenuItemClick as _contextMenuItemClick');
+    expect(contextMenu).toContain('contextMenuItemKeyDown as _contextMenuItemKeyDown');
+    expect(contextMenu).toContain('contextMenuMove as _contextMenuMove');
+    expect(contextMenu).toContain('contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu');
+    expect(contextMenu).toContain('contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown');
+    expect(contextMenu).toContain('contextMenuTypeahead as _contextMenuTypeahead');
+    expect(contextMenu).toContain('data-bind:aria-expanded=');
+    expect(contextMenu).toContain('data-bind:data-anchor-x=');
+    expect(contextMenu).toContain('data-bind:data-anchor-y=');
+    expect(contextMenu).toContain('data-bind:data-highlighted=');
+    expect(contextMenu).toContain('data-bind:hidden=');
+    expect(contextMenu).toContain('data-bind:tabIndex=');
+    expect(contextMenuClient).toContain('contextMenuFocusElement as _contextMenuFocusElement');
+    expect(contextMenuClient).toContain('contextMenuItemKeyDown as _contextMenuItemKeyDown');
+    expect(contextMenuClient).toContain(
+      'contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu',
+    );
+    expect(contextMenuClient).toContain('contextMenuTypeahead as _contextMenuTypeahead');
+    expect(contextMenuClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(contextMenu).toMatch(
       /on:contextmenu="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$div_contextmenu"/,
     );
@@ -230,6 +253,12 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(contextMenu).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$button_keydown"/,
+    );
+    expect(contextMenu).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$button_keydown_2"/,
+    );
+    expect(contextMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$button_click_2"/,
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
