@@ -1,6 +1,9 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
-import { type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
+import {
+  checkboxTriggerClick as _checkboxTriggerClick,
+  type CheckboxCheckedState,
+} from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -34,7 +37,9 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
         }
         name="gallery-email-summary"
         onClick={() => {
-          state.checked = state.checked === 'indeterminate' ? true : !state.checked;
+          const result = _checkboxTriggerClick(Object(event), { checked: state.checked });
+          if (!result) return;
+          state.checked = result.checked;
         }}
         type="checkbox"
         value="enabled"

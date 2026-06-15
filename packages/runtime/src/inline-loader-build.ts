@@ -92,12 +92,17 @@ function installInlineJisoLoader(importModule) {
     [...(element.attributes || [])].filter(
       (attribute) => attribute.name.startsWith('data-bind:') && attribute.value,
     );
+  const writeAttr = (element, name, value) => {
+    if (name === 'checked' && value === false) value = null;
+    if (value == null) element.removeAttribute?.(name);
+    else element.setAttribute?.(name, formatBoundValue(value));
+    if (name === 'checked' && element.checked !== undefined) element.checked = value != null;
+  };
   const writeStateBinding = (element, path, boundAttribute, state) => {
     if (!path?.startsWith('state.')) return;
     const value = valueAtPath(state, path.slice('state.'.length));
     if (boundAttribute) {
-      if (value == null) element.removeAttribute?.(boundAttribute);
-      else element.setAttribute?.(boundAttribute, formatBoundValue(value));
+      writeAttr(element, boundAttribute, value);
     } else if (element.value !== undefined) {
       element.value = formatBoundValue(value);
     } else {
@@ -111,8 +116,7 @@ function installInlineJisoLoader(importModule) {
     const derive = mod[ref.slice(hashIndex + 1)];
     const value = derive?.run?.(state);
     if (boundAttribute) {
-      if (value == null) element.removeAttribute?.(boundAttribute);
-      else element.setAttribute?.(boundAttribute, formatBoundValue(value));
+      writeAttr(element, boundAttribute, value);
     } else if (element.value !== undefined) {
       element.value = formatBoundValue(value);
     } else {

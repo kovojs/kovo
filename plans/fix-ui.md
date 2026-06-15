@@ -272,15 +272,40 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 ### Selection controls
 
-- [ ] **switch** [P0]: Phase 1 now updates `fw-state`, `aria-checked`, `data-state`, native `checked`,
+- [x] **switch** [P0]: Phase 1 now updates `fw-state`, `aria-checked`, `data-state`, native `checked`,
       and `<output>` from declarative state bindings in the no-shim export. Remaining parity work:
       route through `switchTriggerClick` and add Enter-to-toggle to match shadcn.
-- [ ] **toggle** [P0]: Phase 1 now updates `aria-pressed`, `data-state`, and `<output>` from
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/switch-demo.tsx` now calls
+    `_switchTriggerClick` for click and Enter key activation, mutates only `state.checked`, and keeps
+    `aria-checked`, native `checked`, `data-state`, and output text as state-bound TSX.
+  - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts` and
+    `packages/runtime/src/inline-loader-build.ts` now reflect `data-bind:checked` updates to the live
+    `.checked` property; `packages/runtime/src/query-bindings.test.ts` covers state-derived checked
+    property reflection.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts
+    src/inline-loader-delegated.test.ts src/handlers.test.ts`, `pnpm --filter @jiso/runtime
+    check:inline-loader`, and `pnpm --filter @jiso/runtime exec tsc --noEmit` passed.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+    focused browser coverage for `switch`, `toggle stamped`, and `checkbox stamped`, and
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
+- [x] **toggle** [P0]: Phase 1 now updates `aria-pressed`, `data-state`, and `<output>` from
       declarative state bindings. Remaining parity work: route through `toggleTriggerClick` and cover
       the modeled keyboard/button contract.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/toggle-demo.tsx` now calls
+    `_toggleTriggerClick`, mutates only `state.pressed`, and keeps `aria-pressed`, `data-state`, and
+    output text as state-bound TSX.
+  - Evidence 2026-06-15: the focused gallery client/compile test, browser interaction test for
+    `toggle stamped`, and gallery typecheck commands listed under `switch` passed.
 - [ ] **checkbox** [P1]: Phase 1 now updates `aria-checked`, `data-state`, native `checked`, and
       `<output>` from the indeterminate initial state on click. Remaining parity work:
       `checkboxTriggerClick`/`applyCheckboxIndeterminate` and fuller checkbox model coverage.
+  - Progress 2026-06-15: `examples/gallery/src/interactive/checkbox-demo.tsx` now calls
+    `_checkboxTriggerClick`, mutates only `state.checked`, and keeps `aria-checked`, native `checked`,
+    `data-state`, and output text as state-bound TSX. The focused gallery client/compile test and
+    browser interaction test for `checkbox stamped` passed. Leave open until
+    `applyCheckboxIndeterminate` is integrated into the demo/runtime path instead of being applied
+    manually by the browser test.
 - [x] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
       every key (Tab/typing flip it) and never wraps/skips disabled; per-item `onClick` is hardcoded
       one-directional and native `checked` desyncs from stamped `aria-checked`. Wire `radioGroupKeyDown` + `radioGroupItemClick`; maintain roving `tabindex` via `radioGroupItemTabIndex`.

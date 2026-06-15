@@ -1071,5 +1071,13 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(input.checked).toBe(false);
       expect(new FormData(form).get('gallery-notifications')).toBeNull();
     });
+
+    await userEvent.keyboard('{Enter}');
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
+      expect(input.checked).toBe(true);
+      expect(new FormData(form).get('gallery-notifications')).toBe('enabled');
+    });
   });
 });

@@ -643,6 +643,14 @@ describe('compiled interactive gallery demos', () => {
       state: switchState,
     });
     expect(switchState).toEqual({ checked: true });
+    const switchEnterEvent = keyEvent('Enter');
+    clientHandler(switchDemo, 'GallerySwitchDemo$input_keydown')(switchEnterEvent, {
+      params: {},
+      signal,
+      state: switchState,
+    });
+    expect(switchEnterEvent.defaultPrevented).toBe(true);
+    expect(switchState).toEqual({ checked: false });
 
     const tabsState = { activeValue: 'overview', value: 'overview' };
     clientHandler(tabs, 'GalleryTabsDemo$section_keydown')(keyEvent('ArrowRight'), {

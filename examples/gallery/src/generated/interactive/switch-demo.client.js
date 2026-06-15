@@ -1,8 +1,19 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GallerySwitchDemo$input_click = handler((_event, ctx) => {
-  ctx.state.checked = !ctx.state.checked;
+import { switchTriggerClick as _switchTriggerClick } from '@jiso/headless-ui/primitives';
+
+export const GallerySwitchDemo$input_click = handler((event, ctx) => {
+  const result = _switchTriggerClick(Object(event), { checked: ctx.state.checked });
+  if (!result) return;
+  ctx.state.checked = result.checked;
+});
+export const GallerySwitchDemo$input_keydown = handler((event, ctx) => {
+  if (Object(event)['key'] !== 'Enter') return;
+  const result = _switchTriggerClick(Object(event), { checked: ctx.state.checked });
+  if (!result) return;
+  Object(event)['preventDefault']?.call(event);
+  ctx.state.checked = result.checked;
 });
 
 export const GallerySwitchDemo$input_aria_checked_derive = derive(['state'], (state) =>

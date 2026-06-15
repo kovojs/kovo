@@ -243,12 +243,13 @@ export class FakeTemplateStampHost extends FakeQueryPlanElement {
 
 export class FakeQueryBindingElement {
   attributes: { name: string; value: string }[];
+  checked?: boolean;
   textContent: string | null;
   value?: string;
 
   constructor(
     pathOrAttributes: string | Record<string, string>,
-    options: { textContent?: string | null; value?: string } | string = {},
+    options: { checked?: boolean; textContent?: string | null; value?: string } | string = {},
   ) {
     this.attributes =
       typeof pathOrAttributes === 'string'
@@ -256,6 +257,9 @@ export class FakeQueryBindingElement {
         : Object.entries(pathOrAttributes).map(([name, value]) => ({ name, value }));
     const normalizedOptions = typeof options === 'string' ? { textContent: options } : options;
     this.textContent = normalizedOptions.textContent ?? null;
+    if (normalizedOptions.checked !== undefined) {
+      this.checked = normalizedOptions.checked;
+    }
     if (normalizedOptions.value !== undefined) {
       this.value = normalizedOptions.value;
     }
@@ -297,6 +301,7 @@ export class FakeStatefulBindingElement extends FakeQueryBindingElement {
   constructor(
     attributes: Record<string, string>,
     options: {
+      checked?: boolean;
       parent?: FakeStatefulBindingElement;
       textContent?: string | null;
       value?: string;

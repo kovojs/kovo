@@ -1,5 +1,6 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
+import { toggleTriggerClick as _toggleTriggerClick } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -25,7 +26,9 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
         class={BUTTON_CLASS}
         data-state={state.pressed ? 'pressed' : 'off'}
         onClick={() => {
-          state.pressed = !state.pressed;
+          const result = _toggleTriggerClick(Object(event), { pressed: state.pressed });
+          if (!result) return;
+          state.pressed = result.pressed;
         }}
         type="button"
       >

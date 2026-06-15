@@ -7,6 +7,7 @@ import type {
 
 export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
+  checked?: boolean;
   textContent?: string | null;
   value?: string;
 }
@@ -136,9 +137,9 @@ function applyRootBindings(
 
       const boundValue = valueAtPath(value, path.slice(rootName.length + 1));
       if (boundValue === undefined || boundValue === null) {
-        element.removeAttribute?.(boundAttribute);
+        removeBoundAttribute(element, boundAttribute);
       } else {
-        element.setAttribute?.(boundAttribute, formatBoundValue(boundValue));
+        setBoundAttribute(element, boundAttribute, boundValue);
       }
       applied.push(path);
     }
@@ -178,9 +179,9 @@ export function applyCompiledQueryUpdatePlan(
 
     for (const element of root.querySelectorAll(stamp.selector)) {
       if (selected === undefined || selected === null) {
-        element.removeAttribute?.(stamp.attr);
+        removeBoundAttribute(element, stamp.attr);
       } else {
-        element.setAttribute?.(stamp.attr, formatBoundValue(selected));
+        setBoundAttribute(element, stamp.attr, selected);
       }
       applied.stamps.push(stamp.attr);
     }
@@ -307,9 +308,9 @@ async function applyStateDeriveBindings(
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
       const boundAttribute = attribute.name.slice('data-bind:'.length);
       if (value === undefined || value === null) {
-        element.removeAttribute?.(boundAttribute);
+        removeBoundAttribute(element, boundAttribute);
       } else {
-        element.setAttribute?.(boundAttribute, formatBoundValue(value));
+        setBoundAttribute(element, boundAttribute, value);
       }
       applied.push(attribute.value);
     }
@@ -356,6 +357,25 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
     element.value = rendered;
   } else {
     element.textContent = rendered;
+  }
+}
+
+function removeBoundAttribute(element: QueryBindingElement, name: string): void {
+  element.removeAttribute?.(name);
+  if (name === 'checked' && element.checked !== undefined) {
+    element.checked = false;
+  }
+}
+
+function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
+  if (name === 'checked' && value === false) {
+    removeBoundAttribute(element, name);
+    return;
+  }
+
+  element.setAttribute?.(name, formatBoundValue(value));
+  if (name === 'checked' && element.checked !== undefined) {
+    element.checked = true;
   }
 }
 

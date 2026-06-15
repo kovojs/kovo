@@ -1,8 +1,12 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryCheckboxDemo$input_click = handler((_event, ctx) => {
-  ctx.state.checked = ctx.state.checked === 'indeterminate' ? true : !ctx.state.checked;
+import { checkboxTriggerClick as _checkboxTriggerClick } from '@jiso/headless-ui/primitives';
+
+export const GalleryCheckboxDemo$input_click = handler((event, ctx) => {
+  const result = _checkboxTriggerClick(Object(event), { checked: ctx.state.checked });
+  if (!result) return;
+  ctx.state.checked = result.checked;
 });
 
 export const GalleryCheckboxDemo$input_aria_checked_derive = derive(['state'], (state) =>

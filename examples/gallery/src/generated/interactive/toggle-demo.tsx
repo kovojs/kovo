@@ -13,6 +13,7 @@ export const GalleryToggleDemo$output_text_derive = derive(['state'], (state: an
 );
 
 import { component } from '@jiso/core';
+import { toggleTriggerClick as _toggleTriggerClick } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/toggle.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -40,11 +41,11 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
       <button
         aria-label="Toggle gallery density"
         aria-pressed={String(state.pressed)}
-        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$button_aria_pressed_derive"
+        data-bind:aria-pressed="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$button_aria_pressed_derive"
         class={BUTTON_CLASS}
         data-state={state.pressed ? 'pressed' : 'off'}
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$button_data_state_derive"
-        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$button_click"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$button_data_state_derive"
+        on:click="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$button_click"
         type="button"
       >
         Dense rows
@@ -52,7 +53,7 @@ export const GalleryToggleDemo = component('gallery-toggle-demo', {
       <output
         class="text-xs text-neutral-500"
         data-demo-state="pressed"
-        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=3532ed06#GalleryToggleDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/toggle-demo.client.js?v=f13bbe2a#GalleryToggleDemo$output_text_derive"
       >
         {state.pressed ? 'pressed' : 'off'}
       </output>

@@ -308,6 +308,45 @@ describe('query binding helpers', () => {
     expect(panel.getAttribute('hidden')).toBe('');
   });
 
+  it('reflects state-derived checked bindings to the live input property', async () => {
+    const host = new FakeStatefulBindingElement({ 'fw-state': '{"checked":false}' });
+    const directInput = new FakeStatefulBindingElement(
+      {
+        checked: '',
+        'data-bind:checked': 'state.checked',
+      },
+      { checked: true, parent: host },
+    );
+    const input = new FakeStatefulBindingElement(
+      {
+        'data-bind:checked': '/c/switch.client.js#Switch$input_checked_derive',
+      },
+      { checked: false, parent: host },
+    );
+    const importModule = async () => ({
+      Switch$input_checked_derive: {
+        run(value: unknown) {
+          return (value as { checked: boolean }).checked ? '' : null;
+        },
+      },
+    });
+
+    await expect(applyStateBindings(host, { checked: true }, { importModule })).resolves.toEqual([
+      'state.checked',
+      '/c/switch.client.js#Switch$input_checked_derive',
+    ]);
+    expect(directInput.getAttribute('checked')).toBe('true');
+    expect(directInput.checked).toBe(true);
+    expect(input.getAttribute('checked')).toBe('');
+    expect(input.checked).toBe(true);
+
+    await applyStateBindings(host, { checked: false }, { importModule });
+    expect(directInput.getAttribute('checked')).toBeNull();
+    expect(directInput.checked).toBe(false);
+    expect(input.getAttribute('checked')).toBeNull();
+    expect(input.checked).toBe(false);
+  });
+
   it('lazy-imports state derive text bindings', async () => {
     const host = new FakeStatefulBindingElement({ 'fw-state': '{"value":""}' });
     const output = new FakeStatefulBindingElement(

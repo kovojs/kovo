@@ -16,7 +16,10 @@ export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state: 
 );
 
 import { component } from '@jiso/core';
-import { type CheckboxCheckedState } from '@jiso/headless-ui/primitives';
+import {
+  checkboxTriggerClick as _checkboxTriggerClick,
+  type CheckboxCheckedState,
+} from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/checkbox.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -44,9 +47,9 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
     >
       <input
         aria-checked={state.checked === 'indeterminate' ? 'mixed' : String(state.checked)}
-        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_aria_checked_derive"
+        data-bind:aria-checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b6c74269#GalleryCheckboxDemo$input_aria_checked_derive"
         checked={state.checked === true}
-        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_checked_derive"
+        data-bind:checked="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b6c74269#GalleryCheckboxDemo$input_checked_derive"
         class={INPUT_CLASS}
         data-state={
           state.checked === 'indeterminate'
@@ -55,9 +58,9 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
               ? 'checked'
               : 'unchecked'
         }
-        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_data_state_derive"
+        data-bind:data-state="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b6c74269#GalleryCheckboxDemo$input_data_state_derive"
         name="gallery-email-summary"
-        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$input_click"
+        on:click="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b6c74269#GalleryCheckboxDemo$input_click"
         type="checkbox"
         value="enabled"
       />
@@ -65,7 +68,7 @@ export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=e15bea8a#GalleryCheckboxDemo$output_text_derive"
+        data-bind="/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js?v=b6c74269#GalleryCheckboxDemo$output_text_derive"
       >
         {String(state.checked)}
       </output>

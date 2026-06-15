@@ -1,5 +1,6 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
+import { switchTriggerClick as _switchTriggerClick } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/switch.tsx)
 // so this interactive demo matches the component-gallery look. Importing @jiso/ui
@@ -28,7 +29,16 @@ export const GallerySwitchDemo = component('gallery-switch-demo', {
         form="gallery-switch-form"
         name="gallery-notifications"
         onClick={() => {
-          state.checked = !state.checked;
+          const result = _switchTriggerClick(Object(event), { checked: state.checked });
+          if (!result) return;
+          state.checked = result.checked;
+        }}
+        onKeyDown={() => {
+          if (Object(event)['key'] !== 'Enter') return;
+          const result = _switchTriggerClick(Object(event), { checked: state.checked });
+          if (!result) return;
+          Object(event)['preventDefault']?.call(event);
+          state.checked = result.checked;
         }}
         role="switch"
         type="checkbox"
