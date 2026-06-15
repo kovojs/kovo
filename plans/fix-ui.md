@@ -1049,12 +1049,23 @@ These are framework changes the demo rewrites depend on (not just demo edits):
 
 ## Phase 5 — Verification (make the contracts regression-proof)
 
-- [ ] **Promote the static-export Playwright harness to a CI gate.** The existing browser tests
+- [x] **Promote the static-export Playwright harness to a CI gate.** The existing browser tests
       (`examples/gallery/src/interactive-gallery.*.browser.test.ts`) mount the generated server modules
       with their own loader + explicit event list + working module resolution — so they pass while the
       _shipped_ export is dead. Add a test that builds `dist/` via `export-static.mjs`, serves it, and
       drives it (no shim) to assert real interactivity end-to-end (this is what surfaced #1/#2). Seed
       from `scratch/gallery-probe2.mjs`/`probe3.mjs`.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive-gallery.static-export.test.ts` runs in the
+    normal Node Vitest suite, exports the gallery through `scripts/export-static.mjs` into a temporary
+    static output directory, serves those files verbatim through `node:http`, launches Chromium through
+    Playwright, and verifies click, keydown, contextmenu, and synthesized pointerenter interactivity
+    against the shipped `/gallery/interactive/` route with no import map or runtime shim.
+  - Evidence 2026-06-15: the gate asserts the exported HTML contains no `type="importmap"` and no
+    `@jiso/runtime` bare specifier, records page errors and failed non-font/non-favicon resources, and
+    waits for real `fw-state` changes on accordion, combobox, context-menu, and tooltip demos.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.static-export.test.ts` and
+    `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [ ] **Rewrite the interaction assertions to the model contracts, not the canned paths.** Current
       tests assert the hardcoded demo behavior (e.g. tabs flipping on any key), which is why broken
       keyboard passed. Assert the Base UI/shadcn keyboard map per component (ArrowRight roving, Home/End,
