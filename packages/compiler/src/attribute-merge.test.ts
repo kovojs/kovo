@@ -3,6 +3,91 @@ import { describe, expect, it } from 'vitest';
 import { compileComponentModule } from './index.js';
 
 describe('compiler attribute merge diagnostics', () => {
+  it('merges primitive attrs-function records into the author element on the wire', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-merge.tsx',
+      registryFacts: { queries: { cart: 'CartQuery', product: 'ProductQuery' } },
+      source: `
+export const PrimitiveMerge = component('primitive-merge', {
+  render: () => (
+    <primitive-merge>
+      <div id="author-panel"></div>
+      <Tooltip.Trigger
+        attrs={{
+          class: 'primitive base',
+          style: 'color: red;',
+          'on:click': '/c/primitive#click',
+          id: 'primitive-trigger',
+          'aria-controls': 'primitive-panel',
+          'aria-label': 'Primitive label',
+          'data-state': 'closed',
+          'data-p-id': 'primitive-id',
+          'data-bind': 'cart.count',
+          required: true,
+          'fw-deps': 'cart',
+          type: 'button',
+        }}
+      >
+        {(attrs) => (
+          <button
+            {...attrs}
+            class="author base"
+            style="background: blue;"
+            on:click="/c/author#click"
+            id="author-trigger"
+            aria-controls="author-panel"
+            aria-label="Author label"
+            data-state="author-open"
+            data-p-id="author-id"
+            data-bind="cart.total"
+            disabled
+            required={false}
+            fw-deps="product"
+            type="submit"
+          >
+            Toggle
+          </button>
+        )}
+      </Tooltip.Trigger>
+    </primitive-merge>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain('class="primitive base author"');
+    expect(serverSource).toContain('style="color: red; background: blue"');
+    expect(serverSource).toContain('on:click="/c/author#click /c/primitive#click"');
+    expect(serverSource).toContain('id="author-trigger"');
+    expect(serverSource).toContain('aria-controls="author-panel"');
+    expect(serverSource).toContain('aria-label="Author label"');
+    expect(serverSource).toContain('data-state="closed"');
+    expect(serverSource).toContain('data-p-id="author-id"');
+    expect(serverSource).toContain('data-bind="cart.total"');
+    expect(serverSource).toContain('required');
+    expect(serverSource).toContain('disabled');
+    expect(serverSource).toContain('fw-deps="cart product"');
+    expect(serverSource).toContain('type="submit"');
+    expect(serverSource).not.toContain('Tooltip.Trigger');
+    expect(serverSource).not.toContain('{...attrs}');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'FW231',
+      'FW232',
+      'FW232',
+      'FW231',
+      'FW233',
+    ]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      'Unmergeable attribute conflict in primitive composition. aria-controls',
+      'Author overrides a primitive-owned ARIA or state attribute. aria-label',
+      'Author overrides a primitive-owned ARIA or state attribute. data-state',
+      'Unmergeable attribute conflict in primitive composition. data-p-id',
+      'Two writers target the same binding slot. data-bind',
+    ]);
+  });
+
   it('reports FW231, FW232, and FW233 for residual attribute merge conflicts', () => {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',

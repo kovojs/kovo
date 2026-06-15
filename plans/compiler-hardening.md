@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (15 / 32 findings closed)
+**Status:** open (16 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -242,8 +242,11 @@ Do before/alongside the broad refactors so subsequent changes are actually check
 
 The full merge-rules implementation currently lives only in `examples/gallery/src/merge-fixtures-oracle.tsx`; FW231/232/233 only detect literal duplicate attributes on one element. Plan-tracked in `fix-ui.md` Phase 2. Land as one coherent slice after the safety/coverage criticals.
 
-- [ ] **Implement §4.6 composition merge as a compiler lower-phase** — consume the primitive's computed attribute record + the author element (`asChild` as sugar lowering to the attrs-function form), emit one merged element applying the full normative rule table (class/style concat, `on:*` chain, IDREF FW231, aria FW232, data-state precedence, `data-p` FW231, `data-bind` FW233, disabled/required logical-OR, `fw-deps` union, `fw-c`/`fw-state` FW231). (SPEC §4.6)
+- [x] **Implement §4.6 composition merge as a compiler lower-phase** — consume the primitive's computed attribute record + the author element (`asChild` as sugar lowering to the attrs-function form), emit one merged element applying the full normative rule table (class/style concat, `on:*` chain, IDREF FW231, aria FW232, data-state precedence, `data-p` FW231, `data-bind` FW233, disabled/required logical-OR, `fw-deps` union, `fw-c`/`fw-state` FW231). (SPEC §4.6)
   - Done = a primitive `attrs`-function trigger merges into the author element with the rule-table result on the wire (no oracle).
+  - Evidence 2026-06-15: `packages/compiler/src/lower/attribute-merge.ts` owns the SPEC §4.6 rule table, and `packages/compiler/src/lower/primitive-spreads.ts` now rewrites `asChild`/attrs-function primitive wrappers to a single merged child opening tag instead of appending primitive attrs.
+  - Evidence 2026-06-15: `packages/compiler/src/attribute-merge.test.ts` proves an attrs-function primitive merges class/style, chains `on:click`, preserves author `id`/scalar defaults, lets primitive `data-state` win, ORs boolean attrs, unions `fw-deps`, and emits FW231/FW232/FW233 for primitive-vs-author conflicts.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/attribute-merge.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec vitest run`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm exec vp check` passed.
 - [ ] **Drive FW231/FW232/FW233 from the merged primitive-vs-author result; delete the gallery oracle** — extract the rule table into a shared compiler module feeding both the G5 gallery fixtures and the diagnostics; keep same-element literal-duplicate detection as a separate, clearly-scoped author-error check (stop presenting it as the §4.6 merge). (SPEC §4.6)
   - Done = FW232 fires on a genuine author-over-primitive override (not a duplicate-name shape); `mergePrimitiveAttrs` removed. Prove: `pnpm test attribute-merge && pnpm run test:browser` (gallery G5)
 

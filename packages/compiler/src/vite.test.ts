@@ -10,6 +10,7 @@ import { createJisoVitePlugin } from './vite.js';
 
 const cartBadgeSource = `
 import { component } from '@jiso/core';
+import { removeItem } from './cart-actions';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
@@ -278,6 +279,7 @@ export const Shell = component('shell', {
     const middlewares: JisoViteMiddleware[] = [];
     const source = (handler: string) => `
 import { component } from '@jiso/core';
+import { ${handler} } from './cart-actions';
 
 export const CartBadge = component('cart-badge', {
   render: () => <button onClick={${handler}}>Add</button>,

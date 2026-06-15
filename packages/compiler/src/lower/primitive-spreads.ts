@@ -1,20 +1,32 @@
 import { literalStringValue } from '../scan/object.js';
 import type { ComponentModuleModel, JsxElementModel, ObjectLiteralEntry } from '../scan/parse.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
+import type { CompilerDiagnostic } from '../diagnostics.js';
+import {
+  authorJsxAttributes,
+  mergePrimitiveAndAuthorAttributes,
+  primitiveObjectEntryAttributes,
+  renderMergedAttributes,
+  type MergeableAttribute,
+} from './attribute-merge.js';
 
 export interface PrimitiveSpreadLowering {
+  diagnostics: readonly CompilerDiagnostic[];
   replacements: readonly SourceReplacement[];
 }
 
 export function lowerPrimitiveAttributeSpreads(
   model: ComponentModuleModel,
+  options: { fileName: string; source: string },
 ): PrimitiveSpreadLowering {
+  const diagnostics: CompilerDiagnostic[] = [];
   const replacements: SourceReplacement[] = [];
 
   for (const element of model.jsxElements) {
-    const composition = primitiveCompositionPatches(model, element);
+    const composition = primitiveCompositionPatches(model, element, options);
     if (composition.length > 0) {
-      replacements.push(...composition);
+      replacements.push(...composition.flatMap((patch) => patch.replacements));
+      diagnostics.push(...composition.flatMap((patch) => patch.diagnostics));
       continue;
     }
 
@@ -32,13 +44,19 @@ export function lowerPrimitiveAttributeSpreads(
     }
   }
 
-  return { replacements };
+  return { diagnostics, replacements };
+}
+
+interface PrimitiveCompositionPatch {
+  diagnostics: readonly CompilerDiagnostic[];
+  replacements: readonly SourceReplacement[];
 }
 
 function primitiveCompositionPatches(
   model: ComponentModuleModel,
   element: JsxElementModel,
-): SourceReplacement[] {
+  options: { fileName: string; source: string },
+): PrimitiveCompositionPatch[] {
   if (!isComponentTag(element.tag)) return [];
 
   const attrs = element.attributes.find(
@@ -46,40 +64,49 @@ function primitiveCompositionPatches(
   )?.expressionObjectEntries;
   if (!attrs) return [];
 
-  const attributes = spreadObjectAttributes(attrs);
-  if (attributes === null) return [];
+  const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
+  if (primitiveAttributes === null) return [];
 
   if (element.attributes.some((attribute) => attribute.name === 'asChild')) {
     const child = singleImmediateChildElement(model, element);
-    return child ? unwrapPrimitiveWrapper(element, child, attributes) : [];
+    return child ? [unwrapPrimitiveWrapper(element, child, primitiveAttributes, options)] : [];
   }
 
   const child = singleAttrsFunctionChildElement(model, element);
-  return child ? unwrapPrimitiveWrapper(element, child, attributes) : [];
+  return child ? [unwrapPrimitiveWrapper(element, child, primitiveAttributes, options)] : [];
 }
 
 function unwrapPrimitiveWrapper(
   wrapper: JsxElementModel,
   child: JsxElementModel,
-  attributes: string,
-): SourceReplacement[] {
-  const insertion = childAttributeInsertion(child, attributes);
-  return [
-    { end: wrapper.openingEnd, replacement: '', start: wrapper.start },
-    { end: wrapper.end, replacement: '', start: wrapper.closingStart },
-    { end: insertion.position, replacement: insertion.replacement, start: insertion.position },
-    ...child.spreadAttributes
-      .filter((spread) => spread.expressionBareIdentifierName === 'attrs')
-      .map((spread) => ({ end: spread.end, replacement: '', start: spread.start })),
-    ...wrapper.childExpressionContainers.flatMap((container) =>
-      child.start > container.start && child.end < container.end
-        ? [
-            { end: child.start, replacement: '', start: container.start },
-            { end: container.end, replacement: '', start: child.end },
-          ]
-        : [],
-    ),
-  ];
+  primitiveAttributes: readonly MergeableAttribute[],
+  options: { fileName: string; source: string },
+): PrimitiveCompositionPatch {
+  if (childHasUnsupportedSpreads(child)) return { diagnostics: [], replacements: [] };
+
+  const merge = mergePrimitiveAndAuthorAttributes(
+    primitiveAttributes,
+    authorJsxAttributes(child.attributes),
+    options,
+  );
+  const attributes = renderMergedAttributes(merge.attributes);
+
+  return {
+    diagnostics: merge.diagnostics,
+    replacements: [
+      { end: wrapper.openingEnd, replacement: '', start: wrapper.start },
+      { end: wrapper.end, replacement: '', start: wrapper.closingStart },
+      childAttributeReplacement(child, attributes),
+      ...wrapper.childExpressionContainers.flatMap((container) =>
+        child.start > container.start && child.end < container.end
+          ? [
+              { end: child.start, replacement: '', start: container.start },
+              { end: container.end, replacement: '', start: child.end },
+            ]
+          : [],
+      ),
+    ],
+  };
 }
 
 function singleImmediateChildElement(
@@ -117,19 +144,27 @@ function singleAttrsFunctionChildElement(
   return children.length === 1 ? (children[0] ?? null) : null;
 }
 
-function childAttributeInsertion(
+function childHasUnsupportedSpreads(element: JsxElementModel): boolean {
+  return element.spreadAttributes.some((spread) => spread.expressionBareIdentifierName !== 'attrs');
+}
+
+function childAttributeReplacement(
   element: JsxElementModel,
   attributes: string,
-): { position: number; replacement: string } {
-  if (!attributes) return { position: element.openingEnd - 1, replacement: '' };
-  if (!element.selfClosing)
-    return { position: element.openingEnd - 1, replacement: ` ${attributes}` };
+): SourceReplacement {
+  const end = element.selfClosing ? element.openingEnd - 2 : element.openingEnd - 1;
+  const replacement = attributes
+    ? element.selfClosing
+      ? ` ${attributes} `
+      : ` ${attributes}`
+    : element.selfClosing && element.selfClosingSlashHasLeadingWhitespace
+      ? ' '
+      : '';
 
   return {
-    position: element.openingEnd - 2,
-    replacement: element.selfClosingSlashHasLeadingWhitespace
-      ? `${attributes} `
-      : ` ${attributes} `,
+    end,
+    replacement,
+    start: element.openingTagNameEnd,
   };
 }
 

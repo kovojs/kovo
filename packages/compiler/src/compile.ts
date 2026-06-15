@@ -62,7 +62,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const primitiveSpreadLowering = lowerPrimitiveAttributeSpreads(originalState.model);
+  const primitiveSpreadLowering = lowerPrimitiveAttributeSpreads(originalState.model, {
+    fileName: options.fileName,
+    source: options.source,
+  });
   const viewTransitions = viewTransitionLowering(originalState.model);
   const platformLowering = platformBehaviorLowering(originalState.model);
   const linkReplacements = navigationLinkLowering(originalState.model);
@@ -148,6 +151,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     diagnostics: [
       ...authoringSurfaceDiagnostics,
       ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
+      ...primitiveSpreadLowering.diagnostics,
       ...packagePrefixDiagnostics,
       ...validationDiagnostics,
     ],
