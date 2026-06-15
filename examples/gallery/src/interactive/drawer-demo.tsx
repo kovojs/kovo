@@ -78,7 +78,8 @@ export const GalleryDrawerDemo = component('gallery-drawer-demo', {
               Mobile actions
             </h2>
             <p class={DESCRIPTION_CLASS} id={descriptionId}>
-              Directional sheet drawer; Vaul drag, snap, and background-scale gestures are not modeled.
+              Directional sheet drawer; Vaul drag, snap, and background-scale gestures are not
+              modeled.
             </p>
           </header>
           <button

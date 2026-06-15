@@ -75,12 +75,12 @@ describe('headless-ui dialog primitive', () => {
       }),
     ).toEqual({
       'aria-describedby': 'cart-description',
-        'aria-labelledby': 'cart-title',
-        closedby: 'any',
-        'data-state': 'open',
-        id: 'cart-drawer',
-        open: true,
-      });
+      'aria-labelledby': 'cart-title',
+      closedby: 'any',
+      'data-state': 'open',
+      id: 'cart-drawer',
+      open: true,
+    });
     expect(dialogContentAttributes({ contentId: 'cart-drawer', open: false })).toEqual({
       closedby: 'any',
       'data-state': 'closed',

@@ -237,13 +237,7 @@ export function otpFieldInput(
   const input = otpFieldInputEventTarget(event);
   if (input === undefined) return;
 
-  const result = setOtpFieldSlotValue(
-    state,
-    state.slotIndex,
-    input.value,
-    'input',
-    options,
-  );
+  const result = setOtpFieldSlotValue(state, state.slotIndex, input.value, 'input', options);
   if (!result.changed) {
     restoreOtpFieldSlotTargetValue(input, state, result.value);
     event.preventDefault();
@@ -306,9 +300,7 @@ export function otpFieldPaste(
   return result;
 }
 
-function otpFieldInputEventTarget(
-  event: OtpFieldInputEvent,
-): { value: string } | undefined {
+function otpFieldInputEventTarget(event: OtpFieldInputEvent): { value: string } | undefined {
   if (event.currentTarget && typeof event.currentTarget.value === 'string') {
     return event.currentTarget;
   }

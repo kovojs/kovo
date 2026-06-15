@@ -202,8 +202,7 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
             data-highlighted={state.highlightedValue === 'design' ? '' : null}
             data-state={state.value === 'design' ? 'checked' : 'unchecked'}
             hidden={
-              state.inputValue !== '' &&
-              !'design'.startsWith(state.inputValue.toLocaleLowerCase())
+              state.inputValue !== '' && !'design'.startsWith(state.inputValue.toLocaleLowerCase())
             }
             onClick={() => {
               const result = _autocompleteOptionClick(Object(event), {

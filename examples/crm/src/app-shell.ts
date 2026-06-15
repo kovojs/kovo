@@ -31,11 +31,20 @@ async function loadContact(db: CrmDb, id: string): Promise<ContactRow | undefine
   const rows = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   const row = rows[0];
   return row
-    ? { id: row.id, name: row.name, email: row.email, ownerId: row.ownerId, dealCount: row.dealCount }
+    ? {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        ownerId: row.ownerId,
+        dealCount: row.dealCount,
+      }
     : undefined;
 }
 
-export async function createCrmStaticExportShell(): Promise<{ app: ReturnType<typeof createApp>; db: CrmDb }> {
+export async function createCrmStaticExportShell(): Promise<{
+  app: ReturnType<typeof createApp>;
+  db: CrmDb;
+}> {
   const db = await createCrmDb();
   await seedCrmDemo(db);
 
@@ -43,7 +52,10 @@ export async function createCrmStaticExportShell(): Promise<{ app: ReturnType<ty
 
   const dealRoutes = allDeals.map((deal) =>
     route(`/deals/${deal.id}`, {
-      meta: { description: `CRM deal ${deal.id} detail.`, title: `Deal ${deal.id.toUpperCase()} · Atlas CRM` },
+      meta: {
+        description: `CRM deal ${deal.id} detail.`,
+        title: `Deal ${deal.id.toUpperCase()} · Atlas CRM`,
+      },
       async page() {
         const contact = await loadContact(db, deal.contactId);
         const timeline = await db
@@ -54,7 +66,13 @@ export async function createCrmStaticExportShell(): Promise<{ app: ReturnType<ty
         return renderDealDetailPage({
           activities: timeline,
           contact,
-          deal: { id: deal.id, contactId: deal.contactId, stage: deal.stage, amount: deal.amount, ownerId: deal.ownerId },
+          deal: {
+            id: deal.id,
+            contactId: deal.contactId,
+            stage: deal.stage,
+            amount: deal.amount,
+            ownerId: deal.ownerId,
+          },
         });
       },
       stylesheets: crmStylesheets,
@@ -66,7 +84,10 @@ export async function createCrmStaticExportShell(): Promise<{ app: ReturnType<ty
     document: { lang: 'en-US' },
     routes: [
       route('/', {
-        meta: { description: 'Sales pipeline by stage with open deals.', title: 'Pipeline · Atlas CRM' },
+        meta: {
+          description: 'Sales pipeline by stage with open deals.',
+          title: 'Pipeline · Atlas CRM',
+        },
         async page() {
           const [{ buckets }, openDeals, { items: contactItems }] = await Promise.all([
             pipelineByStageQuery.load(undefined, db),

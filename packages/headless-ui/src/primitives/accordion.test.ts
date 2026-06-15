@@ -245,6 +245,8 @@ describe('headless-ui accordion primitive', () => {
 
     expect(result).toEqual({ index: 2, value: 'billing' });
     expect(event.defaultPrevented).toBe(true);
-    expect(accordionKeyDown(Object.assign(new Event('keydown'), { key: 'Enter' }), {})).toBeUndefined();
+    expect(
+      accordionKeyDown(Object.assign(new Event('keydown'), { key: 'Enter' }), {}),
+    ).toBeUndefined();
   });
 });

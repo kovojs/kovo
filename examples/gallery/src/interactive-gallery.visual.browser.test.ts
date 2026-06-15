@@ -56,7 +56,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(route)).toBe('0e0fc5af');
     expect(['1dc30a6d', '9ad15de9', '81aa77c6']).toContain(await visualBaselineHash(switchDemo));
     expect(['b19a1055', '94604e9e']).toContain(await visualBaselineHash(menuDemo));
-    expect(['cc33e71c', 'b06676d3', 'b970b899']).toContain(await visualBaselineHash(pureMarkupDemo));
+    expect(['cc33e71c', 'b06676d3', 'b970b899']).toContain(
+      await visualBaselineHash(pureMarkupDemo),
+    );
   });
 
   it('keeps stable visual baselines for representative styled static gallery routes', async () => {

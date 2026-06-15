@@ -232,11 +232,12 @@ describe('headless-ui select primitive', () => {
       changed: true,
       open: true,
     });
-    expect(selectTriggerClick(new Event('click', { cancelable: true }), { open: false }))
-      .toMatchObject({
-        changed: true,
-        open: true,
-      });
+    expect(
+      selectTriggerClick(new Event('click', { cancelable: true }), { open: false }),
+    ).toMatchObject({
+      changed: true,
+      open: true,
+    });
     expect(selectOption({ items: colorItems, open: true, value: 'red' }, 'blue')).toMatchObject({
       open: { changed: true, open: false },
       value: { changed: true, value: 'blue' },
@@ -261,7 +262,9 @@ describe('headless-ui select primitive', () => {
     ).toEqual({ highlightedIndex: 2, highlightedValue: 'blue' });
 
     const openEvent = selectKeyEvent('ArrowDown');
-    expect(selectKeyDown(openEvent, { items: colorItems, open: false, value: 'red' })).toMatchObject({
+    expect(
+      selectKeyDown(openEvent, { items: colorItems, open: false, value: 'red' }),
+    ).toMatchObject({
       changed: true,
       open: true,
     });
@@ -289,11 +292,9 @@ describe('headless-ui select primitive', () => {
     });
 
     expect(
-      selectTypeahead(
-        { highlightedValue: 'red', items: colorItems, value: 'red' },
-        'b',
-        { now: 1000 },
-      ),
+      selectTypeahead({ highlightedValue: 'red', items: colorItems, value: 'red' }, 'b', {
+        now: 1000,
+      }),
     ).toMatchObject({ matchIndex: 2, value: 'blue' });
   });
 

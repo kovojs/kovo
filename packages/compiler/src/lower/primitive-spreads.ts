@@ -41,8 +41,9 @@ function primitiveCompositionPatches(
 ): SourceReplacement[] {
   if (!isComponentTag(element.tag)) return [];
 
-  const attrs = element.attributes.find((attribute) => attribute.name === 'attrs')
-    ?.expressionObjectEntries;
+  const attrs = element.attributes.find(
+    (attribute) => attribute.name === 'attrs',
+  )?.expressionObjectEntries;
   if (!attrs) return [];
 
   const attributes = spreadObjectAttributes(attrs);
@@ -121,11 +122,14 @@ function childAttributeInsertion(
   attributes: string,
 ): { position: number; replacement: string } {
   if (!attributes) return { position: element.openingEnd - 1, replacement: '' };
-  if (!element.selfClosing) return { position: element.openingEnd - 1, replacement: ` ${attributes}` };
+  if (!element.selfClosing)
+    return { position: element.openingEnd - 1, replacement: ` ${attributes}` };
 
   return {
     position: element.openingEnd - 2,
-    replacement: element.selfClosingSlashHasLeadingWhitespace ? `${attributes} ` : ` ${attributes} `,
+    replacement: element.selfClosingSlashHasLeadingWhitespace
+      ? `${attributes} `
+      : ` ${attributes} `,
   };
 }
 

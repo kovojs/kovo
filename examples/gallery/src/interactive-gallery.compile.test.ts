@@ -228,7 +228,9 @@ describe('compiled interactive gallery demos', () => {
     expect(contextMenu).toContain('contextMenuItemClick as _contextMenuItemClick');
     expect(contextMenu).toContain('contextMenuItemKeyDown as _contextMenuItemKeyDown');
     expect(contextMenu).toContain('contextMenuMove as _contextMenuMove');
-    expect(contextMenu).toContain('contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu');
+    expect(contextMenu).toContain(
+      'contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu',
+    );
     expect(contextMenu).toContain('contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown');
     expect(contextMenu).toContain('contextMenuTypeahead as _contextMenuTypeahead');
     expect(contextMenu).toContain('data-bind:aria-expanded=');
@@ -391,8 +393,12 @@ describe('compiled interactive gallery demos', () => {
     expect(hoverCard).toContain('data-bind:hidden=');
     expect(hoverCard).not.toContain('aria-controls');
     expect(hoverCard).not.toContain('aria-expanded');
-    expect(hoverCardClient).toContain('hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter');
-    expect(hoverCardClient).toContain('hoverCardContentPointerEnter as _hoverCardContentPointerEnter');
+    expect(hoverCardClient).toContain(
+      'hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter',
+    );
+    expect(hoverCardClient).toContain(
+      'hoverCardContentPointerEnter as _hoverCardContentPointerEnter',
+    );
     expect(hoverCardClient).toContain('setTimeout');
     expect(hoverCardClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
@@ -424,9 +430,7 @@ describe('compiled interactive gallery demos', () => {
     expect(menubarClient).toContain('menubarFocusElement as _menubarFocusElement');
     expect(menubarClient).toContain('menubarItemKeyDown as _menubarItemKeyDown');
     expect(menubarClient).toContain('menubarKeyDown as _menubarKeyDown');
-    expect(menubarClient).toContain(
-      'menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick',
-    );
+    expect(menubarClient).toContain('menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick');
     expect(menubarClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
@@ -741,7 +745,9 @@ describe('compiled interactive gallery demos', () => {
     expect(toggleGroup).toContain('data-bind:tabIndex=');
     expect(toggleGroupClient).toContain('toggleGroupKeyDown as _toggleGroupKeyDown');
     expect(toggleGroupClient).toContain('toggleGroupItemClick as _toggleGroupItemClick');
-    expect(toggleGroupClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
+    expect(toggleGroupClient).not.toMatch(
+      /Reflect|getElementById|setAttribute|document|globalThis/,
+    );
 
     expect(toast).toContain('data-gallery-interactive="toast"');
     expect(toast).toContain(

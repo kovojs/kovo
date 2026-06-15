@@ -510,10 +510,6 @@ function dropdownMenuItemActivationKey(key: string): boolean {
 
 function dropdownMenuTriggerOpenKey(key: string): boolean {
   return (
-    key === 'Enter' ||
-    key === ' ' ||
-    key === 'Spacebar' ||
-    key === 'ArrowDown' ||
-    key === 'ArrowUp'
+    key === 'Enter' || key === ' ' || key === 'Spacebar' || key === 'ArrowDown' || key === 'ArrowUp'
   );
 }

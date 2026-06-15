@@ -35,15 +35,15 @@ Done when:
     `state.submitted`; regenerated `pure-markup-demo.client.js` relies on the existing state-bound
     output derive instead of querying/mutating DOM.
   - Evidence 2026-06-15: `rg "Reflect|getElementById|setAttribute|globalThis|ctx\\.params"
-    examples/gallery/src/interactive examples/gallery/src/generated/interactive -g "*-demo.tsx"
-    -g "*-demo.client.js"` and `rg -n "document" examples/gallery/src/interactive
-    examples/gallery/src/generated/interactive -g "*-demo.tsx" -g "*-demo.client.js"` found no
+examples/gallery/src/interactive examples/gallery/src/generated/interactive -g "*-demo.tsx"
+-g "*-demo.client.js"` and `rg -n "document" examples/gallery/src/interactive
+examples/gallery/src/generated/interactive -g "*-demo.tsx" -g "*-demo.client.js"` found no
     matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.compile.test.ts src/interactive-gallery.client-behavior.test.ts`,
+src/interactive-gallery.compile.test.ts src/interactive-gallery.client-behavior.test.ts`,
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
     and `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t "pure markup"` passed.
+src/interactive-gallery.interactions-b.browser.test.ts -t "pure markup"` passed.
 - [x] **Per-component parity:** all 35 components reach their committed status — the 15 `broken` become
       functional; the locked-scope items land (custom `select`/`slider`, imperative `toast`,
       directional-sheet `drawer`, documented-native `progress`/`meter`); `partial` items close their
@@ -53,19 +53,21 @@ Done when:
     items remain open.
   - Evidence 2026-06-15: the generated gallery compile/client-behavior tests and pure-markup browser
     smoke listed under **Primitive-driven** passed after the final component cleanup.
-- [ ] **Regression-proof:** the no-shim static-export Playwright harness is a CI gate asserting the
+- [x] **Regression-proof:** the no-shim static-export Playwright harness is a CI gate asserting the
       **model contracts** (ArrowRight roving, Home/End, typeahead, Escape, focus-into-menu, hover-open,
       …) — not the old canned behavior — with axe clean on real interactive end-states; `vp check` and
       the gzip-budget/fixpoint parity gates stay green.
   - Evidence 2026-06-15: the interaction-contract browser suites and axe suite now pass after the
     native progress indeterminate runtime fix: `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
-    src/interactive-gallery.interactions-b.browser.test.ts` and `pnpm --filter @jiso/example-gallery
-    exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts`.
-  - Gap 2026-06-15: top-level closure still blocked by the full `vp check` gate. `pnpm exec vp check`
-    currently fails on formatting across existing files; `pnpm exec vp check --no-fmt` still reports
-    unrelated lint/type issues including missing `@tailwindcss/vite` in `examples/crm` and
-    `examples/stackoverflow`.
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
+src/interactive-gallery.interactions-b.browser.test.ts` and `pnpm --filter @jiso/example-gallery
+exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts`.
+  - Evidence 2026-06-15: `pnpm exec vp check` passed with all 1200 checked files formatted and no
+    warnings, lint errors, or type errors across 911 files; `pnpm --filter @jiso/runtime run
+check:inline-loader`, `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter @jiso/example-gallery exec vitest
+run src/interactive-gallery.static-export.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.client-behavior.test.ts`, and `git diff --check` passed.
 
 **Success metric:** re-run `scratch/gallery-probe3.mjs` semantics against the **unmodified** export —
 every component that is `broken`/`wrong-primitive`/`partial` today returns the model-correct result
@@ -222,7 +224,7 @@ The demos use the low-level `*Attributes()` plain-function spelling, which yield
     `packages/compiler/src/emit/client.ts`, and `examples/gallery/src/app-shell.ts` implement the
     parser/lowering/client-import/static-rewrite path.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts
-    src/handler-lowering.test.ts` passed.
+src/handler-lowering.test.ts` passed.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec tsc --noEmit` and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **Establish the canonical demo pattern** with tabs: declarative state-bound attributes (Phase 1)
@@ -238,9 +240,9 @@ The demos use the low-level `*Attributes()` plain-function spelling, which yield
     and generated tabs files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts`, and
+src/interactive-gallery.compile.test.ts`, and
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
+src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
 - [x] **Implement primitive `on:*` chaining for the behavior-attribute authoring spelling.** Merge a
       static primitive `on:keydown`/`on:click` ref with a lowered author JSX handler on the same element.
   - Evidence 2026-06-15: `packages/compiler/src/emit/server.ts` merges an existing static
@@ -251,8 +253,8 @@ The demos use the low-level `*Attributes()` plain-function spelling, which yield
     `onClick={...}` plus `on:click="/c/...#primitive"` emits one chained `on:click` attribute,
     removes the residual `onClick`, preserves element params, and emits the generated handler body.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec vitest run
-    src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts`,
+src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec vitest run
+src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts`,
     and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 - [x] **Lower attrs-function and `asChild` primitive composition sugar onto the behavior-attribute
       merge path.** The verified behavior-attribute form now provides the underlying §4.6
@@ -269,8 +271,8 @@ The demos use the low-level `*Attributes()` plain-function spelling, which yield
     JSX handlers with SPEC §4.6 author-first ordering; `packages/compiler/src/attribute-merge.test.ts`
     proves FW232/FW233 diagnostics run after static primitive attr spread lowering.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/handler-lowering.test.ts
-    src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts
-    src/scan/parse.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
+src/attribute-merge.test.ts src/execution-triggers.test.ts src/compile-component.test.ts
+src/scan/parse.test.ts` and `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 
 ## Phase 3 — Per-component demo rewrites (use the primitives + declarative state)
 
@@ -298,15 +300,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     the dropdown reducers/focus helper, and `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"`
     against the authored and generated dropdown files found no matches.
   - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/dropdown-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
-    "dropdown"`; `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts
-    --run src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
+src/primitives/dropdown-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+"dropdown"`; `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts
+--run src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
-    tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
-    scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
+tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [x] **context-menu** [P1]: `onContextMenu` open never fires (loader #2) and the menu has **no
       arrow/typeahead nav and no Escape handler at all**; anchoring is static `data-anchor-x/y=24/40`.
       Wire `contextMenuKeyDown/Move/Typeahead`, read `event.clientX/Y` via `contextMenuPointFromEvent`
@@ -325,15 +327,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
     and generated context-menu files found no matches.
   - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/context-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`;
+src/primitives/context-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`;
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t "dropdown and context"`;
+src/interactive-gallery.interactions-b.browser.test.ts -t "dropdown and context"`;
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
+src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
-    tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
-    scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
+tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [x] **menubar** [P1]: section `onKeyDown` is a stub that ignores the key and hardcodes File→Edit;
       Edit is fully inert (no handler); no ArrowLeft/Right roving, no ArrowDown-to-open, no Escape, no
       "switch open menu while arrowing the bar." Wire `menubarMove`/`menubarKeyDown`/`menubarItemKeyDown`
@@ -351,15 +353,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
     and generated menubar files found no matches.
   - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/menubar.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
-    "menubar"`; `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts
-    --run src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
+src/primitives/menubar.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+"menubar"`; `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts
+--run src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
-    tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
-    scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
+tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [x] **navigation-menu** [P1]: no hover-open (signature interaction); ArrowRight is one-way
       Products→Docs with no ArrowLeft/loop; **Escape is actively wrong** — it sets
       `value='escape-canceled'` and leaves the panel open. Wire `navigationMenuMove`,
@@ -378,15 +380,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
     and generated navigation-menu files found no matches.
   - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/navigation-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
-    "navigation-menu"`; `pnpm --filter @jiso/example-gallery exec vitest --config
-    vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts -t
-    "generated interactive"`; `pnpm --filter @jiso/headless-ui exec tsc --noEmit`;
+src/primitives/navigation-menu.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+"navigation-menu"`; `pnpm --filter @jiso/example-gallery exec vitest --config
+vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts -t
+"generated interactive"`; `pnpm --filter @jiso/headless-ui exec tsc --noEmit`;
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery
-    exec node scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
+exec node scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [x] **toolbar** [P2]: root `onKeyDown` hardcodes a bold↔link flip ignoring the key (ArrowLeft==Right,
       no Home/End, disabled 'italic' skipped only incidentally). Wire `toolbarKeyDown`/`toolbarMoveFocus`
       (auto-skips disabled). Click-toggle already works (imperative stamps present).
@@ -401,9 +403,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     and generated toolbar files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t "toolbar"`,
+src/interactive-gallery.interactions-b.browser.test.ts -t "toolbar"`,
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
     and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 
@@ -413,55 +415,46 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
       `state.open = !state.open`, so ArrowDown **closes** the listbox; Home/End/Escape unimplemented;
       typing rewrites the committed `value`. Wire `comboboxKeyDown`/`comboboxMove`; on input update
       query/highlight only (commit on Enter/click via `comboboxOptionClick`); drive option
-      visibility/highlight from the typed text.
-      - Evidence 2026-06-15: `packages/headless-ui/src/primitives/combobox.ts` now accepts delegated
-        input values from `event.target`, resolves active descendants from item ids, and exposes
-        `comboboxFilteredItems`; covered by
-        `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/combobox.test.ts`.
-      - Evidence 2026-06-15: `examples/gallery/src/interactive/combobox-demo.tsx` keeps
-        `inputValue` separate from committed `value`, routes input/key/click handlers through
-        `comboboxInput`, `comboboxFilteredItems`, `comboboxKeyDown`, and `comboboxOptionClick`, and
-        drives input/listbox/option/output state through TSX bindings. Generated
-        `combobox-demo.client.js` imports those primitive helpers and has no
-        `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches.
-      - Evidence 2026-06-15: gallery client/compile and browser interaction coverage passed via
-        `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
-        and
-        `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t combobox`.
+      visibility/highlight from the typed text. - Evidence 2026-06-15: `packages/headless-ui/src/primitives/combobox.ts` now accepts delegated
+      input values from `event.target`, resolves active descendants from item ids, and exposes
+      `comboboxFilteredItems`; covered by
+      `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/combobox.test.ts`. - Evidence 2026-06-15: `examples/gallery/src/interactive/combobox-demo.tsx` keeps
+      `inputValue` separate from committed `value`, routes input/key/click handlers through
+      `comboboxInput`, `comboboxFilteredItems`, `comboboxKeyDown`, and `comboboxOptionClick`, and
+      drives input/listbox/option/output state through TSX bindings. Generated
+      `combobox-demo.client.js` imports those primitive helpers and has no
+      `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches. - Evidence 2026-06-15: gallery client/compile and browser interaction coverage passed via
+      `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
+      and
+      `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t combobox`.
 - [x] **autocomplete** [P1]: popup is a native `<datalist>` with a single hardcoded `<option>` (not a
       navigable `role=listbox`); typing always scripts `'dev'→development`; arrows toggle open instead
       of navigating. Render a real `role=listbox`/`role=option` list from `autocompleteSuggestions`,
-      wire `autocompleteKeyDown`/`autocompleteMove`, filter on real input.
-      - Evidence 2026-06-15: `packages/headless-ui/src/primitives/autocomplete.ts` now emits
-        listbox/option attributes instead of datalist/option attributes, accepts delegated
-        `event.target` input values, and resolves active descendants from item ids; covered by
-        `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/autocomplete.test.ts`.
-      - Evidence 2026-06-15: `examples/gallery/src/interactive/autocomplete-demo.tsx` renders a real
-        `div role=listbox` with option buttons, routes input/key/click handlers through
-        `autocompleteInput`, `autocompleteSuggestions`, `autocompleteKeyDown`, and
-        `autocompleteOptionClick`, and drives input/listbox/option/output state through TSX
-        bindings. Generated `autocomplete-demo.client.js` imports those primitive helpers and has no
-        `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches.
-      - Evidence 2026-06-15: gallery client/compile and browser interaction coverage passed via
-        `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
-        and
-        `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t autocomplete`.
+      wire `autocompleteKeyDown`/`autocompleteMove`, filter on real input. - Evidence 2026-06-15: `packages/headless-ui/src/primitives/autocomplete.ts` now emits
+      listbox/option attributes instead of datalist/option attributes, accepts delegated
+      `event.target` input values, and resolves active descendants from item ids; covered by
+      `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/autocomplete.test.ts`. - Evidence 2026-06-15: `examples/gallery/src/interactive/autocomplete-demo.tsx` renders a real
+      `div role=listbox` with option buttons, routes input/key/click handlers through
+      `autocompleteInput`, `autocompleteSuggestions`, `autocompleteKeyDown`, and
+      `autocompleteOptionClick`, and drives input/listbox/option/output state through TSX
+      bindings. Generated `autocomplete-demo.client.js` imports those primitive helpers and has no
+      `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches. - Evidence 2026-06-15: gallery client/compile and browser interaction coverage passed via
+      `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`
+      and
+      `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts -t autocomplete`.
 - [x] **command** [P0]: input `onKeyDown` early-returns on any non-Enter key, so Arrow nav does nothing
       and `aria-activedescendant`/`data-highlighted` never move. Wire `commandKeyDown`/`commandMove`,
-      live filter + reset-highlight-to-first-match (cmdk model), Escape closes dialog.
-      - Evidence 2026-06-15: `examples/gallery/src/interactive/command-demo.tsx` now routes trigger,
-        input, keydown, item click, and close handlers through `commandTriggerClick`,
-        `commandInput`, `commandFilteredItems`, `commandKeyDown`, `commandItemClick`, and
-        `commandCloseClick`; generated `command-demo.client.js` imports those primitive helpers and
-        contains no `Reflect`/`document`/`globalThis`/`setAttribute` escape hatches.
-      - Evidence 2026-06-15: `packages/headless-ui/src/primitives/command.ts` accepts delegated
-        input values from `event.target` with nullable event-target fallback; covered by
-        `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/command.test.ts`.
-      - Evidence 2026-06-15: command gallery behavior, ARIA derives, generated compile assertions,
-        and browser interaction passed via
-        `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`
-        and
-        `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t command`.
+      live filter + reset-highlight-to-first-match (cmdk model), Escape closes dialog. - Evidence 2026-06-15: `examples/gallery/src/interactive/command-demo.tsx` now routes trigger,
+      input, keydown, item click, and close handlers through `commandTriggerClick`,
+      `commandInput`, `commandFilteredItems`, `commandKeyDown`, `commandItemClick`, and
+      `commandCloseClick`; generated `command-demo.client.js` imports those primitive helpers and
+      contains no `Reflect`/`document`/`globalThis`/`setAttribute` escape hatches. - Evidence 2026-06-15: `packages/headless-ui/src/primitives/command.ts` accepts delegated
+      input values from `event.target` with nullable event-target fallback; covered by
+      `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/command.test.ts`. - Evidence 2026-06-15: command gallery behavior, ARIA derives, generated compile assertions,
+      and browser interaction passed via
+      `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`
+      and
+      `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t command`.
 - [x] **select** [P1]: demo is a **native `<select>`** (and the primitive itself targets a native
       `<select>`/`<optgroup>`), not the shadcn button+`role=listbox` popup. Even as native, the
       `onChange` hardcodes three outcomes and collapses anything but `'express'` to `'standard'`.
@@ -479,16 +472,16 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `Reflect`/`document`/`globalThis`/`setAttribute`/`ctx.params` escape hatches or captured
     `shippingOptions`.
   - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/select.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec
-    vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t select`,
+src/primitives/select.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec
+vitest --config vitest.browser.config.ts --run
+src/interactive-gallery.interactions-a.browser.test.ts -t select`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/merge-fixtures.forms.test.tsx
-    src/merge-fixtures.idref-oracle.test.tsx`, `pnpm --filter @jiso/headless-ui exec tsc
-    --noEmit`, `pnpm --filter @jiso/ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery
-    exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
-    @jiso/example-gallery exec tsc --noEmit` passed.
+src/merge-fixtures.idref-oracle.test.tsx`, `pnpm --filter @jiso/headless-ui exec tsc
+--noEmit`, `pnpm --filter @jiso/ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery
+exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
+@jiso/example-gallery exec tsc --noEmit` passed.
 
 ### Selection controls
 
@@ -503,10 +496,10 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `.checked` property; `packages/runtime/src/query-bindings.test.ts` covers state-derived checked
     property reflection.
   - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts
-    src/inline-loader-delegated.test.ts src/handlers.test.ts`, `pnpm --filter @jiso/runtime
-    check:inline-loader`, and `pnpm --filter @jiso/runtime exec tsc --noEmit` passed.
+src/inline-loader-delegated.test.ts src/handlers.test.ts`, `pnpm --filter @jiso/runtime
+check:inline-loader`, and `pnpm --filter @jiso/runtime exec tsc --noEmit` passed.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     focused browser coverage for `switch`, `toggle stamped`, and `checkbox stamped`, and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **toggle** [P0]: Phase 1 now updates `aria-pressed`, `data-state`, and `<output>` from
@@ -528,19 +521,19 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `data-bind:indeterminate` to the live checkbox property and initialize SSR-native mixed
     checkboxes during modular and inline loader install.
   - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts
-    src/loader.test.ts src/inline-loader-delegated.test.ts src/handlers.test.ts`,
+src/loader.test.ts src/inline-loader-delegated.test.ts src/handlers.test.ts`,
     `pnpm --filter @jiso/runtime check:inline-loader`, `pnpm --filter @jiso/runtime exec tsc
-    --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+--noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox stamped"`,
+src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox stamped"`,
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter
-    @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check` passed.
+@jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check` passed.
   - Evidence 2026-06-15: `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"
-    examples/gallery/src/interactive/checkbox-demo.tsx
-    examples/gallery/src/generated/interactive/checkbox-demo.tsx
-    examples/gallery/src/generated/interactive/checkbox-demo.client.js` found no imperative
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"
+examples/gallery/src/interactive/checkbox-demo.tsx
+examples/gallery/src/generated/interactive/checkbox-demo.tsx
+examples/gallery/src/generated/interactive/checkbox-demo.client.js` found no imperative
     DOM escape-hatch usage in the checkbox authored/generated path.
 - [x] **radio-group** [P1]: `onKeyDown` is a direction-blind 2-state `email↔sms` flip that fires on
       every key (Tab/typing flip it) and never wraps/skips disabled; per-item `onClick` is hardcoded
@@ -556,9 +549,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     and generated radio-group files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t radio-group`, and
+src/interactive-gallery.interactions-b.browser.test.ts -t radio-group`, and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **checkbox-group** [P2]: click-toggle works (imperative stamps), but the `onKeyDown` invents
       arrow-roving (wrong model — checkboxes are each Tab-focusable + Space) and is a blind 2-state flip.
@@ -577,9 +570,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     and generated checkbox-group files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox-group"`,
+src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox-group"`,
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
     and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **toggle-group** [P1]: click-toggle works; `onKeyDown` hardcodes bold↔italic ignoring the key and
@@ -595,9 +588,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     and generated toggle-group files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
+src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t "toggle-group"`,
+src/interactive-gallery.interactions-b.browser.test.ts -t "toggle-group"`,
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
     and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 
@@ -615,9 +608,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
     and generated disclosure files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t disclosure`, and
+src/interactive-gallery.interactions-a.browser.test.ts -t disclosure`, and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **tabs** [P1]: `onKeyDown` is a stub that **never reads `event.key`** (any key flips
       overview→details); no ArrowRight/Left roving, no Home/End, no manual Enter/Space activation, no
@@ -627,9 +620,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `_tabsKeyDown`/`_tabsTriggerClick` and uses declarative state-bound trigger/panel attributes;
     generated client/server artifacts were refreshed under `examples/gallery/src/generated/interactive/`.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts` and
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts` and
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
+src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
 - [x] **accordion** [P1, needs primitive work]: no `onKeyDown` at all → no Arrow/Home/End roving between
       triggers; the primitive has **no** `accordionKeyDown`/roving-`tabindex` helper (unlike tabs). Add
       `accordionKeyDown` + roving `tabindex` to `accordion.ts` (mirror `tabsKeyDown`/`tabsMoveFocus`),
@@ -645,15 +638,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     TSX. Regenerated server/client artifacts import the primitive reducers and emit the corresponding
     state derives.
   - Evidence 2026-06-15: `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
     generated accordion files found no matches; `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/accordion.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`, `pnpm
-    --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
-    -t accordion`, `pnpm --filter @jiso/example-gallery exec node
-    scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter @jiso/example-gallery exec tsc
-    --noEmit` passed.
+src/primitives/accordion.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`, `pnpm
+--filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+-t accordion`, `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter @jiso/example-gallery exec tsc
+--noEmit` passed.
 - [x] **collapsible** [P2]: native `<details>/<summary>` toggles fine, but `aria-expanded`/`data-state`
       on the summary never update (Phase-1 gap) and `data-[state=closed]:hidden` is dead on native
       `<details>`. Either sync `aria-expanded`/`data-state` from the native toggle, or move to the
@@ -669,11 +662,11 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     and generated collapsible files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery emit:interactive-gallery`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
-    -t "collapsible"`, `pnpm --filter @jiso/example-gallery exec node
-    scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter @jiso/example-gallery exec tsc
-    --noEmit` passed.
+src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+-t "collapsible"`, `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter @jiso/example-gallery exec tsc
+--noEmit` passed.
 
 ### Inputs
 
@@ -688,17 +681,17 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `tabIndex`, native `value`, and output text as state-bound TSX. `packages/headless-ui/src/primitives/otp-field.ts`
     also accepts delegated `event.target.value` for input/paste parity with the loader.
   - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/otp-field.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/primitives/otp-field.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t OTP`, and
+src/interactive-gallery.interactions-a.browser.test.ts -t OTP`, and
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
     passed. `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed. `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params|otpSlotValue|applyOtpResult"
-    examples/gallery/src/interactive/otp-field-demo.tsx
-    examples/gallery/src/generated/interactive/otp-field-demo.tsx
-    examples/gallery/src/generated/interactive/otp-field-demo.client.js` found no matches.
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params|otpSlotValue|applyOtpResult"
+examples/gallery/src/interactive/otp-field-demo.tsx
+examples/gallery/src/generated/interactive/otp-field-demo.tsx
+examples/gallery/src/generated/interactive/otp-field-demo.client.js` found no matches.
 - [x] **slider** [P1]: native `<input type=range>` with decorative `aria-hidden` track/thumb — neither
       Base UI's per-thumb nested input nor shadcn/Radix's `role=slider` thumb. No `role=slider`/
       `aria-valuemin/now/max`, no track-click, no drag, no large-step, no multi-thumb.
@@ -717,16 +710,16 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `Reflect`/`document`/`setAttribute` path, and drives all visible value, ratio, output, hidden
     input value, and thumb ARIA updates through state bindings in the generated client.
   - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/slider.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec
-    vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t slider`,
+src/primitives/slider.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec
+vitest --config vitest.browser.config.ts --run
+src/interactive-gallery.interactions-b.browser.test.ts -t slider`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/merge-fixtures.forms.test.tsx
-    src/merge-fixtures.idref-oracle.test.tsx`, `pnpm --filter @jiso/headless-ui exec tsc
-    --noEmit`, `pnpm --filter @jiso/ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery
-    exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
-    @jiso/example-gallery exec tsc --noEmit` passed.
+src/merge-fixtures.idref-oracle.test.tsx`, `pnpm --filter @jiso/headless-ui exec tsc
+--noEmit`, `pnpm --filter @jiso/ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery
+exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
+@jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **number-field** [P1]: functional via native `<input type=number>` + `+/-` buttons, but stepping
       is the browser's (not the primitive's aligned-step/clamp), and there's no PageUp/Down, Shift/Meta
       step, press-and-hold repeat, or `Intl` formatting. Add `numberFieldKeyDown` + `largeStep`/
@@ -743,17 +736,17 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `packages/runtime/src/inline-loader-build.ts` now reflect derived `data-bind:value` updates to the
     live control `.value`, with modular and inline tests covering the property reflection.
   - Evidence 2026-06-15: `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
     generated number-field files found no matches; `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/number-field.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+src/primitives/number-field.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
     `pnpm --filter @jiso/runtime exec vitest run src/query-bindings.test.ts
-    src/inline-loader-delegated.test.ts`, `pnpm --filter @jiso/runtime run check:inline-loader`,
+src/inline-loader-delegated.test.ts`, `pnpm --filter @jiso/runtime run check:inline-loader`,
     `pnpm --filter @jiso/runtime exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest
-    run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t number-field`, `pnpm --filter
-    @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
-    @jiso/example-gallery exec tsc --noEmit` passed. Press-and-hold repeat and `Intl` formatting remain
+src/interactive-gallery.interactions-a.browser.test.ts -t number-field`, `pnpm --filter
+@jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter
+@jiso/example-gallery exec tsc --noEmit` passed. Press-and-hold repeat and `Intl` formatting remain
     future enhancements beyond this verified primitive-routing closeout.
 - [x] **field** [P2]: ARIA/`data-*` wiring is correct, but handlers are one-way scripted transitions
       (email always becomes valid; plan `<select>` toggles instead of reading the chosen value) and
@@ -768,14 +761,14 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
   - Evidence 2026-06-15: regenerated
     `examples/gallery/src/generated/interactive/field-demo.client.js` mutates only `ctx.state` from
     event values and emits derives for the field validity/value/disabled bindings; `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
     generated field files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t field`, `pnpm --filter
-    @jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter @jiso/example-gallery exec node
-    scripts/emit-interactive-gallery.mjs --check` passed.
+src/interactive-gallery.interactions-a.browser.test.ts -t field`, `pnpm --filter
+@jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter @jiso/example-gallery exec node
+scripts/emit-interactive-gallery.mjs --check` passed.
 
 ### Overlays — hover
 
@@ -797,19 +790,19 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     reducers, emits derives for `aria-describedby`, `data-state`, `hidden`, and output text, and captures
     no local `contentId` in the client derive.
   - Evidence 2026-06-15: `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params|showPopover|hidePopover|popover"`
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params|showPopover|hidePopover|popover"`
     against the authored tooltip demo, generated tooltip files, tooltip primitive, and tooltip primitive
     test found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/tooltip.test.ts src/platform-audit.test.ts`, `pnpm --filter @jiso/headless-ui exec
-    tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/primitives/tooltip.test.ts src/platform-audit.test.ts`, `pnpm --filter @jiso/headless-ui exec
+tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/demo-fixtures.test.ts -t
-    "renders tooltip fixture"`, `pnpm --filter @jiso/example-gallery exec vitest --config
-    vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t tooltip`,
+"renders tooltip fixture"`, `pnpm --filter @jiso/example-gallery exec vitest --config
+vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t tooltip`,
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, `pnpm --filter @jiso/ui exec vitest run
-    src/index.markup.test.tsx`, `pnpm --filter @jiso/ui exec tsc --noEmit`, and `git diff --check`
+src/index.markup.test.tsx`, `pnpm --filter @jiso/ui exec tsc --noEmit`, and `git diff --check`
     passed.
 - [x] **hover-card** [P0 hover + P1 ARIA]: same hover gap; additionally the trigger exposes
       `aria-expanded`/`aria-controls`, but Radix/Base UI do **not** treat a hover card as a disclosure —
@@ -829,15 +822,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `data-state`, content `hidden`, and output text, and contains no `Reflect`, `document`,
     `getElementById`, `setAttribute`, `showPopover`, or `hidePopover` escape hatches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/hover-card.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+src/primitives/hover-card.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+src/interactive-gallery.compile.test.ts src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t "hover-card|tooltip"`,
+src/interactive-gallery.interactions-b.browser.test.ts -t "hover-card|tooltip"`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.visual.browser.test.ts -t "stable visual baselines"`, `pnpm --filter
-    @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter
-    @jiso/example-gallery exec tsc --noEmit`, the authored/generated hover-card and tooltip forbidden-DOM
+src/interactive-gallery.visual.browser.test.ts -t "stable visual baselines"`, `pnpm --filter
+@jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter
+@jiso/example-gallery exec tsc --noEmit`, the authored/generated hover-card and tooltip forbidden-DOM
     `rg` scan, and `git diff --check` passed.
 
 ### Overlays — native dialog family (open/close work via native `<dialog command>`; gaps are dismissal/state/fallback)
@@ -857,7 +850,7 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     for the dynamic slots, and the authored/generated forbidden-DOM scan for the dialog family found no
     `Reflect`/`getElementById`/`setAttribute`/`document`/`globalThis`/`ctx.params` matches.
   - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/dialog.test.ts src/primitives/alert-dialog.test.ts`, gallery client/compile tests,
+src/primitives/dialog.test.ts src/primitives/alert-dialog.test.ts`, gallery client/compile tests,
     focused browser `alert dialog|native dialog|sheet and drawer`, gallery emit `--check`, package
     typechecks, and visual baseline browser tests passed.
 - [x] **alert-dialog** [P2]: correct `role=alertdialog`/`aria-modal`, correct no-backdrop-dismiss
@@ -911,15 +904,15 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `document`, `getElementById`, `setAttribute`, `showPopover`, `hidePopover`, `on:click`, or
     `on:keydown` matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run src/index.test.ts
-    src/loader.test.ts src/inline-loader-build.test.ts src/inline-loader-delegated.test.ts`,
+src/loader.test.ts src/inline-loader-build.test.ts src/inline-loader-delegated.test.ts`,
     `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm --filter @jiso/runtime exec tsc
-    --noEmit`, `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/popover.test.ts`,
+--noEmit`, `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/popover.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/demo-fixtures.test.ts
-    src/behavior-contracts.test.ts src/interactive-gallery.client-behavior.test.ts
-    src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
-    -t popover`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
-    --check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
+src/behavior-contracts.test.ts src/interactive-gallery.client-behavior.test.ts
+src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+-t popover`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
+--check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
 
 ### Feedback / display
 
@@ -938,9 +931,9 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
     and generated progress files found no matches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-b.browser.test.ts -t "progress|meter"`, and
+src/interactive-gallery.interactions-b.browser.test.ts -t "progress|meter"`, and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **meter** [P2]: renders native `<meter>` instead of Base UI `<div role=meter>` + indicator; demo
       hardcodes the `data-state` region (`value===92?optimum:suboptimum`). **Decision (locked 2026-06-14):
@@ -969,16 +962,16 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `_scrollAreaViewportScroll`/`_scrollAreaThumbGeometry`, mutates only `ctx.state`, and contains no
     DOM escape hatches.
   - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
-    src/query-bindings.test.ts src/index.test.ts src/inline-loader.test.ts
-    src/inline-loader-triggers.test.ts src/loader-query-hydration.test.ts`,
+src/query-bindings.test.ts src/index.test.ts src/inline-loader.test.ts
+src/inline-loader-triggers.test.ts src/loader-query-hydration.test.ts`,
     `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm --filter @jiso/runtime exec tsc
-    --noEmit`, `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`,
+--noEmit`, `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`,
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec
-    vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
-    scroll-area`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
-    --check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
+vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+src/interactive-gallery.aria-contracts.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+scroll-area`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
+--check`, `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and `git diff --check` passed.
   - Evidence 2026-06-15: the second scroll-area slice added `scrollAreaTrackPointerDown`,
     `scrollAreaThumbDragStart`, and `scrollAreaThumbDrag`, delegated `pointerdown`/`pointermove`/
     `pointerup` through the modular and inline loaders, and exposed `data-has-overflow-y`,
@@ -988,7 +981,7 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
   - Evidence 2026-06-15: generated `scroll-area-demo.client.js` imports the new primitive helpers,
     mutates only `ctx.state`, and has no `Reflect`/`document`/`globalThis`/`setAttribute`/
     `ctx.params` escape hatches. Verified by `pnpm --filter @jiso/runtime exec vitest run
-    src/index.test.ts src/inline-loader.test.ts src/inline-loader-triggers.test.ts`,
+src/index.test.ts src/inline-loader.test.ts src/inline-loader-triggers.test.ts`,
     `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
     and `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t scroll-area`.
@@ -1013,8 +1006,8 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     from island state with no DOM escape hatches. Generated toast artifacts import the primitive
     reducers and emit derives for hidden, `data-state`, description text, output text, and count.
   - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/toast.test.ts`, runtime event-list tests, `pnpm --filter @jiso/runtime
-    check:inline-loader`, headless/runtime/gallery typechecks, gallery client/compile/ARIA tests,
+src/primitives/toast.test.ts`, runtime event-list tests, `pnpm --filter @jiso/runtime
+check:inline-loader`, headless/runtime/gallery typechecks, gallery client/compile/ARIA tests,
     focused browser toast interaction, full gallery axe browser test, gallery visual baseline test,
     gallery emit `--check`, forbidden-DOM scan, and `git diff --check` passed.
 
@@ -1029,13 +1022,13 @@ These are framework changes the demo rewrites depend on (not just demo edits):
 - [x] `hover-card.ts`: remove `aria-expanded`/`aria-controls` from the trigger (model divergence);
       update `hover-card.test.ts`.
   - Evidence 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/hover-card.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
+src/primitives/hover-card.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.compile.test.ts
-    src/interactive-gallery.client-behavior.test.ts`, `pnpm --filter @jiso/example-gallery exec
-    vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
-    -t hover-card`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
-    --check`, and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed; `rg -n
-    "aria-expanded|aria-controls"` against the hover-card primitive/demo/generated files found no
+src/interactive-gallery.client-behavior.test.ts`, `pnpm --filter @jiso/example-gallery exec
+vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+-t hover-card`, `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs
+--check`, and `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed; `rg -n
+"aria-expanded|aria-controls"` against the hover-card primitive/demo/generated files found no
     matches.
 - [x] `number-field.ts`: add `numberFieldKeyDown`, `largeStep`/`smallStep`; optional hold-repeat + `Intl`.
   - Evidence 2026-06-15: closed by the Phase 3 number-field slice above; verified by
@@ -1053,7 +1046,7 @@ These are framework changes the demo rewrites depend on (not just demo edits):
       primitive (reuse `comboboxMove`/`comboboxKeyDown`/`comboboxTypeahead` for keyboard + highlight).
   - Evidence 2026-06-15: `packages/headless-ui/src/primitives/select.ts` exports the custom listbox
     attrs and reducers; verified by `pnpm --filter @jiso/headless-ui exec vitest run
-    src/primitives/select.test.ts` and `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
+src/primitives/select.test.ts` and `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
 - [x] `scroll-area.ts`: thumb-geometry helper + `data-has-overflow-*`/`data-scrolling`/`data-hovering` +
       thumb-drag/track-click handlers.
   - Evidence 2026-06-15: `packages/headless-ui/src/primitives/scroll-area.ts` exports
@@ -1104,7 +1097,7 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     `@jiso/runtime` bare specifier, records page errors and failed non-font/non-favicon resources, and
     waits for real `fw-state` changes on accordion, combobox, context-menu, and tooltip demos.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.static-export.test.ts` and
+src/interactive-gallery.static-export.test.ts` and
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit` passed.
 - [x] **Rewrite the interaction assertions to the model contracts, not the canned paths.** Current
       tests assert the hardcoded demo behavior (e.g. tabs flipping on any key), which is why broken
@@ -1116,15 +1109,15 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     Home/End movement, typeahead, Escape close paths, menu focus movement, hover-open paths, native
     progress complete/indeterminate states, and emitted `fw-state` transitions.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest --config
-    vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
-    src/interactive-gallery.interactions-b.browser.test.ts` passed.
+vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
+src/interactive-gallery.interactions-b.browser.test.ts` passed.
 - [x] **Keep axe coverage on the real interactive end-states** (open menu with focus moved, expanded
       accordion via keyboard, etc.) — extend `interactive-gallery.axe.browser.test.ts`.
   - Evidence 2026-06-15: `examples/gallery/src/interactive-gallery.axe.browser.test.ts` exercises
     real terminal interactive states instead of only initial render, while the interaction suites
     separately drive the same end-state contracts for component behavior.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest --config
-    vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts` passed.
+vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts` passed.
 - [x] **Primitive unit tests already exist and pass** — they are not the gap; the gap is the demos and
       the framework wiring. Add tests that the demos actually call the primitives (or that the chained
       `on:*` refs are present in emitted HTML).
@@ -1132,7 +1125,7 @@ These are framework changes the demo rewrites depend on (not just demo edits):
     rewritten generated demo imports/calls the expected primitive reducers or emits the relevant
     chained `on:*` handler refs, and asserts the generated clients no longer contain DOM escape hatches.
   - Evidence 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.compile.test.ts` passed.
+src/interactive-gallery.compile.test.ts` passed.
 
 ## Sequencing & ownership
 

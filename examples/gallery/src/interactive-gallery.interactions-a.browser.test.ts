@@ -49,9 +49,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe(
-      '{"activeValue":"shipping","value":"shipping"}',
-    );
+    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"shipping","value":"shipping"}');
     expect(shipping.getAttribute('aria-expanded')).toBe('true');
     expect(shippingPanel.hidden).toBe(false);
     expect(billing.getAttribute('aria-expanded')).toBe('false');
@@ -230,7 +228,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(standard.getAttribute('data-highlighted')).toBe('');
     });
 
-    trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
+    );
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe(
@@ -239,7 +239,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(express.getAttribute('data-highlighted')).toBe('');
     });
 
-    trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }),
+    );
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe(
@@ -415,7 +417,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       const currentInput = required(
         root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'),
       );
-      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-autocomplete-list'));
+      const currentListbox = required(
+        root.querySelector<HTMLElement>('#gallery-autocomplete-list'),
+      );
       const currentDevelopment = required(
         root.querySelector<HTMLButtonElement>('#gallery-autocomplete-list-option-2'),
       );
@@ -585,7 +589,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing')).click();
 
     await vi.waitFor(() => {
-      const currentAll = required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-all'));
+      const currentAll = required(
+        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-all'),
+      );
       const currentUpdates = required(
         root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
       );

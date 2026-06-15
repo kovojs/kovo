@@ -11,7 +11,7 @@ of the authored source. CRM and StackOverflow were data-only libraries and now s
 read-only UIs (CRM: pipeline / contacts / deal detail; SO: question list / question detail). One
 manifest-driven helper (`EXAMPLES` in `site/scripts/examples.mjs`) builds and renders all three.
 Verified end-to-end in a real browser by the site smoke gate (Playwright drives each docs page,
-asserts the app renders *inside* the iframe, and navigates CRM list → deal detail in-iframe).
+asserts the app renders _inside_ the iframe, and navigates CRM list → deal detail in-iframe).
 
 ## Goal
 
@@ -69,7 +69,7 @@ loads a **prebuilt export** rather than SSR-rendering inline.
   that emits the two-pane layout: left `<iframe src="/examples/commerce/app/" sandbox="allow-scripts">`,
   right a tabbed `.code-window` panel with the three source files Shiki-highlighted.
 - **Source read:** at build time, read `examples/commerce/src/components/{cart-badge,order-history,
-  product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
+product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
 
 ## Checklist
 
@@ -124,19 +124,19 @@ loads a **prebuilt export** rather than SSR-rendering inline.
 
 ## Risks / resolutions
 
-- **Asset path rewriting (was top risk) — RESOLVED.** A `<base href>` does *not* fix root-relative
+- **Asset path rewriting (was top risk) — RESOLVED.** A `<base href>` does _not_ fix root-relative
   URLs (only relative ones), so we re-root instead: `rerootHtml` rewrites `="/assets/` and `="/c/`
-  (covering the modulepreload href *and* the inline loader's `on:*` handler refs like
+  (covering the modulepreload href _and_ the inline loader's `on:*` handler refs like
   `/c/commerce.client.js#fn`) to the `/examples/commerce/app/` base. Verified: the served export has
   zero unresolved modules/404s in the smoke browser run.
 - **`sandbox` scope — RESOLVED.** `allow-scripts allow-same-origin` (same-origin needed so the
   inline loader can `import()` the same-origin client module). The commerce public export is a fully
-  client-runnable static replay (no live server); the in-app `/products` pagination link is *not*
+  client-runnable static replay (no live server); the in-app `/products` pagination link is _not_
   exported and 404s if clicked — acceptable for a demo, and excluded from the link gate.
 - **Build cost / ordering.** `buildCommerceEmbed` runs commerce `vp build` during the site build
   (~adds a few seconds). Acceptable; the `build-site`/`export` vite tasks now list
   `examples/commerce/**` as inputs so the cache invalidates on commerce changes. (Note: the `vp run`
-  output cache hashes git-tracked inputs — a first run with the new files *untracked* can serve a
+  output cache hashes git-tracked inputs — a first run with the new files _untracked_ can serve a
   stale dist; once committed it invalidates correctly. Use `vp run --no-cache export` to force.)
 - **Source/compile drift — RESOLVED.** `loadCommerceSources` reads the three files from disk at build
   time; a missing/renamed file throws (ENOENT) and fails the build loudly rather than silently
@@ -147,7 +147,7 @@ loads a **prebuilt export** rather than SSR-rendering inline.
 - [ ] **Live interactivity in the docs iframe.** All embeds are read-only static exports (no server
       on a static host), so mutations/optimism don't run in-iframe — the source tabs tell that story.
       Each example ships a dynamic node handler + `serve.mjs` (`pnpm --filter @jiso/example-<name>
-      start`) for full local interactivity; wiring mutation/optimism client modules into those dynamic
+start`) for full local interactivity; wiring mutation/optimism client modules into those dynamic
       shells (add-contact, vote, post-answer) is future work.
 - [ ] **reference example** (auth) could opt into the now-generic helper if a public-only export is
       added; the data-only nature of crm/so is resolved, but reference still needs a static shell.

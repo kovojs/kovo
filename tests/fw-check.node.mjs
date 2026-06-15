@@ -1048,13 +1048,13 @@ export const CartBadge = component('cart-badge', {
     {
       code: 'FW311',
       fileName: 'components/cart/cart-badge.tsx',
-      message: `${diagnosticDefinitions.FW311.message} CartBadge cart.discount expression`,
+      message: `${String(diagnosticDefinitions.FW311.message)} CartBadge cart.discount expression`,
       severity: 'warn',
     },
     {
       code: 'FW311',
       fileName: 'components/cart/cart-badge.tsx',
-      message: `${diagnosticDefinitions.FW311.message} CartBadge product.name expression`,
+      message: `${String(diagnosticDefinitions.FW311.message)} CartBadge product.name expression`,
       severity: 'warn',
     },
   ]);

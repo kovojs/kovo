@@ -52,9 +52,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
 
-    expect(root.getAttribute('fw-state')).toBe(
-      '{"activeValue":"shipping","value":"shipping"}',
-    );
+    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"shipping","value":"shipping"}');
     expect(root.getAttribute('data-orientation')).toBe('vertical');
     expect(shipping.getAttribute('aria-expanded')).toBe('true');
     expect(shipping.getAttribute('data-state')).toBe('open');
@@ -85,9 +83,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports).toEqual([
         '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
       ]);
-      expect(root.getAttribute('fw-state')).toBe(
-        '{"activeValue":"billing","value":"shipping"}',
-      );
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"shipping"}');
       expect(currentShipping.getAttribute('aria-expanded')).toBe('true');
       expect(currentShipping.tabIndex).toBe(-1);
       expect(currentShippingPanel.hidden).toBe(false);
@@ -116,9 +112,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
       );
 
-      expect(root.getAttribute('fw-state')).toBe(
-        '{"activeValue":"billing","value":"billing"}',
-      );
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"billing"}');
       expect(currentShipping.getAttribute('aria-expanded')).toBe('false');
       expect(currentShipping.getAttribute('data-state')).toBe('closed');
       expect(currentShippingPanel.hidden).toBe(true);
@@ -394,7 +388,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('75');
     });
 
-    thumb.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }));
+    thumb.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }),
+    );
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe(
@@ -405,7 +401,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(output.textContent).toBe('0');
     });
 
-    thumb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 20 }));
+    thumb.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 20 }),
+    );
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe(
         '{"dragging":true,"dragPointerStart":20,"dragValueStart":0,"value":0}',
@@ -413,7 +411,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(thumb.getAttribute('data-dragging')).toBe('');
     });
 
-    thumb.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: 170 }));
+    thumb.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: 170 }),
+    );
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe(
         '{"dragging":true,"dragPointerStart":20,"dragValueStart":0,"value":75}',
@@ -1424,9 +1424,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const toastRoot = mountInteractiveDemo(GalleryToastDemo);
     const showToast = required(toastRoot.querySelector<HTMLButtonElement>('[data-toast-show]'));
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
-    const previousToast = required(
-      toastRoot.querySelector<HTMLElement>('#gallery-toast-previous'),
-    );
+    const previousToast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast-previous'));
     const cancelDismiss = required(
       toastRoot.querySelector<HTMLButtonElement>('[data-toast-cancel-dismiss]'),
     );

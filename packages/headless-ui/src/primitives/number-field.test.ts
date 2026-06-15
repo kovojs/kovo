@@ -342,11 +342,15 @@ describe('headless-ui number-field primitive', () => {
     ).toMatchObject({ changed: true, value: 8 });
     expect(pageEvent.defaultPrevented).toBe(true);
 
-    expect(numberFieldKeyDown(numberFieldKeyboardEvent('Home'), { min: 0, value: 7 })).toMatchObject({
+    expect(
+      numberFieldKeyDown(numberFieldKeyboardEvent('Home'), { min: 0, value: 7 }),
+    ).toMatchObject({
       changed: true,
       value: 0,
     });
-    expect(numberFieldKeyDown(numberFieldKeyboardEvent('End'), { max: 10, value: 7 })).toMatchObject({
+    expect(
+      numberFieldKeyDown(numberFieldKeyboardEvent('End'), { max: 10, value: 7 }),
+    ).toMatchObject({
       changed: true,
       value: 10,
     });

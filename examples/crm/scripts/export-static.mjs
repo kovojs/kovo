@@ -31,10 +31,15 @@ export async function exportCrmStaticApp({
       viteServer.ssrLoadModule('@jiso/server/app-shell/static-export'),
     ]);
     const { isJisoApp } = coreModule;
-    const { exportJisoAppShellViteBuildWithManifestFromManifestFile, jisoAppShellViteManifestStylesheetHrefFromFile } =
-      viteModule;
-    const { formatStaticExportDiagnostic, formatStaticExportDiagnostics, isStaticExportDiagnosticError } =
-      staticExportModule;
+    const {
+      exportJisoAppShellViteBuildWithManifestFromManifestFile,
+      jisoAppShellViteManifestStylesheetHrefFromFile,
+    } = viteModule;
+    const {
+      formatStaticExportDiagnostic,
+      formatStaticExportDiagnostics,
+      isStaticExportDiagnosticError,
+    } = staticExportModule;
 
     staticExportTaskHelpers = {
       formatStaticExportDiagnostic,
@@ -68,7 +73,9 @@ if (isMainModule()) {
     const result = await exportCrmStaticApp(parseCliOptions(process.argv.slice(2)));
 
     for (const diagnostic of result.diagnostics) {
-      process.stderr.write(`${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`);
+      process.stderr.write(
+        `${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`,
+      );
       process.exitCode = 1;
     }
 
@@ -88,9 +95,11 @@ if (isMainModule()) {
     if (!staticExportTaskHelpers?.isStaticExportDiagnosticError(error)) throw error;
 
     process.stderr.write(
-      ['crm-export/v1', ...staticExportTaskHelpers.formatStaticExportDiagnostics(error.diagnostics, 'ERROR'), ''].join(
-        '\n',
-      ),
+      [
+        'crm-export/v1',
+        ...staticExportTaskHelpers.formatStaticExportDiagnostics(error.diagnostics, 'ERROR'),
+        '',
+      ].join('\n'),
     );
     process.exitCode = 1;
   }

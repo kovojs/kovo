@@ -40,10 +40,7 @@ describe('compiled interactive gallery static export', () => {
 
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => {
-        if (
-          message.type() === 'error' &&
-          !message.text().startsWith('Failed to load resource:')
-        ) {
+        if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) {
           errors.push(message.text());
         }
       });

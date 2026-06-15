@@ -9,12 +9,48 @@ import { activities, contacts, deals } from './schema.js';
 // base seed's c1/c2/d1/d2.
 
 const DEMO_CONTACTS = [
-  { id: 'c3', name: 'Margaret Hamilton', email: 'margaret@apollo.example.com', ownerId: 'u1', dealCount: 2 },
-  { id: 'c4', name: 'Katherine Johnson', email: 'katherine@apollo.example.com', ownerId: 'u1', dealCount: 1 },
-  { id: 'c5', name: 'Alan Turing', email: 'alan@bletchley.example.com', ownerId: 'u2', dealCount: 2 },
-  { id: 'c6', name: 'Barbara Liskov', email: 'barbara@mit.example.com', ownerId: 'u2', dealCount: 1 },
-  { id: 'c7', name: 'Donald Knuth', email: 'don@stanford.example.com', ownerId: 'u1', dealCount: 1 },
-  { id: 'c8', name: 'Radia Perlman', email: 'radia@spanningtree.example.com', ownerId: 'u2', dealCount: 1 },
+  {
+    id: 'c3',
+    name: 'Margaret Hamilton',
+    email: 'margaret@apollo.example.com',
+    ownerId: 'u1',
+    dealCount: 2,
+  },
+  {
+    id: 'c4',
+    name: 'Katherine Johnson',
+    email: 'katherine@apollo.example.com',
+    ownerId: 'u1',
+    dealCount: 1,
+  },
+  {
+    id: 'c5',
+    name: 'Alan Turing',
+    email: 'alan@bletchley.example.com',
+    ownerId: 'u2',
+    dealCount: 2,
+  },
+  {
+    id: 'c6',
+    name: 'Barbara Liskov',
+    email: 'barbara@mit.example.com',
+    ownerId: 'u2',
+    dealCount: 1,
+  },
+  {
+    id: 'c7',
+    name: 'Donald Knuth',
+    email: 'don@stanford.example.com',
+    ownerId: 'u1',
+    dealCount: 1,
+  },
+  {
+    id: 'c8',
+    name: 'Radia Perlman',
+    email: 'radia@spanningtree.example.com',
+    ownerId: 'u2',
+    dealCount: 1,
+  },
 ];
 
 const DEMO_DEALS = [

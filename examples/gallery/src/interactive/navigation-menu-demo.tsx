@@ -104,7 +104,8 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           if (move) {
             Object(event).preventDefault?.();
             state.activeValue = move.activeValue ?? state.activeValue;
-            if (state.openValue !== '') state.openValue = state.activeValue === 'products' ? 'products' : '';
+            if (state.openValue !== '')
+              state.openValue = state.activeValue === 'products' ? 'products' : '';
             _navigationMenuFocusElement(
               Object(event),
               state.activeValue === 'docs'
@@ -129,7 +130,8 @@ export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo
           if (typeahead.activeValue === state.activeValue) return;
           Object(event).preventDefault?.();
           state.activeValue = typeahead.activeValue ?? state.activeValue;
-          if (state.openValue !== '') state.openValue = state.activeValue === 'products' ? 'products' : '';
+          if (state.openValue !== '')
+            state.openValue = state.activeValue === 'products' ? 'products' : '';
           _navigationMenuFocusElement(
             Object(event),
             state.activeValue === 'docs'

@@ -39,7 +39,9 @@ export function renderPipelinePage({ buckets, openDeals, contacts }: PipelinePag
       </section>
 
       <section>
-        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Open deals</h2>
+        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Open deals
+        </h2>
         <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -53,7 +55,10 @@ export function renderPipelinePage({ buckets, openDeals, contacts }: PipelinePag
               {openDeals.map((deal) => (
                 <tr class="hover:bg-slate-50">
                   <td class="px-4 py-2.5">
-                    <a class="font-medium text-slate-900 underline-offset-2 hover:underline" href={`/deals/${deal.id}`}>
+                    <a
+                      class="font-medium text-slate-900 underline-offset-2 hover:underline"
+                      href={`/deals/${deal.id}`}
+                    >
                       {deal.id.toUpperCase()}
                     </a>
                   </td>

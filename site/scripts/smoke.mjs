@@ -164,7 +164,10 @@ try {
     const frame = page.frameLocator('iframe.example-frame');
     await frame.locator(embed.marker).first().waitFor({ state: 'attached' });
     const text = (await frame.locator('body').textContent()) ?? '';
-    check(text.includes(embed.text), `JS: ${embed.name} example app renders inside the docs iframe`);
+    check(
+      text.includes(embed.text),
+      `JS: ${embed.name} example app renders inside the docs iframe`,
+    );
   }
 
   // The multi-page apps navigate inside the iframe (root-relative links re-rooted

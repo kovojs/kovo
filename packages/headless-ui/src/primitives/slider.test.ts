@@ -361,19 +361,19 @@ describe('headless-ui slider primitive', () => {
       changed: true,
       value: 15,
     });
-    expect(sliderKeyDown(sliderKeyEvent('ArrowLeft', { shiftKey: true }), { step: 5, value: 50 }))
-      .toMatchObject({
-        changed: true,
-        value: 0,
-      });
+    expect(
+      sliderKeyDown(sliderKeyEvent('ArrowLeft', { shiftKey: true }), { step: 5, value: 50 }),
+    ).toMatchObject({
+      changed: true,
+      value: 0,
+    });
     expect(
       sliderKeyDown(sliderKeyEvent('PageUp'), { largeStep: 20, max: 100, step: 5, value: 50 }),
     ).toMatchObject({ changed: true, value: 70 });
-    expect(sliderKeyDown(sliderKeyEvent('End'), { max: 100, step: 25, value: 50 }))
-      .toMatchObject({
-        changed: true,
-        value: 100,
-      });
+    expect(sliderKeyDown(sliderKeyEvent('End'), { max: 100, step: 25, value: 50 })).toMatchObject({
+      changed: true,
+      value: 100,
+    });
 
     const ignored = sliderKeyEvent('Enter');
     expect(sliderKeyDown(ignored, { value: 50 })).toBeUndefined();

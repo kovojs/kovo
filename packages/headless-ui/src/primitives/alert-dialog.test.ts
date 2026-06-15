@@ -68,10 +68,10 @@ describe('headless-ui alert-dialog primitive', () => {
         titleId: 'delete-title',
       }),
     ).toEqual({
-        'aria-describedby': 'delete-description',
-        'aria-labelledby': 'delete-title',
-        'aria-modal': 'true',
-        'data-state': 'open',
+      'aria-describedby': 'delete-description',
+      'aria-labelledby': 'delete-title',
+      'aria-modal': 'true',
+      'data-state': 'open',
       id: 'delete-account',
       open: true,
       role: 'alertdialog',
@@ -83,9 +83,9 @@ describe('headless-ui alert-dialog primitive', () => {
       open: false,
       role: 'alertdialog',
     });
-    expect(alertDialogContentAttributes({ contentId: 'delete-account', open: true })).not.toHaveProperty(
-      'closedby',
-    );
+    expect(
+      alertDialogContentAttributes({ contentId: 'delete-account', open: true }),
+    ).not.toHaveProperty('closedby');
 
     expect(
       alertDialogCancelAttributes({

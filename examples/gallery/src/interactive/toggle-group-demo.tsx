@@ -57,11 +57,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
         onKeyDown={() => {
           const result = _toggleGroupKeyDown(Object(event), {
             activeValue: state.activeValue,
-            items: [
-              { value: 'bold' },
-              { disabled: true, value: 'strike' },
-              { value: 'italic' },
-            ],
+            items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
             type: 'multiple',
             value:
               state.value === 'bold,italic'
@@ -87,9 +83,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...boldState,
                 id: 'gallery-toggle-group-bold',
               })}
-              aria-pressed={String(
-                state.value === 'bold' || state.value === 'bold,italic',
-              )}
+              aria-pressed={String(state.value === 'bold' || state.value === 'bold,italic')}
               class={BUTTON_CLASS}
               data-state={
                 state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'
@@ -138,9 +132,7 @@ export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
                 ...italicState,
                 id: 'gallery-toggle-group-italic',
               })}
-              aria-pressed={String(
-                state.value === 'italic' || state.value === 'bold,italic',
-              )}
+              aria-pressed={String(state.value === 'italic' || state.value === 'bold,italic')}
               class={BUTTON_CLASS}
               data-state={
                 state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'

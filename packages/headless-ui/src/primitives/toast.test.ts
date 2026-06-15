@@ -313,16 +313,11 @@ describe('headless-ui toast primitive', () => {
   it('uses animationend as the auto-dismiss timeout affordance', () => {
     const reasons: string[] = [];
     const event = animationEvent('jiso-toast-auto-dismiss');
-    const result = toastAnimationEnd(
-      event,
-      { id: 'toast' },
-      'jiso-toast-auto-dismiss',
-      {
-        onOpenChange(detail) {
-          reasons.push(`${detail.reason}:${detail.value.open}`);
-        },
+    const result = toastAnimationEnd(event, { id: 'toast' }, 'jiso-toast-auto-dismiss', {
+      onOpenChange(detail) {
+        reasons.push(`${detail.reason}:${detail.value.open}`);
       },
-    );
+    });
 
     expect(result).toMatchObject({ changed: true, open: false });
     expect(event.defaultPrevented).toBe(false);

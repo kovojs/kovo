@@ -446,7 +446,12 @@ export function selectKeyDown(
     return result;
   }
 
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+  if (
+    event.key === 'ArrowDown' ||
+    event.key === 'ArrowUp' ||
+    event.key === 'Home' ||
+    event.key === 'End'
+  ) {
     if (state.open === true) {
       const result = selectMove(state, event.key, { loop: true });
       if (result !== undefined) event.preventDefault();

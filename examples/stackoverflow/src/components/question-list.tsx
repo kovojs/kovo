@@ -29,7 +29,9 @@ export function renderQuestionListPage({ questions, totalVotes }: QuestionListPa
           <li class="flex items-start gap-4 p-4">
             {score(question.score)}
             <div class="flex w-16 shrink-0 flex-col items-center">
-              <span class="text-base font-semibold tabular-nums text-slate-700">{question.answerCount}</span>
+              <span class="text-base font-semibold tabular-nums text-slate-700">
+                {question.answerCount}
+              </span>
               <span class="text-[10px] uppercase tracking-wide text-slate-500">answers</span>
             </div>
             <div class="min-w-0 flex-1">

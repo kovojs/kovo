@@ -92,9 +92,7 @@ export const GalleryToastDemo = component('gallery-toast-demo', {
           state.previousOpen = previousResult.open;
         }}
       >
-        <style>
-          {'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}
-        </style>
+        <style>{'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}</style>
         <button
           class={TRIGGER_CLASS}
           data-toast-show=""

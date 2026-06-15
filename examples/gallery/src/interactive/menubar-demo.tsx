@@ -95,7 +95,8 @@ export const GalleryMenubarDemo = component('gallery-menubar-demo', {
           if (move) {
             Object(event).preventDefault?.();
             state.activeValue = move.activeValue ?? state.activeValue;
-            if (state.openValue !== '') state.openValue = state.activeValue === 'file' ? 'file' : '';
+            if (state.openValue !== '')
+              state.openValue = state.activeValue === 'file' ? 'file' : '';
             _menubarFocusElement(
               Object(event),
               state.activeValue === 'edit' ? 'gallery-menubar-edit' : 'gallery-menubar-file',

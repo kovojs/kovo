@@ -274,7 +274,8 @@ export function scrollAreaThumbGeometry(
     orientation === 'vertical'
       ? finiteScrollNumber(target.scrollHeight)
       : finiteScrollNumber(target.scrollWidth);
-  const visible = orientation === 'vertical' ? viewport.verticalVisible : viewport.horizontalVisible;
+  const visible =
+    orientation === 'vertical' ? viewport.verticalVisible : viewport.horizontalVisible;
 
   return Object.freeze({
     offsetRatio: orientation === 'vertical' ? viewport.scrollYRatio : viewport.scrollXRatio,
@@ -316,10 +317,7 @@ export function scrollAreaTrackPointerDown(
   if (event.defaultPrevented) return;
 
   const orientation = scrollAreaOrientation(options.orientation);
-  const trackSize = scrollAreaPointerTargetSize(
-    event.target ?? event.currentTarget,
-    orientation,
-  );
+  const trackSize = scrollAreaPointerTargetSize(event.target ?? event.currentTarget, orientation);
   const pointerOffset = scrollAreaPointerOffset(event, orientation);
   if (trackSize <= 0 || pointerOffset === undefined) return;
 
@@ -329,8 +327,14 @@ export function scrollAreaTrackPointerDown(
   const thumbSize = thumb.sizeRatio * trackSize;
   const max =
     orientation === 'vertical'
-      ? Math.max(0, finiteScrollNumber(viewport.scrollHeight) - finiteScrollNumber(viewport.clientHeight))
-      : Math.max(0, finiteScrollNumber(viewport.scrollWidth) - finiteScrollNumber(viewport.clientWidth));
+      ? Math.max(
+          0,
+          finiteScrollNumber(viewport.scrollHeight) - finiteScrollNumber(viewport.clientHeight),
+        )
+      : Math.max(
+          0,
+          finiteScrollNumber(viewport.scrollWidth) - finiteScrollNumber(viewport.clientWidth),
+        );
   const denominator = Math.max(1, trackSize - thumbSize);
   const ratio = Math.min(Math.max((pointerOffset - thumbSize / 2) / denominator, 0), 1);
 
@@ -395,13 +399,27 @@ export function scrollAreaThumbDrag(
 
   const max =
     orientation === 'vertical'
-      ? Math.max(0, finiteScrollNumber(viewport.scrollHeight) - finiteScrollNumber(viewport.clientHeight))
-      : Math.max(0, finiteScrollNumber(viewport.scrollWidth) - finiteScrollNumber(viewport.clientWidth));
-  const denominator = Math.max(1, finiteScrollNumber(options.trackSize) - finiteScrollNumber(options.thumbSize));
-  const offset = finiteScrollNumber(options.scrollStart) + ((pointer - options.pointerStart) / denominator) * max;
+      ? Math.max(
+          0,
+          finiteScrollNumber(viewport.scrollHeight) - finiteScrollNumber(viewport.clientHeight),
+        )
+      : Math.max(
+          0,
+          finiteScrollNumber(viewport.scrollWidth) - finiteScrollNumber(viewport.clientWidth),
+        );
+  const denominator = Math.max(
+    1,
+    finiteScrollNumber(options.trackSize) - finiteScrollNumber(options.thumbSize),
+  );
+  const offset =
+    finiteScrollNumber(options.scrollStart) +
+    ((pointer - options.pointerStart) / denominator) * max;
 
   event.preventDefault();
-  return scrollAreaViewportState(scrollAreaViewportWithOffset(viewport, orientation, offset), options);
+  return scrollAreaViewportState(
+    scrollAreaViewportWithOffset(viewport, orientation, offset),
+    options,
+  );
 }
 
 function scrollAreaViewportEventTarget(
@@ -521,14 +539,20 @@ function scrollAreaViewportWithOffset(
     orientation === 'vertical'
       ? Math.min(
           Math.max(finiteScrollNumber(offset), 0),
-          Math.max(0, finiteScrollNumber(viewport.scrollHeight) - finiteScrollNumber(viewport.clientHeight)),
+          Math.max(
+            0,
+            finiteScrollNumber(viewport.scrollHeight) - finiteScrollNumber(viewport.clientHeight),
+          ),
         )
       : viewport.scrollTop;
   const scrollLeft =
     orientation === 'horizontal'
       ? Math.min(
           Math.max(finiteScrollNumber(offset), 0),
-          Math.max(0, finiteScrollNumber(viewport.scrollWidth) - finiteScrollNumber(viewport.clientWidth)),
+          Math.max(
+            0,
+            finiteScrollNumber(viewport.scrollWidth) - finiteScrollNumber(viewport.clientWidth),
+          ),
         )
       : viewport.scrollLeft;
 

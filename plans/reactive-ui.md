@@ -51,7 +51,7 @@ validation, update-plan hardening, and primitive merge-rule gaps.
 
 - [x] **Handlers mutate state only for the target demos.**
   - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,
-    disclosure-demo,checkbox-demo}.tsx` express the visible ARIA/native/text slots through state-bound
+disclosure-demo,checkbox-demo}.tsx` express the visible ARIA/native/text slots through state-bound
     TSX attributes, with generated client modules mutating `ctx.state`.
 - [x] **The runtime update path is DOM-described, not signal-graph driven.**
   - Evidence 2026-06-15: modular and inline loaders walk `data-bind`/`data-bind:<attr>` attributes
@@ -139,8 +139,8 @@ validation, update-plan hardening, and primitive merge-rule gaps.
     and attributes, routes boolean-presence attributes through null-removing derives, and leaves mixed
     query+state expressions uncovered.
   - Verification 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts
-    src/handler-lowering.test.ts` passed; `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
+src/state-bindings.test.ts src/query-coverage.test.ts src/query-bindings.test.ts
+src/handler-lowering.test.ts` passed; `pnpm --filter @jiso/compiler exec tsc --noEmit` passed.
 - [x] **S2 Analysis and diagnostics:** state binding/coverage facts are available to compiler,
       `fw check`, and test fixtures without creating runtime state plan objects.
   - Evidence 2026-06-15: `packages/compiler/src/analyze/query-updates.ts`,
@@ -149,14 +149,14 @@ validation, update-plan hardening, and primitive merge-rule gaps.
   - Verification 2026-06-15: `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts`,
     `pnpm --filter fw exec vitest run src/index.fw-check.test.ts`, and
     `pnpm exec vitest run packages/test/src/compiler-fixtures.test.ts
-    packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts` passed.
+packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts` passed.
 - [x] **S3 Runtime application:** modular and inline loaders apply pure-path and derive-backed state
       bindings after handlers mutate state, including chained handler refs.
   - Evidence 2026-06-15: `packages/runtime/src/query-bindings.ts` exposes `applyStateBindings`;
     `packages/runtime/src/handlers.ts` awaits it after delegated handler execution;
     `packages/runtime/src/inline-loader-build.ts` mirrors it for inline bootstrap source.
   - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
-    src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed;
+src/query-bindings.test.ts src/handlers.test.ts src/inline-loader-delegated.test.ts` passed;
     `pnpm --filter @jiso/runtime check:inline-loader` passed;
     `pnpm --filter @jiso/runtime exec tsc --noEmit` passed.
 - [x] **S4 Native checkbox property parity:** state-bound `checked` and `indeterminate` writes update live
@@ -166,33 +166,33 @@ validation, update-plan hardening, and primitive merge-rule gaps.
     `packages/runtime/src/inline-loader-build.ts` initialize SSR-native mixed checkboxes during
     loader install.
   - Verification 2026-06-15: `pnpm --filter @jiso/runtime exec vitest run
-    src/query-bindings.test.ts src/loader.test.ts src/inline-loader-delegated.test.ts
-    src/handlers.test.ts` passed; `pnpm --filter @jiso/runtime check:inline-loader` passed.
+src/query-bindings.test.ts src/loader.test.ts src/inline-loader-delegated.test.ts
+src/handlers.test.ts` passed; `pnpm --filter @jiso/runtime check:inline-loader` passed.
 - [x] **S5 Target demo migration:** `switch`, `toggle`, `disclosure`, and `checkbox` use declarative state
       bindings for the relevant ARIA/data/native/output slots.
   - Evidence 2026-06-15: `examples/gallery/src/interactive/{switch-demo,toggle-demo,
-    disclosure-demo,checkbox-demo}.tsx` removed state-dependent DOM writes for the bound slots; the
+disclosure-demo,checkbox-demo}.tsx` removed state-dependent DOM writes for the bound slots; the
     generated client modules export state derives and local state mutation handlers.
   - Verification 2026-06-15: `pnpm --filter @jiso/example-gallery exec vitest run
-    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
+src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
-    src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox stamped"`,
+src/interactive-gallery.interactions-a.browser.test.ts -t "checkbox stamped"`,
     `pnpm --filter @jiso/example-gallery exec tsc --noEmit`, and
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
     passed.
 - [x] **S6 No imperative DOM escape hatches in target paths:** the target authored/generated paths do not
       use DOM escape hatches for the state-bound slots.
   - Verification 2026-06-15: `rg
-    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"
-    examples/gallery/src/interactive/checkbox-demo.tsx
-    examples/gallery/src/generated/interactive/checkbox-demo.tsx
-    examples/gallery/src/generated/interactive/checkbox-demo.client.js` found no matches; earlier
+"Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"
+examples/gallery/src/interactive/checkbox-demo.tsx
+examples/gallery/src/generated/interactive/checkbox-demo.tsx
+examples/gallery/src/generated/interactive/checkbox-demo.client.js` found no matches; earlier
     target-wide scans for switch/toggle/disclosure also found no authored/generated DOM writes.
 - [x] **S7 Gallery no-shim acceptance:** the target demos work in the unmodified static export, and
       existing imperative demos continue to smoke-test.
   - Verification 2026-06-15: `node examples/gallery/scripts/export-static.mjs --out
-    examples/gallery/dist` reported `html=1 client-modules=36 assets=1 diagnostics=0`; `node
-    scratch/gallery-verify-noshim.mjs` passed with 0 runtime specifier errors and only known font
+examples/gallery/dist` reported `html=1 client-modules=36 assets=1 diagnostics=0`; `node
+scratch/gallery-verify-noshim.mjs` passed with 0 runtime specifier errors and only known font
     404s.
 
 ## Residual Work Moved Elsewhere

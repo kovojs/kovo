@@ -50,11 +50,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         onKeyDown={() => {
           const result = _toolbarKeyDown(Object(event), {
             activeValue: state.activeValue,
-            items: [
-              { value: 'bold' },
-              { disabled: true, value: 'italic' },
-              { value: 'link' },
-            ],
+            items: [{ value: 'bold' }, { disabled: true, value: 'italic' }, { value: 'link' }],
           });
           if (!result?.value) return;
           state.activeValue = result.value;

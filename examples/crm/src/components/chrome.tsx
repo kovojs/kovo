@@ -28,7 +28,9 @@ const STAGE_TONE: Record<string, string> = {
 export function stageBadge(stage: string): string {
   const tone = STAGE_TONE[stage] ?? 'bg-slate-100 text-slate-700';
   return (
-    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>
+    <span
+      class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
+    >
       {stage}
     </span>
   );

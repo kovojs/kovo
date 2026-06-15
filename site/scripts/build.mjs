@@ -312,7 +312,10 @@ async function main() {
   // Examples: runnable apps embedded as a static export beside their source.
   const examplesSection = {
     key: 'examples',
-    pages: EXAMPLES.map((example) => ({ title: example.title, url: examplePagePath(example.name) })),
+    pages: EXAMPLES.map((example) => ({
+      title: example.title,
+      url: examplePagePath(example.name),
+    })),
     title: 'Examples',
   };
   const groups = sections

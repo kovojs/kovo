@@ -37,7 +37,10 @@ async function loadAnswersForQuestion(db: SoDb, questionId: string): Promise<Ans
   }));
 }
 
-export async function createSoStaticExportShell(): Promise<{ app: ReturnType<typeof createApp>; db: SoDb }> {
+export async function createSoStaticExportShell(): Promise<{
+  app: ReturnType<typeof createApp>;
+  db: SoDb;
+}> {
   const db = await createSoDb();
   await seedSoDemo(db);
 
@@ -69,7 +72,10 @@ export async function createSoStaticExportShell(): Promise<{ app: ReturnType<typ
     document: { lang: 'en-US' },
     routes: [
       route('/', {
-        meta: { description: 'Top developer questions and answers.', title: 'Questions · DevOverflow' },
+        meta: {
+          description: 'Top developer questions and answers.',
+          title: 'Questions · DevOverflow',
+        },
         async page() {
           const context = { db, request: { db } };
           const [{ items }, { score: totalVotes }] = await Promise.all([

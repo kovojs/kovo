@@ -28,7 +28,10 @@ export interface QuestionDetailPageData {
 export function renderQuestionDetailPage({ question, answers }: QuestionDetailPageData): string {
   const body = (
     <div class="space-y-6">
-      <a class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900" href="/">
+      <a
+        class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+        href="/"
+      >
         &larr; All questions
       </a>
 

@@ -26,7 +26,10 @@ export function renderSoShell(body: string): string {
             DevOverflow
           </a>
           <nav class="text-sm">
-            <a href="/" class="rounded-md px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100">
+            <a
+              href="/"
+              class="rounded-md px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100"
+            >
               Questions
             </a>
           </nav>

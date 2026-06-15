@@ -503,7 +503,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(drawer).toContain('closedby="any"');
     expect(drawer).toContain('id="account-drawer" open>');
     expect(drawer).toContain('bottom-0 max-h-[85vh] border-t');
-    expect(drawer).toContain('aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300"');
+    expect(drawer).toContain(
+      'aria-hidden="true" class="mx-auto h-1.5 w-12 rounded-full bg-neutral-300"',
+    );
     expect(drawer).toContain('command="request-close" commandfor="account-drawer"');
   });
 });

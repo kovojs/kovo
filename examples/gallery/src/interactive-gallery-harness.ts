@@ -220,6 +220,19 @@ export function clientHandler(exports: ClientExports, name: string): ClientExpor
   return fn;
 }
 
+export function asyncClientHandler(
+  exports: ClientExports,
+  name: string,
+): (
+  event: Event,
+  ctx: { params: Record<string, unknown>; signal: AbortSignal; state: unknown },
+) => Promise<void> {
+  return clientHandler(exports, name) as unknown as (
+    event: Event,
+    ctx: { params: Record<string, unknown>; signal: AbortSignal; state: unknown },
+  ) => Promise<void>;
+}
+
 export function inputEvent(value: string): Event {
   const event = new Event('input', { bubbles: true, cancelable: true });
   const target = { value };

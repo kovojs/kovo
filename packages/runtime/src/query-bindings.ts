@@ -366,11 +366,7 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
 
 function removeBoundAttribute(element: QueryBindingElement, name: string): void {
   element.removeAttribute?.(name);
-  if (
-    name === 'value' &&
-    element.value !== undefined &&
-    shouldClearRemovedValueProperty(element)
-  ) {
+  if (name === 'value' && element.value !== undefined && shouldClearRemovedValueProperty(element)) {
     element.value = '';
   }
   if ((name === 'scrollLeft' || name === 'scrollleft') && element.scrollLeft !== undefined) {

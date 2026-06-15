@@ -21,7 +21,10 @@ export interface DealDetailPageData {
 export function renderDealDetailPage({ deal, contact, activities }: DealDetailPageData): string {
   const body = (
     <div class="space-y-6">
-      <a class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900" href="/">
+      <a
+        class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+        href="/"
+      >
         &larr; Pipeline
       </a>
 
@@ -57,7 +60,9 @@ export function renderDealDetailPage({ deal, contact, activities }: DealDetailPa
           <ol class="space-y-2">
             {activities.map((activity) => (
               <li class="rounded-lg border border-slate-200 bg-white p-4">
-                <p class="text-xs font-medium uppercase tracking-wide text-slate-400">{activity.kind}</p>
+                <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  {activity.kind}
+                </p>
                 <p class="mt-1 text-sm text-slate-700">{activity.note}</p>
               </li>
             ))}

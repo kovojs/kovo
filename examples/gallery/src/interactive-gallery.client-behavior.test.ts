@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  asyncClientHandler,
   changeEvent,
   clientHandler,
   evaluateClientModule,
@@ -490,26 +491,20 @@ describe('compiled interactive gallery demos', () => {
       state: hoverCardState,
     });
     expect(hoverCardState).toEqual({ open: true });
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerenter')(
-      new Event('pointerenter'),
-      {
-        params: {},
-        signal,
-        state: hoverCardState,
-      },
-    );
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerenter')(new Event('pointerenter'), {
+      params: {},
+      signal,
+      state: hoverCardState,
+    });
     expect(hoverCardState).toEqual({ open: true });
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerleave')(
-      new Event('pointerleave'),
-      {
-        params: {},
-        signal,
-        state: hoverCardState,
-      },
-    );
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerleave')(new Event('pointerleave'), {
+      params: {},
+      signal,
+      state: hoverCardState,
+    });
     expect(hoverCardState).toEqual({ open: false });
     hoverCardState.open = true;
-    await clientHandler(hoverCard, 'GalleryHoverCardDemo$a_pointerleave')(
+    await asyncClientHandler(hoverCard, 'GalleryHoverCardDemo$a_pointerleave')(
       new Event('pointerleave'),
       {
         params: {},
@@ -955,11 +950,14 @@ describe('compiled interactive gallery demos', () => {
     expect(scrollAreaState.scrolling).toBe(false);
 
     const selectState = { highlightedValue: 'standard', open: false, value: 'standard' };
-    clientHandler(select, 'GallerySelectDemo$button_click')(new Event('click', { cancelable: true }), {
-      params: {},
-      signal,
-      state: selectState,
-    });
+    clientHandler(select, 'GallerySelectDemo$button_click')(
+      new Event('click', { cancelable: true }),
+      {
+        params: {},
+        signal,
+        state: selectState,
+      },
+    );
     expect(selectState).toEqual({ highlightedValue: 'standard', open: true, value: 'standard' });
     const selectArrowDown = keyEvent('ArrowDown');
     clientHandler(select, 'GallerySelectDemo$button_keydown')(selectArrowDown, {

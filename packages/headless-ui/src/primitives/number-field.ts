@@ -345,9 +345,7 @@ function numberFieldKeyboardStep(event: NumberFieldKeyboardEvent, state: NumberF
     : numberFieldSmallStep(state);
 }
 
-function numberFieldInputEventTarget(
-  event: NumberFieldInputEvent,
-): { value: string } | undefined {
+function numberFieldInputEventTarget(event: NumberFieldInputEvent): { value: string } | undefined {
   if (event.currentTarget !== null) return event.currentTarget;
   const target = event.target;
   if (target && typeof target.value === 'string') return target as { value: string };

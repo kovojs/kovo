@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   clientHandler,
-  element,
   evaluateClientModule,
   fakeDocument,
   inputEvent,
   keyEvent,
-  selector,
 } from './interactive-gallery-harness.js';
 
 function deriveRun(exports: Record<string, unknown>, name: string, state: unknown): unknown {
@@ -138,9 +136,15 @@ describe('compiled interactive gallery demos', () => {
         value: 'duplicate',
       });
       expect(
-        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_aria_expanded_derive', dropdownState),
+        deriveRun(
+          dropdownMenu,
+          'GalleryDropdownMenuDemo$button_aria_expanded_derive',
+          dropdownState,
+        ),
       ).toBe('true');
-      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$div_hidden_derive', dropdownState)).toBeNull();
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$div_hidden_derive', dropdownState),
+      ).toBeNull();
       expect(
         deriveRun(
           dropdownMenu,
@@ -148,9 +152,9 @@ describe('compiled interactive gallery demos', () => {
           dropdownState,
         ),
       ).toBe('');
-      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$output_text_derive', dropdownState)).toBe(
-        'open',
-      );
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$output_text_derive', dropdownState),
+      ).toBe('open');
 
       const dropdownMoveEvent = keyEvent('ArrowDown');
       clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_keydown_2')(dropdownMoveEvent, {
@@ -178,9 +182,9 @@ describe('compiled interactive gallery demos', () => {
           dropdownState,
         ),
       ).toBe('');
-      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_tabIndex_derive', dropdownState)).toBe(
-        -1,
-      );
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_tabIndex_derive', dropdownState),
+      ).toBe(-1);
       expect(
         deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_tabIndex_derive_2', dropdownState),
       ).toBe(0);
@@ -194,12 +198,18 @@ describe('compiled interactive gallery demos', () => {
       expect(dropdownEnterEvent.defaultPrevented).toBe(true);
       expect(dropdownState).toEqual({ highlightedValue: 'rename', open: false, value: 'rename' });
       expect(
-        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$button_aria_expanded_derive', dropdownState),
+        deriveRun(
+          dropdownMenu,
+          'GalleryDropdownMenuDemo$button_aria_expanded_derive',
+          dropdownState,
+        ),
       ).toBe('false');
-      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$div_hidden_derive', dropdownState)).toBe('');
-      expect(deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$output_text_derive', dropdownState)).toBe(
-        'closed',
-      );
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$div_hidden_derive', dropdownState),
+      ).toBe('');
+      expect(
+        deriveRun(dropdownMenu, 'GalleryDropdownMenuDemo$output_text_derive', dropdownState),
+      ).toBe('closed');
 
       const menubar = evaluateClientModule('menubar-demo.client.js', { document });
       const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
@@ -389,9 +399,9 @@ describe('compiled interactive gallery demos', () => {
       expect(
         deriveRun(command, 'GalleryCommandDemo$input_aria_activedescendant_derive', commandState),
       ).toBe('gallery-command-listbox-item-1');
-      expect(deriveRun(command, 'GalleryCommandDemo$button_aria_selected_derive_2', commandState)).toBe(
-        'true',
-      );
+      expect(
+        deriveRun(command, 'GalleryCommandDemo$button_aria_selected_derive_2', commandState),
+      ).toBe('true');
       expect(deriveRun(command, 'GalleryCommandDemo$output_text_derive', commandState)).toBe(
         'invite',
       );
@@ -410,9 +420,9 @@ describe('compiled interactive gallery demos', () => {
         value: 'invite',
       });
       expect(deriveRun(command, 'GalleryCommandDemo$dialog_open_derive', commandState)).toBeNull();
-      expect(
-        deriveRun(command, 'GalleryCommandDemo$output_text_derive_2', commandState),
-      ).toBe('Invite teammate');
+      expect(deriveRun(command, 'GalleryCommandDemo$output_text_derive_2', commandState)).toBe(
+        'Invite teammate',
+      );
       commandState.open = true;
       commandState.value = 'dashboard';
       clientHandler(command, 'GalleryCommandDemo$button_click_3')(new Event('click'), {
@@ -427,9 +437,9 @@ describe('compiled interactive gallery demos', () => {
         open: false,
         value: 'invite',
       });
-      expect(deriveRun(command, 'GalleryCommandDemo$button_data_selected_derive_2', commandState)).toBe(
-        '',
-      );
+      expect(
+        deriveRun(command, 'GalleryCommandDemo$button_data_selected_derive_2', commandState),
+      ).toBe('');
 
       const toolbar = evaluateClientModule('toolbar-demo.client.js', { document });
       const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
@@ -441,21 +451,27 @@ describe('compiled interactive gallery demos', () => {
       });
       expect(toolbarKeyboardEvent.defaultPrevented).toBe(true);
       expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
-      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_tabIndex_derive', toolbarState)).toBe(-1);
-      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_tabIndex_derive_2', toolbarState)).toBe(0);
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_tabIndex_derive', toolbarState)).toBe(
+        -1,
+      );
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_tabIndex_derive_2', toolbarState)).toBe(
+        0,
+      );
       clientHandler(toolbar, 'GalleryToolbarDemo$button_click_2')(new Event('click'), {
         params: {},
         signal,
         state: toolbarState,
       });
       expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'link' });
-      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_aria_pressed_derive', toolbarState)).toBe(
-        'false',
+      expect(
+        deriveRun(toolbar, 'GalleryToolbarDemo$button_aria_pressed_derive', toolbarState),
+      ).toBe('false');
+      expect(
+        deriveRun(toolbar, 'GalleryToolbarDemo$button_aria_pressed_derive_2', toolbarState),
+      ).toBe('true');
+      expect(deriveRun(toolbar, 'GalleryToolbarDemo$output_text_derive', toolbarState)).toBe(
+        'link',
       );
-      expect(deriveRun(toolbar, 'GalleryToolbarDemo$button_aria_pressed_derive_2', toolbarState)).toBe(
-        'true',
-      );
-      expect(deriveRun(toolbar, 'GalleryToolbarDemo$output_text_derive', toolbarState)).toBe('link');
 
       const toggleGroup = evaluateClientModule('toggle-group-demo.client.js', { document });
       const toggleGroupState = { activeValue: 'bold', value: 'bold' };
@@ -466,7 +482,11 @@ describe('compiled interactive gallery demos', () => {
       });
       expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
       expect(
-        deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_aria_pressed_derive', toggleGroupState),
+        deriveRun(
+          toggleGroup,
+          'GalleryToggleGroupDemo$button_aria_pressed_derive',
+          toggleGroupState,
+        ),
       ).toBe('true');
       expect(
         deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_data_state_derive', toggleGroupState),
@@ -479,7 +499,11 @@ describe('compiled interactive gallery demos', () => {
         ),
       ).toBe('true');
       expect(
-        deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_data_state_derive_2', toggleGroupState),
+        deriveRun(
+          toggleGroup,
+          'GalleryToggleGroupDemo$button_data_state_derive_2',
+          toggleGroupState,
+        ),
       ).toBe('pressed');
       expect(
         deriveRun(toggleGroup, 'GalleryToggleGroupDemo$output_text_derive', toggleGroupState),
@@ -506,10 +530,11 @@ describe('compiled interactive gallery demos', () => {
       expect(deriveRun(toast, 'GalleryToastDemo$div_data_state_derive_2', toastState)).toBe('open');
       expect(deriveRun(toast, 'GalleryToastDemo$div_hidden_derive_2', toastState)).toBeNull();
       expect(deriveRun(toast, 'GalleryToastDemo$output_text_derive', toastState)).toBe('open');
-      clientHandler(toast, 'GalleryToastDemo$section_keydown')(
-        keyEvent('Enter'),
-        { params: {}, signal, state: toastState },
-      );
+      clientHandler(toast, 'GalleryToastDemo$section_keydown')(keyEvent('Enter'), {
+        params: {},
+        signal,
+        state: toastState,
+      });
       expect(toastState.activeOpen).toBe(true);
       clientHandler(toast, 'GalleryToastDemo$div_animationend')(animationEvent(), {
         params: {},

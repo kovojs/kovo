@@ -31,7 +31,9 @@ export const GalleryProgressDemo = component('gallery-progress-demo', {
         <label for="gallery-progress-value">Upload progress</label>
         <progress
           {...progressRootAttributes({ max: 100, value: state.value, valueText })}
-          aria-valuetext={state.value === null ? 'Upload pending' : `${state.value} percent uploaded`}
+          aria-valuetext={
+            state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
+          }
           class={PROGRESS_CLASS}
           data-state={
             state.value === null ? 'indeterminate' : state.value === 100 ? 'complete' : 'loading'

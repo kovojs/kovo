@@ -133,7 +133,9 @@ export function toastShowPayload(input: ToastShowPayload): ToastShowPayload {
     ...(input.actionLabel === undefined ? {} : { actionLabel: input.actionLabel }),
     ...(input.actionValue === undefined ? {} : { actionValue: input.actionValue }),
     ...(input.description === undefined ? {} : { description: input.description }),
-    ...(input.durationMs === undefined ? {} : { durationMs: normalizeToastDuration(input.durationMs) }),
+    ...(input.durationMs === undefined
+      ? {}
+      : { durationMs: normalizeToastDuration(input.durationMs) }),
     ...(input.id === undefined ? {} : { id: input.id }),
     ...(input.politeness === undefined ? {} : { politeness: toastPoliteness(input.politeness) }),
     ...(input.title === undefined ? {} : { title: input.title }),

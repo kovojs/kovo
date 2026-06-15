@@ -98,14 +98,14 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
       >
         {props.trigger ?? 'Open'}
       </button>
-    <dialog
-      aria-describedby={contentAttrs['aria-describedby']}
-      aria-labelledby={contentAttrs['aria-labelledby']}
-      class={cn(sheetContentClassNames({ side }), props.contentClass)}
-      closedby={contentAttrs.closedby}
-      data-state={contentAttrs['data-state']}
-      id={contentAttrs.id}
-      open={contentAttrs.open}
+      <dialog
+        aria-describedby={contentAttrs['aria-describedby']}
+        aria-labelledby={contentAttrs['aria-labelledby']}
+        class={cn(sheetContentClassNames({ side }), props.contentClass)}
+        closedby={contentAttrs.closedby}
+        data-state={contentAttrs['data-state']}
+        id={contentAttrs.id}
+        open={contentAttrs.open}
       >
         <header class="grid gap-1">
           <h2 class="text-base font-semibold" id={titleId}>

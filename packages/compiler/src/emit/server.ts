@@ -90,7 +90,9 @@ function serverRenderPatches(
     if (!hostElement) return patches;
 
     patches.push(
-      ...hostHandlers.filter((handler) => !chainedHandlers.has(handler)).map(handlerSourceReplacement),
+      ...hostHandlers
+        .filter((handler) => !chainedHandlers.has(handler))
+        .map(handlerSourceReplacement),
     );
     patches.push(...renderHostStampPatches(model, hostElement));
   }
