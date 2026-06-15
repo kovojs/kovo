@@ -2,7 +2,7 @@ import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/q
 import { componentCssAssetForFile, emitCssModule } from './css.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
-import { emitServerModule, renderEquivalenceCheck, serverRenderLowering } from './emit/server.js';
+import { emitServerModule, serverRenderLowering } from './emit/server.js';
 import { componentGraphFact, findFragmentTargetFacts } from './graph.js';
 import {
   clientModuleUrl,
@@ -165,9 +165,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
-    renderEquivalenceChecks: [
-      renderEquivalenceCheck(fileNames.server, serverRenderedSource, serverModule.executableSource),
-    ],
+    // SPEC §5.2 rule 3 requires an authored-vs-lowered render differential. The previous
+    // generated fact compared renderSource() with its own lowered source, so it proved only the
+    // wrapper round-trip. Do not emit a render-equivalence fact until an independent authored
+    // renderer backs it.
+    renderEquivalenceChecks: [],
     updateCoverage,
     viewTransitions: viewTransitions.stamps,
   };

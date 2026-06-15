@@ -284,9 +284,9 @@ function templateLiteral(value: string): string {
 }
 
 function renderSourceModule(renderedSource: string, exportPrefix: '' | 'export '): string {
-  // SPEC 5.2.3 requires render(src) to equal render(compile(src)); execute the
-  // generated renderSource function body, but build the executable variant from
-  // the same source facts instead of reparsing the emitted artifact.
+  // Build the executable variant from the same lowered source facts instead of reparsing the
+  // emitted artifact. This is a generated renderSource round-trip helper, not the SPEC §5.2
+  // authored-vs-lowered semantic gate.
   return `${compilerIrHeader}
 ${exportPrefix}function renderSource() {
   return ${templateLiteral(renderedSource)};

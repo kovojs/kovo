@@ -112,6 +112,7 @@ export const CartBadge = component('cart-badge', {
     expect(registry?.source).toContain(
       "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
     );
+    expect(result.renderEquivalenceChecks).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
