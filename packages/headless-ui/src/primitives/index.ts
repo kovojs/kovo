@@ -505,6 +505,7 @@ export type {
 } from './hover-card.js';
 
 export {
+  menubarFocusElement,
   menubarGroupAttributes,
   menubarItemAttributes,
   menubarItemClick,
@@ -525,6 +526,8 @@ export {
 } from './menubar.js';
 export type {
   MenubarChangeOptions,
+  MenubarFocusEvent,
+  MenubarFocusOptions,
   MenubarGroupAttributeOptions,
   MenubarItem,
   MenubarItemAttributeOptions,

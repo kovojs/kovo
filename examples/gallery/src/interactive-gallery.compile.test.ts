@@ -29,6 +29,7 @@ describe('compiled interactive gallery demos', () => {
     const hoverCard = readGenerated('hover-card-demo.tsx');
     const hoverCardClient = readGenerated('hover-card-demo.client.js');
     const menubar = readGenerated('menubar-demo.tsx');
+    const menubarClient = readGenerated('menubar-demo.client.js');
     const meter = readGenerated('meter-demo.tsx');
     const navigationMenu = readGenerated('navigation-menu-demo.tsx');
     const navigationMenuClient = readGenerated('navigation-menu-demo.client.js');
@@ -409,6 +410,26 @@ describe('compiled interactive gallery demos', () => {
     expect(menubar).toContain('data-gallery-interactive="menubar"');
     expect(menubar).toContain('fw-state=\'{"activeValue":"file","openValue":"","value":"new"}\'');
     expect(menubar).toContain('menubarSubmenuAttributes({');
+    expect(menubar).toContain('menubarFocusElement as _menubarFocusElement');
+    expect(menubar).toContain('menubarItemClick as _menubarItemClick');
+    expect(menubar).toContain('menubarItemKeyDown as _menubarItemKeyDown');
+    expect(menubar).toContain('menubarKeyDown as _menubarKeyDown');
+    expect(menubar).toContain('menubarMove as _menubarMove');
+    expect(menubar).toContain('menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick');
+    expect(menubar).toContain('menubarTypeahead as _menubarTypeahead');
+    expect(menubar).toContain('data-bind:aria-expanded=');
+    expect(menubar).toContain('data-bind:data-highlighted=');
+    expect(menubar).toContain('data-bind:hidden=');
+    expect(menubar).toContain('data-bind:tabIndex=');
+    expect(menubarClient).toContain('menubarFocusElement as _menubarFocusElement');
+    expect(menubarClient).toContain('menubarItemKeyDown as _menubarItemKeyDown');
+    expect(menubarClient).toContain('menubarKeyDown as _menubarKeyDown');
+    expect(menubarClient).toContain(
+      'menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick',
+    );
+    expect(menubarClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
     expect(menubar).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$section_keydown"/,
     );
@@ -417,6 +438,15 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(menubar).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_keydown"/,
+    );
+    expect(menubar).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_click_2"/,
+    );
+    expect(menubar).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_keydown_2"/,
+    );
+    expect(menubar).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_click_3"/,
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  menubarFocusElement as exportedMenubarFocusElement,
   menubarGroupAttributes as exportedMenubarGroupAttributes,
   menubarItemAttributes as exportedMenubarItemAttributes,
   menubarItemClick as exportedMenubarItemClick,
@@ -20,6 +21,7 @@ import {
   toggleMenubarOpenValue as exportedToggleMenubarOpenValue,
 } from '../index.js';
 import {
+  menubarFocusElement,
   menubarGroupAttributes,
   menubarItemAttributes,
   menubarItemClick,
@@ -522,7 +524,87 @@ describe('headless-ui menubar primitive', () => {
     expect(menubarKeyDown(keydownEvent('Enter'), { openValue: 'file' })).toBeUndefined();
   });
 
+  it('focuses menubar elements through delegated event ownerDocument access', () => {
+    let focusCount = 0;
+    const ownerDocument = {
+      getElementById(id: string) {
+        return id === 'file-item'
+          ? {
+              focus() {
+                focusCount += 1;
+              },
+            }
+          : undefined;
+      },
+    };
+    const directEvent = {
+      currentTarget: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+    const delegatedEvent = {
+      currentTarget: null,
+      target: {
+        ownerDocument,
+      },
+    } as Event & {
+      currentTarget: null;
+      target: {
+        ownerDocument: typeof ownerDocument;
+      };
+    };
+
+    expect(menubarFocusElement(directEvent, 'file-item')).toBe(true);
+    expect(menubarFocusElement(delegatedEvent, 'file-item')).toBe(true);
+    expect(menubarFocusElement(directEvent, 'missing')).toBe(false);
+    expect(focusCount).toBe(2);
+  });
+
+  it('can defer menubar focus until after reactive state bindings commit', () => {
+    let deferredFocusCount = 0;
+    const scheduled: Array<() => void> = [];
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'new-item'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: {
+        ownerDocument: {
+          getElementById(id: string): unknown;
+        };
+      };
+    };
+
+    expect(
+      menubarFocusElement(event, 'new-item', {
+        defer: true,
+        schedule(callback) {
+          scheduled.push(callback);
+        },
+      }),
+    ).toBe(true);
+    expect(deferredFocusCount).toBe(0);
+
+    scheduled.forEach((callback) => callback());
+    expect(deferredFocusCount).toBe(1);
+  });
+
   it('exports menubar helpers from package and primitives barrels', () => {
+    expect(exportedMenubarFocusElement).toBe(menubarFocusElement);
     expect(exportedMenubarGroupAttributes).toBe(menubarGroupAttributes);
     expect(exportedMenubarItemAttributes).toBe(menubarItemAttributes);
     expect(exportedMenubarItemClick).toBe(menubarItemClick);

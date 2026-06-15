@@ -128,6 +128,22 @@ export type MenubarPrimitiveAttributes = PrimitiveDataAttributes &
 
 export type MenubarItemEvent = Event;
 export type MenubarKeyboardEvent = Event & { readonly key: string };
+export type MenubarFocusEvent = Event & {
+  readonly currentTarget?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+  readonly target?: {
+    ownerDocument?: {
+      getElementById?: (id: string) => unknown;
+    };
+  } | null;
+};
+export interface MenubarFocusOptions {
+  defer?: boolean;
+  schedule?: (callback: () => void) => void;
+}
 
 export function menubarRootAttributes(
   options: MenubarRootAttributeOptions = {},
@@ -463,6 +479,28 @@ export function menubarKeyDown(
   }
 
   return undefined;
+}
+
+export function menubarFocusElement(
+  event: MenubarFocusEvent,
+  id: string | undefined,
+  options: MenubarFocusOptions = {},
+): boolean {
+  if (!id) return false;
+
+  const ownerDocument = event.currentTarget?.ownerDocument ?? event.target?.ownerDocument;
+  const target = ownerDocument?.getElementById?.(id);
+  if (typeof (target as { focus?: unknown } | undefined)?.focus !== 'function') return false;
+
+  const focus = () => {
+    (target as { focus(): void }).focus();
+  };
+  if (options.defer === true) {
+    (options.schedule ?? ((callback) => setTimeout(callback, 0)))(focus);
+  } else {
+    focus();
+  }
+  return true;
 }
 
 function menubarDataAttributes(state: MenubarState): PrimitiveDataAttributes {

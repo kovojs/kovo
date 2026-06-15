@@ -203,35 +203,48 @@ describe('compiled interactive gallery demos', () => {
 
       const menubar = evaluateClientModule('menubar-demo.client.js', { document });
       const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
-      clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(new Event('keydown'), {
+      const menubarMoveEvent = keyEvent('ArrowRight');
+      clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(menubarMoveEvent, {
         params: {},
         signal,
         state: menubarState,
       });
-      expect(element(document, 'gallery-menubar-file').tabIndex).toBe(-1);
-      expect(element(document, 'gallery-menubar-edit').tabIndex).toBe(0);
-      expect(selector(document, '[data-demo-state="menubar-active"]').textContent).toBe('edit');
+      expect(menubarMoveEvent.defaultPrevented).toBe(true);
+      expect(menubarState).toEqual({ activeValue: 'edit', openValue: '', value: 'new' });
+      expect(deriveRun(menubar, 'GalleryMenubarDemo$button_tabIndex_derive', menubarState)).toBe(
+        -1,
+      );
+      expect(deriveRun(menubar, 'GalleryMenubarDemo$button_tabIndex_derive_2', menubarState)).toBe(
+        0,
+      );
       clientHandler(menubar, 'GalleryMenubarDemo$button_click')(new Event('click'), {
         params: {},
         signal,
         state: menubarState,
       });
-      expect(element(document, 'gallery-menubar-file').attrs['aria-expanded']).toBe('true');
-      expect(element(document, 'gallery-menubar-file-menu').hidden).toBe(false);
-      expect(selector(document, '[data-demo-state="menubar-open"]').textContent).toBe('file');
-      const menubarKeyEvent = Object.assign(new Event('keydown', { cancelable: true }), {
-        key: 'Enter',
-      });
-      clientHandler(menubar, 'GalleryMenubarDemo$button_keydown')(menubarKeyEvent, {
+      expect(menubarState).toEqual({ activeValue: 'new', openValue: 'file', value: 'new' });
+      expect(
+        deriveRun(menubar, 'GalleryMenubarDemo$button_aria_expanded_derive', menubarState),
+      ).toBe('true');
+      expect(deriveRun(menubar, 'GalleryMenubarDemo$div_hidden_derive', menubarState)).toBeNull();
+      expect(deriveRun(menubar, 'GalleryMenubarDemo$output_text_derive', menubarState)).toBe(
+        'file',
+      );
+      const menubarKeyEvent = keyEvent('Escape');
+      clientHandler(menubar, 'GalleryMenubarDemo$button_keydown_2')(menubarKeyEvent, {
         params: {},
         signal,
         state: menubarState,
       });
       expect(menubarKeyEvent.defaultPrevented).toBe(true);
-      expect(element(document, 'gallery-menubar-file').attrs['aria-expanded']).toBe('false');
-      expect(element(document, 'gallery-menubar-file-menu').hidden).toBe(true);
-      expect(selector(document, '[data-demo-state="menubar-open"]').textContent).toBe('none');
-      expect(selector(document, '[data-demo-state="menubar-value"]').textContent).toBe('new');
+      expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
+      expect(
+        deriveRun(menubar, 'GalleryMenubarDemo$button_aria_expanded_derive', menubarState),
+      ).toBe('false');
+      expect(deriveRun(menubar, 'GalleryMenubarDemo$div_hidden_derive', menubarState)).toBe('');
+      expect(deriveRun(menubar, 'GalleryMenubarDemo$output_text_derive', menubarState)).toBe(
+        'none',
+      );
 
       const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js', { document });
       const navigationState = { activeValue: 'products', openValue: '', value: 'none' };

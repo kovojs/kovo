@@ -1201,18 +1201,42 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(menubarDemo.getAttribute('fw-state')).toBe(
-        '{"activeValue":"file","openValue":"file","value":"new"}',
+        '{"activeValue":"new","openValue":"file","value":"new"}',
       );
       expect(file.getAttribute('aria-expanded')).toBe('true');
       expect(fileMenu.hidden).toBe(false);
       expect(openOutput.textContent).toBe('file');
+      expect(newFile.getAttribute('data-highlighted')).toBe('');
+      expect(document.activeElement).toBe(newFile);
     });
 
     // SPEC §12.1: the menubar open state (expanded top-level item, visible nested
     // role="menu" with a disabled item) must stay axe-clean.
     await expectNoAxeViolations(menubarDemo);
 
-    newFile.focus();
+    await userEvent.keyboard('{Escape}');
+
+    await vi.waitFor(() => {
+      expect(menubarDemo.getAttribute('fw-state')).toBe(
+        '{"activeValue":"file","openValue":"","value":"new"}',
+      );
+      expect(file.getAttribute('aria-expanded')).toBe('false');
+      expect(fileMenu.hidden).toBe(true);
+      expect(openOutput.textContent).toBe('none');
+      expect(document.activeElement).toBe(file);
+    });
+
+    await userEvent.keyboard('{Enter}');
+
+    await vi.waitFor(() => {
+      expect(menubarDemo.getAttribute('fw-state')).toBe(
+        '{"activeValue":"new","openValue":"file","value":"new"}',
+      );
+      expect(file.getAttribute('aria-expanded')).toBe('true');
+      expect(fileMenu.hidden).toBe(false);
+      expect(document.activeElement).toBe(newFile);
+    });
+
     await userEvent.keyboard('{Space}');
 
     await vi.waitFor(() => {

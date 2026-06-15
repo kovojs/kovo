@@ -520,27 +520,43 @@ describe('compiled interactive gallery demos', () => {
     expect(hoverCardState).toEqual({ open: false });
 
     const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
-    clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(new Event('keydown'), {
+    const menubarMoveEvent = keyEvent('ArrowRight');
+    clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(menubarMoveEvent, {
       params: {},
       signal,
       state: menubarState,
     });
+    expect(menubarMoveEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'edit', openValue: '', value: 'new' });
     clientHandler(menubar, 'GalleryMenubarDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: menubarState,
     });
-    expect(menubarState).toEqual({ activeValue: 'file', openValue: 'file', value: 'new' });
-    const menubarKeyboardEvent = Object.assign(new Event('keydown', { cancelable: true }), {
-      key: ' ',
-    });
-    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown')(menubarKeyboardEvent, {
+    expect(menubarState).toEqual({ activeValue: 'new', openValue: 'file', value: 'new' });
+    const menubarEscapeEvent = keyEvent('Escape');
+    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown_2')(menubarEscapeEvent, {
       params: {},
       signal,
       state: menubarState,
     });
-    expect(menubarKeyboardEvent.defaultPrevented).toBe(true);
+    expect(menubarEscapeEvent.defaultPrevented).toBe(true);
+    expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
+    const menubarKeyboardOpenEvent = keyEvent('Enter');
+    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown')(menubarKeyboardOpenEvent, {
+      params: {},
+      signal,
+      state: menubarState,
+    });
+    expect(menubarKeyboardOpenEvent.defaultPrevented).toBe(true);
+    expect(menubarState).toEqual({ activeValue: 'new', openValue: 'file', value: 'new' });
+    const menubarSelectEvent = keyEvent(' ');
+    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown_2')(menubarSelectEvent, {
+      params: {},
+      signal,
+      state: menubarState,
+    });
+    expect(menubarSelectEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
 
     const meterState = { dataState: 'suboptimum', value: 72 };

@@ -281,10 +281,32 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
     tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
     scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
-- [ ] **menubar** [P1]: section `onKeyDown` is a stub that ignores the key and hardcodes File→Edit;
+- [x] **menubar** [P1]: section `onKeyDown` is a stub that ignores the key and hardcodes File→Edit;
       Edit is fully inert (no handler); no ArrowLeft/Right roving, no ArrowDown-to-open, no Escape, no
       "switch open menu while arrowing the bar." Wire `menubarMove`/`menubarKeyDown`/`menubarItemKeyDown`
       across both menus.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/menubar.ts` now exports deferred
+    `menubarFocusElement`; primitive coverage verifies root/submenu movement, typeahead, submenu
+    trigger open, item selection, Escape close, delegated ownerDocument focus, deferred focus
+    scheduling, and barrel exports.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/menubar-demo.tsx` now calls
+    `_menubarKeyDown`, `_menubarMove`, `_menubarTypeahead`, `_menubarSubmenuTriggerClick`,
+    `_menubarItemKeyDown`, and `_menubarItemClick`, with state-bound `aria-expanded`, `data-open`,
+    `data-state`, `hidden`, `data-highlighted`, `tabIndex`, and outputs.
+  - Evidence 2026-06-15: generated `menubar-demo.client.js` mutates only `ctx.state`, imports the
+    menubar reducers/focus helper, and
+    `rg "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored
+    and generated menubar files found no matches.
+  - Evidence 2026-06-15: passed `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/menubar.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest run
+    src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts
+    src/interactive-gallery.aria-contracts.test.ts`; `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t
+    "menubar"`; `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts
+    --run src/interactive-gallery.axe.browser.test.ts -t "generated interactive"`;
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec
+    tsc --noEmit`; `pnpm --filter @jiso/example-gallery exec node
+    scripts/emit-interactive-gallery.mjs --check`; `git diff --check`.
 - [ ] **navigation-menu** [P1]: no hover-open (signature interaction); ArrowRight is one-way
       Products→Docs with no ArrowLeft/loop; **Escape is actively wrong** — it sets
       `value='escape-canceled'` and leaves the panel open. Wire `navigationMenuMove`,
