@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (10 / 32 findings closed)
+**Status:** open (11 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -160,8 +160,16 @@ src/state-events.test.ts src/scan/parse.test.ts`, `pnpm --filter @jiso/compiler 
 src/state-events.test.ts src/query-bindings.test.ts src/registry.test.ts`, `pnpm --filter
 @jiso/compiler exec tsc --noEmit`, and `pnpm exec vp check --fix` passed.
 
-- [ ] **FW221: scope IDREF resolution per component, not the module-wide flat id set** — `packages/compiler/src/validate/markup.ts:32` (SPEC §4.5). Resolve ids within each component's render-body span (iterate `model.components`) instead of over module-wide `model.jsxElements`. Requires tagging each `JsxElementModel` with its owning component (parser) or partitioning by render-body span.
+- [x] **FW221: scope IDREF resolution per component, not the module-wide flat id set** — `packages/compiler/src/validate/markup.ts:32` (SPEC §4.5). Resolve ids within each component's render-body span (iterate `model.components`) instead of over module-wide `model.jsxElements`. Requires tagging each `JsxElementModel` with its owning component (parser) or partitioning by render-body span.
   - Done = component A's `popovertarget="x"` is **not** satisfied by component B's `id="x"`. Prove: `pnpm test id-content-model`
+  - Evidence 2026-06-15: `packages/compiler/src/validate/markup.ts` now partitions JSX elements by
+    each component render host and validates FW221 IDREFs against literal ids in that component
+    scope instead of one module-wide id set.
+  - Evidence 2026-06-15: `packages/compiler/src/id-content-model.test.ts` covers an IDREF in one
+    component that is only satisfied by another component's `id`, producing FW221.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
+src/id-content-model.test.ts src/platform-lowering.test.ts`, `pnpm --filter @jiso/compiler exec
+tsc --noEmit`, and `pnpm exec vp check --fix` passed.
 
 ---
 

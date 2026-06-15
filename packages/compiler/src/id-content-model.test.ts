@@ -50,6 +50,32 @@ export const PricingLink = component('pricing-link', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('reports FW221 when an IDREF is only satisfied by another component', () => {
+    const result = compileComponentModule({
+      fileName: 'search-controls.tsx',
+      source: `
+export const SearchLabel = component('search-label', {
+  render: () => <label for="shared-search">Search</label>,
+});
+
+export const SearchInput = component('search-input', {
+  render: () => <input id="shared-search" />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW221',
+        fileName: 'search-controls.tsx',
+        length: 19,
+        message: 'IDREF references an id not present in component scope. shared-search',
+        severity: 'error',
+        start: { column: 24, line: 3 },
+      },
+    ]);
+  });
+
   it('reports FW221 for package-prefixed behavior IDREFs that miss component scope ids', () => {
     const result = compileComponentModule({
       fileName: 'pricing-link.tsx',

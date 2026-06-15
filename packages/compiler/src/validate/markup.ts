@@ -35,19 +35,10 @@ export function validateIdrefs(
   fileName: string,
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
 ): CompilerDiagnostic[] {
-  const ids = new Set(literalIdValues(model).map((id) => id.value));
-  if (ids.size === 0) {
-    return idrefValues(model, packageComponentPrefixes).map((value) =>
-      fw221Diagnostic(fileName, source, value),
-    );
-  }
-
-  const missing = idrefValues(model, packageComponentPrefixes).filter(
-    (value) => !ids.has(value.value),
+  const diagnostics = componentElementScopes(model).flatMap((elements) =>
+    validateIdrefsInElementScope(source, fileName, elements, packageComponentPrefixes),
   );
-  return dedupeBy(missing, (value) => value.value).map((value) =>
-    fw221Diagnostic(fileName, source, value),
-  );
+  return dedupeBy(diagnostics, diagnosticKey);
 }
 
 export function validateStaticIds(
@@ -245,7 +236,14 @@ export function validateAttributeMergeConflicts(
 }
 
 function literalIdValues(model: ComponentModuleModel, offset = 0): LiteralIdValue[] {
-  return jsxAttributes(model).flatMap((attribute) =>
+  return literalIdValuesForElements(jsxElements(model), offset);
+}
+
+function literalIdValuesForElements(
+  elements: readonly JsxElementModel[],
+  offset = 0,
+): LiteralIdValue[] {
+  return jsxAttributesForElements(elements).flatMap((attribute) =>
     attribute.name === 'id' && attribute.value
       ? [
           {
@@ -255,6 +253,21 @@ function literalIdValues(model: ComponentModuleModel, offset = 0): LiteralIdValu
           },
         ]
       : [],
+  );
+}
+
+function validateIdrefsInElementScope(
+  source: string,
+  fileName: string,
+  elements: readonly JsxElementModel[],
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
+): CompilerDiagnostic[] {
+  const ids = new Set(literalIdValuesForElements(elements).map((id) => id.value));
+  const values = idrefValuesForElements(elements, packageComponentPrefixes);
+  const missing = ids.size === 0 ? values : values.filter((value) => !ids.has(value.value));
+
+  return dedupeBy(missing, (value) => `${value.index}\0${value.value}`).map((value) =>
+    fw221Diagnostic(fileName, source, value),
   );
 }
 
@@ -358,8 +371,8 @@ function fw221Diagnostic(fileName: string, source: string, value: IdrefValue): C
   };
 }
 
-function idrefValues(
-  model: ComponentModuleModel,
+function idrefValuesForElements(
+  elements: readonly JsxElementModel[],
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
 ): IdrefValue[] {
   const values: IdrefValue[] = [];
@@ -376,7 +389,7 @@ function idrefValues(
   ]);
   const packageIdrefAttributes = packageBehaviorIdrefAttributeNames(packageComponentPrefixes);
 
-  for (const attribute of jsxAttributes(model)) {
+  for (const attribute of jsxAttributesForElements(elements)) {
     if (!idrefAttributes.has(attribute.name) && !packageIdrefAttributes.has(attribute.name)) {
       continue;
     }
@@ -408,6 +421,24 @@ function idrefValues(
   return values;
 }
 
+function componentElementScopes(model: ComponentModuleModel): JsxElementModel[][] {
+  const elements = jsxElements(model);
+  const scopes = model.components.flatMap((component) => {
+    const host = component.renderHost
+      ? elements.find(
+          (element) =>
+            element.start === component.renderHost?.start &&
+            element.openingEnd === component.renderHost.end,
+        )
+      : undefined;
+    return host
+      ? [elements.filter((element) => element.start >= host.start && element.end <= host.end)]
+      : [];
+  });
+
+  return scopes.length > 0 ? scopes : [elements];
+}
+
 function packageBehaviorIdrefAttributeNames(
   facts: readonly PackageComponentPrefixFact[] | undefined,
 ): Set<string> {
@@ -427,7 +458,11 @@ function packageBehaviorIdrefAttributeNames(
 }
 
 function jsxAttributes(model: ComponentModuleModel): JsxAttributeModel[] {
-  return jsxElements(model).flatMap((element) => [...element.attributes]);
+  return jsxAttributesForElements(jsxElements(model));
+}
+
+function jsxAttributesForElements(elements: readonly JsxElementModel[]): JsxAttributeModel[] {
+  return elements.flatMap((element) => [...element.attributes]);
 }
 
 function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
