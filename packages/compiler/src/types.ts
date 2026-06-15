@@ -90,6 +90,7 @@ export interface HandlerLowering {
   attributeStart: number;
   attributeValue: string;
   arrowBody?: HandlerArrowBody;
+  clientConstants?: readonly ClientConstantDependency[];
   clientImports?: readonly ClientImportDependency[];
   expression: string;
   // SPEC §5.2: typed fact (threaded from the parser) marking a bare-named-reference handler such as
@@ -105,6 +106,11 @@ export interface ClientImportDependency {
   importedName: string;
   localName: string;
   moduleSpecifier: string;
+}
+
+export interface ClientConstantDependency {
+  name: string;
+  source: string;
 }
 
 export interface HandlerArrowBody {

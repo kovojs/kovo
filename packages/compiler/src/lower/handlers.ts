@@ -2,9 +2,11 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
+  componentRenderInputs,
   jsxElements,
   type ComponentModuleModel,
   type IdentifierReferenceModel,
+  type ModuleScopeBindingModel,
   type NamedImportModel,
   type PropertyAccessPathModel,
   type ZeroArgArrowModel,
@@ -12,6 +14,7 @@ import {
 import { replaceExtension } from '../shared.js';
 import type {
   ClientImportDependency,
+  ClientConstantDependency,
   CompileComponentOptions,
   ElementParam,
   ElementParamType,
@@ -41,6 +44,7 @@ export function lowerEventHandlers(
       : extractElementParams(
           eventAttribute.zeroArgArrow,
           eventAttribute.expressionPropertyAccesses,
+          new Set(componentRenderInputs(model)),
         );
     const exportName = namedHandler
       ? `${componentName}$${expression}`
@@ -53,11 +57,7 @@ export function lowerEventHandlers(
       );
     }
 
-    if (
-      capturesUnserializableReferences(
-        eventAttribute.zeroArgArrow?.references ?? eventAttribute.expressionReferences ?? [],
-      )
-    ) {
+    if (capturesUnserializableReferences(eventAttributeReferences(eventAttribute), model, params)) {
       diagnostics.push(
         fw201Diagnostic(options.fileName, options.source, attributeStart, {
           attributeName: `on:${eventName}`,
@@ -93,6 +93,10 @@ export function lowerEventHandlers(
             },
           }
         : {}),
+      ...clientConstantDependencies(
+        model.moduleScopeBindings,
+        handlerReferenceNames(eventAttribute),
+      ),
       ...clientImportDependencies(model.namedImports, handlerReferenceNames(eventAttribute)),
       ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
@@ -157,6 +161,13 @@ export function clientModuleVersion(source: string): string {
   return hash.toString(16).padStart(8, '0');
 }
 
+function eventAttributeReferences(eventAttribute: {
+  expressionReferences?: readonly string[];
+  zeroArgArrow?: ZeroArgArrowModel;
+}): readonly string[] {
+  return eventAttribute.zeroArgArrow?.references ?? eventAttribute.expressionReferences ?? [];
+}
+
 function handlerReferenceNames(eventAttribute: {
   expressionReferences?: readonly string[];
   expressionIsBareIdentifier?: boolean;
@@ -180,6 +191,20 @@ function clientImportDependencies(
   const clientImports = namedImports.filter((item) => references.has(item.localName));
 
   return clientImports.length > 0 ? { clientImports } : {};
+}
+
+function clientConstantDependencies(
+  moduleScopeBindings: readonly ModuleScopeBindingModel[],
+  references: ReadonlySet<string>,
+): { clientConstants: readonly ClientConstantDependency[] } | {} {
+  const clientConstants = moduleScopeBindings
+    .filter((item) => references.has(item.name))
+    .map((item) => ({
+      name: item.name,
+      source: item.source,
+    }));
+
+  return clientConstants.length > 0 ? { clientConstants } : {};
 }
 
 function eventAttributes(model: ComponentModuleModel): Array<{
@@ -250,11 +275,33 @@ function uniqueAnonymousHandlerName(
   return count === 1 ? base : `${base}_${count}`;
 }
 
-export function capturesUnserializableReferences(references: readonly string[]): boolean {
-  const referenceSet = new Set(references);
-  return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
-    referenceSet.has(name),
-  );
+export function capturesUnserializableReferences(
+  references: readonly string[],
+  model?: ComponentModuleModel,
+  params: readonly ElementParam[] = [],
+): boolean {
+  if (!model) {
+    const referenceSet = new Set(references);
+    return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
+      referenceSet.has(name),
+    );
+  }
+
+  const allowed = new Set([
+    'ctx',
+    'event',
+    'state',
+    ...params.flatMap((param) => referenceRootsForElementParam(param)),
+    ...(model?.namedImports.map((item) => item.localName) ?? []),
+    ...(model?.moduleScopeBindings.map((item) => item.name) ?? []),
+  ]);
+
+  return references.some((name) => !allowed.has(name));
+}
+
+function referenceRootsForElementParam(param: ElementParam): string[] {
+  const [root] = param.expression.split('.');
+  return root ? [root] : [];
 }
 
 interface ElementParamCandidate {
@@ -292,6 +339,7 @@ function fw201Diagnostic(
 function extractElementParams(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
+  eligibleBareReferenceNames: ReadonlySet<string> = new Set(),
 ): ElementParam[] {
   const callArgumentKinds = zeroArgArrow?.callArgumentKinds;
   const localNames = new Set(zeroArgArrow?.bodyLocalNames ?? []);
@@ -316,12 +364,17 @@ function extractElementParams(
           const reference = simpleCallArgumentReference(
             zeroArgArrow?.callArgumentReferences?.[index] ?? [],
           );
-          return reference ? [{ expression: reference, terminalName: reference }] : [];
+          return reference && eligibleBareReferenceNames.has(reference)
+            ? [{ expression: reference, terminalName: reference }]
+            : [];
         }
 
         return [];
       })
-    : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, localNames);
+    : [
+        ...serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, localNames),
+        ...serializableBareReferences(zeroArgArrow, eligibleBareReferenceNames, localNames),
+      ];
 
   return dedupeElementParamCandidates(candidates).map((candidate) => ({
     attributeName: elementParamAttributeNameFromPropertyName(candidate.terminalName),
@@ -374,6 +427,22 @@ function serializableMemberExpressions(
     .map(elementParamCandidateFromAccess);
 }
 
+function serializableBareReferences(
+  zeroArgArrow: ZeroArgArrowModel | undefined,
+  eligibleBareReferenceNames: ReadonlySet<string>,
+  localNames: ReadonlySet<string>,
+): ElementParamCandidate[] {
+  return (zeroArgArrow?.bodyReferences ?? [])
+    .filter(
+      (reference) =>
+        eligibleBareReferenceNames.has(reference.name) && !localNames.has(reference.name),
+    )
+    .map((reference) => ({
+      expression: reference.name,
+      terminalName: reference.name,
+    }));
+}
+
 function serializableMemberExpression(
   member: string,
   localNames: ReadonlySet<string> = new Set(),
@@ -383,6 +452,7 @@ function serializableMemberExpression(
     (root === undefined || !localNames.has(root)) &&
     !member.startsWith('state.') &&
     !member.startsWith('ctx.') &&
+    !member.startsWith('event.') &&
     !member.startsWith('document.') &&
     !member.startsWith('window.')
   );

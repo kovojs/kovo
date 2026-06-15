@@ -218,12 +218,19 @@ export interface NamedImportModel {
   moduleSpecifier: string;
 }
 
+export interface ModuleScopeBindingModel {
+  name: string;
+  source: string;
+  staticValue: StaticLiteralValue;
+}
+
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
   components: readonly ComponentModel[];
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
+  moduleScopeBindings: readonly ModuleScopeBindingModel[];
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];
   namedImports: readonly NamedImportModel[];
@@ -243,6 +250,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
+  const moduleScopeBindings: ModuleScopeBindingModel[] = [];
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
   const namedImports: NamedImportModel[] = [];
@@ -252,6 +260,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     const specifier = moduleSpecifierModel(node);
     if (specifier) moduleSpecifiers.push(specifier);
     namedImports.push(...namedImportModels(node));
+    moduleScopeBindings.push(...moduleScopeBindingModels(sourceFile, source, node));
 
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
       const model = componentModelFromInitializer(
@@ -295,6 +304,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     jsxComments: attachedJsxComments,
     jsxExpressions,
     jsxElements,
+    moduleScopeBindings,
     moduleSpecifiers,
     mutationHandlers,
     namedImports,
@@ -337,6 +347,32 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
     localName: element.name.text,
     moduleSpecifier,
   }));
+}
+
+function moduleScopeBindingModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  node: ts.Node,
+): ModuleScopeBindingModel[] {
+  if (!ts.isVariableStatement(node) || node.parent !== sourceFile) return [];
+
+  return node.declarationList.declarations.flatMap((declaration) => {
+    if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) return [];
+
+    const value = staticLiteralValue(declaration.initializer);
+    if (value === undefined) return [];
+
+    return [
+      {
+        name: declaration.name.text,
+        source: source.slice(
+          declaration.initializer.getStart(sourceFile),
+          declaration.initializer.getEnd(),
+        ),
+        staticValue: value,
+      },
+    ];
+  });
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {

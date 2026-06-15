@@ -105,6 +105,7 @@ export const DisclosureDemo = component('disclosure-demo', {
       fileName: 'cart-badge.tsx',
       source: `
 import { component } from '@jiso/core';
+import { removeItem } from './actions';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
@@ -125,7 +126,7 @@ export const CartBadge = component('cart-badge', {
         length: 5,
         message: fw210.message,
         severity: fw210.severity,
-        start: { column: 13, line: 8 },
+        start: { column: 13, line: 9 },
       },
     ]);
   });
@@ -155,9 +156,71 @@ export const CartBadge = component('cart-badge', {
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
     expect(fw201?.help).toContain(
-      'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
+      'Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.',
     );
     expect(fw201?.start).toEqual({ column: 9, line: 1 });
+  });
+
+  it('reports FW201 for globals outside the handler channels', () => {
+    for (const expression of ['fetch("/api/cart")', 'localStorage.getItem("cart")']) {
+      const result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `<button onClick={() => ${expression}}>x</button>`,
+      });
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
+    }
+  });
+
+  it('reports FW201 for captured outer locals that are not element params', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+import { track } from './analytics';
+
+export const CartBadge = component('cart-badge', {
+  render: () => {
+    const snapshot = readSnapshot();
+    return <button onClick={() => track(snapshot)}>Track</button>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
+  });
+
+  it('allows handler references through state, element params, named imports, and static module constants', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+import { track } from './analytics';
+
+const LABEL = 'cart';
+
+export const CartBadge = component('cart-badge', {
+  state: () => ({ count: 0 }),
+  render: ({ quantity }) => (
+    <button onClick={() => {
+      state.count += quantity;
+      track(LABEL, event.type, state.count);
+    }}>Track</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210']);
+    expect(serverSource).toContain('data-p-quantity="{quantity}"');
+    expect(clientSource).toContain('import { track } from "./analytics";');
+    expect(clientSource).toContain("const LABEL = 'cart';");
+    expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
+    expect(clientSource).toContain('track(LABEL, event.type, ctx.state.count);');
   });
 
   it('reports stable-name and serializability diagnostics for anonymous browser handlers', () => {

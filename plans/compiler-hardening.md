@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (0 / 32 findings closed)
+**Status:** open (1 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -12,9 +12,12 @@ Each checkbox is a closure-oriented slice (a module / runtime path / diagnostic 
 
 Self-contained, no cross-deps; do first.
 
-- [ ] **FW201: invert the unserializable-capture denylist to channel-membership** — `packages/compiler/src/lower/handlers.ts:225` (SPEC §4.3). Replace `capturesUnserializableReferences` (8-name denylist) with: for each free identifier in the closure, emit FW201 **unless** it is (1) `ctx`/`state`-rooted, (2) captured as a serializable `data-p-*` element param, or (3) a proven serializable module-scope binding. The parser already gives a clean free-identifier set (`references`, locals excluded at `parse.ts:1690`). Update the FW201 help text (`@jiso/core` diagnostics) to stop advertising the denylist.
+- [x] **FW201: invert the unserializable-capture denylist to channel-membership** — `packages/compiler/src/lower/handlers.ts:225` (SPEC §4.3). Replace `capturesUnserializableReferences` (8-name denylist) with: for each free identifier in the closure, emit FW201 **unless** it is (1) `ctx`/`state`-rooted, (2) captured as a serializable `data-p-*` element param, or (3) a proven serializable module-scope binding. The parser already gives a clean free-identifier set (`references`, locals excluded at `parse.ts:1690`). Update the FW201 help text (`@jiso/core` diagnostics) to stop advertising the denylist.
   - Done = FW201 fires for `fetch` / `localStorage` / a captured outer-closure local; passes for the legitimate channels. New negative fixtures added.
   - Prove: `pnpm test handler-lowering`
+  - Evidence 2026-06-15: `packages/compiler/src/scan/parse.ts` records typed static module-scope bindings, `packages/compiler/src/lower/handlers.ts` validates handler references against the explicit §4.3 channels, and `packages/compiler/src/emit/client.ts` emits referenced static constants into generated client modules.
+  - Evidence 2026-06-15: `packages/compiler/src/handler-lowering.test.ts` covers `fetch`, `localStorage`, captured outer locals, and allowed state/event/element-param/import/static-constant channels; `packages/core/src/diagnostics.ts` no longer advertises the old name denylist.
+  - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/handler-lowering.test.ts src/compile-component.test.ts src/scan/parse.test.ts src/fragment-targets.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm --filter @jiso/core exec vitest run src/diagnostics.test.ts` passed.
 
 - [ ] **Platform substitution: prove handler ≡ platform feature before dropping the handler** — `packages/compiler/src/lower/platform.ts:64` (SPEC §5.2 rule 4). Before returning any dialog/popover substitution, prove from typed model facts that (a) the host tag is a valid invoker host (`button`) and (b) the resolved target id refers to the required element kind (`<dialog>` for show-modal/close/request-close; a `popover`-bearing element for popover actions), resolved via the same component id registry FW221 uses — not the raw `getElementById` string. On failure return `null` (preserve the JS handler); optionally emit a teaching note (rule 5).
   - Done = non-`button` hosts, non-`<dialog>` show-modal targets, and popover actions aimed at non-popover elements keep their handler and emit no inert platform attribute.

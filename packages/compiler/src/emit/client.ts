@@ -2,6 +2,7 @@ import { compilerIrHeader } from '../ir.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import { elementParamNameFromAttribute } from '../types.js';
 import type {
+  ClientConstantDependency,
   ClientImportDependency,
   ElementParam,
   HandlerArrowBody,
@@ -34,6 +35,9 @@ export function emitClientModule(
   const dependencyImportLines = emitClientImportDependencies(
     handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
   );
+  const dependencyConstantLines = emitClientConstantDependencies(
+    handlers.flatMap((handler) => [...(handler.clientConstants ?? [])]),
+  );
   const handlerExports = handlers.length ? handlers.map(emitHandlerExport).join('\n') : '';
   const stateDeriveExports = stateDerives.map(emitStateDeriveExport).join('\n');
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
@@ -42,7 +46,7 @@ export function emitClientModule(
     .join('\n\n');
 
   return `${compilerIrHeader}
-${importLine}${dependencyImportLines}${exports || '// no client handlers emitted'}
+${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// no client handlers emitted'}
 `;
 }
 
@@ -73,6 +77,14 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
       return `import { ${specifiers} } from ${JSON.stringify(moduleSpecifier)};\n\n`;
     })
     .join('');
+}
+
+function emitClientConstantDependencies(constants: readonly ClientConstantDependency[]): string {
+  const lines = dedupeBy(constants, (entry) => `${entry.name}\0${entry.source}`)
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((entry) => `const ${entry.name} = ${entry.source};`);
+
+  return lines.length > 0 ? `${lines.join('\n')}\n\n` : '';
 }
 
 function emitStateDeriveExport(deriveFact: StateDeriveFact): string {

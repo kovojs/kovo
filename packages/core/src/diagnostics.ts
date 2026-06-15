@@ -107,7 +107,7 @@ export const diagnosticDefinitions = {
     },
     help: [
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
-      'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
+      'Handlers may reference only state/ctx/event, data-p-* element params, named imports, and statically serializable module constants.',
     ].join('\n'),
     severity: 'error',
     message: 'Closure captures unserializable value.',
