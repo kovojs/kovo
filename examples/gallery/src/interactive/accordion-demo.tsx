@@ -4,8 +4,10 @@ import {
   accordionContentAttributes,
   accordionHeaderAttributes,
   accordionItemAttributes,
+  accordionKeyDown as _accordionKeyDown,
   accordionRootAttributes,
   accordionTriggerAttributes,
+  accordionTriggerClick as _accordionTriggerClick,
 } from '@jiso/headless-ui/primitives';
 
 // Tailwind classes mirror the @jiso/ui styled layer (packages/ui/src/accordion.tsx)
@@ -19,18 +21,21 @@ const TRIGGER_CLASS =
 const CONTENT_CLASS = 'px-3 pb-3 pt-1 text-sm text-neutral-700 data-[state=closed]:hidden';
 
 export interface GalleryAccordionDemoState {
+  activeValue: string;
   value: string;
 }
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Jiso.
 export const GalleryAccordionDemo = component('gallery-accordion-demo', {
-  state: () => ({ value: 'shipping' }),
+  state: () => ({ activeValue: 'shipping', value: 'shipping' }),
   render: (_queries: Record<string, never>, state: GalleryAccordionDemoState) => {
     const rootState = {
+      activeValue: state.activeValue,
       collapsible: true,
+      items: [{ value: 'shipping' }, { value: 'billing' }],
       type: 'single' as const,
-      value: state.value,
+      value: state.value || undefined,
     };
     const shippingState = { ...rootState, itemValue: 'shipping' };
     const billingState = { ...rootState, itemValue: 'billing' };
@@ -40,8 +45,25 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
         {...accordionRootAttributes(rootState)}
         class="grid w-full gap-2 text-sm text-neutral-950"
         data-gallery-interactive="accordion"
+        onKeyDown={() => {
+          const result = _accordionKeyDown(Object(event), {
+            activeValue: state.activeValue,
+            items: [{ value: 'shipping' }, { value: 'billing' }],
+            type: 'single',
+            value: state.value || undefined,
+          });
+          if (!result?.value) return;
+          state.activeValue = result.value;
+          const root = Object(event)['target']?.closest?.('[data-gallery-interactive="accordion"]');
+          const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+          Object(next)['focus']?.call(next);
+        }}
       >
-        <section {...accordionItemAttributes(shippingState)} class={ITEM_CLASS}>
+        <section
+          {...accordionItemAttributes(shippingState)}
+          class={ITEM_CLASS}
+          data-state={state.value === 'shipping' ? 'open' : 'closed'}
+        >
           <h3 {...accordionHeaderAttributes({ ...shippingState, level: 3 })} class={HEADER_CLASS}>
             <button
               {...accordionTriggerAttributes({
@@ -49,42 +71,22 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
                 contentId: 'gallery-accordion-shipping-content',
                 triggerId: 'gallery-accordion-shipping-trigger',
               })}
+              aria-expanded={String(state.value === 'shipping')}
               class={TRIGGER_CLASS}
+              data-state={state.value === 'shipping' ? 'open' : 'closed'}
               onClick={() => {
-                state.value = state.value === 'shipping' ? '' : 'shipping';
-                const doc = Reflect['get'](globalThis, 'document');
-                const shippingTrigger = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-trigger')
-                  : undefined;
-                const billingTrigger = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-trigger')
-                  : undefined;
-                const shippingPanel = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-content')
-                  : undefined;
-                const billingPanel = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-content')
-                  : undefined;
-                const output = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="accordion-value"]')
-                  : undefined;
-
-                if (shippingTrigger)
-                  Object(shippingTrigger)['setAttribute']?.call(
-                    shippingTrigger,
-                    'aria-expanded',
-                    state.value === 'shipping' ? 'true' : 'false',
-                  );
-                if (billingTrigger)
-                  Object(billingTrigger)['setAttribute']?.call(
-                    billingTrigger,
-                    'aria-expanded',
-                    state.value === 'billing' ? 'true' : 'false',
-                  );
-                if (shippingPanel) shippingPanel['hidden'] = state.value !== 'shipping';
-                if (billingPanel) billingPanel['hidden'] = state.value !== 'billing';
-                if (output) output['textContent'] = state.value || 'none';
+                const result = _accordionTriggerClick(Object(event), {
+                  collapsible: true,
+                  itemValue: 'shipping',
+                  type: 'single',
+                  value: state.value || undefined,
+                });
+                if (!result) return;
+                state.activeValue = 'shipping';
+                state.value = result.value?.toString() ?? '';
               }}
+              tabIndex={state.activeValue === 'shipping' ? 0 : -1}
+              value="shipping"
             >
               Shipping
             </button>
@@ -96,11 +98,17 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
               triggerId: 'gallery-accordion-shipping-trigger',
             })}
             class={CONTENT_CLASS}
+            data-state={state.value === 'shipping' ? 'open' : 'closed'}
+            hidden={state.value !== 'shipping'}
           >
             Shipping windows are selected during checkout.
           </div>
         </section>
-        <section {...accordionItemAttributes(billingState)} class={ITEM_CLASS}>
+        <section
+          {...accordionItemAttributes(billingState)}
+          class={ITEM_CLASS}
+          data-state={state.value === 'billing' ? 'open' : 'closed'}
+        >
           <h3 {...accordionHeaderAttributes({ ...billingState, level: 3 })} class={HEADER_CLASS}>
             <button
               {...accordionTriggerAttributes({
@@ -108,42 +116,22 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
                 contentId: 'gallery-accordion-billing-content',
                 triggerId: 'gallery-accordion-billing-trigger',
               })}
+              aria-expanded={String(state.value === 'billing')}
               class={TRIGGER_CLASS}
+              data-state={state.value === 'billing' ? 'open' : 'closed'}
               onClick={() => {
-                state.value = state.value === 'billing' ? '' : 'billing';
-                const doc = Reflect['get'](globalThis, 'document');
-                const shippingTrigger = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-trigger')
-                  : undefined;
-                const billingTrigger = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-trigger')
-                  : undefined;
-                const shippingPanel = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-content')
-                  : undefined;
-                const billingPanel = doc
-                  ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-content')
-                  : undefined;
-                const output = doc
-                  ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="accordion-value"]')
-                  : undefined;
-
-                if (shippingTrigger)
-                  Object(shippingTrigger)['setAttribute']?.call(
-                    shippingTrigger,
-                    'aria-expanded',
-                    state.value === 'shipping' ? 'true' : 'false',
-                  );
-                if (billingTrigger)
-                  Object(billingTrigger)['setAttribute']?.call(
-                    billingTrigger,
-                    'aria-expanded',
-                    state.value === 'billing' ? 'true' : 'false',
-                  );
-                if (shippingPanel) shippingPanel['hidden'] = state.value !== 'shipping';
-                if (billingPanel) billingPanel['hidden'] = state.value !== 'billing';
-                if (output) output['textContent'] = state.value || 'none';
+                const result = _accordionTriggerClick(Object(event), {
+                  collapsible: true,
+                  itemValue: 'billing',
+                  type: 'single',
+                  value: state.value || undefined,
+                });
+                if (!result) return;
+                state.activeValue = 'billing';
+                state.value = result.value?.toString() ?? '';
               }}
+              tabIndex={state.activeValue === 'billing' ? 0 : -1}
+              value="billing"
             >
               Billing
             </button>
@@ -155,6 +143,8 @@ export const GalleryAccordionDemo = component('gallery-accordion-demo', {
               triggerId: 'gallery-accordion-billing-trigger',
             })}
             class={CONTENT_CLASS}
+            data-state={state.value === 'billing' ? 'open' : 'closed'}
+            hidden={state.value !== 'billing'}
           >
             Billing contacts receive invoice updates.
           </div>

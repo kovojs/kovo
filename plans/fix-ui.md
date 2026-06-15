@@ -426,11 +426,30 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts` and
     `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.interactions-b.browser.test.ts -t tabs` passed.
-- [ ] **accordion** [P1, needs primitive work]: no `onKeyDown` at all → no Arrow/Home/End roving between
+- [x] **accordion** [P1, needs primitive work]: no `onKeyDown` at all → no Arrow/Home/End roving between
       triggers; the primitive has **no** `accordionKeyDown`/roving-`tabindex` helper (unlike tabs). Add
       `accordionKeyDown` + roving `tabindex` to `accordion.ts` (mirror `tabsKeyDown`/`tabsMoveFocus`),
       then wire it. Click-toggle works but also stamp `data-state` (currently only `aria-expanded` +
       `hidden`, so `data-[state=open]` trigger styling goes stale).
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/accordion.ts` now exports
+    `accordionRovingIndex`, `accordionMoveFocus`, and `accordionKeyDown`, with
+    `accordionTriggerAttributes` stamping roving `tabIndex`; `accordion.test.ts` covers disabled-skip,
+    non-loop edge behavior, and Arrow/Home/End keyboard mapping.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/accordion-demo.tsx` routes root keydown
+    through `_accordionKeyDown`, trigger clicks through `_accordionTriggerClick`, and keeps
+    `aria-expanded`, `data-state`, roving `tabIndex`, panel `hidden`, and output text as state-bound
+    TSX. Regenerated server/client artifacts import the primitive reducers and emit the corresponding
+    state derives.
+  - Evidence 2026-06-15: `rg
+    "Reflect|getElementById|setAttribute|document|globalThis|ctx\\.params"` against the authored and
+    generated accordion files found no matches; `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/accordion.test.ts`, `pnpm --filter @jiso/headless-ui exec tsc --noEmit`, `pnpm
+    --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts
+    src/interactive-gallery.compile.test.ts`, `pnpm --filter @jiso/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts
+    -t accordion`, `pnpm --filter @jiso/example-gallery exec node
+    scripts/emit-interactive-gallery.mjs --check`, and `pnpm --filter @jiso/example-gallery exec tsc
+    --noEmit` passed.
 - [x] **collapsible** [P2]: native `<details>/<summary>` toggles fine, but `aria-expanded`/`data-state`
       on the summary never update (Phase-1 gap) and `data-[state=closed]:hidden` is dead on native
       `<details>`. Either sync `aria-expanded`/`data-state` from the native toggle, or move to the
@@ -564,7 +583,10 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
 
 These are framework changes the demo rewrites depend on (not just demo edits):
 
-- [ ] `accordion.ts`: add `accordionKeyDown` + roving-`tabindex` helper (parity with `tabs.ts`).
+- [x] `accordion.ts`: add `accordionKeyDown` + roving-`tabindex` helper (parity with `tabs.ts`).
+  - Evidence 2026-06-15: closed by the Phase 2 accordion slice above; verified by
+    `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/accordion.test.ts` and
+    `pnpm --filter @jiso/headless-ui exec tsc --noEmit`.
 - [ ] `hover-card.ts`: remove `aria-expanded`/`aria-controls` from the trigger (model divergence);
       update `hover-card.test.ts`.
 - [ ] `number-field.ts`: add `numberFieldKeyDown`, `largeStep`/`smallStep`; optional hold-repeat + `Intl`.

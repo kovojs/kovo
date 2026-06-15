@@ -5,6 +5,7 @@ import { readGenerated } from './interactive-gallery-harness.js';
 describe('compiled interactive gallery demos', () => {
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const accordion = readGenerated('accordion-demo.tsx');
+    const accordionClient = readGenerated('accordion-demo.client.js');
     const alertDialog = readGenerated('alert-dialog-demo.tsx');
     const autocomplete = readGenerated('autocomplete-demo.tsx');
     const toggle = readGenerated('toggle-demo.tsx');
@@ -42,8 +43,21 @@ describe('compiled interactive gallery demos', () => {
     const toast = readGenerated('toast-demo.tsx');
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
-    expect(accordion).toContain('fw-state=\'{"value":"shipping"}\'');
+    expect(accordion).toContain('fw-state=\'{"activeValue":"shipping","value":"shipping"}\'');
     expect(accordion).toContain('accordionTriggerAttributes({');
+    expect(accordion).toContain('accordionKeyDown as _accordionKeyDown');
+    expect(accordion).toContain('accordionTriggerClick as _accordionTriggerClick');
+    expect(accordion).toContain('data-bind:aria-expanded=');
+    expect(accordion).toContain('data-bind:tabIndex=');
+    expect(accordion).toContain('data-bind:hidden=');
+    expect(accordionClient).toContain('accordionKeyDown as _accordionKeyDown');
+    expect(accordionClient).toContain('accordionTriggerClick as _accordionTriggerClick');
+    expect(accordionClient).not.toMatch(
+      /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
+    );
+    expect(accordion).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAccordionDemo\$section_keydown"/,
+    );
     expect(accordion).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAccordionDemo\$button_click"/,
     );

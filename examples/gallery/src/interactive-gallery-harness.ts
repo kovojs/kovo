@@ -99,6 +99,8 @@ export function evaluateClientModule(
     exports,
     handler: (fn: ClientExports[string]) => fn,
     ...headlessPrimitives,
+    _accordionKeyDown: headlessPrimitives.accordionKeyDown,
+    _accordionTriggerClick: headlessPrimitives.accordionTriggerClick,
     _checkboxGroupItemClick: headlessPrimitives.checkboxGroupItemClick,
     _checkboxTriggerClick: headlessPrimitives.checkboxTriggerClick,
     _collapsibleTriggerClick: headlessPrimitives.collapsibleTriggerClick,

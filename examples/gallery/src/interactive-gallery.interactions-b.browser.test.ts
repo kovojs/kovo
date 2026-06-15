@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
+import { GalleryAccordionDemo } from './generated/interactive/accordion-demo.js';
 import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo.js';
 import { GalleryCommandDemo } from './generated/interactive/command-demo.js';
 import { GalleryContextMenuDemo } from './generated/interactive/context-menu-demo.js';
@@ -32,6 +33,106 @@ afterEach(() => {
 });
 
 describe('compiled interactive gallery demos in the browser', () => {
+  it('updates accordion roving tabindex and stamped panel state through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryAccordionDemo);
+    const shipping = required(
+      root.querySelector<HTMLButtonElement>('#gallery-accordion-shipping-trigger'),
+    );
+    const billing = required(
+      root.querySelector<HTMLButtonElement>('#gallery-accordion-billing-trigger'),
+    );
+    const shippingPanel = required(
+      root.querySelector<HTMLElement>('#gallery-accordion-shipping-content'),
+    );
+    const billingPanel = required(
+      root.querySelector<HTMLElement>('#gallery-accordion-billing-content'),
+    );
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
+
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"activeValue":"shipping","value":"shipping"}',
+    );
+    expect(root.getAttribute('data-orientation')).toBe('vertical');
+    expect(shipping.getAttribute('aria-expanded')).toBe('true');
+    expect(shipping.getAttribute('data-state')).toBe('open');
+    expect(shipping.tabIndex).toBe(0);
+    expect(shippingPanel.hidden).toBe(false);
+    expect(billing.getAttribute('aria-expanded')).toBe('false');
+    expect(billing.getAttribute('data-state')).toBe('closed');
+    expect(billing.tabIndex).toBe(-1);
+    expect(billingPanel.hidden).toBe(true);
+    expect(output.textContent).toBe('shipping');
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+
+    await vi.waitFor(() => {
+      const currentShipping = required(
+        root.querySelector<HTMLButtonElement>('#gallery-accordion-shipping-trigger'),
+      );
+      const currentBilling = required(
+        root.querySelector<HTMLButtonElement>('#gallery-accordion-billing-trigger'),
+      );
+      const currentShippingPanel = required(
+        root.querySelector<HTMLElement>('#gallery-accordion-shipping-content'),
+      );
+      const currentBillingPanel = required(
+        root.querySelector<HTMLElement>('#gallery-accordion-billing-content'),
+      );
+
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"activeValue":"billing","value":"shipping"}',
+      );
+      expect(currentShipping.getAttribute('aria-expanded')).toBe('true');
+      expect(currentShipping.tabIndex).toBe(-1);
+      expect(currentShippingPanel.hidden).toBe(false);
+      expect(currentBilling.getAttribute('aria-expanded')).toBe('false');
+      expect(currentBilling.tabIndex).toBe(0);
+      expect(currentBillingPanel.hidden).toBe(true);
+      expect(document.activeElement).toBe(currentBilling);
+    });
+
+    required(root.querySelector<HTMLButtonElement>('#gallery-accordion-billing-trigger')).click();
+
+    await vi.waitFor(() => {
+      const currentShipping = required(
+        root.querySelector<HTMLButtonElement>('#gallery-accordion-shipping-trigger'),
+      );
+      const currentBilling = required(
+        root.querySelector<HTMLButtonElement>('#gallery-accordion-billing-trigger'),
+      );
+      const currentShippingPanel = required(
+        root.querySelector<HTMLElement>('#gallery-accordion-shipping-content'),
+      );
+      const currentBillingPanel = required(
+        root.querySelector<HTMLElement>('#gallery-accordion-billing-content'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"activeValue":"billing","value":"billing"}',
+      );
+      expect(currentShipping.getAttribute('aria-expanded')).toBe('false');
+      expect(currentShipping.getAttribute('data-state')).toBe('closed');
+      expect(currentShippingPanel.hidden).toBe(true);
+      expect(currentBilling.getAttribute('aria-expanded')).toBe('true');
+      expect(currentBilling.getAttribute('data-state')).toBe('open');
+      expect(currentBillingPanel.hidden).toBe(false);
+      expect(currentOutput.textContent).toBe('billing');
+    });
+
+    // SPEC §12.1: the accordion roving and expanded state after keyboard movement and
+    // click activation must stay axe-clean.
+    await expectNoAxeViolations(root);
+  });
+
   it('updates collapsible stamped state while native details open state moves', async () => {
     const root = mountInteractiveDemo(GalleryCollapsibleDemo) as HTMLDetailsElement;
     const summary = required(root.querySelector<HTMLElement>('summary'));

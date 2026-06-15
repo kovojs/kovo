@@ -1,77 +1,83 @@
 // @jiso-ir
 import { derive, handler } from '@jiso/runtime';
 
-export const GalleryAccordionDemo$button_click = handler((_event, ctx) => {
-  ctx.state.value = ctx.state.value === 'shipping' ? '' : 'shipping';
-  const doc = Reflect['get'](globalThis, 'document');
-  const shippingTrigger = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-trigger')
-    : undefined;
-  const billingTrigger = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-trigger')
-    : undefined;
-  const shippingPanel = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-content')
-    : undefined;
-  const billingPanel = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="accordion-value"]')
-    : undefined;
+import {
+  accordionKeyDown as _accordionKeyDown,
+  accordionTriggerClick as _accordionTriggerClick,
+} from '@jiso/headless-ui/primitives';
 
-  if (shippingTrigger)
-    Object(shippingTrigger)['setAttribute']?.call(
-      shippingTrigger,
-      'aria-expanded',
-      ctx.state.value === 'shipping' ? 'true' : 'false',
-    );
-  if (billingTrigger)
-    Object(billingTrigger)['setAttribute']?.call(
-      billingTrigger,
-      'aria-expanded',
-      ctx.state.value === 'billing' ? 'true' : 'false',
-    );
-  if (shippingPanel) shippingPanel['hidden'] = ctx.state.value !== 'shipping';
-  if (billingPanel) billingPanel['hidden'] = ctx.state.value !== 'billing';
-  if (output) output['textContent'] = ctx.state.value || 'none';
+export const GalleryAccordionDemo$section_keydown = handler((event, ctx) => {
+  const result = _accordionKeyDown(Object(event), {
+    activeValue: ctx.state.activeValue,
+    items: [{ value: 'shipping' }, { value: 'billing' }],
+    type: 'single',
+    value: ctx.state.value || undefined,
+  });
+  if (!result?.value) return;
+  ctx.state.activeValue = result.value;
+  const root = Object(event)['target']?.closest?.('[data-gallery-interactive="accordion"]');
+  const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+  Object(next)['focus']?.call(next);
 });
-export const GalleryAccordionDemo$button_click_2 = handler((_event, ctx) => {
-  ctx.state.value = ctx.state.value === 'billing' ? '' : 'billing';
-  const doc = Reflect['get'](globalThis, 'document');
-  const shippingTrigger = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-trigger')
-    : undefined;
-  const billingTrigger = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-trigger')
-    : undefined;
-  const shippingPanel = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-shipping-content')
-    : undefined;
-  const billingPanel = doc
-    ? Object(doc)['getElementById']?.call(doc, 'gallery-accordion-billing-content')
-    : undefined;
-  const output = doc
-    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="accordion-value"]')
-    : undefined;
-
-  if (shippingTrigger)
-    Object(shippingTrigger)['setAttribute']?.call(
-      shippingTrigger,
-      'aria-expanded',
-      ctx.state.value === 'shipping' ? 'true' : 'false',
-    );
-  if (billingTrigger)
-    Object(billingTrigger)['setAttribute']?.call(
-      billingTrigger,
-      'aria-expanded',
-      ctx.state.value === 'billing' ? 'true' : 'false',
-    );
-  if (shippingPanel) shippingPanel['hidden'] = ctx.state.value !== 'shipping';
-  if (billingPanel) billingPanel['hidden'] = ctx.state.value !== 'billing';
-  if (output) output['textContent'] = ctx.state.value || 'none';
+export const GalleryAccordionDemo$button_click = handler((event, ctx) => {
+  const result = _accordionTriggerClick(Object(event), {
+    collapsible: true,
+    itemValue: 'shipping',
+    type: 'single',
+    value: ctx.state.value || undefined,
+  });
+  if (!result) return;
+  ctx.state.activeValue = 'shipping';
+  ctx.state.value = result.value?.toString() ?? '';
+});
+export const GalleryAccordionDemo$button_click_2 = handler((event, ctx) => {
+  const result = _accordionTriggerClick(Object(event), {
+    collapsible: true,
+    itemValue: 'billing',
+    type: 'single',
+    value: ctx.state.value || undefined,
+  });
+  if (!result) return;
+  ctx.state.activeValue = 'billing';
+  ctx.state.value = result.value?.toString() ?? '';
 });
 
+export const GalleryAccordionDemo$section_data_state_derive = derive(['state'], (state) =>
+  state.value === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$button_aria_expanded_derive = derive(['state'], (state) =>
+  String(state.value === 'shipping'),
+);
+export const GalleryAccordionDemo$button_data_state_derive = derive(['state'], (state) =>
+  state.value === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$button_tabIndex_derive = derive(['state'], (state) =>
+  state.activeValue === 'shipping' ? 0 : -1,
+);
+export const GalleryAccordionDemo$div_data_state_derive = derive(['state'], (state) =>
+  state.value === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$div_hidden_derive = derive(['state'], (state) =>
+  state.value !== 'shipping' ? '' : null,
+);
+export const GalleryAccordionDemo$section_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'billing' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$button_aria_expanded_derive_2 = derive(['state'], (state) =>
+  String(state.value === 'billing'),
+);
+export const GalleryAccordionDemo$button_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'billing' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
+  state.activeValue === 'billing' ? 0 : -1,
+);
+export const GalleryAccordionDemo$div_data_state_derive_2 = derive(['state'], (state) =>
+  state.value === 'billing' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$div_hidden_derive_2 = derive(['state'], (state) =>
+  state.value !== 'billing' ? '' : null,
+);
 export const GalleryAccordionDemo$output_text_derive = derive(
   ['state'],
   (state) => state.value || 'none',

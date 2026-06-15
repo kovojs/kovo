@@ -44,13 +44,34 @@ describe('compiled interactive gallery demos', () => {
     const toast = evaluateClientModule('toast-demo.client.js');
     const signal = new AbortController().signal;
 
-    const accordionState = { value: 'shipping' };
+    const accordionState = { activeValue: 'shipping', value: 'shipping' };
+    const billingTrigger = {
+      focusCalls: 0,
+      focus() {
+        this.focusCalls += 1;
+      },
+    };
+    const accordionRoot = {
+      querySelector: (selector: string) =>
+        selector === '[value="billing"]' ? billingTrigger : undefined,
+    };
+    const accordionKeyEvent = keyEvent('ArrowDown');
+    Object.defineProperty(accordionKeyEvent, 'target', {
+      value: { closest: () => accordionRoot },
+    });
+    clientHandler(accordion, 'GalleryAccordionDemo$section_keydown')(accordionKeyEvent, {
+      params: {},
+      signal,
+      state: accordionState,
+    });
+    expect(accordionState).toEqual({ activeValue: 'billing', value: 'shipping' });
+    expect(billingTrigger.focusCalls).toBe(1);
     clientHandler(accordion, 'GalleryAccordionDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
       state: accordionState,
     });
-    expect(accordionState).toEqual({ value: 'billing' });
+    expect(accordionState).toEqual({ activeValue: 'billing', value: 'billing' });
 
     const alertDialogState = { open: false };
     clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click')(new Event('click'), {

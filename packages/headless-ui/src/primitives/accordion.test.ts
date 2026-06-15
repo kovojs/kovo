@@ -4,8 +4,11 @@ import {
   accordionContentAttributes,
   accordionHeaderAttributes,
   accordionItemAttributes,
+  accordionKeyDown,
   accordionItemOpen,
+  accordionMoveFocus,
   accordionRootAttributes,
+  accordionRovingIndex,
   accordionTriggerAttributes,
   accordionTriggerClick,
   setAccordionValue,
@@ -48,6 +51,7 @@ describe('headless-ui accordion primitive', () => {
       'data-state': 'open',
       disabled: false,
       id: 'shipping-trigger',
+      tabIndex: 0,
       type: 'button',
     });
 
@@ -72,6 +76,29 @@ describe('headless-ui accordion primitive', () => {
     expect(accordionItemOpen({ itemValue: 'two', type: 'multiple', value: ['one', 'two'] })).toBe(
       true,
     );
+  });
+
+  it('computes roving focus across enabled accordion triggers', () => {
+    const items = [{ value: 'shipping' }, { disabled: true, value: 'tax' }, { value: 'billing' }];
+
+    expect(accordionRovingIndex({ items, value: 'shipping' })).toBe(0);
+    expect(accordionRovingIndex({ activeValue: 'billing', items, value: 'shipping' })).toBe(2);
+    expect(accordionMoveFocus({ items, value: 'shipping' }, 'next')).toEqual({
+      index: 2,
+      value: 'billing',
+    });
+    expect(accordionMoveFocus({ activeValue: 'billing', items, loop: false }, 'next')).toEqual({
+      index: 2,
+      value: 'billing',
+    });
+    expect(
+      accordionTriggerAttributes({
+        activeValue: 'billing',
+        itemValue: 'shipping',
+        items,
+        value: 'shipping',
+      }),
+    ).toMatchObject({ tabIndex: -1 });
   });
 
   it('dispatches a cancelable value change detail before committing state', () => {
@@ -207,5 +234,17 @@ describe('headless-ui accordion primitive', () => {
     expect(canceledResult).toMatchObject({ changed: false, value: 'one' });
     expect(canceledResult?.detail?.defaultPrevented).toBe(true);
     expect(canceledEvent.defaultPrevented).toBe(true);
+  });
+
+  it('maps keyboard navigation to roving focus movement', () => {
+    const event = Object.assign(new Event('keydown', { cancelable: true }), { key: 'End' });
+    const result = accordionKeyDown(event, {
+      items: [{ value: 'shipping' }, { disabled: true, value: 'tax' }, { value: 'billing' }],
+      value: 'shipping',
+    });
+
+    expect(result).toEqual({ index: 2, value: 'billing' });
+    expect(event.defaultPrevented).toBe(true);
+    expect(accordionKeyDown(Object.assign(new Event('keydown'), { key: 'Enter' }), {})).toBeUndefined();
   });
 });
