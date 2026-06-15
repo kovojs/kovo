@@ -1,6 +1,6 @@
 # Compiler & Framework Hardening — Execution Plan
 
-**Status:** open (20 / 32 findings closed)
+**Status:** open (21 / 32 findings closed)
 **Findings source:** [`plans/compiler-improvements.md`](./compiler-improvements.md) — the audit holds the per-hack what/why/fix and the exact `file:line` evidence. This file is the compact execution ledger: one checkbox per coherent fix slice, sequenced by leverage.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -268,7 +268,9 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
 - [x] **`<Link>` lowering: self-closing + dynamic-target** — `packages/compiler/src/lower/navigation.ts:13` (SPEC §6.4). Remove the `!selfClosing` filter; route static-`to` Links through FW220; lower non-static `to` to a resolved `<a href>` or diagnose. Prove: `pnpm test navigation-lowering`
   - Evidence 2026-06-15: `packages/compiler/src/lower/navigation.ts` now visits self-closing `Link` elements, lowers static string/expression targets to literal native anchors, and lowers dynamic `to={...}` to `href={...}` on `<a>`; `packages/compiler/src/navigation-lowering.test.ts` covers self-closing static links and dynamic `to={target}` links through full component compilation and fixpoint checks.
   - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/navigation-lowering.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
-- [ ] **JSX comment→attribute attachment: structural, not char-class gap** — `packages/compiler/src/scan/parse.ts:1503` (SPEC §5.2 rule 8). Associate a justification comment with the opening element it directly precedes via the ts tree, not `isAttachedJsxCommentGap`'s permissive regex. Prove: `pnpm test execution-triggers scan/parse`
+- [x] **JSX comment→attribute attachment: structural, not char-class gap** — `packages/compiler/src/scan/parse.ts:1503` (SPEC §5.2 rule 8). Associate a justification comment with the opening element it directly precedes via the ts tree, not `isAttachedJsxCommentGap`'s permissive regex. Prove: `pnpm test execution-triggers scan/parse`
+  - Evidence 2026-06-15: `packages/compiler/src/scan/parse.ts` now derives `attachedAttributeStart` from the JSX parent/child tree instead of scanning the raw gap; `packages/compiler/src/scan/parse.test.ts` and `packages/compiler/src/execution-triggers.test.ts` cover a FW211 comment inside a preceding `<p>` and prove it no longer attaches to the following `on:load`.
+  - Verified 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/scan/parse.test.ts src/execution-triggers.test.ts`; `pnpm --filter @jiso/compiler exec tsc --noEmit`; `pnpm exec vp check`.
 - [ ] **Remove dead snippet-reparse exports; FW311 help text; FW224 message scope; FW232 placement; primitive-handler-lint default-on** — bundle the remaining audit lows (`scan/parse.ts:462`, `core/diagnostics.ts` FW311, `markup.ts` FW224/FW232, `headless-ui/.../primitive-handler-lint.ts`). Each: tighten the rule or wording to match SPEC; add the asserting test. Prove: `pnpm test` + `pnpm run check:fw`
 
 ---

@@ -297,12 +297,10 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   visit(sourceFile);
 
-  const attachedJsxComments = attachJsxCommentsToAttributes(source, jsxComments, jsxElements);
-
   return {
     calls,
     components,
-    jsxComments: attachedJsxComments,
+    jsxComments,
     jsxExpressions,
     jsxElements,
     moduleScopeBindings,
@@ -1598,6 +1596,7 @@ function jsxCommentModel(
   const justifiedDiagnostics = parseJustifiedDiagnostics(text);
 
   return {
+    ...directlyFollowingJsxElementAttributeStart(sourceFile, node),
     end,
     ...(justifiedDiagnostics.length === 0 ? {} : { justifiedDiagnostics }),
     start,
@@ -1611,31 +1610,30 @@ function parseJustifiedDiagnostics(commentText: string): string[] {
   return [...codes];
 }
 
-function attachJsxCommentsToAttributes(
-  source: string,
-  comments: readonly JsxCommentModel[],
-  elements: readonly JsxElementModel[],
-): JsxCommentModel[] {
-  const attributes = elements
-    .flatMap((element) => element.attributes)
-    .sort((left, right) => left.start - right.start);
+function directlyFollowingJsxElementAttributeStart(
+  sourceFile: ts.SourceFile,
+  node: ts.JsxExpression,
+): { attachedAttributeStart: number } | {} {
+  const parent = node.parent;
+  if (!ts.isJsxElement(parent)) return {};
 
-  return comments.map((comment) => {
-    const attribute = attributes.find(
-      (candidate) =>
-        candidate.start >= comment.end &&
-        isAttachedJsxCommentGap(source, comment.end, candidate.start),
-    );
-    return attribute ? { ...comment, attachedAttributeStart: attribute.start } : comment;
-  });
-}
+  const childIndex = parent.children.findIndex((child) => child === node);
+  if (childIndex === -1) return {};
 
-function isAttachedJsxCommentGap(
-  source: string,
-  commentEnd: number,
-  attributeStart: number,
-): boolean {
-  return /^[\s<>"'=/\w:.-]*$/.test(source.slice(commentEnd, attributeStart));
+  for (const sibling of parent.children.slice(childIndex + 1)) {
+    if (ts.isJsxText(sibling) && sibling.containsOnlyTriviaWhiteSpaces) continue;
+    if (ts.isJsxElement(sibling) || ts.isJsxSelfClosingElement(sibling)) {
+      const openingElement = ts.isJsxElement(sibling) ? sibling.openingElement : sibling;
+      const [attribute] = openingElement.attributes.properties;
+      return attribute && ts.isJsxAttribute(attribute)
+        ? { attachedAttributeStart: attribute.getStart(sourceFile) }
+        : {};
+    }
+
+    return {};
+  }
+
+  return {};
 }
 
 function jsxAttributeExpression(

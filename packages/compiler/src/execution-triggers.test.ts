@@ -126,4 +126,31 @@ export const ExecutionTriggers = component('execution-triggers', {
       },
     ]);
   });
+
+  it('does not attach FW211 justification from inside a preceding element', () => {
+    const result = compileComponentModule({
+      fileName: 'execution-triggers.tsx',
+      source: `
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <p>{/* FW211: paragraph text explains something else. */}</p>
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW211',
+        fileName: 'execution-triggers.tsx',
+        length: 7,
+        message: `${fw211.message} on:load`,
+        severity: fw211.severity,
+        start: { column: 21, line: 6 },
+      },
+    ]);
+  });
 });

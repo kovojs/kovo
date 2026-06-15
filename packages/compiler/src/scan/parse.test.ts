@@ -453,6 +453,23 @@ export const ExecutionTriggers = component('execution-triggers', {
     expect(comment?.attachedAttributeStart).toBe(source.indexOf('on:load'));
   });
 
+  it('does not attach JSX comments across element boundaries', () => {
+    const source = `
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <p>{/* FW211: this paragraph is not the eager trigger. */}</p>
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`;
+    const model = parseComponentModule('execution-triggers.tsx', source);
+    const [comment] = model.jsxComments;
+
+    expect(comment?.attachedAttributeStart).toBeUndefined();
+  });
+
   it('records handler property access boolean and number usage contexts', () => {
     const source = `
 export const CartActions = component('cart-actions', {
