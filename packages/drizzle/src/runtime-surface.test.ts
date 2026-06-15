@@ -69,7 +69,9 @@ describe('@jiso/drizzle runtime surface', () => {
     expect(staticSource).toContain("from 'ts-morph'");
     expect(staticSource).not.toContain('SOURCE_EXTRACTION_FILE_NAME');
     expect(staticSource).not.toContain('__jiso_source.ts');
-    expect(staticSource).toContain('createSourceFile(projectSourceFileName(file.fileName), file.source');
+    expect(staticSource).toContain(
+      'createSourceFile(projectSourceFileName(file.fileName), file.source',
+    );
     expect(staticSource).toContain('function projectSourceFileName(fileName: string): string');
     expect(compatibilityBarrelSource).not.toContain('ts-morph');
     expect(compatibilityBarrelSource).not.toContain('./static.js');

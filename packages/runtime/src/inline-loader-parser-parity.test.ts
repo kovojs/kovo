@@ -265,10 +265,7 @@ describe('inline loader parser parity', () => {
     ).toThrow('canonical wire parser helper closure exactly once; found 0');
     expect(() =>
       assertMinifiedInlineJisoLoaderInstallerWireParserParity(
-        minifiedInstaller.replace(
-          'function uh(value){',
-          'function uh(value){value=String(value);',
-        ),
+        minifiedInstaller.replace('function uh(value){', 'function uh(value){value=String(value);'),
       ),
     ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
   });

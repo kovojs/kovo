@@ -51,9 +51,9 @@ The keyed morph and template-stamp reconciler exist but no production seam const
     identity, focus, selection, keyed panel identity, keyed scroll, and updated label text survive the
     fragment replace.
   - Evidence 2026-06-15: `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm --filter
-    @jiso/runtime exec vitest run`, `pnpm --filter @jiso/runtime exec tsc --noEmit`, `pnpm run
-    test:browser`, `pnpm test`, `pnpm exec tsc --noEmit`, and `pnpm run check:fw` passed; `node
-    --experimental-strip-types -e` measurement of `jisoLoaderSource` reported 4095 gzip bytes,
+@jiso/runtime exec vitest run`, `pnpm --filter @jiso/runtime exec tsc --noEmit`, `pnpm run
+test:browser`, `pnpm test`, `pnpm exec tsc --noEmit`, and `pnpm run check:fw` passed; `node
+--experimental-strip-types -e` measurement of `jisoLoaderSource` reported 4095 gzip bytes,
     under the SPEC §4.4 budget.
 
 - [x] **Implement a DOM-backed keyed template-stamp reconciler** — `packages/runtime/src/query-bindings.ts:190` (the `isTemplateStampHost` guard) + `emit/client.ts` template-stamp plan (SPEC §4.8 step 3, §13.2). Invoke a real reconciler directly from `applyCompiledQueryUpdatePlan` (or at loader setup) instead of depending on a `reconcileTemplateStamp` method that only test fakes implement: index existing `[fw-key]` children, clone `<template fw-stamp>` for inserts, remove exits, reorder by key, run item-relative bindings — **reusing the same `fw-key` helper the morph uses** (§13.2 single keyed-identity contract). Keep the host-method interface only as an optional override seam.
@@ -255,14 +255,14 @@ Do before/alongside the broad refactors so subsequent changes are actually check
     `mismatchRejected: true`, and `ok: true` for the acceptance fixture.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/compile-component.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`, and `pnpm --filter fw exec tsc --noEmit` passed.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/compile-component.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/example-gallery
-    exec node scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter @jiso/example-commerce
-    exec node scripts/emit-components.mjs --check`, `node site/tutorial/run-steps.mjs --check`, and
+src/compile-component.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/example-gallery
+exec node scripts/emit-interactive-gallery.mjs --check`, `pnpm --filter @jiso/example-commerce
+exec node scripts/emit-components.mjs --check`, `node site/tutorial/run-steps.mjs --check`, and
     `pnpm --filter @jiso/example-commerce exec vitest run src/app.rendering.test.ts -t
-    "committed IR"` passed.
+"committed IR"` passed.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run src/compile-component.test.ts
-    src/stamps.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts
-    src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`,
+src/stamps.test.ts`, `pnpm --filter fw exec vitest run src/index.compile-mcp.test.ts
+src/index.fw-check.test.ts`, `pnpm --filter @jiso/compiler exec tsc --noEmit`,
     `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`,
     `pnpm exec vp run build`, `pnpm run check:fw`, and `pnpm test` passed.
 
@@ -293,10 +293,10 @@ The full merge-rules implementation currently lives only in `examples/gallery/sr
     (`jiso-context-menu`, `jiso-hover-card`, `jiso-tooltip`) and keep primitive-owned `data-*`
     precedence scoped to `data-state`, matching the proven gallery/compiler fixtures.
   - Evidence 2026-06-15: `pnpm --filter @jiso/compiler exec vitest run
-    src/attribute-merge.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec
-    tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run`, `pnpm --filter
-    @jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter @jiso/example-gallery exec vitest
-    --config vitest.browser.config.ts --run` passed.
+src/attribute-merge.test.ts src/handler-lowering.test.ts`, `pnpm --filter @jiso/compiler exec
+tsc --noEmit`, `pnpm --filter @jiso/example-gallery exec vitest run`, `pnpm --filter
+@jiso/example-gallery exec tsc --noEmit`, and `pnpm --filter @jiso/example-gallery exec vitest
+--config vitest.browser.config.ts --run` passed.
 
 ---
 
@@ -346,15 +346,15 @@ Independent; fan out opportunistically once higher-leverage slices integrate.
     same Drizzle dependency graph.
   - Evidence 2026-06-15: `pnpm test` passed (316 files / 2410 tests);
     `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts
-    packages/drizzle/src/index.query-loader-config.test.ts
-    packages/drizzle/src/index.query-loader-receivers.test.ts
-    packages/drizzle/src/index.serialization.test.ts
-    packages/drizzle/src/index.conditional-approximation.test.ts
-    packages/drizzle/src/index.write-callbacks-aliases.test.ts
-    packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/runtime-surface.test.ts`
+packages/drizzle/src/index.query-loader-config.test.ts
+packages/drizzle/src/index.query-loader-receivers.test.ts
+packages/drizzle/src/index.serialization.test.ts
+packages/drizzle/src/index.conditional-approximation.test.ts
+packages/drizzle/src/index.write-callbacks-aliases.test.ts
+packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/runtime-surface.test.ts`
     passed from the repo root; the same eight files passed with `pnpm --filter @jiso/drizzle exec
-    vitest run ...`; `pnpm --filter @jiso/drizzle exec tsc --noEmit`, `pnpm --filter fw exec tsc
-    --noEmit`, `pnpm --filter @jiso/test exec tsc --noEmit`, and `git diff --check` passed.
+vitest run ...`; `pnpm --filter @jiso/drizzle exec tsc --noEmit`, `pnpm --filter fw exec tsc
+--noEmit`, `pnpm --filter @jiso/test exec tsc --noEmit`, and `git diff --check` passed.
   - Evidence 2026-06-15: `pnpm exec vp run build`, `pnpm run check:fw`, and `pnpm test` passed
     after the Phase 6 render-equivalence differential landed, satisfying the requested closure
     gates for this low-risk bundle.

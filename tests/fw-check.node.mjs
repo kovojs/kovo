@@ -3486,14 +3486,10 @@ void test('Conformance suites are an explicit gate', async () => {
     /conformance task executes every discovered conformance package test/,
   );
 
-  await execFileAsync(
-    'pnpm',
-    ['--filter', '@jiso/drizzle', 'exec', 'vitest', 'run', 'src/index'],
-    {
-      cwd: new URL('..', import.meta.url),
-      maxBuffer: 1024 * 1024 * 10,
-    },
-  );
+  await execFileAsync('pnpm', ['--filter', '@jiso/drizzle', 'exec', 'vitest', 'run', 'src/index'], {
+    cwd: new URL('..', import.meta.url),
+    maxBuffer: 1024 * 1024 * 10,
+  });
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {

@@ -44,7 +44,9 @@ describe('inline loader response apply source', () => {
     expect(inlineResponseApplyReadableSource).toContain('function m(');
     expect(inlineResponseApplyReadableSource).toContain('function u(');
     expect(inlineResponseApplyReadableSource).not.toContain('function applyResponseFragment(');
-    expect(inlineResponseApplyReadableSource).not.toContain('function dispatchInlineMutationQueries(');
+    expect(inlineResponseApplyReadableSource).not.toContain(
+      'function dispatchInlineMutationQueries(',
+    );
     expect(inlineResponseApplyReadableSource).not.toContain('element.innerHTML = html');
     expect(inlineResponseApplyReadableSource).toContain(
       'return p(chunks.fragments, (target) => options.findFragmentTarget(target));',

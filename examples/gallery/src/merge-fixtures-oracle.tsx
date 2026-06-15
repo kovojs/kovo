@@ -619,9 +619,11 @@ export function mergeCompilerPrimitiveAttrs(
         return value === undefined ? [] : [[attribute.name, value]];
       }),
     ),
-    diagnostics: merge.diagnostics.map((diagnostic) =>
-      galleryMergeDiagnostic(diagnostic.code as MergeDiagnostic['code'], diagnostic.message),
-    ).sort((left, right) => order.indexOf(left.attr) - order.indexOf(right.attr)),
+    diagnostics: merge.diagnostics
+      .map((diagnostic) =>
+        galleryMergeDiagnostic(diagnostic.code as MergeDiagnostic['code'], diagnostic.message),
+      )
+      .sort((left, right) => order.indexOf(left.attr) - order.indexOf(right.attr)),
   };
 }
 
@@ -709,6 +711,9 @@ function fw231ConflictKind(attr: string): string {
   return 'IDREF';
 }
 
-function mergedAttributeOrder(primitive: AttributeRecord, author: AttributeRecord): readonly string[] {
+function mergedAttributeOrder(
+  primitive: AttributeRecord,
+  author: AttributeRecord,
+): readonly string[] {
   return [...new Set([...Object.keys(primitive), ...Object.keys(author)])];
 }
