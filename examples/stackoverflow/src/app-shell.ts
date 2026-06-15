@@ -71,9 +71,10 @@ export async function createSoStaticExportShell(): Promise<{ app: ReturnType<typ
       route('/', {
         meta: { description: 'Top developer questions and answers.', title: 'Questions · DevOverflow' },
         async page() {
+          const context = { db, request: { db } };
           const [{ items }, { score: totalVotes }] = await Promise.all([
-            questionList.load(undefined, { db }),
-            questionScore.load(undefined, { db }),
+            questionList.load(undefined, context),
+            questionScore.load(undefined, context),
           ]);
           return renderQuestionListPage({ questions: items, totalVotes });
         },

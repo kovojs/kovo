@@ -10,18 +10,83 @@ import { pathToFileURL } from 'node:url';
  * its absolute asset/handler refs under the iframe base so the docs site can
  * serve it from a subdirectory without colliding with the docs' own /assets and
  * /c namespaces.
+ *
+ * Manifest-driven: every example declares its dir, export bridge, and the source
+ * files to surface; build/render is one generic path (commerce, crm, so all run
+ * through it). `sources` show authored TSX next to the data/optimism story
+ * (queries, mutations, derived transforms) — never lowered IR / generated
+ * components (SPEC §5.2: hand-authored lowered IR is FW235; we display, not author).
  */
 
-const COMMERCE = {
-  appBase: '/examples/commerce/app/',
-  // Authored TSX the reader should see — never lowered IR / generated stamps
-  // (SPEC §5.2: hand-authored lowered IR is FW235; we display, not author).
-  sources: [
-    'src/components/product-grid.tsx',
-    'src/components/cart-badge.tsx',
-    'src/components/order-history.tsx',
-  ],
-};
+/** @typedef {{ name: string, title: string, blurb: string, dir: string,
+ *   exportModule: string, exportFn: string, appExportField: string,
+ *   sources: string[] }} ExampleManifest */
+
+/** @type {ExampleManifest[]} */
+export const EXAMPLES = [
+  {
+    name: 'commerce',
+    title: 'Commerce',
+    blurb:
+      'A full Jiso storefront — product grid, cart badge, and order history — running live next to the authored components, queries, and derived optimism that drive it.',
+    dir: 'examples/commerce',
+    exportModule: 'examples/commerce/scripts/export-static.mjs',
+    exportFn: 'exportCommerceStaticApp',
+    appExportField: 'commerce.client.js',
+    sources: [
+      'src/components/product-grid.tsx',
+      'src/components/cart-badge.tsx',
+      'src/components/order-history.tsx',
+      'src/queries.ts',
+      'src/generated/optimistic/cart-add.ts',
+    ],
+  },
+  {
+    name: 'crm',
+    title: 'CRM',
+    blurb:
+      'A multi-page sales CRM — pipeline dashboard, contact book, and per-deal detail — over a real Drizzle/PGlite database. The source tabs show the derived + hand-written optimism mix that powers create/move/close-deal.',
+    dir: 'examples/crm',
+    exportModule: 'examples/crm/scripts/export-static.mjs',
+    exportFn: 'exportCrmStaticApp',
+    appExportField: '',
+    sources: [
+      'src/components/pipeline.tsx',
+      'src/components/contacts.tsx',
+      'src/components/deal-detail.tsx',
+      'src/queries.ts',
+      'src/mutations.ts',
+      'src/generated/optimistic/create-deal.ts',
+    ],
+  },
+  {
+    name: 'stackoverflow',
+    title: 'Stack Overflow',
+    blurb:
+      'A multi-page Q&A site — ranked question list and per-question answers — over a real Drizzle/PGlite database. The source tabs show the fully compiler-derived optimism behind voting and posting answers.',
+    dir: 'examples/stackoverflow',
+    exportModule: 'examples/stackoverflow/scripts/export-static.mjs',
+    exportFn: 'exportSoStaticApp',
+    appExportField: '',
+    sources: [
+      'src/components/question-list.tsx',
+      'src/components/question-detail.tsx',
+      'src/queries.ts',
+      'src/mutations.ts',
+      'src/generated/optimistic/vote-up.ts',
+    ],
+  },
+];
+
+/** The docs-site base path the example's static export is served from. */
+export function exampleAppBase(name) {
+  return `/examples/${name}/app/`;
+}
+
+/** The docs-site page path for an example's two-pane embed. */
+export function examplePagePath(name) {
+  return `/examples/${name}/`;
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -31,14 +96,16 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
-/** Re-root the export's origin-absolute /assets and /c references (incl. the
- * inline loader's `on:*` handler refs like `/c/commerce.client.js#fn` and the
- * modulepreload href) under the iframe base. The loader itself is inlined and
- * resolves handlers relative to origin, so every such ref must carry the base
- * prefix once the export is served from a subdirectory. */
+/** Re-root every origin-absolute attribute value under the iframe base so the
+ * export runs from a subdirectory. This covers in-app navigation (`href="/"`,
+ * `href="/deals/d1"` — the multi-page links), assets (`/assets/…`), and any
+ * inline-loader handler refs / modulepreloads (`/c/foo.client.js#fn`). The match
+ * is `="/` not followed by another `/` (so protocol-relative `="//host"` and
+ * full `="https://…"` URLs are left alone). A `<base href>` can't do this — it
+ * only rewrites relative URLs, never root-absolute ones. */
 function rerootHtml(html, appBase) {
   const prefix = appBase.replace(/\/$/, '');
-  return html.replaceAll('="/assets/', `="${prefix}/assets/`).replaceAll('="/c/', `="${prefix}/c/`);
+  return html.replace(/="\/(?!\/)/g, `="${prefix}/`);
 }
 
 async function htmlFilesUnder(directory) {
@@ -52,40 +119,45 @@ async function htmlFilesUnder(directory) {
 }
 
 /**
- * Build the commerce static export straight into the docs `dist/` under
- * COMMERCE.appBase, then re-root its absolute refs so it runs from there.
- * Reuses examples/commerce/scripts/export-static.mjs (`vp run export`) as the
- * producer — the same bridge the example ships for standalone hosting.
+ * Build one example's static export straight into the docs `dist/` under its
+ * app base, then re-root its absolute refs so it runs from there. Reuses the
+ * example's own export bridge (`vp run export`) as the producer.
  */
-export async function buildCommerceEmbed({ outDir, repoRootPath }) {
-  const exportStaticPath = path.join(repoRootPath, 'examples/commerce/scripts/export-static.mjs');
-  const { exportCommerceStaticApp } = await import(pathToFileURL(exportStaticPath).href);
-  const appDir = path.join(outDir, COMMERCE.appBase.replace(/^\//, ''));
+export async function buildExampleEmbed(manifest, { outDir, repoRootPath }) {
+  const exportStaticPath = path.join(repoRootPath, manifest.exportModule);
+  const module = await import(pathToFileURL(exportStaticPath).href);
+  const exportFn = module[manifest.exportFn];
+  if (typeof exportFn !== 'function') {
+    throw new Error(`build: ${manifest.exportModule} must export ${manifest.exportFn}()`);
+  }
 
-  const result = await exportCommerceStaticApp({ outDir: appDir });
+  const appBase = exampleAppBase(manifest.name);
+  const appDir = path.join(outDir, appBase.replace(/^\//, ''));
+
+  const result = await exportFn({ outDir: appDir });
   if (result.diagnostics.length > 0) {
     throw new Error(
-      `build: commerce static export reported ${result.diagnostics.length} diagnostic(s); refusing to embed a broken app`,
+      `build: ${manifest.name} static export reported ${result.diagnostics.length} diagnostic(s); refusing to embed a broken app`,
     );
   }
 
-  // Drop the build manifest the export copies in — it's not part of the served
-  // app and would otherwise ship inside the docs site.
+  // Drop the build manifest the export copies in — not part of the served app.
   await rm(path.join(appDir, '.vite'), { force: true, recursive: true });
 
   for (const file of await htmlFilesUnder(appDir)) {
-    await writeFile(file, rerootHtml(await readFile(file, 'utf8'), COMMERCE.appBase), 'utf8');
+    await writeFile(file, rerootHtml(await readFile(file, 'utf8'), appBase), 'utf8');
   }
 
-  return { appBase: COMMERCE.appBase, htmlCount: result.artifacts.length };
+  return { appBase, htmlCount: result.artifacts.length };
 }
 
-/** Read the authored source files an example wants to showcase. */
-export async function loadCommerceSources({ repoRootPath }) {
-  const commerceRoot = path.join(repoRootPath, 'examples/commerce');
+/** Read the authored source files an example surfaces in its code panel. A
+ * missing file throws (fails the build loudly) rather than silently dropping a tab. */
+export async function loadExampleSources(manifest, { repoRootPath }) {
+  const exampleRoot = path.join(repoRootPath, manifest.dir);
   const files = [];
-  for (const relative of COMMERCE.sources) {
-    const absolute = path.join(commerceRoot, relative);
+  for (const relative of manifest.sources) {
+    const absolute = path.join(exampleRoot, relative);
     files.push({ code: await readFile(absolute, 'utf8'), name: relative });
   }
   return files;
@@ -151,5 +223,3 @@ export function renderExampleSplit({ appBase, blurb, files, idBase, title }) {
     </div>
   </div>`;
 }
-
-export const EXAMPLES = { commerce: COMMERCE };

@@ -7,7 +7,13 @@ import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
 import { renderDocument, renderDocsPage, renderSectionIndex } from './chrome.mjs';
 import { generateDiagnosticsReference } from './diagnostics-ref.mjs';
-import { buildCommerceEmbed, loadCommerceSources, renderExampleSplit } from './examples.mjs';
+import {
+  EXAMPLES,
+  buildExampleEmbed,
+  examplePagePath,
+  loadExampleSources,
+  renderExampleSplit,
+} from './examples.mjs';
 import { renderLanding } from './landing.mjs';
 import { buildLlmsFull, buildLlmsIndex } from './llms.mjs';
 import { parseFrontmatter, renderMarkdown } from './md.mjs';
@@ -306,7 +312,7 @@ async function main() {
   // Examples: runnable apps embedded as a static export beside their source.
   const examplesSection = {
     key: 'examples',
-    pages: [{ title: 'Commerce', url: '/examples/commerce/' }],
+    pages: EXAMPLES.map((example) => ({ title: example.title, url: examplePagePath(example.name) })),
     title: 'Examples',
   };
   const groups = sections
@@ -436,28 +442,49 @@ async function main() {
     });
   }
 
-  // Examples: produce the commerce static export under dist/examples/commerce/app/
+  // Examples: produce each example's static export under dist/examples/<name>/app/
   // and render its docs page (running app in a sandboxed iframe + authored
   // source). The export is the example's own §9.5 bridge; we re-root its refs.
-  const commerceEmbed = await buildCommerceEmbed({ outDir, repoRootPath });
-  const commerceSources = await loadCommerceSources({ repoRootPath });
-  const commerceFiles = [];
-  for (const file of commerceSources) {
-    const { html: codeHtml } = await renderMarkdown(
-      `\`\`\`tsx title="examples/commerce/${file.name}"\n${file.code}\n\`\`\``,
+  // All examples run through the one manifest-driven helper.
+  for (const example of EXAMPLES) {
+    const pagePath = examplePagePath(example.name);
+    const embed = await buildExampleEmbed(example, { outDir, repoRootPath });
+    const sources = await loadExampleSources(example, { repoRootPath });
+    const files = [];
+    for (const file of sources) {
+      const lang = file.name.endsWith('.tsx') ? 'tsx' : 'ts';
+      const { html: codeHtml } = await renderMarkdown(
+        `\`\`\`${lang} title="${example.dir}/${file.name}"\n${file.code}\n\`\`\``,
+      );
+      files.push({ html: codeHtml, name: file.name });
+    }
+    const html = renderExampleSplit({
+      appBase: embed.appBase,
+      blurb: example.blurb,
+      files,
+      idBase: `${example.name}-src`,
+      title: example.title,
+    });
+
+    await writeRoutePage(
+      pagePath,
+      finishPage(
+        renderDocument({
+          body: renderDocsPage({ activePath: pagePath, groups, html, prose: false }),
+          description: example.blurb,
+          path: pagePath,
+          title: `${example.title} · Examples · Jiso`,
+        }),
+      ),
     );
-    commerceFiles.push({ html: codeHtml, name: file.name });
+
+    searchIndex.push({
+      section: 'Examples',
+      text: `${example.title} ${example.blurb} ${files.map((file) => file.name).join(' ')}`,
+      title: example.title,
+      url: pagePath,
+    });
   }
-  const commerceTitle = 'Commerce';
-  const commerceBlurb =
-    'A full Jiso app — product grid, cart badge, and order history — running live next to the authored components that render it.';
-  const commerceExampleHtml = renderExampleSplit({
-    appBase: commerceEmbed.appBase,
-    blurb: commerceBlurb,
-    files: commerceFiles,
-    idBase: 'commerce-src',
-    title: commerceTitle,
-  });
 
   await writeRoutePage(
     '/examples/',
@@ -468,13 +495,11 @@ async function main() {
           groups,
           html: renderSectionIndex({
             key: 'examples',
-            pages: [
-              {
-                description: commerceBlurb,
-                title: commerceTitle,
-                url: '/examples/commerce/',
-              },
-            ],
+            pages: EXAMPLES.map((example) => ({
+              description: example.blurb,
+              title: example.title,
+              url: examplePagePath(example.name),
+            })),
             title: 'Examples',
           }),
           prose: false,
@@ -485,30 +510,6 @@ async function main() {
       }),
     ),
   );
-
-  await writeRoutePage(
-    '/examples/commerce/',
-    finishPage(
-      renderDocument({
-        body: renderDocsPage({
-          activePath: '/examples/commerce/',
-          groups,
-          html: commerceExampleHtml,
-          prose: false,
-        }),
-        description: commerceBlurb,
-        path: '/examples/commerce/',
-        title: 'Commerce · Examples · Jiso',
-      }),
-    ),
-  );
-
-  searchIndex.push({
-    section: 'Examples',
-    text: `${commerceTitle} ${commerceBlurb} ${commerceFiles.map((file) => file.name).join(' ')}`,
-    title: commerceTitle,
-    url: '/examples/commerce/',
-  });
 
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
   await writeRoutePage(
@@ -610,7 +611,8 @@ async function main() {
   const pageCount =
     sections.reduce((total, section) => total + section.pages.length, 0) +
     galleryRoutes.length +
-    2 + // examples index + commerce
+    EXAMPLES.length +
+    1 + // examples index + one page per example
     1 +
     1;
   process.stdout.write(

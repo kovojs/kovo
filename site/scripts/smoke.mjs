@@ -148,25 +148,34 @@ try {
     'JS: interactive gallery client module loads on interaction',
   );
 
-  // Examples: the commerce app loads as a static export inside the docs page's
-  // sandboxed iframe, and the authored source renders beside it.
-  await page.goto(`${origin}/examples/commerce/`, { waitUntil: 'networkidle' });
+  // Examples: each app loads as a static export inside the docs page's sandboxed
+  // iframe, and its authored source renders beside it in the tabbed panel.
+  const EMBED_CHECKS = [
+    { name: 'commerce', marker: '[data-commerce-shell]', text: 'Cart' },
+    { name: 'crm', marker: 'header', text: 'Atlas CRM' },
+    { name: 'stackoverflow', marker: 'header', text: 'DevOverflow' },
+  ];
+  for (const embed of EMBED_CHECKS) {
+    await page.goto(`${origin}/examples/${embed.name}/`, { waitUntil: 'networkidle' });
+    check(
+      (await page.locator('.example-source .code-window').count()) >= 2,
+      `JS: ${embed.name} example shows authored source windows`,
+    );
+    const frame = page.frameLocator('iframe.example-frame');
+    await frame.locator(embed.marker).first().waitFor({ state: 'attached' });
+    const text = (await frame.locator('body').textContent()) ?? '';
+    check(text.includes(embed.text), `JS: ${embed.name} example app renders inside the docs iframe`);
+  }
+
+  // The multi-page apps navigate inside the iframe (root-relative links re-rooted
+  // under the app base): from the CRM pipeline into a deal detail page.
+  await page.goto(`${origin}/examples/crm/`, { waitUntil: 'networkidle' });
+  const crmFrame = page.frameLocator('iframe.example-frame');
+  await crmFrame.locator('a[href$="/deals/d1"]').first().click();
+  await crmFrame.locator('h1').first().waitFor({ state: 'attached' });
   check(
-    (await page.locator('.example-source .code-window').count()) >= 3,
-    'JS: commerce example shows authored source windows',
-  );
-  const commerceFrame = page.frameLocator('iframe.example-frame');
-  await commerceFrame.locator('[data-commerce-shell]').waitFor({ state: 'attached' });
-  check(
-    await commerceFrame
-      .locator('[data-commerce-shell]')
-      .count()
-      .then((count) => count === 1),
-    'JS: commerce example app renders inside the docs iframe',
-  );
-  check(
-    (await commerceFrame.locator('cart-badge').first().textContent())?.includes('Cart'),
-    'JS: commerce example renders its cart badge',
+    ((await crmFrame.locator('h1').first().textContent()) ?? '').includes('Deal D1'),
+    'JS: crm example navigates list → deal detail inside the iframe',
   );
   await context.close();
 } finally {

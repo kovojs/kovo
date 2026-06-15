@@ -1,15 +1,17 @@
 # Examples in the docs site — side-by-side running app + source
 
-Status: **done (commerce) — 2026-06-14.** Created 2026-06-14. `SPEC.md` is the source of truth for
-framework behavior; this plan changes the **docs site build** (`site/`) and adds a thin
-static-export hand-off from `examples/commerce`. It does not change framework behavior. Keep this
-file compact: checklist, open work, risks, proving commands.
+Status: **done (commerce + crm + stackoverflow, generalized) — 2026-06-14.** Created 2026-06-14.
+`SPEC.md` is the source of truth for framework behavior; this plan changes the **docs site build**
+(`site/`) and adds static-export shells + UI to `examples/{commerce,crm,stackoverflow}`. It does not
+change framework behavior. Keep this file compact: checklist, open work, risks, proving commands.
 
-Shipped: `/examples/commerce/` renders the commerce app live in a sandboxed `<iframe>` (its own §9.5
-static export, re-rooted under `/examples/commerce/app/`) beside a zero-JS tabbed viewer of the
-authored components. Verified end-to-end in a real browser by the site smoke gate (Playwright drives
-the docs page and asserts the app renders _inside_ the iframe). Phase 4 (generalized `{{example:}}`)
-stays open by choice.
+Shipped: `/examples/{commerce,crm,stackoverflow}/` each render the app live in a sandboxed `<iframe>`
+(its own §9.5 static export, re-rooted under `/examples/<name>/app/`) beside a zero-JS tabbed viewer
+of the authored source. CRM and StackOverflow were data-only libraries and now ship real multi-page
+read-only UIs (CRM: pipeline / contacts / deal detail; SO: question list / question detail). One
+manifest-driven helper (`EXAMPLES` in `site/scripts/examples.mjs`) builds and renders all three.
+Verified end-to-end in a real browser by the site smoke gate (Playwright drives each docs page,
+asserts the app renders *inside* the iframe, and navigates CRM list → deal detail in-iframe).
 
 ## Goal
 
@@ -67,7 +69,7 @@ loads a **prebuilt export** rather than SSR-rendering inline.
   that emits the two-pane layout: left `<iframe src="/examples/commerce/app/" sandbox="allow-scripts">`,
   right a tabbed `.code-window` panel with the three source files Shiki-highlighted.
 - **Source read:** at build time, read `examples/commerce/src/components/{cart-badge,order-history,
-product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
+  product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
 
 ## Checklist
 
@@ -102,27 +104,39 @@ product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
       (commerce's `/products` "More" link). Evidence: `check-links/v1 pages=85 ... OK`.
 - [x] `vp run smoke` green (14/14) incl. three new commerce checks; `site` `vitest --run` 50/50.
 
-### Phase 4 (stretch) — generalize
+### Phase 4 — generalize + add crm/stackoverflow
 
-- [ ] Extract a reusable `{{example:<name>}}` embed helper so reference/gallery/future apps can opt
-      in, with a per-example manifest (export command, base path, source-file list). Leave open until
-      commerce ships.
+- [x] Manifest-driven helper: `EXAMPLES` in `site/scripts/examples.mjs` declares each example's dir,
+      export bridge (`exportFn`), and source-file list; `buildExampleEmbed` + `loadExampleSources` +
+      `renderExampleSplit` are one generic path. `build.mjs` loops over `EXAMPLES` to emit
+      `/examples/<name>/` pages and the `/examples/` index. Commerce migrated onto it (no behaviour
+      change — re-verified).
+- [x] CRM + StackOverflow given real multi-page read-only static-export apps (see the sibling commit
+      "Add multi-page UI to crm and stackoverflow examples"): `component`-free `@jiso/server` JSX
+      views, a richer demo-data seed layered on the untouched `createXDb()` seed, an app-shell static
+      export + node handler, `export-static.mjs`, `serve.mjs`, `vite.config.ts`, `styles.css`.
+- [x] In-iframe multi-page navigation works: `rerootHtml` now re-roots **every** root-absolute
+      attribute value (`href="/deals/d1"`, `href="/"`, `/assets`, `/c`) under the app base — a
+      `<base href>` can't (it only rewrites relative URLs). Smoke asserts CRM list → deal detail
+      navigates inside the iframe.
+- [x] Source tabs show **TSX + the data/optimism story** (queries.ts, mutations.ts, the derived/
+      custom optimistic transform) per the chosen scope.
 
 ## Risks / resolutions
 
-- **Asset path rewriting (was top risk) — RESOLVED.** A `<base href>` does _not_ fix root-relative
+- **Asset path rewriting (was top risk) — RESOLVED.** A `<base href>` does *not* fix root-relative
   URLs (only relative ones), so we re-root instead: `rerootHtml` rewrites `="/assets/` and `="/c/`
-  (covering the modulepreload href _and_ the inline loader's `on:*` handler refs like
+  (covering the modulepreload href *and* the inline loader's `on:*` handler refs like
   `/c/commerce.client.js#fn`) to the `/examples/commerce/app/` base. Verified: the served export has
   zero unresolved modules/404s in the smoke browser run.
 - **`sandbox` scope — RESOLVED.** `allow-scripts allow-same-origin` (same-origin needed so the
   inline loader can `import()` the same-origin client module). The commerce public export is a fully
-  client-runnable static replay (no live server); the in-app `/products` pagination link is _not_
+  client-runnable static replay (no live server); the in-app `/products` pagination link is *not*
   exported and 404s if clicked — acceptable for a demo, and excluded from the link gate.
 - **Build cost / ordering.** `buildCommerceEmbed` runs commerce `vp build` during the site build
   (~adds a few seconds). Acceptable; the `build-site`/`export` vite tasks now list
   `examples/commerce/**` as inputs so the cache invalidates on commerce changes. (Note: the `vp run`
-  output cache hashes git-tracked inputs — a first run with the new files _untracked_ can serve a
+  output cache hashes git-tracked inputs — a first run with the new files *untracked* can serve a
   stale dist; once committed it invalidates correctly. Use `vp run --no-cache export` to force.)
 - **Source/compile drift — RESOLVED.** `loadCommerceSources` reads the three files from disk at build
   time; a missing/renamed file throws (ENOENT) and fails the build loudly rather than silently
@@ -130,8 +144,13 @@ product-grid}.tsx` and run them through the existing Shiki path in `md.mjs`.
 
 ## Open work
 
-- [ ] **Phase 4 — generalize** `{{example:<name>}}` with a per-example manifest (export command, base
-      path, source-file list) so reference/future apps can opt in. Open by choice.
+- [ ] **Live interactivity in the docs iframe.** All embeds are read-only static exports (no server
+      on a static host), so mutations/optimism don't run in-iframe — the source tabs tell that story.
+      Each example ships a dynamic node handler + `serve.mjs` (`pnpm --filter @jiso/example-<name>
+      start`) for full local interactivity; wiring mutation/optimism client modules into those dynamic
+      shells (add-contact, vote, post-answer) is future work.
+- [ ] **reference example** (auth) could opt into the now-generic helper if a public-only export is
+      added; the data-only nature of crm/so is resolved, but reference still needs a static shell.
 
 ## Proving commands
 

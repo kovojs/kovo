@@ -713,6 +713,8 @@
 
 .example-panel {
   display: none;
+  max-height: 34rem;
+  overflow: auto;
 }
 
 .example-panel .code-window {
