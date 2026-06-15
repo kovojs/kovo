@@ -37,7 +37,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     expect(visualGeometry(route)).toEqual({
-      height: 6334,
+      height: 6255,
       width: 820,
     });
     expect(visualGeometry(switchDemo)).toEqual({
@@ -53,7 +53,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       width: 780,
     });
 
-    expect(await visualBaselineHash(route)).toBe('c6622329');
+    expect(await visualBaselineHash(route)).toBe('0e0fc5af');
     expect(['1dc30a6d', '9ad15de9', '81aa77c6']).toContain(await visualBaselineHash(switchDemo));
     expect(['b19a1055', '94604e9e']).toContain(await visualBaselineHash(menuDemo));
     expect(['cc33e71c', 'b06676d3', 'b970b899']).toContain(await visualBaselineHash(pureMarkupDemo));

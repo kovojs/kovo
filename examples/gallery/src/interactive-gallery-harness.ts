@@ -170,6 +170,12 @@ export function evaluateClientModule(
     _tooltipTriggerFocus: headlessPrimitives.tooltipTriggerFocus,
     _tooltipTriggerPointerEnter: headlessPrimitives.tooltipTriggerPointerEnter,
     _tooltipTriggerPointerLeave: headlessPrimitives.tooltipTriggerPointerLeave,
+    _dismissToast: headlessPrimitives.dismissToast,
+    _toastActionClick: headlessPrimitives.toastActionClick,
+    _toastAnimationEnd: headlessPrimitives.toastAnimationEnd,
+    _toastCloseClick: headlessPrimitives.toastCloseClick,
+    _toastEscapeKeyDown: headlessPrimitives.toastEscapeKeyDown,
+    _toastViewportKeyDown: headlessPrimitives.toastViewportKeyDown,
     ...globals,
   });
 

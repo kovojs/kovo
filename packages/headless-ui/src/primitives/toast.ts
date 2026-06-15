@@ -124,16 +124,16 @@ export type ToastPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type ToastButtonEvent = Event;
+export type ToastAnimationEvent = Event & { readonly animationName?: string };
 export type ToastKeyboardEvent = Event & { readonly key: string };
+export type ToastViewportKeyboardEvent = Event & { readonly key: string };
 
 export function toastShowPayload(input: ToastShowPayload): ToastShowPayload {
   return Object.freeze({
     ...(input.actionLabel === undefined ? {} : { actionLabel: input.actionLabel }),
     ...(input.actionValue === undefined ? {} : { actionValue: input.actionValue }),
     ...(input.description === undefined ? {} : { description: input.description }),
-    ...(input.durationMs === undefined
-      ? {}
-      : { durationMs: normalizeToastDuration(input.durationMs) }),
+    ...(input.durationMs === undefined ? {} : { durationMs: normalizeToastDuration(input.durationMs) }),
     ...(input.id === undefined ? {} : { id: input.id }),
     ...(input.politeness === undefined ? {} : { politeness: toastPoliteness(input.politeness) }),
     ...(input.title === undefined ? {} : { title: input.title }),
@@ -315,6 +315,44 @@ export function toastEscapeKeyDown(
   return result;
 }
 
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function toastAnimationEnd(
+  event: ToastAnimationEvent,
+  state: ToastState,
+  animationName = 'jiso-toast-auto-dismiss',
+  options: ToastChangeOptions = {},
+): ToastChangeResult | undefined {
+  if (event.defaultPrevented) return;
+  if (event.animationName !== animationName) return;
+
+  const result = dismissToast(state, 'timeout', options);
+  if (!result.changed) {
+    event.preventDefault();
+  }
+
+  return result;
+}
+
+/**
+ * @jisoPrimitiveHandler
+ *
+ * SPEC.md §4.6: chained primitive handlers run after author handlers and must
+ * no-op when the author has already prevented the default action.
+ */
+export function toastViewportKeyDown(event: ToastViewportKeyboardEvent): boolean | undefined {
+  if (event.defaultPrevented) return;
+  if (event.key !== 'F6') return;
+
+  (event.currentTarget as { focus?: () => void } | null)?.focus?.();
+  event.preventDefault();
+  return true;
+}
+
 function toastPartAttributes(
   options: ToastPartAttributeOptions,
   part: 'description' | 'title',
@@ -349,7 +387,7 @@ function toastVariant(variant: ToastVariant | undefined): ToastVariant {
   return variant ?? 'default';
 }
 
-function normalizeToastDuration(durationMs: number): number {
+export function normalizeToastDuration(durationMs: number): number {
   if (!Number.isFinite(durationMs) || durationMs < 0) return 0;
   return Math.round(durationMs);
 }

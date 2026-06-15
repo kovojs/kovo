@@ -38,6 +38,7 @@ describe('inline loader source', () => {
         'paste',
         'cancel',
         'beforetoggle',
+        'animationend',
         'scroll',
         'focus',
         'blur',

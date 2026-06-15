@@ -60,6 +60,7 @@ const defaultDelegatedEvents = [
   'paste',
   'cancel',
   'beforetoggle',
+  'animationend',
   'scroll',
   'focus',
   'blur',

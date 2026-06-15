@@ -62,7 +62,7 @@ function installInlineJisoLoader(importModule) {
   // capture phase at ancestors, so they are synthesized below from pointerover/out.
   const events = [
     'click', 'submit', 'input', 'change', 'keydown', 'keyup',
-    'contextmenu', 'paste', 'cancel', 'beforetoggle', 'scroll', 'focus', 'blur',
+    'contextmenu', 'paste', 'cancel', 'beforetoggle', 'animationend', 'scroll', 'focus', 'blur',
     'pointerdown', 'pointermove', 'pointerup',
   ];
   const doc = document;

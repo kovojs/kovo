@@ -849,13 +849,31 @@ declaratively. Grouped by family; severity is the worst gap. Primitives are corr
     `pnpm --filter @jiso/headless-ui exec vitest run src/primitives/scroll-area.test.ts`,
     `pnpm --filter @jiso/example-gallery exec vitest run src/interactive-gallery.client-behavior.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts`,
     and `pnpm --filter @jiso/example-gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-b.browser.test.ts -t scroll-area`.
-- [ ] **toast** [P1]: a single static always-open toast — not the imperative push/stack/auto-dismiss
+- [x] **toast** [P1]: a single static always-open toast — not the imperative push/stack/auto-dismiss
       (timeout 5000ms)/swipe/pause-on-hover/F6-viewport model of Base UI/Sonner; Escape-dismiss is dead
       (loader #2); live-region announcement is degraded (content pre-rendered). **Decision (locked
       2026-06-14): build the imperative model** — a "show toast" trigger that pushes into an (initially
       empty) `Toast.Viewport` landmark, with `normalizeToastDuration` auto-dismiss timeout,
       `setToastOpen`/`dismissToast`, pause-on-hover, and F6-into-viewport. May need a primitive/loader
       timer affordance — flag during implementation.
+  - Evidence 2026-06-15: `packages/headless-ui/src/primitives/toast.ts` now exports
+    `normalizeToastDuration`, `toastAnimationEnd` (CSS `animationend` timeout affordance), and
+    `toastViewportKeyDown` (F6 focus), with primitive tests covering timeout, F6, disabled/canceled
+    actions, and public barrel exports.
+  - Evidence 2026-06-15: `packages/runtime/src/loader.ts` and regenerated
+    `packages/runtime/src/inline-loader.ts` delegate `animationend`, so the toast auto-dismiss timer
+    runs through the same SPEC §4.4 event path in modular and inline loaders.
+  - Evidence 2026-06-15: `examples/gallery/src/interactive/toast-demo.tsx` now starts with an empty
+    viewport, uses a `Show toast` trigger to push the active toast, keeps the previous toast visible as
+    a two-item stack, pauses the 5000ms CSS auto-dismiss animation on hover/focus-within, supports
+    Escape dismissal and F6 viewport focus through primitive reducers, and binds visibility/state/text
+    from island state with no DOM escape hatches. Generated toast artifacts import the primitive
+    reducers and emit derives for hidden, `data-state`, description text, output text, and count.
+  - Verification 2026-06-15: `pnpm --filter @jiso/headless-ui exec vitest run
+    src/primitives/toast.test.ts`, runtime event-list tests, `pnpm --filter @jiso/runtime
+    check:inline-loader`, headless/runtime/gallery typechecks, gallery client/compile/ARIA tests,
+    focused browser toast interaction, full gallery axe browser test, gallery visual baseline test,
+    gallery emit `--check`, forbidden-DOM scan, and `git diff --check` passed.
 
 ## Phase 4 — Primitive / styled-layer changes called out above (consolidated)
 
@@ -909,8 +927,11 @@ These are framework changes the demo rewrites depend on (not just demo edits):
   - Verification 2026-06-15: primitive tests cover fallback `showModal()`/`requestClose()` calls and
     alert no-light-dismiss; gallery browser tests assert `closedby='any'` on dialog/sheet/drawer and
     no `closedby` on alert-dialog.
-- [ ] toast: imperative push/stack/auto-dismiss demo + viewport landmark; add a timer affordance if the
+- [x] toast: imperative push/stack/auto-dismiss demo + viewport landmark; add a timer affordance if the
       primitive/loader lacks one.
+  - Evidence 2026-06-15: closed by the toast slice above. The timer affordance is delegated
+    `animationend` from a 5000ms CSS animation, which preserves the loader's event/state-binding
+    update path instead of mutating state from a detached `setTimeout`.
 - [ ] _Not doing (locked):_ `progress.ts`/`meter.ts` stay native `<progress>`/`<meter>` (documented
       deviation, demo-only `data-state` derivation fix); no Vaul drag primitive for `drawer`.
 

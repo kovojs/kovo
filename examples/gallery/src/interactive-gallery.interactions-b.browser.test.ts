@@ -1261,7 +1261,11 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
 
     const toastRoot = mountInteractiveDemo(GalleryToastDemo);
+    const showToast = required(toastRoot.querySelector<HTMLButtonElement>('[data-toast-show]'));
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
+    const previousToast = required(
+      toastRoot.querySelector<HTMLElement>('#gallery-toast-previous'),
+    );
     const cancelDismiss = required(
       toastRoot.querySelector<HTMLButtonElement>('[data-toast-cancel-dismiss]'),
     );
@@ -1272,20 +1276,54 @@ describe('compiled interactive gallery demos in the browser', () => {
     const toastOutput = required(
       toastRoot.querySelector<HTMLOutputElement>('[data-demo-state="toast-open"]'),
     );
-    installGeneratedGalleryLoader(toastRoot, { events: ['click', 'keydown'] });
+    const toastCount = required(
+      toastRoot.querySelector<HTMLOutputElement>('[data-demo-state="toast-count"]'),
+    );
+    installGeneratedGalleryLoader(toastRoot, { events: ['click', 'keydown', 'animationend'] });
 
     expect(toastRoot.getAttribute('role')).toBe('region');
     expect(toast.getAttribute('role')).toBe('status');
     expect(toast.getAttribute('aria-live')).toBe('polite');
-    expect(toast.getAttribute('data-state')).toBe('open');
-    expect(toast.hidden).toBe(false);
+    expect(toastRoot.getAttribute('fw-state')).toBe(
+      '{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}',
+    );
+    expect(toast.getAttribute('data-state')).toBe('closed');
+    expect(toast.hidden).toBe(true);
+    expect(previousToast.hidden).toBe(true);
     expect(disabledAction.disabled).toBe(true);
-    expect(toastOutput.textContent).toBe('open');
+    expect(toastOutput.textContent).toBe('empty');
+    expect(toastCount.textContent).toBe('0');
+
+    showToast.click();
+
+    await vi.waitFor(() => {
+      expect(toastRoot.getAttribute('fw-state')).toBe(
+        '{"activeCount":1,"activeOpen":true,"previousCount":0,"previousOpen":false}',
+      );
+      expect(toast.hidden).toBe(false);
+      expect(toast.getAttribute('data-state')).toBe('open');
+      expect(toastOutput.textContent).toBe('open');
+      expect(toastCount.textContent).toBe('1');
+    });
+
+    showToast.click();
+
+    await vi.waitFor(() => {
+      expect(toastRoot.getAttribute('fw-state')).toBe(
+        '{"activeCount":2,"activeOpen":true,"previousCount":1,"previousOpen":true}',
+      );
+      expect(previousToast.hidden).toBe(false);
+      expect(previousToast.getAttribute('data-state')).toBe('open');
+      expect(toastOutput.textContent).toBe('open');
+      expect(toastCount.textContent).toBe('2');
+    });
 
     disabledAction.click();
 
     await vi.waitFor(() => {
-      expect(toastRoot.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(toastRoot.getAttribute('fw-state')).toBe(
+        '{"activeCount":2,"activeOpen":true,"previousCount":1,"previousOpen":true}',
+      );
       expect(toast.hidden).toBe(false);
       expect(toast.getAttribute('data-state')).toBe('open');
       expect(toastOutput.textContent).toBe('open');
@@ -1294,7 +1332,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     cancelDismiss.click();
 
     await vi.waitFor(() => {
-      expect(toastRoot.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(toastRoot.getAttribute('fw-state')).toBe(
+        '{"activeCount":2,"activeOpen":true,"previousCount":1,"previousOpen":true}',
+      );
       expect(toast.hidden).toBe(false);
       expect(toast.getAttribute('data-state')).toBe('open');
       expect(toastOutput.textContent).toBe('open');
@@ -1304,13 +1344,31 @@ describe('compiled interactive gallery demos in the browser', () => {
     // disabled action that did not auto-dismiss) must stay axe-clean.
     await expectNoAxeViolations(toastRoot);
 
+    toast.dispatchEvent(
+      new AnimationEvent('animationend', {
+        animationName: 'gallery-toast-auto-dismiss',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(toastRoot.getAttribute('fw-state')).toBe(
+        '{"activeCount":2,"activeOpen":false,"previousCount":1,"previousOpen":true}',
+      );
+      expect(toast.hidden).toBe(true);
+      expect(toast.getAttribute('data-state')).toBe('closed');
+      expect(toastOutput.textContent).toBe('stacked');
+    });
+
     dismiss.click();
 
     await vi.waitFor(() => {
-      expect(toastRoot.getAttribute('fw-state')).toBe('{"open":false}');
-      expect(toast.hidden).toBe(true);
-      expect(toast.getAttribute('data-state')).toBe('closed');
-      expect(toastOutput.textContent).toBe('closed');
+      expect(toastRoot.getAttribute('fw-state')).toBe(
+        '{"activeCount":2,"activeOpen":false,"previousCount":1,"previousOpen":false}',
+      );
+      expect(previousToast.hidden).toBe(true);
+      expect(toastOutput.textContent).toBe('empty');
     });
   });
 

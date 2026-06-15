@@ -993,30 +993,61 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
 
-    const toastState = { open: true };
-    const canceledToastClick = new Event('click', { cancelable: true });
-    clientHandler(toast, 'GalleryToastDemo$button_click_2')(canceledToastClick, {
+    const toastState = { activeCount: 0, activeOpen: false, previousCount: 0, previousOpen: false };
+    clientHandler(toast, 'GalleryToastDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: toastState,
     });
-    expect(canceledToastClick.defaultPrevented).toBe(true);
-    expect(toastState).toEqual({ open: true });
-    clientHandler(toast, 'GalleryToastDemo$button_click_3')(new Event('click'), {
+    expect(toastState).toEqual({
+      activeCount: 1,
+      activeOpen: true,
+      previousCount: 0,
+      previousOpen: false,
+    });
+    clientHandler(toast, 'GalleryToastDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: toastState,
     });
-    expect(toastState).toEqual({ open: false });
-    toastState.open = true;
+    expect(toastState).toEqual({
+      activeCount: 2,
+      activeOpen: true,
+      previousCount: 1,
+      previousOpen: true,
+    });
+    const timeoutEvent = animationEvent('gallery-toast-auto-dismiss');
+    clientHandler(toast, 'GalleryToastDemo$div_animationend')(timeoutEvent, {
+      params: {},
+      signal,
+      state: toastState,
+    });
+    expect(toastState).toEqual({
+      activeCount: 2,
+      activeOpen: false,
+      previousCount: 1,
+      previousOpen: true,
+    });
+    clientHandler(toast, 'GalleryToastDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: toastState,
+    });
+    expect(toastState).toEqual({
+      activeCount: 2,
+      activeOpen: false,
+      previousCount: 1,
+      previousOpen: false,
+    });
+    toastState.activeOpen = true;
     const disabledToastClick = new Event('click', { cancelable: true });
-    clientHandler(toast, 'GalleryToastDemo$button_click_4')(disabledToastClick, {
+    clientHandler(toast, 'GalleryToastDemo$button_click_6')(disabledToastClick, {
       params: {},
       signal,
       state: toastState,
     });
     expect(disabledToastClick.defaultPrevented).toBe(true);
-    expect(toastState).toEqual({ open: true });
+    expect(toastState.activeOpen).toBe(true);
   });
 });
 
@@ -1037,5 +1068,11 @@ function pointerEvent(
       value,
     });
   }
+  return event;
+}
+
+function animationEvent(animationName: string): Event {
+  const event = new Event('animationend', { cancelable: true });
+  Object.defineProperty(event, 'animationName', { value: animationName });
   return event;
 }

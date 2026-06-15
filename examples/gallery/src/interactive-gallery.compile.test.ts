@@ -49,6 +49,7 @@ describe('compiled interactive gallery demos', () => {
     const toggleGroup = readGenerated('toggle-group-demo.tsx');
     const toggleGroupClient = readGenerated('toggle-group-demo.client.js');
     const toast = readGenerated('toast-demo.tsx');
+    const toastClient = readGenerated('toast-demo.client.js');
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
     expect(accordion).toContain('fw-state=\'{"activeValue":"shipping","value":"shipping"}\'');
@@ -620,13 +621,27 @@ describe('compiled interactive gallery demos', () => {
     expect(toggleGroupClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
 
     expect(toast).toContain('data-gallery-interactive="toast"');
-    expect(toast).toContain('fw-state=\'{"open":true}\'');
-    expect(toast).toContain('toastRootAttributes(toastState)');
+    expect(toast).toContain(
+      'fw-state=\'{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}\'',
+    );
+    expect(toast).toContain('toastRootAttributes(activeToastState)');
+    expect(toast).toContain('toastRootAttributes(previousToastState)');
+    expect(toast).toContain('data-toast-show=""');
+    expect(toast).toContain('data-toast-duration-ms={durationMs}');
+    expect(toast).toContain('normalizeToastDuration(5000)');
+    expect(toast).toContain('toastAnimationEnd as _toastAnimationEnd');
+    expect(toast).toContain('toastViewportKeyDown as _toastViewportKeyDown');
+    expect(toast).toContain('data-bind:hidden=');
+    expect(toast).toContain('data-bind:data-state=');
+    expect(toast).toContain('data-demo-state="toast-count"');
     expect(toast).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$section_keydown"/,
     );
     expect(toast).toMatch(
-      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_2"/,
+      /on:animationend="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$div_animationend"/,
+    );
+    expect(toast).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click"/,
     );
     expect(toast).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_3"/,
@@ -637,5 +652,8 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toContain('data-toast-cancel-dismiss=""');
     expect(toast).toContain('data-toast-disabled-action=""');
     expect(toast).toContain('dismissOnAction: false');
+    expect(toastClient).toContain('toastAnimationEnd as _toastAnimationEnd');
+    expect(toastClient).toContain('toastViewportKeyDown as _toastViewportKeyDown');
+    expect(toastClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
   });
 });

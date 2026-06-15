@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dismissToast as exportedDismissToast,
+  normalizeToastDuration as exportedNormalizeToastDuration,
   setToastOpen as exportedSetToastOpen,
   toastActionAttributes as exportedToastActionAttributes,
   toastActionClick as exportedToastActionClick,
+  toastAnimationEnd as exportedToastAnimationEnd,
   toastCloseAttributes as exportedToastCloseAttributes,
   toastCloseClick as exportedToastCloseClick,
   toastDescriptionAttributes as exportedToastDescriptionAttributes,
@@ -19,12 +21,15 @@ import {
   toastShowPayload as exportedToastShowPayload,
   toastTitleAttributes as exportedToastTitleAttributes,
   toastViewportAttributes as exportedToastViewportAttributes,
+  toastViewportKeyDown as exportedToastViewportKeyDown,
 } from '../index.js';
 import {
   dismissToast as primitiveDismissToast,
+  normalizeToastDuration as primitiveNormalizeToastDuration,
   setToastOpen as primitiveSetToastOpen,
   toastActionAttributes as primitiveToastActionAttributes,
   toastActionClick as primitiveToastActionClick,
+  toastAnimationEnd as primitiveToastAnimationEnd,
   toastCloseAttributes as primitiveToastCloseAttributes,
   toastCloseClick as primitiveToastCloseClick,
   toastDescriptionAttributes as primitiveToastDescriptionAttributes,
@@ -39,12 +44,15 @@ import {
   toastShowPayload as primitiveToastShowPayload,
   toastTitleAttributes as primitiveToastTitleAttributes,
   toastViewportAttributes as primitiveToastViewportAttributes,
+  toastViewportKeyDown as primitiveToastViewportKeyDown,
 } from './index.js';
 import {
   dismissToast,
+  normalizeToastDuration,
   setToastOpen,
   toastActionAttributes,
   toastActionClick,
+  toastAnimationEnd,
   toastCloseAttributes,
   toastCloseClick,
   toastDescriptionAttributes,
@@ -59,6 +67,7 @@ import {
   toastShowPayload,
   toastTitleAttributes,
   toastViewportAttributes,
+  toastViewportKeyDown,
 } from './toast.js';
 
 describe('headless-ui toast primitive', () => {
@@ -93,6 +102,7 @@ describe('headless-ui toast primitive', () => {
       variant: 'success',
     });
     expect(toastShowPayload({ durationMs: Number.NaN })).toEqual({ durationMs: 0 });
+    expect(normalizeToastDuration(5000.4)).toBe(5000);
     expect(toastDismissPayload({ id: 'upload-complete', reason: 'timeout' })).toEqual({
       id: 'upload-complete',
       reason: 'timeout',
@@ -300,6 +310,45 @@ describe('headless-ui toast primitive', () => {
     expect(reasons).toEqual(['close-click:false', 'action-click:false', 'escape-key:false']);
   });
 
+  it('uses animationend as the auto-dismiss timeout affordance', () => {
+    const reasons: string[] = [];
+    const event = animationEvent('jiso-toast-auto-dismiss');
+    const result = toastAnimationEnd(
+      event,
+      { id: 'toast' },
+      'jiso-toast-auto-dismiss',
+      {
+        onOpenChange(detail) {
+          reasons.push(`${detail.reason}:${detail.value.open}`);
+        },
+      },
+    );
+
+    expect(result).toMatchObject({ changed: true, open: false });
+    expect(event.defaultPrevented).toBe(false);
+    expect(reasons).toEqual(['timeout:false']);
+    expect(
+      toastAnimationEnd(animationEvent('unrelated-animation'), { id: 'toast' }),
+    ).toBeUndefined();
+  });
+
+  it('focuses the viewport on F6 without touching toast state', () => {
+    let focusCount = 0;
+    const event = keyEvent('F6');
+    Object.defineProperty(event, 'currentTarget', {
+      value: {
+        focus() {
+          focusCount += 1;
+        },
+      },
+    });
+
+    expect(toastViewportKeyDown(event)).toBe(true);
+    expect(focusCount).toBe(1);
+    expect(event.defaultPrevented).toBe(true);
+    expect(toastViewportKeyDown(keyEvent('Escape'))).toBeUndefined();
+  });
+
   it('prevents native button behavior when disabled or canceled', () => {
     const disabledEvent = new Event('click', { cancelable: true });
     const disabledResult = toastCloseClick(disabledEvent, { disabled: true, id: 'toast' });
@@ -347,6 +396,7 @@ describe('headless-ui toast primitive', () => {
     expect(exportedToastDismissEvent).toBe(toastDismissEvent);
     expect(exportedToastEvents).toBe(toastEvents);
     expect(exportedToastShowPayload).toBe(toastShowPayload);
+    expect(exportedNormalizeToastDuration).toBe(normalizeToastDuration);
     expect(exportedToastDismissPayload).toBe(toastDismissPayload);
     expect(exportedToastViewportAttributes).toBe(toastViewportAttributes);
     expect(exportedToastRootAttributes).toBe(toastRootAttributes);
@@ -359,6 +409,8 @@ describe('headless-ui toast primitive', () => {
     expect(exportedToastCloseClick).toBe(toastCloseClick);
     expect(exportedToastActionClick).toBe(toastActionClick);
     expect(exportedToastEscapeKeyDown).toBe(toastEscapeKeyDown);
+    expect(exportedToastAnimationEnd).toBe(toastAnimationEnd);
+    expect(exportedToastViewportKeyDown).toBe(toastViewportKeyDown);
 
     expect(primitiveToastShowEventName).toBe(toastShowEventName);
     expect(primitiveToastDismissEventName).toBe(toastDismissEventName);
@@ -366,6 +418,7 @@ describe('headless-ui toast primitive', () => {
     expect(primitiveToastDismissEvent).toBe(toastDismissEvent);
     expect(primitiveToastEvents).toBe(toastEvents);
     expect(primitiveToastShowPayload).toBe(toastShowPayload);
+    expect(primitiveNormalizeToastDuration).toBe(normalizeToastDuration);
     expect(primitiveToastDismissPayload).toBe(toastDismissPayload);
     expect(primitiveToastViewportAttributes).toBe(toastViewportAttributes);
     expect(primitiveToastRootAttributes).toBe(toastRootAttributes);
@@ -378,8 +431,18 @@ describe('headless-ui toast primitive', () => {
     expect(primitiveToastCloseClick).toBe(toastCloseClick);
     expect(primitiveToastActionClick).toBe(toastActionClick);
     expect(primitiveToastEscapeKeyDown).toBe(toastEscapeKeyDown);
+    expect(primitiveToastAnimationEnd).toBe(toastAnimationEnd);
+    expect(primitiveToastViewportKeyDown).toBe(toastViewportKeyDown);
   });
 });
+
+function animationEvent(animationName: string): Event & { readonly animationName: string } {
+  const event = new Event('animationend', { cancelable: true }) as Event & {
+    animationName: string;
+  };
+  Object.defineProperty(event, 'animationName', { value: animationName });
+  return event;
+}
 
 function keyEvent(key: string): Event & { readonly key: string } {
   const event = new Event('keydown', { cancelable: true }) as Event & { key: string };

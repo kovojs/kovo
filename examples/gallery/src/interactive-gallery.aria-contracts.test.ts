@@ -402,37 +402,50 @@ describe('compiled interactive gallery demos', () => {
       ).toBe('bold,italic');
 
       const toast = evaluateClientModule('toast-demo.client.js', { document });
-      const toastState = { open: true };
-      const canceledToastClick = new Event('click', { cancelable: true });
-      clientHandler(toast, 'GalleryToastDemo$button_click_2')(canceledToastClick, {
+      const toastState = {
+        activeCount: 0,
+        activeOpen: false,
+        previousCount: 0,
+        previousOpen: false,
+      };
+      clientHandler(toast, 'GalleryToastDemo$button_click')(new Event('click'), {
         params: {},
         signal,
         state: toastState,
       });
-      expect(canceledToastClick.defaultPrevented).toBe(true);
-      expect(toastState).toEqual({ open: true });
-      expect(element(document, 'gallery-toast').hidden).toBe(false);
-      expect(element(document, 'gallery-toast').attrs['data-state']).toBe('open');
+      expect(toastState).toEqual({
+        activeCount: 1,
+        activeOpen: true,
+        previousCount: 0,
+        previousOpen: false,
+      });
+      expect(deriveRun(toast, 'GalleryToastDemo$div_data_state_derive_2', toastState)).toBe('open');
+      expect(deriveRun(toast, 'GalleryToastDemo$div_hidden_derive_2', toastState)).toBeNull();
+      expect(deriveRun(toast, 'GalleryToastDemo$output_text_derive', toastState)).toBe('open');
       clientHandler(toast, 'GalleryToastDemo$section_keydown')(
-        Object.assign(new Event('keydown'), { key: 'Enter' }),
+        keyEvent('Enter'),
         { params: {}, signal, state: toastState },
       );
-      expect(toastState).toEqual({ open: true });
-      clientHandler(toast, 'GalleryToastDemo$section_keydown')(
-        Object.assign(new Event('keydown'), { key: 'Escape' }),
-        { params: {}, signal, state: toastState },
+      expect(toastState.activeOpen).toBe(true);
+      clientHandler(toast, 'GalleryToastDemo$div_animationend')(animationEvent(), {
+        params: {},
+        signal,
+        state: toastState,
+      });
+      expect(toastState.activeOpen).toBe(false);
+      expect(deriveRun(toast, 'GalleryToastDemo$div_data_state_derive_2', toastState)).toBe(
+        'closed',
       );
-      expect(element(document, 'gallery-toast').hidden).toBe(true);
-      expect(element(document, 'gallery-toast').attrs['data-state']).toBe('closed');
-      toastState.open = true;
+      expect(deriveRun(toast, 'GalleryToastDemo$div_hidden_derive_2', toastState)).toBe('');
+      toastState.activeOpen = true;
       const disabledToastClick = new Event('click', { cancelable: true });
-      clientHandler(toast, 'GalleryToastDemo$button_click_4')(disabledToastClick, {
+      clientHandler(toast, 'GalleryToastDemo$button_click_6')(disabledToastClick, {
         params: {},
         signal,
         state: toastState,
       });
       expect(disabledToastClick.defaultPrevented).toBe(true);
-      expect(toastState).toEqual({ open: true });
+      expect(toastState.activeOpen).toBe(true);
     } finally {
       if (hadDocument) {
         Object.defineProperty(globalThis, 'document', {
@@ -445,3 +458,9 @@ describe('compiled interactive gallery demos', () => {
     }
   });
 });
+
+function animationEvent(): Event {
+  const event = new Event('animationend', { cancelable: true });
+  Object.defineProperty(event, 'animationName', { value: 'gallery-toast-auto-dismiss' });
+  return event;
+}

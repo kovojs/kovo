@@ -77,11 +77,16 @@ describe('compiled interactive gallery demos in the browser', () => {
     await expectNoAxeViolations(fieldRoot);
 
     const toastRoot = mountInteractiveDemo(GalleryToastDemo);
+    const showToast = required(toastRoot.querySelector<HTMLButtonElement>('[data-toast-show]'));
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
     const disabledAction = required(
       toastRoot.querySelector<HTMLButtonElement>('[data-toast-disabled-action]'),
     );
+    installGeneratedGalleryLoader(toastRoot, { events: ['click'] });
 
+    expect(toast.hidden).toBe(true);
+    showToast.click();
+    await vi.waitFor(() => expect(toast.hidden).toBe(false));
     expect(toast.hidden).toBe(false);
     expect(toast.getAttribute('aria-live')).toBe('polite');
     expect(disabledAction.disabled).toBe(true);

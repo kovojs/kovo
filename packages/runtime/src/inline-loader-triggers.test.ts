@@ -74,6 +74,7 @@ describe('inline loader execution triggers', () => {
           'paste',
           'cancel',
           'beforetoggle',
+          'animationend',
           'scroll',
           'focus',
           'blur',

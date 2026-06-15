@@ -848,9 +848,11 @@ export type {
 
 export {
   dismissToast,
+  normalizeToastDuration,
   setToastOpen,
   toastActionAttributes,
   toastActionClick,
+  toastAnimationEnd,
   toastCloseAttributes,
   toastCloseClick,
   toastDescriptionAttributes,
@@ -865,9 +867,11 @@ export {
   toastShowPayload,
   toastTitleAttributes,
   toastViewportAttributes,
+  toastViewportKeyDown,
 } from './toast.js';
 export type {
   ToastActionAttributeOptions,
+  ToastAnimationEvent,
   ToastButtonEvent,
   ToastChangeDetail,
   ToastChangeOptions,
@@ -888,6 +892,7 @@ export type {
   ToastState,
   ToastVariant,
   ToastViewportAttributeOptions,
+  ToastViewportKeyboardEvent,
 } from './toast.js';
 
 export {
