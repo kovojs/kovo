@@ -217,7 +217,18 @@ function fragmentTargetChildCapturesUnserializableValue(
     .filter((expression) => expression.start >= body.offset && expression.end <= bodyEnd)
     .flatMap((expression) => expression.references);
 
-  return capturesUnserializableReferences(references);
+  return capturesUnserializableReferences(references, {
+    additionalAllowedReferences: moduleRenderInputNames(model),
+    model,
+  });
+}
+
+function moduleRenderInputNames(model: ComponentModuleModel): string[] {
+  return [
+    ...new Set(
+      model.components.flatMap((component) => component.renderInputs.map((input) => input.name)),
+    ),
+  ];
 }
 
 function kv230Diagnostic(
@@ -249,6 +260,12 @@ function kv311Diagnostic(
   const start = generatedOffsetToOriginal(sourceOffsetMap, span?.start);
   return {
     ...diagnosticFor(fileName, 'KV311', source, start, span?.length),
+    help: [
+      `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
+      `Blocked update: ${fact.detail}`,
+      diagnosticDefinitions.KV311.help ?? '',
+      'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
+    ].join('\n'),
     message: `${diagnosticDefinitions.KV311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
 }

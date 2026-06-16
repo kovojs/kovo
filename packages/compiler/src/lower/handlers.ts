@@ -57,7 +57,12 @@ export function lowerEventHandlers(
       );
     }
 
-    if (capturesUnserializableReferences(eventAttributeReferences(eventAttribute), model, params)) {
+    if (
+      capturesUnserializableReferences(eventAttributeReferences(eventAttribute), {
+        elementParams: params,
+        model,
+      })
+    ) {
       diagnostics.push(
         kv201Diagnostic(options.fileName, options.source, attributeStart, {
           attributeName: `on:${eventName}`,
@@ -275,18 +280,16 @@ function uniqueAnonymousHandlerName(
   return count === 1 ? base : `${base}_${count}`;
 }
 
+interface CaptureReferenceContext {
+  additionalAllowedReferences?: readonly string[];
+  elementParams?: readonly ElementParam[];
+  model: ComponentModuleModel;
+}
+
 export function capturesUnserializableReferences(
   references: readonly string[],
-  model?: ComponentModuleModel,
-  params: readonly ElementParam[] = [],
+  context: CaptureReferenceContext,
 ): boolean {
-  if (!model) {
-    const referenceSet = new Set(references);
-    return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
-      referenceSet.has(name),
-    );
-  }
-
   const allowed = new Set([
     'Object',
     'Promise',
@@ -296,9 +299,10 @@ export function capturesUnserializableReferences(
     'setTimeout',
     'state',
     'undefined',
-    ...params.flatMap((param) => referenceRootsForElementParam(param)),
-    ...(model?.namedImports.map((item) => item.localName) ?? []),
-    ...(model?.moduleScopeBindings.map((item) => item.name) ?? []),
+    ...(context.additionalAllowedReferences ?? []),
+    ...(context.elementParams ?? []).flatMap((param) => referenceRootsForElementParam(param)),
+    ...context.model.namedImports.map((item) => item.localName),
+    ...context.model.moduleScopeBindings.map((item) => item.name),
   ]);
 
   return references.some((name) => !allowed.has(name));

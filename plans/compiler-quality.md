@@ -44,6 +44,19 @@ Current maturity rating: **strong early compiler / pre-world-class**.
 - Verification run for this assessment:
   `pnpm --filter @kovojs/compiler exec tsc --noEmit` -> **passed**.
 
+## Quantitative Conformance Bar
+
+A Kovo compiler quality claim is "world-class" only when this compact bar is met against the decided
+corpus: the reference app, the commerce app, and focused generated fixtures.
+
+| Area | Minimum bar |
+| ---- | ----------- |
+| Diagnostic coverage | Every compiler-owned KV2xx/KV3xx diagnostic has a positive fixture, a negative fixture, and a stable text snapshot covering code, severity, message, help/fix menu, and source surface. KV201/KV230 compatibility snapshots are included with this cleanup because they guard the capture-channel contract in SPEC §4.3 and §4.5. |
+| SPEC clause coverage | Every falsifiable compiler promise in SPEC §4.3, §4.6, §4.8, §4.9, §5.2, §6.1.1, §6.4, and §11.3/§11.4 has at least one corpus fixture that proves the accepted path and one that proves the diagnostic or check path. Clause-only design decisions remain recorded as decisions, not test coverage. |
+| Browser matrix | Browser tests are limited to behavior that cannot be proven browser-free and must run on Chromium, Firefox, and WebKit in CI; bulky screenshots/traces stay generated artifacts, not checked-in fixtures. |
+| Performance posture | Performance gates remain deliberately deferred by D3. Until D3 is reopened, compiler performance evidence is descriptive only: full compiler tests, type-checking, and any local timing notes do not constitute a blocking budget. |
+| Security payload matrix | Security fixtures must cover text, title/ARIA attributes, `href`/route URLs, style/CSS values, template stamps, fragment targets, and raw/trusted-HTML escape hatches, with server-render and client-update agreement where both paths exist. |
+
 ## Understandability
 
 Strengths:
@@ -302,12 +315,23 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
   - [x] Decision made: use a reference app, commerce app, and focused generated fixtures as the
         conformance corpus.
     - Evidence 2026-06-15: user accepted D5=A.
-  - [ ] Decision needed: decide what "world-class" means quantitatively for Kovo: diagnostic coverage,
-        SPEC clause coverage, browser matrix, performance budgets, and security payload matrix.
+  - [x] Decision made: quantitative "world-class" bar covers diagnostic coverage, SPEC clause
+        coverage, browser matrix, performance posture, and security payload matrix.
+    - Evidence 2026-06-16: see "Quantitative Conformance Bar" in this plan.
   - [x] Decision made: commit stable text snapshots and generate bulky/browser artifacts in CI.
     - Evidence 2026-06-15: user accepted D5b=A.
+  - [x] Quantitative conformance bar defined for the decided corpus.
+    - Evidence 2026-06-16: `plans/compiler-quality.md` now defines diagnostic coverage, SPEC clause
+      coverage, browser matrix, deliberately deferred performance posture, and security payload
+      matrix under "Quantitative Conformance Bar."
+  - [x] Initial compatibility cleanup snapshots added without bulky/browser artifacts.
+    - Evidence 2026-06-16: `packages/compiler/src/conformance-compat.test.ts` snapshots KV201,
+      KV230, KV235, and KV311 structured diagnostic text; narrow verification
+      `pnpm --filter @kovojs/compiler exec vitest run src/conformance-compat.test.ts
+      src/fragment-targets.test.ts src/query-coverage.test.ts src/state-bindings.test.ts
+      src/stamps.test.ts` passed.
 
-- [ ] **Retire compatibility paths with weaker semantics.**
+- [x] **Retire compatibility paths with weaker semantics.**
   - Risk: compatibility branches preserve old behavior after the main path has improved. The clearest
     current example is `capturesUnserializableReferences()` using a model-backed allowlist in normal
     handler lowering but falling back to the old denylist when called without a model.
@@ -322,6 +346,13 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
         helpers to `test-support.ts`.
     - Evidence 2026-06-15: user accepted D6=A+B. Production code should use only the strong semantic
       form; weak fallback exports should not remain as documented footguns.
+  - Evidence 2026-06-16: `capturesUnserializableReferences()` now requires an explicit
+    model-backed context; `rg -n "capturesUnserializableReferences\\(" packages/compiler/src`
+    shows only handler lowering and fragment-target validation call sites plus the helper
+    definition; `rg -n "capturesUnserializableReferences" packages/compiler/src/index.ts
+    packages/**/*.test.ts packages/conformance-fixtures/src` returns no public export or test
+    helper use. Narrow compiler verification passed with the command listed under the conformance
+    snapshot evidence above.
 
 - [ ] **Broaden diagnostics from detection to teaching.**
   - Risk: diagnostics can correctly detect a problem but still fail SPEC §5.2 rule 5 if they do not
@@ -357,9 +388,12 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
 - [x] **D4: Security context model.** Raw HTML only via Kovo `TrustedHtml` with Trusted Types interop;
       strict URL policy; strict style/CSS policy; CSP/nonces are a compiler/server contract.
   - Evidence 2026-06-15: user accepted D4/B, D4b=A, D4c=A, and D4d=A.
-- [ ] **D5: Conformance bar.** Define the corpus and quantitative meaning of "world-class" for Kovo:
+- [x] **D5: Conformance bar.** Define the corpus and quantitative meaning of "world-class" for Kovo:
       SPEC coverage, diagnostic coverage, browser coverage, performance budgets, and security
       payload matrix.
+  - Evidence 2026-06-16: "Quantitative Conformance Bar" defines the reference-app, commerce-app, and
+    focused-generated-fixture corpus plus the diagnostic, SPEC, browser, performance, and security
+    criteria.
 - [x] **D6: Internal API policy.** Delete weak compatibility helpers by default; move only genuinely
       useful test helpers to `test-support.ts`.
   - Evidence 2026-06-15: user accepted D6=A+B.

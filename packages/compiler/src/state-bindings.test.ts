@@ -285,6 +285,7 @@ export const MixedState = component('mixed-state', {
       {
         code: 'KV311',
         fileName: 'mixed-state.tsx',
+        help: expect.stringContaining('SPEC §4.9'),
         length: 50,
         message:
           'Query/state-dependent DOM position has no update status. MixedState cart.count expression',
@@ -294,6 +295,7 @@ export const MixedState = component('mixed-state', {
       {
         code: 'KV311',
         fileName: 'mixed-state.tsx',
+        help: expect.stringContaining('SPEC §4.9'),
         length: 30,
         message:
           'Query/state-dependent DOM position has no update status. MixedState state.open expression',
@@ -303,6 +305,7 @@ export const MixedState = component('mixed-state', {
       {
         code: 'KV311',
         fileName: 'mixed-state.tsx',
+        help: expect.stringContaining('SPEC §4.9'),
         length: 50,
         message:
           'Query/state-dependent DOM position has no update status. MixedState state.open expression',

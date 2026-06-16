@@ -141,6 +141,52 @@ export const CartTable = component('cart-table', {
     ]);
   });
 
+  it('reports KV230 when fragment target children capture outer locals outside stamped props', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component('cart-table', {
+  render: ({ cart }) => {
+    const snapshot = readSnapshot();
+    return (
+      <table>
+        <CartRow rowId={cart.rowId}>
+          <span>{snapshot.total}</span>
+        </CartRow>
+      </table>
+    );
+  },
+});
+`,
+    });
+
+    expect(
+      result.diagnostics.map(({ code, help, message, severity }) => ({
+        code,
+        help,
+        message,
+        severity,
+      })),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV230",
+          "help": "Would hoist children to: CartRow$slot_children
+      Blocked children: <span>{escapeText(snapshot.total)}</span>
+      Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.",
+          "message": "Fragment-target children cannot lower to a component reference. CartRow",
+          "severity": "error",
+        },
+      ]
+    `);
+  });
+
   it('does not report KV230 for local child variables named like non-serializable captures', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

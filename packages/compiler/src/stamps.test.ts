@@ -354,6 +354,7 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'KV311',
         fileName: 'cart-badge.tsx',
+        help: expect.stringContaining('SPEC §4.9'),
         length: 10,
         message:
           'Query/state-dependent DOM position has no update status. CartBadge cart.total expression',

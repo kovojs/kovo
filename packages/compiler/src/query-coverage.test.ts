@@ -298,6 +298,7 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'KV311',
         fileName: 'cart-badge.tsx',
+        help: expect.stringContaining('SPEC §4.9'),
         length: 13,
         message:
           'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
@@ -307,6 +308,7 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'KV311',
         fileName: 'cart-badge.tsx',
+        help: expect.stringContaining('SPEC §4.9'),
         length: 12,
         message:
           'Query/state-dependent DOM position has no update status. CartBadge product.name expression',
@@ -337,6 +339,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toContainEqual({
       code: 'KV311',
       fileName: 'cart-badge.tsx',
+      help: expect.stringContaining('SPEC §4.9'),
       length: 13,
       message:
         'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
@@ -456,6 +459,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toContainEqual({
       code: 'KV311',
       fileName: 'cart-badge.tsx',
+      help: expect.stringContaining('SPEC §4.9'),
       length: 13,
       message:
         'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
