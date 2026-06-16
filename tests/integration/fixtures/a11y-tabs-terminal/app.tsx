@@ -3,6 +3,7 @@ import { createApp, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/integration/define';
 
 const homeRoute = route('/', {
+  meta: { title: 'Tabs terminal state' },
   page: () => `<main>
     <h1>Tabs terminal state</h1>
     <section aria-label="Account sections">

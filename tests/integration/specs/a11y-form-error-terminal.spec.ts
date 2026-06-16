@@ -1,5 +1,7 @@
 import { expect, test } from '@kovojs/test/integration';
 
+import { expectAxeClean } from './a11y-axe';
+
 test.use({ kovoFixture: 'a11y-form-error-terminal' });
 
 test('enhanced form error terminal state links invalid field to alert text', async ({
@@ -21,6 +23,7 @@ test('enhanced form error terminal state links invalid field to alert text', asy
   await expect(email).toHaveAttribute('aria-describedby', 'email-error');
   await expect(page.getByRole('alert')).toHaveText('Enter a valid email address.');
   await expect(page.locator('[data-error-path="email"]')).toHaveCount(1);
+  await expectAxeClean(page);
 
   expect(
     await kovoApp.semantic('[kovo-fragment-target="newsletter-form"]', {

@@ -8,6 +8,7 @@
     "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/test": "workspace:*",
+    "axe-core": "4.12.1",
     "kovo": "workspace:*"
   }
 }

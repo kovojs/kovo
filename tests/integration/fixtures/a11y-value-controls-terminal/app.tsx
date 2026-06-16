@@ -3,6 +3,7 @@ import { createApp, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/integration/define';
 
 const homeRoute = route('/', {
+  meta: { title: 'Value controls' },
   page: () => `<main>
     <h1>Value controls</h1>
     <label for="volume">Volume</label>

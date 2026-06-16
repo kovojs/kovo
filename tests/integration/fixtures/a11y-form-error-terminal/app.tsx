@@ -28,6 +28,7 @@ function renderForm(failure?: MutationFail): string {
 }
 
 const homeRoute = route('/', {
+  meta: { title: 'Newsletter error state' },
   page: () => `<main>
     <h1>Newsletter</h1>
     ${renderForm()}

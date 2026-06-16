@@ -1,5 +1,7 @@
 import { expect, test } from '@kovojs/test/integration';
 
+import { expectAxeClean } from './a11y-axe';
+
 test.use({ kovoFixture: 'a11y-value-controls-terminal' });
 
 test('native value controls expose terminal role name and value semantics', async ({
@@ -21,6 +23,7 @@ test('native value controls expose terminal role name and value semantics', asyn
   await expect(page.getByRole('group', { name: 'One-time code' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Digit 1' })).toHaveValue('4');
   await expect(page.getByRole('textbox', { name: 'Digit 2' })).toHaveValue('2');
+  await expectAxeClean(page);
 
   expect(
     await kovoApp.semantic('main', {

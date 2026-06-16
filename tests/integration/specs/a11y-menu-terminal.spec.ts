@@ -1,5 +1,7 @@
 import { expect, test } from '@kovojs/test/integration';
 
+import { expectAxeClean } from './a11y-axe';
+
 test.use({ kovoFixture: 'a11y-menu-terminal' });
 
 test('menu terminal open state exposes expanded trigger and active item semantics', async ({
@@ -20,6 +22,7 @@ test('menu terminal open state exposes expanded trigger and active item semantic
     'data-state',
     'active',
   );
+  await expectAxeClean(page);
 
   expect(
     await kovoApp.semantic('main', {

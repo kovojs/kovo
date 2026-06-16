@@ -552,6 +552,9 @@ importers:
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
+      axe-core:
+        specifier: 4.12.1
+        version: 4.12.1
       kovo:
         specifier: workspace:*
         version: link:../../packages/cli

@@ -1,5 +1,7 @@
 import { expect, test } from '@kovojs/test/integration';
 
+import { expectAxeClean } from './a11y-axe';
+
 test.use({ kovoFixture: 'a11y-tabs-terminal' });
 
 test('tabs terminal selected state exposes role and panel relationships', async ({
@@ -18,6 +20,7 @@ test('tabs terminal selected state exposes role and panel relationships', async 
     'aria-selected',
     'false',
   );
+  await expectAxeClean(page);
 
   expect(
     await kovoApp.semantic('[aria-label="Account sections"]', {

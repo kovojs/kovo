@@ -3,6 +3,7 @@ import { createApp, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/integration/define';
 
 const homeRoute = route('/', {
+  meta: { title: 'Menu terminal state' },
   page: () => `<main>
     <h1>Menu terminal state</h1>
     <button type="button" id="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu" on:click="/client.ts#openMenu">Account actions</button>

@@ -3,6 +3,7 @@ import { createApp, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/integration/define';
 
 const homeRoute = route('/', {
+  meta: { title: 'Dialog terminal state' },
   page: () => `<main>
     <h1>Dialog terminal state</h1>
     <button type="button" commandfor="settings-dialog" command="show-modal">Open settings</button>
