@@ -30,7 +30,7 @@ const toolbarItems = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
+export const GalleryToolbarDemo = component({
   state: () => ({ activeValue: 'bold', pressedValue: 'bold' }),
   render: (_queries: Record<string, never>, state: GalleryToolbarDemoState) => {
     const rootState = {

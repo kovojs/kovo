@@ -35,7 +35,7 @@ you'll never write the code that makes that happen.
 import { component } from '@kovojs/core';
 import { cartQuery } from './queries.js';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <cart-badge>

@@ -42,7 +42,7 @@ export interface GalleryPopoverDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryPopoverDemo = component('gallery-popover-demo', {
+export const GalleryPopoverDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryPopoverDemoState) => {
     const contentId = 'gallery-popover-content';

@@ -27,7 +27,7 @@ export interface GalleryAccordionDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryAccordionDemo = component('gallery-accordion-demo', {
+export const GalleryAccordionDemo = component({
   state: () => ({ activeValue: 'shipping', value: 'shipping' }),
   render: (_queries: Record<string, never>, state: GalleryAccordionDemoState) => {
     const rootState = {

@@ -265,7 +265,7 @@ describe('server app shell Vite plugin', () => {
       ],
       fileName: 'src/components/cart.tsx',
       source: [
-        'export const Cart = component("cart", {',
+        'export const Cart = component({',
         '  render: () => <p><div /></p>',
         '});',
       ].join('\n'),

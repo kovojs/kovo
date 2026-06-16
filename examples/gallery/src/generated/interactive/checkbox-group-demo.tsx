@@ -81,7 +81,7 @@ const checkboxItems = Object.freeze([{ value: 'updates' }, { value: 'billing' }]
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryCheckboxGroupDemo = component('gallery-checkbox-group-demo', {
+export const GalleryCheckboxGroupDemo = component({
   state: () => ({ activeValue: 'updates', value: 'updates' }),
   render: (_queries: Record<string, never>, state: GalleryCheckboxGroupDemoState) => {
     const selectedValues =

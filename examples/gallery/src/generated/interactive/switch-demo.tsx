@@ -33,7 +33,7 @@ export interface GallerySwitchDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GallerySwitchDemo = component('gallery-switch-demo', {
+export const GallerySwitchDemo = component({
   state: () => ({ checked: false }),
   render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => (
     <label

@@ -31,7 +31,7 @@ const SAMPLE = [
   '',
   '```ts',
   "import { component } from '@kovojs/core';",
-  "const c = component('x', { render: () => null });",
+  "const c = component({ render: () => null });",
   '```',
 ].join('\n');
 

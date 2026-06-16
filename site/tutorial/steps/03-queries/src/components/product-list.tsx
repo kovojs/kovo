@@ -11,7 +11,7 @@ import { productsQuery, type ProductsResult } from '../queries.js';
 // stamps, morph, and optimistic reordering (section 4.8).
 
 // snippet:product-list
-export const ProductList = component('product-list', {
+export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }) => (
     <ul class="products">

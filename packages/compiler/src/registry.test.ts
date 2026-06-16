@@ -11,7 +11,7 @@ import {
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
@@ -48,9 +48,9 @@ describe('compiler registry and graph emission', () => {
     expect(registry).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
-    expect(registry).toContain("'cart-badge': {};");
+    expect(registry).toContain("'components/cart/cart-badge/cart-badge': {};");
     expect(registry).toContain(`interface FragmentTargets {
-  'cart-badge': {};
+  'components/cart/cart-badge/cart-badge': {};
   }`);
     expect(registry).toContain(`export interface QueryRegistry {
   'cart': typeof cartQuery;
@@ -65,7 +65,7 @@ describe('compiler registry and graph emission', () => {
 }`);
     expect(registry).toContain(`declare module '@kovojs/core' {
   interface FragmentTargets {
-  'cart-badge': {};
+  'components/cart/cart-badge/cart-badge': {};
   }
 
   interface QueryRegistry {
@@ -174,7 +174,7 @@ describe('compiler registry and graph emission', () => {
       source: `
 import { component } from '@kovojs/core';
 
-export const ProductGrid = component('product-grid', {
+export const ProductGrid = component({
   queries: { productGrid: {} },
   render: () => <section><ul data-bind="productGrid.items"></ul></section>,
 });
@@ -183,8 +183,8 @@ export const ProductGrid = component('product-grid', {
 
     expect(cartBadge.componentGraphFacts).toEqual([
       {
-        fragments: ['cart-badge'],
-        name: 'CartBadge',
+        fragments: ['components/cart/cart-badge/cart-badge'],
+        name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
       },
     ]);
@@ -203,20 +203,23 @@ export const ProductGrid = component('product-grid', {
 
     expect(derived.graph.components).toEqual([
       {
-        fragments: ['cart-badge'],
-        name: 'CartBadge',
+        fragments: ['components/cart/cart-badge/cart-badge'],
+        name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
       },
       {
-        name: 'ProductGrid',
+        name: 'components/products/product-grid/product-grid',
         queries: ['productGrid'],
       },
     ]);
     expect(derived.diagnostics).toEqual([]);
     expect(derived.registryFacts).toEqual({
-      components: ['cart-badge', 'product-grid'],
+      components: [
+        'components/cart/cart-badge/cart-badge',
+        'components/products/product-grid/product-grid',
+      ],
       domainKeys: ['cart', 'product'],
-      fragmentTargets: ['cart-badge'],
+      fragmentTargets: ['components/cart/cart-badge/cart-badge'],
       invalidations: {
         'cart/add': ['cart'],
       },

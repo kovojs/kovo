@@ -21,7 +21,7 @@ import { cartQuery } from '../queries.js';
 // in the browser. `kovo-fragment-target` is an authored attribute (not a lowered
 // stamp), so it does not violate the section 4.8 "authored sugar carries no
 // stamps" gate.
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartQueryResult }) => (

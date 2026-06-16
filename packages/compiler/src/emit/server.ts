@@ -6,7 +6,6 @@ import {
   componentRenderHost,
   componentRenderHostElement,
   componentStateReturnObjectModel,
-  firstComponentModel,
   parseComponentModule,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -35,8 +34,9 @@ export function emitServerModule(renderedSource: string): EmittedServerModule {
 export function serverRenderLowering(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
+  domComponentName: string,
 ): SourceReplacement[] {
-  return serverRenderPatches(handlers, model);
+  return serverRenderPatches(handlers, model, domComponentName);
 }
 
 export function renderEquivalenceCheck(
@@ -283,6 +283,7 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
 function serverRenderPatches(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
+  domComponentName: string,
 ): SourceReplacement[] {
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
@@ -314,7 +315,7 @@ function serverRenderPatches(
         .filter((handler) => !chainedHandlers.has(handler))
         .map(handlerSourceReplacement),
     );
-    patches.push(...renderHostStampPatches(model, hostElement));
+    patches.push(...renderHostStampPatches(model, hostElement, domComponentName));
   }
 
   return patches;
@@ -404,10 +405,11 @@ function handlerAttributeReplacement(handler: HandlerLowering): string {
 function renderHostStampPatches(
   model: ComponentModuleModel,
   hostElement: JsxElementModel,
+  domComponentName: string,
 ): SourceReplacement[] {
   const patches: SourceReplacement[] = [];
   const insertedAttributes: string[] = [];
-  const componentIdentity = componentIdentityStamp(model, hostElement);
+  const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
   const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
   const stateJson = staticStateJson(model);
 
@@ -445,18 +447,15 @@ function renderHostStampPatches(
 // sugar) and emits it explicitly on native hosts (`<tr kovo-c="cart-row">`), so
 // authored sugar never hand-writes the stamp (§4.8 residual-string rule).
 function componentIdentityStamp(
-  model: ComponentModuleModel,
   hostElement: JsxElementModel,
+  domComponentName: string,
 ): string | null {
-  const componentName = firstComponentModel(model)?.explicitName;
-  if (!componentName) return null;
-
   const tagName = hostElement.tag;
   if (tagName !== tagName.toLowerCase()) return null;
-  if (tagName === componentName || tagName.includes('-')) return null;
+  if (tagName === domComponentName || tagName.includes('-')) return null;
   if (hostElement.attributes.some((attribute) => attribute.name === 'kovo-c')) return null;
 
-  return `kovo-c="${escapeAttribute(componentName)}"`;
+  return `kovo-c="${escapeAttribute(domComponentName)}"`;
 }
 
 function declaredQueryDepsStamp(

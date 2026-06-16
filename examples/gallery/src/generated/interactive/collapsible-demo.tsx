@@ -42,7 +42,7 @@ export interface GalleryCollapsibleDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryCollapsibleDemo = component('gallery-collapsible-demo', {
+export const GalleryCollapsibleDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryCollapsibleDemoState) => {
     const contentId = 'gallery-collapsible-content';

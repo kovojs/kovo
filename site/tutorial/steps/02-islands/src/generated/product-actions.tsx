@@ -18,7 +18,7 @@ export type ProductActionsState = {
 };
 
 // snippet:product-actions
-export const ProductActions = component('product-actions', {
+export const ProductActions = component({
   state: (): ProductActionsState => ({ saved: 0 }),
   render: (_queries: Record<string, never>, state: ProductActionsState) => (
     <product-actions kovo-state="{&quot;saved&quot;:0}">

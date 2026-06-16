@@ -134,7 +134,7 @@ borrowing its concrete API/spike detail.
     md: { height: 36, paddingInline: 12 },
   });
 
-  export const Button = component('button', {
+  export const Button = component({
     render({ variant = 'primary', size = 'md', style: override, children }: ButtonProps) {
       // `style={[...]}`: array of style objects, override last (wins by position). Compiler merges
       // statically to `class="kv-button-…"` when nothing is dynamic; emits a §4.8 toggle when it is.

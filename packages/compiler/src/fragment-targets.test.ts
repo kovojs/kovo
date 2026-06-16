@@ -8,17 +8,17 @@ const kv303 = diagnosticDefinitions.KV303;
 const kv238 = diagnosticDefinitions.KV238;
 
 describe('fragment target validation', () => {
-  it('reports KV238 for duplicate fragment-target wire names', () => {
+  it('reports KV238 for duplicate derived fragment-target registry names', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
 
-export const CartRowAlias = component('cart-row', {
+export const Cart_Row = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
@@ -32,13 +32,13 @@ export const CartRowAlias = component('cart-row', {
         fileName: 'cart-row.tsx',
         help: [
           kv238.help,
-          'Fragment target: cart-row',
-          'First writer: CartRow component("cart-row")',
-          'Duplicate writer: CartRowAlias component("cart-row")',
-          "Would emit registry:\ninterface FragmentTargets {\n  'cart-row': ...;\n}",
+          'Fragment target: cart-row/cart-row',
+          'First writer: CartRow',
+          'Duplicate writer: Cart_Row',
+          "Would emit registry:\ninterface FragmentTargets {\n  'cart-row/cart-row': ...;\n}",
         ].join('\n'),
         message:
-          'Duplicate fragment-target wire name. cart-row is used by CartRow component("cart-row") and CartRowAlias component("cart-row").',
+          'Duplicate fragment-target wire name. cart-row/cart-row is used by CartRow and Cart_Row.',
         severity: 'error',
       }),
     );
@@ -48,13 +48,13 @@ export const CartRowAlias = component('cart-row', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
 });
 
-export const OrderRow = component('order-row', {
+export const OrderRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
@@ -68,9 +68,9 @@ export const OrderRow = component('order-row', {
   it('reports KV238 when registry facts already contain the fragment target name', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
-      registryFacts: { fragmentTargets: ['cart-row'] },
+      registryFacts: { fragmentTargets: ['cart-row/cart-row'] },
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr data-row={rowId}></tr>,
@@ -83,7 +83,7 @@ export const CartRow = component('cart-row', {
         code: 'KV238',
         help: expect.stringContaining('registryFacts.fragmentTargets'),
         message:
-          'Duplicate fragment-target wire name. cart-row is already present in registry facts and is reused by CartRow component("cart-row").',
+          'Duplicate fragment-target wire name. cart-row/cart-row is already present in registry facts and is reused by CartRow.',
       }),
     );
   });
@@ -92,7 +92,7 @@ export const CartRow = component('cart-row', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String, quantity: Number, selected: Boolean },
   queries: { cart: cartQuery },
@@ -103,10 +103,10 @@ export const CartRow = component('cart-row', {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.files[2]?.source).toContain(
-      "'cart-row': { rowId: string; quantity: number; selected: boolean };",
+      "'cart-row/cart-row': { rowId: string; quantity: number; selected: boolean };",
     );
     expect(result.files[2]?.source).toContain(`interface FragmentTargets {
-  'cart-row': { rowId: string; quantity: number; selected: boolean };
+  'cart-row/cart-row': { rowId: string; quantity: number; selected: boolean };
   }`);
   });
 
@@ -116,7 +116,7 @@ export const CartRow = component('cart-row', {
       source: `
 const jsonProp = createJsonProp();
 
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String, payload: jsonProp },
   render: ({ rowId, payload }) => <tr kovo-c="cart-row" data-row={rowId}>{renderOnce(payload.label)}</tr>,
@@ -125,15 +125,17 @@ export const CartRow = component('cart-row', {
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.files[2]?.source).toContain("'cart-row': { rowId: string; payload: unknown };");
-    expect(result.files[2]?.source).not.toContain("'cart-row': {};");
+    expect(result.files[2]?.source).toContain(
+      "'cart-row/cart-row': { rowId: string; payload: unknown };",
+    );
+    expect(result.files[2]?.source).not.toContain("'cart-row/cart-row': {};");
   });
 
   it('reports KV303 when fragment target render inputs cannot be rerendered from queries or stamped props', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart, priceList }) => <tr kovo-c="cart-row">{renderOnce(cart.count)}{priceList.version}</tr>,
@@ -159,13 +161,13 @@ export const CartRow = component('cart-row', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => (
     <table>
       <CartRow rowId={cart.rowId}>
@@ -184,13 +186,13 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => (
     <table>
       <CartRow rowId={cart.rowId}>
@@ -226,13 +228,13 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => {
     const snapshot = readSnapshot();
     return (
@@ -274,13 +276,13 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => {
     return (
       <table>
@@ -301,13 +303,13 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => {
     const sample = '<CartRow><span>{window.location.href}</span></CartRow>';
     // <CartRow><span>{request.url}</span></CartRow>
@@ -330,9 +332,9 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-const sample = "export const CartRow = component('cart-row', { fragmentTarget: true, render: () => null });";
-// export const OtherRow = component('other-row', { fragmentTarget: true, render: () => null });
-export const CartTable = component('cart-table', {
+const sample = "export const CartRow = component({ fragmentTarget: true, render: () => null });";
+// export const OtherRow = component({ fragmentTarget: true, render: () => null });
+export const CartTable = component({
   render: () => (
     <table>
       <CartRow>
@@ -351,9 +353,9 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-const sample = "export const CartRow = component('cart-row', { fragmentTarget: true, render: () => null });";
-// export const OtherRow = component('other-row', { fragmentTarget: true, render: () => null });
-export const CartTable = component('cart-table', {
+const sample = "export const CartRow = component({ fragmentTarget: true, render: () => null });";
+// export const OtherRow = component({ fragmentTarget: true, render: () => null });
+export const CartTable = component({
   queries: { cart: {} },
   render: () => (
     <table>
@@ -368,7 +370,7 @@ export const CartTable = component('cart-table', {
 
     expect(result.componentGraphFacts).toEqual([
       {
-        name: 'CartTable',
+        name: 'cart-row/cart-table',
         queries: ['cart'],
       },
     ]);

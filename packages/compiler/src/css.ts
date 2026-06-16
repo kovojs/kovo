@@ -2,11 +2,10 @@ import { findMatchingToken } from './scan/text.js';
 import {
   componentOptionStaticTemplateValue,
   componentRenderHostElement,
-  firstComponentModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
 import { cssIrHeader } from './ir.js';
-import { escapeAttribute, indent, kebabCase } from './shared.js';
+import { escapeAttribute, indent } from './shared.js';
 
 /**
  * @internal A scoped-CSS asset reference produced by the compiler (href, optional critical
@@ -374,10 +373,8 @@ function extractStaticComponentCss(model: ComponentModuleModel): string | null {
   );
 }
 
-function componentHostSelector(componentName: string, model: ComponentModuleModel): string {
-  const component = firstComponentModel(model);
-  const explicitName = component?.explicitName;
-  const hostName = explicitName ?? kebabCase(componentName);
+function componentHostSelector(domComponentName: string, model: ComponentModuleModel): string {
+  const hostName = domComponentName;
   const renderedHost = componentRenderHostElement(model)?.tag ?? null;
 
   return renderedHost === hostName ? hostName : `[kovo-c="${escapeAttribute(hostName)}"]`;

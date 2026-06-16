@@ -54,7 +54,7 @@ import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/pr
 
   it('records trimmed JSX child bodies with original source offsets', () => {
     const source = `
-export const ChildSlot = component('child-slot', {
+export const ChildSlot = component({
   fragmentTarget: true,
   render: () => (
     <ChildSlot>
@@ -78,7 +78,7 @@ export const ChildSlot = component('child-slot', {
 
   it('records JSX expression container spans for source patches', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <cart-badge>Total: {cart.count} items</cart-badge>,
 });
 `;
@@ -98,7 +98,7 @@ export const CartBadge = component('cart-badge', {
 
   it('records sole JSX expression children as parsed child facts', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <section>
       <cart-badge>
@@ -138,7 +138,7 @@ export const CartBadge = component('cart-badge', {
 
   it('records sole JSX property access expressions with optional receiver segments', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <span>{cart.count}</span>
@@ -163,7 +163,7 @@ export const CartBadge = component('cart-badge', {
 
   it('returns the parsed component render host element', () => {
     const source = `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: () => <section kovo-deps="product:p1 cart">Recommended</section>,
 });
@@ -178,7 +178,7 @@ export const Recommendations = component('recommendations', {
 
   it('records first HTML tag names for string-rendered component returns', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: ({ cart }) => \`<cart-badge><span>\${cart.count}</span></cart-badge>\`,
 });
 `;
@@ -196,7 +196,7 @@ export const CartBadge = component('cart-badge', {
 
   it('records static literal state return values', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ label: "it's ready", count: -2, open: false, meta: { empty: null } }),
   render: () => <cart-badge>Ready</cart-badge>,
 });
@@ -213,7 +213,7 @@ export const CartBadge = component('cart-badge', {
 
   it('leaves non-static state return values unstamped in the model', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ now: Date.now() }),
   render: () => <cart-badge>Ready</cart-badge>,
 });
@@ -225,7 +225,7 @@ export const CartBadge = component('cart-badge', {
 
   it('records state return initializer property accesses as parser facts', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ saved: cart.count, local: 'draft' }),
   render: () => <cart-badge>Ready</cart-badge>,
 });
@@ -251,7 +251,7 @@ export const CartBadge = component('cart-badge', {
 
   it('records component prop constructor types as parser model facts', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   props: { label: String, count: Number, open: Boolean, meta: customProp },
   css: \`
     cart-badge { color: red; }
@@ -328,7 +328,7 @@ export const save = mutation('cart/save', {
 
   it('records zero-argument JSX arrow attribute body facts', () => {
     const source = `
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => { log('item.id'); state.count += item.quantity; }}>Add</button>
   ),
@@ -384,7 +384,7 @@ export const CartActions = component('cart-actions', {
 
   it('records local declaration names inside zero-argument JSX arrow attributes', () => {
     const source = `
-export const Tabs = component('tabs', {
+export const Tabs = component({
   render: () => (
     <button onClick={() => { const result = choose(item.id); state.value = result.value; }}>Pick</button>
   ),
@@ -398,7 +398,7 @@ export const Tabs = component('tabs', {
 
   it('records document element actions on zero-argument JSX arrow attributes', () => {
     const source = `
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>
   ),
@@ -417,7 +417,7 @@ export const CartActions = component('cart-actions', {
 
   it('attaches JSX comments to the following attribute when no JSX content intervenes', () => {
     const source = `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       {/* KV211: intentionally eager. */}
@@ -437,7 +437,7 @@ export const ExecutionTriggers = component('execution-triggers', {
 
   it('does not attach JSX comments across element boundaries', () => {
     const source = `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <p>{/* KV211: this paragraph is not the eager trigger. */}</p>
@@ -454,7 +454,7 @@ export const ExecutionTriggers = component('execution-triggers', {
 
   it('records handler property access boolean and number usage contexts', () => {
     const source = `
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => track(item.quantity > 0, !item.selected, item.name)}>Add</button>
   ),
@@ -489,7 +489,7 @@ export const CartActions = component('cart-actions', {
 
   it('records JSX attribute and child expression property access facts', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <button disabled={cart.count === 0}>Checkout</button>
@@ -524,7 +524,7 @@ export const CartBadge = component('cart-badge', {
 
   it('records JSX ancestor tags for element model consumers', () => {
     const source = `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <p><span><strong>Cart</strong></span></p>
@@ -540,7 +540,7 @@ export const CartShell = component('cart-shell', {
 
   it('records JSX opening tag and child source for model-driven lowerers', () => {
     const source = `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => (
     <section>
       <Link to="/products/:id" params={{ id: 'p1' }}>Product</Link>
@@ -568,7 +568,7 @@ export const ProductCard = component('product-card', {
 
   it('records call argument property access facts', () => {
     const source = `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <span>{renderOnce(format(cart.count), "cart.discount", product.name, { product: { unitPrice: product.unitPrice }, clientOnly })}</span>,
 });
 export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count === 0);
@@ -611,7 +611,7 @@ export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count ===
 
   it('records static literal JSX attribute expression values', () => {
     const source = `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <Link
       to="/products/:id"
@@ -637,7 +637,7 @@ export const ProductLinks = component('product-links', {
 
   it('records references and property accesses on JSX attribute expressions', () => {
     const source = `
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => <button onClick={track(item.id, "window.location")}>Save</button>,
 });
 `;
@@ -650,7 +650,7 @@ export const CartActions = component('cart-actions', {
 
   it('records call argument facts on zero-argument JSX arrow attributes', () => {
     const source = `
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => saveItem('literal,item', item.id, { quantity: item.quantity }, state)}>
       Save

@@ -177,7 +177,7 @@ import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets';
 
-export const Shell = component('shell', {
+export const Shell = component({
   render: () => <section></section>,
 });
 `,

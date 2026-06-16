@@ -25,7 +25,7 @@ export interface ProductListRenderContext {
   request?: ShopRequest | undefined;
 }
 
-export const ProductList = component('product-list', {
+export const ProductList = component({
   fragmentTarget: true,
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (

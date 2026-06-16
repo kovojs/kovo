@@ -8,7 +8,7 @@ import { applySourceReplacements } from './shared.js';
 describe('navigation lowering', () => {
   it('exposes static Link lowering as explicit source patches', () => {
     const source = `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => <Link to="/products/:id" params={{ id: 'p 1' }}>Product</Link>,
 });
 `;
@@ -47,7 +47,7 @@ export const ProductLinks = component('product-links', {
 
   it('lowers parsed multiline Link opening tags without source-regex matching', () => {
     const source = `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <Link
       className="product-link"
@@ -97,7 +97,7 @@ export const ProductLinks = component('product-links', {
 
   it('exposes static href lowering as explicit source patches', () => {
     const source = `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => <a href={href('/products/:id', { params: { id: 'p1' } })}>Product</a>,
 });
 `;
@@ -121,7 +121,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/cart', '/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <a href="/products/p1?max=500">Product</a>
@@ -144,7 +144,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/cart', '/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <Link className="product-link" to="/products/:id" params={{ id: 'p 1' }} search={{ max: 500, sort: 'price' }}>
@@ -171,7 +171,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/cart'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <Link aria-label="Cart" to="/cart" />
@@ -194,7 +194,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: ({ product }) => {
     const target = href('/products/:id', { params: { id: product.id } });
     return <Link className="product-link" to={target}>Product</Link>;
@@ -218,7 +218,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => {
     const sample = '<Link to="/missing">Missing</Link>';
     // <Link to="/also-missing">Missing</Link>
@@ -244,7 +244,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/cart', '/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <a href={href('/products/:id', { params: { id: 'p1' }, search: { max: 500, sort: 'price' } })}>
@@ -269,7 +269,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/products/:id.:format'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <a href={href('/products/:id.:format', { params: { id: 'p 1', format: 'json' }, search: { token: 'a:b' } })}>
@@ -293,7 +293,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => {
     const sample = "href('/products/:id', { params: { id: 'p1' } })";
     // href('/products/:id', { params: { id: 'p2' } })
@@ -321,7 +321,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/cart', '/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <a href="/product/p1">Product</a>
@@ -359,7 +359,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/docs/v1.0/:slug', '/files/[raw]'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <a href="/docs/v1.0/intro?tab=api">Docs</a>
@@ -390,7 +390,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/cart', '/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => {
     const sample = '<a href="/missing">Missing</a><form action="/checkout"></form>';
     // <a href="/also-missing">Missing</a>
@@ -410,7 +410,7 @@ export const ProductLinks = component('product-links', {
         routes: ['/products/:id'],
       },
       source: `
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => {
     const sample = 'href={"/missing"}';
     // href={"/also-missing"}

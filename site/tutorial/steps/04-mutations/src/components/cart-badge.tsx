@@ -9,7 +9,7 @@ import { cartQuery, type CartResult } from '../queries.js';
 // queries, so the server can always answer a re-render request (section 4.1).
 
 // snippet:cart-badge
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (

@@ -7,7 +7,7 @@ describe('compiler state bindings', () => {
     const result = compileComponentModule({
       fileName: 'switch-demo.tsx',
       source: `
-export const SwitchDemo = component('switch-demo', {
+export const SwitchDemo = component({
   state: () => ({ checked: false }),
   render: (_queries, state) => (
     <switch-demo>
@@ -41,7 +41,7 @@ export const SwitchDemo = component('switch-demo', {
     const result = compileComponentModule({
       fileName: 'toggle-demo.tsx',
       source: `
-export const ToggleDemo = component('toggle-demo', {
+export const ToggleDemo = component({
   state: () => ({ pressed: false }),
   render: (_queries, state) => (
     <toggle-demo>
@@ -75,7 +75,7 @@ export const ToggleDemo = component('toggle-demo', {
     const result = compileComponentModule({
       fileName: 'accordion-demo.tsx',
       source: `
-export const AccordionDemo = component('accordion-demo', {
+export const AccordionDemo = component({
   state: () => ({ value: '' }),
   render: (_queries, state) => (
     <accordion-demo>
@@ -113,7 +113,7 @@ export const AccordionDemo = component('accordion-demo', {
       fileName: 'counter.tsx',
       queryShapes: { cart: { count: 'number' } },
       source: `
-export const Counter = component('counter', {
+export const Counter = component({
   state: () => ({ count: 0 }),
   render: (_queries, state) => (
     <counter>
@@ -143,7 +143,7 @@ export const Counter = component('counter', {
     const valid = compileComponentModule({
       fileName: 'profile-card.tsx',
       source: `
-export const ProfileCard = component('profile-card', {
+export const ProfileCard = component({
   state: () => ({ profile: { name: 'Ada' } }),
   render: (_queries, state) => (
     <profile-card>
@@ -156,7 +156,7 @@ export const ProfileCard = component('profile-card', {
     const invalid = compileComponentModule({
       fileName: 'bad-profile-card.tsx',
       source: `
-export const BadProfileCard = component('bad-profile-card', {
+export const BadProfileCard = component({
   state: () => ({ profile: { name: 'Ada' } }),
   render: () => (
     <bad-profile-card>
@@ -184,7 +184,7 @@ export const BadProfileCard = component('bad-profile-card', {
     const result = compileComponentModule({
       fileName: 'disclosure-demo.tsx',
       source: `
-export const DisclosureDemo = component('disclosure-demo', {
+export const DisclosureDemo = component({
   state: () => ({ open: false }),
   render: (_queries, state) => (
     <disclosure-demo>
@@ -240,7 +240,7 @@ export const DisclosureDemo = component('disclosure-demo', {
     const result = compileComponentModule({
       fileName: 'mixed-state.tsx',
       source: `
-export const MixedState = component('mixed-state', {
+export const MixedState = component({
   queries: { cart: {} },
   state: () => ({ open: false }),
   render: (_queries, state) => (
@@ -259,7 +259,7 @@ export const MixedState = component('mixed-state', {
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'cart.count',
-        sourceSpan: { length: 50, start: 253 },
+        sourceSpan: { length: 50, start: 238 },
         status: 'UNHANDLED',
       },
       {
@@ -268,7 +268,7 @@ export const MixedState = component('mixed-state', {
         position: 'expression',
         query: 'state.open',
         source: 'state',
-        sourceSpan: { length: 30, start: 187 },
+        sourceSpan: { length: 30, start: 172 },
         status: 'UNHANDLED',
       },
       {
@@ -277,7 +277,7 @@ export const MixedState = component('mixed-state', {
         position: 'expression',
         query: 'state.open',
         source: 'state',
-        sourceSpan: { length: 50, start: 253 },
+        sourceSpan: { length: 50, start: 238 },
         status: 'UNHANDLED',
       },
     ]);
@@ -319,7 +319,7 @@ export const MixedState = component('mixed-state', {
     const result = compileComponentModule({
       fileName: 'state-once.tsx',
       source: `
-export const StateOnce = component('state-once', {
+export const StateOnce = component({
   state: () => ({ tone: 'calm' }),
   render: (_queries, state) => (
     <state-once>
@@ -350,7 +350,7 @@ export const StateOnce = component('state-once', {
     const result = compileComponentModule({
       fileName: 'bad-state-query.tsx',
       source: `
-export const BadStateQuery = component('bad-state-query', {
+export const BadStateQuery = component({
   queries: { state: stateQuery },
   render: () => <bad-state-query />,
 });

@@ -1,7 +1,6 @@
 import type { ComponentCssAsset } from '../css.js';
 import { compilerIrHeader } from '../ir.js';
 import type { PlatformSubstitution } from '../lower/platform.js';
-import { kebabCase } from '../shared.js';
 import type {
   FragmentTargetFact,
   HandlerLowering,
@@ -15,17 +14,19 @@ export interface EmitRegistryModuleOptions {
   clientFileName: string;
   cssAssets: readonly ComponentCssAsset[];
   componentName: string;
+  domComponentName: string;
   fragmentTargetFacts: readonly FragmentTargetFact[];
   handlers: readonly Pick<HandlerLowering, 'exportName'>[];
   platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   registryFacts?: RegistryFacts;
+  registryComponentName: string;
   viewTransitions: readonly ViewTransitionStamp[];
 }
 
 export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
   const handlerModuleLine = options.handlers.length
-    ? `  '#${kebabCase(options.componentName)}': typeof import('../${options.clientFileName}');`
+    ? `  '#${options.domComponentName}': typeof import('../${options.clientFileName}');`
     : '';
   const fragmentTargetLines = options.fragmentTargetFacts
     .map((fact) => `  '${fact.target}': ${fact.propsType};`)
@@ -33,7 +34,7 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
   const platformSubstitutionLines = options.platformSubstitutions
     .map(
       (substitution) =>
-        `  '${options.componentName}:${substitution.tag}:${substitution.event}:${substitution.target}': '${substitution.kind}:${substitution.action}';`,
+        `  '${options.registryComponentName}:${substitution.tag}:${substitution.event}:${substitution.target}': '${substitution.kind}:${substitution.action}';`,
     )
     .join('\n');
   const viewTransitionLines = options.viewTransitions

@@ -12,7 +12,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 const prefixFixtureSource = `
 import { component } from '@kovojs/core';
 
-export const Shell = component('shell', {
+export const Shell = component({
   render: () => <section></section>,
 });
 `;
@@ -83,7 +83,7 @@ import { component } from '@kovojs/core';
 import { Dialog } from '@acme/primitives/dialog';
 import '@other/acme-widgets';
 
-export const Shell = component('shell', {
+export const Shell = component({
   render: () => <section></section>,
 });
 `,
@@ -128,7 +128,7 @@ import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/acme-widgets';
 
-export const Shell = component('shell', {
+export const Shell = component({
   render: () => <section></section>,
 });
 `,

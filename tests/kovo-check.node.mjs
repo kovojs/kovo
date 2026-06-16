@@ -885,7 +885,7 @@ void test('P2 compiler merges view transition stamps into existing styles', asyn
     source: `
 import { component } from '@kovojs/core';
 
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <img style="opacity: .8" viewTransitionName="product-p1-image" src="/p1.png" />,
 });
 `,
@@ -1016,7 +1016,7 @@ void test('P1 compiler emits KV311 update coverage facts', async () => {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {}, product: {} },
   render: () => (
     <cart-badge>
@@ -1150,7 +1150,7 @@ void test('P1 compiler validates binding stamp expression drift', async () => {
         source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
 });
@@ -1174,7 +1174,7 @@ export const CartBadge = component('cart-badge', {
         source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span data-bind="cart.count">{cart.total}</span>,
 });
@@ -1210,7 +1210,7 @@ void test('P1 compiler validates primitive composition attribute merges', async 
         source: `
 import { component } from '@kovojs/core';
 
-export const PrimitiveMerge = component('primitive-merge', {
+export const PrimitiveMerge = component({
   render: () => (
     <primitive-merge>
       <dialog id="drawer"></dialog>
@@ -1289,13 +1289,13 @@ void test('P1 compiler validates fragment-target child hoisting failures', async
       source: `
 import { component } from '@kovojs/core';
 
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => (
     <table>
       <CartRow rowId={cart.rowId}>
@@ -1315,13 +1315,13 @@ export const CartTable = component('cart-table', {
         source: `
 import { component } from '@kovojs/core';
 
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => (
     <table>
       <CartRow rowId={cart.rowId}>
@@ -2834,21 +2834,21 @@ void test('D10 seeded diagnostics gate Vite, static export, and MCP red-green su
   const redSource = `
 import { component } from '@kovojs/core';
 
-export const DiagnosticCard = component('diagnostic-card', {
+export const DiagnosticCard = component({
   render: () => <button onClick={() => window.alert('x')}>Add</button>,
 });
 `;
   const greenSource = `
 import { component } from '@kovojs/core';
 
-export const DiagnosticCard = component('diagnostic-card', {
+export const DiagnosticCard = component({
   render: () => <button>Add</button>,
 });
 `;
   const lintSource = `
 import { component } from '@kovojs/core';
 
-export const DiagnosticCard = component('diagnostic-card', {
+export const DiagnosticCard = component({
   render: () => <button onClick={() => { const response = { ok: true }; return response.ok; }}>Check</button>,
 });
 `;
@@ -3295,7 +3295,7 @@ void test('P1 fragment targets emit typed registry facts', async () => {
   const result = compileComponentModule({
     fileName: 'cart-row.tsx',
     source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
@@ -3510,7 +3510,7 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
     source: `
 export const CartBadge$isEmpty = derive(['cart'], (cart) => cart.count === 0);
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -3731,7 +3731,7 @@ import { component } from '@kovojs/core';
 
 function removeItem() {}
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <div>
       <button onClick={removeItem}>Remove</button>
@@ -3749,7 +3749,7 @@ import { component } from '@kovojs/core';
 
 function removeItem() {}
 
-export const CartDrawer = component('cart-drawer', {
+export const CartDrawer = component({
   render: () => <button onClick={removeItem}>Remove</button>,
 });
 `,
@@ -3802,7 +3802,7 @@ void test('P1 typed data param coercion remains represented', async () => {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <div>
       <button onClick={() => state.count += item.quantity}>Add</button>
@@ -3857,7 +3857,7 @@ void test('P1 render-equivalence gate remains represented', async () => {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartTotal = component('cart-total', {
+export const CartTotal = component({
   render: () => <cart-total><span data-bind="cart.total">{cart.total}</span></cart-total>,
 });
 `,

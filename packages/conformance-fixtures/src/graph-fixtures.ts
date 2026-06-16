@@ -472,7 +472,7 @@ export function commerceGraphBehaviorFact<T extends ProjectGraphFixture>(
   const cartBadge = options.compileComponentModule({
     fileName: 'cart-badge.tsx',
     source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <cart-badge><span data-bind="cart.count">{cart.count}</span></cart-badge>,
 });

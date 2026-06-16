@@ -40,7 +40,7 @@ const menubarItems: readonly MenubarItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryMenubarDemo = component('gallery-menubar-demo', {
+export const GalleryMenubarDemo = component({
   state: () => ({ activeValue: 'file', openValue: '', value: 'new' }),
   render: (_queries: Record<string, never>, state: GalleryMenubarDemoState) => {
     const rootState = {

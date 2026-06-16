@@ -33,7 +33,7 @@ const radioItems = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
+export const GalleryRadioGroupDemo = component({
   state: () => ({ value: 'email' }),
   render: (_queries: Record<string, never>, state: GalleryRadioGroupDemoState) => {
     const groupState = {

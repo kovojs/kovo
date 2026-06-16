@@ -128,7 +128,7 @@ const tagOptions: readonly AutocompleteItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
+export const GalleryAutocompleteDemo = component({
   state: () => ({ highlightedValue: 'design', inputValue: 'de', open: false, value: 'design' }),
   render: (_queries: Record<string, never>, state: GalleryAutocompleteDemoState) => {
     const listId = 'gallery-autocomplete-list';

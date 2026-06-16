@@ -91,7 +91,7 @@ const contextItems: readonly ContextMenuItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryContextMenuDemo = component('gallery-context-menu-demo', {
+export const GalleryContextMenuDemo = component({
   state: () => ({ highlightedValue: 'copy', open: false, point: { x: 24, y: 40 }, value: 'copy' }),
   render: (_queries: Record<string, never>, state: GalleryContextMenuDemoState) => {
     const contentId = 'gallery-context-menu-content';

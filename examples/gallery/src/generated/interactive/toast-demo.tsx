@@ -76,7 +76,7 @@ export interface GalleryToastDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryToastDemo = component('gallery-toast-demo', {
+export const GalleryToastDemo = component({
   state: () => ({ activeCount: 0, activeOpen: false, previousCount: 0, previousOpen: false }),
   render: (_queries: Record<string, never>, state: GalleryToastDemoState) => {
     const durationMs = normalizeToastDuration(5000);

@@ -109,7 +109,7 @@ const navigationItems: readonly NavigationMenuItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryNavigationMenuDemo = component('gallery-navigation-menu-demo', {
+export const GalleryNavigationMenuDemo = component({
   state: () => ({ activeValue: 'products', openValue: '', value: 'none' }),
   render: (_queries: Record<string, never>, state: GalleryNavigationMenuDemoState) => {
     const rootState = {

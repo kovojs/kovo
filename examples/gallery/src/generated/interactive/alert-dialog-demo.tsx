@@ -61,7 +61,7 @@ export interface GalleryAlertDialogDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
+export const GalleryAlertDialogDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryAlertDialogDemoState) => {
     const contentId = 'gallery-interactive-alert-dialog-content';

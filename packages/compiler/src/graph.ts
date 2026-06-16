@@ -1,12 +1,10 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 
-import { kebabCase } from './shared.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
   componentOptionStaticValue,
-  firstComponentModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
 import type {
@@ -57,16 +55,15 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
  * component graph facts. Exported for in-repo callers only (SPEC.md §5.2).
  */
 export function findFragmentTargetFacts(
-  componentName: string,
+  registryComponentName: string,
   model: ComponentModuleModel,
 ): FragmentTargetFact[] {
   if (componentOptionStaticValue(model, 'fragmentTarget') !== true) return [];
 
-  const explicitName = firstComponentModel(model)?.explicitName;
   return [
     {
       propsType: fragmentTargetPropsType(model),
-      target: explicitName ?? kebabCase(componentName),
+      target: registryComponentName,
     },
   ];
 }
@@ -157,8 +154,8 @@ function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
 }
 
 function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
-  return [...new Set((graph.components ?? []).map((component) => kebabCase(component.name)))].sort(
-    (left, right) => left.localeCompare(right),
+  return [...new Set((graph.components ?? []).map((component) => component.name))].sort((left, right) =>
+    left.localeCompare(right),
   );
 }
 

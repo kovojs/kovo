@@ -12,7 +12,7 @@ const cartBadgeSource = `
 import { component } from '@kovojs/core';
 import { removeItem } from './cart-actions';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
@@ -260,7 +260,7 @@ import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets/menu';
 
-export const Shell = component('shell', {
+export const Shell = component({
   render: () => <section></section>,
 });
 `,
@@ -281,7 +281,7 @@ export const Shell = component('shell', {
 import { component } from '@kovojs/core';
 import { ${handler} } from './cart-actions';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <button onClick={${handler}}>Add</button>,
 });
 `;

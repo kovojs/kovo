@@ -377,7 +377,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         },
       },
     };
-    const appSource = "export const App = component('starter-app', { render: () => <main /> });";
+    const appSource = "export const App = component({ render: () => <main /> });";
     const clientSource = `
 import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime';
 

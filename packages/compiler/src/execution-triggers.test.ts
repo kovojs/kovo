@@ -11,7 +11,7 @@ describe('execution trigger validation', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <button on:click="/c/cart.client.js#Cart$add">Add</button>
@@ -32,7 +32,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
@@ -67,7 +67,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <button on:Click="/c/cart.client.js#Cart$add">Add</button>
@@ -86,7 +86,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => {
     const sample = '<stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>';
     // <video-player on:media="/c/video.client.js#Video$mount"></video-player>
@@ -103,7 +103,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       {/* KV211: this explains another trigger. */}
@@ -131,7 +131,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <p>{/* KV211: paragraph text explains something else. */}</p>

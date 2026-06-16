@@ -7,7 +7,7 @@ describe('compiler query update plans', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
@@ -135,7 +135,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 export const CartBadge$isEmpty = derive(['cart'], (cart) => cart.count === 0);
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <button data-derive="cart.CartBadge$isEmpty">Checkout</button>
@@ -184,7 +184,7 @@ export const CartBadge$label = derive(
   (cart) => cart.count === 0 ? 'empty; cart' : \`items: \${cart.count}\`,
 );
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <output data-derive="cart.CartBadge$label">empty</output>

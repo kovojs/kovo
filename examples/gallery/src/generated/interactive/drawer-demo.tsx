@@ -57,7 +57,7 @@ export interface GalleryDrawerDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryDrawerDemo = component('gallery-drawer-demo', {
+export const GalleryDrawerDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryDrawerDemoState) => {
     const contentId = 'gallery-interactive-drawer-content';

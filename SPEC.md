@@ -87,7 +87,7 @@ Client router and SPA navigation; hydration; hash-named heuristic chunks; load-b
 import { component } from '@kovojs/core';
 import { cartQuery } from './cart.queries.js';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true, // registers in FragmentTargets registry
   queries: { cart: cartQuery }, // typed data dependencies
   state: () => ({ bouncing: false }), // LOCAL state: UI-only facts, JsonValue-constrained
@@ -103,6 +103,11 @@ export const CartBadge = component('cart-badge', {
   ),
 });
 ```
+
+`component()` accepts the definition object only. The author never supplies a component name string:
+the compiler derives the DOM wire leaf from the exported binding (`CartBadge` -> `cart-badge`) and the
+registry/type key from the module path plus that leaf (`components/cart-badge/cart-badge`). This is the
+component-name application of the §4.8 rule that TSX does not require strings the compiler can derive.
 
 **Rules enforced by the type system:**
 
@@ -125,7 +130,7 @@ export const CartBadge = component('cart-badge', {
 </script>
 ```
 
-Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (rationale in §3.1). The load-bearing identity is the `kovo-c` stamp; the compiler omits it when the host tag already spells the component name (`<cart-badge>` — dashed tags are inert sugar) and emits it on native hosts (`<tr kovo-c="cart-row">`, so table content-model nesting works). Co-located CSS is compiler-scoped to the host (`@scope`, donut-scoped out of nested islands) and deduped into one per-page stylesheet (§13.1). With no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and no-JS form fallback depend on it. The compiler validates JSX nesting against the HTML content model (**KV225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes served HTML and parsed DOM disagree, silently breaking morph identity and fragment targets — a compile error, not a runtime surprise.
+Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (rationale in §3.1). The load-bearing DOM identity is the derived `kovo-c` leaf; the compiler omits it when the host tag already spells the derived leaf (`<cart-badge>` — dashed tags are inert sugar) and emits it on native hosts (`<tr kovo-c="cart-row">`, so table content-model nesting works). Registry and type identities are separately namespaced by module path (§6.1), so global uniqueness never lengthens the ordinary DOM leaf. If two distinct registry keys would put the same DOM leaf on one page, the composition pass derives a stable disambiguated `kovo-c` value from the registry key and reports it through component explain output. Co-located CSS is compiler-scoped to the derived host leaf (`@scope`, donut-scoped out of nested islands) and deduped into one per-page stylesheet (§13.1). With no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and no-JS form fallback depend on it. The compiler validates JSX nesting against the HTML content model (**KV225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes served HTML and parsed DOM disagree, silently breaking morph identity and fragment targets — a compile error, not a runtime surprise.
 
 Everything is inspectable in the Elements panel: dependencies (`kovo-deps`), data (the JSON), behavior (`on:*` attributes), pending mutations (`kovo-pending`, §10.3).
 
@@ -177,7 +182,7 @@ Composition is **render-time function composition** — there is no client re-re
 **1. Children are a render-time value.** JSX children lower to an opaque `Html`-typed argument; named slots are just named `Html`-typed props. The lowered IR is a plain function call — fixpoint-trivial:
 
 ```tsx
-export const Card = component('card', {
+export const Card = component({
   render: (_, state, { children, footer }) => (
     <div class="card">
       {children}
@@ -377,7 +382,10 @@ interface HandlerModules {
 }
 // '#cart' is a compile-time alias only — emission resolves it to a full URL (§4.3)
 interface FragmentTargets {
-  'cart-badge': CartBadgeProps; /* … */
+  'components/cart-badge/cart-badge': CartBadgeProps; /* … */
+}
+interface ComponentRegistry {
+  'components/cart-badge/cart-badge': typeof import('../components/cart-badge.js').CartBadge; /* … */
 }
 interface QueryRegistry {
   cart: typeof cartQuery;
@@ -396,6 +404,11 @@ interface InvalidationSets {
 // also: DomainKey (schema domains), PageIds (per-page element ids, §6.4/KV221),
 // ComponentPackagePrefixes + ComponentPackageRegistry (§6.1.1)
 ```
+
+Component registry keys are derived as `<module path relative to the package src root>/<dom leaf>`, with
+`tests/integration/fixtures/` used as the fixture root in the integration suite. The DOM leaf remains
+the exported binding's kebab-case form; the generated registry key is for TypeScript, fragment targets,
+graph facts, and uniqueness diagnostics only.
 
 ### 6.1.1 Package component prefixes
 
@@ -948,8 +961,8 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV234 | error      | Package component prefix registration conflict or reservation violation (§6.1.1)                              |
 | KV235 | error      | App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR (§5.2)  |
 | KV236 | error      | Unsafe output context requires an explicit trusted Kovo escape hatch (§1, §5.2)                               |
-| KV237 | error      | Duplicate component effective wire name (§4.2, §4.8, §6.1.1)                                                  |
-| KV238 | error      | Duplicate fragment-target wire name (§4.5, §6.2, §9.1)                                                        |
+| KV237 | error      | Duplicate derived component registry key (§4.2, §4.8, §6.1.1)                                                 |
+| KV238 | error      | Duplicate derived fragment-target registry key (§4.5, §6.2, §9.1)                                             |
 | KV239 | error      | Duplicate static view-transition name (§8)                                                                    |
 | KV240 | error      | Duplicate query-shape fact for one query name (§4.8)                                                         |
 | KV301 | lint       | Server fact in island-local state                                                                             |
@@ -1040,7 +1053,7 @@ A state MAY be excluded from this requirement only where it cannot be represente
 
 These ship with v1 only if resolved; otherwise they are explicitly punted with documented workarounds.
 
-**13.1 CSS.** Kovo v1 is Tailwind-first for app-authored styling. Starters and examples should install Tailwind through Vite+, include a static `@source` rule that covers templates and HTML, and keep utility classes statically discoverable; dynamic classes must be safelisted explicitly with Tailwind v4.1+ `@source inline("...")` so SSR pages, mutation fragments (§9.1), and `<kovo-defer>` streams never reference missing CSS. Kovo still owns the framework CSS contract: emitted pages list required stylesheet assets once, preload first-party app styles when useful, and use the same stylesheet hints for full-page renders, mutation fragments, and deferred fragments. For non-Tailwind co-located component CSS, the compiler extracts rules, wraps them in `@scope` keyed to the host (dashed tag or `[kovo-c=…]` stamp), donut-scopes nested islands out, emits a tag-prefixed fallback for older engines, dedupes assets in page order, and preserves fragment-target metadata so late fragments can request their styles. Design tokens are ordinary CSS custom properties; theming CSS remains document CSS because there is no shadow boundary.
+**13.1 CSS.** Kovo v1 is Tailwind-first for app-authored styling. Starters and examples should install Tailwind through Vite+, include a static `@source` rule that covers templates and HTML, and keep utility classes statically discoverable; dynamic classes must be safelisted explicitly with Tailwind v4.1+ `@source inline("...")` so SSR pages, mutation fragments (§9.1), and `<kovo-defer>` streams never reference missing CSS. Kovo still owns the framework CSS contract: emitted pages list required stylesheet assets once, preload first-party app styles when useful, and use the same stylesheet hints for full-page renders, mutation fragments, and deferred fragments. For non-Tailwind co-located component CSS, the compiler extracts rules, wraps them in `@scope` keyed to the derived DOM host leaf (dashed tag or `[kovo-c=…]` stamp), donut-scopes nested islands out, emits a tag-prefixed fallback for older engines, dedupes assets in page order, and preserves fragment-target metadata keyed by registry name so late fragments can request their styles. Design tokens are ordinary CSS custom properties; theming CSS remains document CSS because there is no shadow boundary.
 
 **13.2 Lists at scale.** Template stamps and the shared `kovo-key` identity contract are now normative (§4.8); remaining design: cursor pagination flowing through URL params, infinite scroll as fragment appends, and keyed reordering under simultaneous optimistic updates + morphing — exercised in the commerce grid.
 

@@ -7,7 +7,7 @@ import { component } from '@kovojs/core';
 
 import { countQuery, type CountResult } from './shared';
 
-export const CountBadge = component('count-badge', {
+export const CountBadge = component({
   fragmentTarget: true,
   queries: { count: countQuery },
   render: ({ count }: { count: CountResult }) => (

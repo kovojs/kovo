@@ -12,7 +12,7 @@ import { orderHistoryQuery, type OrderHistoryResult } from '../queries.js';
 // declaration — the same shape as examples/commerce.
 
 // snippet:order-history
-export const OrderHistory = component('order-history', {
+export const OrderHistory = component({
   fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (

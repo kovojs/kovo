@@ -37,13 +37,13 @@ describe('compiler conformance compatibility diagnostics', () => {
     const kv230 = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   props: { rowId: String },
   render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
 });
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: ({ cart }) => {
     const snapshot = readSnapshot();
     return (
@@ -61,7 +61,7 @@ export const CartTable = component('cart-table', {
     const kv235 = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => \`<cart-badge kovo-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
 });
@@ -71,7 +71,7 @@ export const CartBadge = component('cart-badge', {
     const kv311 = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <strong className={cart.discount}>Discount</strong>,
 });

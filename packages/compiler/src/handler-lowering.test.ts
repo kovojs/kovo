@@ -22,7 +22,7 @@ describe('handler lowering', () => {
     const source = `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => <button onClick={() => state.count += item.quantity}>Add one</button>,
 });
 `;
@@ -48,7 +48,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <div>
       <button onClick={removeItem}>Remove</button>
@@ -63,7 +63,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartDrawer = component('cart-drawer', {
+export const CartDrawer = component({
   render: () => (
     <button onClick={removeItem}>Remove</button>
   ),
@@ -84,7 +84,7 @@ export const CartDrawer = component('cart-drawer', {
       source: `
 import { component } from '@kovojs/core';
 
-export const DisclosureDemo = component('disclosure-demo', {
+export const DisclosureDemo = component({
   state: () => ({ open: false }),
   render: (_queries, state) => (
     <section hidden={!state.open}>Panel</section>
@@ -107,7 +107,7 @@ export const DisclosureDemo = component('disclosure-demo', {
 import { component } from '@kovojs/core';
 import { removeItem } from './actions';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
@@ -179,7 +179,7 @@ export const CartBadge = component('cart-badge', {
 import { component } from '@kovojs/core';
 import { track } from './analytics';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => {
     const snapshot = readSnapshot();
     return <button onClick={() => track(snapshot)}>Track</button>;
@@ -200,7 +200,7 @@ import { track } from './analytics';
 
 const LABEL = 'cart';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ count: 0 }),
   render: ({ quantity }) => (
     <button onClick={() => {
@@ -227,7 +227,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ value: '' }),
   render: () => (
     <button onClick={() => {
@@ -278,7 +278,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <button onClick={() => { const response = { ok: true }; return response.ok; }}>
       Check
@@ -304,7 +304,7 @@ export const CartBadge = component('cart-badge', {
     const source = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <button onClick={() => add(item.id)}>Add</button>,
 });
 `;
@@ -330,7 +330,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
     <div>
@@ -376,7 +376,7 @@ export const CartActions = component('cart-actions', {
 import { component } from '@kovojs/core';
 import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/primitives';
 
-export const TabsDemo = component('tabs-demo', {
+export const TabsDemo = component({
   state: () => ({ activeValue: 'overview', value: 'overview' }),
   render: () => (
     <section
@@ -429,7 +429,7 @@ export const TabsDemo = component('tabs-demo', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
     <button
@@ -464,7 +464,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
     <button
@@ -506,7 +506,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
     <Tooltip.Trigger
@@ -544,7 +544,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
     <Tooltip.Trigger
@@ -584,7 +584,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => item.selected ? select(item.id) : deselect(item.id)}>Toggle</button>
   ),
@@ -609,7 +609,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <div>
       <button onClick={() => emit('cart:add', { id: item.id })}>Add</button>
@@ -647,7 +647,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => emit('cart:add', { id: item.id, idx: item.idx })}>Add</button>
   ),
@@ -672,7 +672,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
     <button onClick={() => {
@@ -700,7 +700,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => track('cart,add', item.id, { qty: item.quantity })}>Add</button>
   ),
@@ -724,7 +724,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: ({ quantity }) => (
     <button onClick={() => track(quantity)}>Add</button>
   ),
@@ -743,7 +743,7 @@ export const CartActions = component('cart-actions', {
     const source = `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => track(getQuantity())}>Add</button>
   ),
@@ -764,7 +764,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={(): void => track(item.id)}>Add</button>
   ),
@@ -786,7 +786,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => log('item.id stays text')}>Add</button>
   ),
@@ -808,7 +808,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => track(item.quantity, 'item.quantity > 0')}>Add</button>
   ),
@@ -830,7 +830,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (
     <button onClick={() => track(item.quantity > 0, !item.selected)}>Add</button>
   ),
@@ -851,7 +851,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => {
     const sample = '<button onClick={() => window.alert("x")}>Add</button>';
     // <button onClick={() => document.body.remove()}>Remove</button>
@@ -877,7 +877,7 @@ describe('handler lowering is formatting-resistant', () => {
     const source = `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (<button ${handlerAttribute}>Act</button>),
 });
 `;
@@ -895,7 +895,7 @@ export const CartActions = component('cart-actions', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartActions = component('cart-actions', {
+export const CartActions = component({
   render: () => (<button ${handlerAttribute}>Act</button>),
 });
 `,

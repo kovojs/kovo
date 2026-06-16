@@ -9,7 +9,7 @@ describe('compiler output-context security', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: ({ product }) => (
     <article title={product.name} aria-label={product.name}>
       <h2>{product.name}</h2>
@@ -32,7 +32,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'links.tsx',
       source: `
-export const Links = component('links', {
+export const Links = component({
   render: () => (
     <nav>
       <a href="javascript:alert(1)">bad</a>
@@ -71,7 +71,7 @@ export const Links = component('links', {
     const result = compileComponentModule({
       fileName: 'styled-card.tsx',
       source: `
-export const StyledCard = component('styled-card', {
+export const StyledCard = component({
   styles: \`
     .card { background-image: url("javascript:alert(1)"); }
   \`,
@@ -98,7 +98,7 @@ export const StyledCard = component('styled-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   queries: { product: productQuery },
   render: ({ product }) => <img viewTransitionName={product.slug} src="/p1.png" />,
 });
@@ -121,7 +121,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',
       source: `
-export const CartList = component('cart-list', {
+export const CartList = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="sku">
       <template kovo-stamp>
@@ -145,7 +145,7 @@ export const CartList = component('cart-list', {
     const unsafe = compileComponentModule({
       fileName: 'promo.tsx',
       source: `
-export const Promo = component('promo', {
+export const Promo = component({
   fragmentTarget: true,
   render: ({ promo }) => (
     <section>
@@ -161,7 +161,7 @@ export const Promo = component('promo', {
       source: `
 import { trustedHtml } from '@kovojs/runtime';
 
-export const TrustedPromo = component('trusted-promo', {
+export const TrustedPromo = component({
   render: ({ promo }) => <div dangerouslySetInnerHTML={trustedHtml("<b>safe</b>")} />,
 });
 `,

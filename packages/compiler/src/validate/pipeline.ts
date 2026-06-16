@@ -70,8 +70,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ options, originalModel }) => validateOutputContexts(options.source, originalModel, options),
   ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
-  ({ componentName, model, options, source }) =>
-    validateResidualStamps(source, model, options, componentName),
+  ({ model, options, source }) => validateResidualStamps(source, model, options),
   ({ model, options, source }) => validateAttributeMergeConflicts(source, model, options.fileName),
   ({ diagnosticSource, options, sourceOffsetMap, updateCoverage }) =>
     unhandledUpdateCoverageDiagnostics(

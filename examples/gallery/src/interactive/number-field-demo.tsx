@@ -31,7 +31,7 @@ export interface GalleryNumberFieldDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryNumberFieldDemo = component('gallery-number-field-demo', {
+export const GalleryNumberFieldDemo = component({
   state: () => ({ value: 2 }),
   render: (_queries: Record<string, never>, state: GalleryNumberFieldDemoState) => {
     const fieldState = {

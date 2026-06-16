@@ -1,5 +1,6 @@
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import { componentCssAssetForFile, emitCssModule } from './css.js';
+import { deriveComponentNames } from './component-names.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
 import {
@@ -21,6 +22,7 @@ import {
   inferComponentName,
   jsxElements,
   parseComponentModule as parseComponentModuleModel,
+  firstComponentModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
 import {
@@ -73,6 +75,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const compileOptions = { ...options, packageComponentPrefixes };
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
+  const componentNames = deriveComponentNames(options.fileName, firstComponentModel(originalModel));
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
   const structuralLowering = lowerStructuralJsx(originalState.model, componentName, compileOptions);
   const platformLowering = platformBehaviorLowering(originalState.model);
@@ -116,15 +119,25 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
   );
-  const cssSource = emitCssModule(componentName, model);
-  const fragmentTargetFacts = findFragmentTargetFacts(componentName, model);
+  const cssSource = emitCssModule(componentNames.domName, model);
+  const fragmentTargetFacts = findFragmentTargetFacts(componentNames.registryKey, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
-  const componentGraphFacts = [componentGraphFact(componentName, model, fragmentTargets)];
+  const componentGraphFacts = [
+    componentGraphFact(componentNames.registryKey, model, fragmentTargets),
+  ];
   const cssAssets = cssSource
-    ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
+    ? [
+        componentCssAssetForFile(
+          fileNames.css,
+          componentNames.domName,
+          fragmentTargets,
+          {},
+          cssSource,
+        ),
+      ]
     : [];
   const serverRenderReplacements = [
-    ...serverRenderLowering(versionedHandlers, model),
+    ...serverRenderLowering(versionedHandlers, model, componentNames.domName),
     ...versionStateDeriveReferences(model, structuralLowering.stateDerives, clientHref),
   ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
@@ -133,6 +146,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     clientFileName: fileNames.client,
     cssAssets,
     componentName,
+    domComponentName: componentNames.domName,
+    registryComponentName: componentNames.registryKey,
     fragmentTargetFacts,
     handlers: versionedHandlers,
     platformSubstitutions: platformLowering.substitutions,

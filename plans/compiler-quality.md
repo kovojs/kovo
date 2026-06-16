@@ -437,13 +437,13 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     snapshot evidence above.
 
 - [x] **Add a duplicate component-name (effective wire-name) validator.**
-  - Risk: the component name passed to `component('name', ...)` is the app-wide wire identity — it
-    becomes the `kovo-c` stamp, the `@scope [kovo-c="name"]` CSS host selector, and the
-    fragment-target key — but nothing enforces that it is unique. `deriveComponentFactsFromGraph()`
-    in `packages/compiler/src/graph.ts` silently `[...new Set(...)]`-dedupes colliding names, and
-    there is no validator in `packages/compiler/src/validate/**` that rejects two components sharing
-    one effective name. Package prefixes are enforced unique (KV234), but bare app-local names are
-    not, so the uniqueness SPEC §6.1.1 assumes is only assumed, never proven.
+  - Risk: the component name is a load-bearing derived identity. It becomes the `kovo-c` stamp,
+    scoped-CSS host selector, and fragment-target registry key, but nothing originally enforced
+    uniqueness. `deriveComponentFactsFromGraph()` in `packages/compiler/src/graph.ts` silently
+    `[...new Set(...)]`-deduped colliding names, and there was no validator in
+    `packages/compiler/src/validate/**` that rejected two components sharing one effective name.
+    Package prefixes are enforced unique (KV234), but bare app-local names were not, so the
+    uniqueness SPEC §6.1.1 assumed was only assumed, never proven.
   - Why it matters: a collision degrades silently rather than failing the build. Fragment targeting
     resolves `querySelector('[kovo-c="name"]')` to the first DOM match (wrong-element patches), CSS
     `@scope` selectors from one component leak into the other, and the duplicate vanishes from the
@@ -479,8 +479,9 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
   - [x] Decision made: scope is effective app/vendored component names in the current module plus
         app-graph names supplied through `registryFacts.components`; package prefix collisions stay
         under KV234.
-    - Evidence 2026-06-16: `validateDuplicateComponentNames()` computes `component('name')` or
-      kebab-cased local names and checks both module-local duplicates and supplied registry names.
+    - Evidence 2026-06-16: `validateDuplicateComponentNames()` computes derived component registry
+      keys from module path plus kebab-cased binding names and checks both module-local duplicates
+      and supplied registry names.
 
 - [x] **Extend wire-name uniqueness (KV237) to the remaining runtime-string-match identities:
       fragment-target names and view-transition names.**

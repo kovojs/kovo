@@ -12,7 +12,7 @@ import { compileFixture } from './test-support.js';
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
@@ -60,7 +60,7 @@ describe('compileComponentModule', () => {
     expect(registry?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
-    expect(registry?.source).toContain("'cart-badge': {};");
+    expect(registry?.source).toContain("'components/cart/cart-badge/cart-badge': {};");
     expect(registry?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
@@ -71,7 +71,7 @@ describe('compileComponentModule', () => {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   css: \`
     button { color: teal; }
@@ -105,18 +105,18 @@ export const CartBadge = component('cart-badge', {
     );
     expect(result.cssAssets).toEqual([
       {
-        componentName: 'CartBadge',
+        componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
-        fragmentTargets: ['cart-badge'],
+        fragmentTargets: ['components/cart/cart-badge/cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
       },
     ]);
     expect(server?.source).toContain('export function renderSource()');
     expect(client?.source).toContain('// no client handlers emitted');
-    expect(registry?.source).toContain("'cart-badge': {};");
+    expect(registry?.source).toContain("'components/cart/cart-badge/cart-badge': {};");
     expect(registry?.source).toContain(
-      "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
+      "'cart-badge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['components/cart/cart-badge/cart-badge']; };",
     );
     expect(result.loweredSource).toContain('export const CartBadge = component');
     expect(result.renderEquivalenceChecks).toHaveLength(1);
@@ -178,14 +178,14 @@ export const CartBadge = component('cart-badge', {
     const expectedSource = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <cart-badge><span>2</span></cart-badge>,
 });
 `;
     const actualSource = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <cart-badge><span>3</span></cart-badge>,
 });
 `;
@@ -210,7 +210,7 @@ export const CartBadge = component('cart-badge', {
     const expectedSource = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: ({ cart }) => (
     <cart-badge>
@@ -223,7 +223,7 @@ export const CartBadge = component('cart-badge', {
     const actualSource = `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: ({ cart }) => (
     <cart-badge kovo-deps="cart" kovo-state="{&quot;open&quot;:true}">
@@ -250,7 +250,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   styles: \`
     td { padding: 0.5rem; }
   \`,
@@ -274,7 +274,7 @@ export const CartRow = component('cart-row', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   css: \`
     button { color: teal; }
   \`,
@@ -302,7 +302,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => {
     const sample = 'css: \`button { color: red; }\`';
     // styles: \`a { color: blue; }\`
@@ -329,7 +329,7 @@ export const CartBadge = component('cart-badge', {
     expect(registry).toMatch(/export interface InvalidationSets \{\n\n\}/);
     expect(registry).toContain(`declare module '@kovojs/core' {
   interface FragmentTargets {
-  'cart-badge': {};
+  'components/cart/cart-badge/cart-badge': {};
   }
 
   interface QueryRegistry {
@@ -364,7 +364,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => \`<cart-badge kovo-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
 });
@@ -417,7 +417,7 @@ export function renderSource() {
     const result = compileComponentModule({
       fileName: 'total-display.tsx',
       source: `
-export const TotalDisplay = component('total-display', {
+export const TotalDisplay = component({
   render: () => \`Total items\`,
 });
 `,

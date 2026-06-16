@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 
-export const App = component('app-root', {
+export const App = component({
   state: () => ({ clicks: 0 }),
   render: () => (
     <main

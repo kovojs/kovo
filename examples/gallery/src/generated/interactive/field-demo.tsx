@@ -79,7 +79,7 @@ export interface GalleryFieldDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryFieldDemo = component('gallery-field-demo', {
+export const GalleryFieldDemo = component({
   state: () => ({
     email: 'ada@example',
     invalid: true,

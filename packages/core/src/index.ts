@@ -148,21 +148,21 @@ export interface ComponentDefinitionInput {
   render: (...args: never[]) => ComponentRenderResult;
 }
 
-/** A named component descriptor returned by `component()`. */
-export interface Component<Name extends string, Definition extends ComponentDefinitionInput> {
-  name: Name;
+/** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
+export interface Component<Definition extends ComponentDefinitionInput> {
   definition: Definition;
+  name?: string;
 }
 
 /**
- * Declare a UI component with a stable name, optional query bindings, optional
- * serializable island state, and a render function. The component name becomes
- * the custom-element tag the compiler lowers `render` into; queries and state
- * are passed to `render` at runtime. Authored components are plain TSX — the
- * compiler derives stamps, bindings, and the client module, so you never write
- * `data-bind`/`kovo-*` attributes by hand (SPEC §4.1).
+ * Declare a UI component with optional query bindings, optional serializable
+ * island state, and a render function. The compiler derives the component's
+ * load-bearing name from the exported binding and module path; queries and
+ * state are passed to `render` at runtime. Authored components are plain TSX —
+ * the compiler derives stamps, bindings, names, and the client module, so you
+ * never write derivable `data-bind`/`kovo-*` attributes by hand (SPEC §4.1,
+ * §4.8).
  *
- * @param name - Custom-element tag name; also the component's identity in the registry.
  * @param definition - `render` plus optional `queries`, `state`, and `fragmentTarget`.
  * @returns A `Component` descriptor the compiler lowers and the server renders.
  * @example
@@ -170,17 +170,16 @@ export interface Component<Name extends string, Definition extends ComponentDefi
  *
  * type CounterState = { count: number };
  *
- * export const Counter = component('app-counter', {
+ * export const Counter = component({
  *   state: (): CounterState => ({ count: 0 }),
  *   render: (_queries: Record<string, never>, state: CounterState) =>
  *     `<button>${state.count}</button>`,
  * });
  */
 export function component<
-  const Name extends string,
   const Definition extends ComponentDefinitionInput,
->(name: Name, definition: Definition): Component<Name, Definition> {
-  return { definition, name };
+>(definition: Definition): Component<Definition> {
+  return { definition };
 }
 
 /** A typed query handle: a key and the result type it resolves to. */

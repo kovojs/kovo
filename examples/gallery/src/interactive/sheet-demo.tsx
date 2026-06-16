@@ -31,7 +31,7 @@ export interface GallerySheetDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GallerySheetDemo = component('gallery-sheet-demo', {
+export const GallerySheetDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GallerySheetDemoState) => {
     const contentId = 'gallery-interactive-sheet-content';

@@ -372,7 +372,7 @@ const productCardSourceFixture = `
 import { component } from '@kovojs/core';
 import { addToCart } from './cart-actions';
 
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => (
     <article>
       <button onClick={() => addToCart(product.id)}>Add</button>

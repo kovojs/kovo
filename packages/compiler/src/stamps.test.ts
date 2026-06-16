@@ -7,7 +7,7 @@ import { parseComponentModule } from './scan/parse.js';
 describe('compiler stamps', () => {
   it('exposes server host stamps as parsed source patches', () => {
     const source = `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   state: () => ({ open: true }),
   render: ({ cart }) => (
@@ -18,7 +18,7 @@ export const Recommendations = component('recommendations', {
 });
 `;
     const model = parseComponentModule('recommendations.tsx', source);
-    const lowering = serverRenderLowering([], model);
+    const lowering = serverRenderLowering([], model, 'recommendations');
     const kovoDepsStart = source.indexOf("kovo-deps='product:p1'");
     const insertPosition = source.indexOf('>', kovoDepsStart);
 
@@ -40,7 +40,7 @@ export const Recommendations = component('recommendations', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery, productPage: productPageQuery },
   render: ({ cart, productPage }) => (
     <cart-badge>
@@ -60,7 +60,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',
       source: `
-export const OrderHistory = component('order-history', {
+export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }) => (
     <ol>
@@ -82,7 +82,7 @@ export const OrderHistory = component('order-history', {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',
       source: `
-export const OrderHistory = component('order-history', {
+export const OrderHistory = component({
   render: () => {
     const sample = '<order-history></order-history>';
     return <ol><li kovo-key="order-1">Order</li></ol>;
@@ -101,7 +101,7 @@ export const OrderHistory = component('order-history', {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',
       source: `
-export const OrderHistory = component('order-history', {
+export const OrderHistory = component({
   render: () => (
     <ol kovo-c="order-history">
       <li kovo-key="order-1">Order</li>
@@ -120,7 +120,7 @@ export const OrderHistory = component('order-history', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => {
     const sample = 'queries: { cart: cartQuery }, state: () => ({ open: true })';
     // queries: { product: productQuery }, state: () => ({ count: 1 })
@@ -140,7 +140,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   state: () => ({ open: true }),
   render: ({ cart }) => {
@@ -170,7 +170,7 @@ export const CartBadge = component('cart-badge', {
         },
       },
       source: `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section kovo-c="recommendations" kovo-deps="product:p1 cart">
@@ -192,7 +192,7 @@ export const Recommendations = component('recommendations', {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       source: `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section class="card" kovo-deps='product:p1'>
@@ -218,7 +218,7 @@ export const Recommendations = component('recommendations', {
         },
       },
       source: `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section kovo-c="recommendations" kovo-deps="product:p1 cart">
@@ -246,7 +246,7 @@ export const Recommendations = component('recommendations', {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       source: `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section kovo-c="unknown-component" kovo-deps="cart missingQuery:p1">
@@ -292,7 +292,7 @@ export const Recommendations = component('recommendations', {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
       source: `
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => {
     const sample = '<section kovo-c="unknown-component" kovo-deps="missingQuery:p1"></section>';
@@ -314,7 +314,7 @@ export const Recommendations = component('recommendations', {
     const redundant = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
 });
@@ -323,7 +323,7 @@ export const CartBadge = component('cart-badge', {
     const drift = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span data-bind="cart.count">{cart.total}</span>,
 });
@@ -368,7 +368,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => {
     const sample = '<span data-bind="cart.count">{cart.count}</span>';
@@ -391,7 +391,7 @@ export const CartBadge = component('cart-badge', {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="sku">
       <ul />

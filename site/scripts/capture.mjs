@@ -46,7 +46,7 @@ export function captureTeachingError() {
       },
     ],
     source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <span data-bind="product.details.name">Coffee</span>,
 });
 `,
@@ -149,7 +149,7 @@ export function captureLoaderBudget() {
 export function captureLowering() {
   const source = `import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   state: () => ({ count: 0 }),
   render: (props, state) => (

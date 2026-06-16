@@ -1,15 +1,15 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 
+import { deriveComponentNames } from '../component-names.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
-  componentExplicitNames,
   componentOptionObjectKeys,
   jsxElements,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { dedupeBy, kebabCase, splitDepValue } from '../shared.js';
+import { dedupeBy, splitDepValue } from '../shared.js';
 import type { PackageComponentPrefixFact, RegistryFacts } from '../types.js';
 
 interface IdrefValue {
@@ -132,7 +132,6 @@ export function validateResidualStamps(
   source: string,
   model: ComponentModuleModel,
   options: ResidualStampValidationOptions,
-  componentName: string,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const knownQueries = new Set([
@@ -140,8 +139,7 @@ export function validateResidualStamps(
     ...componentQueryNames(model),
   ]);
   const knownComponents = new Set([
-    kebabCase(componentName),
-    ...componentExplicitNames(model),
+    ...model.components.map((component) => deriveComponentNames(options.fileName, component).domName),
     ...(options.registryFacts?.components ?? []),
   ]);
   for (const attribute of jsxAttributes(model)) {

@@ -3,15 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { compileComponentModule } from './index.js';
 
 describe('component effective name validation', () => {
-  it('reports KV237 for duplicate explicit component wire names', () => {
+  it('reports KV237 for duplicate derived registry names', () => {
     const result = compileComponentModule({
       fileName: 'components/cart.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <cart-badge></cart-badge>,
 });
 
-export const MiniCartBadge = component('cart-badge', {
+export const Cart_Badge = component({
   render: () => <mini-cart-badge></mini-cart-badge>,
 });
 `,
@@ -23,9 +23,9 @@ export const MiniCartBadge = component('cart-badge', {
         fileName: 'components/cart.tsx',
         help: expect.stringContaining('SPEC §6.1.1'),
         message:
-          'Duplicate component effective wire name. cart-badge is used by CartBadge component("cart-badge") and MiniCartBadge component("cart-badge").',
+          'Duplicate component effective wire name. components/cart/cart-badge is used by CartBadge and Cart_Badge.',
         severity: 'error',
-        start: { column: 40, line: 6 },
+        start: { column: 14, line: 6 },
       }),
     );
   });
@@ -34,11 +34,11 @@ export const MiniCartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'components/cart.tsx',
       source: `
-export const CartBadge = component(undefined, {
+export const CartBadge = component({
   render: () => <cart-badge></cart-badge>,
 });
 
-export const Cart_Badge = component(undefined, {
+export const Cart_Badge = component({
   render: () => <cart-badge></cart-badge>,
 });
 `,
@@ -48,7 +48,7 @@ export const Cart_Badge = component(undefined, {
       expect.objectContaining({
         code: 'KV237',
         message:
-          'Duplicate component effective wire name. cart-badge is used by CartBadge and Cart_Badge.',
+          'Duplicate component effective wire name. components/cart/cart-badge is used by CartBadge and Cart_Badge.',
         severity: 'error',
       }),
     );
@@ -58,11 +58,11 @@ export const Cart_Badge = component(undefined, {
     const result = compileComponentModule({
       fileName: 'components/cart.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <cart-badge></cart-badge>,
 });
 
-export const MiniCartBadge = component('mini-cart-badge', {
+export const MiniCartBadge = component({
   render: () => <mini-cart-badge></mini-cart-badge>,
 });
 `,
@@ -74,9 +74,9 @@ export const MiniCartBadge = component('mini-cart-badge', {
   it('reports KV237 when registry facts already contain the effective name', () => {
     const result = compileComponentModule({
       fileName: 'components/cart.tsx',
-      registryFacts: { components: ['cart-badge'] },
+      registryFacts: { components: ['components/cart/cart-badge'] },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <cart-badge></cart-badge>,
 });
 `,
@@ -86,7 +86,7 @@ export const CartBadge = component('cart-badge', {
       expect.objectContaining({
         code: 'KV237',
         message:
-          'Duplicate component effective wire name. cart-badge is already present in registry facts and is reused by CartBadge component("cart-badge").',
+          'Duplicate component effective wire name. components/cart/cart-badge is already present in registry facts and is reused by CartBadge.',
       }),
     );
   });

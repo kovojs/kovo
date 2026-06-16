@@ -8,7 +8,7 @@ describe('structural JSX IR lowering', () => {
       fileName: 'product-page.tsx',
       registryFacts: { queries: { product: 'ProductQuery' }, routes: ['/products/:id'] },
       source: `
-export const ProductPage = component('product-page', {
+export const ProductPage = component({
   queries: { product: productQuery },
   state: () => ({ open: false }),
   render: (_queries, state) => (
@@ -86,7 +86,7 @@ export const ProductPage = component('product-page', {
     const result = compileComponentModule({
       fileName: 'primitive-conflict.tsx',
       source: `
-export const PrimitiveConflict = component('primitive-conflict', {
+export const PrimitiveConflict = component({
   render: () => (
     <Tooltip.Trigger asChild attrs={{ commandfor: 'drawer' }}>
       <button commandfor="confirm">Open</button>

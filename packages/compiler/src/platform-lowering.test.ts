@@ -17,7 +17,7 @@ describe('platform lowering', () => {
     const result = compileComponentModule({
       fileName: 'cart-button.tsx',
       source: `
-export const CartButton = component('cart-button', {
+export const CartButton = component({
   render: () => (
     <section>
       <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>
@@ -43,7 +43,7 @@ export const CartButton = component('cart-button', {
     expect(result.files[0]?.source).toContain('commandfor="cart-drawer" command="show-modal"');
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
     expect(result.files[2]?.source).toContain(
-      "'CartButton:button:click:cart-drawer': 'dialog:show-modal';",
+      "'cart-button/cart-button:button:click:cart-drawer': 'dialog:show-modal';",
     );
   });
 
@@ -51,7 +51,7 @@ export const CartButton = component('cart-button', {
     const result = compileComponentModule({
       fileName: 'cart-close-button.tsx',
       source: `
-export const CartCloseButton = component('cart-close-button', {
+export const CartCloseButton = component({
   render: () => (
     <section>
       <button onClick={() => document.getElementById('cart-drawer')!.requestClose()}>
@@ -77,7 +77,7 @@ export const CartCloseButton = component('cart-close-button', {
     expect(result.files[0]?.source).toContain('commandfor="cart-drawer" command="request-close"');
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
     expect(result.files[2]?.source).toContain(
-      "'CartCloseButton:button:click:cart-drawer': 'dialog:request-close';",
+      "'cart-close-button/cart-close-button:button:click:cart-drawer': 'dialog:request-close';",
     );
   });
 
@@ -85,7 +85,7 @@ export const CartCloseButton = component('cart-close-button', {
     const result = compileComponentModule({
       fileName: 'cart-close-button.tsx',
       source: `
-export const CartCloseButton = component('cart-close-button', {
+export const CartCloseButton = component({
   render: () => (
     <section>
       <button onClick={() => (document.getElementById('cart-drawer') as HTMLDialogElement).requestClose()}>
@@ -116,7 +116,7 @@ export const CartCloseButton = component('cart-close-button', {
     const result = compileComponentModule({
       fileName: 'filter-button.tsx',
       source: `
-export const FilterButton = component('filter-button', {
+export const FilterButton = component({
   render: () => (
     <section>
       <button onClick={() => document.getElementById('filters')!.togglePopover()}>Filters</button>
@@ -146,7 +146,7 @@ export const FilterButton = component('filter-button', {
     const result = compileComponentModule({
       fileName: 'cart-button.tsx',
       source: `
-export const CartButton = component('cart-button', {
+export const CartButton = component({
   render: () => {
     const sample = "<button onClick={() => document.getElementById('missing')!.showModal()} />";
     // <button onClick={() => document.getElementById('also-missing')!.showModal()} />
@@ -181,7 +181,7 @@ export const CartButton = component('cart-button', {
     const result = compileComponentModule({
       fileName: 'shipping-details.tsx',
       source: `
-export const ShippingDetails = component('shipping-details', {
+export const ShippingDetails = component({
   render: () => (
     <details id="shipping">
       <summary onClick={() => document.getElementById('shipping')!.open = !document.getElementById('shipping')!.open}>
@@ -208,7 +208,7 @@ export const ShippingDetails = component('shipping-details', {
     expect(result.files[0]?.source).not.toContain('on:click=');
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
     expect(result.files[2]?.source).toContain(
-      "'ShippingDetails:summary:click:shipping': 'details:toggle';",
+      "'shipping-details/shipping-details:summary:click:shipping': 'details:toggle';",
     );
   });
 
@@ -216,7 +216,7 @@ export const ShippingDetails = component('shipping-details', {
     const result = compileComponentModule({
       fileName: 'accordion-toggle.tsx',
       source: `
-export const AccordionToggle = component('accordion-toggle', {
+export const AccordionToggle = component({
   render: () => (
     <button onClick={() => document.getElementById('shipping')!.open = true}>
       Shipping
@@ -241,7 +241,7 @@ export const AccordionToggle = component('accordion-toggle', {
     const result = compileComponentModule({
       fileName: 'cart-link.tsx',
       source: `
-export const CartLink = component('cart-link', {
+export const CartLink = component({
   render: () => (
     <section>
       <a href="/cart" onClick={() => document.getElementById('cart-drawer')!.showModal()}>
@@ -263,7 +263,7 @@ export const CartLink = component('cart-link', {
     const result = compileComponentModule({
       fileName: 'cart-button.tsx',
       source: `
-export const CartButton = component('cart-button', {
+export const CartButton = component({
   render: () => (
     <section>
       <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>
@@ -289,7 +289,7 @@ export const CartButton = component('cart-button', {
     const result = compileComponentModule({
       fileName: 'filter-button.tsx',
       source: `
-export const FilterButton = component('filter-button', {
+export const FilterButton = component({
   render: () => (
     <section>
       <button onClick={() => document.getElementById('filters')!.togglePopover()}>Filters</button>

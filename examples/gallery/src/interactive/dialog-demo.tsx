@@ -29,7 +29,7 @@ export interface GalleryDialogDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryDialogDemo = component('gallery-dialog-demo', {
+export const GalleryDialogDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryDialogDemoState) => {
     const contentId = 'gallery-dialog-content';

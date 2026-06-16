@@ -48,7 +48,7 @@ export interface GalleryHoverCardDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryHoverCardDemo = component('gallery-hover-card-demo', {
+export const GalleryHoverCardDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryHoverCardDemoState) => {
     const contentId = 'gallery-hover-card-content';

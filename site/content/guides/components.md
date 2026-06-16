@@ -86,7 +86,7 @@ export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost';
 }
 
-export const Button = component('button', {
+export const Button = component({
   render(props: ButtonProps) {
     return (
       <button class={cn(buttonClassNames({ variant: props.variant }), props.class)}>

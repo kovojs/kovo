@@ -1,5 +1,6 @@
 import { diagnosticDefinitions } from '@kovojs/core';
 
+import { deriveComponentNames } from '../component-names.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   jsxElements,
@@ -9,7 +10,6 @@ import {
   type JsxElementModel,
   type SourceSpan,
 } from '../scan/parse.js';
-import { kebabCase } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
 
 interface ComponentNameRegistration {
@@ -41,7 +41,7 @@ export function validateDuplicateComponentNames(
   const registryNames = new Set(options.registryFacts?.components ?? []);
 
   for (const component of model.components) {
-    const registration = componentNameRegistration(component);
+    const registration = componentNameRegistration(component, options.fileName);
     if (registryNames.has(registration.effectiveName)) {
       diagnostics.push(registryComponentNameDiagnostic(source, options.fileName, registration));
     }
@@ -69,7 +69,7 @@ export function validateDuplicateFragmentTargetNames(
   const byName = new Map<string, FragmentTargetRegistration>();
   const registryNames = new Set(options.registryFacts?.fragmentTargets ?? []);
 
-  for (const registration of fragmentTargetRegistrations(model)) {
+  for (const registration of fragmentTargetRegistrations(model, options.fileName)) {
     if (registryNames.has(registration.targetName)) {
       diagnostics.push(
         registryFragmentTargetNameDiagnostic(source, options.fileName, registration),
@@ -120,15 +120,21 @@ export function validateDuplicateStaticViewTransitionNames(
   return diagnostics;
 }
 
-function componentNameRegistration(component: ComponentModel): ComponentNameRegistration {
+function componentNameRegistration(
+  component: ComponentModel,
+  fileName: string,
+): ComponentNameRegistration {
   return {
     component,
-    effectiveName: effectiveComponentName(component),
-    span: component.explicitNameSpan ?? component.localNameSpan ?? null,
+    effectiveName: deriveComponentNames(fileName, component).registryKey,
+    span: component.localNameSpan ?? null,
   };
 }
 
-function fragmentTargetRegistrations(model: ComponentModuleModel): FragmentTargetRegistration[] {
+function fragmentTargetRegistrations(
+  model: ComponentModuleModel,
+  fileName: string,
+): FragmentTargetRegistration[] {
   return model.components.flatMap((component) => {
     if (component.options.find((option) => option.key === 'fragmentTarget')?.staticValue !== true) {
       return [];
@@ -137,8 +143,8 @@ function fragmentTargetRegistrations(model: ComponentModuleModel): FragmentTarge
     return [
       {
         component,
-        span: component.explicitNameSpan ?? component.localNameSpan ?? null,
-        targetName: effectiveComponentName(component),
+        span: component.localNameSpan ?? null,
+        targetName: deriveComponentNames(fileName, component).registryKey,
       },
     ];
   });
@@ -323,14 +329,7 @@ function registryViewTransitionNameDiagnostic(
 }
 
 function componentLabel(component: ComponentModel): string {
-  const local = component.localName ?? 'anonymous component';
-  return component.explicitName
-    ? `${local} component(${JSON.stringify(component.explicitName)})`
-    : local;
-}
-
-function effectiveComponentName(component: ComponentModel): string {
-  return component.explicitName ?? kebabCase(component.localName ?? 'component');
+  return component.localName ?? 'anonymous component';
 }
 
 function componentForElement(

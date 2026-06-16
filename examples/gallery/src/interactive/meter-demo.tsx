@@ -26,7 +26,7 @@ export interface GalleryMeterDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryMeterDemo = component('gallery-meter-demo', {
+export const GalleryMeterDemo = component({
   state: () => ({ dataState: 'suboptimum' as MeterDataState, value: 72 }),
   render: (_queries: Record<string, never>, state: GalleryMeterDemoState) => {
     const meterState = {

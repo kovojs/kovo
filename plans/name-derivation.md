@@ -120,6 +120,11 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     still exposes a `name`, injected by the compiler when derived. Collapse `Component<Name, Definition>`
     so `Name` no longer comes from a literal arg (it is recovered via codegen, not inference).
   - Update the JSDoc example (currently `component('app-counter', …)`) and `ComponentDefinitionInput`.
+  - Evidence: `packages/core/src/index.ts` now exposes `component(definition)` and removes the
+    literal `Name` generic from `Component`; `pnpm --filter @kovojs/core exec vitest run` and
+    `pnpm --filter @kovojs/core exec tsc --noEmit` passed on 2026-06-16.
+  - Gap: the compiler does not yet inject the derived name onto the runtime descriptor, and the
+    parser still accepts the legacy two-argument form for compatibility during migration.
 - [ ] **Compiler: derive the name in lowering** (`packages/compiler/src/lower/structural-jsx.ts` and
   the component-model builder).
   - Derive from the exported binding identifier (the lowering already tracks `exportName`) + module
@@ -127,29 +132,54 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
   - Respect the §4.2 host-tag omission rule against the chosen DOM wire name.
   - Honor §11.3 post-parse discipline: derive from typed model facts/spans, not raw source
     (name-formatting of model-derived identifiers is explicitly permitted, §11.3 line 351).
+  - Evidence: `packages/compiler/src/component-names.ts` derives DOM leaves and registry keys from
+    `ComponentModel.localName` plus the module path; `packages/compiler/src/compile.ts`,
+    `packages/compiler/src/css.ts`, `packages/compiler/src/emit/server.ts`, and
+    `packages/compiler/src/graph.ts` thread those values through CSS, stamps, graph facts, and
+    fragment-target facts. `pnpm --filter @kovojs/compiler exec vitest run` and
+    `pnpm --filter @kovojs/compiler exec tsc --noEmit` passed on 2026-06-16.
+  - Gap: stable per-page DOM-leaf collision disambiguation/reporting and descriptor injection remain
+    open.
 - [ ] **Registry/type codegen** (registry `.d.ts` emission + `validate/component-names.ts`).
   - Emit `FragmentTargets` and a name→component map keyed off derived names; KV237/KV238 key on the
     derived (namespaced) key. Update `componentNameRegistration` to source the derived name.
+  - Evidence: `packages/compiler/src/registry.test.ts` verifies generated `FragmentTargets` entries
+    and component graph facts use derived registry keys such as
+    `components/cart/cart-badge/cart-badge`; `packages/compiler/src/fragment-targets.test.ts` verifies
+    KV238 keys on derived registry names; `packages/compiler/src/component-names.test.ts` verifies
+    KV237 duplicate checks on derived registry names. `pnpm --filter @kovojs/compiler exec vitest run`
+    passed on 2026-06-16.
+  - Gap: a dedicated name→component type map is not emitted yet.
 - [ ] **Diagnostics.**
   - Repoint KV237/KV238 messaging (`packages/core/src/diagnostics.ts:339,348`) away from
     "give one component a distinct `component(\"wire-name\")` value" — with derivation there is no
     string to change, so the fix is "rename the binding" (or move the file). KV237 now fires only on a
     genuine duplicate registry key (same file path + same binding leaf is impossible; this catches
     cross-path key clashes that survive full-path namespacing).
+  - Evidence: `packages/core/src/diagnostics.ts` now points KV237/KV238 fixes at binding renames,
+    module moves, or fragment-target removal; `pnpm --filter @kovojs/core exec vitest run
+    src/diagnostics.test.ts` passed on 2026-06-16.
   - [ ] Auto-disambiguation reporting: when the DOM-leaf collision pass rewrites a `kovo-c`, surface
     it in `kovo explain component` (no error, but it must be inspectable — a silent wire-name change is
     exactly what the "no silent caps" discipline forbids).
   - [ ] New diagnostic: a derived name that **changed** vs. the last emitted registry fact (wire names
     are deploy-load-bearing; a silent change breaks morph identity for in-flight clients). Decide
     severity (warn vs. error) and whether it gates only when fragmentTarget/cross-build matters.
-- [ ] **Migrate call sites off the positional string.**
+- [x] **Migrate call sites off the positional string.**
   - Fixtures: `tests/integration/fixtures/{counter/count-badge,stock/stock-badge}.tsx`.
   - `packages/ui/src/*.tsx` (~30 components, multi-per-file — the binding-leaf derivation must hold
     here) and `packages/ui/scripts/build-registry.mjs:60` (regex scans `component('name', …)` — update
     to the new form).
   - Conformance/compat corpora and any `component('…'` in tests.
+  - Evidence: `rg -n "component\(\s*(['\"])" --glob '!plans/name-derivation.md'` returns only generic
+    `component(` sentinels in Vite/test plugins, not authored positional calls; `node
+    packages/ui/scripts/build-registry.mjs` passed on 2026-06-16; `pnpm --filter kovo exec vitest run
+    src/index.kovo-add.test.ts` passed on 2026-06-16.
 - [ ] **SPEC update.** §4.2 (identity + kovo-c omission against derived name), the `component()`
   signature/description, and §14 codegen note. Cite this plan.
+  - Evidence: authoring examples in `SPEC.md` now use `component({ ... })`.
+  - Gap: deeper normative text still needs a complete pass for derived DOM leaves, registry keys, and
+    no authored name override.
 - [ ] **Docs.** `docs/integration-testing.md` fixtures and any authoring docs showing the string form.
 
 ## Verification
@@ -159,7 +189,9 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
   `packages/core/src/index.test.ts:56,277`).
 - [ ] Integration suite (`tests/integration`) green — served HTML / semantic snapshots unchanged under
   Option 2 (or snapshots intentionally updated under Option 1).
-- [ ] `kovo-check` post-parse guard still passes (no new raw-source reads).
+- [x] `kovo-check` post-parse guard still passes (no new raw-source reads).
+  - Evidence: `node --test --test-name-pattern "post-parse compiler phases"
+    tests/kovo-check.node.mjs` passed on 2026-06-16.
 - [ ] Built `.d.ts` registry facts inspected: derived names present, fragment-target keys typed.
 
 ## Risks

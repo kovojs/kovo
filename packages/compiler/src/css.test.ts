@@ -79,7 +79,7 @@ describe('component CSS helpers', () => {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   css: \`
     .count { color: teal; }
   \`,
@@ -92,7 +92,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartDrawer = component('cart-drawer', {
+export const CartDrawer = component({
   css: \`
     dialog { border: 0; }
   \`,
@@ -107,14 +107,14 @@ export const CartDrawer = component('cart-drawer', {
 
     expect(manifest.stylesheets).toEqual([
       {
-        componentName: 'CartBadge',
+        componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
         fragmentTargets: [],
         href: '/_kovo/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
       },
       {
-        componentName: 'CartDrawer',
+        componentName: 'cart-drawer',
         criticalCss: expect.stringContaining(
           '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
         ),
@@ -125,7 +125,7 @@ export const CartDrawer = component('cart-drawer', {
     ]);
     expect(selectCssAssets(manifest, ['components/cart/cart-drawer.css'])).toEqual([
       {
-        componentName: 'CartDrawer',
+        componentName: 'cart-drawer',
         criticalCss: expect.stringContaining(
           '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
         ),
@@ -142,7 +142,7 @@ export const CartDrawer = component('cart-drawer', {
       source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   styles: \`
     .count { color: teal; }
@@ -154,9 +154,9 @@ export const CartBadge = component('cart-badge', {
 
     expect(collectCssAssetManifest(cartBadge).stylesheets).toEqual([
       {
-        componentName: 'CartBadge',
+        componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
-        fragmentTargets: ['cart-badge'],
+        fragmentTargets: ['components/cart/cart-badge/cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
       },
@@ -167,7 +167,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: './components/reviews.tsx',
       source: `
-export const Reviews = component('reviews', {
+export const Reviews = component({
   styles: \`
     .reviews-card { border-radius: 0.5rem; }
   \`,
@@ -178,7 +178,7 @@ export const Reviews = component('reviews', {
 
     expect(collectCssAssetManifest(result, { preload: false }).stylesheets).toEqual([
       {
-        componentName: 'Reviews',
+        componentName: 'reviews',
         criticalCss: expect.stringContaining('@scope ([kovo-c="reviews"]) to (:scope [kovo-c])'),
         fragmentTargets: [],
         href: '/assets/components/reviews.css',

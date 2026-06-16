@@ -11,7 +11,7 @@ describe('compiler state and event diagnostics', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ bouncing: false, count: 2 }),
   render: (_data, state) => (
     <cart-badge class={state.bouncing ? 'bounce' : ''}>
@@ -32,7 +32,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   state: () => ({ label: "it's ready", open: false }),
   render: () => <cart-badge>Ready</cart-badge>,
 });
@@ -48,7 +48,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   state: () => ({ saved: cart.count }),
   render: ({ cart }, state) => <button disabled={cart.count === 0}>{state.saved}</button>,
@@ -72,7 +72,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'account-menu.tsx',
       source: `
-export const AccountMenu = component('account-menu', {
+export const AccountMenu = component({
   queries: { account: accountQuery },
   state: () => ({ accountNameDraft: '' }),
   render: ({ account }, state) => <span>{state.accountNameDraft}</span>,
@@ -87,7 +87,7 @@ export const AccountMenu = component('account-menu', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   state: () => ({ bouncing: false }),
   render: ({ cart }, state) => <span class={state.bouncing ? 'bounce' : ''}>{renderOnce(cart.count)}</span>,

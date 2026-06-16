@@ -84,7 +84,7 @@ export interface GallerySliderDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GallerySliderDemo = component('gallery-slider-demo', {
+export const GallerySliderDemo = component({
   state: () => ({
     dragging: false,
     dragPointerStart: 0,

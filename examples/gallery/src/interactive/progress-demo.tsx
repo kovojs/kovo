@@ -21,7 +21,7 @@ export interface GalleryProgressDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryProgressDemo = component('gallery-progress-demo', {
+export const GalleryProgressDemo = component({
   state: () => ({ value: 40 }),
   render: (_queries: Record<string, never>, state: GalleryProgressDemoState) => {
     const valueText = state.value === null ? 'Upload pending' : `${state.value} percent uploaded`;

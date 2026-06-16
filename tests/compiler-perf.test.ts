@@ -320,7 +320,7 @@ function largeComponentCorpus(): CompilerPerfCorpus {
         source: `
 import { component } from '@kovojs/core';
 
-export const LargeCatalog = component('large-catalog', {
+export const LargeCatalog = component({
   queries: { catalog: catalogQuery },
   state: () => ({ expanded0: false }),
   render: ({ catalog }, state) => (
@@ -344,7 +344,7 @@ function manySmallComponentsCorpus(): CompilerPerfCorpus {
       source: `
 import { component } from '@kovojs/core';
 
-export const Small${index} = component('small-${index}', {
+export const Small${index} = component({
   queries: { item: itemQuery },
   state: () => ({ active: false }),
   render: ({ item }, state) => (
@@ -378,7 +378,7 @@ function manyRoutesRegistriesCorpus(): CompilerPerfCorpus {
 import { component } from '@kovojs/core';
 import { Link } from '@kovojs/runtime';
 
-export const RouteCard${index} = component('route-card-${index}', {
+export const RouteCard${index} = component({
   render: () => (
     <route-card-${index}>
       <Link to="${productRoute}" params={{ slug: 'sku-${index}' }}>Product ${index}</Link>
@@ -411,7 +411,7 @@ function cssHeavyComponentsCorpus(): CompilerPerfCorpus {
         source: `
 import { component } from '@kovojs/core';
 
-export const CssPanel${index} = component('css-panel-${index}', {
+export const CssPanel${index} = component({
   css: \`
 ${rules}
   \`,
@@ -452,7 +452,7 @@ function heavyPrimitiveCompositionCorpus(): CompilerPerfCorpus {
         source: `
 import { component } from '@kovojs/core';
 
-export const PrimitiveStack${index} = component('primitive-stack-${index}', {
+export const PrimitiveStack${index} = component({
   render: () => (
     <primitive-stack-${index}>
 ${triggers}
@@ -477,7 +477,7 @@ function mixedRealAppCorpus(): CompilerPerfCorpus {
 import { component } from '@kovojs/core';
 import { Link } from '@kovojs/runtime';
 
-export const Dashboard${index} = component('dashboard-${index}', {
+export const Dashboard${index} = component({
   fragmentTarget: ${index % 2 === 0},
   queries: { account: accountQuery, report: reportQuery },
   state: () => ({ expanded: false }),

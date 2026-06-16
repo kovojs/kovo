@@ -9,7 +9,7 @@ import { cartQuery, type CartResult } from '../queries.js';
 // committed lowered IR in ../generated/ is what the app imports.
 
 // snippet:cart-badge
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartResult }) => (
     <cart-badge>

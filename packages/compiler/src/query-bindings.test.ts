@@ -14,7 +14,7 @@ describe('compiler query binding diagnostics', () => {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
@@ -45,7 +45,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       queryShapeFacts,
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
@@ -88,7 +88,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       queryShapeFacts,
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <span data-bind="cart.count">2</span>,
 });
 `,
@@ -200,7 +200,7 @@ export const CartBadge = component('cart-badge', {
         },
       ],
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => (
     <article>
       <span data-bind="product.details?.name">Coffee</span>
@@ -232,7 +232,7 @@ export const ProductCard = component('product-card', {
         },
       ],
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <span data-bind="product.details.name">Coffee</span>,
 });
 `,
@@ -268,7 +268,7 @@ export const ProductCard = component('product-card', {
         },
       },
       source: `
-export const DealCard = component('deal-card', {
+export const DealCard = component({
   queries: { deal: {} },
   render: () => (
     <deal-card>
@@ -310,7 +310,7 @@ export const DealCard = component('deal-card', {
         },
       ],
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <span data-bind="product.details.price">0</span>,
 });
 `,
@@ -337,7 +337,7 @@ export const ProductCard = component('product-card', {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <span data-bind="cart.total">2</span>,
 });
 `,
@@ -368,7 +368,7 @@ export const CartBadge = component('cart-badge', {
         },
       ],
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <span data-bind="cart.count">2</span>,
 });
 `,
@@ -395,7 +395,7 @@ export const CartBadge = component('cart-badge', {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => {
     const sample = '<span data-bind="cart.missing">0</span>';
     // <span data-bind="cart.otherMissing">0</span>
@@ -417,7 +417,7 @@ export const CartBadge = component('cart-badge', {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="productId">
       <template kovo-stamp>
@@ -436,7 +436,7 @@ export const CartBadge = component('cart-badge', {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="sku">
       <template kovo-stamp>
@@ -470,7 +470,7 @@ export const CartBadge = component('cart-badge', {
         },
       },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => {
     const sample = '<ul data-bind-list="cart.missing" kovo-key="id"><template kovo-stamp><li><span data-bind=".name">Item</span></li></template></ul>';
     // <ul data-bind-list="cart.otherMissing" kovo-key="id"><template kovo-stamp><li><span data-bind=".name">Item</span></li></template></ul>

@@ -57,7 +57,7 @@ const toggleItems = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryToggleGroupDemo = component('gallery-toggle-group-demo', {
+export const GalleryToggleGroupDemo = component({
   state: () => ({ activeValue: 'bold', value: 'bold' }),
   render: (_queries: Record<string, never>, state: GalleryToggleGroupDemoState) => {
     const selectedValues =

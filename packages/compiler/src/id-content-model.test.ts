@@ -7,7 +7,7 @@ describe('ID and content-model validation', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <label for="cart-search">Search</label>
@@ -36,7 +36,7 @@ export const CartShell = component('cart-shell', {
         },
       ],
       source: `
-export const PricingLink = component('pricing-link', {
+export const PricingLink = component({
   render: () => (
     <section>
       <a href="/pricing" kovo-tooltip="pricing-tip">Pricing</a>
@@ -54,11 +54,11 @@ export const PricingLink = component('pricing-link', {
     const result = compileComponentModule({
       fileName: 'search-controls.tsx',
       source: `
-export const SearchLabel = component('search-label', {
+export const SearchLabel = component({
   render: () => <label for="shared-search">Search</label>,
 });
 
-export const SearchInput = component('search-input', {
+export const SearchInput = component({
   render: () => <input id="shared-search" />,
 });
 `,
@@ -88,7 +88,7 @@ export const SearchInput = component('search-input', {
         },
       ],
       source: `
-export const PricingLink = component('pricing-link', {
+export const PricingLink = component({
   render: () => (
     <section>
       <a href="/pricing" acme-ui-tooltip="missing-tip" kovo-tooltip="framework-owned">Pricing</a>
@@ -114,7 +114,7 @@ export const PricingLink = component('pricing-link', {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <label for="cart-search">Search</label>
@@ -159,7 +159,7 @@ export const CartShell = component('cart-shell', {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => {
     const sample = '<label for="missing">Search</label><input id="duplicate" id="duplicate" />';
     // <button popovertarget="missing-popover"></button>
@@ -176,7 +176,7 @@ export const CartShell = component('cart-shell', {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <h2 id="cart-title">Cart</h2>
@@ -204,7 +204,7 @@ export const CartShell = component('cart-shell', {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <button commandfor="cart-drawer" command="show-modal">Open</button>
@@ -233,7 +233,7 @@ export const CartShell = component('cart-shell', {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',
       source: `
-export const CartList = component('cart-list', {
+export const CartList = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="productId">
       <template kovo-stamp>
@@ -262,7 +262,7 @@ export const CartList = component('cart-list', {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',
       source: `
-export const CartList = component('cart-list', {
+export const CartList = component({
   render: () => (
     <ul id="cart-items" data-bind-list="cart.items" kovo-key="productId">
       <template kovo-stamp>
@@ -284,7 +284,7 @@ export const CartList = component('cart-list', {
         components: ['cart-row'],
       },
       source: `
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: () => (
     <table>
       <tbody>
@@ -305,7 +305,7 @@ export const CartTable = component('cart-table', {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <p>
@@ -346,7 +346,7 @@ export const CartShell = component('cart-shell', {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
       source: `
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => {
     const sample = '<p><div>Not JSX</div></p><tr><td>Detached</td></tr>';
     // <p><section>Not JSX</section></p>

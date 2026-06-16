@@ -32,7 +32,7 @@ export interface ProductGridRenderContext {
   request?: CommerceRequest | undefined;
 }
 
-export const ProductGrid = component('product-grid', {
+export const ProductGrid = component({
   fragmentTarget: true,
   queries: { productGrid: productGridQuery },
   render: (

@@ -386,7 +386,7 @@ export function compilerDataBindBehaviorFact(
     fileName: 'cart-badge.tsx',
     queryShapeFacts: generatedCartShapeFacts,
     source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
@@ -411,7 +411,7 @@ export const CartBadge = component('cart-badge', {
       }),
     ],
     source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => <span data-bind="cart.count">2</span>,
 });
 `,
@@ -421,7 +421,7 @@ export const CartBadge = component('cart-badge', {
     fileName: 'cart-badge.tsx',
     queryShapeFacts: generatedCartShapeFacts,
     source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="sku">
       <template kovo-stamp>
@@ -456,7 +456,7 @@ export const CartBadge = component('cart-badge', {
     fileName: 'product-card.tsx',
     queryShapeFacts: nullableFacts,
     source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <span data-bind="product.review?.rating">5</span>,
 });
 `,
@@ -466,7 +466,7 @@ export const ProductCard = component('product-card', {
     fileName: 'product-card.tsx',
     queryShapeFacts: nullableFacts,
     source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <span data-bind="product.review.rating">5</span>,
 });
 `,
@@ -499,7 +499,7 @@ export function compilerValidationBehaviorFact(
     source: `
 import { component } from '@kovojs/core';
 
-export const CartSearch = component('cart-search', {
+export const CartSearch = component({
   render: () => (
     <section>
       <label for="cart-query">Search</label>
@@ -516,7 +516,7 @@ export const CartSearch = component('cart-search', {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartSearch = component('cart-search', {
+export const CartSearch = component({
   render: () => (
     <section>
       <label for="missing-label">Search</label>
@@ -534,7 +534,7 @@ export const CartSearch = component('cart-search', {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <h2 id="cart-title">Cart</h2>
@@ -550,7 +550,7 @@ export const CartShell = component('cart-shell', {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartList = component('cart-list', {
+export const CartList = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="productId">
       <template kovo-stamp>
@@ -570,7 +570,7 @@ export const CartList = component('cart-list', {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartTable = component('cart-table', {
+export const CartTable = component({
   render: () => (
     <table>
       <tbody>
@@ -589,7 +589,7 @@ export const CartTable = component('cart-table', {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartShell = component('cart-shell', {
+export const CartShell = component({
   render: () => (
     <section>
       <p>
@@ -610,7 +610,7 @@ export const CartShell = component('cart-shell', {
     source: `
 import { component } from '@kovojs/core';
 
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <button on:click="/c/cart.client.js#Cart$add">Add</button>
@@ -629,7 +629,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     source: `
 import { component } from '@kovojs/core';
 
-export const ExecutionTriggers = component('execution-triggers', {
+export const ExecutionTriggers = component({
   render: () => (
     <section>
       <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
@@ -645,7 +645,7 @@ export const ExecutionTriggers = component('execution-triggers', {
     source: `
 import { component } from '@kovojs/core';
 
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section kovo-c="recommendations" kovo-deps="cart">{cart.count}</section>
@@ -659,7 +659,7 @@ export const Recommendations = component('recommendations', {
     source: `
 import { component } from '@kovojs/core';
 
-export const Recommendations = component('recommendations', {
+export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section kovo-c="unknown-component" kovo-deps="cart missingQuery:p1">{cart.count}</section>
@@ -706,7 +706,7 @@ export function compilerLoweredIrKovoCheckBehaviorFact(
   const result = options.compileComponentModule({
     fileName: sourceFileName,
     source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => \`<cart-badge kovo-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
 });

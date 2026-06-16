@@ -279,7 +279,7 @@ import { component } from '@kovojs/core';
 
 function choose() {}
 
-export const DocCard = component('doc-card', {
+export const DocCard = component({
   fragmentTarget: true,
   css: \`
     .title { color: teal; }

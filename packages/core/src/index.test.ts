@@ -71,30 +71,30 @@ declare module './index.js' {
 }
 
 describe('core authoring APIs', () => {
-  it('preserves component names and definitions for compiler analysis', () => {
+  it('preserves component definitions for compiler analysis', () => {
     const cart = query<'cart', { count: number }>('cart');
-    const CartBadge = component('cart-badge', {
+    const CartBadge = component({
       fragmentTarget: true,
       queries: { cart },
       state: () => ({ bouncing: false }) satisfies JsonValue,
       render: ({ cart: cartQuery }, state) => ({ cartQuery, state }),
     });
 
-    expect(CartBadge.name).toBe('cart-badge');
+    expect(CartBadge.name).toBeUndefined();
     expect(CartBadge.definition.fragmentTarget).toBe(true);
     expect(CartBadge.definition.queries?.cart.key).toBe('cart');
   });
 
   it('rejects non-JsonValue component state at authoring time', () => {
     const assertDateState = () => {
-      component('clock-face', {
+      component({
         render: () => null,
         // @ts-expect-error component state must satisfy JsonValue; Date cannot be serialized.
         state: () => ({ now: new Date() }),
       });
     };
     const assertMapState = () => {
-      component('filter-panel', {
+      component({
         render: () => null,
         // @ts-expect-error component state must satisfy JsonValue; Map cannot be serialized.
         state: () => ({ selected: new Map<string, string>() }),

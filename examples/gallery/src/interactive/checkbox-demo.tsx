@@ -20,7 +20,7 @@ export interface GalleryCheckboxDemoState {
 
 // SPEC.md section 5.2: this source is the authored gallery component; generated
 // IR and client modules are checked in only as compiler outputs.
-export const GalleryCheckboxDemo = component('gallery-checkbox-demo', {
+export const GalleryCheckboxDemo = component({
   state: () => ({ checked: 'indeterminate' }),
   render: (_queries: Record<string, never>, state: GalleryCheckboxDemoState) => (
     <label class={ROOT_CLASS} data-gallery-interactive="checkbox">

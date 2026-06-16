@@ -133,7 +133,7 @@ const cityOptions: readonly ComboboxItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryComboboxDemo = component('gallery-combobox-demo', {
+export const GalleryComboboxDemo = component({
   state: () => ({ highlightedValue: 'austin', inputValue: 'austin', open: false, value: 'austin' }),
   render: (_queries: Record<string, never>, state: GalleryComboboxDemoState) => {
     const listboxId = 'gallery-combobox-listbox';

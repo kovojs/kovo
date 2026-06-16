@@ -8,7 +8,7 @@ describe('compiler attribute merge diagnostics', () => {
       fileName: 'primitive-merge.tsx',
       registryFacts: { queries: { cart: 'CartQuery', product: 'ProductQuery' } },
       source: `
-export const PrimitiveMerge = component('primitive-merge', {
+export const PrimitiveMerge = component({
   render: () => (
     <primitive-merge>
       <div id="author-panel"></div>
@@ -92,7 +92,7 @@ export const PrimitiveMerge = component('primitive-merge', {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',
       source: `
-export const PrimitiveMerge = component('primitive-merge', {
+export const PrimitiveMerge = component({
   render: () => (
     <primitive-merge>
       <dialog id="drawer"></dialog>
@@ -178,7 +178,7 @@ export const PrimitiveMerge = component('primitive-merge', {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',
       source: `
-export const PrimitiveMerge = component('primitive-merge', {
+export const PrimitiveMerge = component({
   render: () => {
     const sample = '<button role="button" role="link"></button>';
     // <button data-state="closed" data-state="open"></button>
@@ -195,7 +195,7 @@ export const PrimitiveMerge = component('primitive-merge', {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',
       source: `
-export const PrimitiveMerge = component('primitive-merge', {
+export const PrimitiveMerge = component({
   render: () => (
     <button
       {...{

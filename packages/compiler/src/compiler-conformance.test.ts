@@ -71,7 +71,7 @@ describe('compiler conformance corpus', () => {
           "clientExports": [],
           "componentGraphFacts": [
             {
-              "name": "ReferenceShell",
+              "name": "components/reference-shell/reference-shell",
               "queries": [
                 "account",
               ],
@@ -96,7 +96,7 @@ describe('compiler conformance corpus', () => {
             "registryHasRoutes": true,
             "serverHasRenderSource": true,
           },
-          "name": "ReferenceShell",
+          "name": "components/reference-shell/reference-shell",
           "registryFacts": {
             "hasComponentStylesheet": true,
             "hasFragmentTargets": true,
@@ -112,9 +112,9 @@ describe('compiler conformance corpus', () => {
           "componentGraphFacts": [
             {
               "fragments": [
-                "cart-badge",
+                "components/cart-badge/cart-badge",
               ],
-              "name": "CartBadge",
+              "name": "components/cart-badge/cart-badge",
               "queries": [
                 "cart",
               ],
@@ -139,7 +139,7 @@ describe('compiler conformance corpus', () => {
             "registryHasRoutes": false,
             "serverHasRenderSource": true,
           },
-          "name": "CartBadge",
+          "name": "components/cart-badge/cart-badge",
           "registryFacts": {
             "hasComponentStylesheet": true,
             "hasFragmentTargets": true,
@@ -155,9 +155,9 @@ describe('compiler conformance corpus', () => {
           "componentGraphFacts": [
             {
               "fragments": [
-                "order-history",
+                "components/order-history/order-history",
               ],
-              "name": "OrderHistory",
+              "name": "components/order-history/order-history",
               "queries": [
                 "orderHistory",
               ],
@@ -182,7 +182,7 @@ describe('compiler conformance corpus', () => {
             "registryHasRoutes": false,
             "serverHasRenderSource": true,
           },
-          "name": "OrderHistory",
+          "name": "components/order-history/order-history",
           "registryFacts": {
             "hasComponentStylesheet": true,
             "hasFragmentTargets": true,
@@ -198,9 +198,9 @@ describe('compiler conformance corpus', () => {
           "componentGraphFacts": [
             {
               "fragments": [
-                "product-grid",
+                "components/product-grid/product-grid",
               ],
-              "name": "ProductGrid",
+              "name": "components/product-grid/product-grid",
               "queries": [
                 "productGrid",
               ],
@@ -225,7 +225,7 @@ describe('compiler conformance corpus', () => {
             "registryHasRoutes": false,
             "serverHasRenderSource": true,
           },
-          "name": "ProductGrid",
+          "name": "components/product-grid/product-grid",
           "registryFacts": {
             "hasComponentStylesheet": true,
             "hasFragmentTargets": true,
@@ -241,9 +241,9 @@ describe('compiler conformance corpus', () => {
           "componentGraphFacts": [
             {
               "fragments": [
-                "cart-badge",
+                "conformance/generated/cart-badge/cart-badge",
               ],
-              "name": "CartBadge",
+              "name": "conformance/generated/cart-badge/cart-badge",
               "queries": [
                 "cart",
               ],
@@ -268,7 +268,7 @@ describe('compiler conformance corpus', () => {
             "registryHasRoutes": true,
             "serverHasRenderSource": true,
           },
-          "name": "CartBadge",
+          "name": "conformance/generated/cart-badge/cart-badge",
           "registryFacts": {
             "hasComponentStylesheet": true,
             "hasFragmentTargets": true,
@@ -565,7 +565,7 @@ function referenceShellFixture(): CompileResult {
     source: `
 import { component } from '@kovojs/core';
 
-export const ReferenceShell = component('reference-shell', {
+export const ReferenceShell = component({
   queries: { account: accountQuery },
   render: ({ account }) => (
     <section>
@@ -607,7 +607,7 @@ function focusedGeneratedFixture(): CompileResult {
     source: `
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart }) => (
@@ -665,7 +665,7 @@ function corpusArtifactFact(result: CompileResult): CorpusArtifactFact {
 
 function compilerDiagnosticFixtures(): Array<{ code: string; result: CompileResult }> {
   const simpleComponent = `
-export const Shell = component('shell', {
+export const Shell = component({
   render: () => <section></section>,
 });
 `;
@@ -676,7 +676,7 @@ export const Shell = component('shell', {
       result: compileComponentModule({
         fileName: 'handlers.tsx',
         source: `
-export const HandlerNames = component('handler-names', {
+export const HandlerNames = component({
   state: () => ({ open: false }),
   render: () => <button onClick={() => state.open = true}>Open</button>,
 });
@@ -688,7 +688,7 @@ export const HandlerNames = component('handler-names', {
       result: compileComponentModule({
         fileName: 'execution.tsx',
         source: `
-export const Execution = component('execution', {
+export const Execution = component({
   render: () => <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>,
 });
 `,
@@ -699,7 +699,7 @@ export const Execution = component('execution', {
       result: compileComponentModule({
         fileName: 'execution.tsx',
         source: `
-export const Execution = component('execution', {
+export const Execution = component({
   render: () => <video-player on:media="/c/video.client.js#Video$mount"></video-player>,
 });
 `,
@@ -711,7 +711,7 @@ export const Execution = component('execution', {
         fileName: 'navigation.tsx',
         registryFacts: { routes: ['/cart'] },
         source: `
-export const Navigation = component('navigation', {
+export const Navigation = component({
   render: () => <a href="/checkout">Checkout</a>,
 });
 `,
@@ -722,7 +722,7 @@ export const Navigation = component('navigation', {
       result: compileComponentModule({
         fileName: 'idrefs.tsx',
         source: `
-export const Idrefs = component('idrefs', {
+export const Idrefs = component({
   render: () => <label for="missing">Name</label>,
 });
 `,
@@ -734,7 +734,7 @@ export const Idrefs = component('idrefs', {
         fileName: 'stamps.tsx',
         queryShapes: { cart: { count: 'number', total: 'number' } },
         source: `
-export const Stamps = component('stamps', {
+export const Stamps = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span data-bind="cart.total">{cart.count}</span>,
 });
@@ -747,7 +747,7 @@ export const Stamps = component('stamps', {
         fileName: 'stamps.tsx',
         queryShapes: { cart: { count: 'number' } },
         source: `
-export const Stamps = component('stamps', {
+export const Stamps = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
 });
@@ -759,7 +759,7 @@ export const Stamps = component('stamps', {
       result: compileComponentModule({
         fileName: 'ids.tsx',
         source: `
-export const Ids = component('ids', {
+export const Ids = component({
   render: () => <section><h2 id="title">A</h2><output id="title">B</output></section>,
 });
 `,
@@ -770,7 +770,7 @@ export const Ids = component('ids', {
       result: compileComponentModule({
         fileName: 'markup.tsx',
         source: `
-export const Markup = component('markup', {
+export const Markup = component({
   render: () => <p><div>Bad</div></p>,
 });
 `,
@@ -781,7 +781,7 @@ export const Markup = component('markup', {
       result: compileComponentModule({
         fileName: 'residual.tsx',
         source: `
-export const Residual = component('residual', {
+export const Residual = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <section kovo-c="unknown-component" kovo-deps="cart missing">{cart.count}</section>,
 });
@@ -796,7 +796,7 @@ export const Residual = component('residual', {
           product: { details: { kind: 'nullable', shape: { name: 'string' } } },
         },
         source: `
-export const Nullable = component('nullable', {
+export const Nullable = component({
   render: () => <span data-bind="product.details.name">Coffee</span>,
 });
 `,
@@ -807,7 +807,7 @@ export const Nullable = component('nullable', {
       result: compileComponentModule({
         fileName: 'primitive-conflicts.tsx',
         source: `
-export const PrimitiveConflicts = component('primitive-conflicts', {
+export const PrimitiveConflicts = component({
   render: () => <button commandfor="drawer" commandfor="confirm">Open</button>,
 });
 `,
@@ -818,7 +818,7 @@ export const PrimitiveConflicts = component('primitive-conflicts', {
       result: compileComponentModule({
         fileName: 'primitive-conflicts.tsx',
         source: `
-export const PrimitiveConflicts = component('primitive-conflicts', {
+export const PrimitiveConflicts = component({
   render: () => <button role="button" role="link">Open</button>,
 });
 `,
@@ -829,7 +829,7 @@ export const PrimitiveConflicts = component('primitive-conflicts', {
       result: compileComponentModule({
         fileName: 'primitive-conflicts.tsx',
         source: `
-export const PrimitiveConflicts = component('primitive-conflicts', {
+export const PrimitiveConflicts = component({
   render: () => <span data-bind="cart.count" data-bind="cart.total">2</span>,
 });
 `,
@@ -848,7 +848,7 @@ export const PrimitiveConflicts = component('primitive-conflicts', {
       result: compileComponentModule({
         fileName: 'state.tsx',
         source: `
-export const State = component('state', {
+export const State = component({
   queries: { cart: cartQuery },
   state: () => ({ saved: cart.count }),
   render: ({ cart }, state) => <span>{state.saved}</span>,
@@ -862,7 +862,7 @@ export const State = component('state', {
         fileName: 'bindings.tsx',
         queryShapes: { cart: { count: 'number' } },
         source: `
-export const Bindings = component('bindings', {
+export const Bindings = component({
   render: () => <span data-bind="cart.total">2</span>,
 });
 `,
@@ -873,7 +873,7 @@ export const Bindings = component('bindings', {
       result: compileComponentModule({
         fileName: 'fragment.tsx',
         source: `
-export const Fragment = component('fragment', {
+export const Fragment = component({
   fragmentTarget: true,
   queries: { cart: cartQuery },
   render: ({ cart, priceList }) => <section>{renderOnce(cart.count)}{priceList.version}</section>,
@@ -886,7 +886,7 @@ export const Fragment = component('fragment', {
       result: compileComponentModule({
         fileName: 'reserved-query.tsx',
         source: `
-export const ReservedQuery = component('reserved-query', {
+export const ReservedQuery = component({
   queries: { state: stateQuery },
   render: () => <section></section>,
 });

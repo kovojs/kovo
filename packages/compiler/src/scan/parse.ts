@@ -737,7 +737,10 @@ function componentModelFromInitializer(
   if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'component')
     return null;
 
-  const [nameArg, optionsArg] = initializer.arguments;
+  const [firstArg, secondArg] = initializer.arguments;
+  const optionsArg =
+    firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : secondArg;
+  const nameArg = optionsArg === firstArg ? undefined : firstArg;
   const explicitName = nameArg && ts.isStringLiteralLike(nameArg) ? nameArg.text : undefined;
   const explicitNameSpan =
     nameArg && ts.isStringLiteralLike(nameArg)

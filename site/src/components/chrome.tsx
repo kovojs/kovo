@@ -36,7 +36,7 @@ export interface SiteHeaderProps {
   clients: ClientHrefs;
 }
 
-export const SiteHeader = component('site-header', {
+export const SiteHeader = component({
   render: ({ activePath = '', clients }: SiteHeaderProps) => (
     <header class="site-bar">
       <div class="site-bar-inner">
@@ -77,7 +77,7 @@ export const SiteHeader = component('site-header', {
   ),
 });
 
-export const SiteFooter = component('site-footer', {
+export const SiteFooter = component({
   render: () => (
     <footer class="site-footer">
       <div class="site-footer-inner">
@@ -102,7 +102,7 @@ export interface DocsSidebarProps {
   groups: NavGroup[];
 }
 
-export const DocsSidebar = component('docs-sidebar', {
+export const DocsSidebar = component({
   render: ({ activePath = '', groups }: DocsSidebarProps) => (
     <nav class="doc-sidebar" aria-label="Documentation">
       {groups.map((group) => (
@@ -142,7 +142,7 @@ function prevNextCard(page: NavLink | undefined, direction: 'prev' | 'next') {
   );
 }
 
-export const PrevNext = component('docs-prev-next', {
+export const PrevNext = component({
   render: ({ prev, next }: PrevNextProps) => (
     <nav class="pn" aria-label="Pagination">
       {prevNextCard(prev, 'prev')}

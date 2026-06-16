@@ -10,7 +10,7 @@ describe('compiler text-child escaping (C1)', () => {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',
       source: `
-export const OrderHistory = component('order-history', {
+export const OrderHistory = component({
   render: ({ orders }) => (
     <ol>
       {orders.map((item) => (
@@ -39,7 +39,7 @@ export const OrderHistory = component('order-history', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: ({ product }) => <h2>{product.name}</h2>,
 });
 `,
@@ -54,7 +54,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'card.tsx',
       source: `
-export const Card = component('card', {
+export const Card = component({
   render: ({ product }) => (
     <article title={product.name}>
       {formatPrice(product.price)}

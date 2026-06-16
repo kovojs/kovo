@@ -12,7 +12,7 @@ import { orderHistoryQuery } from '../queries.js';
 // (section 4.2) along with the kovo-deps stamp from the queries declaration.
 // The lowered IR is committed at src/generated/order-history.tsx and is what
 // the app imports at runtime.
-export const OrderHistory = component('order-history', {
+export const OrderHistory = component({
   fragmentTarget: true,
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (

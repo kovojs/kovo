@@ -29,7 +29,7 @@ export interface GalleryToggleDemoState {
 
 // SPEC.md section 5.2: this is app-authored TSX. The emitted lowered TSX and
 // client module under src/generated/interactive are compiler artifacts.
-export const GalleryToggleDemo = component('gallery-toggle-demo', {
+export const GalleryToggleDemo = component({
   state: () => ({ pressed: false }),
   render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => (
     <section

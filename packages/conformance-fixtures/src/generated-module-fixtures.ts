@@ -751,7 +751,7 @@ const generatedTypedRouteDiagnosticFacts = (
 const typedRouteValidSource = `
 import { component, href, Link } from '@kovojs/core';
 
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <Link to="/products/:id" params={{ id: 'p 1' }} search={{ max: 500 }}>Product</Link>
@@ -764,7 +764,7 @@ export const ProductLinks = component('product-links', {
 const typedRouteInvalidSource = `
 import { component } from '@kovojs/core';
 
-export const ProductLinks = component('product-links', {
+export const ProductLinks = component({
   render: () => (
     <nav>
       <a href="/product/p1">Bad</a>

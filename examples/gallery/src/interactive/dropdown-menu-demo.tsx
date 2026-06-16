@@ -41,7 +41,7 @@ const dropdownItems: readonly DropdownMenuItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryDropdownMenuDemo = component('gallery-dropdown-menu-demo', {
+export const GalleryDropdownMenuDemo = component({
   state: () => ({ highlightedValue: 'duplicate', open: false, value: 'duplicate' }),
   render: (_queries: Record<string, never>, state: GalleryDropdownMenuDemoState) => {
     const contentId = 'gallery-dropdown-menu-content';

@@ -46,7 +46,7 @@ A component declares the queries it uses and renders with their values:
 ```tsx
 import { component } from '@kovojs/core';
 
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <cart-badge>

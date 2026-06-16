@@ -244,17 +244,17 @@ describe('diagnostic registry', () => {
         },
         "KV237": {
           "code": "KV237",
-          "help": "Would lower to: one effective kovo-c/component name per component across the app graph.
-      Blocked reason: duplicate effective names make component identity, CSS scoping, fragment routing, and graph facts ambiguous.
-      Fixes: give one component a distinct component("wire-name") value, or split reusable package components behind distinct package prefixes.
-      SPEC §4.2 and §4.8 make kovo-c/component names load-bearing for identity, scoped CSS, fragments, and graph facts; duplicate effective names are ambiguous.",
+          "help": "Would lower to: one derived component registry key per component across the app graph.
+      Blocked reason: duplicate derived registry keys make component identity, CSS scoping, fragment routing, and graph facts ambiguous.
+      Fixes: rename the exported component binding, or move one component so its derived module path namespace differs.
+      SPEC §4.2 and §4.8 make derived component names load-bearing for identity, scoped CSS, fragments, and graph facts; duplicate registry keys are ambiguous.",
           "message": "Duplicate component effective wire name.",
           "severity": "error",
         },
         "KV238": {
           "code": "KV238",
-          "help": "Fixes: give one fragment target a distinct component("target-name") value, or remove fragmentTarget from the component that should not receive enhanced patches.
-      SPEC §4.5 and §6.2 make fragment-target names registry-visible wire identities; duplicate names make enhanced fragment patches ambiguous.",
+          "help": "Fixes: rename the exported component binding, move one component so its derived module path namespace differs, or remove fragmentTarget from the component that should not receive enhanced patches.
+      SPEC §4.5, §4.8, and §6.2 make fragment-target names derived registry-visible identities; duplicate keys make enhanced fragment patches ambiguous.",
           "message": "Duplicate fragment-target wire name.",
           "severity": "error",
         },

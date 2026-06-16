@@ -89,7 +89,7 @@ const tabsItems = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryTabsDemo = component('gallery-tabs-demo', {
+export const GalleryTabsDemo = component({
   state: () => ({ activeValue: 'overview', value: 'overview' }),
   render: (_queries: Record<string, never>, state: GalleryTabsDemoState) => {
     const rootState = {

@@ -7,7 +7,7 @@ const result = compileComponentModule({
   source: `
 import { component } from '@kovojs/core';
 
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => (
     <article>
       <button onClick={() => addToCart(product.id)}>Add</button>

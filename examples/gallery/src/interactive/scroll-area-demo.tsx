@@ -52,7 +52,7 @@ export interface GalleryScrollAreaDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryScrollAreaDemo = component('gallery-scroll-area-demo', {
+export const GalleryScrollAreaDemo = component({
   state: () => ({
     dragging: false,
     dragPointerStart: 0,

@@ -7,7 +7,7 @@ describe('compiler query coverage', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -67,7 +67,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -95,7 +95,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -118,7 +118,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       queryShapes: { cart: { count: 'number' } },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -152,7 +152,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       queryShapes: { cart: { count: 'number' } },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -194,7 +194,7 @@ export const CartBadge = component('cart-badge', {
       fileName: 'cart-badge.tsx',
       queryShapes: { cart: { count: 'number' } },
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -231,7 +231,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {}, product: {} },
   render: () => (
     <cart-badge>
@@ -273,7 +273,7 @@ export const CartBadge = component('cart-badge', {
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'cart.discount',
-        sourceSpan: { length: 13, start: 314 },
+        sourceSpan: { length: 13, start: 300 },
         status: 'UNHANDLED',
       },
       {
@@ -281,7 +281,7 @@ export const CartBadge = component('cart-badge', {
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'product.name',
-        sourceSpan: { length: 12, start: 368 },
+        sourceSpan: { length: 12, start: 354 },
         status: 'UNHANDLED',
       },
     ]);
@@ -322,7 +322,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -352,7 +352,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
     <cart-badge>
@@ -385,7 +385,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   queries: { cart: {} },
   render: () => (
@@ -409,7 +409,7 @@ export const CartRow = component('cart-row', {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
       source: `
-export const CartRow = component('cart-row', {
+export const CartRow = component({
   fragmentTarget: true,
   state: () => ({ open: false }),
   render: (_queries, state) => (
@@ -440,7 +440,7 @@ export const CartRow = component('cart-row', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: {} },
   routes: { cart: '/cart' },
   render: () => (
@@ -472,7 +472,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   render: () => (
     <ul data-bind-list="cart.items" kovo-key="productId">
       <template kovo-stamp>
@@ -514,7 +514,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   isomorphic: true,
   queries: { cart: {} },
   render: () => (
@@ -544,7 +544,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 const sample = 'queries: { fake: fakeQuery } <span>{fake.count}</span>';
 // queries: { otherFake: otherFakeQuery } <span>{otherFake.count}</span>
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span>{renderOnce(cart.count)}</span>,
 });
@@ -560,7 +560,7 @@ export const CartBadge = component('cart-badge', {
       source: `
 const sample = '<strong>{cart.discount}</strong><span>{renderOnce(cart.currency)}</span>';
 // <em>{cart.total}</em>
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span>{renderOnce(cart.count)}</span>,
 });
@@ -574,7 +574,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => <span>{renderOnce(cart.label ?? "cart.discount")}</span>,
 });
@@ -597,7 +597,7 @@ export const CartBadge = component('cart-badge', {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-export const CartBadge = component('cart-badge', {
+export const CartBadge = component({
   queries: { cart: cartQuery, product: productQuery },
   render: ({ cart, product }) => (
     <span>{renderOnce(format(cart.count), "cart.discount", product.name)}</span>

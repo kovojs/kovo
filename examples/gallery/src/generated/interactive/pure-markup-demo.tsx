@@ -14,7 +14,7 @@ export interface GalleryPureMarkupDemoState {
 
 // SPEC.md section 5.2: this is app-authored TSX. Generated files under
 // src/generated/interactive are compiler artifacts used for gallery verification.
-export const GalleryPureMarkupDemo = component('gallery-pure-markup-demo', {
+export const GalleryPureMarkupDemo = component({
   state: () => ({ submitted: false }),
   render: (_queries: Record<string, never>, state: GalleryPureMarkupDemoState) => (
     <section

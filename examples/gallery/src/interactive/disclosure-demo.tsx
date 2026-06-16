@@ -18,7 +18,7 @@ export interface GalleryDisclosureDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryDisclosureDemo = component('gallery-disclosure-demo', {
+export const GalleryDisclosureDemo = component({
   state: () => ({ open: false }),
   render: (_queries: Record<string, never>, state: GalleryDisclosureDemoState) => (
     <section class={ROOT_CLASS} data-gallery-interactive="disclosure">

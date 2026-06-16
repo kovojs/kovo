@@ -30,7 +30,7 @@ export interface GalleryOtpFieldDemoState {
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GalleryOtpFieldDemo = component('gallery-otp-field-demo', {
+export const GalleryOtpFieldDemo = component({
   state: () => ({ activeSlot: 2, value: '12' }),
   render: (_queries: Record<string, never>, state: GalleryOtpFieldDemoState) => {
     const formId = 'gallery-otp-form';

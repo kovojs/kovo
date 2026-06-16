@@ -93,7 +93,7 @@ const shippingOptions: readonly SelectItem[] = Object.freeze([
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
-export const GallerySelectDemo = component('gallery-select-demo', {
+export const GallerySelectDemo = component({
   state: () => ({ highlightedValue: 'standard', open: false, value: 'standard' }),
   render: (_queries: Record<string, never>, state: GallerySelectDemoState) => {
     const selectState = {

@@ -10,7 +10,7 @@ const kv239 = diagnosticDefinitions.KV239;
 describe('view transition lowering', () => {
   it('exposes view transition lowering as parsed source patches', () => {
     const source = `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <img alt="Product" style='opacity: .8;' viewTransitionName="product-p1-image" src="/p1.png" />,
 });
 `;
@@ -38,7 +38,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <img viewTransitionName="product-p1-image" src="/p1.png" />,
 });
 `,
@@ -56,7 +56,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => (
     <section>
       <img viewTransitionName="product-p1-image" src="/p1.png" />
@@ -74,13 +74,13 @@ export const ProductCard = component('product-card', {
         help: [
           kv239.help,
           'View-transition name: product-p1-image',
-          'First writer: ProductCard component("product-card") <img>',
-          'Duplicate writer: ProductCard component("product-card") <a>',
+          'First writer: ProductCard <img>',
+          'Duplicate writer: ProductCard <a>',
           "Would emit registry:\ninterface ViewTransitions {\n  'product-p1-image': unknown;\n}",
           'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
         ].join('\n'),
         message:
-          'Duplicate static view-transition name. product-p1-image is used by ProductCard component("product-card") <img> and ProductCard component("product-card") <a>.',
+          'Duplicate static view-transition name. product-p1-image is used by ProductCard <img> and ProductCard <a>.',
         severity: 'error',
       }),
     );
@@ -90,7 +90,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => (
     <section>
       <img viewTransitionName="product-p1-image" src="/p1.png" />
@@ -109,7 +109,7 @@ export const ProductCard = component('product-card', {
       fileName: 'product-card.tsx',
       registryFacts: { viewTransitions: ['product-p1-image'] },
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <img viewTransitionName="product-p1-image" src="/p1.png" />,
 });
 `,
@@ -120,7 +120,7 @@ export const ProductCard = component('product-card', {
         code: 'KV239',
         help: expect.stringContaining('registryFacts.viewTransitions'),
         message:
-          'Duplicate static view-transition name. product-p1-image is already present in registry facts and is reused by ProductCard component("product-card") <img>.',
+          'Duplicate static view-transition name. product-p1-image is already present in registry facts and is reused by ProductCard <img>.',
       }),
     );
   });
@@ -129,7 +129,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <img style="opacity: .8" viewTransitionName="product-p1-image" src="/p1.png" />,
 });
 `,
@@ -149,7 +149,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => <img alt="Product" style='opacity: .8;' viewTransitionName="product-p1-image" src="/p1.png" />,
 });
 `,
@@ -166,7 +166,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   queries: { product: {} },
   render: () => <img viewTransitionName={product.slug} src="/p1.png" />,
 });
@@ -195,7 +195,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   queries: { product: {} },
   render: () => <img style="opacity: .8" viewTransitionName={product.slug} src="/p1.png" />,
 });
@@ -221,7 +221,7 @@ export const ProductCard = component('product-card', {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       source: `
-export const ProductCard = component('product-card', {
+export const ProductCard = component({
   render: () => {
     const sample = '<img viewTransitionName="not-real" />';
     // <img viewTransitionName="also-not-real" />
