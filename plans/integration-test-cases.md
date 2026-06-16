@@ -474,21 +474,33 @@ integration harness uniquely proves.
     `tests/integration/fixtures/primitive-as-child/card.tsx`, and
     `tests/integration/specs/primitive-as-child.spec.ts`; passed
     `pnpm exec playwright test tests/integration/specs/primitive-as-child.spec.ts --config tests/integration/playwright.config.ts`.
-- [ ] `primitive-id-author-wins` / `primitive-id-author-wins.spec.ts`: when an author id wins, primitive
+- [x] `primitive-id-author-wins` / `primitive-id-author-wins.spec.ts`: when an author id wins, primitive
       IDREFs are rewired to the surviving id.
   - SPEC refs: §4.6 merge rules, §6.2 IDREFs.
   - Assertions: runtime relationship works; snapshot shows final id/IDREF values.
-  - Gap: a focused fixture probe using plain primitive attrs records left the authored dialog closed
-    after trigger activation, so the current integration/compiler path is not yet rewriting the
-    cross-element `commandfor`/`aria-controls` IDREFs needed by SPEC.md §4.6.
-- [ ] `primitive-state-attrs` / `primitive-state-attrs.spec.ts`: primitive-owned `data-state` updates
+  - Evidence: added `tests/integration/fixtures/primitive-id-author-wins/app.tsx`,
+    `tests/integration/fixtures/primitive-id-author-wins/dialog-card.tsx`,
+    `tests/integration/specs/primitive-id-author-wins.spec.ts`, and
+    `tests/integration/specs/__snapshots__/primitive-id-author-wins.spec.ts/primitive-id-author-wins-semantic.txt`;
+    implemented compiler IDREF rewrites in `packages/compiler/src/lower/attribute-merge.ts`,
+    `packages/compiler/src/lower/primitive-spreads.ts`, and
+    `packages/compiler/src/lower/structural-jsx.ts`; passed
+    `pnpm exec vitest --run packages/compiler/src/attribute-merge.test.ts packages/compiler/src/structural-jsx-ir.test.ts`
+    and
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/primitive-id-author-wins.spec.ts specs/primitive-state-attrs.spec.ts --config playwright.config.ts`.
+- [x] `primitive-state-attrs` / `primitive-state-attrs.spec.ts`: primitive-owned `data-state` updates
       on interaction and author static overrides do not break runtime state.
   - SPEC refs: §4.6 merge rules, §12.1 accessibility conformance.
   - Assertions: `data-state`/ARIA state terminal values; axe-clean terminal state if axe helper lands.
-  - Gap: the integration fixture path can lower stateless primitive `asChild` merges, but the
-    attempted stateful primitive-composition probe hit unsupported fixture/compiler edges before the
-    browser assertions ran, so this remains open pending a supported stateful primitive integration
-    surface.
+  - Evidence: added `tests/integration/fixtures/primitive-state-attrs/app.tsx`,
+    `tests/integration/fixtures/primitive-state-attrs/client.ts`,
+    `tests/integration/fixtures/primitive-state-attrs/state-card.tsx`,
+    `tests/integration/specs/primitive-state-attrs.spec.ts`, and
+    `tests/integration/specs/__snapshots__/primitive-state-attrs.spec.ts/primitive-state-attrs-semantic.txt`;
+    passed
+    `pnpm exec vitest --run packages/compiler/src/attribute-merge.test.ts packages/compiler/src/structural-jsx-ir.test.ts`
+    and
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/primitive-id-author-wins.spec.ts specs/primitive-state-attrs.spec.ts --config playwright.config.ts`.
 
 ## Composition, slots, and component identity
 

@@ -1,0 +1,10 @@
+<section data-case="primitive-id-author-wins" kovo-c="primitive-id-author-wins-card">
+  <button aria-controls="authored-account-dialog" aria-haspopup="dialog" class="author-trigger" command="show-modal" commandfor="authored-account-dialog" data-case="primitive-open-trigger" data-state="closed" id="primitive-account-trigger" type="button">
+    "Open account dialog"
+  <dialog aria-labelledby="primitive-account-title" class="author-dialog" data-case="primitive-dialog" data-state="closed" id="authored-account-dialog">
+    <h1 id="primitive-account-title">
+      "Account dialog"
+    <p>
+      "Authored dialog id should be the command target."
+    <button command="close" commandfor="authored-account-dialog" type="button">
+      "Close"
