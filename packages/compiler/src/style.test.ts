@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { assertFixpoint, compileComponentModule } from './index.js';
 
 describe('Kovo Style extraction', () => {
   it('lowers static style.create references to readable classes and atomic CSS', () => {
@@ -43,6 +43,7 @@ export const Button = component({
         }),
       ]),
     );
+    expect(() => assertFixpoint(result)).not.toThrow();
   });
 
   it('lowers static style arrays with author-last property wins', () => {

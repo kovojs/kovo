@@ -9,6 +9,7 @@ import {
   serverRenderLowering,
 } from './emit/server.js';
 import { componentGraphFact, findFragmentTargetFacts } from './graph.js';
+import { cssIrHeader } from './ir.js';
 import {
   clientModuleUrl,
   clientModuleVersion,
@@ -122,7 +123,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     versionHandlerLowering(handler, options.fileName, clientHref),
   );
   const componentCssSource = emitCssModule(componentNames.domName, model);
-  const styleCssSource = styleExtraction.css;
+  const styleCssSource = styleExtraction.css ? `${cssIrHeader}\n${styleExtraction.css}` : null;
   const cssSource =
     componentCssSource && styleCssSource
       ? dedupeCss([componentCssSource, styleCssSource])

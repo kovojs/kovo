@@ -220,6 +220,12 @@ borrowing its concrete API/spike detail.
 - [ ] **Phase 3 — Fixpoint + reactive + merge integration.** Fixpoint fixture (compile(IR) ≡ IR);
       §4.9 classifier accepts style-object toggles; §4.7 atomic-aware class merge. _Evidence:_ fixpoint CI
       green; a reactive `state`-driven style toggle updates via §4.8 with no `setAttribute`.
+  - Evidence (partial, 2026-06-16): `packages/compiler/src/style.test.ts` asserts
+    `assertFixpoint(...)` for the static `style.create` lowering subset; `pnpm exec vitest --run
+    packages/compiler/src/style.test.ts packages/compiler/src/css.test.ts
+    packages/compiler/src/compile-component.test.ts` passes.
+  - [ ] Add reactive `state`/query-driven style-object toggle lowering through the §4.8 update plan
+    before checking Phase 3 complete.
 - [ ] **Phase 4 — UI model bake-off (Button) + one multi-slot component.** Implement Button as Model V
       and Model L; rewrite one interactive multi-slot component (`Select`/`Dialog`/`Tabs`) exercising
       headless attrs + slot overrides. Keep axe/browser gates green (§12.1). Recommend a model.
