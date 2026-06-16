@@ -629,18 +629,32 @@ integration harness uniquely proves.
   - SPEC refs: §8 out-of-order streaming, §13.3 streaming details.
   - Assertions: fallback visible first; final content replaces it; query JSON arrives before/with
     consumers.
+  - Gap: public `renderDeferredDocument`/`renderDeferredStream` can produce the wire artifact and the
+    runtime exposes stream-apply helpers, but the current inline loader does not consume initial
+    document stream boundaries in the browser, so the fallback-then-morph integration assertion is
+    not yet expressible through the public harness.
 - [ ] `deferred-fragment-styles` / `deferred-fragment-styles.spec.ts`: late fragments request or reuse
       required styles without duplicating per-page CSS.
   - SPEC refs: §13.1 CSS, §13.3 streaming details.
   - Assertions: styled deferred content appears correctly; stylesheet hints remain deduped.
-- [ ] `static-export-l0-l1` / `static-export-l0-l1.spec.ts`: an exportable L0/L1 route replays through
+- [x] `static-export-l0-l1` / `static-export-l0-l1.spec.ts`: an exportable L0/L1 route replays through
       the same handler and writes HTML plus immutable client modules.
   - SPEC refs: §9.5 static export.
   - Assertions: exported document opens and preserves L0/L1 behavior; no second render path.
-- [ ] `static-export-rejects-dynamic` / `static-export-rejects-dynamic.spec.ts`: guarded or mutation-only
+  - Evidence: `tests/integration/fixtures/static-export-l0-l1` and
+    `tests/integration/specs/static-export-l0-l1.spec.ts` verify `exportStaticApp()` writes three
+    route documents plus referenced immutable `/c/` client modules, serves the exported tree through
+    a static file server for anchor/form L0/L1 navigation, and proves no second render path by
+    checking the route render counter is unchanged after static serving. Proving command:
+    `pnpm exec playwright test static-export-l0-l1.spec.ts static-export-rejects-dynamic.spec.ts diagnostic-dev-document.spec.ts diagnostic-warning-nonblocking.spec.ts explain-artifact-smoke.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+- [x] `static-export-rejects-dynamic` / `static-export-rejects-dynamic.spec.ts`: guarded or mutation-only
       routes fail/skip static export loudly according to policy.
   - SPEC refs: §9.5 KV229.
   - Assertions: export command reports KV229; no misleading partial artifact.
+  - Evidence: `tests/integration/fixtures/static-export-rejects-dynamic` and
+    `tests/integration/specs/static-export-rejects-dynamic.spec.ts` verify guarded and unenumerated
+    param routes reject with KV229 and leave no misleading partial HTML artifacts. Proving command:
+    `pnpm exec playwright test static-export-l0-l1.spec.ts static-export-rejects-dynamic.spec.ts diagnostic-dev-document.spec.ts diagnostic-warning-nonblocking.spec.ts explain-artifact-smoke.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 
 ## CSS and assets
 
@@ -660,23 +674,39 @@ integration harness uniquely proves.
 
 ## Diagnostics surfaced through integration
 
-- [ ] `diagnostic-dev-document` / `diagnostic-dev-document.spec.ts`: a dev-mode page depending on a
+- [x] `diagnostic-dev-document` / `diagnostic-dev-document.spec.ts`: a dev-mode page depending on a
       module with an error-severity diagnostic returns a server-rendered teaching-error document.
   - SPEC refs: §11.3 diagnostic severity surface.
   - Assertions: HTTP 500; code/message/help visible; no partial app output.
+  - Evidence: `tests/integration/fixtures/diagnostic-dev-document` and
+    `tests/integration/specs/diagnostic-dev-document.spec.ts` use the public
+    `@kovojs/server/app-shell/vite` dev diagnostic ledger/plugin to record a KV225 module error,
+    then verify the route returns HTTP 500 with diagnostic code/location/help and no partial app
+    body. Proving command:
+    `pnpm exec playwright test static-export-l0-l1.spec.ts static-export-rejects-dynamic.spec.ts diagnostic-dev-document.spec.ts diagnostic-warning-nonblocking.spec.ts explain-artifact-smoke.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `diagnostic-warning-nonblocking` / `diagnostic-warning-nonblocking.spec.ts`: warn/lint/notice
       diagnostics are surfaced through the non-blocking channel but do not block serving.
   - SPEC refs: §11.3 diagnostic severity surface.
   - Assertions: page renders; diagnostic is observable in captured logs/channel.
+  - Partial evidence: `tests/integration/fixtures/diagnostic-warning-nonblocking` and
+    `tests/integration/specs/diagnostic-warning-nonblocking.spec.ts` verify a lint diagnostic
+    recorded through the public dev diagnostic ledger does not block serving. Gap: the current dev
+    ledger intentionally drops non-error diagnostics, so there is no public non-blocking diagnostic
+    channel to assert observability yet.
 - [ ] `fixpoint-render-equivalence-fixture` / `fixpoint-render-equivalence-fixture.spec.ts`: a fixture
       that imports emitted/lowered IR renders byte/semantic-equivalent HTML to source TSX.
   - SPEC refs: §5.2 fixpoint + render-equivalence, §4.8 hand-written stamps.
   - Assertions: semantic snapshots match; compiler-only byte equality can remain in unit tests.
-- [ ] `explain-artifact-smoke` / `explain-artifact-smoke.spec.ts`: a browser-driven behavior has a
+- [x] `explain-artifact-smoke` / `explain-artifact-smoke.spec.ts`: a browser-driven behavior has a
       matching stable `kovo explain` graph for component/mutation/query intent.
   - SPEC refs: §5.3 explain, §11.4 verification surface.
   - Assertions: UI behavior passes; explain output snapshot names the same handlers, queries, and
     invalidated consumers.
+  - Evidence: `tests/integration/fixtures/explain-artifact-smoke` and
+    `tests/integration/specs/explain-artifact-smoke.spec.ts` drive the cart mutation in a browser,
+    then assert public `kovoExplain()` component and mutation output names the matching handler,
+    query, fragment, page, mutation, and invalidated consumer graph. Proving command:
+    `pnpm exec playwright test static-export-l0-l1.spec.ts static-export-rejects-dynamic.spec.ts diagnostic-dev-document.spec.ts diagnostic-warning-nonblocking.spec.ts explain-artifact-smoke.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 
 ## Accessibility states worth proving in this suite
 
