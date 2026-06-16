@@ -1,0 +1,12 @@
+<main>
+  <kovo-fragment>
+    <profile-summary kovo-deps="profile" kovo-fragment-target="profile-summary">
+      <h2 data-bind="profile.name">
+        "Grace Hopper"
+  <kovo-fragment>
+    <profile-status kovo-deps="profile" kovo-fragment-target="profile-status">
+      <output data-bind="profile.status">
+        "published"
+  <form action="/_m/shared-query-consumers/publish" kovo-deps="profile" method="post">
+    <button type="submit">
+      "Publish profile"

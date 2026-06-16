@@ -1,0 +1,5 @@
+<state-binding-panel kovo-state="{\"text\":\"Client text\",\"label\":\"Client card\",\"status\":\"ready\"}">
+  <output data-bind="state.text">
+    "Client text"
+  <button aria-label="Client card" data-bind:aria-label="state.label" data-bind:data-state="state.status" data-state="ready" type="button">
+    "Client binding"
