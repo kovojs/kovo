@@ -115,7 +115,6 @@ import {
   progressClasses,
   radioGroupClasses,
   scrollAreaClasses,
-  separatorClasses,
   selectClasses,
   selectTriggerClasses,
   tabsClasses,
@@ -287,7 +286,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(popoverClasses.join(' ')).toContain('relative inline-block');
     expect(popoverContentClasses.join(' ')).toContain('w-64');
     expect(progressClasses.join(' ')).toContain('data-[state=indeterminate]');
-    expect(separatorClasses.join(' ')).toContain('data-[orientation=vertical]');
     expect(tooltipClasses.join(' ')).toContain('relative inline-block');
     expect(tooltipContentClasses.join(' ')).toContain('max-w-64');
   });

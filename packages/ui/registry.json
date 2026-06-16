@@ -711,13 +711,8 @@
       "files": ["src/separator.tsx"],
       "exports": ["Separator"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "ClassValue",
-          "cn",
-          "defineVariants",
-          "SeparatorOrientation",
-          "separatorRootAttributes"
-        ],
+        "@kovojs/headless-ui": ["SeparatorOrientation", "separatorRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

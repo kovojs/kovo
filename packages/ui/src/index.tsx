@@ -711,7 +711,7 @@ export type {
 } from './popover.js';
 export { Progress, progressClassNames, progressClasses } from './progress.js';
 export type { ProgressProps } from './progress.js';
-export { Separator, separatorClassNames, separatorClasses } from './separator.js';
+export { Separator, separatorClasses, separatorStyles } from './separator.js';
 export type { SeparatorProps } from './separator.js';
 export {
   Tooltip,

@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Separator StyleX styles > exports StyleX style groups 1`] = `
+{
+  "base": [
+    "root",
+  ],
+  "baseMarkers": {
+    "root": true,
+  },
+  "orientationMarkers": {
+    "horizontal": true,
+    "vertical": true,
+  },
+  "orientations": [
+    "horizontal",
+    "vertical",
+  ],
+}
+`;
+
+exports[`@kovojs/ui Separator StyleX styles > matches author-last override output 1`] = `"<div class="kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-app-separator-bg-1c68yj kv-app-separator-w-1v3cp9" data-style-src="separator.tsx#root; separator.tsx#horizontal; app-separator.tsx#root" data-orientation="horizontal" role="none"></div>"`;
+
+exports[`@kovojs/ui Separator StyleX styles > matches default and semantic orientation output 1`] = `
+{
+  "classes": [
+    "kv-separator-bg-lw8anm kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-orientation-w-519kc1",
+    "kv-separator-orientation-h-1evh3u kv-separator-orientation-w-ed5ea8",
+  ],
+  "decorative": "<div class="kv-separator-bg-lw8anm kv-separator-flex-1pwdgv kv-separator-orientation-h-1g00uh kv-separator-orientation-w-519kc1" data-style-src="separator.tsx#root; separator.tsx#horizontal" data-orientation="horizontal" role="none"></div>",
+  "semanticVertical": "<div class="kv-separator-bg-lw8anm kv-separator-flex-1pwdgv kv-separator-orientation-h-1evh3u kv-separator-orientation-w-ed5ea8" data-style-src="separator.tsx#root; separator.tsx#vertical" aria-orientation="vertical" data-orientation="vertical" role="separator"></div>",
+}
+`;

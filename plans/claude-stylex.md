@@ -415,6 +415,20 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
     `pnpm exec tsc --noEmit`, and `git diff --check` pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/separator.tsx` now uses `@kovojs/style`,
+    exports `separatorStyles`, accepts `style?: style.StyleInput`, and drops `defineVariants`/`cn` plus
+    the `class` escape hatch while preserving `separatorRootAttributes(...)` orientation/role output.
+    `packages/ui/src/separator.stylex.test.tsx` snapshots decorative, semantic vertical, exported style
+    groups, and author-last override output; the gallery Separator route uses a StyleX width override.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/separator.stylex.test.tsx
+    packages/ui/src/kbd.stylex.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --run
+    src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    `pnpm exec tsc --noEmit`, and `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

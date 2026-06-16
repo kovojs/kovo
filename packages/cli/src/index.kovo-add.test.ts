@@ -86,6 +86,7 @@ describe('kovo add', () => {
           'navigation-menu',
           'radio-group',
           'select',
+          'separator',
           'sheet',
           'skeleton',
           'slider',
@@ -156,6 +157,9 @@ describe('kovo add', () => {
         `ADD select path=${JSON.stringify(join(outDir, 'select.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD separator path=${JSON.stringify(join(outDir, 'separator.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD sheet path=${JSON.stringify(join(outDir, 'sheet.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -203,6 +207,7 @@ describe('kovo add', () => {
       const navigationMenu = readFileSync(join(outDir, 'navigation-menu.tsx'), 'utf8');
       const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
       const select = readFileSync(join(outDir, 'select.tsx'), 'utf8');
+      const separator = readFileSync(join(outDir, 'separator.tsx'), 'utf8');
       const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
       const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
       const slider = readFileSync(join(outDir, 'slider.tsx'), 'utf8');
@@ -258,6 +263,10 @@ describe('kovo add', () => {
       expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
       expect(select).toContain('export const Select = component({');
       expect(select).toContain('export const selectClassNames = defineVariants');
+      expect(separator).toContain('export const Separator = component({');
+      expect(separator).toContain("import * as style from '@kovojs/style';");
+      expect(separator).toContain('export const separatorStyles =');
+      expect(separator).toContain('style?: style.StyleInput');
       expect(sheet).toContain('export const Sheet = component({');
       expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
       expect(skeleton).toContain('export const Skeleton = component({');
@@ -299,6 +308,7 @@ describe('kovo add', () => {
         navigationMenu,
         radioGroup,
         select,
+        separator,
         sheet,
         skeleton,
         slider,

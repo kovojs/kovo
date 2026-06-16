@@ -2316,6 +2316,15 @@ export function SelectDemo(): string {
 }
 
 export function SeparatorDemo(): string {
+  const separatorDemoStyles = style.create(
+    {
+      short: {
+        width: 256,
+      },
+    },
+    { namespace: 'gallerySeparator', source: 'demo-fixtures.tsx' },
+  );
+
   return (
     <section data-gallery-demo="separator">
       <p data-demo-summary="no-js">
@@ -2323,7 +2332,7 @@ export function SeparatorDemo(): string {
       </p>
       <div class="grid gap-4" data-ui-demo="separator">
         <span data-fixture-state="decorative">
-          {Separator.definition.render({ class: 'h-px w-64' })}
+          {Separator.definition.render({ style: separatorDemoStyles.short })}
         </span>
         <span class="flex h-16 items-stretch gap-4" data-fixture-state="semantic">
           <span>Before</span>
