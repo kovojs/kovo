@@ -36,16 +36,6 @@ export default defineConfig({
         ],
         output: ['dist/**'],
       },
-      serve: {
-        command: 'node scripts/serve.mjs',
-        input: [
-          { pattern: 'content/**/*', base: 'workspace' },
-          { pattern: 'scripts/**/*', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'tutorial/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-      },
       'check-links': {
         command: 'node scripts/check-links.mjs',
         input: [{ pattern: 'dist/**', base: 'workspace' }],
