@@ -190,10 +190,13 @@ integration harness uniquely proves.
 
 ## Morph survival
 
-- [ ] `morph-focus-caret` / `morph-focus-caret.spec.ts`: fragment morph preserves focus and caret
+- [x] `morph-focus-caret` / `morph-focus-caret.spec.ts`: fragment morph preserves focus and caret
       selection in an edited input inside or adjacent to a patched fragment.
   - SPEC refs: §9.1 morph contract, §11.4 browser-bound survival suite.
   - Assertions: active element and selection range survive; bound text still reconciles.
+  - Evidence: added `tests/integration/fixtures/morph-focus-caret/app.tsx` and
+    `tests/integration/specs/morph-focus-caret.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
 - [ ] `morph-scroll` / `morph-scroll.spec.ts`: fragment morph preserves scroll position in a scrollable
       region that remains keyed across the patch.
   - SPEC refs: §9.1 morph contract.
@@ -202,14 +205,20 @@ integration harness uniquely proves.
       survives a parent fragment morph when the nested island identity is preserved.
   - SPEC refs: §9.1 morph contract, §4.2 component identity.
   - Assertions: local state value remains; parent query text updates.
+  - Current gap: not implemented in this slice because current DOM morph syncs the server fragment's
+    attributes onto matched keyed elements, so a nested island's client-owned `kovo-state` would be
+    overwritten instead of preserved.
 - [ ] `morph-remove-aborts` / `morph-remove-aborts.spec.ts`: removing an island through morph aborts
       its `ctx.signal` and clears pending trigger observation.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.
   - Assertions: abort callback fires; no later handler side effects from removed island.
-- [ ] `fragment-append` / `fragment-append.spec.ts`: `<kovo-fragment mode="append">` appends paged rows
+- [x] `fragment-append` / `fragment-append.spec.ts`: `<kovo-fragment mode="append">` appends paged rows
       without replacing existing keyed content.
   - SPEC refs: §9.1 append vocabulary, §13.2 pagination.
   - Assertions: existing element identity preserved; appended rows bind correctly.
+  - Evidence: added `tests/integration/fixtures/fragment-append/app.tsx` and
+    `tests/integration/specs/fragment-append.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
 - [ ] `patched-in-island-inert` / `patched-in-island-inert.spec.ts`: islands introduced by a fragment
       are observable by future triggers but do not eagerly import client code.
   - SPEC refs: §4.4 morph application, §9.1 patched-in islands.
@@ -253,18 +262,24 @@ integration harness uniquely proves.
 
 ## L0 platform behavior and primitives
 
-- [ ] `dialog-invoker` / `dialog-invoker.spec.ts`: declarative `commandfor`/`command` opens a dialog
+- [x] `dialog-invoker` / `dialog-invoker.spec.ts`: declarative `commandfor`/`command` opens a dialog
       without importing client code.
   - SPEC refs: §4.2 light DOM, §5.2 platform-behavior emission, §7 L0.
   - Assertions: dialog opens; no handler network/module import; IDREF remains in semantic snapshot.
+  - Evidence: added `tests/integration/fixtures/dialog-invoker/app.tsx` and
+    `tests/integration/specs/dialog-invoker.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
 - [ ] `popover-invoker` / `popover-invoker.spec.ts`: Popover API wiring works as light DOM and degrades
       through platform attributes.
   - SPEC refs: §4.6 behavior attributes, §7 L0.
   - Assertions: popover visible state; IDREF attrs snapshot; no custom-element upgrade.
-- [ ] `details-disclosure` / `details-disclosure.spec.ts`: native `<details>` disclosure works with no
+- [x] `details-disclosure` / `details-disclosure.spec.ts`: native `<details>` disclosure works with no
       Kovo client handler.
   - SPEC refs: §7 L0.
   - Assertions: toggled open state; no app module import.
+  - Evidence: added `tests/integration/fixtures/details-disclosure/app.tsx` and
+    `tests/integration/specs/details-disclosure.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
 - [ ] `primitive-as-child` / `primitive-as-child.spec.ts`: primitive attrs merge into an author-owned
       element through `asChild`/attrs-function lowering.
   - SPEC refs: §4.6 primitive composition.
