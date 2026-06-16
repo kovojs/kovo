@@ -96,29 +96,58 @@ test('add to cart increments badge', async ({ kovoApp }) => {
 - Reuses ideas already in `packages/test/src/html-fragment.ts` (HTML normalization) and the gallery
   aria-contract serializers — consolidate rather than reinvent.
 
+## Implementation note (serve path)
+
+The framework has no fully-bundled SSR server: even the example "production serve"
+SSR-loads the app shell through a Vite middleware server while serving built
+`dist/assets/*`. The harness generalizes exactly that — a Vite middleware server SSRs
+the fixture (compiling `component()` TSX live) and the node http layer routes
+app-matched requests to the handler with a per-request `db`, everything else to Vite.
+Two compiler findings drove the design: (1) the live `kovoVitePlugin` emits the
+`renderSource()` form (drops `export const Foo = component(...)`), so the harness uses
+its own `kovoFixtureCompilerPlugin` returning `compileComponentModule().loweredSource`
+— the fixpoint form real apps import, preserving `Foo.definition.render(data)`; (2) the
+plugin claims any module whose source contains the component-call token, so fixture
+entries keep components in their own files.
+
 ## Phased rollout
 
-- [ ] **I0 — Harness skeleton.** `boot-fixture.ts` (generic prod build + serve, generalizing
-      `examples/commerce/scripts/serve.mjs`), `playwright-fixtures.ts` (`kovoApp` fixture: PGlite + seed +
-      boot + page + teardown), `tests/integration/playwright.config.ts`, root `test:integration` script.
-      Evidence: one trivial fixture (static page) boots, serves, a `page.goto('/')` passes in CI headless.
-- [ ] **I1 — Semantic snapshot serializer.** `semantic-snapshot.ts` + unit tests over fixed HTML
-      inputs (deterministic, browser-free) proving keep/drop/normalize rules and stability under volatile-
-      attr churn. Consolidate with `html-fragment.ts`. Evidence: serializer unit suite + golden `.semantic.txt`.
-- [ ] **I2 — Auth/login helper.** `login()` encapsulating CSRF token read + session cookie (kills the
-      scratch-script friction). Evidence: an `auth` fixture logs in and reaches a guarded route/mutation.
-- [ ] **I3 — Core-feature fixtures (first wave).** add-to-cart (mutation + fragment morph), query
-      refetch/visible-return, optimistic success + failure/rollback, inline-loader form enhance, loader
-      lifecycle, error-union rendering (`data-error-code/path`). One fixture + spec each; semantic
-      snapshots + web-first assertions. Evidence: `test:integration` green; snapshots reviewed.
-- [ ] **I4 — Build caching + CI wiring.** Content-hash fixture builds; add `test:integration` to the
-      `acceptance` script and CI; Chromium required, Firefox/WebKit matrix where behavior is engine-bound
-      (mirror `compiler-quality.md` browser-matrix rule). Evidence: CI run; cache hit on unchanged fixture.
-- [ ] **I5 — Authoring docs.** Short "write an integration fixture in 10 lines" guide + a template
-      fixture. Evidence: doc page; a new contributor fixture added against the template.
+- [x] **I0 — Harness skeleton.** `bootFixture` (Vite-SSR + per-request `db` + routing),
+      `defineFixture`/`fixture-instance`, Playwright `kovoServer`/`kovoApp` fixtures,
+      `tests/integration/playwright.config.ts`, `@kovojs/test/integration` (+ light `/define`).
+  - Evidence: `tests/integration/fixtures/static-home` boots and serves; `specs/static-home.spec.ts`
+    passes (`pnpm run test:integration`). `tests/integration` is a workspace package so fixtures
+    resolve `@kovojs/*`; Vite `ssr.noExternal: [/^@kovojs\//]` compiles TS source.
+- [x] **I1 — Semantic snapshot serializer.** `semantic-snapshot.ts` (keep Kovo semantic +
+      behavioral + a11y attrs; drop volatile presentation/CSRF/hash; opaque script/style/kovo-query).
+  - Evidence: `packages/test/src/integration/semantic-snapshot.test.ts` — 11 browser-free unit tests
+    incl. stability under volatile-only churn (`vitest --run`). Reuses `html-fragment.ts` conventions.
+- [x] **I2 — Auth/login helper.** `login()` submits the rendered form + establishes the session cookie.
+  - Evidence: `fixtures/auth` (sessionProvider + `guards.authed()` + `context.setCookie`); `specs/auth.spec.ts`
+    — `login()` reaches the guarded route as the signed-in user, and signed-out access does not leak it.
+- [x] **I3 — Core-feature fixtures (first wave).** Mutation + fragment morph, and typed error union.
+  - Evidence: `fixtures/counter` (`specs/counter.spec.ts`) — click → `/_m/counter/increment` → morph
+    `data-bind="count.count"` 0→1, no nav, db verified, semantic snapshot. `fixtures/stock`
+    (`specs/stock.spec.ts`) — typed `OUT_OF_STOCK` failure morphs a `data-error-code` fragment.
+  - [ ] Remaining first-wave fixtures: query refetch/visible-return, optimistic success +
+        failure/rollback, inline-loader enhanced submit nuances, loader lifecycle. (Pattern proven;
+        author against the `counter`/`stock` template.)
+- [x] **I4 — CI / acceptance wiring.** `vp run integration` task + root `test:integration` →
+      added to `acceptance`; CI step after the browser gate (Chromium already installed);
+      `tests/integration/**` excluded from the root vitest run; Playwright `outputDir` outside the tree.
+  - Evidence: `vite.config.ts` `run.tasks.integration` + vitest `exclude`; `package.json` `acceptance`;
+    `.github/workflows/ci.yml` `- run: vp run integration`. Suite: 6/6 green via `pnpm run test:integration`.
+  - [ ] Refinements: perfect `vp run` cache hit (currently re-runs; `{auto:true}` input churn) and the
+        Firefox/WebKit matrix for engine-bound behavior (mirror `compiler-quality.md` browser-matrix).
+- [x] **I5 — Authoring docs.** `docs/integration-testing.md` — "write a fixture in ~10 lines",
+      the db/seed/interactive/auth contracts, the compiler-token gotcha, and the assertion ladder.
 
 ## Risks / open questions
 
-- Prod build per fixture is the main cost → mitigated by content-hash caching + `port: 0` parallelism; revisit a shared multi-route app if fixture count explodes.
-- Some L0/morph-survival behavior already covered by runtime `*.browser.test.ts`; keep this suite to _cross-layer, server-round-trip_ behavior to avoid duplication.
-- Semantic serializer must stay in lockstep with new emitted attributes → single source-of-truth list, asserted against compiler/runtime output.
+- Per-fixture Vite startup is the main cost → amortized by per-worker boot + `port: 0` parallelism
+  (6 fixtures ≈ 6s). Revisit a shared multi-route app if fixture count grows large.
+- Some L0/morph-survival behavior is already covered by runtime `*.browser.test.ts`; this suite stays
+  on _cross-layer, server-round-trip_ behavior to avoid duplication.
+- Semantic serializer must stay in lockstep with newly emitted attributes → `KOVO_SEMANTIC_ATTRS`
+  is the single keep-list; align with the compiler's `isGeneratedOnlyRenderAttribute` allowlist, and
+  expect committed `.semantic.txt` goldens to need refresh when the CSP/nonce attribute work lands.
