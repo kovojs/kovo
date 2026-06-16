@@ -6,3 +6,4 @@ coverage/
 .vp/
 *.tsbuildinfo
 test-results/
+.playwright/

@@ -72,6 +72,21 @@ export default defineConfig({
           { pattern: 'packages/compiler/src/**/*.ts', base: 'workspace' },
         ],
       },
+      integration: {
+        // Framework-owned integration suite: boot a single-file Kovo fixture on a
+        // real Vite-SSR server and drive it in Chromium via @playwright/test
+        // (plans/integration-test-suite.md). Requires `playwright install chromium`.
+        command: 'playwright test --config tests/integration/playwright.config.ts',
+        input: [
+          { auto: true },
+          { pattern: 'tests/integration/**', base: 'workspace' },
+          { pattern: 'packages/test/src/integration/**', base: 'workspace' },
+          { pattern: 'packages/core/src/**', base: 'workspace' },
+          { pattern: 'packages/server/src/**', base: 'workspace' },
+          { pattern: 'packages/compiler/src/**', base: 'workspace' },
+          { pattern: 'packages/runtime/src/**', base: 'workspace' },
+        ],
+      },
       'conformance-drizzle': {
         command: 'vitest --run conformance/drizzle-pin/src/',
         input: [
@@ -163,6 +178,9 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/*.browser.test.ts',
+      // The framework-owned integration specs use @playwright/test, not vitest;
+      // they run under their own gate (`vp run integration`).
+      'tests/integration/**',
       'packages/create-kovo/templates/**/*.test.ts',
       // Conformance suites run in their own gate (`test:conformance` → `vp run conformance`,
       // per-package cwd). The root unit pool runs from the repo root, where project-mode ts-morph

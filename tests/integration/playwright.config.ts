@@ -11,7 +11,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: fileURLToPath(new URL('./specs', import.meta.url)),
-  outputDir: fileURLToPath(new URL('./test-results', import.meta.url)),
+  // Keep run artifacts OUT of tests/integration so the `vp run integration` cache
+  // (which globs tests/integration/**) isn't invalidated by each run's output.
+  outputDir: fileURLToPath(new URL('../../.playwright', import.meta.url)),
   snapshotPathTemplate: '{testDir}/__snapshots__/{testFilePath}/{arg}{ext}',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
