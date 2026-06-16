@@ -1,0 +1,17 @@
+<cart-list kovo-deps="cart">
+  <ul aria-label="Cart items" data-bind-list="cart.items" kovo-key="id">
+    <li data-row="a" kovo-key="a">
+      <span data-bind=".qty">
+        "2"
+      <span data-bind=".name">
+        "Adapter"
+    <li data-row="c" kovo-key="c">
+      <span data-bind=".qty">
+        "1"
+      <span data-bind=".name">
+        "Cable"
+    <template>
+      <li data-row="" kovo-key="">
+        <span data-bind=".qty">
+          "0"
+        <span data-bind=".name">

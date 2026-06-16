@@ -1,0 +1,22 @@
+<main>
+  <kovo-fragment>
+    <product-card kovo-deps="product" kovo-fragment-target="product-p1">
+      <h2>
+        "Pen"
+      <p>
+        "Stock"
+        <span data-bind="product.stock">
+          "7"
+  <kovo-fragment>
+    <product-card kovo-deps="product" kovo-fragment-target="product-p2">
+      <h2>
+        "Notebook"
+      <p>
+        "Stock"
+        <span data-bind="product.stock">
+          "7"
+  <form action="/_m/multi-instance-query/restock" kovo-deps="product" method="post">
+    <input name="id" type="hidden" value="p1">
+    <input name="restock" type="hidden" value="5">
+    <button type="submit">
+      "Restock Pen"

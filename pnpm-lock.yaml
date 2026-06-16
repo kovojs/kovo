@@ -543,6 +543,9 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@kovojs/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
