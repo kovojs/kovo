@@ -59,8 +59,24 @@ export const ACCESSIBLE_ATTRS: readonly string[] = [
   'value',
 ];
 
+/**
+ * Behavioral / navigational attributes that define what an element *does*: which
+ * mutation a form posts to, where a link goes, which module a script loads. These
+ * are wire contracts — kept (with volatile version/hash segments normalized).
+ */
+export const BEHAVIORAL_ATTRS: readonly string[] = [
+  'action',
+  'formaction',
+  'href',
+  'method',
+  'src',
+];
+
 /** Attributes whose values carry a URL that may embed a volatile version/hash. */
 const URL_ATTRS = new Set(['action', 'href', 'src', 'formaction']);
+
+/** Elements whose text content is opaque data, not structure — keep the shell only. */
+const OPAQUE_TAGS = new Set(['script', 'style', 'kovo-query']);
 
 /** Form field names that are pure wire mechanics, never user-facing semantics. */
 const VOLATILE_FIELD_NAMES = new Set(['csrf', 'kovo-idem', '_csrf']);
@@ -109,7 +125,12 @@ type SnapshotNode = ElementNode | TextNode;
  * semantic text tree suitable for `toMatchSnapshot`.
  */
 export function semanticSnapshot(html: string, options: SemanticSnapshotOptions = {}): string {
-  const keep = new Set([...KOVO_SEMANTIC_ATTRS, ...ACCESSIBLE_ATTRS, ...(options.keepAttrs ?? [])]);
+  const keep = new Set([
+    ...KOVO_SEMANTIC_ATTRS,
+    ...ACCESSIBLE_ATTRS,
+    ...BEHAVIORAL_ATTRS,
+    ...(options.keepAttrs ?? []),
+  ]);
   const nodes = parseFragment(html);
   const lines: string[] = [];
   for (const node of nodes) renderNode(node, 0, keep, lines);
@@ -136,6 +157,8 @@ function renderNode(
 
   const attrs = renderAttrs(node.attrs, keep);
   lines.push(`${indent}<${node.tag}${attrs}>`);
+  // Opaque elements (scripts, styles, query hydration) carry data, not structure.
+  if (OPAQUE_TAGS.has(node.tag)) return;
   for (const child of node.children) renderNode(child, depth + 1, keep, lines);
 }
 

@@ -12,12 +12,12 @@ import { stat } from 'node:fs/promises';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import path from 'node:path';
 
-import { kovoVitePlugin } from '@kovojs/compiler';
 import { toNodeHandler } from '@kovojs/server/app-shell/node';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/app-shell/vite';
-import { createServer as createViteServer, type ViteDevServer } from 'vite';
+import { createServer as createViteServer } from 'vite';
 
 import { isFixtureDescriptor } from './define-fixture.js';
+import { kovoFixtureCompilerPlugin } from './fixture-compiler-plugin.js';
 import { createFixtureInstance, type FixtureInstance } from './fixture-instance.js';
 
 /** A booted fixture server: its `origin`, the live `db`, a per-test `reset`, and `close`. */
@@ -68,9 +68,11 @@ export async function bootFixture(
     appType: 'custom',
     configFile: false,
     logLevel: 'warn',
-    plugins: [Object.assign(kovoVitePlugin(), { enforce: 'pre' as const })],
+    plugins: [kovoFixtureCompilerPlugin()],
     root: fixtureDir,
-    server: { hmr: false, middlewareMode: true },
+    // No HMR/file-watching/ws server: fixtures are immutable per run, and parallel
+    // workers must not contend for the default HMR WebSocket port.
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
     // Kovo workspace packages ship TS source from their dev `exports`, so Vite must
     // compile them rather than externalize to Node (which can't import `.ts`). This
     // mirrors what vite-plus configures for the example app-shells.
@@ -82,7 +84,15 @@ export async function bootFixture(
     const module = await vite.ssrLoadModule(entry);
     const descriptor = (module as { default?: unknown }).default;
     if (!isFixtureDescriptor(descriptor)) {
-      throw new Error(`Fixture entry ${entry} must \`export default defineFixture(...)\`.`);
+      const exportedKeys = JSON.stringify(Object.keys(module));
+      const hint = exportedKeys.includes('renderSource')
+        ? ' The Kovo compiler claimed this module (it exports `renderSource`): the fixture entry' +
+          ' must NOT declare a Kovo component — move components to their own file, and keep the' +
+          ' component-call token out of comments in the entry (the plugin matches it as source text).'
+        : '';
+      throw new Error(
+        `Fixture entry ${entry} must \`export default defineFixture(...)\` (exports: ${exportedKeys}).${hint}`,
+      );
     }
     instance = await createFixtureInstance(descriptor);
   } catch (error) {
@@ -99,7 +109,8 @@ export async function bootFixture(
         return;
       }
       vite.middlewares(req, res);
-    })().catch(() => {
+    })().catch((error: unknown) => {
+      console.error('[kovo fixture] request routing error:', error);
       if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('Internal Server Error');
     });

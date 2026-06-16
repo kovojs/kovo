@@ -17,6 +17,7 @@ export type { BootedFixture, BootFixtureOptions } from './boot-fixture.js';
 
 export {
   ACCESSIBLE_ATTRS,
+  BEHAVIORAL_ATTRS,
   KOVO_SEMANTIC_ATTRS,
   semanticSnapshot,
 } from './semantic-snapshot.js';

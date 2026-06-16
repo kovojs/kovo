@@ -44,6 +44,7 @@ interface KovoWorkerFixtures {
 
 interface KovoTestFixtures {
   kovoApp: KovoApp;
+  resetDatabase: void;
 }
 
 export const test = base.extend<KovoTestOptions & KovoTestFixtures, KovoWorkerFixtures>({
@@ -69,8 +70,18 @@ export const test = base.extend<KovoTestOptions & KovoTestFixtures, KovoWorkerFi
     await use(kovoServer.origin);
   },
 
-  kovoApp: async ({ kovoServer, page }, use) => {
-    await kovoServer.reset();
+  // Fresh, freshly-seeded database before EVERY test (auto: runs even when a test
+  // doesn't destructure kovoApp), so tests are isolated from each other.
+  resetDatabase: [
+    async ({ kovoServer }, use) => {
+      await kovoServer.reset();
+      await use();
+    },
+    { auto: true },
+  ],
+
+  kovoApp: async ({ kovoServer, resetDatabase, page }, use) => {
+    void resetDatabase;
     const app: KovoApp = {
       get db() {
         return kovoServer.db;

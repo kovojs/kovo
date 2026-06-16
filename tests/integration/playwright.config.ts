@@ -11,6 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: fileURLToPath(new URL('./specs', import.meta.url)),
+  outputDir: fileURLToPath(new URL('./test-results', import.meta.url)),
   snapshotPathTemplate: '{testDir}/__snapshots__/{testFilePath}/{arg}{ext}',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

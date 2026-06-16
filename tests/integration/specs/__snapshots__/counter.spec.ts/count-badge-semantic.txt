@@ -1,0 +1,5 @@
+<count-badge kovo-deps="count" kovo-fragment-target="count-badge">
+  <span>
+    "Count:"
+  <output data-bind="count.count">
+    "1"

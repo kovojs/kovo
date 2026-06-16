@@ -57,14 +57,21 @@ export async function createFixtureInstance(
     get db() {
       return db;
     },
-    handle(request) {
+    async handle(request) {
       // Attach the current db the same way the example app-shells do (SPEC §9.5
       // request context), so fixture handlers read `(request as KovoFixtureRequest).db`.
       Object.defineProperty(request, 'db', {
         configurable: true,
         value: db,
       } satisfies { configurable: true; value: KovoFixtureRequest['db'] });
-      return dispatch(request);
+      try {
+        return await dispatch(request);
+      } catch (error) {
+        // toNodeHandler turns thrown errors into an opaque 500; surface the cause
+        // so fixture authoring mistakes are debuggable.
+        console.error('[kovo fixture] request handler error:', error);
+        throw error;
+      }
     },
     async close() {
       await db.close();
