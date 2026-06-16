@@ -319,21 +319,32 @@ integration harness uniquely proves.
 
 ## Routes and navigation
 
-- [ ] `typed-link-navigation` / `typed-link-navigation.spec.ts`: `<Link>`/`href()` lowers to plain
+- [x] `typed-link-navigation` / `typed-link-navigation.spec.ts`: `<Link>`/`href()` lowers to plain
       anchors that perform real navigations and carry path/search params.
   - SPEC refs: §6.4 routes and links, §8 no client router.
   - Assertions: anchor `href` is readable; browser navigation loads new document; no router runtime.
-- [ ] `get-form-search` / `get-form-search.spec.ts`: GET forms write typed route search params and
+  - Evidence: `pnpm exec playwright test tests/integration/specs/typed-link-navigation.spec.ts
+    tests/integration/specs/get-form-search.spec.ts
+    tests/integration/specs/trailing-slash-308.spec.ts
+    tests/integration/specs/guarded-query-read.spec.ts
+    tests/integration/specs/forbidden-route.spec.ts --config tests/integration/playwright.config.ts`
+    passed on 2026-06-16; `tests/integration/specs/typed-link-navigation.spec.ts` asserts
+    readable `Link()`/`href()` anchor hrefs and document navigation to typed path/search targets.
+- [x] `get-form-search` / `get-form-search.spec.ts`: GET forms write typed route search params and
       refresh route/query output through normal navigation or fragment response.
   - SPEC refs: §6.4 GET forms, §7 URL coordination, §9.4 typed reads.
   - Assertions: URL search changes; rendered result matches coerced search schema.
+  - Evidence: same Playwright command passed on 2026-06-16; `tests/integration/specs/get-form-search.spec.ts`
+    asserts GET form URL search params and server-rendered coerced search output.
 - [ ] `redirect-typed-target` / `redirect-typed-target.spec.ts`: a mutation follows a typed
       POST-redirect-GET target with params/search and lands on the expected route.
   - SPEC refs: §6.4 redirect, §9.1 no-JS behavior.
   - Assertions: response status/location; final page semantic content.
-- [ ] `trailing-slash-308` / `trailing-slash-308.spec.ts`: trailing slashes normalize before matching.
+- [x] `trailing-slash-308` / `trailing-slash-308.spec.ts`: trailing slashes normalize before matching.
   - SPEC refs: §9.5 request shell.
   - Assertions: direct request receives 308; canonical route renders once followed.
+  - Evidence: same Playwright command passed on 2026-06-16; `tests/integration/specs/trailing-slash-308.spec.ts`
+    asserts direct 308 `Location` and followed canonical route rendering.
 - [ ] `speculation-rules-opt-in` / `speculation-rules-opt-in.spec.ts`: only routes declaring prefetch
       emit speculation rules, and routes default to no speculation script.
   - SPEC refs: §8 Speculation Rules.
@@ -350,10 +361,12 @@ integration harness uniquely proves.
 
 ## Auth, guards, sessions, and authorization audits
 
-- [ ] `guarded-query-read` / `guarded-query-read.spec.ts`: query guards run on initial page render and
+- [x] `guarded-query-read` / `guarded-query-read.spec.ts`: query guards run on initial page render and
       on every `/_q` typed read.
   - SPEC refs: §6.5 guard failures, §9.4 typed reads, §10.2 queries.
   - Assertions: anonymous `/_q` denies/redirects safely; signed-in read succeeds.
+  - Evidence: same Playwright command passed on 2026-06-16; `tests/integration/specs/guarded-query-read.spec.ts`
+    asserts anonymous route/`/_q` denial and signed-in route/typed-read success.
 - [ ] `guarded-mutation` / `guarded-mutation.spec.ts`: mutation guards fail before transaction/write
       execution and return the typed enhanced error path.
   - SPEC refs: §6.5 mutation guard failures, §10.3 request lifecycle.
@@ -362,6 +375,10 @@ integration harness uniquely proves.
       the configured 403 shell with status 403.
   - SPEC refs: §6.5 route/query guard failures, §9.5 error shells.
   - Assertions: status 403; no protected data; semantic snapshot of shell.
+  - Gap: `tests/integration/specs/forbidden-route.spec.ts` was added and the same Playwright command
+    passed on 2026-06-16 for role-based 403/default body and authorized access, but the current app
+    route guard path does not wire `createApp({ errorShells.forbidden })` into guard rendering, so the
+    configured-shell claim remains unchecked.
 - [ ] `session-provider-once` / `session-provider-once.spec.ts`: request shell resolves
       `sessionProvider` once before route/query/mutation guards.
   - SPEC refs: §6.5 sessions, §9.5 request shell.
