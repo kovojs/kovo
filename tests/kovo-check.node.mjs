@@ -210,7 +210,7 @@ const runCliCommand = (args) => runCapturedCliCommand(mainAsync, args);
 
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
-  applyDeferredStreamResponseToDom: applyDeferredStreamResponseToRuntime,
+  applyDeferredStreamResponseToRuntime,
   createQueryStore,
   derive,
   DomMorphTarget,
@@ -1815,13 +1815,11 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.deepEqual(fact.guards, {
     authenticatedSession: { id: 's1', user: { id: 'u1' } },
     authedFailure: {
-      auth: 'unauthenticated',
-      code: 'UNAUTHORIZED',
+      kind: 'unauthenticated',
       payload: {},
-      status: 422,
     },
     firstRateLimitPasses: true,
-    secondRateLimitFailure: 'RATE_LIMITED',
+    secondRateLimitFailure: 'rateLimited',
   });
   const receiptFile = fact.upload.result.changes[0].input.receipt.file;
   assert.equal(receiptFile instanceof Blob, true);
