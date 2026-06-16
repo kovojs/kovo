@@ -698,6 +698,15 @@ integration harness uniquely proves.
       contract.
   - SPEC refs: §13.1 CSS.
   - Assertions: fragment renders with expected computed style; stylesheet asset included once.
+  - Partial evidence: `tests/integration/fixtures/tailwind-fragment-css` and
+    `tests/integration/specs/tailwind-fragment-css.spec.ts` verify an enhanced mutation fragment can
+    carry a deduped late stylesheet link, the linked `/assets/fragment.css` asset is served, and the
+    browser applies the fragment-only class styles after morph. Proving command:
+    `pnpm exec playwright test specs/tailwind-fragment-css.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`.
+  - Gap: left unchecked because this fixture uses a prebuilt CSS asset; it does not prove Tailwind
+    source scanning or safelist generation for classes that exist only in mutation/deferred
+    fragments.
 - [ ] `scoped-component-css` / `scoped-component-css.spec.ts`: co-located component CSS is scoped to the
       derived host leaf, donut-scopes nested islands out, and dedupes in page order.
   - SPEC refs: §4.2 rendered output, §13.1 CSS.

@@ -1,0 +1,9 @@
+.fragment-only {
+  background-color: rgb(12, 84, 96);
+  color: rgb(255, 255, 255);
+  padding: 8px;
+}
+
+.late-card {
+  border: 2px solid rgb(8, 66, 76);
+}

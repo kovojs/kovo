@@ -1,0 +1,4 @@
+<section kovo-deps="recommendations" kovo-fragment-target="recommendations">
+  <link href="/assets/fragment.css">
+  <article>
+    "Styled recommendation"
