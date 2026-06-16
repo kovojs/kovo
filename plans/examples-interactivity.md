@@ -37,10 +37,26 @@ Key facts proven in research:
 
 ## Checklist
 
-- [ ] **Phase 0 — Prove the mechanism (stackoverflow vertical slice).** In-browser backend module +
-      one interactive affordance (vote-up enhance form on question rows), exported static, driven in
-      real Chromium: clicking upvote increments the score via the REAL `voteUp` mutation on in-browser
-      PGlite (not a mock). Evidence: a Playwright assertion against the unmodified export.
+- [x] **Phase 0 — Prove the mechanism (stackoverflow vertical slice).** DONE 2026-06-16 (commit
+      38e4fc37). The unmodified static export, driven in real Chromium
+      (`examples/stackoverflow/scratch/so-vote-drive.mjs`), runs the REAL `voteUp` mutation on
+      in-browser PGlite and morphs the server-truth score 3→4→5. Node proof:
+      `interactive-app.test.ts` (23 SO tests green). KEY LEARNINGS (binding for all apps):
+  - **KV229**: a static export forbids `action`/`href`/`src` pointing at `/_m/*` or `/_q/*` (no-JS
+    L0/L1 contract). So mutations CANNOT be `enhance` forms — author them as **on:click/on:submit
+    islands** (the diagnostic's own remedy) that call the in-browser backend and morph the result.
+  - **In-browser backend** = a Vite-bundled browser entry (`src/browser-backend.ts`) that builds the
+    interactive `createApp` over PGlite and exposes island handlers. Vite needs:
+    `preserveEntrySignatures: 'strict'` (island exports are referenced only by string, else
+    treeshaken), a `process` polyfill `banner` (PGlite Emscripten glue), stable `entryFileNames`
+    (so HTML can reference `/assets/browser-backend.js` without manifest plumbing). The static export
+    AUTO-COPIES all Vite manifest assets (pglite.wasm/.data included).
+  - **CSRF**: `createApp` rejects `csrf:false` (fails isKovoApp); disable it by returning
+    `{ csrf:false }` from the app's `mutationResponse` hook instead.
+  - **Fragments**: register a `mutationResponse` returning `fragmentRenderers` that re-render a
+    `kovo-fragment-target` host from server truth; the island applies the wire by replacing the
+    matching `[kovo-fragment-target]` element's outerHTML (event delegation keeps new nodes live).
+  - **on:load** pre-warm island boots PGlite before first click (wired via createApp `renderRoute`).
 - [ ] **Phase 1 — Generalize the in-browser backend** into a shared helper (one place that wires
       PGlite + interactive `createApp` + fetch-patch), so each app supplies only its app + db factory.
 - [ ] **Phase 2 — StackOverflow full UI:** vote-up (list + detail), post-answer, post-question wired
