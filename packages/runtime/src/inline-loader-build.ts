@@ -313,20 +313,25 @@ function installInlineKovoLoader(im) {
     );
   crossing('pointerover', 'pointerenter');
   crossing('pointerout', 'pointerleave');
-  doc.querySelectorAll('[on\\:load]').forEach((el) => trigger('load', el));
-  doc
-    .querySelectorAll('[on\\:idle]')
-    .forEach((el) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),);
-  if (globalThis.IntersectionObserver) {
-    const observer = new IntersectionObserver((entries) =>
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        observer.unobserve(entry.target);
-        trigger('visible', entry.target);
-      }),
-    );
-    doc.querySelectorAll('[on\\:visible]').forEach((el) => observer.observe(el));
-  }
+  // SPEC.md §4.7: declared triggers are legible in body markup, while the default
+  // document emits the loader in <head>. Defer the scan one task so the parser can
+  // continue into the body; event delegation above is installed immediately.
+  setTimeout(() => {
+    doc.querySelectorAll('[on\\:load]').forEach((el) => trigger('load', el));
+    doc
+      .querySelectorAll('[on\\:idle]')
+      .forEach((el) => (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', el)),);
+    if (globalThis.IntersectionObserver) {
+      const observer = new IntersectionObserver((entries) =>
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+          trigger('visible', entry.target);
+        }),
+      );
+      doc.querySelectorAll('[on\\:visible]').forEach((el) => observer.observe(el));
+    }
+  });
 }
 `;
 }

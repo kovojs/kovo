@@ -1,0 +1,7 @@
+<main>
+  <h1>
+    "Handler params"
+  <button data-p-item-id="sku-42" kovo-state="{}" on:click="/client.ts#recordParams" type="button">
+    "Record params"
+  <output>
+    "{"enabled":true,"itemId":"sku-42","quantity":3,"quantityType":"number"}"

@@ -217,23 +217,33 @@ integration harness uniquely proves.
 
 ## Execution triggers and loader behavior
 
-- [ ] `on-visible` / `on-visible.spec.ts`: `on:visible` uses the shared IntersectionObserver and fires
+- [x] `on-visible` / `on-visible.spec.ts`: `on:visible` uses the shared IntersectionObserver and fires
       once on first intersection.
+  - Evidence: `tests/integration/fixtures/on-visible`; `tests/integration/specs/on-visible.spec.ts`;
+    passed `pnpm exec playwright test --config tests/integration/playwright.config.ts event-chain.spec.ts handler-params.spec.ts on-idle.spec.ts on-load-justified.spec.ts on-visible.spec.ts --update-snapshots`.
   - SPEC refs: §4.7 execution triggers.
   - Assertions: no handler call before scroll; one call after visibility; no repeat after re-scroll.
-- [ ] `on-idle` / `on-idle.spec.ts`: `on:idle` schedules warm-up work without blocking initial render.
+- [x] `on-idle` / `on-idle.spec.ts`: `on:idle` schedules warm-up work without blocking initial render.
+  - Evidence: `tests/integration/fixtures/on-idle`; `tests/integration/specs/on-idle.spec.ts`;
+    passed `pnpm exec playwright test --config tests/integration/playwright.config.ts event-chain.spec.ts handler-params.spec.ts on-idle.spec.ts on-load-justified.spec.ts on-visible.spec.ts --update-snapshots`.
   - SPEC refs: §4.7 execution triggers.
   - Assertions: initial UI is interactive; idle handler runs once; semantic attrs remain legible.
-- [ ] `on-load-justified` / `on-load-justified.spec.ts`: a lint-justified `on:load` trigger executes at
+- [x] `on-load-justified` / `on-load-justified.spec.ts`: a lint-justified `on:load` trigger executes at
       parse and appears as the app's greppable eager-JS budget.
+  - Evidence: `tests/integration/fixtures/on-load-justified`;
+    `tests/integration/specs/on-load-justified.spec.ts`; passed `pnpm exec playwright test --config tests/integration/playwright.config.ts event-chain.spec.ts handler-params.spec.ts on-idle.spec.ts on-load-justified.spec.ts on-visible.spec.ts --update-snapshots`.
   - SPEC refs: §4.7 `on:load`, §16 criterion 7.
   - Assertions: handler side effect visible after page load; `on:load` attr appears in snapshot.
-- [ ] `event-chain` / `event-chain.spec.ts`: merged/chained `on:*` refs execute author handler first,
+- [x] `event-chain` / `event-chain.spec.ts`: merged/chained `on:*` refs execute author handler first,
       primitive handler second, sequentially awaited, and `defaultPrevented` does not stop the chain.
+  - Evidence: `tests/integration/fixtures/event-chain`; `tests/integration/specs/event-chain.spec.ts`;
+    passed `pnpm exec playwright test --config tests/integration/playwright.config.ts event-chain.spec.ts handler-params.spec.ts on-idle.spec.ts on-load-justified.spec.ts on-visible.spec.ts --update-snapshots`.
   - SPEC refs: §4.6 merge rules, §4.4 event delegation.
   - Assertions: server/client log order; primitive no-op contract can be observed when prevented.
-- [ ] `handler-params` / `handler-params.spec.ts`: element `data-p-*` params are parsed/coerced and
+- [x] `handler-params` / `handler-params.spec.ts`: element `data-p-*` params are parsed/coerced and
       passed to the imported handler.
+  - Evidence: `tests/integration/fixtures/handler-params`;
+    `tests/integration/specs/handler-params.spec.ts`; passed `pnpm exec playwright test --config tests/integration/playwright.config.ts event-chain.spec.ts handler-params.spec.ts on-idle.spec.ts on-load-justified.spec.ts on-visible.spec.ts --update-snapshots`.
   - SPEC refs: §4.3 capture channels.
   - Assertions: handler receives string and coerced non-string params; missing param errors visibly.
 - [ ] `module-scope-shared` / `module-scope-shared.spec.ts`: module-scope values are shared imports,
