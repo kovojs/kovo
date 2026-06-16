@@ -27,6 +27,7 @@ jobs:
 
       - run: vp install
       - run: vp exec pnpm --filter @kovojs/example-gallery run emit:interactive-gallery
+      - run: vp run build
       - run: vp run export
         working-directory: site
       - run: vp run check-links
