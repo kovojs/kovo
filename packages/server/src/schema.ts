@@ -21,6 +21,10 @@ export interface ValidationFailurePayload {
   issues: readonly ValidationIssue[];
 }
 
+export type SchemaValidationErrorLike = Error & {
+  readonly issues: readonly ValidationIssue[];
+};
+
 /** Thrown by a schema's `parse` when input is invalid; carries the per-field `issues`. */
 export class SchemaValidationError extends Error {
   readonly issues: readonly ValidationIssue[];
@@ -30,6 +34,19 @@ export class SchemaValidationError extends Error {
     this.name = 'SchemaValidationError';
     this.issues = issues;
   }
+}
+
+export function isSchemaValidationError(error: unknown): error is SchemaValidationErrorLike {
+  if (error instanceof SchemaValidationError) return true;
+  if (typeof error !== 'object' || error === null) return false;
+
+  const candidate = error as Partial<SchemaValidationErrorLike>;
+  return (
+    candidate.name === 'SchemaValidationError' &&
+    typeof candidate.message === 'string' &&
+    Array.isArray(candidate.issues) &&
+    candidate.issues.every(isValidationIssue)
+  );
 }
 
 /**
@@ -367,7 +384,7 @@ function validationError(message: string, path: readonly string[] = []): SchemaV
 }
 
 function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): SchemaValidationError {
-  if (error instanceof SchemaValidationError) {
+  if (isSchemaValidationError(error)) {
     return new SchemaValidationError(
       error.issues.map((issue) => ({
         message: issue.message,
@@ -377,6 +394,17 @@ function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): Sch
   }
 
   return validationError(error instanceof Error ? error.message : String(error), pathPrefix);
+}
+
+function isValidationIssue(value: unknown): value is ValidationIssue {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Partial<ValidationIssue>).message === 'string' &&
+    Array.isArray((value as Partial<ValidationIssue>).path) &&
+    (value as Partial<ValidationIssue>).path?.every((segment) => typeof segment === 'string') ===
+      true
+  );
 }
 
 function isAsyncSchema<T>(schema: Schema<T>): schema is AsyncSchema<T> {

@@ -13,8 +13,9 @@ import {
 import { retryAfterHeaders, type ServerResponseBase } from './response.js';
 import {
   entriesToRecord,
-  SchemaValidationError,
+  isSchemaValidationError,
   type Schema,
+  type SchemaValidationErrorLike,
   type ValidationFailurePayload,
 } from './schema.js';
 import { renderQueryWireHtml } from './wire-html.js';
@@ -309,7 +310,7 @@ function parseQueryInput<const Key extends string, Value, Input, Request>(
   try {
     return { ok: true, value: definition.args.parse(rawInput) };
   } catch (error) {
-    if (!(error instanceof SchemaValidationError)) throw error;
+    if (!isSchemaValidationError(error)) throw error;
 
     return {
       failure: {
@@ -325,7 +326,7 @@ function parseQueryInput<const Key extends string, Value, Input, Request>(
   }
 }
 
-function validationFailurePayload(error: SchemaValidationError): ValidationFailurePayload {
+function validationFailurePayload(error: SchemaValidationErrorLike): ValidationFailurePayload {
   return { issues: error.issues };
 }
 

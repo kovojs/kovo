@@ -7,7 +7,7 @@ import {
   renderQueryRegistryEndpointResponse,
   runQuery,
 } from './query.js';
-import { s } from './schema.js';
+import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
   it('runs query endpoints through args schemas, guards, and request context', async () => {
@@ -84,6 +84,22 @@ describe('query endpoints', () => {
     });
   });
 
+  it('renders structurally recognized args schema failures as safe 422 JSON', async () => {
+    const productQuery = query('product', {
+      args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+      reads: [domain('product')],
+    });
+
+    await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
+      body: '{"code":"VALIDATION","payload":{"issues":[{"message":"Expected string","path":["id"]}]}}',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      status: 422,
+    });
+  });
+
   it('dispatches typed read endpoints through a query registry', async () => {
     const productQuery = query('product', {
       args: s.object({ id: s.string() }),
@@ -116,3 +132,16 @@ describe('query endpoints', () => {
     });
   });
 });
+
+function alienValidationSchema<T>(message: string, path: readonly string[]): Schema<T> {
+  return {
+    parse(): T {
+      const error = new Error(message) as Error & {
+        issues: readonly { message: string; path: readonly string[] }[];
+      };
+      error.name = 'SchemaValidationError';
+      error.issues = [{ message, path }];
+      throw error;
+    },
+  };
+}
