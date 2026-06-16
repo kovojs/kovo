@@ -1,10 +1,19 @@
 import { compilerIrHeader } from '../ir.js';
 
+/**
+ * One compiled query-update-plan module to wire into the app bootstrap: the module's
+ * `importPath` and the named `exportName` whose plans get spread into the client loader.
+ * Public input shape for emitQueryPlanBootstrapModule (SPEC.md §5.2).
+ */
 export interface QueryPlanBootstrapInput {
   exportName: string;
   importPath: string;
 }
 
+/**
+ * Options for emitQueryPlanBootstrapModule; `fileName` overrides the default emitted client
+ * bootstrap path (`generated/app.client.js`). Public (SPEC.md §5.2).
+ */
 export interface QueryPlanBootstrapOptions {
   fileName?: string;
 }
@@ -15,6 +24,13 @@ export interface BootstrapEmittedFile {
   source: string;
 }
 
+/**
+ * Emit the client bootstrap module that installs the Kovo loader and registers every
+ * compiled query update plan, so an app's hydration wiring is generated rather than
+ * hand-written. Returns the lowered-IR client file (SPEC.md §5.2).
+ *
+ * Public build/codegen helper consumed by an app's bootstrap-emit step.
+ */
 export function emitQueryPlanBootstrapModule(
   inputs: readonly QueryPlanBootstrapInput[],
   options: QueryPlanBootstrapOptions = {},

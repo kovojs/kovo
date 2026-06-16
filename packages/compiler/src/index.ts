@@ -64,6 +64,12 @@ export {
 } from './compile.js';
 export { createEmptyCompileResult, queryShapesFromFacts } from './types.js';
 
+/**
+ * The Kovo Vite plugin: lowers authored component modules through compileComponentModule
+ * during `transform` and serves emitted client islands in dev. Add it to an app's
+ * `vite.config` to compile components at build/dev time (SPEC.md §5.2). Public entry point
+ * of `@kovojs/compiler`.
+ */
 export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
   return createKovoVitePlugin(compileComponentModule, options);
 }

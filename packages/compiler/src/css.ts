@@ -8,6 +8,10 @@ import {
 import { cssIrHeader } from './ir.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 
+/**
+ * @internal A scoped-CSS asset reference produced by the compiler (href, optional critical
+ * CSS, preload hint). Lowered-IR CSS-pipeline shape; in-repo use only (SPEC.md §5.2).
+ */
 export interface CssAsset {
   criticalCss?: string;
   href: string;
@@ -15,26 +19,41 @@ export interface CssAsset {
   sourceFileName: string;
 }
 
+/**
+ * @internal A {@link CssAsset} tagged with the owning component and its fragment targets.
+ * Lowered-IR CSS-pipeline shape; in-repo use only (SPEC.md §5.2).
+ */
 export interface ComponentCssAsset extends CssAsset {
   componentName: string;
   fragmentTargets: readonly string[];
 }
 
+/**
+ * @internal Deduplicated CSS asset manifest (by-file-name index plus ordered stylesheet
+ * list) produced by {@link collectCssAssetManifest}. In-repo build pipeline use only
+ * (SPEC.md §5.2).
+ */
 export interface CssAssetManifest {
   byFileName: Readonly<Record<string, ComponentCssAsset>>;
   stylesheets: readonly ComponentCssAsset[];
 }
 
+/** @internal Options for {@link collectCssAssetManifest} (asset base href + preload hint). */
 export interface CssAssetManifestOptions {
   baseHref?: string;
   preload?: boolean;
 }
 
+/**
+ * @internal Result of {@link scopeComponentCss}: a `@scope`-based form and a prefixed
+ * `fallback` for engines without `@scope`. Lowered-IR CSS-pipeline shape (SPEC.md §5.2).
+ */
 export interface ScopedCssResult {
   fallback: string;
   scoped: string;
 }
 
+/** @internal Options for {@link scopeComponentCss} (nested host selectors to exclude). */
 export interface ScopeComponentCssOptions {
   nestedHostSelectors?: readonly string[];
 }
@@ -43,6 +62,11 @@ interface CompileCssAssetSource {
   cssAssets: readonly ComponentCssAsset[];
 }
 
+/**
+ * @internal Scope a component's CSS to its host selector, emitting both a `@scope` form and
+ * a selector-prefixed fallback. Used by the compiler's CSS lowering; in-repo only
+ * (SPEC.md §5.2).
+ */
 export function scopeComponentCss(
   hostSelector: string,
   css: string,
@@ -57,10 +81,15 @@ export function scopeComponentCss(
   };
 }
 
+/** @internal Join CSS chunks, dropping blank and duplicate chunks. In-repo build use only. */
 export function dedupeCss(chunks: readonly string[]): string {
   return [...new Set(chunks.map((chunk) => chunk.trim()).filter(Boolean))].join('\n\n');
 }
 
+/**
+ * @internal Collect one deduplicated {@link CssAssetManifest} across compiled components.
+ * Used by the in-repo asset/build pipeline, not by app authors (SPEC.md §5.2).
+ */
 export function collectCssAssetManifest(
   results: CompileCssAssetSource | readonly CompileCssAssetSource[],
   options: CssAssetManifestOptions = {},
@@ -88,6 +117,10 @@ export function collectCssAssetManifest(
   return { byFileName, stylesheets };
 }
 
+/**
+ * @internal Select the manifest assets for a given set of source file names, preserving
+ * request order. In-repo build pipeline use only (SPEC.md §5.2).
+ */
 export function selectCssAssets(
   manifest: CssAssetManifest,
   fileNames: readonly string[],

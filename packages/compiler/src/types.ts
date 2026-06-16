@@ -5,6 +5,11 @@ import type { CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import { replaceExtension } from './shared.js';
 
+/**
+ * @internal Input to {@link compileComponentModule}: the source file name and contents plus
+ * optional graph context (query shapes, registry facts, package prefixes) and provenance.
+ * Lowered-IR pipeline shape; in-repo callers only (SPEC.md §5.2).
+ */
 export interface CompileComponentOptions {
   fileName: string;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
@@ -16,13 +21,26 @@ export interface CompileComponentOptions {
   sourceProvenance?: 'app' | 'compiler-emitted';
 }
 
+/**
+ * @internal Per-component graph fact (name, queries, fragment targets) the compiler derives
+ * and {@link deriveAppGraph} merges. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
+ */
 export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
 
+/**
+ * @internal A component's fragment-target fact (target name + props type) used when building
+ * the registry. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
+ */
 export interface FragmentTargetFact {
   propsType: string;
   target: string;
 }
 
+/**
+ * @internal Derived registry facts for an app graph (components, domain keys, invalidations,
+ * mutation/query type maps, routes). Produced by {@link deriveAppGraph}; lowered-IR shape,
+ * in-repo use only (SPEC.md §5.2).
+ */
 export interface RegistryFacts {
   components?: readonly string[];
   domainKeys?: readonly string[];
@@ -32,13 +50,19 @@ export interface RegistryFacts {
   routes?: readonly string[];
 }
 
+/** @internal Map of registry entry name to its emitted TypeScript type source. In-repo use only. */
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
+/**
+ * @internal The graph slice {@link deriveRegistryFactsFromGraph} reads from a Kovo explain
+ * input. Lowered-IR shape; in-repo use only (SPEC.md §5.2).
+ */
 export type RegistryGraphInput = Pick<
   KovoExplainInput,
   'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
 >;
 
+/** @internal Optional mutation/query type maps threaded into registry-fact derivation. */
 export interface RegistryTypeFactOptions {
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
@@ -56,12 +80,20 @@ export interface CompileAppGraphResult {
   registryFacts: RegistryFacts;
 }
 
+/**
+ * @internal One emitted lowered-IR artifact (server/client/css/registry file name, kind, and
+ * source). Carried in {@link CompileResult}; in-repo use only (SPEC.md §5.2).
+ */
 export interface EmittedFile {
   fileName: string;
   kind: 'client' | 'css' | 'registry' | 'server';
   source: string;
 }
 
+/**
+ * @internal The derived artifact file names for a compiled component (client/css/registry/
+ * server). Lowered-IR pipeline shape; in-repo use only (SPEC.md §5.2).
+ */
 export interface CompileArtifactFileNames {
   client: string;
   css: string;
@@ -69,6 +101,13 @@ export interface CompileArtifactFileNames {
   server: string;
 }
 
+/**
+ * @internal The full result of {@link compileComponentModule}: emitted artifacts, graph
+ * facts, diagnostics, lowered source, CSS assets, platform substitutions, query update
+ * plans/coverage, render-equivalence checks, and view-transition stamps. App authors call
+ * `compileComponentModule` but consume its result through the public assertion helpers;
+ * this shape itself is lowered-IR detail (SPEC.md §5.2).
+ */
 export interface CompileResult {
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
@@ -167,6 +206,10 @@ export function elementParamNameFromAttribute(attributeName: string): string {
     .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
 }
 
+/**
+ * @internal Construct an empty {@link CompileResult} (all collections empty, no lowered
+ * source). Used internally as the base for pass-through/no-op compiles (SPEC.md §5.2).
+ */
 export function createEmptyCompileResult(): CompileResult {
   return {
     clientExports: [],
@@ -200,10 +243,16 @@ export function compileArtifactFileNames(fileName: string): CompileArtifactFileN
   };
 }
 
+/** @internal A view-transition stamp (transition name) emitted by the compiler. SPEC.md §5.2. */
 export interface ViewTransitionStamp {
   name: string;
 }
 
+/**
+ * @internal A package's component-name prefix fact (package name, configured/effective
+ * prefix, idref behavior attributes) used during lowering and registry derivation. In-repo
+ * use only (SPEC.md §5.2).
+ */
 export interface PackageComponentPrefixFact {
   idrefBehaviorAttributes?: readonly string[];
   effectivePrefix?: string;
@@ -211,6 +260,11 @@ export interface PackageComponentPrefixFact {
   prefix?: string | null;
 }
 
+/**
+ * @internal A compiled query-update plan for one component/query: the bound paths, derives,
+ * and DOM stamps the client loader replays on data change. Lowered-IR fact; in-repo use only
+ * (SPEC.md §5.2).
+ */
 export interface QueryUpdatePlanFact {
   componentName: string;
   derives?: readonly QueryDeriveFact[];
@@ -220,6 +274,10 @@ export interface QueryUpdatePlanFact {
   templateStamps?: readonly QueryTemplateStampFact[];
 }
 
+/**
+ * @internal A derived-value fact within a query update plan (selector expression, exported
+ * client function, input/param names). Lowered-IR fact; in-repo use only (SPEC.md §5.2).
+ */
 export interface QueryDeriveFact {
   expression: string;
   exportName: string;
@@ -239,12 +297,21 @@ export interface StateDeriveFact {
   placeholder: string;
 }
 
+/**
+ * @internal A DOM stamp fact binding a derived value to an element attribute/selector within
+ * a query update plan. Lowered-IR fact; in-repo use only (SPEC.md §5.2).
+ */
 export interface QueryStampFact {
   attr: string;
   derive: QueryDeriveFact;
   selector: string;
 }
 
+/**
+ * @internal A list-template stamp fact: the per-item template, key, and read paths a query
+ * update plan uses to re-render a list on data change. Lowered-IR fact; in-repo use only
+ * (SPEC.md §5.2).
+ */
 export interface QueryTemplateStampFact {
   itemBindingPlaceholders?: readonly QueryTemplateStampBindingPlaceholder[];
   key: string;
@@ -269,6 +336,11 @@ export interface BindingPathSegmentFact {
   optional: boolean;
 }
 
+/**
+ * @internal A coverage fact recording how one query/state binding site is handled by the
+ * lowered update plan (isomorphic, fragment, plan, render-once, or UNHANDLED). Drives
+ * verification; lowered-IR fact, in-repo use only (SPEC.md §5.2).
+ */
 export interface QueryUpdateCoverageFact {
   componentName: string;
   detail?: string;
@@ -279,6 +351,11 @@ export interface QueryUpdateCoverageFact {
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
 
+/**
+ * @internal One render-equivalence check result (artifact name, expected vs actual render,
+ * pass flag) consumed by {@link assertRenderEquivalence}. Lowered-IR fact; in-repo use only
+ * (SPEC.md §5.2 rule 3).
+ */
 export interface RenderEquivalenceCheck {
   actual: string;
   artifact: string;
@@ -286,6 +363,11 @@ export interface RenderEquivalenceCheck {
   ok: boolean;
 }
 
+/**
+ * @internal Structural shape of a query result (primitive kind, array, object, or
+ * nullable/optional wrapper) the compiler infers to type and stamp query bindings.
+ * Lowered-IR fact; in-repo use only (SPEC.md §5.2).
+ */
 export type QueryShape =
   | 'array'
   | 'boolean'
@@ -298,17 +380,26 @@ export type QueryShape =
       readonly [key: string]: QueryShape;
     };
 
+/** @internal A nullable/optional wrapper around a {@link QueryShape}. In-repo use only. */
 export interface QueryShapeWrapper {
   kind: 'nullable' | 'optional';
   shape: QueryShape;
 }
 
+/**
+ * @internal A query-shape fact (query name, inferred {@link QueryShape}, source) threaded
+ * into compilation. Lowered-IR fact; in-repo use only (SPEC.md §5.2).
+ */
 export interface QueryShapeFact {
   query: string;
   shape: QueryShape;
   source: string;
 }
 
+/**
+ * @internal Index {@link QueryShapeFact}s by query name into the record the compiler reads.
+ * In-repo use only (SPEC.md §5.2).
+ */
 export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
   return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }

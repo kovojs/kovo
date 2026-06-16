@@ -6,6 +6,12 @@ import type { CompilerDiagnostic } from './diagnostics.js';
 import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';
 import type { PackageComponentPrefixFact } from './types.js';
 
+/**
+ * The Vite plugin object produced by createKovoVitePlugin (and the `kovoVitePlugin` barrel
+ * helper): a `transform` hook that lowers authored component modules through the compiler
+ * and a dev-server hook that serves emitted client islands. Public plugin contract an app
+ * wires into its `vite.config` (SPEC.md §5.2).
+ */
 export interface KovoVitePlugin {
   configureServer?: (server: KovoViteDevServer) => void;
   name: 'kovo';
@@ -18,22 +24,37 @@ export interface KovoVitePlugin {
   };
 }
 
+/** @internal Callback the Vite plugin invokes per non-error compiler diagnostic. */
 export type KovoViteDiagnosticReporter = (diagnostic: CompilerDiagnostic) => void;
 
+/**
+ * @internal Per-module diagnostic report (all diagnostics for one transformed file) passed
+ * to a {@link KovoViteModuleDiagnosticReporter}. Plugin-internal reporting shape.
+ */
 export interface KovoViteModuleDiagnosticReport {
   diagnostics: readonly CompilerDiagnostic[];
   fileName: string;
   source: string;
 }
 
+/** @internal Callback the Vite plugin invokes with each module's diagnostic report. */
 export type KovoViteModuleDiagnosticReporter = (report: KovoViteModuleDiagnosticReport) => void;
 
+/**
+ * Options for createKovoVitePlugin / the `kovoVitePlugin` helper: diagnostic callbacks and
+ * the package component prefixes to thread into compilation. Public plugin configuration
+ * surface (SPEC.md §5.2).
+ */
 export interface KovoVitePluginOptions {
   onDiagnostic?: KovoViteDiagnosticReporter;
   onModuleDiagnostics?: KovoViteModuleDiagnosticReporter;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
 }
 
+/**
+ * @internal Minimal structural view of the Vite dev server the plugin's `configureServer`
+ * hook needs (root config + middleware registration). Plugin-internal wiring type.
+ */
 export interface KovoViteDevServer {
   config?: {
     root?: string;
@@ -43,6 +64,7 @@ export interface KovoViteDevServer {
   };
 }
 
+/** @internal Connect-style middleware the plugin registers to serve emitted client islands. */
 export type KovoViteMiddleware = (
   req: { url?: string },
   res: {
@@ -68,6 +90,13 @@ interface ViteCompileResult {
   }[];
 }
 
+/**
+ * Build a KovoVitePlugin bound to a given component-compile function, lowering authored
+ * component modules through the compiler on `transform` and serving emitted client islands
+ * in dev. The barrel-level `kovoVitePlugin` helper wraps this with the real
+ * compileComponentModule; this lower-level factory exists so the compile step can be
+ * substituted in tests (SPEC.md §5.2). Public plugin factory.
+ */
 export function createKovoVitePlugin(
   compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
   options: KovoVitePluginOptions = {},
