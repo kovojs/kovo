@@ -18,3 +18,4 @@ export type {
 } from '../../app-types.js';
 export type { RouteResponseOutcome, RouteStreamOptions, RouteFileOptions } from '../../response.js';
 export type { RouteDeclaration, RouteDefinition } from '../../route.js';
+export type { DocumentTemplate, DocumentTemplateContext } from '../../document-core.js';
