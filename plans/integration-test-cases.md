@@ -151,19 +151,28 @@ integration harness uniquely proves.
   - Assertions: `request.post` without `Kovo-Fragment` returns redirect or full page; browser can
     submit a real form with JavaScript disabled if Playwright project support is added.
   - Evidence: `pnpm exec playwright test mutation-prg-no-js.spec.ts post-commit-rerun.spec.ts typed-error-union-multiple.spec.ts validation-field-errors.spec.ts --config=tests/integration/playwright.config.ts` passed the no-JS redirect and typed-error full-page tests in `tests/integration/specs/mutation-prg-no-js.spec.ts`.
-- [ ] `csrf-required` / `csrf-required.spec.ts`: emitted mutation forms carry `kovo-csrf`, valid
+- [x] `csrf-required` / `csrf-required.spec.ts`: emitted mutation forms carry `kovo-csrf`, valid
       enhanced submits pass, missing/invalid tokens fail before parsing/guards.
   - SPEC refs: §6.6 CSRF boundary, §9.1 mutation lifecycle.
   - Assertions: hidden token is present but omitted from semantic snapshots; invalid raw POST is
     rejected; valid browser submit succeeds.
-- [ ] `idempotent-mutation` / `idempotent-mutation.spec.ts`: duplicate `Kovo-Idem` submissions replay
+  - Evidence: added `tests/integration/fixtures/csrf-required/app.tsx` and
+    `tests/integration/specs/csrf-required.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test --grep "CSRF|idempotency|headers|patched-in|Kovo-Changes|render-error" --config playwright.config.ts`.
+- [x] `idempotent-mutation` / `idempotent-mutation.spec.ts`: duplicate `Kovo-Idem` submissions replay
       the stored response and do not execute the write twice.
   - SPEC refs: §9.1 wire protocol, §10.3 request lifecycle.
   - Assertions: same response shape; db row/count changes once; duplicate request is observable.
-- [ ] `mutation-response-headers` / `mutation-response-headers.spec.ts`: mutation handlers can attach
+  - Evidence: added `tests/integration/fixtures/idempotent-mutation/app.tsx` and
+    `tests/integration/specs/idempotent-mutation.spec.ts`; passed the Slice F Playwright command
+    recorded under `csrf-required`.
+- [x] `mutation-response-headers` / `mutation-response-headers.spec.ts`: mutation handlers can attach
       narrow transport headers such as `Set-Cookie` without replacing the framework response body.
   - SPEC refs: §9.1 mutation response headers.
   - Assertions: header is present on enhanced and no-JS paths; fragment/query vocabulary remains.
+  - Evidence: added `tests/integration/fixtures/mutation-response-headers/app.tsx` and
+    `tests/integration/specs/mutation-response-headers.spec.ts`; passed the Slice F Playwright
+    command recorded under `csrf-required`.
 - [ ] `validation-field-errors` / `validation-field-errors.spec.ts`: schema validation failures return
       HTTP 422 with `data-error-path` and field-scoped messages.
   - SPEC refs: §6.3 form fields, §9.2 errors.
@@ -179,19 +188,28 @@ integration harness uniquely proves.
   - SPEC refs: §10.3 request lifecycle.
   - Assertions: response fragment shows committed value; db and UI agree; no visible revert.
   - Evidence: `pnpm exec playwright test mutation-prg-no-js.spec.ts post-commit-rerun.spec.ts typed-error-union-multiple.spec.ts validation-field-errors.spec.ts --config=tests/integration/playwright.config.ts` passed `tests/integration/specs/post-commit-rerun.spec.ts`; assertions inspect committed `<kovo-query>`, fragment HTML, UI text, and db truth.
-- [ ] `fragment-targets-live-dom` / `fragment-targets-live-dom.spec.ts`: `Kovo-Targets` is collected
+- [x] `fragment-targets-live-dom` / `fragment-targets-live-dom.spec.ts`: `Kovo-Targets` is collected
       from the live DOM, including islands patched in by an earlier mutation.
   - SPEC refs: §9.1 `Kovo-Targets`, §4.4 morph application.
   - Assertions: second mutation refreshes newly patched island; server holds no screen session.
-- [ ] `sanitized-kovo-changes` / `sanitized-kovo-changes.spec.ts`: successful mutation responses expose
+  - Evidence: added `tests/integration/fixtures/fragment-targets-live-dom/app.tsx` and
+    `tests/integration/specs/fragment-targets-live-dom.spec.ts`; passed the Slice F Playwright
+    command recorded under `csrf-required`.
+- [x] `sanitized-kovo-changes` / `sanitized-kovo-changes.spec.ts`: successful mutation responses expose
       sanitized `Kovo-Changes` domain/key summaries and never input, stack, or failure details.
   - SPEC refs: §9.1 `Kovo-Changes`.
   - Assertions: response header contains only `{domain, keys}`; sensitive input absent.
-- [ ] `render-error-fragment` / `render-error-fragment.spec.ts`: a post-commit fragment/render failure
+  - Evidence: added `tests/integration/fixtures/sanitized-kovo-changes/app.tsx` and
+    `tests/integration/specs/sanitized-kovo-changes.spec.ts`; passed the Slice F Playwright
+    command recorded under `csrf-required`.
+- [x] `render-error-fragment` / `render-error-fragment.spec.ts`: a post-commit fragment/render failure
       returns HTTP 500 with `data-error-code="RENDER_ERROR"` while preserving sanitized committed
       changes.
   - SPEC refs: §9.2 unexpected failures.
   - Assertions: db write committed; response status/header semantics; UI receives stable error shell.
+  - Evidence: added `tests/integration/fixtures/render-error-fragment/app.tsx` and
+    `tests/integration/specs/render-error-fragment.spec.ts`; passed the Slice F Playwright command
+    recorded under `csrf-required`.
 
 ## Query and update plan
 
