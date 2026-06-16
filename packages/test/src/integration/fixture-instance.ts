@@ -5,6 +5,9 @@
 import { createRequestHandler, type KovoApp } from '@kovojs/server/app-shell/core';
 
 import { createPgliteTestDb, type PgliteTestDb } from '../pglite.js';
+import { createDbVerifier, type DbVerifier } from '../verifier.js';
+import type { DbVerificationDiagnostic } from '../verifier-diagnostics.js';
+import type { ObservedDbOperation } from '../verifier-observation.js';
 import type { KovoFixtureDescriptor, KovoFixtureRequest } from './define-fixture.js';
 
 /** A booted fixture's database + dispatch handler, with per-test `reset()`. */
@@ -13,6 +16,8 @@ export interface FixtureInstance {
   readonly app: KovoApp;
   /** The current per-test database. */
   readonly db: PgliteTestDb;
+  /** Runtime DB verification diagnostics collected by this fixture instance. */
+  verificationDiagnostics(): readonly DbVerificationDiagnostic[];
   /** Dispatch a Web `Request` through the app with `db` attached. */
   handle(request: Request): Promise<Response>;
   /** Tear down the database for good. */
@@ -34,16 +39,23 @@ export async function createFixtureInstance(
   descriptor: KovoFixtureDescriptor,
 ): Promise<FixtureInstance> {
   const { definition } = descriptor;
+  let rawDb: PgliteTestDb;
   let db: PgliteTestDb;
   let app: KovoApp;
   let dispatch: (request: Request) => Promise<Response>;
+  let verifier: DbVerifier | null;
 
   const build = async (): Promise<void> => {
-    db = await createPgliteTestDb();
+    rawDb = await createPgliteTestDb();
     for (const statement of schemaStatements(definition.schema)) {
-      await db.exec(statement);
+      await rawDb.exec(statement);
     }
-    await definition.seed?.(db);
+    await definition.seed?.(rawDb);
+    verifier =
+      definition.touchGraph && definition.verification
+        ? createDbVerifier(definition.touchGraph, definition.verification)
+        : null;
+    db = verifier ? (verifier.wrap(rawDb) as PgliteTestDb) : rawDb;
     app = typeof definition.app === 'function' ? definition.app({ db }) : definition.app;
     dispatch = createRequestHandler(app);
   };
@@ -57,6 +69,9 @@ export async function createFixtureInstance(
     get db() {
       return db;
     },
+    verificationDiagnostics() {
+      return verifier?.diagnostics() ?? [];
+    },
     async handle(request) {
       // Attach the current db the same way the example app-shells do (SPEC §9.5
       // request context), so fixture handlers read `(request as KovoFixtureRequest).db`.
@@ -65,8 +80,14 @@ export async function createFixtureInstance(
         value: db,
       } satisfies { configurable: true; value: KovoFixtureRequest['db'] });
       try {
-        return await dispatch(request);
+        if (!verifier) return await dispatch(request);
+
+        const captured = await verifier.capture(() => dispatch(request));
+        verifyRequestOperations(app, request, captured.observed, verifier);
+        return captured.result;
       } catch (error) {
+        const verificationResponse = verificationFailureResponse(error);
+        if (verificationResponse) return verificationResponse;
         // toNodeHandler turns thrown errors into an opaque 500; surface the cause
         // so fixture authoring mistakes are debuggable.
         console.error('[kovo fixture] request handler error:', error);
@@ -74,11 +95,46 @@ export async function createFixtureInstance(
       }
     },
     async close() {
-      await db.close();
+      await rawDb.close();
     },
     async reset() {
-      await db.close();
+      await rawDb.close();
       await build();
     },
   };
+}
+
+function verifyRequestOperations(
+  app: KovoApp,
+  request: Request,
+  observed: readonly ObservedDbOperation[],
+  verifier: DbVerifier,
+): void {
+  const url = new URL(request.url);
+  if (url.pathname.startsWith('/_m/')) {
+    verifier.assertCoveredOperations(
+      observed,
+      decodeURIComponent(url.pathname.slice('/_m/'.length)),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/_q/')) {
+    const queryKey = decodeURIComponent(url.pathname.slice('/_q/'.length));
+    const query = app.queries.find((definition) => definition.key === queryKey);
+    if (!query) return;
+    verifier.assertReadsCoveredOperations(
+      observed,
+      query.reads.map((domain) => domain.key),
+    );
+  }
+}
+
+function verificationFailureResponse(error: unknown): Response | null {
+  if (!(error instanceof Error) || !/^KV\d{3}\b/.test(error.message)) return null;
+
+  return new Response(`Kovo verification failed: ${error.message}`, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    status: 500,
+  });
 }

@@ -673,23 +673,26 @@ integration harness uniquely proves.
 
 ## Data-plane verification edges
 
-- [ ] `touch-graph-runtime-crosscheck` / `touch-graph-runtime-crosscheck.spec.ts`: an executed write's
+- [x] `touch-graph-runtime-crosscheck` / `touch-graph-runtime-crosscheck.spec.ts`: an executed write's
       observed domains are within the static touch set and the integration harness fails loudly on a
       smuggled write.
   - SPEC refs: §11.1 touch extraction, §11.2 runtime verification.
   - Assertions: positive fixture passes; intentionally bad fixture can be a skipped/expected-fail spec
     if the harness supports failure cases.
-  - Gap: public Playwright fixtures attach only `request.db` and `createRequestHandler(app)`; they do
-    not accept the `createKovoTestHarness({ touchGraph, verification })` verifier options used by
-    `packages/test/src/harness-verifier.test.ts` and `packages/test/src/pglite-harness.test.ts`, so a
-    browser fixture cannot honestly assert runtime touch-graph failure yet.
+  - Evidence: `tests/integration/fixtures/touch-graph-runtime-crosscheck` declares
+    `touchGraph`/`verification` through `defineFixture`; `tests/integration/specs/touch-graph-runtime-crosscheck.spec.ts`
+    verifies a raw SQL cart write morphs through the browser with no verifier diagnostics, and a
+    smuggled `audit_log` write returns a served KV402 verification failure. Proving commands:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/touch-graph-runtime-crosscheck.spec.ts specs/query-readset-runtime-crosscheck.spec.ts specs/exempt-table-read-fails.spec.ts --config playwright.config.ts --workers=1`;
+    `pnpm exec vitest run packages/test/src/harness-verifier.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts`;
+    `pnpm exec vp check packages/test/src/integration/define-fixture.ts packages/test/src/integration/fixture-instance.ts packages/test/src/integration/boot-fixture.ts packages/test/src/integration/playwright.ts tests/integration/fixtures/touch-graph-runtime-crosscheck/app.tsx tests/integration/specs/touch-graph-runtime-crosscheck.spec.ts tests/integration/fixtures/query-readset-runtime-crosscheck/app.tsx tests/integration/specs/query-readset-runtime-crosscheck.spec.ts tests/integration/fixtures/exempt-table-read-fails/app.tsx tests/integration/specs/exempt-table-read-fails.spec.ts`.
 - [ ] `manual-touches-raw-write` / `manual-touches-raw-write.spec.ts`: a statically opaque write with
       declared touches refreshes the right query and remains runtime-verified.
   - SPEC refs: §10.3 manual touches, §11.1 KV406.
   - Assertions: raw write changes db; invalidated query/fragment updates; diagnostics are visible.
-  - Gap: integration fixtures can assert raw DB writes and change headers, but cannot currently inject
-    static KV406/manual-touch coverage into the request verifier; leave open until the integration
-    harness exposes verifier metadata or a compiled touch graph artifact.
+  - Gap: integration fixtures can now inject verifier metadata through `defineFixture`, but this
+    named case still needs its own fixture/spec tying a KV406/manual-touch artifact to the raw write
+    and invalidated query/fragment behavior.
 - [ ] `table-level-invalidation` / `table-level-invalidation.spec.ts`: non-eq predicates degrade to
       table-level invalidation and refresh all affected query instances.
   - SPEC refs: §11.1 KV409, §10.1 row-level keys.
@@ -697,14 +700,17 @@ integration harness uniquely proves.
   - Gap: row/table-level degradation is covered in Drizzle extraction units, but the current
     integration runner has no public path from fixture source to a KV409 diagnostic/explain artifact
     for a browser-served fixture.
-- [ ] `query-readset-runtime-crosscheck` / `query-readset-runtime-crosscheck.spec.ts`: query loaders'
+- [x] `query-readset-runtime-crosscheck` / `query-readset-runtime-crosscheck.spec.ts`: query loaders'
       observed SELECT/JOIN tables match derived read sets during integration runs.
   - SPEC refs: §10.2 queries, §11.2 runtime verification.
   - Assertions: positive fixture passes; bad raw read fixture fails through harness diagnostics if
     failure-case support exists.
-  - Gap: read-side verifier assertions exist in the package-level harness, but fixture dispatch does
-    not expose observed SELECT/JOIN readsets or a way to install expected readset metadata for
-    Playwright requests.
+  - Evidence: `tests/integration/fixtures/query-readset-runtime-crosscheck` installs verifier
+    metadata through the public fixture definition; `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
+    verifies `/_q/readset-good` serves the declared product read and `/_q/readset-bad` fails with a
+    served KV407 diagnostic for an undeclared `audit_log` read. Proving commands: same Playwright,
+    verifier vitest, and path-scoped `vp check` commands recorded under
+    `touch-graph-runtime-crosscheck`.
 - [ ] `opaque-projection-schema` / `opaque-projection-schema.spec.ts`: raw/`sql<T>` projections with a
       declared output schema render when observed rows match and fail when runtime shape drifts.
   - SPEC refs: §10.2 KV410, §11.2 runtime shape verification.
@@ -712,12 +718,15 @@ integration harness uniquely proves.
   - Gap: query `output` schemas can be exercised through typed-read endpoints, but KV410 is a
     compiler/Drizzle opaque-projection diagnostic and no integration fixture hook currently surfaces
     that artifact for raw/`sql<T>` projection source.
-- [ ] `exempt-table-read-fails` / `exempt-table-read-fails.spec.ts`: a query reading an exempt table is
+- [x] `exempt-table-read-fails` / `exempt-table-read-fails.spec.ts`: a query reading an exempt table is
       rejected because exemptions are write-side only.
   - SPEC refs: §10.1 KV411, §11.2 runtime verification.
   - Assertions: served request fails with teaching diagnostic; no stale UI path.
-  - Gap: `packages/test/src/verifier.test.ts` proves KV411 in the verifier, but browser fixtures do not
-    accept `verification.exemptTables` or expose the verifier failure as a served diagnostic.
+  - Evidence: `tests/integration/fixtures/exempt-table-read-fails` declares
+    `verification.exemptTables: ['audit_log']`; `tests/integration/specs/exempt-table-read-fails.spec.ts`
+    verifies `/_q/audit-read` returns a served KV411 verification failure before any stale read path
+    can render. Proving commands: same Playwright, verifier vitest, and path-scoped `vp check`
+    commands recorded under `touch-graph-runtime-crosscheck`.
 
 ## Endpoints, webhooks, files, and streams
 
