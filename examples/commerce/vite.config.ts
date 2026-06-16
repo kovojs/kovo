@@ -15,7 +15,13 @@ export const commerceViteConfig = defineConfig({
       },
     },
   },
-  plugins: [tailwindcss(), commerceSharedAppShellDevPlugin()],
+  // KOVO_DEMO_MULTITENANT (scripts/demo-serve.mjs) mounts its own per-session
+  // request dispatch, so drop the singleton app-shell dev plugin that would
+  // otherwise also claim app routes against one shared PGlite (SPEC.md §9.5).
+  plugins: [
+    tailwindcss(),
+    ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [commerceSharedAppShellDevPlugin()]),
+  ],
   // The Drizzle/PGlite (WASM) data layer makes the build/dev/export tests (which
   // spawn real vite builds and a dev server) run well past Vitest's 5s default,
   // especially under the suite's parallelism. Give them room.
