@@ -78,6 +78,21 @@ describe('server response adapters', () => {
     await expect(response.text()).resolves.toBe('');
   });
 
+  it('suppresses shared server response bodies for 304 responses', async () => {
+    const response = serverResponseToWebResponse(
+      {
+        body: '',
+        headers: { ETag: '"orders-v1"' },
+        status: 304,
+      },
+      { method: 'GET' },
+    );
+
+    expect(response.status).toBe(304);
+    expect(response.headers.get('etag')).toBe('"orders-v1"');
+    await expect(response.text()).resolves.toBe('');
+  });
+
   it('normalizes ArrayBuffer bodies before document wrapping', () => {
     const source = new TextEncoder().encode('page').buffer;
     const response: RoutePageResponse = {

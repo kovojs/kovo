@@ -566,15 +566,25 @@ integration harness uniquely proves.
 
 ## Endpoints, webhooks, files, and streams
 
-- [ ] `endpoint-raw-request` / `endpoint-raw-request.spec.ts`: declared `endpoint()` receives raw
+- [x] `endpoint-raw-request` / `endpoint-raw-request.spec.ts`: declared `endpoint()` receives raw
       `Request`, handles exact/prefix paths, and is visible apart from route matching.
   - SPEC refs: §9.1 endpoints, §9.5 dispatch order.
   - Assertions: endpoint response wins before route table; cookies/session are not ambient.
-- [ ] `endpoint-csrf-exempt-audited` / `endpoint-csrf-exempt-audited.spec.ts`: a CSRF-exempt endpoint
+  - Evidence: `tests/integration/fixtures/endpoint-raw-request` and
+    `tests/integration/specs/endpoint-raw-request.spec.ts` verify raw body/header handling,
+    exact/prefix endpoint dispatch, route-table separation, and no ambient endpoint session.
+    Proving command:
+    `pnpm exec playwright test endpoint-raw-request endpoint-csrf-exempt-audited respond-file respond-stream storage-download-route --config tests/integration/playwright.config.ts --workers=1`.
+- [x] `endpoint-csrf-exempt-audited` / `endpoint-csrf-exempt-audited.spec.ts`: a CSRF-exempt endpoint
       requires named justification and does not share browser mutation semantics.
   - SPEC refs: §9.1 endpoints, §11.4 endpoint audit.
   - Assertions: request succeeds only through endpoint auth path; audit snapshot may be
     browser-free but fixture proves dispatch.
+  - Evidence: `tests/integration/fixtures/endpoint-csrf-exempt-audited` and
+    `tests/integration/specs/endpoint-csrf-exempt-audited.spec.ts` verify CSRF-token-free
+    machine-ingress dispatch and assert the public `kovoExplain(..., { endpoints: true })` audit
+    line with verifier auth plus the exemption justification. Proving command:
+    `pnpm exec playwright test endpoint-raw-request endpoint-csrf-exempt-audited respond-file respond-stream storage-download-route --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `webhook-hmac` / `webhook-hmac.spec.ts`: `webhook()` verifies raw bytes with HMAC, parses loose
       input, writes through domain writes, and emits a unified change record.
   - SPEC refs: §9.1 webhook, verifier kit.
@@ -583,18 +593,34 @@ integration harness uniquely proves.
       stored webhook response without re-executing the handler.
   - SPEC refs: §9.1 webhook lifecycle.
   - Assertions: duplicate signed request returns same response; db changes once.
-- [ ] `respond-file` / `respond-file.spec.ts`: a guarded route returns `respond.file()` with required
+- [x] `respond-file` / `respond-file.spec.ts`: a guarded route returns `respond.file()` with required
       content type, attachment disposition default, and ETag/304 support.
   - SPEC refs: §6.4 file outcomes.
   - Assertions: body/header/status semantics; `If-None-Match` returns 304; guard still applies.
-- [ ] `respond-stream` / `respond-stream.spec.ts`: a guarded route returns `respond.stream()` with
+  - Evidence: `tests/integration/fixtures/respond-file` and
+    `tests/integration/specs/respond-file.spec.ts` verify unauthenticated guard redirect,
+    authorized CSV body, attachment disposition, content type, ETag, nosniff, and 304 on
+    `If-None-Match`. Proving commands:
+    `pnpm exec playwright test endpoint-raw-request endpoint-csrf-exempt-audited respond-file respond-stream storage-download-route --config tests/integration/playwright.config.ts --workers=1`
+    and `pnpm exec vitest run packages/server/src/response.test.ts packages/server/src/route-response.test.ts`.
+- [x] `respond-stream` / `respond-stream.spec.ts`: a guarded route returns `respond.stream()` with
       declared content type/disposition and can opt into inline display.
   - SPEC refs: §6.4 stream outcomes.
   - Assertions: streamed body arrives; headers match declaration; guard still applies.
-- [ ] `storage-download-route` / `storage-download-route.spec.ts`: file storage capability serves a
+  - Evidence: `tests/integration/fixtures/respond-stream` and
+    `tests/integration/specs/respond-stream.spec.ts` verify unauthenticated guard redirect plus an
+    authorized streamed body with declared inline disposition, content type, and nosniff. Proving
+    command:
+    `pnpm exec playwright test endpoint-raw-request endpoint-csrf-exempt-audited respond-file respond-stream storage-download-route --config tests/integration/playwright.config.ts --workers=1`.
+- [x] `storage-download-route` / `storage-download-route.spec.ts`: file storage capability serves a
       row-authorized object while rejecting path traversal and cross-owner reads.
   - SPEC refs: §13.5 storage capability.
   - Assertions: authorized download succeeds; escaped key/cross-owner request fails safely.
+  - Evidence: `tests/integration/fixtures/storage-download-route` and
+    `tests/integration/specs/storage-download-route.spec.ts` verify a guarded DB-authorized
+    download over `createMemoryStorage`, cross-owner 404 without leaked bytes, and a DB row with an
+    escaped storage key failing safely through the storage capability. Proving command:
+    `pnpm exec playwright test endpoint-raw-request endpoint-csrf-exempt-audited respond-file respond-stream storage-download-route --config tests/integration/playwright.config.ts --workers=1`.
 
 ## Streaming and deferred content
 

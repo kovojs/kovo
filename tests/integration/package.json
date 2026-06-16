@@ -6,6 +6,7 @@
   "dependencies": {
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",
-    "@kovojs/test": "workspace:*"
+    "@kovojs/test": "workspace:*",
+    "kovo": "workspace:*"
   }
 }
