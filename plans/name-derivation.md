@@ -132,7 +132,7 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     call is a TypeScript error. `pnpm --filter @kovojs/compiler exec vitest run`, `pnpm --filter
     @kovojs/compiler exec tsc --noEmit`, `pnpm --filter @kovojs/core exec vitest run`, and `pnpm
     --filter @kovojs/core exec tsc --noEmit` passed on 2026-06-16.
-- [ ] **Compiler: derive the name in lowering** (`packages/compiler/src/lower/structural-jsx.ts` and
+- [x] **Compiler: derive the name in lowering** (`packages/compiler/src/lower/structural-jsx.ts` and
   the component-model builder).
   - Derive from the exported binding identifier (the lowering already tracks `exportName`) + module
     path per the format decision. Inject the derived name into the component model + emitted descriptor.
@@ -150,8 +150,15 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     composition; `packages/cli/src/index.ts` prints those facts in `kovo explain component`.
     `pnpm --filter @kovojs/compiler exec vitest run`, `pnpm --filter kovo exec vitest run`, `pnpm
     exec vp run build`, and `node tests/kovo-check.node.mjs` passed on 2026-06-16.
-  - Gap: the compiler still does not rewrite served page HTML/CSS to the disambiguated `kovo-c` in a
-    per-rendered-page composition pass.
+  - Evidence: `packages/compiler/src/page-composition.ts` adds `composePageComponentArtifacts`, the
+    per-rendered-page artifact pass that rewrites colliding DOM leaves to stable registry-key
+    `kovo-c` values in emitted server/lowered source and scoped CSS.
+    `packages/compiler/src/page-composition.test.ts` verifies dashed-host insertion, native-host
+    stamp replacement, scoped CSS rewrite, graph
+    `disambiguatedDomName` reporting, and no-op behavior for unique leaves; `pnpm --filter
+    @kovojs/compiler exec vitest run src/page-composition.test.ts`, `pnpm --filter @kovojs/compiler
+    exec vitest run`, `pnpm --filter @kovojs/compiler exec tsc --noEmit`, and `node
+    tests/kovo-check.node.mjs` passed on 2026-06-16.
 - [x] **Registry/type codegen** (registry `.d.ts` emission + `validate/component-names.ts`).
   - Emit `FragmentTargets` and a name→component map keyed off derived names; KV237/KV238 key on the
     derived (namespaced) key. Update `componentNameRegistration` to source the derived name.
@@ -168,7 +175,7 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     `packages/core/src/index.test.ts` verify the emitted map and core merge target. `pnpm --filter
     @kovojs/compiler exec vitest run` and `pnpm --filter @kovojs/core exec vitest run` passed on
     2026-06-16.
-- [ ] **Diagnostics.**
+- [x] **Diagnostics.**
   - Repoint KV237/KV238 messaging (`packages/core/src/diagnostics.ts:339,348`) away from
     "give one component a distinct `component(\"wire-name\")` value" — with derivation there is no
     string to change, so the fix is "rename the binding" (or move the file). KV237 now fires only on a
@@ -177,7 +184,7 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
   - Evidence: `packages/core/src/diagnostics.ts` now points KV237/KV238 fixes at binding renames,
     module moves, or fragment-target removal; `pnpm --filter @kovojs/core exec vitest run
     src/diagnostics.test.ts` passed on 2026-06-16.
-  - [ ] Auto-disambiguation reporting: when the DOM-leaf collision pass rewrites a `kovo-c`, surface
+  - [x] Auto-disambiguation reporting: when the DOM-leaf collision pass rewrites a `kovo-c`, surface
     it in `kovo explain component` (no error, but it must be inspectable — a silent wire-name change is
     exactly what the "no silent caps" discipline forbids).
     - Evidence: graph-level reporting plumbing exists: `ComponentExplain` accepts `domName` and
@@ -186,8 +193,12 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
       `effective-dom-name:`. Verified by `packages/compiler/src/registry.test.ts`,
       `packages/cli/src/index.kovo-explain.test.ts`, `pnpm --filter @kovojs/compiler exec vitest run`,
       `pnpm --filter kovo exec vitest run`, and `node tests/kovo-check.node.mjs` on 2026-06-16.
-    - Gap: still no page-level rewrite pass that changes the actual emitted `kovo-c`, so this remains
-      open.
+    - Evidence: `packages/compiler/src/page-composition.ts` rewrites the actual emitted server
+      artifact, lowered source, and scoped CSS when page component artifacts collide on a DOM leaf,
+      and annotates the returned component graph facts with `disambiguatedDomName`. Verified by
+      `packages/compiler/src/page-composition.test.ts` and `pnpm --filter @kovojs/compiler exec vitest
+      run src/page-composition.test.ts`, `pnpm --filter @kovojs/compiler exec vitest run`, and `node
+      tests/kovo-check.node.mjs` on 2026-06-16.
   - [x] New diagnostic: a derived name that **changed** vs. the last emitted registry fact (wire names
     are deploy-load-bearing; a silent change breaks morph identity for in-flight clients). Decide
     severity (warn vs. error) and whether it gates only when fragmentTarget/cross-build matters.

@@ -24,6 +24,7 @@ export type {
 } from './lower/attribute-merge.js';
 export { mergePrimitiveAndAuthorAttributes } from './lower/attribute-merge.js';
 export { deriveAppGraph, deriveRegistryFactsFromGraph } from './graph.js';
+export { composePageComponentArtifacts } from './page-composition.js';
 export type {
   ComponentCssAsset,
   CssAsset,
