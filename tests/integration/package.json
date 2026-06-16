@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@kovojs/core": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/test": "workspace:*",
     "kovo": "workspace:*"

@@ -232,23 +232,50 @@ integration harness uniquely proves.
     `tests/integration/specs/nullable-binding.spec.ts` verify initial null SSR, server null/non-null
     fragment updates, inline-loader local state null/non-null updates, DB truth, and semantic
     snapshots. Proving command: `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
-- [ ] `derive-binding` / `derive-binding.spec.ts`: a named derive lazily imports on first relevant
+- [x] `derive-binding` / `derive-binding.spec.ts`: a named derive lazily imports on first relevant
       query change and updates a bound attribute without dependency tracking.
   - SPEC refs: §4.8 derives.
   - Assertions: derive-driven `disabled`/`hidden` flips; module import is tied to query change.
-- [ ] `stamp-list-insert-remove` / `stamp-list-insert-remove.spec.ts`: keyed template stamps clone,
+  - Evidence: `tests/integration/fixtures/derive-binding` and
+    `tests/integration/specs/derive-binding.spec.ts` verify an enhanced mutation returning only a
+    query chunk updates `data-bind` text, lazily imports the named derive module on that query
+    change, flips the derived `disabled` attribute, checks DB truth, and snapshots the semantic
+    derive binding. Proving command:
+    `pnpm exec playwright test specs/derive-binding.spec.ts specs/stamp-list-insert-remove.spec.ts specs/stamp-list-reorder.spec.ts specs/query-args-search.spec.ts specs/multi-instance-query.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+- [x] `stamp-list-insert-remove` / `stamp-list-insert-remove.spec.ts`: keyed template stamps clone,
       remove, and bind item-relative paths when array data changes.
   - SPEC refs: §4.8 template stamps, §13.2 keyed identity.
   - Assertions: row count/order/text updates; `kovo-key` values stable in semantic snapshot.
-- [ ] `stamp-list-reorder` / `stamp-list-reorder.spec.ts`: keyed list reorder preserves DOM identity
+  - Evidence: `tests/integration/fixtures/stamp-list-insert-remove` and
+    `tests/integration/specs/stamp-list-insert-remove.spec.ts` verify query-chunk-only enhanced
+    mutation responses insert and remove keyed rows through `data-bind-list="cart.items"`, update
+    item-relative `.qty`/`.name` bindings, preserve stable `kovo-key` values, check DB truth, and
+    snapshot the semantic list. Proving command: same Slice J command recorded under
+    `derive-binding`.
+- [x] `stamp-list-reorder` / `stamp-list-reorder.spec.ts`: keyed list reorder preserves DOM identity
       for existing rows while updating item-relative bindings.
   - SPEC refs: §4.8 stamps, §13.2 lists at scale.
   - Assertions: element handles survive reorder; semantic order follows server truth.
+  - Evidence: `tests/integration/fixtures/stamp-list-reorder` and
+    `tests/integration/specs/stamp-list-reorder.spec.ts` verify a query-chunk-only reorder moves
+    keyed rows into server-truth order, updates item-relative `.rank`/`.label` bindings, preserves
+    expando identity on existing keyed DOM nodes, checks DB truth, and snapshots the semantic list.
+    Proving command: same Slice J command recorded under `derive-binding`.
 - [ ] `multi-instance-query` / `multi-instance-query.spec.ts`: two instances of one parameterized
       query coexist on a page and update only the matching instance keys.
   - SPEC refs: §10.2 instance keys, §9.4 typed reads.
   - Assertions: `kovo-query="product:p1"` and `product:p2` stay distinct; one mutation/refetch does
     not overwrite the other.
+  - Partial evidence: `tests/integration/fixtures/multi-instance-query` and
+    `tests/integration/specs/multi-instance-query.spec.ts` verify two initial
+    `script[kovo-query="product"][key="product:p*"]` instances coexist, a keyed mutation response
+    emits only `<kovo-query name="product" key="product:p1">` plus the matching `product-p1`
+    fragment, leaves the `product-p2` fragment DOM identity untouched, checks DB truth, and
+    snapshots the semantic page. Proving command: same Slice J command recorded under
+    `derive-binding`.
+  - Gap: left unchecked because the current `CompiledQueryUpdatePlan` lookup is keyed by query name
+    only, not query instance key; a pure client query-plan update cannot safely target two
+    same-query instances on one page without fragment scoping.
 - [x] `shared-query-consumers` / `shared-query-consumers.spec.ts`: a single query value ships once and
       updates multiple islands consuming the same `kovo-deps` key.
   - SPEC refs: §4.2 query data ships once, §10.4 optimism keyed to queries.
@@ -261,18 +288,26 @@ integration harness uniquely proves.
       search params and returns the canonical instance key.
   - SPEC refs: §9.4 typed reads, §10.2 query args/instance key.
   - Assertions: `/_q/product?id=p1` response includes `product:p1`; invalid args fail safely.
-  - Partial evidence: added `tests/integration/fixtures/query-args-search/app.tsx` and
-    `tests/integration/specs/query-args-search.spec.ts`; the positive Playwright test verifies
-    search-param coercion, defaulted args, and canonical `product:p1` / `product:p2` chunks. Proving
-    command:
-    `pnpm exec playwright test tests/integration/specs/guarded-mutation.spec.ts tests/integration/specs/session-provider-once.spec.ts tests/integration/specs/session-null-anonymous.spec.ts tests/integration/specs/redirect-typed-target.spec.ts tests/integration/specs/query-args-search.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-  - Gap: left unchecked because invalid query args through the app-level `/_q` endpoint currently
-    return HTTP 500 instead of the SPEC §9.4/§10.2 safe validation response; the skipped spec records
-    the expected 422 `VALIDATION` behavior.
+  - Partial evidence: `tests/integration/fixtures/query-args-search` and
+    `tests/integration/specs/query-args-search.spec.ts` verify initial route search coercion,
+    defaulted args, and typed read responses with canonical `product:p1` / `product:p2` chunks.
+    Proving commands: `pnpm exec playwright test tests/integration/specs/guarded-mutation.spec.ts
+    tests/integration/specs/session-provider-once.spec.ts
+    tests/integration/specs/session-null-anonymous.spec.ts
+    tests/integration/specs/redirect-typed-target.spec.ts
+    tests/integration/specs/query-args-search.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`; same Slice J command recorded under
+    `derive-binding`.
+  - Gap: left unchecked because invalid typed-read args currently return HTTP 500 in the Vite
+    integration path instead of the SPEC §9.4/§9.2 safe 422 validation response; the skipped spec
+    records the expected 422 `VALIDATION` behavior.
 - [ ] `broadcast-channel-sync` / `broadcast-channel-sync.spec.ts`: mutation response query chunks
       rebroadcast to another same-user tab.
   - SPEC refs: §9.3 BroadcastChannel liveness.
   - Assertions: two pages share session; mutation in one tab updates the other without navigation.
+  - Gap: not implemented in this slice because the fixture document shell uses the generated inline
+    loader, which dispatches local `kovo:query` events for enhanced mutation responses but does not
+    install the full `installKovoLoader` BroadcastChannel mutation rebroadcast path.
 
 ## Morph survival
 
