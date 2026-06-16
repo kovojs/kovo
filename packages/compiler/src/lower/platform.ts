@@ -5,6 +5,11 @@ import {
 } from '../scan/parse.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 
+/**
+ * @internal A lowered platform-behavior substitution: a provable event handler the compiler
+ * rewrites to a native invoker command (dialog/popover/details). Carried in
+ * {@link CompileResult}; lowered-IR fact, in-repo use only (SPEC.md §5.2.4).
+ */
 export interface PlatformSubstitution {
   action: string;
   event: string;

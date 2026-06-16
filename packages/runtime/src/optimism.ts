@@ -80,12 +80,22 @@ export type OptimisticFor<
   };
 };
 
+/**
+ * A staged optimistic prediction: `commit` it to keep the predicted store state,
+ * or `restore` it to roll back to the captured `snapshot` when the server rejects
+ * the mutation (SPEC §10.4).
+ */
 export interface PendingOptimism {
   commit(): void;
   restore(): void;
   snapshot: QuerySnapshot;
 }
 
+/**
+ * One recorded optimistic transform awaiting reconciliation: the `change` that
+ * triggered it, the mutation `id` it belongs to, and the pure `transform` re-run
+ * on rebase against server truth (SPEC §10.5).
+ */
 export interface PendingTransform<Input = unknown> {
   change: OptimisticChange<Input>;
   id: string;
@@ -97,11 +107,13 @@ interface PagehideRoot {
   removeEventListener?: (type: 'pagehide', listener: () => void) => void;
 }
 
+/** @internal */
 export interface PagehideOptimismCleanupOptions {
   discardPendingOptimism: () => readonly string[] | void;
   root: PagehideRoot;
 }
 
+/** @internal */
 export class OptimisticRebaser {
   #pendingByQuery = new Map<string, PendingTransform[]>();
   #serverTruthByQuery = new Map<string, unknown>();
@@ -212,6 +224,7 @@ export class OptimisticRebaser {
   }
 }
 
+/** @internal */
 export function installPagehideOptimismCleanup(
   options: PagehideOptimismCleanupOptions,
 ): () => void {
@@ -225,6 +238,7 @@ export function installPagehideOptimismCleanup(
   };
 }
 
+/** @internal */
 export function applyOptimisticTransforms<Input>(
   store: QueryStore,
   input: Input,
@@ -278,7 +292,10 @@ export function tempId(): string {
   return `kovo-tmp-${derivedTempIdCounter}`;
 }
 
-/** Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5). */
+/**
+ * Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5).
+ * @internal
+ */
 export function now(): number {
   return Date.now();
 }

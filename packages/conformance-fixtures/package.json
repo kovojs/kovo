@@ -1,0 +1,39 @@
+{
+  "name": "@kovojs/conformance-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./command-fixtures": "./src/command-fixtures.ts",
+    "./commerce-fixtures": "./src/commerce-fixtures.ts",
+    "./compiler-fixtures": "./src/compiler-fixtures.ts",
+    "./derivation-fixtures": "./src/derivation-fixtures.ts",
+    "./diagnostic-output-fixtures": "./src/diagnostic-output-fixtures.ts",
+    "./generated-module-fixtures": "./src/generated-module-fixtures.ts",
+    "./graph-fixtures": "./src/graph-fixtures.ts",
+    "./kovo-check-fixtures": "./src/kovo-check-fixtures.ts",
+    "./kovo-explain-fixtures": "./src/kovo-explain-fixtures.ts",
+    "./kovo-export-fixtures": "./src/kovo-export-fixtures.ts",
+    "./markdown-fixtures": "./src/markdown-fixtures.ts",
+    "./mcp-fixtures": "./src/mcp-fixtures.ts",
+    "./runtime-fixtures": "./src/runtime-fixtures.ts",
+    "./server-fixtures": "./src/server-fixtures.ts",
+    "./source-fixtures": "./src/source-fixtures.ts",
+    "./starter-template-fixtures": "./src/starter-template-fixtures.ts",
+    "./touch-graph-fixtures": "./src/touch-graph-fixtures.ts",
+    "./typescript-fixtures": "./src/typescript-fixtures.ts",
+    "./verification-fixtures": "./src/verification-fixtures.ts",
+    "./vite-fixtures": "./src/vite-fixtures.ts",
+    "./wire-fixtures": "./src/wire-fixtures.ts"
+  },
+  "dependencies": {
+    "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
+    "@kovojs/runtime": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/test": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  }
+}

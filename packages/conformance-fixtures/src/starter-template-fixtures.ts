@@ -21,7 +21,7 @@ import {
   type KovoExplainPageAssertionFact,
   type KovoExplainQueryAssertionFact,
 } from './kovo-explain-fixtures.ts';
-import { htmlElementFacts, type HtmlElementFact } from './html-fragment.ts';
+import { htmlElementFacts, type HtmlElementFact } from '@kovojs/test/html-fragment';
 import { cssSourceDirectives } from './source-fixtures.ts';
 
 export interface StarterTemplateSources {

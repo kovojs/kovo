@@ -60,6 +60,11 @@ export interface CreateAppOptions<SessionValue = unknown> {
   sessionProvider?: SessionProvider<Request, SessionValue>;
 }
 
+/**
+ * A compile/route-table diagnostic surfaced on a `KovoApp` (the `diagnostics` array
+ * returned by `createApp`). Carries the diagnostic code, message, source file, and
+ * optional severity/position so app tooling can report it (SPEC §9.5).
+ */
 export interface AppDiagnostic {
   code: DiagnosticCode;
   fileName: string;

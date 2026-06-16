@@ -29,6 +29,9 @@ function sectionsWithPages(sections) {
  * llms.txt index. `sections` are the loaded content sections (each with
  * `title` and `pages` carrying `title`/`description`/`mirror`). `origin` is the
  * site origin so links are absolute; `specMirror` is the raw spec URL path.
+ *
+ * @param {ReadonlyArray<{ title: string; pages: ReadonlyArray<{ title: string; description?: string; mirror: string }> }>} sections
+ * @param {{ origin: string; specMirror?: string }} [options]
  */
 export function buildLlmsIndex(sections, { origin, specMirror = '/spec.md' } = {}) {
   return [

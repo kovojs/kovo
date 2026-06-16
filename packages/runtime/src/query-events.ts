@@ -8,16 +8,20 @@ import type { QueryStore } from './query-store.js';
 import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
 
+/** @internal */
 export interface InlineQueryEventDetail {
   queries: QueryElementChunkLike[];
 }
 
+/** @internal */
 export interface InlineQueryEvent {
   detail?: InlineQueryEventDetail;
 }
 
+/** @internal */
 export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQueryEvent> {}
 
+/** @internal */
 export interface ApplyInlineQueryEventOptions {
   applyQuery?: QueryApplyInterposition;
   onError?: RuntimeErrorReporter;
@@ -26,11 +30,13 @@ export interface ApplyInlineQueryEventOptions {
   store: QueryStore;
 }
 
+/** @internal */
 export interface InstallInlineQueryEventHydrationOptions extends ApplyInlineQueryEventOptions {
   onAppliedQueries?: (queries: readonly string[]) => void;
   target: QueryEventHydrationTarget;
 }
 
+/** @internal */
 export function applyInlineQueryEventToRuntime(
   event: InlineQueryEvent,
   options: ApplyInlineQueryEventOptions,
@@ -50,6 +56,7 @@ export function applyInlineQueryEventToRuntime(
   });
 }
 
+/** @internal */
 export function installInlineQueryEventHydration(
   options: InstallInlineQueryEventHydrationOptions,
 ): () => void {

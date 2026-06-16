@@ -6,9 +6,9 @@ import {
   resolveLifecycleRequest,
   runGuard,
   type Guard,
-  type GuardFailure,
   type GuardFailureResponseOptions,
   type RequestLifecycleOptions,
+  type ResolvedGuardFailure,
   type UnauthenticatedHandler,
 } from './guards.js';
 import type { PageHintOptions } from './hints.js';
@@ -215,7 +215,7 @@ export interface RoutePageOutcomeSuccess {
 }
 
 export interface RoutePageFailure {
-  auth?: GuardFailure['auth'];
+  auth?: ResolvedGuardFailure['auth'];
   error?: {
     code: 'RATE_LIMITED' | 'UNAUTHORIZED';
     payload: Record<string, unknown>;

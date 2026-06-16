@@ -1,0 +1,918 @@
+{
+  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior + cn/variants), @kovojs/core (component()), and optionally @kovojs/server (escape helpers). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "registryDependencies": ["@kovojs/headless-ui", "@kovojs/core", "@kovojs/server"],
+  "components": [
+    {
+      "name": "accordion",
+      "title": "Accordion",
+      "files": ["src/accordion.tsx"],
+      "exports": [
+        "Accordion",
+        "AccordionItem",
+        "AccordionHeader",
+        "AccordionTrigger",
+        "AccordionContent"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "accordionContentAttributes",
+          "accordionHeaderAttributes",
+          "accordionItemAttributes",
+          "accordionRootAttributes",
+          "accordionTriggerAttributes",
+          "AccordionType",
+          "AccordionValue",
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "alert-dialog",
+      "title": "AlertDialog",
+      "files": ["src/alert-dialog.tsx"],
+      "exports": [
+        "AlertDialog",
+        "AlertDialogTrigger",
+        "AlertDialogContent",
+        "AlertDialogCancel",
+        "AlertDialogAction"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "alertDialogActionAttributes",
+          "AlertDialogActionIntent",
+          "alertDialogCancelAttributes",
+          "alertDialogContentAttributes",
+          "alertDialogRootAttributes",
+          "alertDialogTriggerAttributes",
+          "ClassValue",
+          "cn",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "alert",
+      "title": "Alert",
+      "files": ["src/alert.tsx"],
+      "exports": ["Alert"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "autocomplete",
+      "title": "Autocomplete",
+      "files": ["src/autocomplete.tsx"],
+      "exports": [
+        "Autocomplete",
+        "AutocompleteInput",
+        "AutocompleteList",
+        "AutocompleteOption",
+        "AutocompleteValue"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "autocompleteInputAttributes",
+          "AutocompleteItem",
+          "autocompleteListAttributes",
+          "autocompleteOptionAttributes",
+          "autocompleteRootAttributes",
+          "autocompleteValueAttributes",
+          "autocompleteValueText",
+          "ClassValue",
+          "cn",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "avatar",
+      "title": "Avatar",
+      "files": ["src/avatar.tsx"],
+      "exports": ["Avatar", "AvatarImage", "AvatarFallback"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "avatarFallbackAttributes",
+          "avatarImageAttributes",
+          "AvatarImageStatus",
+          "avatarRootAttributes",
+          "ClassValue",
+          "cn",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "badge",
+      "title": "Badge",
+      "files": ["src/badge.tsx"],
+      "exports": ["Badge"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "breadcrumb",
+      "title": "Breadcrumb",
+      "files": ["src/breadcrumb.tsx"],
+      "exports": ["Breadcrumb", "BreadcrumbItem", "BreadcrumbLink", "BreadcrumbSeparator"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "safeUrl", "separatorRootAttributes"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "button",
+      "title": "Button",
+      "files": ["src/button.tsx"],
+      "exports": ["Button"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "card",
+      "title": "Card",
+      "files": ["src/card.tsx"],
+      "exports": ["Card"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "checkbox-group",
+      "title": "CheckboxGroup",
+      "files": ["src/checkbox-group.tsx"],
+      "exports": [
+        "CheckboxGroup",
+        "CheckboxGroupItem",
+        "CheckboxGroupControl",
+        "CheckboxGroupLabel"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "checkboxGroupControlAttributes",
+          "CheckboxGroupItem",
+          "checkboxGroupItemAttributes",
+          "checkboxGroupLabelAttributes",
+          "checkboxGroupRootAttributes",
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants",
+          "TextDirection"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "checkbox",
+      "title": "Checkbox",
+      "files": ["src/checkbox.tsx"],
+      "exports": ["Checkbox"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "CheckboxCheckedState",
+          "checkboxRootAttributes",
+          "ClassValue",
+          "cn",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "collapsible",
+      "title": "Collapsible",
+      "files": ["src/collapsible.tsx"],
+      "exports": ["Collapsible", "CollapsibleTrigger", "CollapsibleContent"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "collapsibleContentAttributes",
+          "collapsibleRootAttributes",
+          "collapsibleTriggerAttributes",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "combobox",
+      "title": "Combobox",
+      "files": ["src/combobox.tsx"],
+      "exports": [
+        "Combobox",
+        "ComboboxInput",
+        "ComboboxListbox",
+        "ComboboxOption",
+        "ComboboxValue"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "comboboxInputAttributes",
+          "ComboboxItem",
+          "comboboxListboxAttributes",
+          "comboboxOptionAttributes",
+          "comboboxRootAttributes",
+          "comboboxValueAttributes",
+          "comboboxValueText",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "command",
+      "title": "Command",
+      "files": ["src/command.tsx"],
+      "exports": [
+        "Command",
+        "CommandTrigger",
+        "CommandDialog",
+        "CommandInput",
+        "CommandListbox",
+        "CommandItem",
+        "CommandClose",
+        "CommandEmpty",
+        "CommandValue"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "commandCloseAttributes",
+          "commandDialogAttributes",
+          "commandEmptyAttributes",
+          "commandInputAttributes",
+          "CommandItem",
+          "commandItemAttributes",
+          "commandListboxAttributes",
+          "commandRootAttributes",
+          "commandTriggerAttributes",
+          "commandValueText",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "context-menu",
+      "title": "ContextMenu",
+      "files": ["src/context-menu.tsx"],
+      "exports": [
+        "ContextMenu",
+        "ContextMenuTrigger",
+        "ContextMenuContent",
+        "ContextMenuItem",
+        "ContextMenuGroup",
+        "ContextMenuSeparator"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "contextMenuContentAttributes",
+          "contextMenuGroupAttributes",
+          "ContextMenuItem",
+          "contextMenuItemAttributes",
+          "ContextMenuPoint",
+          "contextMenuRootAttributes",
+          "contextMenuSeparatorAttributes",
+          "contextMenuTriggerAttributes",
+          "defineVariants"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "dialog",
+      "title": "Dialog",
+      "files": ["src/dialog.tsx"],
+      "exports": ["Dialog", "DialogTrigger", "DialogContent", "DialogClose"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "dialogCloseAttributes",
+          "dialogContentAttributes",
+          "dialogRootAttributes",
+          "dialogTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "disclosure",
+      "title": "Disclosure",
+      "files": ["src/disclosure.tsx"],
+      "exports": ["Disclosure", "DisclosureTrigger", "DisclosureContent"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "disclosureContentAttributes",
+          "disclosureRootAttributes",
+          "disclosureTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "drawer",
+      "title": "Drawer",
+      "files": ["src/drawer.tsx"],
+      "exports": ["Drawer"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "dialogCloseAttributes",
+          "dialogContentAttributes",
+          "dialogRootAttributes",
+          "dialogTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "dropdown-menu",
+      "title": "DropdownMenu",
+      "files": ["src/dropdown-menu.tsx"],
+      "exports": [
+        "DropdownMenu",
+        "DropdownMenuTrigger",
+        "DropdownMenuContent",
+        "DropdownMenuItem",
+        "DropdownMenuGroup",
+        "DropdownMenuSeparator"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "dropdownMenuContentAttributes",
+          "dropdownMenuGroupAttributes",
+          "DropdownMenuItem",
+          "dropdownMenuItemAttributes",
+          "dropdownMenuRootAttributes",
+          "dropdownMenuSeparatorAttributes",
+          "dropdownMenuTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "field",
+      "title": "Field",
+      "files": ["src/field.tsx"],
+      "exports": [
+        "Field",
+        "FieldLabel",
+        "FieldControl",
+        "FieldTextarea",
+        "FieldSelect",
+        "FieldSelectOption",
+        "FieldDescription",
+        "FieldError",
+        "Fieldset",
+        "FieldsetLegend"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "fieldControlAttributes",
+          "fieldDescriptionAttributes",
+          "fieldErrorAttributes",
+          "fieldLabelAttributes",
+          "fieldRootAttributes",
+          "fieldsetLegendAttributes",
+          "fieldsetRootAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "hover-card",
+      "title": "HoverCard",
+      "files": ["src/hover-card.tsx"],
+      "exports": ["HoverCard", "HoverCardTrigger", "HoverCardContent"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "hoverCardContentAttributes",
+          "hoverCardRootAttributes",
+          "hoverCardTriggerAttributes",
+          "safeUrl"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "kbd",
+      "title": "Kbd",
+      "files": ["src/kbd.tsx"],
+      "exports": ["Kbd"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "menubar",
+      "title": "Menubar",
+      "files": ["src/menubar.tsx"],
+      "exports": ["Menubar", "MenubarItem", "MenubarSubmenu", "MenubarGroup", "MenubarSeparator"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants",
+          "menubarGroupAttributes",
+          "MenubarItem",
+          "menubarItemAttributes",
+          "menubarRootAttributes",
+          "menubarSeparatorAttributes",
+          "menubarSubmenuAttributes",
+          "TextDirection"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "meter",
+      "title": "Meter",
+      "files": ["src/meter.tsx"],
+      "exports": ["Meter"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "meterRootAttributes"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "navigation-menu",
+      "title": "NavigationMenu",
+      "files": ["src/navigation-menu.tsx"],
+      "exports": [
+        "NavigationMenu",
+        "NavigationMenuList",
+        "NavigationMenuItem",
+        "NavigationMenuTrigger",
+        "NavigationMenuContent",
+        "NavigationMenuLink",
+        "NavigationMenuViewport",
+        "NavigationMenuIndicator"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants",
+          "navigationMenuContentAttributes",
+          "navigationMenuIndicatorAttributes",
+          "NavigationMenuItem",
+          "navigationMenuItemAttributes",
+          "navigationMenuLinkAttributes",
+          "navigationMenuListAttributes",
+          "navigationMenuRootAttributes",
+          "navigationMenuTriggerAttributes",
+          "navigationMenuViewportAttributes",
+          "TextDirection"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "number-field",
+      "title": "NumberField",
+      "files": ["src/number-field.tsx"],
+      "exports": [
+        "NumberField",
+        "NumberFieldControl",
+        "NumberFieldInput",
+        "NumberFieldDecrement",
+        "NumberFieldIncrement"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "numberFieldDecrementAttributes",
+          "numberFieldIncrementAttributes",
+          "numberFieldInputAttributes",
+          "numberFieldRootAttributes",
+          "NumberFieldValue"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "otp-field",
+      "title": "OtpField",
+      "files": ["src/otp-field.tsx"],
+      "exports": ["OtpField", "OtpFieldGroup", "OtpFieldHiddenInput", "OtpFieldInput"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "otpFieldHiddenInputAttributes",
+          "otpFieldInputAttributes",
+          "OtpFieldInputMode",
+          "otpFieldRootAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "popover",
+      "title": "Popover",
+      "files": ["src/popover.tsx"],
+      "exports": ["Popover", "PopoverTrigger", "PopoverContent"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "popoverContentAttributes",
+          "popoverRootAttributes",
+          "popoverTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "progress",
+      "title": "Progress",
+      "files": ["src/progress.tsx"],
+      "exports": ["Progress"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "progressRootAttributes"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "radio-group",
+      "title": "RadioGroup",
+      "files": ["src/radio-group.tsx"],
+      "exports": ["RadioGroup", "RadioGroupItem", "RadioGroupRadio", "RadioGroupLabel"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants",
+          "RadioGroupItem",
+          "radioGroupItemAttributes",
+          "radioGroupLabelAttributes",
+          "radioGroupRadioAttributes",
+          "radioGroupRootAttributes",
+          "TextDirection"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "scroll-area",
+      "title": "ScrollArea",
+      "files": ["src/scroll-area.tsx"],
+      "exports": [
+        "ScrollArea",
+        "ScrollAreaViewport",
+        "ScrollAreaScrollbar",
+        "ScrollAreaThumb",
+        "ScrollAreaCorner"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "scrollAreaCornerAttributes",
+          "ScrollAreaOrientation",
+          "scrollAreaRootAttributes",
+          "scrollAreaScrollbarAttributes",
+          "ScrollAreaScrollbars",
+          "ScrollAreaScrollPosition",
+          "scrollAreaThumbAttributes",
+          "scrollAreaViewportAttributes",
+          "TextDirection"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "select",
+      "title": "Select",
+      "files": ["src/select.tsx"],
+      "exports": [
+        "Select",
+        "SelectTrigger",
+        "SelectHiddenInput",
+        "SelectContent",
+        "SelectItem",
+        "SelectValue"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "selectContentAttributes",
+          "selectHiddenInputAttributes",
+          "SelectItem",
+          "selectItemAttributes",
+          "selectRootAttributes",
+          "selectTriggerAttributes",
+          "selectValueAttributes",
+          "selectValueText"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "separator",
+      "title": "Separator",
+      "files": ["src/separator.tsx"],
+      "exports": ["Separator"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "SeparatorOrientation",
+          "separatorRootAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "sheet",
+      "title": "Sheet",
+      "files": ["src/sheet.tsx"],
+      "exports": ["Sheet", "Drawer"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "dialogCloseAttributes",
+          "dialogContentAttributes",
+          "dialogRootAttributes",
+          "dialogTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "skeleton",
+      "title": "Skeleton",
+      "files": ["src/skeleton.tsx"],
+      "exports": ["Skeleton"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "slider",
+      "title": "Slider",
+      "files": ["src/slider.tsx"],
+      "exports": ["Slider", "SliderInput", "SliderTrack", "SliderRange", "SliderThumb"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "sliderInputAttributes",
+          "SliderOrientation",
+          "sliderRangeAttributes",
+          "sliderRootAttributes",
+          "sliderThumbAttributes",
+          "sliderTrackAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "switch",
+      "title": "Switch",
+      "files": ["src/switch.tsx"],
+      "exports": ["Switch"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "switchRootAttributes"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "table",
+      "title": "Table",
+      "files": ["src/table.tsx"],
+      "exports": ["Table", "TableHead", "TableBody", "TableRow", "TableHeaderCell", "TableCell"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["escapeAttribute", "escapeHtml"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "tabs",
+      "title": "Tabs",
+      "files": ["src/tabs.tsx"],
+      "exports": ["Tabs", "TabsList", "TabsTrigger", "TabsPanel"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants",
+          "TabsActivationMode",
+          "TabsItem",
+          "tabsListAttributes",
+          "tabsPanelAttributes",
+          "tabsRootAttributes",
+          "tabsTriggerAttributes",
+          "TextDirection"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "toast",
+      "title": "ToastViewport",
+      "files": ["src/toast.tsx"],
+      "exports": [
+        "ToastViewport",
+        "Toast",
+        "ToastTitle",
+        "ToastDescription",
+        "ToastAction",
+        "ToastClose"
+      ],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "toastActionAttributes",
+          "toastCloseAttributes",
+          "toastDescriptionAttributes",
+          "ToastPlacement",
+          "ToastPoliteness",
+          "toastRootAttributes",
+          "toastTitleAttributes",
+          "ToastVariant",
+          "toastViewportAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "toggle-group",
+      "title": "ToggleGroup",
+      "files": ["src/toggle-group.tsx"],
+      "exports": ["ToggleGroup", "ToggleGroupItem", "ToggleGroupButton"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "CollectionOrientation",
+          "defineVariants",
+          "TextDirection",
+          "toggleGroupButtonAttributes",
+          "ToggleGroupItem",
+          "toggleGroupItemAttributes",
+          "toggleGroupRootAttributes",
+          "ToggleGroupType",
+          "ToggleGroupValue"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "toggle",
+      "title": "Toggle",
+      "files": ["src/toggle.tsx"],
+      "exports": ["Toggle"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "toggleRootAttributes"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "toolbar",
+      "title": "Toolbar",
+      "files": ["src/toolbar.tsx"],
+      "exports": ["Toolbar", "ToolbarItem", "ToolbarButton"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "TextDirection",
+          "toolbarButtonAttributes",
+          "ToolbarItem",
+          "toolbarItemAttributes",
+          "ToolbarOrientation",
+          "toolbarRootAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    },
+    {
+      "name": "tooltip",
+      "title": "Tooltip",
+      "files": ["src/tooltip.tsx"],
+      "exports": ["Tooltip", "TooltipTrigger", "TooltipContent"],
+      "dependencies": {
+        "@kovojs/headless-ui": [
+          "ClassValue",
+          "cn",
+          "defineVariants",
+          "tooltipContentAttributes",
+          "tooltipRootAttributes",
+          "tooltipTriggerAttributes"
+        ],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": []
+    }
+  ]
+}

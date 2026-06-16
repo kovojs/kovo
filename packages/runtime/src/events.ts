@@ -8,24 +8,29 @@ import type {
 } from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
 
+/** @internal */
 export interface DelegatedEvent {
   preventDefault?: () => void;
   type: string;
   target: EventTargetLike | null;
 }
 
+/** @internal */
 export interface EventTargetLike extends ClosestElementLike<EventElementLike> {}
 
+/** @internal */
 export interface EventElementLike
   extends
     AttributeElementLike,
     ClosestElementLike<EventElementLike>,
     OptionalQuerySelectorAllRootLike<UploadProgressElementLike> {}
 
+/** @internal */
 export interface UploadProgressElementLike extends AttributeWriterLike {
   setAttribute(name: string, value: string): void;
 }
 
+/** @internal */
 export type EventPayloadMap<Definitions extends readonly EventDefinition<string, JsonValue>[]> = {
   [Definition in Definitions[number] as Definition['name']]: Definition extends EventDefinition<
     string,
@@ -35,17 +40,21 @@ export type EventPayloadMap<Definitions extends readonly EventDefinition<string,
     : never;
 };
 
+/** @internal */
 export interface TypedEvent<Name extends string = string, Payload = unknown> {
   name: Name;
   payload: Payload;
 }
 
+/** @internal */
 export type EventListener<Payload> = (event: TypedEvent<string, Payload>) => void | Promise<void>;
 
+/** @internal */
 export interface EventSubscription {
   off(): void;
 }
 
+/** @internal */
 export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   emit<Name extends Extract<keyof EventMap, string>>(name: Name, payload: EventMap[Name]): void;
   events: readonly Extract<keyof EventMap, string>[];
@@ -55,11 +64,13 @@ export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   ): EventSubscription;
 }
 
+/** @internal */
 export interface EventBusOptions {
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
   queryDataKeys?: readonly string[];
 }
 
+/** @internal */
 export interface RuntimeErrorContext {
   event?: DelegatedEvent | TypedEvent<string, unknown>;
   phase:
@@ -71,6 +82,7 @@ export interface RuntimeErrorContext {
     | 'query-hydration';
 }
 
+/** @internal */
 export function createEventBus<
   const Definitions extends readonly EventDefinition<string, JsonValue>[],
 >(

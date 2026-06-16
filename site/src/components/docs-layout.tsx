@@ -63,7 +63,7 @@ export function renderDocsBody(options: PageOptions): string {
         </main>
         <aside class="hidden w-56 shrink-0 xl:block">{toc}</aside>
       </div>
-      {SiteFooter.definition.render({})}
+      {SiteFooter.definition.render()}
     </>
   );
 }

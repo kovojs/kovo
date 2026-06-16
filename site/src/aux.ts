@@ -15,7 +15,6 @@ import { loadSiteContent } from './content.js';
 //   - 404.html           the app's own themed not-found document
 // All come from the one content pass, so they cannot drift from the human pages.
 
-// @ts-expect-error - site-local .mjs build tooling, no type declarations.
 import { buildLlmsFull, buildLlmsIndex } from '../scripts/llms.mjs';
 
 const SITE_ORIGIN = 'https://kovo.sh';

@@ -8,13 +8,19 @@ import type { JsonValue } from './index.js';
 // The IRs are intentionally formatting-resistant data (no source strings) so
 // every slice asserts algebraic class / status, never incidental formatting.
 
-/** Arithmetic operators in the §10.5 `Arith(op,v,v)` value grammar. */
+/**
+ * Arithmetic operators in the §10.5 `Arith(op,v,v)` value grammar.
+ *
+ * @internal
+ */
 export type ArithOp = '*' | '+' | '-' | '/';
 
 /**
  * Placeholder produced by the Stage-3 `INSERT × AGG` rule for Opaque columns:
  * a `tempId()`/`now()` standin, pending-styled and content-matched on reconcile
  * (SPEC.md §10.5). `tempId` is a fresh client-only id; `now` is a client clock.
+ *
+ * @internal
  */
 export type PlaceholderKind = 'now' | 'tempId';
 
@@ -27,6 +33,8 @@ export type PlaceholderKind = 'now' | 'tempId';
  * lowers to `arith('-', col('stock'), param('quantity'))`). `opaque` is the
  * Stage-1 "could not trace" marker; it never survives into a *derivable* program
  * (the deriver either replaces an INSERT column with a `placeholder` or punts).
+ *
+ * @internal
  */
 export type SymbolicValue =
   | { kind: 'arith'; left: SymbolicValue; op: ArithOp; right: SymbolicValue }
@@ -36,7 +44,11 @@ export type SymbolicValue =
   | { kind: 'param'; path: string }
   | { kind: 'placeholder'; placeholder: PlaceholderKind };
 
-/** One `eq(T.keyCol, expr)` predicate of a write `match` (SPEC.md §10.5/§11.1). */
+/**
+ * One `eq(T.keyCol, expr)` predicate of a write `match` (SPEC.md §10.5/§11.1).
+ *
+ * @internal
+ */
 export interface SymbolicKeyEq {
   column: string;
   value: SymbolicValue;
@@ -45,6 +57,8 @@ export interface SymbolicKeyEq {
 /**
  * §10.5 write `match`. `keys` is the AND of eq-predicates on keys; `opaque`
  * marks ranges / `IN` / server-time / non-key predicates ⇒ punt.
+ *
+ * @internal
  */
 export type SymbolicMatch =
   | { eq: readonly SymbolicKeyEq[]; kind: 'keys' }
@@ -53,6 +67,8 @@ export type SymbolicMatch =
 /**
  * §10.5 Stage-1 `effect` grammar:
  * `effect ::= INSERT{vals} | UPDATE{match, sets} | DELETE{match} | UPSERT{…}`.
+ *
+ * @internal
  */
 export type SymbolicEffect =
   | { op: 'delete'; match: SymbolicMatch; table: string }
@@ -71,7 +87,11 @@ export type SymbolicEffect =
       values: Readonly<Record<string, SymbolicValue>>;
     };
 
-/** One `ORDER BY` column of a rowset, with per-column opacity (SPEC.md §10.5). */
+/**
+ * One `ORDER BY` column of a rowset, with per-column opacity (SPEC.md §10.5).
+ *
+ * @internal
+ */
 export interface OrderByColumn {
   column: string;
   direction: 'asc' | 'desc';
@@ -79,7 +99,11 @@ export interface OrderByColumn {
   opaque?: boolean;
 }
 
-/** One predicate in a rowset's filter chain. */
+/**
+ * One predicate in a rowset's filter chain.
+ *
+ * @internal
+ */
 export interface RowsetFilter {
   column: string;
   op: 'eq' | 'non-eq' | 'opaque';
@@ -89,6 +113,8 @@ export interface RowsetFilter {
 /**
  * §10.5 `R = rowset(filter chain, key, orderBy)` — the rows a query's aggregate
  * or projection ranges over.
+ *
+ * @internal
  */
 export interface Rowset {
   filters: readonly RowsetFilter[];
@@ -103,6 +129,8 @@ export interface Rowset {
  * Client-data availability witness (SPEC.md §10.5): the result path that already
  * ships an aggregate's contributing rows plus the contribution columns, proving
  * a `COUNT`/`SUM` delete/update can be computed client-side. Absent ⇒ punt.
+ *
+ * @internal
  */
 export interface RowWitness {
   columns: readonly string[];
@@ -114,6 +142,8 @@ export interface RowWitness {
  * `field ::= Scalar(keyed-row col) | COUNT(R[,pred]) | SUM(R, arith) | AGG(R, projection)`.
  * `opaque` carries the punt reason for out-of-grammar shapes (window / GROUP BY
  * +HAVING / DISTINCT / raw `sql<T>` projections).
+ *
+ * @internal
  */
 export type AlgebraicField =
   | { arith: SymbolicValue; kind: 'sum'; rowset: Rowset; witness?: RowWitness }
@@ -135,6 +165,8 @@ export type AlgebraicField =
  * to an `AlgebraicField`. `rowsByTable` records which result path ships a given
  * table's rows (the AGG witness for sibling scalar/count/sum fields over the same
  * table).
+ *
+ * @internal
  */
 export interface AlgebraicQueryShape {
   fields: Readonly<Record<string, AlgebraicField>>;
@@ -143,7 +175,11 @@ export interface AlgebraicQueryShape {
   rowsByTable?: Readonly<Record<string, RowWitness>>;
 }
 
-/** Match a client-data row by a column equal to a derived value (SPEC.md §10.5). */
+/**
+ * Match a client-data row by a column equal to a derived value (SPEC.md §10.5).
+ *
+ * @internal
+ */
 export interface RowMatch {
   column: string;
   value: SymbolicValue;
@@ -153,6 +189,8 @@ export interface RowMatch {
  * §10.5 Stage-3 output: a JSON-patch program over client data. Each op is a
  * sound, client-computable mutation of the query value; `update-row` / `remove-row`
  * carry a `find-or-no-op` guard for rows possibly outside the client's rowset.
+ *
+ * @internal
  */
 export type PatchOp =
   | {
@@ -209,10 +247,18 @@ export type PatchOp =
       value: SymbolicValue;
     };
 
-/** Insertion point for a pushed row: list end/start, or a sorted insert by an orderBy column. */
+/**
+ * Insertion point for a pushed row: list end/start, or a sorted insert by an orderBy column.
+ *
+ * @internal
+ */
 export type PushPosition = 'end' | 'start' | { column: string; direction: 'asc' | 'desc' };
 
-/** §10.5 Stage-3 result: a patch program over one query's client value. */
+/**
+ * §10.5 Stage-3 result: a patch program over one query's client value.
+ *
+ * @internal
+ */
 export interface PatchProgram {
   ops: readonly PatchOp[];
   query: string;
@@ -223,6 +269,8 @@ export interface PatchProgram {
  * explains why a pair still needs a hand-written transform or `'await-fragment'`,
  * and is rendered inline by `kovo explain --optimistic` (e.g. `PUNTED (Opaque:
  * compute_discount)`). The `code` set mirrors the SPEC PUNT list one-for-one.
+ *
+ * @internal
  */
 export type PuntReason =
   | { code: 'interprocedural'; site: string }
@@ -236,7 +284,11 @@ export type PuntReason =
   | { code: 'unsupported'; detail: string }
   | { code: 'untraceable-param'; expr: string };
 
-/** Derivation outcome for one (mutation × invalidated query) pair (SPEC.md §10.5). */
+/**
+ * Derivation outcome for one (mutation × invalidated query) pair (SPEC.md §10.5).
+ *
+ * @internal
+ */
 export type DerivationResult =
   | { kind: 'derived'; program: PatchProgram }
   | { kind: 'punt'; reason: PuntReason };
@@ -245,15 +297,25 @@ export type DerivationResult =
  * Derivation status carried alongside (never *as*) optimistic coverage
  * (SPEC.md §10.5 / plan Phase 5). A `PUNTED` derivation leaves coverage
  * `UNHANDLED` unless a hand-written transform or `'await-fragment'` covers the pair.
+ *
+ * @internal
  */
 export type DerivationStatus = { reason: PuntReason; status: 'PUNTED' } | { status: 'derived' };
 
-/** Construct a `derived` result. */
+/**
+ * Construct a `derived` result.
+ *
+ * @internal
+ */
 export function derived(program: PatchProgram): DerivationResult {
   return { kind: 'derived', program };
 }
 
-/** Construct a `punt` result. */
+/**
+ * Construct a `punt` result.
+ *
+ * @internal
+ */
 export function punt(reason: PuntReason): DerivationResult {
   return { kind: 'punt', reason };
 }
@@ -261,6 +323,8 @@ export function punt(reason: PuntReason): DerivationResult {
 /**
  * Human-readable punt label for `kovo explain --optimistic` (SPEC.md §10.6 example
  * `PUNTED (Opaque: compute_discount)`). Surfaces wrap this as `PUNTED (<label>)`.
+ *
+ * @internal
  */
 export function puntReasonLabel(reason: PuntReason): string {
   switch (reason.code) {
@@ -287,7 +351,11 @@ export function puntReasonLabel(reason: PuntReason): string {
   }
 }
 
-/** Options for the `PatchProgram` interpreter (and parity with codegen). */
+/**
+ * Options for the `PatchProgram` interpreter (and parity with codegen).
+ *
+ * @internal
+ */
 export interface ApplyPatchOptions {
   /** Client clock for `now` placeholders (default: a fixed sentinel for tests). */
   now?: () => JsonValue;
@@ -300,6 +368,8 @@ export interface ApplyPatchOptions {
  * the executable meaning of the IR — the commuting-diagram suite (SPEC.md §10.5,
  * §11.4) runs it as `patch(clientShape(s), i)`, and the codegen lowers the same
  * ops to the committed transform. Pure: clones the input value, never mutates it.
+ *
+ * @internal
  */
 export function applyPatchProgram(
   value: JsonValue,

@@ -1,7 +1,13 @@
-/** A subscriber callback invoked with a query's new value when it changes. */
+/**
+ * A subscriber callback invoked with a query's new value when it changes.
+ * @internal
+ */
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
-/** The client query store: get/set/subscribe to query values and take snapshots. */
+/**
+ * The client query store: get/set/subscribe to query values and take snapshots.
+ * @internal
+ */
 export interface QueryStore {
   get<Value = unknown>(name: string, key?: string): Value | undefined;
   snapshot(
@@ -12,7 +18,10 @@ export interface QueryStore {
   subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>, key?: string): () => void;
 }
 
-/** A point-in-time copy of query values, used to roll back optimistic updates. */
+/**
+ * A point-in-time copy of query values, used to roll back optimistic updates.
+ * @internal
+ */
 export type QuerySnapshot = Map<string, unknown>;
 
 /**
@@ -26,6 +35,7 @@ export type QuerySnapshot = Map<string, unknown>;
  *
  * const store = createQueryStore();
  * store.set('cart', { count: 1 });
+ * @internal
  */
 export function createQueryStore(): QueryStore {
   const values = new Map<string, unknown>();
@@ -77,16 +87,19 @@ export function createQueryStore(): QueryStore {
   };
 }
 
+/** @internal */
 export function queryStoreKey(name: string, key: string | undefined): string {
   return key === undefined ? name : `${name}\0${key}`;
 }
 
+/** @internal */
 export function queryWireKey(name: string, key: string | undefined): string {
   if (key === undefined) return name;
 
   return key.startsWith(`${name}:`) ? key : `${name}:${key}`;
 }
 
+/** @internal */
 export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
   const separator = storeKey.indexOf('\0');
   if (separator === -1) return { name: storeKey };

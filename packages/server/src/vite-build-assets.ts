@@ -11,19 +11,39 @@ import {
   type KovoAppShellViteManifestHintOptions,
 } from './vite-manifest.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Base asset-copy options
+ * carrying the Vite output dist directory.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteStaticExportAssetOptions {
   distDir: string | URL;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Asset-copy options for
+ * a built app shell plus extra author-provided assets.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteBuildStaticExportAssetOptions extends KovoAppShellViteStaticExportAssetOptions {
   assets?: readonly StaticExportAssetInput[];
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Asset-copy options for
+ * deriving assets directly from a manifest file.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteManifestFileStaticExportAssetOptions extends KovoAppShellViteStaticExportAssetOptions {
   base?: string;
   manifestFile?: string | URL;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Maps built manifest
+ * assets into static-export asset inputs sourced from the dist directory.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteStaticExportAssets(
   assets: readonly KovoAppShellBuildAsset[],
   options: KovoAppShellViteStaticExportAssetOptions,
@@ -39,6 +59,11 @@ export function kovoAppShellViteStaticExportAssets(
   });
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Reads a manifest file
+ * and returns its assets as static-export asset inputs.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function kovoAppShellViteStaticExportAssetsFromManifestFile(
   options: KovoAppShellViteManifestFileStaticExportAssetOptions,
 ): Promise<StaticExportAssetInput[]> {
@@ -53,6 +78,11 @@ export async function kovoAppShellViteStaticExportAssetsFromManifestFile(
   );
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Combines a built app
+ * shell's manifest assets with extra author-provided assets.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteBuildStaticExportAssets(
   build: { assets: readonly KovoAppShellBuildAsset[] },
   options: KovoAppShellViteBuildStaticExportAssetOptions,
@@ -63,10 +93,20 @@ export function kovoAppShellViteBuildStaticExportAssets(
   ];
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Resolves the default
+ * .vite/manifest.json path within a Vite output directory.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteManifestFile(distDir: string | URL): string {
   return path.join(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Resolves a filesystem
+ * path or file: URL to an absolute path, rejecting other URL protocols.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function resolvedFileSystemPath(value: string | URL): string {
   if (value instanceof URL) {
     if (value.protocol === 'file:') return path.resolve(fileURLToPath(value));
@@ -82,6 +122,11 @@ export function resolvedFileSystemPath(value: string | URL): string {
   return path.resolve(value);
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Resolves a dist-relative
+ * file to an absolute source path inside the output directory, rejecting traversal.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function viteDistSourcePath(distDir: string | URL, file: string): string {
   const root = resolvedFileSystemPath(distDir);
   const targetPath = path.resolve(root, normalizedDistFile(file));

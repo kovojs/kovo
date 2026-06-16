@@ -6,6 +6,7 @@ import type {
 } from './dom-like.js';
 import { morphDomElement } from './morph.js';
 
+/** @internal */
 export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
   checked?: boolean;
@@ -17,8 +18,10 @@ export interface QueryBindingElement
   value?: string;
 }
 
+/** @internal */
 export interface QueryBindingRoot extends QuerySelectorAllRootLike<QueryBindingElement> {}
 
+/** @internal */
 export interface TemplateStampItem {
   html: string;
   index: number;
@@ -26,22 +29,26 @@ export interface TemplateStampItem {
   value: unknown;
 }
 
+/** @internal */
 export interface TemplateStampHost extends QueryBindingElement {
   reconcileTemplateStamp(items: readonly TemplateStampItem[]): void;
 }
 
+/** @internal */
 export interface CompiledQueryDerive {
   name: string;
   select(value: unknown, root: QueryBindingRoot): unknown;
   selector?: string;
 }
 
+/** @internal */
 export interface CompiledQueryStamp {
   attr: string;
   select(value: unknown, root: QueryBindingRoot): unknown;
   selector: string;
 }
 
+/** @internal */
 export interface CompiledQueryTemplateStamp {
   key: string | ((item: unknown, index: number) => string | number);
   list: string;
@@ -49,6 +56,7 @@ export interface CompiledQueryTemplateStamp {
   selector: string;
 }
 
+/** @internal */
 export interface CompiledQueryUpdatePlan {
   bindings?: boolean;
   derives?: readonly CompiledQueryDerive[];
@@ -56,6 +64,7 @@ export interface CompiledQueryUpdatePlan {
   templateStamps?: readonly CompiledQueryTemplateStamp[];
 }
 
+/** @internal */
 export interface AppliedCompiledQueryUpdatePlan {
   bindings: string[];
   derives: string[];
@@ -63,30 +72,37 @@ export interface AppliedCompiledQueryUpdatePlan {
   templateStamps: string[];
 }
 
+/** @internal */
 export type CompiledQueryUpdatePlans = Readonly<
   Record<string, CompiledQueryUpdatePlan | undefined>
 >;
 
+/** @internal */
 export interface QueryBindingIndex {
   attributeBindingElements: readonly QueryBindingElement[];
 }
 
+/** @internal */
 export interface ApplyQueryBindingsOptions {
   bindingIndex?: QueryBindingIndex;
 }
 
+/** @internal */
 export interface ApplyStateBindingsOptions extends ApplyQueryBindingsOptions {
   importModule?: (url: string) => Promise<Record<string, unknown>>;
 }
 
+/** @internal */
 export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {}
 
+/** @internal */
 export function createQueryBindingIndex(root: QueryBindingRoot): QueryBindingIndex {
   return {
     attributeBindingElements: queryAttributeBindingElements(root),
   };
 }
 
+/** @internal */
 export function applyQueryBindings(
   root: QueryBindingRoot,
   queryName: string,
@@ -96,6 +112,7 @@ export function applyQueryBindings(
   return applyRootBindings(root, queryName, value, options);
 }
 
+/** @internal */
 export function applyStateBindings(
   root: QueryBindingRoot,
   state: unknown,
@@ -153,6 +170,7 @@ function applyRootBindings(
   return applied;
 }
 
+/** @internal */
 export function applyCompiledQueryUpdatePlan(
   root: QueryBindingRoot,
   queryName: string,
@@ -212,6 +230,7 @@ export function applyCompiledQueryUpdatePlan(
   return applied;
 }
 
+/** @internal */
 export function supportsQueryBindings(root: unknown): root is QueryBindingRoot {
   return typeof (root as Partial<QueryBindingRoot>).querySelectorAll === 'function';
 }

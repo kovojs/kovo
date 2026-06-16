@@ -3,22 +3,81 @@ import type { ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 import type { Schema } from './schema.js';
 
-/** A guard's failure outcome: the auth/rate-limit reason, status, and optional retry-after. */
-export interface GuardFailure {
-  auth?: 'unauthenticated' | 'unauthorized';
-  code: 'RATE_LIMITED' | 'UNAUTHORIZED';
+/**
+ * A guard denial that expresses the user-facing *intent* of a rejection, leaving
+ * the HTTP status to the framework. SPEC §6.5 fixes the three outcomes: an
+ * unauthenticated caller is sent through the app's `onUnauthenticated` handler
+ * (default: a 303 redirect to the login route with the original URL as `next`);
+ * an authenticated-but-unauthorized caller renders the app's 403 shell; a
+ * rate-limited caller gets a 429 carrying `retryAfter` seconds. The wire status
+ * is derived from `kind` inside the framework (`renderHttpGuardFailureResponse`),
+ * so an author reads the intent, not a transport detail. Return `true` to allow.
+ */
+export type GuardDenial = UnauthenticatedDenial | ForbiddenDenial | RateLimitedDenial;
+
+/**
+ * The caller is not authenticated. SPEC §6.5: the framework runs the app's
+ * `onUnauthenticated` handler, whose default is a 303 redirect to the login
+ * route with the original URL available as `next`.
+ */
+export interface UnauthenticatedDenial {
+  kind: 'unauthenticated';
   payload?: Record<string, unknown>;
-  retryAfter?: number;
-  status: 422 | 429;
 }
 
-/** What a guard returns: `true` to allow, or a `GuardFailure` to reject. */
-export type GuardResult = boolean | GuardFailure;
+/**
+ * The caller is authenticated but not permitted. SPEC §6.5: the framework
+ * renders the app's 403 shell with status 403.
+ */
+export interface ForbiddenDenial {
+  kind: 'forbidden';
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * The caller exceeded a rate limit. SPEC §6.5: the framework answers 429 and
+ * surfaces `retryAfter` (seconds) as a `Retry-After` header.
+ */
+export interface RateLimitedDenial {
+  kind: 'rateLimited';
+  payload?: Record<string, unknown>;
+  retryAfter?: number;
+}
+
+/**
+ * Back-compat alias for {@link GuardDenial}: the type a guard returns to reject a
+ * request (SPEC §6.5).
+ *
+ * @deprecated Use {@link GuardDenial}. Retained as a documented alias so external
+ * code that imported the previous denial type keeps compiling; the intent-based
+ * `kind` discriminant (SPEC §6.5) replaces the old `code`/`status` fields, which
+ * advertised an internal sentinel status (422) the browser never received on the
+ * documented auth paths.
+ */
+export type GuardFailure = GuardDenial;
+
+/** What a guard returns: `true` to allow, or a {@link GuardDenial} to reject (SPEC §6.5). */
+export type GuardResult = boolean | GuardDenial;
 
 /** An access guard over a request; may refine the request type when it passes. */
 export interface Guard<Request, RefinedRequest extends Request = Request> {
   (request: Request): GuardResult | Promise<GuardResult>;
   readonly refines?: (request: Request) => request is RefinedRequest;
+}
+
+/**
+ * @internal Framework-resolved guard failure. The intent-based {@link GuardDenial}
+ * an author returns is normalized into this wire-facing shape (auth disposition,
+ * error code, sentinel status, retry-after) that the route/query/mutation render
+ * paths and `renderHttpGuardFailureResponse` consume to derive the §6.5 HTTP
+ * outcome. Not part of the app-facing surface.
+ */
+export interface ResolvedGuardFailure {
+  auth?: 'unauthenticated' | 'unauthorized';
+  code: 'RATE_LIMITED' | 'UNAUTHORIZED';
+  payload?: Record<string, unknown>;
+  retryAfter?: number;
+  status: 422 | 429;
 }
 
 /** The minimal authenticated-user shape guards inspect: `id` and `roles`. */
@@ -131,7 +190,9 @@ export const guards = {
     return async (request: Request) => {
       for (const item of items) {
         const result = await item(request);
-        if (result !== true) return guardFailureFromResult(result);
+        // Propagate the first denial (intent object) or bare `false` as-is so the
+        // §6.5 status mapping stays owned by the render path, not flattened here.
+        if (result !== true) return result;
       }
 
       return true;
@@ -213,11 +274,11 @@ export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> 
 export async function runGuard<Request>(
   guard: Guard<Request> | undefined,
   request: Request,
-): Promise<GuardFailure | null> {
+): Promise<ResolvedGuardFailure | null> {
   if (!guard) return null;
 
   const result = await guard(request);
-  return result === true ? null : guardFailureFromResult(result);
+  return result === true ? null : resolveGuardResult(result);
 }
 
 export async function resolveLifecycleRequest<Request, SessionValue>(
@@ -232,7 +293,7 @@ export async function resolveLifecycleRequest<Request, SessionValue>(
 
 export async function renderHttpGuardFailureResponse<Request>(
   result: {
-    auth?: GuardFailure['auth'];
+    auth?: ResolvedGuardFailure['auth'];
     error?: { code: string };
     ok: false;
     status: number;
@@ -263,40 +324,56 @@ export async function renderHttpGuardFailureResponse<Request>(
   };
 }
 
-function guardFailureFromResult(result: GuardResult): GuardFailure {
-  if (typeof result === 'object') return result;
+/**
+ * Map a guard result to the framework's wire-facing {@link ResolvedGuardFailure}
+ * (SPEC §6.5). The intent `kind` drives the disposition: `unauthenticated` →
+ * 303 login redirect, `forbidden` → 403 shell (both share the internal
+ * `UNAUTHORIZED`/422 sentinel, remapped by `renderHttpGuardFailureResponse` via
+ * `auth`), `rateLimited` → 429 with retry-after. A bare `false` is an ambiguous
+ * denial with no explicit `auth`, so the render path infers unauthenticated vs.
+ * forbidden from the request session — preserving the legacy boolean-guard outcome.
+ */
+function resolveGuardResult(result: Exclude<GuardResult, true>): ResolvedGuardFailure {
+  if (result === false) {
+    return { code: 'UNAUTHORIZED', payload: {}, status: 422 };
+  }
+
+  if (result.kind === 'rateLimited') {
+    return {
+      code: 'RATE_LIMITED',
+      payload: result.payload ?? {},
+      ...(result.retryAfter === undefined ? {} : { retryAfter: result.retryAfter }),
+      status: 429,
+    };
+  }
 
   return {
+    auth: result.kind === 'unauthenticated' ? 'unauthenticated' : 'unauthorized',
     code: 'UNAUTHORIZED',
-    payload: {},
+    payload: result.payload ?? {},
     status: 422,
   };
 }
 
-function rateLimitFailure(resetAt: number, now: number): GuardFailure {
+function rateLimitFailure(resetAt: number, now: number): RateLimitedDenial {
   return {
-    code: 'RATE_LIMITED',
+    kind: 'rateLimited',
     payload: {},
     retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)),
-    status: 429,
   };
 }
 
-function unauthenticatedGuardFailure(): GuardFailure {
+function unauthenticatedGuardFailure(): UnauthenticatedDenial {
   return {
-    auth: 'unauthenticated',
-    code: 'UNAUTHORIZED',
+    kind: 'unauthenticated',
     payload: {},
-    status: 422,
   };
 }
 
-function unauthorizedGuardFailure(): GuardFailure {
+function unauthorizedGuardFailure(): ForbiddenDenial {
   return {
-    auth: 'unauthorized',
-    code: 'UNAUTHORIZED',
+    kind: 'forbidden',
     payload: {},
-    status: 422,
   };
 }
 
@@ -365,7 +442,7 @@ function loginLocationWithNext(loginPath: string, next: string): string {
 }
 
 function guardFailureIsUnauthenticated<Request>(
-  result: { auth?: GuardFailure['auth'] },
+  result: { auth?: ResolvedGuardFailure['auth'] },
   request: Request,
 ): boolean {
   if (result.auth === 'unauthenticated') return true;

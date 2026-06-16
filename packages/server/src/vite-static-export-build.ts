@@ -17,6 +17,11 @@ import {
   type KovoAppShellViteBuildStaticExportOptions,
 } from './vite-static-export-options.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Writes a static export
+ * from an already-built app shell.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function exportKovoAppShellViteBuild(
   build: KovoAppShellBuild,
   options: KovoAppShellViteBuildStaticExportOptions,
@@ -24,6 +29,11 @@ export async function exportKovoAppShellViteBuild(
   return exportStaticApp(build.app, kovoAppShellViteBuildWriteStaticExportOptions(build, options));
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Writes a static export
+ * from a built app shell and returns the matched manifest + result.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function exportKovoAppShellViteBuildWithManifest(
   build: KovoAppShellBuild,
   options: KovoAppShellViteBuildStaticExportOptions,
@@ -41,6 +51,11 @@ export async function exportKovoAppShellViteBuildWithManifest(
   });
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Dry-run inventory of
+ * files a static export from a built app shell would write.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function staticExportInventoryForKovoAppShellViteBuild(
   build: KovoAppShellBuild,
   options: KovoAppShellViteBuildStaticExportInventoryOptions,
@@ -50,6 +65,11 @@ export async function staticExportInventoryForKovoAppShellViteBuild(
   return staticExportInventory(result);
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Dry-run static export
+ * manifest for a built app shell.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function staticExportManifestForKovoAppShellViteBuild(
   build: KovoAppShellBuild,
   options: KovoAppShellViteBuildStaticExportInventoryOptions,

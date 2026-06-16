@@ -13,9 +13,7 @@ import { fileURLToPath } from 'node:url';
 // read here as plain data, so SSR render and static export never run the
 // compiler/CLI themselves.
 
-// @ts-expect-error - site-local .mjs build tooling, no type declarations.
 import { parseFrontmatter, renderMarkdown } from '../scripts/md.mjs';
-// @ts-expect-error - site-local .mjs build tooling, no type declarations.
 import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-snippets.mjs';
 
 import { clientHrefs } from './client/modules.js';

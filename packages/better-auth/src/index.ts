@@ -7,7 +7,7 @@ import type {
   EndpointDeclaration,
   EndpointMethod,
   Guard,
-  GuardFailure,
+  GuardDenial,
   MaybePromise,
   MutationDefinition,
   MutationFail,
@@ -16,45 +16,97 @@ import type {
   SessionRequestLike,
 } from '@kovojs/server';
 
+/**
+ * Options passed to a Better Auth `getSession` call. Carries the incoming request
+ * `Headers` so Better Auth can read the session cookie. Part of the `BetterAuthApi`
+ * contract the adapter consumes when building a Kovo session provider (SPEC.md §6.5).
+ */
 export interface BetterAuthGetSessionOptions {
   headers: Headers;
 }
 
+/**
+ * The `{ session, user }` pair Better Auth returns for an authenticated request. The
+ * adapter maps this into the app's own session value via a `BetterAuthSessionMapper`;
+ * see SPEC.md §6.5 for how sessions flow into the request.
+ */
 export interface BetterAuthSessionPayload<Session, User> {
   session: Session;
   user: User;
 }
 
+/**
+ * The subset of the Better Auth server `api` the session provider depends on: a
+ * `getSession` method returning a `BetterAuthSessionPayload` (or null/undefined
+ * when unauthenticated). Structurally satisfied by a real Better Auth instance.
+ */
 export interface BetterAuthApi<Session, User> {
   getSession(
     options: BetterAuthGetSessionOptions,
   ): MaybePromise<BetterAuthSessionPayload<Session, User> | null | undefined>;
 }
 
+/**
+ * Structural shape of a Better Auth instance accepted by `betterAuthSession`: it
+ * just needs an `api` exposing `getSession`. Apps pass their real Better Auth object,
+ * which satisfies this without an explicit cast (SPEC.md §6.5).
+ */
 export interface BetterAuthLike<Session, User> {
   api: BetterAuthApi<Session, User>;
 }
 
+/**
+ * Minimal request shape the credential mutations and session provider read from: an
+ * object carrying the incoming `Headers`. Apps extend this with their own session and
+ * CSRF fields; it is the default `Request` type parameter across this adapter's helpers.
+ */
 export interface BetterAuthRequestLike {
   headers: Headers;
 }
 
+/**
+ * Handler that turns a web `Request` into a `Response`. This is Better Auth's own
+ * fetch-style handler, mounted at a prefix endpoint by `mount` to serve the
+ * library's browser redirect protocol (OAuth/SAML/magic-link callbacks; SPEC.md §9.1).
+ */
 export type BetterAuthMountHandler = (request: Request) => MaybePromise<Response>;
 
+/**
+ * Structural shape of a Better Auth instance accepted by `mount`: it just needs a
+ * `handler`. Apps pass their real Better Auth object directly.
+ */
 export interface BetterAuthMountLike {
   handler: BetterAuthMountHandler;
 }
 
+/**
+ * Options for `mount`. `auth` overrides the default `custom` endpoint auth
+ * declaration; `method` narrows the HTTP method; `csrfJustification` records why this
+ * prefix endpoint is exempt from CSRF (the endpoint always runs with `csrf: false` — see
+ * `mount` for the SPEC.md §6.6 rationale).
+ */
 export interface BetterAuthMountOptions<Method extends EndpointMethod = EndpointMethod> {
   auth?: EndpointAuthDeclaration;
   csrfJustification?: string;
   method?: Method;
 }
 
+/**
+ * Function the app supplies to `betterAuthSession` to project Better Auth's
+ * `{ session, user }` payload into the app's own session value. Called once per
+ * authenticated request (SPEC.md §6.5).
+ */
 export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
   value: BetterAuthSessionPayload<AuthSession, AuthUser>,
 ) => SessionValue;
 
+/**
+ * Builds a Kovo `SessionProvider` backed by Better Auth: it calls
+ * `auth.api.getSession({ headers })` for each request and projects the result through
+ * `map` into the app's session value, returning `null` when there is no session. Wire the
+ * returned provider into `session(...)` so guards and pages see the authenticated user
+ * (SPEC.md §6.5).
+ */
 export function betterAuthSession<
   AuthSession,
   AuthUser,
@@ -73,8 +125,23 @@ export function betterAuthSession<
   };
 }
 
-// SPEC.md §9.1: adapter-owned OAuth/SAML/magic-link callbacks live behind declared
-// prefix endpoints, while credential forms stay on typed mutations.
+/**
+ * Mounts Better Auth's own request handler at a prefix endpoint so its browser redirect
+ * protocol — OAuth/SAML/magic-link callbacks and similar provider round-trips — is served
+ * under one declared path, while credential forms stay on typed mutations (SPEC.md §9.1).
+ *
+ * SECURITY — this endpoint is always declared with `csrf: false`. Per SPEC.md §6.6, CSRF
+ * protection is default-ON for server-rendered, cookie-authenticated mutations, and
+ * `csrf: false` is the framework's *sanctioned opt-out* reserved for endpoints that are
+ * not browser-form-driven or are authenticated by some other means (e.g. non-browser /
+ * externally-authenticated callers). Better Auth's redirect protocol handler is exactly
+ * such an endpoint: the inbound requests are external-provider redirects and the
+ * library-supplied OAuth `state` parameter (not a Kovo CSRF token) carries the
+ * anti-forgery guarantee, so a Kovo CSRF token cannot be present or required here.
+ * Disabling CSRF on this prefix does NOT relax protection on the app's own credential
+ * mutations, which keep CSRF on. The reason is recorded on the endpoint via
+ * `csrfJustification` (overridable through `BetterAuthMountOptions`).
+ */
 export function mount<
   const Path extends string,
   const Method extends EndpointMethod = EndpointMethod,
@@ -97,20 +164,32 @@ export function mount<
   });
 }
 
+/**
+ * Minimal Better Auth response shape the credential mutations inspect: an object with
+ * `status` and `headers`. Used to classify sign-in/sign-up success and to forward
+ * `Set-Cookie` headers into the mutation response (SPEC.md §6.5).
+ */
 export interface BetterAuthResponseLike {
   headers: Headers;
   status: number;
 }
 
+/** Request body for a Better Auth email/password sign-in: `email` and `password`. */
 export interface BetterAuthSignInEmailBody {
   email: string;
   password: string;
 }
 
+/** Request body for a Better Auth email/password sign-up: a sign-in body plus `name`. */
 export interface BetterAuthSignUpEmailBody extends BetterAuthSignInEmailBody {
   name: string;
 }
 
+/**
+ * The subset of the Better Auth server `api` consumed by `betterAuthSignInEmailMutation`:
+ * a `signInEmail` method invoked with `asResponse: true` so the adapter can read the raw
+ * response status and `Set-Cookie` headers (SPEC.md §6.5).
+ */
 export interface BetterAuthSignInEmailApi {
   signInEmail(options: {
     asResponse: true;
@@ -119,6 +198,10 @@ export interface BetterAuthSignInEmailApi {
   }): MaybePromise<BetterAuthResponseLike>;
 }
 
+/**
+ * The subset of the Better Auth server `api` consumed by `betterAuthSignUpEmailMutation`:
+ * a `signUpEmail` method invoked with `asResponse: true` (SPEC.md §6.5).
+ */
 export interface BetterAuthSignUpEmailApi {
   signUpEmail(options: {
     asResponse: true;
@@ -127,18 +210,35 @@ export interface BetterAuthSignUpEmailApi {
   }): MaybePromise<BetterAuthResponseLike>;
 }
 
+/**
+ * The subset of the Better Auth server `api` consumed by `betterAuthSignOutMutation`:
+ * a `signOut` method invoked with `asResponse: true` so the session-clearing `Set-Cookie`
+ * headers can be forwarded (SPEC.md §6.5).
+ */
 export interface BetterAuthSignOutApi {
   signOut(options: { asResponse: true; headers: Headers }): MaybePromise<BetterAuthResponseLike>;
 }
 
+/**
+ * Structural shape accepted by `betterAuthSignInEmailMutation`: a Better Auth
+ * instance whose `api` exposes `signInEmail`. A real Better Auth object satisfies this.
+ */
 export interface BetterAuthSignInEmailLike {
   api: BetterAuthSignInEmailApi;
 }
 
+/**
+ * Structural shape accepted by `betterAuthSignUpEmailMutation`: a Better Auth
+ * instance whose `api` exposes `signUpEmail`.
+ */
 export interface BetterAuthSignUpEmailLike {
   api: BetterAuthSignUpEmailApi;
 }
 
+/**
+ * Structural shape accepted by `betterAuthSignOutMutation`: a Better Auth instance
+ * whose `api` exposes `signOut`.
+ */
 export interface BetterAuthSignOutLike {
   api: BetterAuthSignOutApi;
 }
@@ -151,12 +251,21 @@ const optionalStringSchema = {
   },
 };
 
+/**
+ * Input schema for `betterAuthSignInEmailMutation` — `email`, `password`, and an
+ * optional same-origin `next` redirect target. Exposed because it is the declared input
+ * of the sign-in mutation; reuse it when building the matching login form (SPEC.md §6.5).
+ */
 export const betterAuthSignInEmailInput = s.object({
   email: s.string(),
   next: optionalStringSchema,
   password: s.string(),
 });
 
+/**
+ * Input schema for `betterAuthSignUpEmailMutation` — `email`, `name`, `password`,
+ * and an optional same-origin `next` redirect target (SPEC.md §6.5).
+ */
 export const betterAuthSignUpEmailInput = s.object({
   email: s.string(),
   name: s.string(),
@@ -164,12 +273,19 @@ export const betterAuthSignUpEmailInput = s.object({
   password: s.string(),
 });
 
+/** Input schema for `betterAuthSignOutMutation`; sign-out takes no fields. */
 export const betterAuthSignOutInput = s.object({});
 
+/**
+ * Declared error map for the credential mutations: a single `INVALID_CREDENTIALS` failure
+ * (with an empty payload) the sign-in/sign-up mutations return when a session was not
+ * positively established. Surfaced so apps can render the matching error UI (SPEC.md §6.5).
+ */
 export const betterAuthCredentialMutationErrors = {
   INVALID_CREDENTIALS: s.object({}),
 };
 
+/** @internal Better Auth credential API names keyed by the adapter's touch/registry plumbing. */
 export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
 
 const betterAuthCredentialMutationApis = [
@@ -178,8 +294,11 @@ const betterAuthCredentialMutationApis = [
   'signUpEmail',
 ] as const satisfies readonly BetterAuthCredentialMutationApi[];
 
+/** @internal Better Auth core table names recognized by the schema bridge. */
 export type BetterAuthCoreTable = 'account' | 'session' | 'user' | 'verification';
+/** @internal Better Auth device-authorization plugin table name. */
 export type BetterAuthDeviceAuthorizationTable = 'deviceCode';
+/** @internal Better Auth organization plugin table names. */
 export type BetterAuthOrganizationTable =
   | 'invitation'
   | 'member'
@@ -187,11 +306,17 @@ export type BetterAuthOrganizationTable =
   | 'organizationRole'
   | 'team'
   | 'teamMember';
+/** @internal Better Auth OIDC-provider plugin table names. */
 export type BetterAuthOidcProviderTable = 'oauthAccessToken' | 'oauthApplication' | 'oauthConsent';
+/** @internal Better Auth JWT plugin table name. */
 export type BetterAuthJwtTable = 'jwks';
+/** @internal Better Auth rate-limit plugin table name. */
 export type BetterAuthRateLimitTable = 'rateLimit';
+/** @internal Better Auth SIWE plugin table name. */
 export type BetterAuthSiweTable = 'walletAddress';
+/** @internal Better Auth two-factor plugin table name. */
 export type BetterAuthTwoFactorTable = 'twoFactor';
+/** @internal Union of all Better Auth table names known to the schema bridge. */
 export type BetterAuthTable =
   | BetterAuthCoreTable
   | BetterAuthDeviceAuthorizationTable
@@ -202,18 +327,22 @@ export type BetterAuthTable =
   | BetterAuthSiweTable
   | BetterAuthTwoFactorTable;
 
+/** @internal Kovo domain a Better Auth table is bridged into for touch-graph verification. */
 export type BetterAuthTouchDomain = 'auth' | 'organization' | 'user';
 
+/** @internal A declared `{ domain, table }` touch for a Better Auth credential write. */
 export interface BetterAuthDeclaredTableTouch {
   domain: BetterAuthTouchDomain;
   table: string;
 }
 
+/** @internal Schema-bridge annotation mapping a Better Auth table to a Kovo domain/key. */
 export interface BetterAuthSchemaBridgeDomainAnnotation {
   domain: BetterAuthTouchDomain;
   key?: string;
 }
 
+/** @internal Schema-bridge annotation: either a domain mapping or an exempt-with-rationale entry. */
 export type BetterAuthSchemaBridgeAnnotation =
   | BetterAuthSchemaBridgeDomainAnnotation
   | {
@@ -221,9 +350,12 @@ export type BetterAuthSchemaBridgeAnnotation =
       rationale: string;
     };
 
+/** @internal Full Better Auth schema bridge: every known table mapped to an annotation. */
 export type BetterAuthSchemaBridge = Record<BetterAuthTable, BetterAuthSchemaBridgeAnnotation>;
+/** @internal Schema-bridge extensions for app/plugin tables outside the built-in bridge. */
 export type BetterAuthSchemaBridgeExtensions = Record<string, BetterAuthSchemaBridgeAnnotation>;
 
+/** @internal Result of validating an app schema against the Better Auth schema bridge. */
 export interface BetterAuthSchemaBridgeValidation {
   declaredTouchMismatches: string[];
   keyFieldMismatches: string[];
@@ -233,6 +365,7 @@ export interface BetterAuthSchemaBridgeValidation {
   unbridgedTables: string[];
 }
 
+/** @internal Options for `validateBetterAuthSchemaBridge`: bridge extensions and declared touches. */
 export interface BetterAuthSchemaBridgeValidationOptions {
   credentialMutationDeclaredTableTouches?: Partial<
     Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]>
@@ -241,6 +374,7 @@ export interface BetterAuthSchemaBridgeValidationOptions {
   schemaBridge?: BetterAuthSchemaBridgeExtensions;
 }
 
+/** @internal KV406 degradation fact: a Better Auth table outside the blessed schema bridge. */
 export interface BetterAuthPluginTableDegradation {
   diagnosticCode: 'KV406';
   fields: string[] | null;
@@ -252,6 +386,7 @@ export interface BetterAuthPluginTableDegradation {
   table: string;
 }
 
+/** @internal KV406 degradation fact: a schema.ts table declaration the adapter could not recognize. */
 export interface BetterAuthSchemaSourceDeclarationDegradation {
   callee: string;
   diagnosticCode: 'KV406';
@@ -262,6 +397,7 @@ export interface BetterAuthSchemaSourceDeclarationDegradation {
   table: string;
 }
 
+/** @internal KV406 degradation fact: a schema.ts plugin table the adapter did not auto-annotate. */
 export interface BetterAuthSchemaSourcePluginTableDegradation {
   callee: string;
   diagnosticCode: 'KV406';
@@ -275,6 +411,7 @@ export interface BetterAuthSchemaSourcePluginTableDegradation {
   table: string;
 }
 
+/** @internal KV406 degradation fact: the OAuth-provider successor package metadata is unavailable. */
 export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   attemptedImports: readonly string[];
   diagnosticCode: 'KV406';
@@ -287,6 +424,7 @@ export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   tableMetadata: null;
 }
 
+/** @internal KV406 degradation fact: a Better Auth plugin's real table metadata is unavailable. */
 export interface BetterAuthUnavailablePluginMetadataDegradation {
   attemptedImports: readonly string[];
   diagnosticCode: 'KV406';
@@ -299,6 +437,7 @@ export interface BetterAuthUnavailablePluginMetadataDegradation {
   tableMetadata: null;
 }
 
+/** @internal A single touch-graph site emitted for a Better Auth credential write. */
 export interface BetterAuthTouchGraphSite {
   branch?: string;
   domain: BetterAuthTouchDomain;
@@ -308,21 +447,25 @@ export interface BetterAuthTouchGraphSite {
   via: string;
 }
 
+/** @internal A touch-graph entry: the touches declared for one Better Auth credential write. */
 export interface BetterAuthTouchGraphEntry {
   touches: readonly BetterAuthTouchGraphSite[];
   unresolved: readonly [];
 }
 
+/** @internal Map of credential-mutation keys to their declared touch-graph entries. */
 export type BetterAuthCredentialMutationTouchGraph = Readonly<
   Record<string, BetterAuthTouchGraphEntry>
 >;
 
+/** @internal Db-verification config: per-physical-table domain/key/exempt data for the P9 bridge. */
 export interface BetterAuthDbVerificationConfig {
   domainByTable: Record<string, BetterAuthTouchDomain>;
   exemptTables: readonly string[];
   keyByTable: Record<string, string>;
 }
 
+/** @internal Options for `createBetterAuthCredentialMutationTouchGraph`. */
 export interface BetterAuthCredentialMutationTouchGraphOptions {
   apis?: readonly BetterAuthCredentialMutationApi[];
   credentialMutationDeclaredTableTouches?: Partial<
@@ -331,12 +474,14 @@ export interface BetterAuthCredentialMutationTouchGraphOptions {
   keys?: Partial<Record<BetterAuthCredentialMutationApi, string>>;
 }
 
+/** @internal Options for `annotateBetterAuthSchemaSource`. */
 export interface BetterAuthSchemaSourceAnnotationOptions {
   annotationCallee?: string;
   schemaBridge?: BetterAuthSchemaBridgeExtensions;
   tableFactories?: readonly string[];
 }
 
+/** @internal Import-handling note returned by the schema-source annotator. */
 export interface BetterAuthSchemaSourceImportNote {
   hasRequiredImport: boolean;
   insertedImport: boolean;
@@ -345,6 +490,7 @@ export interface BetterAuthSchemaSourceImportNote {
   suggestedImport: string;
 }
 
+/** @internal Result of annotating an app schema.ts with Better Auth domain/exempt annotations. */
 export interface BetterAuthSchemaSourceAnnotationResult {
   alreadyAnnotatedTables: string[];
   annotatedTables: string[];
@@ -362,12 +508,14 @@ export interface BetterAuthSchemaSourceAnnotationResult {
   validation: BetterAuthSchemaBridgeValidation;
 }
 
+/** @internal Reasons a generated schema.ts table is degraded to a KV406 fact. */
 export type BetterAuthGeneratedSchemaTableDegradationReason =
   | 'ambiguous-physical-table'
   | 'schema-bridge-key-unavailable'
   | 'table-field-metadata-unavailable'
   | 'unsupported-field-type';
 
+/** @internal KV406 degradation fact: a table that could not be generated into schema.ts. */
 export interface BetterAuthGeneratedSchemaTableDegradation {
   diagnosticCode: 'KV406';
   field?: string;
@@ -379,17 +527,20 @@ export interface BetterAuthGeneratedSchemaTableDegradation {
   table: string;
 }
 
+/** @internal A successfully generated schema.ts table descriptor. */
 export interface BetterAuthGeneratedSchemaTable {
   exportName: string;
   physicalTable: string;
   table: string;
 }
 
+/** @internal Options for `generateBetterAuthSchemaSource`. */
 export interface BetterAuthSchemaSourceGenerationOptions {
   annotationCallee?: string;
   schemaBridge?: BetterAuthSchemaBridgeExtensions;
 }
 
+/** @internal Result of generating an app schema.ts from Better Auth table metadata. */
 export interface BetterAuthSchemaSourceGenerationResult {
   generatedTables: BetterAuthGeneratedSchemaTable[];
   requiredImports: string[];
@@ -399,10 +550,17 @@ export interface BetterAuthSchemaSourceGenerationResult {
   validation: BetterAuthSchemaBridgeValidation;
 }
 
+/** @internal Kovo `auth` domain handle used by the credential-mutation touch declarations. */
 export const betterAuthAuthDomain = domain('auth');
+/** @internal Kovo `organization` domain handle for organization-plugin touch declarations. */
 export const betterAuthOrganizationDomain = domain('organization');
+/** @internal Kovo `user` domain handle used by the credential-mutation touch declarations. */
 export const betterAuthUserDomain = domain('user');
 
+/**
+ * @internal Blessed Better Auth schema bridge: maps each known table to a Kovo
+ * domain/key or an exempt-with-rationale annotation.
+ */
 // Archived D5 auth plan B1: app-owned schema.ts tables stay visible to the touch graph.
 // User rows are intentionally not exempt; app queries commonly render names/avatars.
 export const betterAuthSchemaBridge = {
@@ -448,6 +606,7 @@ const betterAuthRequiredCoreTables = [
   'verification',
 ] as const satisfies readonly BetterAuthCoreTable[];
 
+/** @internal Resolve the Kovo domain a Better Auth table is bridged into, or null when unbridged/exempt. */
 export function betterAuthTableDomain(
   table: string,
   schemaBridge: BetterAuthSchemaBridgeExtensions = {},
@@ -462,6 +621,7 @@ export function betterAuthTableDomain(
   return 'domain' in bridge ? bridge.domain : null;
 }
 
+/** @internal Declared table touches per Better Auth credential API, used to build verifier facts. */
 // Archived D5 auth plan B1/B6: better-auth writes are library-internal, so the blessed
 // wrappers carry declared table/domain touches until the P9 observed-write
 // harness can verify observed ⊆ declared at runtime.
@@ -478,44 +638,52 @@ export const betterAuthCredentialMutationDeclaredTableTouches = {
   readonly BetterAuthDeclaredTableTouch[]
 >;
 
+/** @internal Default Kovo domain touches per Better Auth credential API. */
 export const betterAuthCredentialMutationTouches = {
   signInEmail: [betterAuthAuthDomain],
   signOut: [betterAuthAuthDomain],
   signUpEmail: [betterAuthUserDomain, betterAuthAuthDomain],
 } as const satisfies Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
 
+/** @internal Default mutation keys per Better Auth credential API. */
 export const betterAuthCredentialMutationDefaultKeys = {
   signInEmail: 'auth/sign-in',
   signOut: 'auth/sign-out',
   signUpEmail: 'auth/sign-up',
 } as const satisfies Record<BetterAuthCredentialMutationApi, string>;
 
+/** @internal Pre-built credential-mutation touch graph consumed by the P9 verifier. */
 // Archived D5 auth plan B1 / SPEC.md §11.2: declared Better Auth table touches are
 // materialized as verifier facts so library-internal writes can be checked by
 // P9 observed-write instrumentation.
 export const betterAuthCredentialMutationTouchGraph =
   createBetterAuthCredentialMutationTouchGraph();
 
+/** @internal Pre-built db-verification config derived from the blessed schema bridge. */
 export const betterAuthDbVerificationConfig = createBetterAuthDbVerificationConfig();
 
+/** @internal Candidate import paths probed for the OAuth-provider successor package metadata. */
 export const betterAuthOAuthProviderSuccessorImportPaths = [
   '@better-auth/oauth-provider',
   'better-auth/oauth-provider',
   'better-auth/plugins/oauth-provider',
 ] as const;
 
+/** @internal Candidate import paths probed for the Better Auth SSO plugin metadata. */
 export const betterAuthSsoPluginMetadataImportPaths = [
   'better-auth/plugins/sso',
   'better-auth/sso',
   '@better-auth/sso',
 ] as const;
 
+/** @internal Candidate import paths probed for the Better Auth passkey plugin metadata. */
 export const betterAuthPasskeyPluginMetadataImportPaths = [
   'better-auth/plugins/passkey',
   'better-auth/passkey',
   '@better-auth/passkey',
 ] as const;
 
+/** @internal Build a KV406 degradation fact for the unavailable OAuth-provider successor metadata. */
 // Better Auth 1.6.17 deprecates `oidcProvider()` in favor of the successor
 // package. SPEC.md §11.2 keeps successor-owned writes KV406 until its real
 // table metadata and declared touches are pinned.
@@ -540,6 +708,7 @@ export function betterAuthOAuthProviderSuccessorMetadataDegradation(
   };
 }
 
+/** @internal Build a KV406 degradation fact for a Better Auth plugin whose table metadata is unavailable. */
 // SPEC.md §11.2: plugin writes whose real Better Auth metadata is unavailable
 // cannot be represented by inferred table mappings. Keep them as KV406 facts
 // until getAuthTables(auth.options) can be pinned for the installed package.
@@ -565,6 +734,7 @@ export function betterAuthUnavailablePluginMetadataDegradation(options: {
   };
 }
 
+/** @internal Build the credential-mutation touch graph (overload: key overrides per API). */
 export function createBetterAuthCredentialMutationTouchGraph(
   keys?: Partial<Record<BetterAuthCredentialMutationApi, string>>,
 ): BetterAuthCredentialMutationTouchGraph;
@@ -606,6 +776,7 @@ export function createBetterAuthCredentialMutationTouchGraph(
   );
 }
 
+/** @internal Build the db-verification config (per-physical-table domain/key/exempt data). */
 export function createBetterAuthDbVerificationConfig(
   schemaBridge: BetterAuthSchemaBridgeExtensions = {},
   tables: Record<string, unknown> = {},
@@ -638,6 +809,7 @@ export function createBetterAuthDbVerificationConfig(
   };
 }
 
+/** @internal Validate Better Auth table metadata against the schema bridge; reports KV406 gaps. */
 export function validateBetterAuthSchemaBridge(
   tables: Record<string, unknown>,
   options: BetterAuthSchemaBridgeValidationOptions = {},
@@ -674,6 +846,7 @@ export function validateBetterAuthSchemaBridge(
   };
 }
 
+/** @internal Annotate an app schema.ts source string with Better Auth Kovo domain/exempt annotations. */
 // Archived D5 auth plan B1 / SPEC.md §14: Better Auth owns the SQL/table metadata, while
 // the app-authored schema.ts must carry explicit Kovo domain/exempt annotations.
 export function annotateBetterAuthSchemaSource(
@@ -779,6 +952,7 @@ export function annotateBetterAuthSchemaSource(
   };
 }
 
+/** @internal Generate an app schema.ts source string from Better Auth table metadata. */
 // Archived D5 auth plan B1 / SPEC.md §10.1 and §11.2: generated app schema.ts is a
 // convenience over real Better Auth metadata, not an inferred plugin mapper.
 export function generateBetterAuthSchemaSource(
@@ -893,16 +1067,30 @@ export function generateBetterAuthSchemaSource(
   };
 }
 
+/**
+ * Success value returned by the credential mutations: a `status` literal
+ * (`'signed-in'` / `'signed-up'` / `'signed-out'`) and the same-origin `redirectTo`
+ * target the framework redirects to after the mutation (SPEC.md §6.5).
+ */
 export interface BetterAuthCredentialMutationValue<Status extends string> {
   redirectTo: string;
   status: Status;
 }
 
+/** @internal Typed shape of the `INVALID_CREDENTIALS` failure the credential mutations can return. */
 export type BetterAuthCredentialFailure = MutationFail<
   'INVALID_CREDENTIALS',
   Record<string, never>
 >;
 
+/**
+ * Options for the credential mutations (`betterAuthSignInEmailMutation`,
+ * `betterAuthSignUpEmailMutation`, `betterAuthSignOutMutation`). `csrf` wires
+ * in CSRF validation (default-on per SPEC.md §6.6), `guard` runs an authorization/rate-limit
+ * guard, `defaultRedirectTo` sets the post-mutation redirect target, `key` overrides the
+ * mutation key, and `registry`/`transaction` integrate with the app's mutation registry and
+ * transaction boundary.
+ */
 export interface BetterAuthCredentialMutationOptions<
   Key extends string,
   Request extends BetterAuthRequestLike,
@@ -919,6 +1107,15 @@ export interface BetterAuthCredentialMutationOptions<
   ) => Promise<Result>;
 }
 
+/**
+ * Builds a typed Kovo mutation that signs a user in via Better Auth email/password.
+ * Calls `auth.api.signInEmail` with `asResponse: true`, treats the result as success only
+ * on POSITIVE evidence of an established session (2xx, no two-factor-pending body, and a
+ * session-establishing `Set-Cookie`), forwards the session cookie, and otherwise returns
+ * the declared `INVALID_CREDENTIALS` failure. Defaults the mutation key to `auth/sign-in`.
+ * Wire it into the app's mutation registry and pair it with a CSRF-protected login form
+ * (SPEC.md §6.5; CSRF default-on per §6.6).
+ */
 export function betterAuthSignInEmailMutation<
   const Key extends string = 'auth/sign-in',
   Request extends BetterAuthRequestLike = BetterAuthRequestLike,
@@ -973,6 +1170,13 @@ export function betterAuthSignInEmailMutation<
   });
 }
 
+/**
+ * Builds a typed Kovo mutation that registers a user via Better Auth email/password.
+ * Calls `auth.api.signUpEmail` with `asResponse: true`, applies the same
+ * positive-session-evidence success check as sign-in, forwards the session cookie, and
+ * returns the declared `INVALID_CREDENTIALS` failure otherwise. Defaults the mutation key
+ * to `auth/sign-up` (SPEC.md §6.5; CSRF default-on per §6.6).
+ */
 export function betterAuthSignUpEmailMutation<
   const Key extends string = 'auth/sign-up',
   Request extends BetterAuthRequestLike = BetterAuthRequestLike,
@@ -1028,6 +1232,13 @@ export function betterAuthSignUpEmailMutation<
   });
 }
 
+/**
+ * Builds a typed Kovo mutation that signs a user out via Better Auth. Calls
+ * `auth.api.signOut` with `asResponse: true`, forwards the session-clearing `Set-Cookie`
+ * headers into the mutation response, and redirects to `defaultRedirectTo` (default
+ * `/login`). Defaults the mutation key to `auth/sign-out`. Typically guarded so only an
+ * authenticated request can sign out (SPEC.md §6.5; CSRF default-on per §6.6).
+ */
 export function betterAuthSignOutMutation<
   const Key extends string = 'auth/sign-out',
   Request extends BetterAuthRequestLike = BetterAuthRequestLike,
@@ -1062,6 +1273,7 @@ export function betterAuthSignOutMutation<
   });
 }
 
+/** @internal Forward Better Auth `Set-Cookie` headers into the mutation response channel. */
 // SPEC.md §9.1 and archived D5 auth plan B4: credential mutations can only forward auth cookies
 // through the current mutation response-header channel.
 export function forwardBetterAuthSetCookie(
@@ -1073,6 +1285,7 @@ export function forwardBetterAuthSetCookie(
   }
 }
 
+/** @internal Read all `Set-Cookie` values from a Headers object across platform variants. */
 export function getBetterAuthSetCookie(headers: Headers): string[] {
   const platformHeaders = headers as Headers & {
     getSetCookie?: () => string[];
@@ -1086,6 +1299,7 @@ export function getBetterAuthSetCookie(headers: Headers): string[] {
   return cookie ? [cookie] : [];
 }
 
+/** @internal True when a Better Auth response status (400/401/403) signals a credential failure. */
 export function isBetterAuthCredentialFailureResponse(response: BetterAuthResponseLike): boolean {
   return isCredentialFailureStatus(response.status);
 }
@@ -1176,6 +1390,7 @@ async function resolveBetterAuthCredentialSuccess<Status extends string>(
   return success;
 }
 
+/** @internal True when a thrown Better Auth error carries a 400/401/403 credential-failure status. */
 export function isBetterAuthCredentialFailureError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
 
@@ -1187,6 +1402,12 @@ export function isBetterAuthCredentialFailureError(error: unknown): boolean {
   return status === undefined ? false : isCredentialFailureStatus(status);
 }
 
+/**
+ * Guard that requires an authenticated session, narrowing the request to an
+ * `AuthenticatedRequest`. A thin re-export of the framework's `guards.authed` for use on
+ * auth-protected mutations and routes; an unauthenticated request denies with a
+ * login-redirect intent (SPEC.md §6.5).
+ */
 export function authed<Request extends SessionRequestLike>(): Guard<
   Request,
   AuthenticatedRequest<Request>
@@ -1194,15 +1415,21 @@ export function authed<Request extends SessionRequestLike>(): Guard<
   return guards.authed<Request>();
 }
 
+/**
+ * Minimal user shape the `role` guard reads: an optional `id` and an optional `roles`
+ * list. Apps' own session-user types structurally satisfy this (SPEC.md §6.5).
+ */
 export interface BetterAuthRoleUser {
   id?: string;
   roles?: readonly string[] | null;
 }
 
+/** Minimal session shape the `role` guard reads: an optional `user`. */
 export interface BetterAuthRoleSession {
   user?: BetterAuthRoleUser | null;
 }
 
+/** Minimal request shape the `role` guard reads: an optional `session`. */
 export interface BetterAuthRoleRequest {
   session?: BetterAuthRoleSession | null;
 }
@@ -1216,6 +1443,12 @@ type RoleNameFor<Request extends BetterAuthRoleRequest> =
     ? Extract<Role, string>
     : string;
 
+/**
+ * Guard that requires the session user to hold a given role. Denies with an
+ * unauthenticated (→ login redirect) intent when there is no session user, and with a
+ * forbidden (→ 403) intent when the user lacks the role. The role name is type-checked
+ * against the request's own `roles` element type when known (SPEC.md §6.5).
+ */
 export function role<Request extends BetterAuthRoleRequest>(
   requiredRole: RoleNameFor<Request>,
 ): Guard<Request>;
@@ -1230,14 +1463,17 @@ export function role(requiredRole: string): Guard<BetterAuthRoleRequest> {
   };
 }
 
+/** @internal Session shape with an optional active organization id, read by `activeOrganization`. */
 export interface BetterAuthOrganizationSession extends BetterAuthRoleSession {
   activeOrganizationId?: string | null;
 }
 
+/** @internal Request shape carrying an organization session for the `activeOrganization` guard. */
 export interface BetterAuthOrganizationRequest {
   session?: BetterAuthOrganizationSession | null;
 }
 
+/** @internal Request narrowed by `activeOrganization` to guarantee a non-null active organization. */
 export type ActiveOrganizationRequest<Request extends BetterAuthOrganizationRequest> = Request & {
   session: NonNullable<Request['session']> & {
     activeOrganizationId: string;
@@ -1245,6 +1481,7 @@ export type ActiveOrganizationRequest<Request extends BetterAuthOrganizationRequ
   };
 };
 
+/** @internal Guard that requires an active organization on the session; narrows the request accordingly. */
 export function activeOrganization<Request extends BetterAuthOrganizationRequest>(): Guard<
   Request,
   ActiveOrganizationRequest<Request>
@@ -1256,22 +1493,19 @@ export function activeOrganization<Request extends BetterAuthOrganizationRequest
   };
 }
 
-// SPEC.md §6.5 and §10.3: adapter guards preserve anonymous vs unauthorized failures.
-function unauthenticatedGuardFailure(): GuardFailure {
+// SPEC.md §6.5 and §10.3: adapter guards preserve the unauthenticated (→ login
+// redirect) vs forbidden (→ 403 shell) intent the framework maps to HTTP.
+function unauthenticatedGuardFailure(): GuardDenial {
   return {
-    auth: 'unauthenticated',
-    code: 'UNAUTHORIZED',
+    kind: 'unauthenticated',
     payload: {},
-    status: 422,
   };
 }
 
-function unauthorizedGuardFailure(): GuardFailure {
+function unauthorizedGuardFailure(): GuardDenial {
   return {
-    auth: 'unauthorized',
-    code: 'UNAUTHORIZED',
+    kind: 'forbidden',
     payload: {},
-    status: 422,
   };
 }
 

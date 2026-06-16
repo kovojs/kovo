@@ -16,6 +16,15 @@ import type {
   RegistryTypeFactOptions,
 } from './types.js';
 
+/**
+ * Derive an app-level component/registry graph from the per-component facts produced by
+ * compileComponentModule, returning the merged graph plus the registry facts (component
+ * list, domain keys, invalidations, routes) the server runtime indexes.
+ *
+ * Public entry point of `@kovojs/compiler` (also reachable via the `@kovojs/compiler/graph`
+ * subpath). `create-kovo` templates and the example apps call it from their graph-emit
+ * scripts to derive `generated/` registries (SPEC.md §5.2).
+ */
 export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraphResult {
   const packageComponentPrefixes = [
     ...(options.graph?.packageComponentPrefixes ?? []),
@@ -36,6 +45,11 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   };
 }
 
+/**
+ * @internal Extract the fragment-target facts a component declares via its
+ * `fragmentTarget` option, used internally by {@link compileComponentModule} when building
+ * component graph facts. Exported for in-repo callers only (SPEC.md §5.2).
+ */
 export function findFragmentTargetFacts(
   componentName: string,
   model: ComponentModuleModel,
@@ -51,6 +65,11 @@ export function findFragmentTargetFacts(
   ];
 }
 
+/**
+ * @internal Build the per-component graph fact (name, queries, fragment targets) that
+ * {@link compileComponentModule} threads into a {@link CompileResult} and that
+ * {@link deriveAppGraph} later merges. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
+ */
 export function componentGraphFact(
   componentName: string,
   model: ComponentModuleModel,
@@ -65,6 +84,11 @@ export function componentGraphFact(
   };
 }
 
+/**
+ * @internal Derive the registry facts (components, domain keys, invalidations, routes) from
+ * a merged graph input. Called by {@link deriveAppGraph}; exported for in-repo graph tooling
+ * only, not for app authors (SPEC.md §5.2).
+ */
 export function deriveRegistryFactsFromGraph(
   graph: RegistryGraphInput,
   options: RegistryTypeFactOptions = {},

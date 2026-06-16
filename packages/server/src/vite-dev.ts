@@ -12,27 +12,52 @@ import { readHeader, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Minimal Vite dev-server
+ * surface the app-shell middleware mounts onto.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteDevServer {
   middlewares: {
     use(handler: KovoAppShellViteMiddleware): void;
   };
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Dev-server shape extended
+ * with the ssrLoadModule hook used to replay the loaded app.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteDevModuleServer extends KovoAppShellViteDevServer {
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Node connect-style
+ * middleware signature used by the dev-server adapter.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export type KovoAppShellViteMiddleware = (
   request: IncomingMessage,
   response: ServerResponse,
   next: (error?: unknown) => void,
 ) => void;
 
+/**
+ * The Vite dev-server plugin object returned by kovoAppShellViteDevPlugin, ready to be
+ * placed in a vite.config.ts plugins array. It wires the app shell into the dev server
+ * for the SPEC.md §9.5 dev/build/export replay path.
+ */
 export interface KovoAppShellViteDevPlugin {
   configureServer(server: KovoAppShellViteDevModuleServer): void | (() => void);
   name: string;
 }
 
+/**
+ * Options for kovoAppShellViteDevPlugin. Control how the dev-server middleware loads
+ * and serves the app shell during SPEC.md §9.5 Vite dev/build/export replay, including
+ * which module/export to load, request filtering, and Early Hints relay.
+ */
 export interface KovoAppShellViteDevPluginOptions {
   appExportName?: string;
   /**
@@ -51,6 +76,11 @@ export interface KovoAppShellViteDevPluginOptions {
   shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Module diagnostics input
+ * recorded into the dev diagnostic ledger.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellDevModuleDiagnostics {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   fileName: string;
@@ -58,6 +88,11 @@ export interface KovoAppShellDevModuleDiagnostics {
   source?: string;
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Stored diagnostic record
+ * keyed by source file in the dev diagnostic ledger.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellDevDiagnosticRecord {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   fileName: string;
@@ -65,11 +100,21 @@ export interface KovoAppShellDevDiagnosticRecord {
   source?: string;
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). In-memory ledger mapping
+ * failed dev modules to teaching diagnostic documents.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellDevDiagnosticLedger {
   diagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
   recordModuleDiagnostics(record: KovoAppShellDevModuleDiagnostics): void;
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Creates the dev diagnostic
+ * ledger that maps failed modules to teaching diagnostic responses.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnosticLedger {
   const moduleRecords = new Map<string, KovoAppShellDevDiagnosticRecord>();
   const hrefToFileName = new Map<string, string>();
@@ -100,6 +145,13 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
   };
 }
 
+/**
+ * Vite dev-server plugin for a Kovo app shell. App authors add it to the plugins array
+ * in their vite.config.ts so the dev server serves the app through the same
+ * Request -> Response shell that SPEC.md §9.5 uses for build/export replay. The plugin's
+ * configureServer hook mounts middleware that ssrLoadModule-loads the app and dispatches
+ * matching requests to it.
+ */
 export function kovoAppShellViteDevPlugin(
   options: KovoAppShellViteDevPluginOptions = {},
 ): KovoAppShellViteDevPlugin {
@@ -142,6 +194,11 @@ export function kovoAppShellViteDevPlugin(
   };
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Default predicate deciding
+ * whether a dev request should be claimed by the app shell instead of Vite.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function shouldHandleKovoAppShellViteRequest(
   request: IncomingMessage,
   app: KovoApp,
@@ -184,6 +241,11 @@ function isUnversionedKovoAppShellClientModuleRequest(url: URL): boolean {
   return url.pathname.startsWith('/c/') && !url.searchParams.has('v');
 }
 
+/**
+ * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Renders the dev teaching
+ * diagnostic document/fragment for a request whose module failed to build.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function renderKovoAppShellViteDevDiagnosticResponse(
   app: KovoApp,
   request: IncomingMessage,

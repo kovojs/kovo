@@ -5,7 +5,20 @@ export type {
   AppliedDeferredStreamResponseWithRoot,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
-export * from './events.js';
+export { createEventBus } from './events.js';
+export type {
+  DelegatedEvent,
+  EventBusOptions,
+  EventElementLike,
+  EventListener,
+  EventPayloadMap,
+  EventSubscription,
+  EventTargetLike,
+  RuntimeErrorContext,
+  TypedEvent,
+  TypedEventBus,
+  UploadProgressElementLike,
+} from './events.js';
 export {
   abortRemovedIslandSignals,
   readElementParams,

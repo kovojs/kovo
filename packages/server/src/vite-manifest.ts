@@ -3,6 +3,11 @@ import { fileURLToPath } from 'node:url';
 import type { PageHintOptions } from './hints.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). One parsed Vite
+ * manifest chunk (file/css/imports/src/isEntry).
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteManifestChunk {
   css?: readonly string[];
   file?: string;
@@ -11,45 +16,96 @@ export interface KovoAppShellViteManifestChunk {
   src?: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Parsed Vite manifest
+ * keyed by entry id.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export type KovoAppShellViteManifest = Record<string, KovoAppShellViteManifestChunk>;
 
+/**
+ * Options for resolving asset hrefs from a Vite manifest, such as the base path used to
+ * prefix emitted asset URLs. Accepted by manifest helpers including
+ * kovoAppShellViteManifestStylesheetHrefFromFile (SPEC.md §9.5 Vite dev/build/export
+ * replay).
+ */
 export interface KovoAppShellViteManifestHintOptions {
   base?: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Emitted asset entry
+ * within a Rollup/Vite output bundle.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteOutputAsset {
   fileName: string;
   source: string | Uint8Array;
   type: 'asset';
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Emitted chunk entry
+ * within a Rollup/Vite output bundle.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteOutputChunk {
   fileName: string;
   type: 'chunk';
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Rollup/Vite output
+ * bundle map passed from a writeBundle hook.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export type KovoAppShellViteOutputBundle = Readonly<
   Record<string, KovoAppShellViteOutputAsset | KovoAppShellViteOutputChunk>
 >;
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Normalized route ->
+ * Vite entries mapping used to compute per-route build hints.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellRouteBuildEntry {
   entries: readonly string[];
   routePath: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Raw route -> Vite
+ * entry mapping authored in plugin/build config.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export type KovoAppShellRouteEntryMap = Readonly<Record<string, string | readonly string[]>>;
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Options for resolving
+ * and validating route build entries against a manifest.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteRouteEntryOptions {
   manifest?: KovoAppShellViteManifest;
   routes?: readonly { path: string }[];
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). A built static asset
+ * (dist file, href, and path) derived from the Vite manifest.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellBuildAsset {
   file: string;
   href: string;
   path: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Computes modulepreload
+ * and stylesheet page hints by walking manifest entries.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteManifestHints(
   manifest: KovoAppShellViteManifest,
   entries: readonly string[],
@@ -69,6 +125,11 @@ export function kovoAppShellViteManifestHints(
   return hints;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Normalizes and
+ * validates a route -> entry map into ordered route build entries.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteRouteEntries(
   routeEntryMap: KovoAppShellRouteEntryMap,
   options: KovoAppShellViteRouteEntryOptions = {},
@@ -130,6 +191,11 @@ export function kovoAppShellViteRouteEntries(
     .map(([routePath, entries]) => ({ entries, routePath }));
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Collects the unique
+ * built static assets referenced across a manifest.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteManifestAssets(
   manifest: KovoAppShellViteManifest,
   options: KovoAppShellViteManifestHintOptions = {},
@@ -144,6 +210,11 @@ export function kovoAppShellViteManifestAssets(
   return [...assets.values()].sort((left, right) => left.file.localeCompare(right.file));
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Reads and parses a
+ * Vite manifest from a filesystem path or file: URL.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function kovoAppShellViteManifestFromFile(
   manifestFile: string | URL,
 ): Promise<KovoAppShellViteManifest> {
@@ -151,6 +222,11 @@ export async function kovoAppShellViteManifestFromFile(
   return kovoAppShellViteManifestFromSource(source);
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Reads a manifest file
+ * and returns its built static assets.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function kovoAppShellViteManifestAssetsFromFile(
   manifestFile: string | URL,
   options: KovoAppShellViteManifestHintOptions = {},
@@ -161,6 +237,11 @@ export async function kovoAppShellViteManifestAssetsFromFile(
   );
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Resolves the single
+ * stylesheet href from an in-memory manifest.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteManifestStylesheetHref(
   manifest: KovoAppShellViteManifest,
   options: KovoAppShellViteManifestHintOptions = {},
@@ -182,6 +263,13 @@ export function kovoAppShellViteManifestStylesheetHref(
   return stylesheetHref;
 }
 
+/**
+ * Resolves the app shell's single stylesheet href from a built Vite manifest file. App
+ * authors call this in scripts/export-static.mjs to find the hashed CSS asset URL to
+ * reference in their exported shell. Reads the manifest from a filesystem path or file:
+ * URL and throws unless the manifest contains exactly one stylesheet (SPEC.md §9.5 Vite
+ * dev/build/export replay).
+ */
 export async function kovoAppShellViteManifestStylesheetHrefFromFile(
   manifestFile: string | URL,
   options: KovoAppShellViteManifestHintOptions = {},
@@ -192,6 +280,11 @@ export async function kovoAppShellViteManifestStylesheetHrefFromFile(
   );
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Extracts and parses
+ * the manifest from a Rollup/Vite output bundle.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteManifestFromBundle(
   bundle: KovoAppShellViteOutputBundle,
 ): KovoAppShellViteManifest {
@@ -209,6 +302,11 @@ export function kovoAppShellViteManifestFromBundle(
   return kovoAppShellViteManifestFromSource(source);
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Normalizes a manifest
+ * file path into a safe dist-relative file, rejecting traversal.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function normalizedDistFile(file: string): string {
   const pathname = file.replace(/[?#].*$/, '').replace(/^\/+/, '');
   const segments = pathname.split('/');

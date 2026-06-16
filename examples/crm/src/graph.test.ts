@@ -3,9 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import type { KovoExplainInput } from '@kovojs/core';
-import { kovoCheckOkAssertionFact } from '@kovojs/test/kovo-check-fixtures';
-import { kovoExplainMutationAssertionFact } from '@kovojs/test/kovo-explain-fixtures';
-import { graphOptimisticStatusMatrix, type KovoGraphFixture } from '@kovojs/test/graph-fixtures';
+import { kovoCheckOkAssertionFact } from '@kovojs/conformance-fixtures/kovo-check-fixtures';
+import { kovoExplainMutationAssertionFact } from '@kovojs/conformance-fixtures/kovo-explain-fixtures';
+import {
+  graphOptimisticStatusMatrix,
+  type KovoGraphFixture,
+} from '@kovojs/conformance-fixtures/graph-fixtures';
 import { kovoCheck, kovoExplain } from 'kovo';
 import { describe, expect, it } from 'vitest';
 

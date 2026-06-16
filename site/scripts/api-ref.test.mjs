@@ -28,7 +28,23 @@ function coreExportNames() {
   const checker = program.getTypeChecker();
   const sourceFile = program.getSourceFile(entry);
   const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
-  return checker.getExportsOfModule(moduleSymbol).map((symbol) => symbol.name);
+  // Mirror the generator: @internal exports are framework internals, excluded from
+  // the public reference, so they are not expected on the page either.
+  const isInternal = (symbol) => {
+    const resolved =
+      symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+    return (resolved.declarations ?? []).some((decl) => {
+      let node = decl;
+      if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent)) {
+        node = node.parent.parent;
+      }
+      return ts.getJSDocTags(node).some((tag) => tag.tagName.getText() === 'internal');
+    });
+  };
+  return checker
+    .getExportsOfModule(moduleSymbol)
+    .filter((symbol) => !isInternal(symbol))
+    .map((symbol) => symbol.name);
 }
 
 describe('api-ref generator', () => {
@@ -53,6 +69,9 @@ describe('api-ref generator', () => {
       'runtime.md',
       'test.md',
       'drizzle.md',
+      'better-auth.md',
+      'compiler.md',
+      'cli.md',
     ]);
     for (const pkg of result.packages) expect(pkg.exports).toBeGreaterThan(0);
   });
@@ -122,6 +141,9 @@ describe('api-ref generator', () => {
       '@kovojs/runtime': 15,
       '@kovojs/server': 70,
       '@kovojs/test': 12,
+      '@kovojs/better-auth': 30,
+      '@kovojs/compiler': 12,
+      kovo: 8,
     };
     for (const pkg of result.packages) {
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);

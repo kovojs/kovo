@@ -8,7 +8,7 @@ import {
   htmlElementFacts,
   htmlLinkHrefs,
   type HtmlElementSelector,
-} from './html-fragment.ts';
+} from '@kovojs/test/html-fragment';
 import { cssScopeRules, type CssScopeRuleFact } from './source-fixtures.ts';
 import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
 

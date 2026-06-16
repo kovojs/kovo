@@ -1,6 +1,9 @@
 {
   "name": "@kovojs/server",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -11,6 +14,46 @@
     "./app-shell/vite": "./src/api/app-shell/vite.ts",
     "./jsx-runtime": "./src/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/jsx-runtime.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./app-shell/client-modules": {
+        "types": "./dist/api/app-shell/client-modules.d.mts",
+        "default": "./dist/api/app-shell/client-modules.mjs"
+      },
+      "./app-shell/core": {
+        "types": "./dist/api/app-shell/core.d.mts",
+        "default": "./dist/api/app-shell/core.mjs"
+      },
+      "./app-shell/node": {
+        "types": "./dist/api/app-shell/node.d.mts",
+        "default": "./dist/api/app-shell/node.mjs"
+      },
+      "./app-shell/static-export": {
+        "types": "./dist/api/app-shell/static-export.d.mts",
+        "default": "./dist/api/app-shell/static-export.mjs"
+      },
+      "./app-shell/vite": {
+        "types": "./dist/api/app-shell/vite.d.mts",
+        "default": "./dist/api/app-shell/vite.mjs"
+      },
+      "./jsx-runtime": {
+        "types": "./dist/jsx-runtime.d.mts",
+        "default": "./dist/jsx-runtime.mjs"
+      },
+      "./jsx-dev-runtime": {
+        "types": "./dist/jsx-runtime.d.mts",
+        "default": "./dist/jsx-runtime.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "build:dist": "vp pack src/api/app-shell/client-modules.ts src/api/app-shell/core.ts src/api/app-shell/node.ts src/api/app-shell/static-export.ts src/api/app-shell/vite.ts src/index.ts src/jsx-runtime.ts --dts",
+    "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",

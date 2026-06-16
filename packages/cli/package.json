@@ -1,12 +1,35 @@
 {
   "name": "kovo",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "bin": {
     "kovo": "./src/index.ts"
   },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/api.ts",
+    "./internal": "./src/index.ts"
+  },
+  "publishConfig": {
+    "bin": {
+      "kovo": "./dist/index.mjs"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/api.d.mts",
+        "default": "./dist/api.mjs"
+      },
+      "./internal": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "build:dist": "vp pack src/api.ts src/index.ts --dts",
+    "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@kovojs/compiler": "workspace:*",

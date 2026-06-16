@@ -120,6 +120,9 @@ importers:
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
+      '@kovojs/conformance-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/conformance-fixtures
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
@@ -163,6 +166,9 @@ importers:
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
+      '@kovojs/conformance-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/conformance-fixtures
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
@@ -206,6 +212,9 @@ importers:
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
+      '@kovojs/conformance-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/conformance-fixtures
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
@@ -262,6 +271,9 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
     devDependencies:
+      '@kovojs/conformance-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/conformance-fixtures
       '@kovojs/test':
         specifier: workspace:*
         version: link:../../packages/test
@@ -290,6 +302,9 @@ importers:
         specifier: workspace:*
         version: link:../server
     devDependencies:
+      better-auth:
+        specifier: 1.6.17
+        version: 1.6.17(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2))(vitest@4.1.8)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
@@ -332,6 +347,28 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
 
+  packages/conformance-fixtures:
+    dependencies:
+      '@kovojs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kovojs/drizzle':
+        specifier: workspace:*
+        version: link:../drizzle
+      '@kovojs/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@kovojs/server':
+        specifier: workspace:*
+        version: link:../server
+      '@kovojs/test':
+        specifier: workspace:*
+        version: link:../test
+    devDependencies:
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
+
   packages/core:
     devDependencies:
       vitest:
@@ -343,6 +380,9 @@ importers:
       '@kovojs/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@kovojs/core':
+        specifier: workspace:*
+        version: link:../core
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
@@ -352,13 +392,13 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
+      ts-morph:
+        specifier: ^28.0.0
+        version: 28.0.0
     devDependencies:
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2)
-      ts-morph:
-        specifier: ^28.0.0
-        version: 28.0.0
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))

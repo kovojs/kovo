@@ -23,11 +23,14 @@ export { guards, session } from '../guards.js';
 export type {
   AuthenticatedRequest,
   ForbiddenContext,
+  ForbiddenDenial,
   ForbiddenRenderer,
   Guard,
+  GuardDenial,
   GuardFailure,
   GuardFailureResponseOptions,
   GuardResult,
+  RateLimitedDenial,
   RateLimitOptions,
   RequestLifecycleOptions,
   SessionDefinition,
@@ -35,6 +38,7 @@ export type {
   SessionRequestLike,
   SessionUserLike,
   UnauthenticatedContext,
+  UnauthenticatedDenial,
   UnauthenticatedHandler,
 } from '../guards.js';
 export { isHeaderSource, readHeader } from '../response.js';

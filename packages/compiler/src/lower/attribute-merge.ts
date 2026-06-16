@@ -7,6 +7,12 @@ import { dedupeBy, escapeAttribute, splitDepValue } from '../shared.js';
 
 export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233';
 
+/**
+ * A single attribute participating in primitive/author attribute merging: its name, the
+ * side it came from (`primitive` headless-UI default vs `author` override), and its
+ * resolved value. Public input/output shape of mergePrimitiveAndAuthorAttributes
+ * (SPEC.md §5.2).
+ */
 export interface MergeableAttribute {
   attribute?: JsxAttributeModel;
   name: string;
@@ -14,12 +20,22 @@ export interface MergeableAttribute {
   value: MergeableAttributeValue;
 }
 
+/**
+ * The resolved value of a MergeableAttribute: a static boolean/number/string literal or an
+ * opaque `expression` source preserved verbatim. Public value type for
+ * mergePrimitiveAndAuthorAttributes (SPEC.md §5.2).
+ */
 export type MergeableAttributeValue =
   | { kind: 'boolean'; value: boolean }
   | { kind: 'expression'; source: string }
   | { kind: 'number'; value: number }
   | { kind: 'string'; value: string };
 
+/**
+ * @internal Result of {@link mergePrimitiveAndAuthorAttributes}: the merged attribute list
+ * plus any KV231–KV233 conflict diagnostics. Exported for in-repo callers/tests; lowered-IR
+ * detail, not app-author surface (SPEC.md §5.2).
+ */
 export interface AttributeMergeResult {
   attributes: readonly MergeableAttribute[];
   diagnostics: readonly CompilerDiagnostic[];
@@ -70,6 +86,15 @@ export function authorJsxAttributes(
     .filter((attribute) => !isAbsentAttributeValue(attribute.value));
 }
 
+/**
+ * Merge a headless-UI primitive's default attributes with an author's overrides into one
+ * ordered attribute set, applying SPEC.md §5.2 merge rules per attribute (class/style/dep
+ * lists union, idref/aria conflicts raise KV231-KV233, author values win elsewhere) and
+ * returning the merged attributes plus any conflict diagnostics.
+ *
+ * Public helper: the gallery example's merge-fixtures oracle calls it directly to prove
+ * primitive composition matches the compiler's lowering.
+ */
 export function mergePrimitiveAndAuthorAttributes(
   primitiveAttributes: readonly MergeableAttribute[],
   authorAttributes: readonly MergeableAttribute[],

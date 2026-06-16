@@ -1,10 +1,29 @@
 {
   "name": "@kovojs/compiler",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./graph": "./src/graph.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./graph": {
+        "types": "./dist/graph.d.mts",
+        "default": "./dist/graph.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "build:dist": "vp pack src/graph.ts src/index.ts --dts",
+    "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",

@@ -1,10 +1,12 @@
 import type { PackageComponentPrefixExplain } from './graph.js';
 
+/** @internal */
 export interface PackageComponentPrefixManifestOptions {
   effectivePrefix?: string;
   requirePrefix?: boolean;
 }
 
+/** @internal */
 export function packageComponentPrefixFactFromPackageManifest(
   manifest: unknown,
   options: PackageComponentPrefixManifestOptions = {},

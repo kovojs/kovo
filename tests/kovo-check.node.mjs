@@ -59,7 +59,7 @@ import {
   loadVitePlusConfig,
   p10PerfAcceptanceProjectFact,
   runCapturedCliCommand,
-} from '../packages/test/src/command-fixtures.ts';
+} from '../packages/conformance-fixtures/src/command-fixtures.ts';
 import {
   compilerDataBindBehaviorFact,
   compilerDiagnosticFacts,
@@ -67,8 +67,8 @@ import {
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   compilerValidationBehaviorFact,
-} from '../packages/test/src/compiler-fixtures.ts';
-import { viteLoweredEventDiagnosticFact } from '../packages/test/src/diagnostic-output-fixtures.ts';
+} from '../packages/conformance-fixtures/src/compiler-fixtures.ts';
+import { viteLoweredEventDiagnosticFact } from '../packages/conformance-fixtures/src/diagnostic-output-fixtures.ts';
 import {
   kovoExplainComponentAssertionFact,
   kovoExplainEndpointAssertionFact,
@@ -77,12 +77,12 @@ import {
   kovoExplainScopeAuditAssertionFact,
   kovoExplainUnguardedAssertionFact,
   kovoExplainUpdateConsumers,
-} from '../packages/test/src/kovo-explain-fixtures.ts';
+} from '../packages/conformance-fixtures/src/kovo-explain-fixtures.ts';
 import {
   kovoCheckAssertionFact,
   kovoCheckUnguardedAuditBehaviorFact,
-} from '../packages/test/src/kovo-check-fixtures.ts';
-import { kovoExportStaticBehaviorFact } from '../packages/test/src/kovo-export-fixtures.ts';
+} from '../packages/conformance-fixtures/src/kovo-check-fixtures.ts';
+import { kovoExportStaticBehaviorFact } from '../packages/conformance-fixtures/src/kovo-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
@@ -99,7 +99,7 @@ import {
   generatedViewTransitionStampBehaviorFact,
   generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
-} from '../packages/test/src/generated-module-fixtures.ts';
+} from '../packages/conformance-fixtures/src/generated-module-fixtures.ts';
 import {
   commerceGraphBehaviorFact,
   graphFixtureFile,
@@ -107,15 +107,15 @@ import {
   graphMutationFact,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
-} from '../packages/test/src/graph-fixtures.ts';
+} from '../packages/conformance-fixtures/src/graph-fixtures.ts';
 import { documentQueryScriptBehaviorFact } from '../packages/test/src/html-fragment.ts';
 import {
   legibilityStudyGateFact,
   normativeDocsGateFact,
   prelaunchChecklistGateFact,
   v1AcceptanceLedgerGateFact,
-} from '../packages/test/src/markdown-fixtures.ts';
-import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
+} from '../packages/conformance-fixtures/src/markdown-fixtures.ts';
+import { mcpCompileResponseFacts } from '../packages/conformance-fixtures/src/mcp-fixtures.ts';
 import {
   drizzleQueryBehaviorSourceFixtures,
   moduleImportFailureFact,
@@ -126,18 +126,18 @@ import {
   postParseSourceStringProjectFact,
   projectJsonFile,
   projectPackageManifestFacts,
-} from '../packages/test/src/source-fixtures.ts';
+} from '../packages/conformance-fixtures/src/source-fixtures.ts';
 import {
   runPnpmFilterTaskCommand,
   starterTemplateAcceptanceFact,
-} from '../packages/test/src/starter-template-fixtures.ts';
+} from '../packages/conformance-fixtures/src/starter-template-fixtures.ts';
 import {
   commerceKeyedOptimisticBehaviorFact,
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
   morphFragmentBehaviorFact,
   optimismCleanupBehaviorFact,
-} from '../packages/test/src/runtime-fixtures.ts';
+} from '../packages/conformance-fixtures/src/runtime-fixtures.ts';
 import {
   serverCommerceAdoptDontInventBehaviorFact,
   serverCommerceStylesheetBehaviorFact,
@@ -145,13 +145,13 @@ import {
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
   serverPageHintsBehaviorFact,
-} from '../packages/test/src/server-fixtures.ts';
+} from '../packages/conformance-fixtures/src/server-fixtures.ts';
 import {
   viteHandlerTransformFact,
   viteProductionEmitContractFact,
   viteRedGreenBuildFixtureFact,
   viteTransformElementFact,
-} from '../packages/test/src/vite-fixtures.ts';
+} from '../packages/conformance-fixtures/src/vite-fixtures.ts';
 import {
   generatedWireResponseBodies,
   loadWireFixtureSources,
@@ -162,11 +162,11 @@ import {
   wireFragmentModeFacts,
   wireResponseBodyPinFacts,
   wireResponseMetadataFacts,
-} from '../packages/test/src/wire-fixtures.ts';
+} from '../packages/conformance-fixtures/src/wire-fixtures.ts';
 import {
   verificationLayerBehaviorFact,
   verificationLayerKovoCheckDiagnosticsFact,
-} from '../packages/test/src/verification-fixtures.ts';
+} from '../packages/conformance-fixtures/src/verification-fixtures.ts';
 import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
   csrfField,
@@ -210,7 +210,7 @@ const runCliCommand = (args) => runCapturedCliCommand(mainAsync, args);
 
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
-  applyDeferredStreamResponseToDom: applyDeferredStreamResponseToRuntime,
+  applyDeferredStreamResponseToRuntime,
   createQueryStore,
   derive,
   DomMorphTarget,
@@ -1815,13 +1815,11 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.deepEqual(fact.guards, {
     authenticatedSession: { id: 's1', user: { id: 'u1' } },
     authedFailure: {
-      auth: 'unauthenticated',
-      code: 'UNAUTHORIZED',
+      kind: 'unauthenticated',
       payload: {},
-      status: 422,
     },
     firstRateLimitPasses: true,
-    secondRateLimitFailure: 'RATE_LIMITED',
+    secondRateLimitFailure: 'rateLimited',
   });
   const receiptFile = fact.upload.result.changes[0].input.receipt.file;
   assert.equal(receiptFile instanceof Blob, true);

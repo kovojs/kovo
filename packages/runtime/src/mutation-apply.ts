@@ -13,6 +13,7 @@ import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 
+/** @internal */
 export interface EnhancedMutationRuntimeApplyOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -24,6 +25,7 @@ export interface EnhancedMutationRuntimeApplyOptions {
   store: QueryStore;
 }
 
+/** @internal */
 export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   appliedFragments: string[];
   changes: MutationChangeRecord[];
@@ -31,11 +33,13 @@ export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   targets: string[];
 };
 
+/** @internal */
 export interface MutationRuntimeApplyHooks {
   applyQuery?: QueryApplyInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
 }
 
+/** @internal */
 export function applyFetchedEnhancedMutationResponseToRuntime(
   options: EnhancedMutationRuntimeApplyOptions,
   fetched: FetchedEnhancedMutation,

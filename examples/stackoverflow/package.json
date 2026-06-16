@@ -21,6 +21,7 @@
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
+    "@kovojs/conformance-fixtures": "workspace:*",
     "@kovojs/test": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
     "kovo": "workspace:*",

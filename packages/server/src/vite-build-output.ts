@@ -15,16 +15,31 @@ import {
   type KovoAppShellViteClientModuleOutputPlanItem,
 } from './vite-client-module-output.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Vite output.dir/file
+ * descriptor passed from the writeBundle hook.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteOutputOptions {
   dir?: string;
   file?: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Options for writing
+ * built client modules and optional static export to an output directory.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteBuildOutputOptions {
   outDir: string | URL;
   staticExport?: KovoAppShellViteBuildOutputStaticExportOptions | false;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Result of writing the
+ * build output: client module plan, emitted modules, and static export artifacts.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteBuildOutput {
   clientModuleOutputPlan: readonly KovoAppShellViteClientModuleOutputPlanItem[];
   clientModules: readonly KovoAppShellBuiltClientModule[];
@@ -32,6 +47,11 @@ export interface KovoAppShellViteBuildOutput {
   staticExportAssets: readonly StaticExportAssetInput[];
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Writes built client
+ * modules and optional static export to the Vite output directory.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function writeKovoAppShellViteBuildOutput(
   build: Pick<KovoAppShellBuild, 'clientModules'> &
     Partial<Pick<KovoAppShellBuild, 'app' | 'assets'>>,
@@ -65,6 +85,11 @@ export async function writeKovoAppShellViteBuildOutput(
   return output;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Resolves the output
+ * directory from a Vite output.dir/file descriptor.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellViteOutputDir(options: KovoAppShellViteOutputOptions): string {
   if (options.dir) return options.dir;
   if (options.file) return path.dirname(options.file);

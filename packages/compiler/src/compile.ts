@@ -41,6 +41,16 @@ import { escapeAttribute, type SourceReplacement } from './shared.js';
 import type { CompileComponentOptions, CompileResult, StateDeriveFact } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
+/**
+ * Compile a single authored component module (TSX/JSX source) into its lowered-IR
+ * artifacts — the server render module, the client island module, scoped CSS, and the
+ * registry stamp — plus diagnostics, render-equivalence checks, and query update plans.
+ *
+ * This is the primary public entry point of `@kovojs/compiler`: `create-kovo` templates,
+ * the example apps, and the tutorial all call it to lower components and assert the
+ * compiler's invariants. Re-compiling a `compiler-emitted` artifact is a no-op pass-through
+ * so the pipeline reaches a fixpoint (SPEC.md §5.2; hand-authored lowered IR is KV235).
+ */
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   if (isCompilerIrArtifact(options.source)) {
     const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
@@ -232,6 +242,12 @@ function versionStateDeriveReferences(
   return replacements;
 }
 
+/**
+ * Assert the SPEC.md §5.2 fixpoint property: re-compiling every emitted artifact of a
+ * compileComponentModule result reproduces that artifact byte-for-byte. Throws on the first
+ * artifact that changes under recompilation. Public verification helper used by `create-kovo`
+ * templates and example apps to prove the compiler is idempotent.
+ */
 export function assertFixpoint(result: CompileResult): void {
   for (const file of result.files) {
     const recompiled = compileComponentModule({ ...file, sourceProvenance: 'compiler-emitted' });
@@ -247,6 +263,12 @@ export function assertFixpoint(result: CompileResult): void {
   }
 }
 
+/**
+ * Assert the SPEC.md §5.2 rule 3 render-equivalence property: the lowered server render
+ * matches the authored reference render once generated-only runtime attributes are
+ * normalized. Throws on the first failing check in a compileComponentModule result. Public
+ * verification helper used by `create-kovo` templates and example apps.
+ */
 export function assertRenderEquivalence(result: CompileResult): void {
   for (const check of result.renderEquivalenceChecks) {
     if (!check.ok) {
@@ -255,6 +277,11 @@ export function assertRenderEquivalence(result: CompileResult): void {
   }
 }
 
+/**
+ * @internal Collect the client-island export names a build's minifier must treat as
+ * reserved so cross-module references in lowered IR keep resolving. Exported for the
+ * in-repo build/codegen pipeline, not for app authors (SPEC.md §5.2).
+ */
 export function collectMinifierReservedNames(
   results: CompileResult | readonly CompileResult[],
 ): string[] {

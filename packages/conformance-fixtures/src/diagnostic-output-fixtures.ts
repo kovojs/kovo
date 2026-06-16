@@ -1,5 +1,5 @@
 import { generatedHandlerReferenceFact } from './generated-module-fixtures.ts';
-import { htmlElementFacts } from './html-fragment.ts';
+import { htmlElementFacts } from '@kovojs/test/html-fragment';
 
 import type { GeneratedHandlerReferenceFact } from './generated-module-fixtures.ts';
 

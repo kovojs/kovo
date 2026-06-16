@@ -1,9 +1,12 @@
 import type { AttributeMutatorLike, QuerySelectorAllRootLike } from './dom-like.js';
 
+/** @internal */
 export interface PendingElementLike extends AttributeMutatorLike {}
 
+/** @internal */
 export interface PendingRoot extends QuerySelectorAllRootLike<PendingElementLike> {}
 
+/** @internal */
 export function stampPendingQueries(
   root: PendingRoot,
   queryNames: readonly string[],
@@ -31,6 +34,7 @@ export function stampPendingQueries(
   return stamped;
 }
 
+/** @internal */
 export function readDeps(value: string | null): string[] {
   return (value ?? '')
     .split(/[\s,]+/)

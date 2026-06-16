@@ -8,17 +8,20 @@ import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
 
+/** @internal */
 export interface BroadcastLike {
   close?: () => void;
   onmessage: ((event: { data: unknown }) => void) | null;
   postMessage(message: unknown): void;
 }
 
+/** @internal */
 export interface MutationBroadcast {
   close(): void;
   publish(body: string, changes?: readonly MutationChangeRecord[]): void;
 }
 
+/** @internal */
 export interface InstallMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   channel: BroadcastLike;
@@ -31,6 +34,7 @@ export interface InstallMutationBroadcastOptions {
   store: QueryStore;
 }
 
+/** @internal */
 export interface DefaultMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -42,6 +46,7 @@ export interface DefaultMutationBroadcastOptions {
   store: QueryStore;
 }
 
+/** @internal */
 export function withDefaultMutationBroadcast<Options extends DefaultMutationBroadcastOptions>(
   options: Options,
 ): {
@@ -78,6 +83,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   }
 }
 
+/** @internal */
 export function installMutationBroadcast(
   options: InstallMutationBroadcastOptions,
 ): MutationBroadcast {

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { diagnosticDefinitions } from '@kovojs/core';
 import { csrfField, csrfToken, domain, mutation, query, s } from '@kovojs/server';
 
-import { createKovoTestHarness } from './harness.js';
-import { createDbVerifier } from './verifier.js';
+import { createKovoTestHarness } from '@kovojs/test/harness';
+import { createDbVerifier } from '@kovojs/test/verifier';
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,

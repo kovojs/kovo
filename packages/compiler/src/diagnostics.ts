@@ -1,5 +1,10 @@
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@kovojs/core';
 
+/**
+ * @internal A teaching diagnostic the compiler emits during lowering (KV### code, severity,
+ * message, source site, optional fix help). Carried inside {@link CompileResult}; in-repo
+ * consumers read it but it is not part of the app-author surface (SPEC.md §5.2 rule 5).
+ */
 export interface CompilerDiagnostic {
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
@@ -10,6 +15,7 @@ export interface CompilerDiagnostic {
   start?: SourcePosition;
 }
 
+/** @internal 1-based line/column source position carried by a {@link CompilerDiagnostic}. */
 export interface SourcePosition {
   column: number;
   line: number;

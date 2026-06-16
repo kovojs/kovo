@@ -9,7 +9,6 @@ import { docRoute, type AnyRoute } from './route-kit.js';
 // Site-local example-embed build tooling (no type declarations); reused so the
 // heavy build/re-root logic lives in one place and the docs app only authors the
 // presentation. See scripts/examples.mjs for the full contract.
-// @ts-expect-error - site-local .mjs build tooling, no type declarations.
 import {
   EXAMPLES,
   buildExampleEmbed,
@@ -17,7 +16,6 @@ import {
   examplePagePath,
   loadExampleSources,
 } from '../scripts/examples.mjs';
-// @ts-expect-error - site-local .mjs build tooling, no type declarations.
 import { renderMarkdown } from '../scripts/md.mjs';
 
 // Examples section: runnable Kovo apps embedded beside their authored source.

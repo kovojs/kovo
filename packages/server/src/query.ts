@@ -5,10 +5,10 @@ import {
   resolveLifecycleRequest,
   runGuard,
   type Guard,
-  type GuardFailure,
   type GuardFailureResponseOptions,
   type GuardResult,
   type RequestLifecycleOptions,
+  type ResolvedGuardFailure,
 } from './guards.js';
 import { retryAfterHeaders, type ServerResponseBase } from './response.js';
 import {
@@ -196,7 +196,7 @@ export interface QueryEndpointSuccess<Value, Input = unknown> {
 }
 
 export interface QueryEndpointFailure {
-  auth?: GuardFailure['auth'];
+  auth?: ResolvedGuardFailure['auth'];
   error: {
     code: 'RATE_LIMITED' | 'UNAUTHORIZED' | 'VALIDATION';
     payload: Record<string, unknown> | ValidationFailurePayload;
