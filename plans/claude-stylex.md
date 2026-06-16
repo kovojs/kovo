@@ -361,6 +361,14 @@ borrowing its concrete API/spike detail.
     src/interactive-gallery.axe.browser.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest
     --config vitest.browser.config.ts --run src/interactive-gallery.visual.browser.test.ts`,
     `node packages/ui/scripts/build-registry.mjs`, and `pnpm exec tsc --noEmit` pass.
+  - Evidence (partial, 2026-06-16): `packages/create-kovo/templates/package.json` drops
+    `@tailwindcss/vite`/`tailwindcss` and adds `@kovojs/style`; `templates/vite.config.ts` removes the
+    Tailwind plugin; `templates/src/app.tsx` and `templates/src/auth.tsx` use `style.create(...)` and
+    `style.attrs(...)`; `templates/src/styles.css` is reduced to raw document defaults. Integrated
+    side-agent commit `ba5aad19` (`agent/stylex-starter` original `9fa834cc`).
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`,
+    `pnpm --filter create-kovo run build:dist`, `pnpm exec tsc --noEmit`, and `git diff --check` pass
+    after integration.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L
