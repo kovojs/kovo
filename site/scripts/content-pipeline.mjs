@@ -27,6 +27,7 @@ const genDir = path.join(siteRoot, 'gen');
  * content pages use, matching the keys content.ts reads. */
 function captureValues(captures) {
   return {
+    'loader-gzip-bytes': String(captures.loader.gzipBytes),
     'lowering-client': `\`\`\`js\n${captures.lowering.client}\n\`\`\``,
     'lowering-input': `\`\`\`tsx\n${captures.lowering.input}\n\`\`\``,
     'lowering-lint': captures.lowering.lint,

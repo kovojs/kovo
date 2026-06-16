@@ -39,12 +39,15 @@ export async function exportSiteStaticApp({
   });
 
   try {
-    const [appModule, coreModule, viteModule, staticExportModule] = await Promise.all([
-      viteServer.ssrLoadModule('/src/app.ts'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
-    ]);
+    const [appModule, auxModule, examplesModule, coreModule, viteModule, staticExportModule] =
+      await Promise.all([
+        viteServer.ssrLoadModule('/src/app.ts'),
+        viteServer.ssrLoadModule('/src/aux.ts'),
+        viteServer.ssrLoadModule('/src/examples.ts'),
+        viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
+        viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
+        viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
+      ]);
     const { isKovoApp } = coreModule;
     const {
       exportKovoAppShellViteBuildWithManifestFromManifestFile,
@@ -75,6 +78,11 @@ export async function exportSiteStaticApp({
     // public/ (fonts + the gallery runtime shim) is verbatim static hosting,
     // outside the manifest; copy it alongside the replayed documents.
     await cp(publicDir, outDir, { recursive: true });
+
+    // Agent/static-host surface (search index, llms.txt, raw .md mirrors, 404)
+    // and the embedded example apps the iframes point at.
+    await auxModule.emitAuxOutputs(outDir);
+    await examplesModule.exportExampleApps(outDir);
 
     return { ...result, manifest };
   } finally {

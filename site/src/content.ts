@@ -31,6 +31,8 @@ export interface DocPage {
   description: string;
   headings: Heading[];
   html: string;
+  /** Markdown body with build-time captures + snippets substituted (for llms-full). */
+  markdown: string;
   mirror: string;
   order: number;
   slug: string;
@@ -78,6 +80,7 @@ export interface SpecContent {
 
 export interface SiteContent {
   groups: NavGroup[];
+  loaderGzipBytes: number;
   search: SearchEntry[];
   sections: DocSection[];
   spec: SpecContent;
@@ -236,6 +239,7 @@ async function buildSiteContent(): Promise<SiteContent> {
         description: raw.description,
         headings: rendered.headings,
         html,
+        markdown: substituted,
         mirror: raw.mirror,
         order: raw.order,
         slug: raw.slug,
@@ -266,6 +270,7 @@ async function buildSiteContent(): Promise<SiteContent> {
 
   return {
     groups: navGroups(sections),
+    loaderGzipBytes: Number(captures['loader-gzip-bytes'] ?? 0),
     search,
     sections,
     spec: { html: finish(specHtml), ids: specIds, source: specSource, text: specRendered.text },
