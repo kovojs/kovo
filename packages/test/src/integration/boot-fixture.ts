@@ -24,6 +24,8 @@ import { createFixtureInstance, type FixtureInstance } from './fixture-instance.
 export interface BootedFixture {
   /** The current per-test database (recreated by `reset`). */
   readonly db: FixtureInstance['db'];
+  /** Runtime DB verification diagnostics collected by this fixture instance. */
+  verificationDiagnostics(): ReturnType<FixtureInstance['verificationDiagnostics']>;
   /** `http://host:port` the fixture is served at. */
   readonly origin: string;
   /** Stop the HTTP server, Vite, and the database. */
@@ -122,6 +124,7 @@ export async function bootFixture(
     get db() {
       return instance.db;
     },
+    verificationDiagnostics: () => instance.verificationDiagnostics(),
     origin: `http://${host}:${port}`,
     async close() {
       await closeHttpServer(server);

@@ -7,8 +7,10 @@
 // framework-owned suite: fixtures exercise framework public APIs end-to-end, not
 // app wiring.
 import type { KovoApp } from '@kovojs/server/app-shell/core';
+import type { TouchGraph } from '@kovojs/core';
 
 import type { PgliteTestDb } from '../pglite.js';
+import type { DbVerificationConfig } from '../verifier.js';
 
 /**
  * The per-request context a fixture's route/query/mutation handlers receive. The
@@ -34,6 +36,14 @@ export interface FixtureDefinition {
   schema?: string | readonly string[];
   /** Populate the database before each test, after `schema` has run. */
   seed?: (db: PgliteTestDb) => void | Promise<unknown>;
+  /**
+   * Optional static touch graph for integration-time DB verification. When
+   * paired with `verification`, the fixture server wraps `request.db` and
+   * checks observed writes/reads against SPEC.md §11.2.
+   */
+  touchGraph?: TouchGraph;
+  /** Table/domain metadata used by the integration-time DB verifier. */
+  verification?: DbVerificationConfig;
 }
 
 const FIXTURE_BRAND = '__kovoIntegrationFixture';
