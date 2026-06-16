@@ -1,0 +1,14 @@
+<table kovo-c="line-items-table">
+  <caption>
+    "Order lines"
+  <tbody>
+    <tr data-row="sku-notebook">
+      <th>
+        "Notebook"
+      <td>
+        "2"
+    <tr data-row="sku-pencil">
+      <th>
+        "Pencil"
+      <td>
+        "6"
