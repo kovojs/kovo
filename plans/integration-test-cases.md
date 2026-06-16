@@ -48,8 +48,10 @@ integration harness uniquely proves.
     `tests/integration/specs/query-refetch.spec.ts` verify `/_q/refetch` returns latest server
     truth and snapshots the stale page. Proving command:
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
-  - Gap: left unchecked because the default inline loader in this branch does not install
-    focus/visibility typed-read refetch or apply query-only chunks to live `[kovo-deps]` consumers.
+  - Gap: default inline loader still does not install focus/visibility typed-read refetch. Query-only
+    chunks now update live `data-bind` / `data-bind:<attr>` text/attrs in `[kovo-deps]`
+    consumers, but typed-read lifecycle wiring exceeded the SPEC §4.4 4KB gzip budget during this
+    slice (prototype generated inline loader was 4619 bytes gzip > 4096).
 - [ ] `optimistic-success` / `optimistic-success.spec.ts`: a hand-written optimistic transform
       updates every consumer of the invalidated query immediately, marks affected islands pending,
       and reconciles cleanly when the server response arrives.
@@ -236,17 +238,25 @@ integration harness uniquely proves.
 
 ## Query and update plan
 
-- [ ] `binding-text-attr` / `binding-text-attr.spec.ts`: query and local-state changes update text
+- [x] `binding-text-attr` / `binding-text-attr.spec.ts`: query and local-state changes update text
       bindings and attribute bindings through `data-bind` / `data-bind:<attr>`.
   - SPEC refs: §4.8 bindings.
   - Assertions: text and attribute values update from one query response; semantic snapshot keeps
     both binding forms.
-  - Partial evidence: `tests/integration/fixtures/binding-text-attr` and
-    `tests/integration/specs/binding-text-attr.spec.ts` verify server mutation fragments and
-    inline-loader local state update `data-bind` / `data-bind:<attr>` text and attributes. Proving
-    command: `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
-  - Gap: left unchecked because live DOM query-only chunk application is not currently wired by the
-    default inline loader; the server-side update path is proven through fragments.
+  - Evidence 2026-06-16: `packages/runtime/src/inline-loader-build.ts` applies valid
+    `kovo-query` chunks from enhanced mutation responses to live `data-bind` / `data-bind:<attr>`
+    bindings before fragment application, and regenerated `packages/runtime/src/inline-loader.ts`
+    passes `pnpm --filter @kovojs/runtime run check:inline-loader`.
+  - Evidence 2026-06-16: `tests/integration/fixtures/binding-text-attr` now returns a query-only
+    mutation response for the server update, and
+    `tests/integration/specs/binding-text-attr.spec.ts` asserts `<kovo-query name="card">` with no
+    `<kovo-fragment>` before observing updated text/attrs. Focused command:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/binding-text-attr.spec.ts specs/query-refetch.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts specs/stamp-list-insert-remove.spec.ts specs/stamp-list-reorder.spec.ts --config playwright.config.ts`
+    passed `binding-text-attr`, `query-refetch`, `nullable-binding`, and `shared-query-consumers`;
+    the same command failed the still-open `data-bind-list` query-only cases in
+    `stamp-list-insert-remove` and `stamp-list-reorder`.
+  - Evidence 2026-06-16: clean focused subset passed 4/4:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/binding-text-attr.spec.ts specs/query-refetch.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts --config playwright.config.ts`.
 - [x] `nullable-binding` / `nullable-binding.spec.ts`: optional path traversal with `?.` renders empty
       text/removes attributes consistently between SSR and loader update.
   - SPEC refs: §4.8 null-aware paths, §6.2 query data/bindings.
@@ -329,8 +339,8 @@ integration harness uniquely proves.
   - SPEC refs: §9.3 BroadcastChannel liveness.
   - Assertions: two pages share session; mutation in one tab updates the other without navigation.
   - Gap: not implemented in this slice because the fixture document shell uses the generated inline
-    loader, which dispatches local `kovo:query` events for enhanced mutation responses but does not
-    install the full `installKovoLoader` BroadcastChannel mutation rebroadcast path.
+    loader, which now applies local query chunks to text/attr bindings but still does not install the
+    full `installKovoLoader` BroadcastChannel mutation rebroadcast path.
 
 ## Morph survival
 

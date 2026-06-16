@@ -10,15 +10,14 @@ import {
   inlineWireParserReadableSource,
 } from './inline-loader-build.js';
 
-// SPEC.md §4.4/§9.1: inline query-event handoff and fragment application are
-// generated from a single runtime-owned apply helper closure that is extracted,
-// closure-checked, and minified before embedding. The decoded runtime apply and
-// modular parity behavior lives in sibling inline-loader-response-apply-runtime.test.ts.
+// SPEC.md §4.4/§9.1: inline fragment application is generated from a single
+// runtime-owned apply helper closure that is extracted, closure-checked, and
+// minified before embedding. Query binding application and modular parity
+// behavior lives in sibling inline-loader-response-apply-runtime.test.ts.
 describe('inline loader response apply source', () => {
   it('generates readable inline loader source around the canonical response apply helper', () => {
     const alternateReadableApply = [
       'function applyInlineMutationResponseChunks(chunks, options) {',
-      '  options.dispatchQueryEvent("kovo:query", { detail: { queries: chunks.queries } });',
       '  return applyHtmlResponseFragments(chunks.fragments, options.findFragmentTarget);',
       '}',
       'function applyHtmlResponseFragments(fragments, findFragmentTarget) {',
@@ -55,7 +54,7 @@ describe('inline loader response apply source', () => {
     expect(alternateReadable).toContain(alternateReadableApply);
     expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);
     expect(alternateReadable).toContain(
-      'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {',
+      'applyInlineMutationResponseChunks(chunks, {',
     );
   });
 

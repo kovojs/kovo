@@ -6,9 +6,8 @@ import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
 
 // SPEC.md §4.4/§9.1: the helper extracted into the inline loader owns the tiny
-// response-apply step that bridges decoded query chunks to modular `kovo:query`
-// hydration and applies fragment patches, staying in parity with the modular DOM
-// apply path. The build/extract/closure-check behavior lives in sibling
+// response-apply step that applies fragment patches after the inline bootstrap
+// has applied decoded query chunks to live bindings. The build/extract/closure-check behavior lives in sibling
 // inline-loader-response-apply-extract.test.ts.
 describe('inline loader response apply runtime', () => {
   it.each(inlineSourceInstallCases)(
@@ -18,8 +17,7 @@ describe('inline loader response apply runtime', () => {
     },
   );
 
-  it('applies decoded inline query events and fragments through the runtime-owned helper', () => {
-    const dispatched: unknown[] = [];
+  it('applies fragments through the runtime-owned helper', () => {
     const targets = new Map([
       [
         'append-second-target',
@@ -53,23 +51,12 @@ describe('inline loader response apply runtime', () => {
         queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
       },
       {
-        dispatchQueryEvent(type, init) {
-          dispatched.push({ type, ...init });
-        },
         findFragmentTarget(target) {
           return (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null;
         },
       },
     );
 
-    expect(dispatched).toEqual([
-      {
-        detail: {
-          queries: [{ attrs: ' name="cart"', content: 'decoded query' }],
-        },
-        type: 'kovo:query',
-      },
-    ]);
     expect(appliedFragments).toEqual(['append-second-target', 'append-target']);
     expect(targets.get('append-second-target')?.html).toBe('<p>old</p><p>second</p>');
     expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');

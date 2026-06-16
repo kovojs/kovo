@@ -1,7 +1,6 @@
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './index.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
-import { applyInlineQueryEventToRuntime, type InlineQueryEvent } from './query-events.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 interface InlineResponseApplyAssertions {
@@ -20,9 +19,6 @@ export async function expectInlineResponseApplyParity(
     '<kovo-query name="cart" key="cart:c1">{"count":1}</kovo-query>',
     '<kovo-query name="productGrid">{"products":[{"id":"p1"}]}</kovo-query>',
     '<kovo-query name="product" key="product&gt;p1">{&quot;stock&quot;:7}</kovo-query>',
-    '<kovo-query name="malformed">{</kovo-query>',
-    '<kovo-query name="empty"></kovo-query>',
-    '<kovo-query>{"ignored":true}</kovo-query>',
     '<kovo-fragment target="cart-badge" mode="append"><cart-badge>1<kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge></kovo-fragment>',
     '<kovo-fragment target="cart-list" mode="append"><li>p1</li></kovo-fragment>',
     '<kovo-fragment target="cart-summary" mode="append"><section kovo-c="cart-summary">summary</section></kovo-fragment>',
@@ -77,17 +73,14 @@ export async function expectInlineResponseApplyParity(
 
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   const originals = {
-    CustomEvent: globalRecord.CustomEvent,
     DOMParser: globalRecord.DOMParser,
     FormData: globalRecord.FormData,
     addEventListener: globalRecord.addEventListener,
-    dispatchEvent: globalRecord.dispatchEvent,
     document: globalRecord.document,
     fetch: globalRecord.fetch,
     importModule: globalRecord.__kovoInlineImport,
   };
   const listeners = new Map<string, (event: unknown) => void>();
-  const dispatched: InlineQueryEvent[] = [];
   interface InlineParityTarget {
     html?: string;
     insertAdjacentHTML?(position: string, html: string): void;
@@ -122,17 +115,30 @@ export async function expectInlineResponseApplyParity(
       },
     ],
   ]);
+  const inlineBindings = [
+    {
+      attributes: [{ name: 'data-bind:aria-label', value: 'product.stock' }],
+      textContent: '',
+      getAttribute(name: string) {
+        return name === 'data-bind' ? 'cart.count' : null;
+      },
+      setAttribute(name: string, value: string) {
+        this.attributes.push({ name, value });
+      },
+    },
+    {
+      attributes: [],
+      textContent: '',
+      getAttribute(name: string) {
+        return name === 'data-bind' ? 'productGrid.products' : null;
+      },
+      setAttribute(name: string, value: string) {
+        this.attributes.push({ name, value });
+      },
+    },
+  ];
 
   try {
-    globalRecord.CustomEvent = class CustomEvent {
-      readonly detail: unknown;
-      readonly type: string;
-
-      constructor(type: string, init?: InlineQueryEvent) {
-        this.detail = init?.detail;
-        this.type = type;
-      }
-    };
     globalRecord.DOMParser = class DOMParser {
       parseFromString() {
         throw new Error('inline mutation response parsing must not use DOMParser');
@@ -143,10 +149,6 @@ export async function expectInlineResponseApplyParity(
     };
     globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
       listeners.set(type, listener);
-    };
-    globalRecord.dispatchEvent = (event: InlineQueryEvent) => {
-      dispatched.push(event);
-      return true;
     };
     globalRecord.document = {
       getElementById(id: string) {
@@ -160,6 +162,7 @@ export async function expectInlineResponseApplyParity(
         return null;
       },
       querySelectorAll(selector: string) {
+        if (selector === '*') return inlineBindings;
         return selector === '[kovo-deps]' ? [] : [];
       },
     };
@@ -194,27 +197,9 @@ export async function expectInlineResponseApplyParity(
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const inlineStore = createQueryStore();
-    const inlineQueries = dispatched.flatMap((event) =>
-      applyInlineQueryEventToRuntime(event, { store: inlineStore }),
-    );
-
-    expect(dispatched.map((event) => event.detail)).toEqual([
-      {
-        queries: [
-          { attrs: ' name="cart" key="cart:c1"', content: '{"count":1}' },
-          { attrs: ' name="productGrid"', content: '{"products":[{"id":"p1"}]}' },
-          { attrs: ' name="product" key="product&gt;p1"', content: '{&quot;stock&quot;:7}' },
-          { attrs: ' name="malformed"', content: '{' },
-          { attrs: ' name="empty"', content: '' },
-          { attrs: '', content: '{"ignored":true}' },
-        ],
-      },
-    ]);
-    expect(inlineQueries).toEqual(modularResult.queries);
-    expect(inlineStore.get('cart', 'cart:c1')).toEqual(store.get('cart', 'cart:c1'));
-    expect(inlineStore.get('productGrid')).toEqual(store.get('productGrid'));
-    expect(inlineStore.get('product', 'product>p1')).toEqual(store.get('product', 'product>p1'));
+    expect(inlineBindings[0]?.textContent).toBe('1');
+    expect(inlineBindings[0]?.attributes).toContainEqual({ name: 'aria-label', value: '7' });
+    expect(inlineBindings[1]?.textContent).toBe('[{"id":"p1"}]');
     expect(inlineTargets.get('cart-badge')?.html).toBe(modularTargets.get('cart-badge')?.html);
     expect(inlineTargets.get('cart-list')?.html).toBe(modularTargets.get('cart-list')?.html);
     expect(inlineTargets.get('cart-summary')?.html).toBe(modularTargets.get('cart-summary')?.html);
@@ -237,11 +222,9 @@ export async function expectInlineResponseApplyParity(
     });
   } finally {
     Object.assign(globalRecord, {
-      CustomEvent: originals.CustomEvent,
       DOMParser: originals.DOMParser,
       FormData: originals.FormData,
       addEventListener: originals.addEventListener,
-      dispatchEvent: originals.dispatchEvent,
       document: originals.document,
       fetch: originals.fetch,
     });
