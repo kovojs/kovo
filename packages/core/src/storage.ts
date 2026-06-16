@@ -1,11 +1,14 @@
+/** The accepted body shapes when writing an object: a string, raw bytes, or a byte stream. */
 export type StorageBody = string | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;
 
+/** Optional metadata to attach when writing an object: content type, etag, and custom key/value metadata. */
 export interface StoragePutOptions {
   contentType?: string;
   etag?: string;
   metadata?: Readonly<Record<string, string>>;
 }
 
+/** Descriptive information about a stored object: its key, size, and optional content type, etag, modified time, and metadata. */
 export interface StorageObjectInfo {
   contentType?: string;
   etag?: string;
@@ -15,16 +18,20 @@ export interface StorageObjectInfo {
   size: number;
 }
 
+/** Result of writing an object: the stored object's descriptive information. */
 export interface StoragePutResult extends StorageObjectInfo {}
 
+/** Result of reading an object fully into memory: its descriptive information plus the object bytes. */
 export interface StorageGetResult extends StorageObjectInfo {
   body: Uint8Array;
 }
 
+/** Result of opening an object as a stream: its descriptive information plus a readable byte stream of the body. */
 export interface StorageStreamResult extends StorageObjectInfo {
   body: ReadableStream<Uint8Array>;
 }
 
+/** The object-storage interface an app uses to read, write, stat, and stream objects by key. */
 export interface StorageCapability {
   get(key: string): Promise<StorageGetResult | undefined>;
   put(key: string, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
@@ -32,14 +39,17 @@ export interface StorageCapability {
   stream(key: string): Promise<StorageStreamResult | undefined>;
 }
 
+/** Options for the filesystem-backed storage: the root directory objects are stored under. */
 export interface FileSystemStorageOptions {
   root: string;
 }
 
+/** Options for the in-memory storage: an optional clock used for deterministic modified times. */
 export interface MemoryStorageOptions {
   now?: () => Date;
 }
 
+/** Input to an S3-compatible put-object call: target bucket and key, the body, and optional content type and metadata. */
 export interface S3CompatiblePutObjectInput {
   body: StorageBody;
   bucket: string;
@@ -48,16 +58,19 @@ export interface S3CompatiblePutObjectInput {
   metadata?: Readonly<Record<string, string>>;
 }
 
+/** Input to an S3-compatible get-object call: the target bucket and key. */
 export interface S3CompatibleGetObjectInput {
   bucket: string;
   key: string;
 }
 
+/** Input to an S3-compatible head-object call: the target bucket and key. */
 export interface S3CompatibleHeadObjectInput {
   bucket: string;
   key: string;
 }
 
+/** Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
 export interface S3CompatibleObjectMetadata {
   contentLength?: number;
   contentType?: string;
@@ -66,20 +79,24 @@ export interface S3CompatibleObjectMetadata {
   metadata?: Readonly<Record<string, string>>;
 }
 
+/** Output of an S3-compatible put-object call: the object metadata plus an optional size. */
 export interface S3CompatiblePutObjectOutput extends S3CompatibleObjectMetadata {
   size?: number;
 }
 
+/** Output of an S3-compatible get-object call: the object metadata plus the object body. */
 export interface S3CompatibleGetObjectOutput extends S3CompatibleObjectMetadata {
   body: StorageBody;
 }
 
+/** The minimal S3-compatible client an app supplies: get, head, and put object operations. */
 export interface S3CompatibleObjectClient {
   getObject(input: S3CompatibleGetObjectInput): Promise<S3CompatibleGetObjectOutput | undefined>;
   headObject(input: S3CompatibleHeadObjectInput): Promise<S3CompatibleObjectMetadata | undefined>;
   putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput>;
 }
 
+/** Options for S3-compatible storage: the bucket, the underlying object client, and an optional key prefix. */
 export interface S3CompatibleStorageOptions {
   bucket: string;
   client: S3CompatibleObjectClient;

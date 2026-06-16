@@ -1,21 +1,27 @@
+/** The raw request body a webhook verifier signs over: a string or raw bytes. */
 export type WebhookPayload = string | ArrayBuffer | ArrayBufferView;
 
+/** A single header value as seen by a verifier: a string, a list of strings, or absent. */
 export type WebhookHeaderValue = null | string | readonly string[] | undefined;
 
+/** The request headers a verifier reads, accepted as a `Headers`, a `Map`, a record, or any object exposing `get`. */
 export type WebhookHeaders =
   | Headers
   | Map<string, string>
   | Record<string, WebhookHeaderValue>
   | { get(name: string): WebhookHeaderValue };
 
+/** The inbound webhook request a verifier checks: its headers, raw payload, and an optional verification clock. */
 export interface WebhookVerificationRequest {
   headers: WebhookHeaders;
   now?: Date | number;
   payload: WebhookPayload;
 }
 
+/** A configured webhook verifier: either an HMAC-signature verifier or a custom-scheme verifier. */
 export type WebhookVerifier = HmacSignatureVerifier | CustomWebhookVerifier;
 
+/** A verifier for a bespoke webhook scheme: a named scheme plus an async `verify` of the request. */
 export interface CustomWebhookVerifier {
   kind: 'custom';
   name: string;
@@ -23,8 +29,10 @@ export interface CustomWebhookVerifier {
   verify(request: WebhookVerificationRequest): Promise<boolean>;
 }
 
+/** Encoding of an HMAC signature as it appears in the signature header. */
 export type HmacSignatureEncoding = 'base64' | 'base64url' | 'hex';
 
+/** A signing secret: a string, raw bytes, or a value with an explicit encoding. */
 export type HmacSecret =
   | string
   | Uint8Array
@@ -33,11 +41,13 @@ export type HmacSecret =
       value: string | Uint8Array;
     };
 
+/** Context passed to a custom payload builder: the signature header value and a header lookup. */
 export interface HmacSignaturePayloadContext {
   header(name: string): string | undefined;
   signatureHeader: string;
 }
 
+/** What gets signed: the request payload directly, or a function that derives the signed bytes from the request and context. */
 export type HmacSignaturePayload =
   | WebhookPayload
   | ((
@@ -45,6 +55,7 @@ export type HmacSignaturePayload =
       context: HmacSignaturePayloadContext,
     ) => Promise<WebhookPayload> | WebhookPayload);
 
+/** Replay-protection window: the allowed clock skew in seconds plus how to read the request timestamp. */
 export interface HmacSignatureTolerance {
   header?: string;
   seconds: number;
@@ -54,8 +65,10 @@ export interface HmacSignatureTolerance {
   ) => number | string | undefined;
 }
 
+/** Whether a signature header may carry multiple candidate signatures, or a function that splits them out. */
 export type HmacMultiSignature = boolean | ((signatureHeader: string) => readonly string[]);
 
+/** Configuration for an HMAC-signature verifier: header, encoding, payload, secret(s), and optional tolerance and multi-signature handling. */
 export interface HmacSignatureOptions {
   encoding: HmacSignatureEncoding;
   header: string;
@@ -67,6 +80,7 @@ export interface HmacSignatureOptions {
   tolerance?: HmacSignatureTolerance;
 }
 
+/** The resolved, defaults-applied view of an HMAC verifier's configuration. */
 export interface ResolvedHmacSignatureConfig {
   encoding: HmacSignatureEncoding;
   header: string;
@@ -77,6 +91,7 @@ export interface ResolvedHmacSignatureConfig {
   toleranceSeconds?: number;
 }
 
+/** A configured HMAC-signature verifier: its options, resolved config, and an async `verify` of the request. */
 export interface HmacSignatureVerifier {
   config: HmacSignatureOptions;
   kind: 'hmac';
@@ -86,10 +101,12 @@ export interface HmacSignatureVerifier {
   verify(request: WebhookVerificationRequest): Promise<boolean>;
 }
 
+/** Options for the Stripe-signature preset: the signing secret(s). */
 export interface StripeSignatureOptions {
   secret: HmacSecret | readonly HmacSecret[];
 }
 
+/** Options for the Standard Webhooks preset: the signing secret(s). */
 export interface StandardWebhooksOptions {
   secret: HmacSecret | readonly HmacSecret[];
 }

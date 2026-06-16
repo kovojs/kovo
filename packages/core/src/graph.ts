@@ -2,6 +2,7 @@ import type { DerivationStatus } from './derivation.js';
 
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 
+/** @internal */
 export interface TouchSite {
   branch?: string;
   domain: string;
@@ -11,6 +12,7 @@ export interface TouchSite {
   via: string;
 }
 
+/** @internal */
 export interface ReadSite {
   branch?: string;
   domain: string;
@@ -21,6 +23,7 @@ export interface ReadSite {
   via: string;
 }
 
+/** @internal */
 export interface UnresolvedWriteSite {
   code: 'KV404' | 'KV406';
   domain?: string;
@@ -28,14 +31,17 @@ export interface UnresolvedWriteSite {
   site: string;
 }
 
+/** @internal */
 export interface TouchGraphEntry {
   reads?: readonly ReadSite[];
   touches: readonly TouchSite[];
   unresolved: readonly UnresolvedWriteSite[];
 }
 
+/** @internal */
 export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
+/** @internal */
 export interface KovoCheckInput {
   diagnostics?: readonly StaticDiagnosticFact[];
   endpoints?: readonly EndpointExplain[];
@@ -55,6 +61,7 @@ export interface KovoCheckInput {
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
 
+/** @internal */
 export interface KovoExplainInput extends KovoCheckInput {
   components?: readonly ComponentExplain[];
   mutations?: readonly MutationExplain[];
@@ -62,12 +69,14 @@ export interface KovoExplainInput extends KovoCheckInput {
   pages?: readonly PageExplain[];
 }
 
+/** @internal */
 export interface PackageComponentPrefixExplain {
   effectivePrefix?: string;
   packageName: string;
   prefix?: string | null;
 }
 
+/** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
   derives?: readonly DeriveExplain[];
@@ -79,6 +88,7 @@ export interface ComponentExplain {
   triggers?: readonly TriggerExplain[];
 }
 
+/** @internal */
 export interface AttributeMergeExplain {
   attr: string;
   decision: string;
@@ -87,6 +97,7 @@ export interface AttributeMergeExplain {
   rule: string;
 }
 
+/** @internal */
 export interface DeriveExplain {
   inputs: readonly string[];
   name: string;
@@ -94,6 +105,7 @@ export interface DeriveExplain {
   target: string;
 }
 
+/** @internal */
 export interface HandlerExplain {
   captures?: readonly CaptureChannel[];
   event: string;
@@ -103,8 +115,10 @@ export interface HandlerExplain {
   substitution?: string;
 }
 
+/** @internal */
 export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
 
+/** @internal */
 export interface TriggerExplain {
   deps?: readonly string[];
   exportName: string;
@@ -113,6 +127,7 @@ export interface TriggerExplain {
   trigger: 'idle' | 'load' | 'visible';
 }
 
+/** @internal */
 export interface PlatformSubstitutionExplain {
   action: string;
   event: string;
@@ -121,6 +136,7 @@ export interface PlatformSubstitutionExplain {
   target: string;
 }
 
+/** @internal */
 export interface MutationExplain {
   auth?: string;
   enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
@@ -134,12 +150,14 @@ export interface MutationExplain {
   writes?: readonly string[];
 }
 
+/** @internal */
 export interface PageMetaExplain {
   description?: string;
   image?: string;
   title?: string;
 }
 
+/** @internal */
 export interface PageExplain {
   guards?: readonly string[];
   i18n?: readonly string[];
@@ -152,6 +170,7 @@ export interface PageExplain {
   viewTransitions?: readonly string[];
 }
 
+/** @internal */
 export interface EndpointExplain {
   auth?: string;
   csrf?: 'checked' | 'exempt';
@@ -164,6 +183,7 @@ export interface EndpointExplain {
   writes?: readonly string[];
 }
 
+/** @internal */
 export interface OptimisticCoverage {
   // SPEC.md §10.5/§10.6: v2 adds `derived` to the status set. `derivation` is
   // separate metadata (derived ✓ or a named PUNTED reason) — a PUNTED derivation
@@ -175,11 +195,13 @@ export interface OptimisticCoverage {
   status: 'UNHANDLED' | 'await-fragment' | 'derived' | 'hand-written';
 }
 
+/** @internal */
 export interface OwnerDomainFact {
   domain: string;
   owner: string;
 }
 
+/** @internal */
 export interface ScopeAuditFact {
   detail?: string;
   domain: string;
@@ -189,6 +211,7 @@ export interface ScopeAuditFact {
   site: string;
 }
 
+/** @internal */
 export interface UpdateCoverageFact {
   component: string;
   detail?: string;
@@ -198,6 +221,7 @@ export interface UpdateCoverageFact {
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
 
+/** @internal */
 export interface FixpointCheck {
   actual?: string;
   artifact: string;
@@ -206,6 +230,7 @@ export interface FixpointCheck {
   ok: boolean;
 }
 
+/** @internal */
 export interface RenderEquivalenceCheck {
   actual?: string;
   artifact: string;
@@ -214,29 +239,34 @@ export interface RenderEquivalenceCheck {
   ok: boolean;
 }
 
+/** @internal */
 export interface EventPayloadFact {
   event: string;
   fields: readonly string[];
   site: string;
 }
 
+/** @internal */
 export interface QueryDataFact {
   fields: readonly string[];
   query: string;
 }
 
+/** @internal */
 export interface QueryReadSet {
   domains: readonly string[];
   guards?: readonly string[];
   query: string;
 }
 
+/** @internal */
 export interface SemanticLint {
   code: DiagnosticCode;
   detail?: string;
   site: string;
 }
 
+/** @internal */
 export interface VerificationDiagnosticFact {
   branch?: string;
   code: DiagnosticCode;
@@ -247,6 +277,7 @@ export interface VerificationDiagnosticFact {
   site?: string;
 }
 
+/** @internal */
 export interface StaticDiagnosticFact {
   code: DiagnosticCode;
   length?: number;
@@ -256,11 +287,13 @@ export interface StaticDiagnosticFact {
   start?: SourcePosition;
 }
 
+/** @internal */
 export interface SourcePosition {
   column: number;
   line: number;
 }
 
+/** @internal */
 export interface GraphInputValidationError {
   message: string;
   path: string;
@@ -286,6 +319,7 @@ const arrayFields = [
   'verificationDiagnostics',
 ] as const;
 
+/** @internal */
 export function validateKovoExplainInput(input: unknown): GraphInputValidationError[] {
   const errors: GraphInputValidationError[] = [];
   if (!isRecord(input)) {
