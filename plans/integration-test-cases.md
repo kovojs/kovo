@@ -564,10 +564,16 @@ integration harness uniquely proves.
     results render the public anonymous shell and send guarded route access through the 303 login
     redirect without a server error, while a real session reaches the guarded route. Proving command:
     the Slice I Playwright command recorded under `query-args-search`.
-- [ ] `unscoped-owner-fixture` / `unscoped-owner-fixture.spec.ts`: an owner-scoped table/query path
+- [x] `unscoped-owner-fixture` / `unscoped-owner-fixture.spec.ts`: an owner-scoped table/query path
       renders only rows tied to `req.session` and rejects cross-user access at request time.
   - SPEC refs: §10.1 owner annotations, §10.3 unscoped audit.
   - Assertions: two sessions see distinct rows; direct query/read cannot fetch another owner.
+  - Evidence: added `tests/integration/fixtures/unscoped-owner-fixture/app.tsx` and
+    `tests/integration/specs/unscoped-owner-fixture.spec.ts`; anonymous access redirects, session
+    `u1` renders only `inv-u1`, cross-owner route access renders a not-found shell without `u2`
+    data, and the typed read endpoint returns `{"invoice":null}` for `u1` reading `inv-u2`.
+    Proving command:
+    `pnpm exec playwright test unscoped-owner-fixture.spec.ts webhook-hmac.spec.ts webhook-idempotency.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 
 ## Data-plane verification edges
 
@@ -577,27 +583,45 @@ integration harness uniquely proves.
   - SPEC refs: §11.1 touch extraction, §11.2 runtime verification.
   - Assertions: positive fixture passes; intentionally bad fixture can be a skipped/expected-fail spec
     if the harness supports failure cases.
+  - Gap: public Playwright fixtures attach only `request.db` and `createRequestHandler(app)`; they do
+    not accept the `createKovoTestHarness({ touchGraph, verification })` verifier options used by
+    `packages/test/src/harness-verifier.test.ts` and `packages/test/src/pglite-harness.test.ts`, so a
+    browser fixture cannot honestly assert runtime touch-graph failure yet.
 - [ ] `manual-touches-raw-write` / `manual-touches-raw-write.spec.ts`: a statically opaque write with
       declared touches refreshes the right query and remains runtime-verified.
   - SPEC refs: §10.3 manual touches, §11.1 KV406.
   - Assertions: raw write changes db; invalidated query/fragment updates; diagnostics are visible.
+  - Gap: integration fixtures can assert raw DB writes and change headers, but cannot currently inject
+    static KV406/manual-touch coverage into the request verifier; leave open until the integration
+    harness exposes verifier metadata or a compiled touch graph artifact.
 - [ ] `table-level-invalidation` / `table-level-invalidation.spec.ts`: non-eq predicates degrade to
       table-level invalidation and refresh all affected query instances.
   - SPEC refs: §11.1 KV409, §10.1 row-level keys.
   - Assertions: multiple instances refresh; explain/diagnostic assertion may be browser-free.
+  - Gap: row/table-level degradation is covered in Drizzle extraction units, but the current
+    integration runner has no public path from fixture source to a KV409 diagnostic/explain artifact
+    for a browser-served fixture.
 - [ ] `query-readset-runtime-crosscheck` / `query-readset-runtime-crosscheck.spec.ts`: query loaders'
       observed SELECT/JOIN tables match derived read sets during integration runs.
   - SPEC refs: §10.2 queries, §11.2 runtime verification.
   - Assertions: positive fixture passes; bad raw read fixture fails through harness diagnostics if
     failure-case support exists.
+  - Gap: read-side verifier assertions exist in the package-level harness, but fixture dispatch does
+    not expose observed SELECT/JOIN readsets or a way to install expected readset metadata for
+    Playwright requests.
 - [ ] `opaque-projection-schema` / `opaque-projection-schema.spec.ts`: raw/`sql<T>` projections with a
       declared output schema render when observed rows match and fail when runtime shape drifts.
   - SPEC refs: §10.2 KV410, §11.2 runtime shape verification.
   - Assertions: matching projection binds in UI; drift fixture reports KV410 without leaking internals.
+  - Gap: query `output` schemas can be exercised through typed-read endpoints, but KV410 is a
+    compiler/Drizzle opaque-projection diagnostic and no integration fixture hook currently surfaces
+    that artifact for raw/`sql<T>` projection source.
 - [ ] `exempt-table-read-fails` / `exempt-table-read-fails.spec.ts`: a query reading an exempt table is
       rejected because exemptions are write-side only.
   - SPEC refs: §10.1 KV411, §11.2 runtime verification.
   - Assertions: served request fails with teaching diagnostic; no stale UI path.
+  - Gap: `packages/test/src/verifier.test.ts` proves KV411 in the verifier, but browser fixtures do not
+    accept `verification.exemptTables` or expose the verifier failure as a served diagnostic.
 
 ## Endpoints, webhooks, files, and streams
 
@@ -620,14 +644,24 @@ integration harness uniquely proves.
     machine-ingress dispatch and assert the public `kovoExplain(..., { endpoints: true })` audit
     line with verifier auth plus the exemption justification. Proving command:
     `pnpm exec playwright test endpoint-raw-request endpoint-csrf-exempt-audited respond-file respond-stream storage-download-route --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `webhook-hmac` / `webhook-hmac.spec.ts`: `webhook()` verifies raw bytes with HMAC, parses loose
+- [x] `webhook-hmac` / `webhook-hmac.spec.ts`: `webhook()` verifies raw bytes with HMAC, parses loose
       input, writes through domain writes, and emits a unified change record.
   - SPEC refs: §9.1 webhook, verifier kit.
   - Assertions: valid signature writes once; invalid signature rejected before parse/write.
-- [ ] `webhook-idempotency` / `webhook-idempotency.spec.ts`: repeated provider event ids replay the
+  - Evidence: added `tests/integration/fixtures/webhook-hmac/app.tsx` and
+    `tests/integration/specs/webhook-hmac.spec.ts`; a signed raw JSON POST writes provider data from
+    a loose extra field, returns `Kovo-Idem` plus sanitized `Kovo-Changes`, and a tampered signature
+    over invalid JSON returns 401 before parse/write. Proving command:
+    `pnpm exec playwright test unscoped-owner-fixture.spec.ts webhook-hmac.spec.ts webhook-idempotency.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+- [x] `webhook-idempotency` / `webhook-idempotency.spec.ts`: repeated provider event ids replay the
       stored webhook response without re-executing the handler.
   - SPEC refs: §9.1 webhook lifecycle.
   - Assertions: duplicate signed request returns same response; db changes once.
+  - Evidence: added `tests/integration/fixtures/webhook-idempotency/app.tsx` and
+    `tests/integration/specs/webhook-idempotency.spec.ts`; two signed deliveries with the same
+    provider event id return the same 200/`Kovo-Idem`/`Kovo-Changes` response while the DB records one
+    handler execution. Proving command:
+    `pnpm exec playwright test unscoped-owner-fixture.spec.ts webhook-hmac.spec.ts webhook-idempotency.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [x] `respond-file` / `respond-file.spec.ts`: a guarded route returns `respond.file()` with required
       content type, attachment disposition default, and ETag/304 support.
   - SPEC refs: §6.4 file outcomes.
