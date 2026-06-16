@@ -221,10 +221,13 @@ integration harness uniquely proves.
   - Evidence: added `tests/integration/fixtures/morph-focus-caret/app.tsx` and
     `tests/integration/specs/morph-focus-caret.spec.ts`; passed
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
-- [ ] `morph-scroll` / `morph-scroll.spec.ts`: fragment morph preserves scroll position in a scrollable
+- [x] `morph-scroll` / `morph-scroll.spec.ts`: fragment morph preserves scroll position in a scrollable
       region that remains keyed across the patch.
   - SPEC refs: §9.1 morph contract.
   - Assertions: scrollTop survives; inserted content reconciles.
+  - Evidence: added `tests/integration/fixtures/morph-scroll/app.tsx` and
+    `tests/integration/specs/morph-scroll.spec.ts`; passed
+    `pnpm exec playwright test --config tests/integration/playwright.config.ts morph-scroll.spec.ts patched-in-island-inert.spec.ts popover-invoker.spec.ts module-scope-shared.spec.ts`.
 - [ ] `morph-nested-island-state` / `morph-nested-island-state.spec.ts`: nested island local state
       survives a parent fragment morph when the nested island identity is preserved.
   - SPEC refs: §9.1 morph contract, §4.2 component identity.
@@ -236,6 +239,10 @@ integration harness uniquely proves.
       its `ctx.signal` and clears pending trigger observation.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.
   - Assertions: abort callback fires; no later handler side effects from removed island.
+  - Gap: left unchecked because the emitted inline loader used by the integration fixture shell creates
+    a fresh `AbortController().signal` per delegated event and does not retain a per-island signal
+    scope that fragment removal can abort. The full `installKovoLoader` path has
+    `abortRemovedIslandSignals(...)`, but this harness path cannot currently prove removal aborts.
 - [x] `fragment-append` / `fragment-append.spec.ts`: `<kovo-fragment mode="append">` appends paged rows
       without replacing existing keyed content.
   - SPEC refs: §9.1 append vocabulary, §13.2 pagination.
@@ -243,10 +250,13 @@ integration harness uniquely proves.
   - Evidence: added `tests/integration/fixtures/fragment-append/app.tsx` and
     `tests/integration/specs/fragment-append.spec.ts`; passed
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
-- [ ] `patched-in-island-inert` / `patched-in-island-inert.spec.ts`: islands introduced by a fragment
+- [x] `patched-in-island-inert` / `patched-in-island-inert.spec.ts`: islands introduced by a fragment
       are observable by future triggers but do not eagerly import client code.
   - SPEC refs: §4.4 morph application, §9.1 patched-in islands.
   - Assertions: no import before trigger; first interaction imports and runs handler.
+  - Evidence: added `tests/integration/fixtures/patched-in-island-inert` and
+    `tests/integration/specs/patched-in-island-inert.spec.ts`; passed
+    `pnpm exec playwright test --config tests/integration/playwright.config.ts morph-scroll.spec.ts patched-in-island-inert.spec.ts popover-invoker.spec.ts module-scope-shared.spec.ts`.
 
 ## Execution triggers and loader behavior
 
@@ -279,10 +289,13 @@ integration harness uniquely proves.
     `tests/integration/specs/handler-params.spec.ts`; passed `pnpm exec playwright test --config tests/integration/playwright.config.ts event-chain.spec.ts handler-params.spec.ts on-idle.spec.ts on-load-justified.spec.ts on-visible.spec.ts --update-snapshots`.
   - SPEC refs: §4.3 capture channels.
   - Assertions: handler receives string and coerced non-string params; missing param errors visibly.
-- [ ] `module-scope-shared` / `module-scope-shared.spec.ts`: module-scope values are shared imports,
+- [x] `module-scope-shared` / `module-scope-shared.spec.ts`: module-scope values are shared imports,
       not captured closure state, across repeated handler invocations.
   - SPEC refs: §4.3 capture channels.
   - Assertions: handler-visible module counter/cache behaves as module scope; params remain per element.
+  - Evidence: added `tests/integration/fixtures/module-scope-shared` and
+    `tests/integration/specs/module-scope-shared.spec.ts`; passed
+    `pnpm exec playwright test --config tests/integration/playwright.config.ts morph-scroll.spec.ts patched-in-island-inert.spec.ts popover-invoker.spec.ts module-scope-shared.spec.ts`.
 
 ## L0 platform behavior and primitives
 
@@ -293,10 +306,13 @@ integration harness uniquely proves.
   - Evidence: added `tests/integration/fixtures/dialog-invoker/app.tsx` and
     `tests/integration/specs/dialog-invoker.spec.ts`; passed
     `pnpm --filter @kovojs/integration-tests exec playwright test specs/morph-focus-caret.spec.ts specs/fragment-append.spec.ts specs/dialog-invoker.spec.ts specs/details-disclosure.spec.ts --config playwright.config.ts`.
-- [ ] `popover-invoker` / `popover-invoker.spec.ts`: Popover API wiring works as light DOM and degrades
+- [x] `popover-invoker` / `popover-invoker.spec.ts`: Popover API wiring works as light DOM and degrades
       through platform attributes.
   - SPEC refs: §4.6 behavior attributes, §7 L0.
   - Assertions: popover visible state; IDREF attrs snapshot; no custom-element upgrade.
+  - Evidence: added `tests/integration/fixtures/popover-invoker/app.tsx` and
+    `tests/integration/specs/popover-invoker.spec.ts`; passed
+    `pnpm exec playwright test --config tests/integration/playwright.config.ts morph-scroll.spec.ts patched-in-island-inert.spec.ts popover-invoker.spec.ts module-scope-shared.spec.ts`.
 - [x] `details-disclosure` / `details-disclosure.spec.ts`: native `<details>` disclosure works with no
       Kovo client handler.
   - SPEC refs: §7 L0.
