@@ -3,11 +3,6 @@ import { expect, test } from '@kovojs/test/integration';
 
 test.use({ kovoFixture: 'validation-field-errors' });
 
-test.skip(
-  true,
-  'Blocked by current Vite integration load: SchemaValidationError is thrown but not recognized by the mutation dispatcher, so SPEC.md §9.2 field errors render as SERVER_ERROR.',
-);
-
 test('schema validation failures morph field-scoped 422 errors and skip the write', async ({
   page,
   kovoApp,

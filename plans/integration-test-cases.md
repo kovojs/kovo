@@ -201,11 +201,16 @@ integration harness uniquely proves.
   - Evidence: added `tests/integration/fixtures/mutation-response-headers/app.tsx` and
     `tests/integration/specs/mutation-response-headers.spec.ts`; passed the Slice F Playwright
     command recorded under `csrf-required`.
-- [ ] `validation-field-errors` / `validation-field-errors.spec.ts`: schema validation failures return
+- [x] `validation-field-errors` / `validation-field-errors.spec.ts`: schema validation failures return
       HTTP 422 with `data-error-path` and field-scoped messages.
   - SPEC refs: §6.3 form fields, §9.2 errors.
   - Assertions: malformed input produces 422; field error anchors morph in; db unchanged.
-  - Gap: fixture/spec path exists but the spec is skipped. Current Vite integration loading throws `SchemaValidationError` from the schema module but the mutation dispatcher does not recognize it with `instanceof`, so schema validation renders `SERVER_ERROR` instead of the SPEC §9.2 `data-error-path` fragment; the skipped spec records this blocker without faking field-error behavior.
+  - Evidence: `tests/integration/fixtures/validation-field-errors` and
+    `tests/integration/specs/validation-field-errors.spec.ts` verify a malformed quantity returns
+    HTTP 422, morphs a `data-error-path="quantity"` alert into the form target, leaves the URL
+    stable, and leaves `reservations` empty. Proving commands:
+    `pnpm exec vitest run packages/server/src/mutation-endpoint.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/schema.test.ts` and
+    `pnpm exec playwright test tests/integration/specs/validation-field-errors.spec.ts tests/integration/specs/query-args-search.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [x] `typed-error-union-multiple` / `typed-error-union-multiple.spec.ts`: one mutation exposes
       multiple declared error codes and the enhanced path renders the right branch each time.
   - SPEC refs: §6.3 typed error union, §9.2 errors.
@@ -312,23 +317,17 @@ integration harness uniquely proves.
     `tests/integration/specs/shared-query-consumers.spec.ts` verify one initial `kovo-query` script,
     one mutation response query chunk, both dependent islands updating in one enhanced mutation, DB
     truth, and a semantic snapshot. Proving command: `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
-- [ ] `query-args-search` / `query-args-search.spec.ts`: typed read endpoint coerces query args from
+- [x] `query-args-search` / `query-args-search.spec.ts`: typed read endpoint coerces query args from
       search params and returns the canonical instance key.
   - SPEC refs: §9.4 typed reads, §10.2 query args/instance key.
   - Assertions: `/_q/product?id=p1` response includes `product:p1`; invalid args fail safely.
-  - Partial evidence: `tests/integration/fixtures/query-args-search` and
+  - Evidence: `tests/integration/fixtures/query-args-search` and
     `tests/integration/specs/query-args-search.spec.ts` verify initial route search coercion,
-    defaulted args, and typed read responses with canonical `product:p1` / `product:p2` chunks.
-    Proving commands: `pnpm exec playwright test tests/integration/specs/guarded-mutation.spec.ts
-    tests/integration/specs/session-provider-once.spec.ts
-    tests/integration/specs/session-null-anonymous.spec.ts
-    tests/integration/specs/redirect-typed-target.spec.ts
-    tests/integration/specs/query-args-search.spec.ts --config
-    tests/integration/playwright.config.ts --workers=1`; same Slice J command recorded under
-    `derive-binding`.
-  - Gap: left unchecked because invalid typed-read args currently return HTTP 500 in the Vite
-    integration path instead of the SPEC §9.4/§9.2 safe 422 validation response; the skipped spec
-    records the expected 422 `VALIDATION` behavior.
+    defaulted args, typed read responses with canonical `product:p1` / `product:p2` chunks, and
+    invalid typed-read args returning HTTP 422 JSON
+    `{"code":"VALIDATION","payload":{"issues":[...]}}`. Proving commands:
+    `pnpm exec vitest run packages/server/src/mutation-endpoint.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/schema.test.ts` and
+    `pnpm exec playwright test tests/integration/specs/validation-field-errors.spec.ts tests/integration/specs/query-args-search.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `broadcast-channel-sync` / `broadcast-channel-sync.spec.ts`: mutation response query chunks
       rebroadcast to another same-user tab.
   - SPEC refs: §9.3 BroadcastChannel liveness.
