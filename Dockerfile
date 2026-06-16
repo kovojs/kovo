@@ -19,10 +19,14 @@ RUN corepack enable
 
 WORKDIR /app
 
-# Install first against just the manifests so the dependency layer caches across
-# source-only changes.
 COPY . .
-RUN pnpm install --frozen-lockfile
+# pnpm 10 skips unapproved dependency build scripts (you'll see "Ignored build
+# scripts: esbuild" on install). esbuild ships its platform binary via an optional
+# dep so SSR/build usually works regardless, but we explicitly rebuild it here so
+# the linux-x64 binary is guaranteed wired before the example builds run — keeping
+# the fix Docker-local instead of changing the monorepo's install semantics.
+RUN pnpm install --frozen-lockfile \
+  && pnpm rebuild esbuild
 
 # Build each example's client assets (Tailwind CSS -> dist/assets/*). The
 # per-session demo serve streams SSR from source but serves built /assets/* from

@@ -17,6 +17,30 @@ static export does); for live servers it's far simpler to give **each example it
 own service at root**. One Docker image backs all three — pick the example with
 the `EXAMPLE` env var.
 
+## One-command deploy (`cloudbuild.yaml`)
+
+The repo root has a `cloudbuild.yaml` that builds the image once and deploys all
+three services. After the one-time setup below:
+
+```bash
+# Once: Artifact Registry repo + Cloud Build deploy permissions
+gcloud artifacts repositories create kovo --repository-format=docker --location=us-central1
+PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+  --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/run.admin
+gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+  --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/iam.serviceAccountUser
+
+# Build + push + deploy all three (override knobs via --substitutions)
+gcloud builds submit --config cloudbuild.yaml .
+```
+
+Tunables are `cloudbuild.yaml` substitutions (`_REGION`, `_MIN_INSTANCES`,
+`_MEMORY`, `_MAX_SESSIONS`, `_IDLE_MS`, …), e.g.
+`--substitutions=_REGION=europe-west1,_MIN_INSTANCES=0`.
+
+The manual equivalent is below if you prefer running the steps yourself.
+
 ```bash
 PROJECT=your-gcp-project
 REGION=us-central1
