@@ -188,9 +188,17 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
       `pnpm --filter kovo exec vitest run`, and `node tests/kovo-check.node.mjs` on 2026-06-16.
     - Gap: still no page-level rewrite pass that changes the actual emitted `kovo-c`, so this remains
       open.
-  - [ ] New diagnostic: a derived name that **changed** vs. the last emitted registry fact (wire names
+  - [x] New diagnostic: a derived name that **changed** vs. the last emitted registry fact (wire names
     are deploy-load-bearing; a silent change breaks morph identity for in-flight clients). Decide
     severity (warn vs. error) and whether it gates only when fragmentTarget/cross-build matters.
+    - Evidence: `packages/core/src/diagnostics.ts` defines warning-level `KV241` for derived
+      component registry-key drift; `packages/compiler/src/types.ts` exposes
+      `previousRegistryFacts`; `packages/compiler/src/validate/component-names.ts` compares current
+      derived registry keys against `previousRegistryFacts.components` by DOM leaf and reports the
+      previous/current keys. `packages/compiler/src/component-names.test.ts` verifies the warning and
+      no-warning cases; `pnpm --filter @kovojs/compiler exec vitest run src/component-names.test.ts`,
+      `pnpm --filter @kovojs/compiler exec tsc --noEmit`, and `pnpm --filter @kovojs/core exec vitest
+      run src/diagnostics.test.ts` passed on 2026-06-16.
 - [x] **Migrate call sites off the positional string.**
   - Fixtures: `tests/integration/fixtures/{counter/count-badge,stock/stock-badge}.tsx`.
   - `packages/ui/src/*.tsx` (~30 components, multi-per-file — the binding-leaf derivation must hold
@@ -202,7 +210,7 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     and `packages/core/src/index.test.ts` that assert the old positional form is rejected; no authored
     call sites remain. `node packages/ui/scripts/build-registry.mjs` passed on 2026-06-16; `pnpm
     --filter kovo exec vitest run src/index.kovo-add.test.ts` passed on 2026-06-16.
-- [ ] **SPEC update.** §4.2 (identity + kovo-c omission against derived name), the `component()`
+- [x] **SPEC update.** §4.2 (identity + kovo-c omission against derived name), the `component()`
   signature/description, and §14 codegen note. Cite this plan.
   - Evidence: `SPEC.md` §4.1 now specifies single-argument `component(definition)` and derived DOM
     leaf/registry key split; §4.2 documents host-tag omission against the derived DOM leaf and stable
@@ -213,7 +221,9 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     vocabulary and that component DOM leaves remain binding-derived; packages encode public prefixes
     through exported binding names. `rg -n "wire name|wire-name|component name string|component\(\)|ComponentRegistry|registry key|derived DOM|package prefix" SPEC.md site/content docs packages/core/src/index.ts`
     inspected the remaining identity wording on 2026-06-16.
-  - Gap: the SPEC text still does not cite this plan explicitly.
+  - Evidence: `SPEC.md` §4.1 now cites `plans/name-derivation.md` for the 2026-06-16 migration
+    sequencing, and §11.3 lists `KV241` as the warning for derived component registry-key drift.
+    `pnpm --filter @kovojs/core exec vitest run src/diagnostics.test.ts` passed on 2026-06-16.
 - [x] **Docs.** `docs/integration-testing.md` fixtures and any authoring docs showing the string form.
   - Evidence: `rg -n "component\(\s*(['\"])" docs site/content site/tutorial
     packages/create-kovo/templates examples -g '*.md' -g '*.ts' -g '*.tsx' -g '*.mjs'` returned no

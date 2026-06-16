@@ -15,6 +15,7 @@ export interface CompileComponentOptions {
   fileName: string;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   packagePrefixDiscoveryRoot?: string;
+  previousRegistryFacts?: RegistryFacts;
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;

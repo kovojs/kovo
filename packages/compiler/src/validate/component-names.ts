@@ -14,6 +14,7 @@ import type { CompileComponentOptions } from '../types.js';
 
 interface ComponentNameRegistration {
   component: ComponentModel;
+  domName: string;
   effectiveName: string;
   span: SourceSpan | null;
 }
@@ -39,11 +40,26 @@ export function validateDuplicateComponentNames(
   const diagnostics: CompilerDiagnostic[] = [];
   const byName = new Map<string, ComponentNameRegistration>();
   const registryNames = new Set(options.registryFacts?.components ?? []);
+  const previousRegistryNames = new Set(options.previousRegistryFacts?.components ?? []);
 
   for (const component of model.components) {
     const registration = componentNameRegistration(component, options.fileName);
     if (registryNames.has(registration.effectiveName)) {
       diagnostics.push(registryComponentNameDiagnostic(source, options.fileName, registration));
+    }
+    if (
+      previousRegistryNames.size > 0 &&
+      !previousRegistryNames.has(registration.effectiveName)
+    ) {
+      const previousName = previousRegistryNameForDomLeaf(
+        previousRegistryNames,
+        registration.domName,
+      );
+      if (previousName) {
+        diagnostics.push(
+          changedComponentNameDiagnostic(source, options.fileName, previousName, registration),
+        );
+      }
     }
 
     const previous = byName.get(registration.effectiveName);
@@ -124,11 +140,27 @@ function componentNameRegistration(
   component: ComponentModel,
   fileName: string,
 ): ComponentNameRegistration {
+  const names = deriveComponentNames(fileName, component);
   return {
     component,
-    effectiveName: deriveComponentNames(fileName, component).registryKey,
+    domName: names.domName,
+    effectiveName: names.registryKey,
     span: component.localNameSpan ?? null,
   };
+}
+
+function previousRegistryNameForDomLeaf(
+  previousRegistryNames: ReadonlySet<string>,
+  domName: string,
+): string | null {
+  for (const previousName of previousRegistryNames) {
+    if (registryNameLeaf(previousName) === domName) return previousName;
+  }
+  return null;
+}
+
+function registryNameLeaf(registryName: string): string {
+  return registryName.split('/').at(-1) ?? registryName;
 }
 
 function fragmentTargetRegistrations(
@@ -219,6 +251,33 @@ function registryComponentNameDiagnostic(
       'SPEC §6.1.1 keeps effective names app-wide unique; registryFacts.components carries names already known to the app graph.',
     ].join('\n'),
     message: `${definition.message} ${duplicate.effectiveName} is already present in registry facts and is reused by ${componentLabel(duplicate.component)}.`,
+  };
+}
+
+function changedComponentNameDiagnostic(
+  source: string,
+  fileName: string,
+  previousName: string,
+  current: ComponentNameRegistration,
+): CompilerDiagnostic {
+  const definition = diagnosticDefinitions.KV241;
+  const span = current.span;
+  return {
+    ...diagnosticFor(
+      fileName,
+      'KV241',
+      source,
+      span?.start,
+      span ? span.end - span.start : undefined,
+    ),
+    help: [
+      definition.help,
+      `Previous registry key: ${previousName}`,
+      `Current registry key: ${current.effectiveName}`,
+      `DOM leaf: ${current.domName}`,
+      'Registry writer: previousRegistryFacts.components',
+    ].join('\n'),
+    message: `${definition.message} ${previousName} -> ${current.effectiveName}.`,
   };
 }
 

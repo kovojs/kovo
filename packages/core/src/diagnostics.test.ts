@@ -33,6 +33,7 @@ describe('diagnostic registry', () => {
       'KV238',
       'KV239',
       'KV240',
+      'KV241',
       'KV301',
       'KV302',
       'KV303',
@@ -271,6 +272,14 @@ describe('diagnostic registry', () => {
       SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
           "message": "Duplicate query-shape fact for one query name.",
           "severity": "error",
+        },
+        "KV241": {
+          "code": "KV241",
+          "help": "Blocked reason: derived component registry keys are deploy-load-bearing; changing one can strand in-flight documents whose morph identity still names the prior emitted component.
+      Fixes: keep the component binding and module path stable across deploys, or review the rename/move as an intentional identity migration and refresh the previous registry facts.
+      SPEC §4.2 and §4.8 make derived component names load-bearing for kovo-c identity, scoped CSS, fragments, and graph facts.",
+          "message": "Derived component registry key changed since the previous emitted graph.",
+          "severity": "warn",
         },
         "KV301": {
           "code": "KV301",

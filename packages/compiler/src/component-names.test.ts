@@ -90,4 +90,40 @@ export const CartBadge = component({
       }),
     );
   });
+
+  it('reports KV241 when previous registry facts contain the same DOM leaf under a different key', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/badge.tsx',
+      previousRegistryFacts: { components: ['components/old-cart/cart-badge'] },
+      source: `
+export const CartBadge = component({
+  render: () => <cart-badge></cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV241',
+        help: expect.stringContaining('previousRegistryFacts.components'),
+        message:
+          'Derived component registry key changed since the previous emitted graph. components/old-cart/cart-badge -> components/cart/badge/cart-badge.',
+        severity: 'warn',
+      }),
+    );
+  });
+
+  it('does not report KV241 when the previous registry facts already contain the current key', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/badge.tsx',
+      previousRegistryFacts: { components: ['components/cart/badge/cart-badge'] },
+      source: `
+export const CartBadge = component({
+  render: () => <cart-badge></cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV241')).toEqual([]);
+  });
 });

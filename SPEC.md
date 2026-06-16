@@ -108,6 +108,7 @@ export const CartBadge = component({
 the compiler derives the DOM wire leaf from the exported binding (`CartBadge` -> `cart-badge`) and the
 registry/type key from the module path plus that leaf (`components/cart-badge/cart-badge`). This is the
 component-name application of the §4.8 rule that TSX does not require strings the compiler can derive.
+Implementation sequencing for the 2026-06-16 migration is tracked in `plans/name-derivation.md`.
 
 **Rules enforced by the type system:**
 
@@ -975,6 +976,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV238 | error      | Duplicate derived fragment-target registry key (§4.5, §6.2, §9.1)                                             |
 | KV239 | error      | Duplicate static view-transition name (§8)                                                                    |
 | KV240 | error      | Duplicate query-shape fact for one query name (§4.8)                                                         |
+| KV241 | warn       | Derived component registry key changed since the previous emitted graph (§4.2, §4.8)                          |
 | KV301 | lint       | Server fact in island-local state                                                                             |
 | KV302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                            |
 | KV303 | error      | Fragment-target render input is not declared as query data or stamped props (§4.5)                            |
