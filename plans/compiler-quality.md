@@ -360,7 +360,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     - Evidence 2026-06-15: user accepted D4d=A. Generated scripts/styles need nonce or hash metadata
       that the server can emit and enforce.
 
-- [ ] **Turn world-class claims into conformance suites.**
+- [x] **Turn world-class claims into conformance suites.**
   - Risk: green package-local tests can still miss framework-level drift across compiler, server,
     runtime, CLI, and examples.
   - Why it matters: world-class framework compilers are trusted because their compatibility matrix is
@@ -390,6 +390,28 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
       `pnpm --filter @kovojs/compiler exec vitest run src/conformance-compat.test.ts
       src/fragment-targets.test.ts src/query-coverage.test.ts src/state-bindings.test.ts
       src/stamps.test.ts` passed.
+  - [x] Compiler-owned conformance corpus and harness added without bulky/browser artifacts.
+    - Evidence 2026-06-16: `packages/compiler/src/compiler-conformance.test.ts` starts from
+      authored TSX for a reference-shell fixture, the commerce app component corpus
+      (`cart-badge`, `order-history`, `product-grid`), and focused generated fixtures; asserts
+      lowered IR, emitted server/client/registry module facts, component graph facts, route/static
+      registry facts, fixpoint, and semantic render equivalence per SPEC §5.2.
+    - Evidence 2026-06-16: `packages/compiler/src/compiler-conformance.test.ts` executes the
+      emitted `CartBadge$queryUpdatePlans` client export against a browser-free DOM fixture through
+      the real `@kovojs/runtime` query update helpers, proving data-bind text, boolean attribute,
+      derived stamp, keyed list template, and escaping behavior for SPEC §4.8.
+    - Evidence 2026-06-16: `packages/compiler/src/compiler-conformance.test.ts` snapshots stable
+      diagnostic text for compiler-owned KV210, KV211, KV212, KV220, KV221, KV222, KV223, KV224,
+      KV225, KV226, KV227, KV231, KV232, KV233, KV234, KV301, KV302, KV303, KV304, KV320, and
+      KV330 cases not already covered by `conformance-compat`, output-context, or component-name
+      snapshots.
+    - Verification 2026-06-16:
+      `pnpm --dir packages/compiler exec vitest run src/compiler-conformance.test.ts` -> 1 file / 3
+      tests passed.
+    - Verification 2026-06-16: `pnpm --filter @kovojs/compiler exec vitest run` -> 31 files / 278
+      tests passed.
+    - Verification 2026-06-16: `pnpm --filter @kovojs/compiler exec tsc --noEmit` -> passed.
+    - Verification 2026-06-16: `git diff --check` -> passed.
 
 - [x] **Retire compatibility paths with weaker semantics.**
   - Risk: compatibility branches preserve old behavior after the main path has improved. The clearest
