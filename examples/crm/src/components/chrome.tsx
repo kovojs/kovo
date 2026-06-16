@@ -11,6 +11,14 @@ const NAV: { href: string; label: string; section: CrmSection }[] = [
   { href: '/contacts', label: 'Contacts', section: 'contacts' },
 ];
 
+// SPEC.md §6.3: addContact / createDeal use text primary keys, so each rendered
+// composer mints a unique id. The app-shell renders server-side (Node), where
+// crypto.randomUUID is available; a fresh fragment re-render yields a new id, so
+// sequential inserts never collide on the text PK.
+export function freshId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
 /** Format an integer dollar amount as `$12,000`. */
 export function money(amount: number): string {
   return `$${amount.toLocaleString('en-US')}`;

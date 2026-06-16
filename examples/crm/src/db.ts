@@ -15,6 +15,11 @@ const SCHEMA_DDL = [
   'CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, owner_id text NOT NULL, deal_count integer NOT NULL);',
   'CREATE TABLE deals (id text PRIMARY KEY, contact_id text NOT NULL, stage text NOT NULL, amount integer NOT NULL, owner_id text NOT NULL);',
   'CREATE TABLE activities (id serial PRIMARY KEY, deal_id text NOT NULL, kind text NOT NULL, note text NOT NULL);',
+  // SPEC.md §10.5: closeDeal's `amount = compute_commission(amount)` is a raw sql
+  // server compute the extractor classifies Opaque (the commission stays server
+  // truth; the client awaits the fragment). Define it as a real Postgres function
+  // so the served closeDeal mutation runs end-to-end — here, a 20% close fee.
+  'CREATE FUNCTION compute_commission(amount integer) RETURNS integer AS $$ SELECT (amount * 8 / 10)::int $$ LANGUAGE sql IMMUTABLE;',
 ].join('\n');
 
 const SEED_CONTACTS =
