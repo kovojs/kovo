@@ -63,12 +63,23 @@ Key facts proven in research:
     matching `[kovo-fragment-target]` element's outerHTML (event delegation keeps new nodes live).
   - **on:load** pre-warm island boots PGlite before first click (wired via createApp `renderRoute`).
 ### REVISED phases (Node-server direction)
-- [ ] **Phase R1 — StackOverflow served + interactive.** Strip the island/in-browser-backend
-      scaffolding; author vote-up (list + detail), post-answer, post-question as native `enhance`
-      server-action forms over the interactive app; serve via `scripts/serve.mjs` (Node + PGlite).
-      Proof: node mutation test + a real-browser drive against the running Node server (score
-      increments, answer/question appears). text-PK ids (postAnswer/postQuestion) generated at render
-      time (crypto.randomUUID), refreshed by the fragment re-render.
+- [x] **Phase R1 — StackOverflow served + interactive.** DONE 2026-06-16 (commit 53ebf658). Vote/ask/
+      answer authored as native `enhance` forms over the interactive app; served via Node serve.mjs +
+      PGlite. Proof: `interactive-app.test.ts` (3 mutation round-trips) + 25 SO tests green +
+      `scratch/so-serve-drive.mjs` drives the real Node server in Chromium (vote 3→4, ask, answer all
+      morph). KEY LEARNINGS (binding for R2/R3):
+  - **Fragment morph + stylesheets**: do NOT put `stylesheets` in `mutationResponse.fragmentRenderers`
+    — the inline loader's morph takes the fragment's `children[0]` as the new root, and a leading
+    `<link rel=stylesheet>` then REPLACES the region with a bare `<link>`, destroying the UI. The page
+    already has the stylesheet; omit it.
+  - **CSRF**: return `{ csrf:false }` from `mutationResponse` (createApp rejects `csrf:false`).
+  - **Styled serve**: serve.mjs must serve built `/assets/*` from `dist/` before the SSR middleware
+    (Vite dev serves CSS-as-JS, so the `<link href=/assets/tailwind.css>` 404s without this). Prod
+    serve = `vp build && node scripts/serve.mjs`.
+  - **Runtime-created rows need a parameterized route** (`/questions/:id` via `params: s.object(...)`),
+    not a route per seeded row, or newly-posted items 404.
+  - **text-PK ids** (postAnswer/postQuestion) minted at render time with `crypto.randomUUID`; the
+    fragment re-render mints a fresh one so sequential posts don't collide.
 - [ ] **Phase R2 — Commerce served + interactive.** Render the interactive (non-readOnly) UI in the
       served app; add-to-cart + receipt upload as enhance forms round-trip; demo authenticated
       session so the betterAuth guard passes. (Keep the existing dynamic app shell; it already has the
