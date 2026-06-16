@@ -1,0 +1,2 @@
+<div data-error-code="OUT_OF_STOCK" kovo-fragment-target="checkout-error" role="alert">
+  "Only 3 available"

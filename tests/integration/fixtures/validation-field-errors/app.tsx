@@ -1,0 +1,41 @@
+// Mutation wire fixture for SPEC.md §6.3 and §9.2: schema validation failures
+// return HTTP 422 with field-scoped error anchors and leave server truth alone.
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/integration/define';
+
+export const reserve = mutation('validation/reserve', {
+  csrf: false,
+  input: s.object({
+    quantity: s.number().int().min(1),
+  }),
+  handler: async (input, request: KovoFixtureRequest) => {
+    await request.db.query('insert into reservations (quantity) values ($1)', [input.quantity]);
+    return { quantity: input.quantity };
+  },
+});
+
+const homeRoute = route('/', {
+  page: () => `<main>
+    <h1>Reserve inventory</h1>
+    <form method="post" action="/_m/validation/reserve" enhance
+      data-mutation="validation/reserve" kovo-fragment-target="reservation-form">
+      <label>Quantity <input name="quantity" type="number" value="0" /></label>
+      <button type="submit">Reserve</button>
+    </form>
+  </main>`,
+});
+
+const app = createApp({
+  mutations: [reserve],
+  routes: [homeRoute],
+  mutationResponse: ({ key }) => {
+    if (key !== reserve.key) return undefined;
+    return { failureTarget: 'reservation-form', redirectTo: '/' };
+  },
+});
+
+export default defineFixture({
+  app,
+  schema:
+    'create table reservations (id serial primary key, quantity integer not null check (quantity > 0))',
+});
