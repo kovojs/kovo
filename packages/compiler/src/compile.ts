@@ -138,6 +138,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     : [];
   const serverRenderReplacements = [
     ...serverRenderLowering(versionedHandlers, model, componentNames.domName),
+    ...componentDescriptorNameAssignments(model, componentNames.registryKey),
     ...versionStateDeriveReferences(model, structuralLowering.stateDerives, clientHref),
   ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
@@ -188,6 +189,22 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,
   };
+}
+
+function componentDescriptorNameAssignments(
+  model: ComponentModuleModel,
+  registryComponentName: string,
+): SourceReplacement[] {
+  const component = firstComponentModel(model);
+  if (!component?.localName) return [];
+
+  return [
+    {
+      end: component.declarationEnd,
+      replacement: `\n${component.localName}.name = ${JSON.stringify(registryComponentName)};`,
+      start: component.declarationEnd,
+    },
+  ];
 }
 
 function versionStateDeriveReferences(

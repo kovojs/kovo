@@ -115,7 +115,7 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
 
 ## Implementation slices
 
-- [ ] **Runtime API: single-arg `component(definition)`, no `name`** (`packages/core/src/index.ts`).
+- [x] **Runtime API: single-arg `component(definition)`, no `name`** (`packages/core/src/index.ts`).
   - Remove the positional `name` parameter and do not add a `name` definition field. The descriptor
     still exposes a `name`, injected by the compiler when derived. Collapse `Component<Name, Definition>`
     so `Name` no longer comes from a literal arg (it is recovered via codegen, not inference).
@@ -123,8 +123,15 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
   - Evidence: `packages/core/src/index.ts` now exposes `component(definition)` and removes the
     literal `Name` generic from `Component`; `pnpm --filter @kovojs/core exec vitest run` and
     `pnpm --filter @kovojs/core exec tsc --noEmit` passed on 2026-06-16.
-  - Gap: the compiler does not yet inject the derived name onto the runtime descriptor, and the
-    parser still accepts the legacy two-argument form for compatibility during migration.
+  - Evidence: `packages/compiler/src/compile.ts` injects the derived registry key onto the emitted
+    descriptor as `ComponentBinding.name = "<registry-key>"`, while keeping the definition object free
+    of any `name` field; `packages/compiler/src/compile-component.test.ts` verifies the emitted
+    assignment. `packages/compiler/src/scan/parse.ts` no longer parses `component('name', { ... })`
+    as a component model, and `packages/compiler/src/scan/parse.test.ts` verifies that legacy form is
+    ignored by the compiler parser. `packages/core/src/index.test.ts` verifies the positional string
+    call is a TypeScript error. `pnpm --filter @kovojs/compiler exec vitest run`, `pnpm --filter
+    @kovojs/compiler exec tsc --noEmit`, `pnpm --filter @kovojs/core exec vitest run`, and `pnpm
+    --filter @kovojs/core exec tsc --noEmit` passed on 2026-06-16.
 - [ ] **Compiler: derive the name in lowering** (`packages/compiler/src/lower/structural-jsx.ts` and
   the component-model builder).
   - Derive from the exported binding identifier (the lowering already tracks `exportName`) + module
@@ -140,7 +147,7 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     `pnpm --filter @kovojs/compiler exec tsc --noEmit` passed on 2026-06-16.
   - Gap: stable per-page DOM-leaf collision disambiguation/reporting and descriptor injection remain
     open.
-- [ ] **Registry/type codegen** (registry `.d.ts` emission + `validate/component-names.ts`).
+- [x] **Registry/type codegen** (registry `.d.ts` emission + `validate/component-names.ts`).
   - Emit `FragmentTargets` and a name→component map keyed off derived names; KV237/KV238 key on the
     derived (namespaced) key. Update `componentNameRegistration` to source the derived name.
   - Evidence: `packages/compiler/src/registry.test.ts` verifies generated `FragmentTargets` entries
@@ -149,7 +156,13 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     KV238 keys on derived registry names; `packages/compiler/src/component-names.test.ts` verifies
     KV237 duplicate checks on derived registry names. `pnpm --filter @kovojs/compiler exec vitest run`
     passed on 2026-06-16.
-  - Gap: a dedicated name→component type map is not emitted yet.
+  - Evidence: `packages/compiler/src/emit/registry.ts` now emits `ComponentRegistry` and augments
+    `@kovojs/core` with derived registry keys from the local component plus graph registry facts;
+    `packages/core/src/index.ts` exposes the augmentable `ComponentRegistry` merge target.
+    `packages/compiler/src/compile-component.test.ts`, `packages/compiler/src/registry.test.ts`, and
+    `packages/core/src/index.test.ts` verify the emitted map and core merge target. `pnpm --filter
+    @kovojs/compiler exec vitest run` and `pnpm --filter @kovojs/core exec vitest run` passed on
+    2026-06-16.
 - [ ] **Diagnostics.**
   - Repoint KV237/KV238 messaging (`packages/core/src/diagnostics.ts:339,348`) away from
     "give one component a distinct `component(\"wire-name\")` value" — with derivation there is no
@@ -171,10 +184,11 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     here) and `packages/ui/scripts/build-registry.mjs:60` (regex scans `component('name', …)` — update
     to the new form).
   - Conformance/compat corpora and any `component('…'` in tests.
-  - Evidence: `rg -n "component\(\s*(['\"])" --glob '!plans/name-derivation.md'` returns only generic
-    `component(` sentinels in Vite/test plugins, not authored positional calls; `node
-    packages/ui/scripts/build-registry.mjs` passed on 2026-06-16; `pnpm --filter kovo exec vitest run
-    src/index.kovo-add.test.ts` passed on 2026-06-16.
+  - Evidence: `rg -n "component\(\s*(['\"])" --glob '!plans/name-derivation.md'` now returns only
+    generic `component(` sentinels plus negative tests in `packages/compiler/src/scan/parse.test.ts`
+    and `packages/core/src/index.test.ts` that assert the old positional form is rejected; no authored
+    call sites remain. `node packages/ui/scripts/build-registry.mjs` passed on 2026-06-16; `pnpm
+    --filter kovo exec vitest run src/index.kovo-add.test.ts` passed on 2026-06-16.
 - [ ] **SPEC update.** §4.2 (identity + kovo-c omission against derived name), the `component()`
   signature/description, and §14 codegen note. Cite this plan.
   - Evidence: `SPEC.md` §4.1 now specifies single-argument `component(definition)` and derived DOM
@@ -193,8 +207,9 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
 - [x] `pnpm --filter @kovojs/core exec vitest run` (descriptor shape, `FragmentTargets` typing — see
   `packages/core/src/index.test.ts:56,277`).
   - Evidence: passed on 2026-06-16.
-- [ ] Integration suite (`tests/integration`) green — served HTML / semantic snapshots unchanged under
+- [x] Integration suite (`tests/integration`) green — served HTML / semantic snapshots unchanged under
   Option 2 (or snapshots intentionally updated under Option 1).
+  - Evidence: `pnpm run test:integration` passed on 2026-06-16 (6 Playwright tests).
 - [x] `kovo-check` post-parse guard still passes (no new raw-source reads).
   - Evidence: `node --test --test-name-pattern "post-parse compiler phases"
     tests/kovo-check.node.mjs` passed on 2026-06-16.

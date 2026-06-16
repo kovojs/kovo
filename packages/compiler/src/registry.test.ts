@@ -27,6 +27,7 @@ describe('compiler registry and graph emission', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
       registryFacts: {
+        components: ['components/products/product-grid/product-grid'],
         domainKeys: ['product', 'cart', 'cart'],
         invalidations: {
           'cart/add': ['cart', 'productGrid', 'orderHistory', 'cart'],
@@ -52,6 +53,10 @@ describe('compiler registry and graph emission', () => {
     expect(registry).toContain(`interface FragmentTargets {
   'components/cart/cart-badge/cart-badge': {};
   }`);
+    expect(registry).toContain(`export interface ComponentRegistry {
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  'components/products/product-grid/product-grid': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+}`);
     expect(registry).toContain(`export interface QueryRegistry {
   'cart': typeof cartQuery;
   'productGrid': typeof productGridQuery;
@@ -64,6 +69,11 @@ describe('compiler registry and graph emission', () => {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
 }`);
     expect(registry).toContain(`declare module '@kovojs/core' {
+  interface ComponentRegistry {
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  'components/products/product-grid/product-grid': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  }
+
   interface FragmentTargets {
   'components/cart/cart-badge/cart-badge': {};
   }

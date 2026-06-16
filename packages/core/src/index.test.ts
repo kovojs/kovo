@@ -11,6 +11,8 @@ import {
   query,
   redirect,
   route,
+  type Component as KovoComponent,
+  type ComponentDefinitionInput,
   type EventPayload,
   type Endpoint,
   type FormFailure,
@@ -57,6 +59,10 @@ declare module './index.js' {
     'cart-row': { rowId: string };
   }
 
+  interface ComponentRegistry {
+    'components/cart/cart-badge/cart-badge': KovoComponent<ComponentDefinitionInput>;
+  }
+
   interface RouteRegistry {
     '/cart': ReturnType<typeof route<'/cart'>>;
     '/products': ReturnType<typeof route<'/products', {}, { max: number; sort: string }>>;
@@ -83,9 +89,18 @@ describe('core authoring APIs', () => {
     expect(CartBadge.name).toBeUndefined();
     expect(CartBadge.definition.fragmentTarget).toBe(true);
     expect(CartBadge.definition.queries?.cart.key).toBe('cart');
+
+    const assertRegisteredComponent = (
+      value: import('./index.js').ComponentRegistry['components/cart/cart-badge/cart-badge'],
+    ) => value;
+    expect(assertRegisteredComponent(CartBadge)).toBe(CartBadge);
   });
 
   it('rejects non-JsonValue component state at authoring time', () => {
+    const assertLegacyNameArgument = () => {
+      // @ts-expect-error component names are compiler-derived; positional strings are not accepted.
+      component('cart-badge', { render: () => null });
+    };
     const assertDateState = () => {
       component({
         render: () => null,
@@ -101,6 +116,7 @@ describe('core authoring APIs', () => {
       });
     };
 
+    expect(assertLegacyNameArgument).toBeTypeOf('function');
     expect(assertDateState).toBeTypeOf('function');
     expect(assertMapState).toBeTypeOf('function');
   });

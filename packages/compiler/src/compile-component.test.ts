@@ -57,10 +57,16 @@ describe('compileComponentModule', () => {
     );
     expect(server?.source).toContain('data-p-id="{item.id}"');
     expect(result.loweredSource).toContain('data-p-id="{item.id}"');
+    expect(result.loweredSource).toContain(
+      'CartBadge.name = "components/cart/cart-badge/cart-badge";',
+    );
     expect(registry?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
     expect(registry?.source).toContain("'components/cart/cart-badge/cart-badge': {};");
+    expect(registry?.source).toContain(`export interface ComponentRegistry {
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+}`);
     expect(registry?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
@@ -328,6 +334,10 @@ export const CartBadge = component({
     expect(registry).toMatch(/export interface RouteRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface InvalidationSets \{\n\n\}/);
     expect(registry).toContain(`declare module '@kovojs/core' {
+  interface ComponentRegistry {
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  }
+
   interface FragmentTargets {
   'components/cart/cart-badge/cart-badge': {};
   }

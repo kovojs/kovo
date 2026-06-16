@@ -197,6 +197,9 @@ export interface MutationRegistry {}
 /** Augmentable registry mapping fragment-target names to their props. */
 export interface FragmentTargets {}
 
+/** Augmentable registry mapping derived component registry keys to component descriptors. */
+export interface ComponentRegistry {}
+
 /** Augmentable registry mapping route paths to their `Route` descriptors. */
 export interface RouteRegistry {}
 

@@ -46,6 +46,10 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
         `  '${plan.componentName}:${plan.query}': readonly [${plan.paths.map((path) => `'${path}'`).join(', ')}];`,
     )
     .join('\n');
+  const componentRegistryLines = componentRegistryFactLines([
+    options.registryComponentName,
+    ...(options.registryFacts?.components ?? []),
+  ]);
   const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
   const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
@@ -78,6 +82,10 @@ export interface ComponentStylesheets {
 ${stylesheetLines}
 }
 
+export interface ComponentRegistry {
+${componentRegistryLines}
+}
+
 export interface QueryRegistry {
 ${queryRegistryLines}
 }
@@ -95,6 +103,10 @@ ${invalidationSetLines}
 }
 
 declare module '@kovojs/core' {
+  interface ComponentRegistry {
+${componentRegistryLines}
+  }
+
   interface FragmentTargets {
 ${fragmentTargetLines}
   }
@@ -132,6 +144,16 @@ function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
   return Object.entries(facts ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, typeExpression]) => `  '${key}': ${typeExpression};`)
+    .join('\n');
+}
+
+function componentRegistryFactLines(componentNames: readonly string[]): string {
+  return [...new Set(componentNames)]
+    .sort((left, right) => left.localeCompare(right))
+    .map(
+      (componentName) =>
+        `  '${componentName}': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;`,
+    )
     .join('\n');
 }
 

@@ -272,6 +272,17 @@ export const CartBadge = component({
     });
   });
 
+  it('does not parse legacy positional component names as component declarations', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`;
+    const model = parseComponentModule('cart-badge.tsx', source);
+
+    expect(model.components).toEqual([]);
+  });
+
   it('records first HTML tag names for exported renderSource returns', () => {
     const source = `
 export function renderSource() {

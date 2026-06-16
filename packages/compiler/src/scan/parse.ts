@@ -175,8 +175,7 @@ export interface ZeroArgArrowModel {
 }
 
 export interface ComponentModel {
-  explicitName?: string;
-  explicitNameSpan?: SourceSpan;
+  declarationEnd: number;
   localName?: string;
   localNameSpan?: SourceSpan;
   options: readonly ComponentOptionEntry[];
@@ -271,6 +270,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
         source,
         node.name.text,
         { end: node.name.getEnd(), start: node.name.getStart(sourceFile) },
+        node.parent.parent.getEnd(),
         node.initializer,
       );
       if (model) components.push(model);
@@ -480,21 +480,13 @@ export function componentStateReturnObjectKeys(model: ComponentModuleModel): str
   return [...(componentStateReturnObjectModel(model)?.entries.map((entry) => entry.key) ?? [])];
 }
 
-export function componentExplicitNames(model: ComponentModuleModel): string[] {
-  return model.components.flatMap((component) =>
-    component.explicitName === undefined ? [] : [component.explicitName],
-  );
-}
-
 export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
   return model.components.flatMap((component) => {
     if (component.options.find((option) => option.key === 'fragmentTarget')?.staticValue !== true) {
       return [];
     }
 
-    return [component.localName, component.explicitName].filter(
-      (name): name is string => name !== undefined,
-    );
+    return component.localName === undefined ? [] : [component.localName];
   });
 }
 
@@ -731,21 +723,16 @@ function componentModelFromInitializer(
   source: string,
   localName: string,
   localNameSpan: SourceSpan,
+  declarationEnd: number,
   initializer: ts.Expression | undefined,
 ): ComponentModel | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'component')
     return null;
 
-  const [firstArg, secondArg] = initializer.arguments;
-  const optionsArg =
-    firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : secondArg;
-  const nameArg = optionsArg === firstArg ? undefined : firstArg;
-  const explicitName = nameArg && ts.isStringLiteralLike(nameArg) ? nameArg.text : undefined;
-  const explicitNameSpan =
-    nameArg && ts.isStringLiteralLike(nameArg)
-      ? { end: nameArg.getEnd(), start: nameArg.getStart(sourceFile) }
-      : undefined;
+  const [optionsArg] = initializer.arguments;
+  if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;
+
   const options =
     optionsArg && ts.isObjectLiteralExpression(optionsArg)
       ? componentOptions(sourceFile, source, optionsArg)
@@ -755,8 +742,7 @@ function componentModelFromInitializer(
   const stateReturnObject = state ? arrowReturnObjectSource(sourceFile, source, state) : null;
 
   return {
-    ...(explicitName === undefined ? {} : { explicitName }),
-    ...(explicitNameSpan === undefined ? {} : { explicitNameSpan }),
+    declarationEnd,
     localName,
     localNameSpan,
     options,
