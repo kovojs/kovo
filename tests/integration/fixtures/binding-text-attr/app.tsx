@@ -64,11 +64,9 @@ const app = createApp({
   mutations: [updateCard],
   queries: [cardQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, request }) => {
+  mutationResponse: ({ key }) => {
     if (key !== updateCard.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
     return {
-      fragmentRenderers: [{ render: () => renderCard(db), target: 'binding-card' }],
       redirectTo: '/',
     };
   },

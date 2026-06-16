@@ -15,12 +15,14 @@ test('updates text and attribute bindings from current server and state surfaces
   await expect(queryButton).toHaveAttribute('data-state', 'idle');
   await expect(page.locator('script[kovo-query="card"]')).toHaveCount(1);
 
-  await Promise.all([
-    page.waitForResponse((response) =>
-      response.url().endsWith('/_m/binding-text-attr/update') && response.status() === 200,
-    ),
-    page.getByRole('button', { name: 'Update server card' }).click(),
-  ]);
+  const mutationResponsePromise = page.waitForResponse((response) =>
+    response.url().endsWith('/_m/binding-text-attr/update') && response.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Update server card' }).click();
+  const mutationResponse = await mutationResponsePromise;
+  const mutationBody = await mutationResponse.text();
+  expect(mutationBody).toContain('<kovo-query name="card">');
+  expect(mutationBody).not.toContain('<kovo-fragment');
 
   await expect(queryOutput).toHaveText('Updated text');
   await expect(queryButton).toHaveAttribute('aria-label', 'Updated card');

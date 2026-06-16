@@ -68,8 +68,8 @@ function installInlineKovoLoader(im) {
   const doc = document;
   let ic = 0;
   const ci = () =>
-    crypto.randomUUID?.() ??
-    'idem_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
+    crypto.randomUUID?.() ||
+    'i_' + Date.now().toString(36) + '_' + (ic += 1).toString(36);
   const rh = (el) => el.closest?.('[kovo-state]') ?? el;
   const rs = (el) => {
     try {
@@ -112,9 +112,9 @@ function installInlineKovoLoader(im) {
       el.indeterminate = val != null;
     }
   };
-  const ws = (el, path, bt, state) => {
-    if (!path?.startsWith('state.')) return;
-    const val = vp(state, path.slice('state.'.length));
+  const ws = (el, path, bt, state, root = 'state') => {
+    if (!path?.startsWith(root + '.')) return;
+    const val = vp(state, path.slice(root.length + 1));
     if (bt) {
       wa(el, bt, val);
     } else if (el.value !== undefined) {
@@ -184,7 +184,7 @@ function installInlineKovoLoader(im) {
           const deps = rd(el.getAttribute('kovo-deps'));
           const target =
             el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c');
-          return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
+          return target && (deps.length ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
     )
@@ -213,10 +213,20 @@ function installInlineKovoLoader(im) {
   }
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
-  const dq = (type, init) => dispatchEvent(new CustomEvent(type, init));
+  const aq = (queries) => {
+    for (const query of queries) {
+      const name = readAttribute(query.attrs, 'name');
+      const val = JSON.parse(unescapeHtml(query.content || 0));
+      for (const el of qa(doc, '*')) {
+        ws(el, el.getAttribute('data-bind'), 0, val, name);
+        for (const attr of ba(el)) ws(el, attr.value, attr.name.slice(10), val, name);
+      }
+    }
+  };
   const ab = (body) => {
-    applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {
-      dispatchQueryEvent: dq,
+    const chunks = readInlineMutationResponseBodyChunks(body);
+    aq(chunks.queries);
+    applyInlineMutationResponseChunks(chunks, {
       findFragmentTarget: ft,
     });
   };
@@ -626,6 +636,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['elementTag', 'et'],
     ['closeStart', 'cs'],
     ['queryOptions', 'qo'],
+    ['queries', 'qs'],
     ['fragmentOptions', 'fo'],
     ['onMalformedQuery', 'oq'],
     ['onMalformedFragment', 'of'],
@@ -634,6 +645,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['current', 'cur'],
     ['segment', 'seg'],
     ['attribute', 'attr'],
+    ['response', 'res'],
     // Installer-local helper names (not referenced by the parity-checked helper
     // closures); compacting them reclaims gzip headroom for the M10 selector
     // guard within the SPEC.md §4.4 4KB ceiling.
