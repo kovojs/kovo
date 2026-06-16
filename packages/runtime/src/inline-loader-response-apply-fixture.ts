@@ -115,12 +115,46 @@ export async function expectInlineResponseApplyParity(
       },
     ],
   ]);
+  const scopedDeps = (deps: string) => ({
+    getAttribute(name: string) {
+      return name === 'kovo-deps' ? deps : null;
+    },
+  });
   const inlineBindings = [
+    {
+      attributes: [],
+      textContent: '',
+      closest(selector: string) {
+        return selector === '[kovo-deps]' ? scopedDeps('cart:c1') : null;
+      },
+      getAttribute(name: string) {
+        return name === 'data-bind' ? 'cart.count' : null;
+      },
+      setAttribute(name: string, value: string) {
+        this.attributes.push({ name, value });
+      },
+    },
     {
       attributes: [{ name: 'data-bind:aria-label', value: 'product.stock' }],
       textContent: '',
+      closest(selector: string) {
+        return selector === '[kovo-deps]' ? scopedDeps('product>p1') : null;
+      },
       getAttribute(name: string) {
-        return name === 'data-bind' ? 'cart.count' : null;
+        return name === 'data-bind' ? null : null;
+      },
+      setAttribute(name: string, value: string) {
+        this.attributes.push({ name, value });
+      },
+    },
+    {
+      attributes: [],
+      textContent: 'unchanged',
+      closest(selector: string) {
+        return selector === '[kovo-deps]' ? scopedDeps('product>p2') : null;
+      },
+      getAttribute(name: string) {
+        return name === 'data-bind' ? 'product.stock' : null;
       },
       setAttribute(name: string, value: string) {
         this.attributes.push({ name, value });
@@ -198,8 +232,9 @@ export async function expectInlineResponseApplyParity(
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(inlineBindings[0]?.textContent).toBe('1');
-    expect(inlineBindings[0]?.attributes).toContainEqual({ name: 'aria-label', value: '7' });
-    expect(inlineBindings[1]?.textContent).toBe('[{"id":"p1"}]');
+    expect(inlineBindings[1]?.attributes).toContainEqual({ name: 'aria-label', value: '7' });
+    expect(inlineBindings[2]?.textContent).toBe('unchanged');
+    expect(inlineBindings[3]?.textContent).toBe('[{"id":"p1"}]');
     expect(inlineTargets.get('cart-badge')?.html).toBe(modularTargets.get('cart-badge')?.html);
     expect(inlineTargets.get('cart-list')?.html).toBe(modularTargets.get('cart-list')?.html);
     expect(inlineTargets.get('cart-summary')?.html).toBe(modularTargets.get('cart-summary')?.html);

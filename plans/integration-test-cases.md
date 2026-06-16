@@ -309,21 +309,28 @@ integration harness uniquely proves.
     keyed rows into server-truth order, updates item-relative `.rank`/`.label` bindings, preserves
     expando identity on existing keyed DOM nodes, checks DB truth, and snapshots the semantic list.
     Proving command: same Slice J command recorded under `derive-binding`.
-- [ ] `multi-instance-query` / `multi-instance-query.spec.ts`: two instances of one parameterized
+- [x] `multi-instance-query` / `multi-instance-query.spec.ts`: two instances of one parameterized
       query coexist on a page and update only the matching instance keys.
   - SPEC refs: §10.2 instance keys, §9.4 typed reads.
   - Assertions: `kovo-query="product:p1"` and `product:p2` stay distinct; one mutation/refetch does
     not overwrite the other.
-  - Partial evidence: `tests/integration/fixtures/multi-instance-query` and
+  - Evidence: `tests/integration/fixtures/multi-instance-query` and
     `tests/integration/specs/multi-instance-query.spec.ts` verify two initial
-    `script[kovo-query="product"][key="product:p*"]` instances coexist, a keyed mutation response
-    emits only `<kovo-query name="product" key="product:p1">` plus the matching `product-p1`
-    fragment, leaves the `product-p2` fragment DOM identity untouched, checks DB truth, and
-    snapshots the semantic page. Proving command: same Slice J command recorded under
-    `derive-binding`.
-  - Gap: left unchecked because the current `CompiledQueryUpdatePlan` lookup is keyed by query name
-    only, not query instance key; a pure client query-plan update cannot safely target two
-    same-query instances on one page without fragment scoping.
+    `script[kovo-query="product"][key="product:p*"]` instances coexist, a mutation response emits
+    only `<kovo-query name="product" key="product:p1">` with no `product-p1`/`product-p2` fragment,
+    the inline loader applies the keyed query chunk only to the `kovo-deps="product:p1"` consumer,
+    `product:p2` remains at distinct server/UI truth, its DOM identity is preserved, DB truth is
+    checked, and the semantic page is snapshotted. Runtime coverage in
+    `packages/runtime/src/query-apply.test.ts` verifies canonical instance-key plan lookup and
+    `kovo-deps` scoping for decoded query chunks; inline parity coverage in
+    `packages/runtime/src/inline-loader-response-apply-runtime.test.ts` verifies the generated
+    bootstrap skips non-matching keyed consumers while staying within the SPEC §4.4 budget. Proving
+    commands: `pnpm exec vitest run packages/runtime/src/query-apply.test.ts
+    packages/runtime/src/inline-loader-response-apply-runtime.test.ts
+    packages/runtime/src/inline-loader-build.test.ts`; `pnpm --filter @kovojs/runtime run
+    check:inline-loader`; `pnpm exec playwright test
+    tests/integration/specs/multi-instance-query.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`.
 - [x] `shared-query-consumers` / `shared-query-consumers.spec.ts`: a single query value ships once and
       updates multiple islands consuming the same `kovo-deps` key.
   - SPEC refs: §4.2 query data ships once, §10.4 optimism keyed to queries.

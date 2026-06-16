@@ -42,7 +42,7 @@ export const productQuery = query('product', {
 
 async function renderCard(db: KovoFixtureRequest['db'], id: string): Promise<string> {
   const product = await readProduct(db, id);
-  return `<product-card kovo-deps="product" kovo-fragment-target="product-${escapeAttribute(product.id)}" data-product-id="${escapeAttribute(product.id)}">
+  return `<product-card kovo-deps="product:${escapeAttribute(product.id)}" kovo-fragment-target="product-${escapeAttribute(product.id)}" data-product-id="${escapeAttribute(product.id)}">
     <h2>${escapeHtml(product.name)}</h2>
     <p>Stock <span data-bind="product.stock">${product.stock}</span></p>
   </product-card>`;
@@ -88,13 +88,10 @@ const app = createApp({
   mutations: [restockProduct],
   queries: [productQuery],
   routes: [homeRoute],
-  mutationResponse: ({ key, rawInput, request }) => {
+  mutationResponse: ({ key }) => {
     if (key !== restockProduct.key) return undefined;
-    const db = (request as unknown as KovoFixtureRequest).db;
-    const formData = rawInput as FormData;
-    const id = String(formData.get('id') ?? '');
     return {
-      fragmentRenderers: [{ render: () => renderCard(db, id), target: `product-${id}` }],
+      fragmentRenderers: [],
       redirectTo: '/',
     };
   },
@@ -106,6 +103,6 @@ export default defineFixture({
     'create table product (id text primary key, name text not null, stock integer not null)',
   seed: async (db) => {
     await db.exec("insert into product (id, name, stock) values ('p1', 'Pen', 2)");
-    await db.exec("insert into product (id, name, stock) values ('p2', 'Notebook', 7)");
+    await db.exec("insert into product (id, name, stock) values ('p2', 'Notebook', 9)");
   },
 });

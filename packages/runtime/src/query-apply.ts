@@ -71,12 +71,14 @@ export function applyQueryChunksToRuntime(
 
   return applyQueryChunks(store, queries, {
     afterApplyQuery(query, value) {
+      const queryKey = queryWireKey(query.name, query.key);
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
         query.name,
         value,
-        options.queryPlans?.[query.name],
+        options.queryPlans?.[queryKey] ?? options.queryPlans?.[query.name],
         readBindingIndex,
+        query.key === undefined ? undefined : queryKey,
       );
       options.afterApplyQuery?.(query, value);
     },
@@ -100,10 +102,16 @@ function applyCompiledQueryUpdatePlanIfSupported(
   value: unknown,
   plan: CompiledQueryUpdatePlan = {},
   readBindingIndex?: (root: QueryBindingRoot) => QueryBindingIndex,
+  queryKey?: string,
 ): void {
   if (!root || !supportsQueryBindings(root)) return;
 
   const options =
-    plan.bindings === false || !readBindingIndex ? {} : { bindingIndex: readBindingIndex(root) };
+    plan.bindings === false || !readBindingIndex
+      ? {}
+      : {
+          bindingIndex: readBindingIndex(root),
+          ...(queryKey === undefined ? {} : { queryKey }),
+        };
   applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
 }

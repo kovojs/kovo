@@ -216,8 +216,15 @@ function installInlineKovoLoader(im) {
   const aq = (queries) => {
     for (const query of queries) {
       const name = readAttribute(query.attrs, 'name');
+      const key = readAttribute(query.attrs, 'key');
       const val = JSON.parse(unescapeHtml(query.content || 0));
       for (const el of qa(doc, '*')) {
+        if (
+          key &&
+          !rd(el.closest?.('[kovo-deps]')?.getAttribute('kovo-deps')).includes(key)
+        ) {
+          continue;
+        }
         ws(el, el.getAttribute('data-bind'), 0, val, name);
         for (const attr of ba(el)) ws(el, attr.value, attr.name.slice(10), val, name);
       }
@@ -238,11 +245,6 @@ function installInlineKovoLoader(im) {
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('kovo-error', '');
   };
-  const ha = (form, name) => form.getAttribute?.(name) != null;
-  const ief = (form) =>
-    ha(form, 'enhance') ||
-    ha(form, 'data-enhance') ||
-    ha(form, 'data-mutation');
   const sef = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
@@ -269,7 +271,7 @@ function installInlineKovoLoader(im) {
   const dispatch = async (event) => {
     if (event.type === 'submit') {
       const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]',);
-      if (form && ief(form)) {
+      if (form) {
         sef(event, form);
         return;
       }

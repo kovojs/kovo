@@ -86,6 +86,7 @@ export interface QueryBindingIndex {
 /** @internal */
 export interface ApplyQueryBindingsOptions {
   bindingIndex?: QueryBindingIndex;
+  queryKey?: string;
 }
 
 /** @internal */
@@ -136,6 +137,8 @@ function applyRootBindings(
   const applied: string[] = [];
 
   for (const element of dataBindElements(root, options.scopeRoot)) {
+    if (!elementBelongsToQueryKey(element, options.queryKey)) continue;
+
     const path = element.getAttribute('data-bind');
     if (!path?.startsWith(`${rootName}.`)) continue;
 
@@ -152,6 +155,7 @@ function applyRootBindings(
 
   for (const element of attributeBindingElements(root, options)) {
     if (!elementBelongsToScope(element, options.scopeRoot)) continue;
+    if (!elementBelongsToQueryKey(element, options.queryKey)) continue;
 
     for (const attribute of bindingAttributes(element)) {
       const boundAttribute = attribute.name.slice('data-bind:'.length);
@@ -179,7 +183,10 @@ export function applyCompiledQueryUpdatePlan(
   plan: CompiledQueryUpdatePlan = {},
   options: ApplyCompiledQueryUpdatePlanOptions = {},
 ): AppliedCompiledQueryUpdatePlan {
-  const bindingOptions = options.bindingIndex ? { bindingIndex: options.bindingIndex } : {};
+  const bindingOptions = {
+    ...(options.bindingIndex ? { bindingIndex: options.bindingIndex } : {}),
+    ...(options.queryKey === undefined ? {} : { queryKey: options.queryKey }),
+  };
   const applied: AppliedCompiledQueryUpdatePlan = {
     bindings:
       plan.bindings === false ? [] : applyQueryBindings(root, queryName, value, bindingOptions),
@@ -462,6 +469,25 @@ function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown)
 
   const closestStateHost = element.closest?.('[kovo-state]');
   return !closestStateHost || closestStateHost === scopeRoot;
+}
+
+function elementBelongsToQueryKey(
+  element: QueryBindingElement,
+  queryKey: string | undefined,
+): boolean {
+  if (!queryKey) return true;
+
+  const closestQueryHost = element.closest?.('[kovo-deps]');
+  if (!closestQueryHost) return false;
+
+  return readDeps(closestQueryHost.getAttribute('kovo-deps')).includes(queryKey);
+}
+
+function readDeps(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
 }
 
 function isQueryBindingElement(value: unknown): value is QueryBindingElement {
