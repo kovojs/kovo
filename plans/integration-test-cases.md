@@ -109,11 +109,12 @@ integration harness uniquely proves.
 
 ## Mutation wire and forms
 
-- [ ] `mutation-prg-no-js` / `mutation-prg-no-js.spec.ts`: when enhanced headers are absent, the same
+- [x] `mutation-prg-no-js` / `mutation-prg-no-js.spec.ts`: when enhanced headers are absent, the same
       mutation endpoint follows POST-redirect-GET and renders errors into a full page.
   - SPEC refs: §9.1 no-JS path, §9.2 errors.
   - Assertions: `request.post` without `Kovo-Fragment` returns redirect or full page; browser can
     submit a real form with JavaScript disabled if Playwright project support is added.
+  - Evidence: `pnpm exec playwright test mutation-prg-no-js.spec.ts post-commit-rerun.spec.ts typed-error-union-multiple.spec.ts validation-field-errors.spec.ts --config=tests/integration/playwright.config.ts` passed the no-JS redirect and typed-error full-page tests in `tests/integration/specs/mutation-prg-no-js.spec.ts`.
 - [ ] `csrf-required` / `csrf-required.spec.ts`: emitted mutation forms carry `kovo-csrf`, valid
       enhanced submits pass, missing/invalid tokens fail before parsing/guards.
   - SPEC refs: §6.6 CSRF boundary, §9.1 mutation lifecycle.
@@ -131,14 +132,17 @@ integration harness uniquely proves.
       HTTP 422 with `data-error-path` and field-scoped messages.
   - SPEC refs: §6.3 form fields, §9.2 errors.
   - Assertions: malformed input produces 422; field error anchors morph in; db unchanged.
-- [ ] `typed-error-union-multiple` / `typed-error-union-multiple.spec.ts`: one mutation exposes
+  - Gap: fixture/spec path exists but the spec is skipped. Current Vite integration loading throws `SchemaValidationError` from the schema module but the mutation dispatcher does not recognize it with `instanceof`, so schema validation renders `SERVER_ERROR` instead of the SPEC §9.2 `data-error-path` fragment; the skipped spec records this blocker without faking field-error behavior.
+- [x] `typed-error-union-multiple` / `typed-error-union-multiple.spec.ts`: one mutation exposes
       multiple declared error codes and the enhanced path renders the right branch each time.
   - SPEC refs: §6.3 typed error union, §9.2 errors.
   - Assertions: each code has distinct `data-error-code`; no unexpected server detail leaks.
-- [ ] `post-commit-rerun` / `post-commit-rerun.spec.ts`: mutation responses re-run invalidated
+  - Evidence: `pnpm exec playwright test mutation-prg-no-js.spec.ts post-commit-rerun.spec.ts typed-error-union-multiple.spec.ts validation-field-errors.spec.ts --config=tests/integration/playwright.config.ts` passed `tests/integration/specs/typed-error-union-multiple.spec.ts`; semantic snapshots verify distinct `OUT_OF_STOCK` and `CARD_DECLINED` branches.
+- [x] `post-commit-rerun` / `post-commit-rerun.spec.ts`: mutation responses re-run invalidated
       queries after commit, so the rendered `<kovo-query>` and fragments never show pre-commit data.
   - SPEC refs: §10.3 request lifecycle.
   - Assertions: response fragment shows committed value; db and UI agree; no visible revert.
+  - Evidence: `pnpm exec playwright test mutation-prg-no-js.spec.ts post-commit-rerun.spec.ts typed-error-union-multiple.spec.ts validation-field-errors.spec.ts --config=tests/integration/playwright.config.ts` passed `tests/integration/specs/post-commit-rerun.spec.ts`; assertions inspect committed `<kovo-query>`, fragment HTML, UI text, and db truth.
 - [ ] `fragment-targets-live-dom` / `fragment-targets-live-dom.spec.ts`: `Kovo-Targets` is collected
       from the live DOM, including islands patched in by an earlier mutation.
   - SPEC refs: §9.1 `Kovo-Targets`, §4.4 morph application.

@@ -1,0 +1,5 @@
+<balance-badge kovo-deps="balance" kovo-fragment-target="balance-badge">
+  <span>
+    "Balance:"
+  <output data-bind="balance.balance">
+    "15"
