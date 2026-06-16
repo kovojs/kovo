@@ -914,8 +914,9 @@ describe('gallery demo fixtures', () => {
     expect(button.html).toContain('disabled type="button"');
 
     expect(badge.html).toContain('data-ui-demo="badge"');
-    expect(badge.html).toContain('bg-emerald-50');
-    expect(badge.html).toContain('bg-amber-50');
+    expect(badge.html).toContain('kv-badge-');
+    expect(badge.html).toContain('data-style-src="badge.tsx#root; badge.tsx#success"');
+    expect(badge.html).toContain('data-style-src="badge.tsx#root; badge.tsx#warning"');
 
     expect(breadcrumb.html).toContain('data-ui-demo="breadcrumb"');
     expect(breadcrumb.html).toContain('aria-label="Account path"');

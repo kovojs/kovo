@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import * as style from '@kovojs/style';
+
 import {
   Accordion,
   AccordionContent,
@@ -174,20 +176,25 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Command.name).toBe('command');
     expect(Tooltip.name).toBe('tooltip');
 
+    const buttonOverride = style.create(
+      { root: { letterSpacing: 1 } },
+      { namespace: 'markupButton', source: 'index.markup.test.tsx' },
+    );
+
     expect(
       Button.definition.render({
         children: 'Save',
-        class: ['tracking-wide', { uppercase: true }],
         disabled: true,
         form: 'settings-form',
         name: 'settings-action',
         size: 'sm',
+        style: buttonOverride.root,
         type: 'submit',
         value: 'save',
         variant: 'secondary',
       }),
     ).toContain(
-      '<button class="inline-flex items-center justify-center rounded-md border text-sm font-medium transition-colors',
+      'data-style-src="button.tsx#root; button.tsx#sm; button.tsx#secondary; index.markup.test.tsx#root"',
     );
     expect(
       Button.definition.render({
@@ -201,9 +208,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Button.definition.render({ children: 'Save', disabled: true })).toContain(
       ' disabled type="button"',
     );
-    expect(Button.definition.render({ children: 'Save', size: 'sm' })).toContain('h-8 gap-1.5');
+    expect(Button.definition.render({ children: 'Save', size: 'sm' })).toContain(
+      'button.tsx#root; button.tsx#sm; button.tsx#primary',
+    );
     expect(Badge.definition.render({ children: 'Live', variant: 'success' })).toContain(
-      'bg-emerald-50',
+      'data-style-src="badge.tsx#root; badge.tsx#success"',
     );
     expect(Card.definition.render({ children: '<p>Total</p>' })).toBe(
       '<section class="rounded-lg border border-neutral-200 bg-white p-4 text-neutral-950 shadow-sm"><p>Total</p></section>',

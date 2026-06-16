@@ -333,6 +333,22 @@ borrowing its concrete API/spike detail.
       stackoverflow, docs site, and `create-kovo` starter; remove Tailwind deps + `@source` safelists;
       decide `@scope` retirement. _Evidence:_ `rg -i tailwind` returns only historical/plan references;
       examples build + static-export styled.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/badge.tsx` now uses `@kovojs/style`,
+    exports `badgeStyles`, accepts `style?: style.StyleInput`, and drops `defineVariants`/`cn` plus the
+    `class` escape hatch. `packages/ui/src/badge.stylex.test.tsx` proves default/variant StyleX
+    classes and author-last overrides.
+  - Evidence (partial, 2026-06-16): `packages/ui/registry.json` records Badge's copied-source
+    dependency on `@kovojs/style`; `packages/cli/src/index.kovo-add.test.ts` asserts copied
+    `badge.tsx` contains StyleX imports, `badgeStyles`, and typed `style` overrides. The gallery
+    Badge visual fixture is refreshed with `kv-badge-*` classes.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/badge.stylex.test.tsx
+    packages/ui/src/button.stylex.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest
+    --run src/demo-fixtures.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --config
+    vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    and `pnpm exec tsc --noEmit` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

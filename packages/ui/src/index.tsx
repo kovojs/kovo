@@ -1,4 +1,4 @@
-export { Badge, badgeClassNames, badgeClasses } from './badge.js';
+export { Badge, badgeClasses, badgeStyles } from './badge.js';
 export type { BadgeProps, BadgeVariant } from './badge.js';
 export {
   Breadcrumb,

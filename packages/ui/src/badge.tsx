@@ -1,37 +1,68 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export type BadgeVariant = 'neutral' | 'success' | 'warning';
 
 export interface BadgeProps {
   children?: string;
-  class?: ClassValue;
+  style?: style.StyleInput;
   variant?: BadgeVariant;
 }
 
-export const badgeClassNames = defineVariants({
-  base: 'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium',
-  variants: {
-    variant: {
-      neutral: 'border-neutral-200 bg-neutral-100 text-neutral-900',
-      success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-      warning: 'border-amber-200 bg-amber-50 text-amber-900',
+const base = style.create(
+  {
+    root: {
+      alignItems: 'center',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'inline-flex',
+      fontSize: 12,
+      fontWeight: 500,
+      paddingBlock: 2,
+      paddingInline: 8,
     },
   },
-  defaultVariants: {
-    variant: 'neutral',
-  },
-});
+  { namespace: 'badge', source: 'badge.tsx' },
+);
 
-export const badgeClasses = badgeClassNames.classes;
+const variants = style.create(
+  {
+    neutral: {
+      backgroundColor: '#f5f5f5',
+      borderColor: '#e5e5e5',
+      color: '#171717',
+    },
+    success: {
+      backgroundColor: '#ecfdf5',
+      borderColor: '#a7f3d0',
+      color: '#065f46',
+    },
+    warning: {
+      backgroundColor: '#fffbeb',
+      borderColor: '#fde68a',
+      color: '#78350f',
+    },
+  },
+  { namespace: 'badgeVariant', source: 'badge.tsx' },
+);
+
+export const badgeStyles = {
+  base,
+  variants,
+} as const;
+
+export const badgeClasses = [
+  style.attrs(base.root, variants.neutral).class ?? '',
+  style.attrs(variants.success).class ?? '',
+  style.attrs(variants.warning).class ?? '',
+] as const;
 
 export const Badge = component({
   render(props: BadgeProps) {
-    return (
-      <span class={cn(badgeClassNames({ variant: props.variant }), props.class)}>
-        {props.children}
-      </span>
-    );
+    const attrs = style.attrs(base.root, variants[props.variant ?? 'neutral'], props.style);
+
+    return <span {...attrs}>{props.children}</span>;
   },
 });

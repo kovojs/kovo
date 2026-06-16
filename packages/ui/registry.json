@@ -128,7 +128,8 @@
       "files": ["src/badge.tsx"],
       "exports": ["Badge"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []
