@@ -44,8 +44,6 @@ import {
   type AddComponentName,
 } from './add-catalog.js';
 
-export type { KovoCheckInput, KovoExplainInput } from '@kovojs/core';
-
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
   message: string;
@@ -59,6 +57,11 @@ interface UnguardedAccessFact {
   name: string;
 }
 
+/**
+ * Result of a `kovoCheck`/`kovoExplain` run: the stable verifier output text and
+ * a process exit code (0 success, 1 failure) matching what the `kovo` bin would
+ * emit (SPEC.md §11.4 verification surface; §1.1 proof claims).
+ */
 export interface KovoCheckResult {
   exitCode: 0 | 1;
   output: string;
@@ -74,6 +77,7 @@ const compileOutputVersion = 'compile/v1';
 const addOutputVersion = 'kovo-add/v1';
 const mcpOutputVersion = 'kovo-mcp/v1';
 
+/** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
     process.stdout.write('kovo: explain, check, audit, export, mcp\n');
@@ -121,6 +125,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   return 1;
 }
 
+/** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
 export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
   if (args[0] === 'mcp') return runMcpCommand(args.slice(1));
   if (args[0] !== 'export') return main(args);
@@ -130,6 +135,7 @@ export async function mainAsync(args: readonly string[] = process.argv.slice(2))
   return writeCommandResult(await runExportCommand(parsed.options));
 }
 
+/** @internal Input shape for the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Input {
   fileName: string;
   packageComponentPrefixes?: CompileComponentOptions['packageComponentPrefixes'];
@@ -141,6 +147,7 @@ export interface CompileComponentV1Input {
   sourceProvenance?: CompileComponentOptions['sourceProvenance'];
 }
 
+/** @internal Diagnostic shape returned by the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Diagnostic {
   code: DiagnosticCode;
   fileName: string;
@@ -151,6 +158,7 @@ export interface CompileComponentV1Diagnostic {
   start?: { column: number; line: number };
 }
 
+/** @internal Result shape returned by the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Result {
   componentGraphFacts: readonly unknown[];
   diagnostics: readonly CompileComponentV1Diagnostic[];
@@ -165,12 +173,14 @@ export interface CompileComponentV1Result {
   viewTransitions: readonly unknown[];
 }
 
+/** @internal Tool names exposed by the internal `kovo mcp` server. */
 export type KovoMcpToolName =
   | 'compile_component'
   | 'kovo_check'
   | 'kovo_explain'
   | 'list_diagnostics';
 
+/** @internal JSON-RPC request shape handled by the internal `kovo mcp` transport. */
 export type KovoMcpRequest =
   | {
       id?: string | number | null;
@@ -184,6 +194,7 @@ export type KovoMcpRequest =
       params: { arguments?: unknown; name: string };
     };
 
+/** @internal JSON-RPC response shape emitted by the internal `kovo mcp` transport. */
 export type KovoMcpResponse =
   | {
       id: string | number | null;
@@ -200,6 +211,7 @@ export type KovoMcpResponse =
       jsonrpc: '2.0';
     };
 
+/** @internal Backs the internal `compile_component` MCP tool; not a public API. */
 export async function compileComponentV1(
   input: CompileComponentV1Input,
 ): Promise<CompileComponentV1Result> {
@@ -262,6 +274,7 @@ function compileComponentOptions(input: CompileComponentV1Input): CompileCompone
   };
 }
 
+/** @internal Dispatches a single `kovo mcp` JSON-RPC request; not a public API. */
 export async function handleKovoMcpRequest(request: unknown): Promise<KovoMcpResponse> {
   if (!isRecord(request)) return mcpError(null, -32600, 'request must be an object');
   const id = mcpRequestId(request.id);
@@ -314,6 +327,7 @@ function mcpUsage(): string {
   ].join('\n');
 }
 
+/** @internal Newline-delimited JSON-RPC stdio fallback for `kovo mcp`; not a public API. */
 export async function runMcpFallbackStdio(
   input: AsyncIterable<Buffer | string>,
   output: { write(chunk: string): unknown },
@@ -350,6 +364,7 @@ async function writeMcpLine(
   output.write(`${JSON.stringify(await handleKovoMcpRequest(parsed))}\n`);
 }
 
+/** @internal Connects the internal `kovo mcp` SDK server to a transport; not a public API. */
 export async function runMcpSdkServer(transport?: Transport): Promise<void> {
   const [{ StdioServerTransport }, server] = await Promise.all([
     import('@modelcontextprotocol/sdk/server/stdio.js'),
@@ -1097,34 +1112,73 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
   );
 }
 
+/**
+ * The kind of graph subject a targeted `kovo explain` describes — a component,
+ * mutation, query, or page (SPEC.md §5.3).
+ */
 export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
 
+/**
+ * Options selecting which `kovo explain` view `kovoExplain` produces: a targeted
+ * component/mutation/query/page subject, the `--endpoints` machine-ingress audit,
+ * or the `--unguarded`/`--unscoped` access audits (SPEC.md §5.3 and §11.4).
+ */
 export type KovoExplainOptions =
   | KovoEndpointExplainOptions
   | KovoTargetExplainOptions
   | KovoUnguardedExplainOptions
   | KovoUnscopedExplainOptions;
 
+/**
+ * `kovo explain --endpoints` options: emit the stable machine-ingress audit table
+ * of every declared endpoint, webhook, and file/stream route (SPEC.md §11.4).
+ */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
 }
 
+/**
+ * Targeted `kovo explain` options: describe one graph subject of the given `kind`
+ * and `target`, optionally including optimistic transform coverage for mutations
+ * (SPEC.md §5.3).
+ */
 export interface KovoTargetExplainOptions {
   kind: ExplainKind;
   optimistic?: boolean;
   target: string;
 }
 
+/**
+ * `kovo explain --unguarded` options: audit every mutation, route, and query
+ * reachable without an `authed` guard, optionally failing when findings exist
+ * (SPEC.md §11.4).
+ */
 export interface KovoUnguardedExplainOptions {
   failOnFindings?: boolean;
   unguarded: true;
 }
 
+/**
+ * `kovo explain --unscoped` options: audit every query or write touching an
+ * owner-annotated domain without an owner scope, optionally failing when findings
+ * exist (SPEC.md §11.4).
+ */
 export interface KovoUnscopedExplainOptions {
   failOnFindings?: boolean;
   unscoped: true;
 }
 
+/**
+ * Run the `kovo explain` verifier in-process against an extracted graph.
+ *
+ * Prints the stable `kovo-explain/v1` graph view selected by `options`: a single
+ * component, mutation, query, or page subject; the `--endpoints` machine-ingress
+ * audit; or the `--unguarded`/`--unscoped` access audits (SPEC.md §5.3 and §11.4).
+ * The printed format is stable so agents and graph queries can answer intent-level
+ * questions over it (SPEC.md §1.1 proof claims). Returns the text plus an exit
+ * code that is non-zero only when an audit ran with `failOnFindings` and findings
+ * were present.
+ */
 export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
@@ -1319,10 +1373,12 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   return ok(lines);
 }
 
+/** @internal Options for the internal `kovo audit` command; not a public API. */
 export interface KovoAuditOptions {
   failOnFindings?: boolean;
 }
 
+/** @internal Backs the internal `kovo audit` command; not a public API. */
 export function kovoAudit(
   input: KovoExplainInput,
   options: KovoAuditOptions = {},
@@ -1368,6 +1424,16 @@ export function kovoAudit(
   };
 }
 
+/**
+ * Run the `kovo check` verifier in-process against an extracted graph.
+ *
+ * Reports the consistency and exhaustiveness findings of SPEC.md §11.4: touch-graph
+ * diagnostics, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint
+ * and render-equivalence invariants, and the unguarded/unscoped audits. The
+ * optional `family` selects the `optimistic` or `coverage` slice (default `all`).
+ * Returns the stable `kovo-check/v1` text plus an exit code that is non-zero when
+ * any error-severity finding is present (SPEC.md §1.1 proof claims).
+ */
 export function kovoCheck(
   input: KovoCheckInput,
   options: { family?: KovoCheckFamily } = {},

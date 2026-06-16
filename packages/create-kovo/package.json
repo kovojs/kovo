@@ -5,11 +5,9 @@
     "create-kovo": "./src/index.ts"
   },
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
+    "@kovojs/core": "workspace:*",
     "vitest": "4.1.8"
   }
 }
