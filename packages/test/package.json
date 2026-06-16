@@ -7,6 +7,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./integration": "./src/integration/index.ts",
+    "./integration/define": "./src/integration/define-fixture.ts",
     "./assertions": "./src/assertions.ts",
     "./headers": "./src/headers.ts",
     "./harness-operations": "./src/harness-operations.ts",
@@ -87,7 +89,10 @@
     "pgsql-ast-parser": "^12.0.2"
   },
   "devDependencies": {
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
+    "@playwright/test": "1.60.0",
+    "vite": "^8.0.16",
     "vitest": "4.1.8"
   }
 }

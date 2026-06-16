@@ -6,7 +6,8 @@
     "packages/*",
     "examples/*",
     "conformance/*",
-    "site"
+    "site",
+    "tests/integration"
   ],
   "type": "module",
   "scripts": {
@@ -22,9 +23,12 @@
     "test:browser": "vp run browser",
     "test:compiler-perf": "vp run compiler-perf",
     "test:conformance": "vp run conformance",
+    "test:integration": "playwright test --config tests/integration/playwright.config.ts",
     "test:p10-perf": "vp run p10-perf"
   },
   "devDependencies": {
+    "@kovojs/test": "workspace:*",
+    "@playwright/test": "1.60.0",
     "@types/node": "25.9.2",
     "@typescript/native-preview": "7.0.0-dev.20260610.1",
     "@vitest/browser-playwright": "4.1.8",

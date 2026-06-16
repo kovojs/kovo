@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@kovojs/test':
+        specifier: workspace:*
+        version: link:packages/test
+      '@playwright/test':
+        specifier: 1.60.0
+        version: 1.60.0
       '@types/node':
         specifier: 25.9.2
         version: 25.9.2
@@ -451,9 +457,18 @@ importers:
         specifier: ^12.0.2
         version: 12.0.2
     devDependencies:
+      '@kovojs/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../drizzle
+      '@playwright/test':
+        specifier: 1.60.0
+        version: 1.60.0
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
@@ -513,6 +528,18 @@ importers:
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
+
+  tests/integration:
+    dependencies:
+      '@kovojs/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kovojs/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kovojs/test':
+        specifier: workspace:*
+        version: link:../../packages/test
 
 packages:
 
@@ -1084,6 +1111,11 @@ packages:
   '@oxlint/plugins@1.61.0':
     resolution: {integrity: sha512-nkOyZEF1vH527CkdQtOp1HMrVFEM4ResURvI2JFeGoup+h+43J/k/FgdOR9b9Isxg+Yae7qVDa7y3nssE8b3TQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+
+  '@playwright/test@1.60.0':
+    resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
@@ -2971,6 +3003,10 @@ snapshots:
     optional: true
 
   '@oxlint/plugins@1.61.0': {}
+
+  '@playwright/test@1.60.0':
+    dependencies:
+      playwright: 1.60.0
 
   '@polka/url@1.0.0-next.29': {}
 
