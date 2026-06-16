@@ -1,0 +1,2 @@
+<div data-error-code="OUT_OF_STOCK" data-error-path="quantity" kovo-fragment-target="buy-error" role="alert">
+  "Sold out (0 left)"
