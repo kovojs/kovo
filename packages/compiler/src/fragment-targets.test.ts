@@ -5,8 +5,89 @@ import { compileComponentModule } from './index.js';
 
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
+const kv238 = diagnosticDefinitions.KV238;
 
 describe('fragment target validation', () => {
+  it('reports KV238 for duplicate fragment-target wire names', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr data-row={rowId}></tr>,
+});
+
+export const CartRowAlias = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr data-row={rowId}></tr>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV238',
+        fileName: 'cart-row.tsx',
+        help: [
+          kv238.help,
+          'Fragment target: cart-row',
+          'First writer: CartRow component("cart-row")',
+          'Duplicate writer: CartRowAlias component("cart-row")',
+          "Would emit registry:\ninterface FragmentTargets {\n  'cart-row': ...;\n}",
+        ].join('\n'),
+        message:
+          'Duplicate fragment-target wire name. cart-row is used by CartRow component("cart-row") and CartRowAlias component("cart-row").',
+        severity: 'error',
+      }),
+    );
+  });
+
+  it('accepts distinct fragment-target wire names', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr data-row={rowId}></tr>,
+});
+
+export const OrderRow = component('order-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr data-row={rowId}></tr>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toEqual([]);
+  });
+
+  it('reports KV238 when registry facts already contain the fragment target name', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      registryFacts: { fragmentTargets: ['cart-row'] },
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr data-row={rowId}></tr>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV238',
+        help: expect.stringContaining('registryFacts.fragmentTargets'),
+        message:
+          'Duplicate fragment-target wire name. cart-row is already present in registry facts and is reused by CartRow component("cart-row").',
+      }),
+    );
+  });
+
   it('accepts fragment target render inputs declared as queries or stamped props', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

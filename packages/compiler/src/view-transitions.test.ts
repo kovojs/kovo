@@ -1,8 +1,11 @@
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
 import { viewTransitionLowering } from './lower/view-transitions.js';
 import { parseComponentModule } from './scan/parse.js';
+
+const kv239 = diagnosticDefinitions.KV239;
 
 describe('view transition lowering', () => {
   it('exposes view transition lowering as parsed source patches', () => {
@@ -47,6 +50,79 @@ export const ProductCard = component('product-card', {
       '<img style="view-transition-name: product-p1-image" src="/p1.png" kovo-c="product-card" />',
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
+  });
+
+  it('reports KV239 for duplicate static view transition names', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => (
+    <section>
+      <img viewTransitionName="product-p1-image" src="/p1.png" />
+      <a viewTransitionName="product-p1-image" href="/products/p1">View</a>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV239',
+        fileName: 'product-card.tsx',
+        help: [
+          kv239.help,
+          'View-transition name: product-p1-image',
+          'First writer: ProductCard component("product-card") <img>',
+          'Duplicate writer: ProductCard component("product-card") <a>',
+          "Would emit registry:\ninterface ViewTransitions {\n  'product-p1-image': unknown;\n}",
+          'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
+        ].join('\n'),
+        message:
+          'Duplicate static view-transition name. product-p1-image is used by ProductCard component("product-card") <img> and ProductCard component("product-card") <a>.',
+        severity: 'error',
+      }),
+    );
+  });
+
+  it('accepts distinct static view transition names', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => (
+    <section>
+      <img viewTransitionName="product-p1-image" src="/p1.png" />
+      <a viewTransitionName="product-p1-link" href="/products/p1">View</a>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV239')).toEqual([]);
+  });
+
+  it('reports KV239 when registry facts already contain the static view transition name', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      registryFacts: { viewTransitions: ['product-p1-image'] },
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => <img viewTransitionName="product-p1-image" src="/p1.png" />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV239',
+        help: expect.stringContaining('registryFacts.viewTransitions'),
+        message:
+          'Duplicate static view-transition name. product-p1-image is already present in registry facts and is reused by ProductCard component("product-card") <img>.',
+      }),
+    );
   });
 
   it('merges cross-document view transition stamps into existing static styles', () => {

@@ -94,14 +94,18 @@ export function deriveRegistryFactsFromGraph(
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
   const components = deriveComponentFactsFromGraph(graph);
+  const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
+  const viewTransitions = deriveViewTransitionsFromGraph(graph);
 
   return {
     ...(components.length > 0 ? { components } : {}),
     domainKeys: deriveDomainKeysFromGraph(graph),
+    ...(fragmentTargets.length > 0 ? { fragmentTargets } : {}),
     invalidations: deriveInvalidationFactsFromGraph(graph),
     ...(Object.keys(options.mutations ?? {}).length > 0 ? { mutations: options.mutations } : {}),
     ...(Object.keys(options.queries ?? {}).length > 0 ? { queries: options.queries } : {}),
     routes: [...new Set((graph.pages ?? []).map((page) => page.route))].sort(),
+    ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
   };
 }
 
@@ -117,6 +121,18 @@ function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
 
 function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
   return [...new Set((graph.components ?? []).map((component) => kebabCase(component.name)))].sort(
+    (left, right) => left.localeCompare(right),
+  );
+}
+
+function deriveFragmentTargetsFromGraph(graph: RegistryGraphInput): string[] {
+  return [...new Set((graph.components ?? []).flatMap((component) => component.fragments ?? []))].sort(
+    (left, right) => left.localeCompare(right),
+  );
+}
+
+function deriveViewTransitionsFromGraph(graph: RegistryGraphInput): string[] {
+  return [...new Set((graph.pages ?? []).flatMap((page) => page.viewTransitions ?? []))].sort(
     (left, right) => left.localeCompare(right),
   );
 }

@@ -44,10 +44,12 @@ export interface FragmentTargetFact {
 export interface RegistryFacts {
   components?: readonly string[];
   domainKeys?: readonly string[];
+  fragmentTargets?: readonly string[];
   invalidations?: Readonly<Record<string, readonly string[]>>;
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
   routes?: readonly string[];
+  viewTransitions?: readonly string[];
 }
 
 /** @internal Map of registry entry name to its emitted TypeScript type source. In-repo use only. */

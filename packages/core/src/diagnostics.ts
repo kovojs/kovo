@@ -24,6 +24,8 @@ export type DiagnosticCode =
   | 'KV235'
   | 'KV236'
   | 'KV237'
+  | 'KV238'
+  | 'KV239'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -337,6 +339,24 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Duplicate component effective wire name.',
+  },
+  KV238: {
+    code: 'KV238',
+    help: [
+      'Fixes: give one fragment target a distinct component("target-name") value, or remove fragmentTarget from the component that should not receive enhanced patches.',
+      'SPEC §4.5 and §6.2 make fragment-target names registry-visible wire identities; duplicate names make enhanced fragment patches ambiguous.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Duplicate fragment-target wire name.',
+  },
+  KV239: {
+    code: 'KV239',
+    help: [
+      'Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.',
+      'SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Duplicate static view-transition name.',
   },
   KV301: {
     code: 'KV301',

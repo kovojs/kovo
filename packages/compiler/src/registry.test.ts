@@ -97,7 +97,11 @@ describe('compiler registry and graph emission', () => {
           { invalidates: ['cart'], key: 'cart/add', writes: ['cart', 'order'] },
           { key: 'product/reserve', writes: ['product'] },
         ],
-        pages: [{ route: '/cart' }, { route: '/products/:id' }, { route: '/cart' }],
+        pages: [
+          { route: '/cart', viewTransitions: ['cart-badge'] },
+          { route: '/products/:id', viewTransitions: ['product-p1-image'] },
+          { route: '/cart', viewTransitions: ['cart-badge'] },
+        ],
         queries: [
           { domains: ['cart'], query: 'cart' },
           { domains: ['product'], query: 'productGrid' },
@@ -127,6 +131,7 @@ describe('compiler registry and graph emission', () => {
         cart: 'typeof cartQuery',
       },
       routes: ['/cart', '/products/:id'],
+      viewTransitions: ['cart-badge', 'product-p1-image'],
     });
 
     const result = compileComponentModule({
@@ -199,6 +204,7 @@ export const ProductGrid = component('product-grid', {
     expect(derived.registryFacts).toEqual({
       components: ['cart-badge', 'product-grid'],
       domainKeys: ['cart', 'product'],
+      fragmentTargets: ['cart-badge'],
       invalidations: {
         'cart/add': ['cart'],
       },
