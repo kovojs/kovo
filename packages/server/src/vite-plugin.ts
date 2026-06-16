@@ -15,6 +15,11 @@ import type { KovoAppShellVitePluginBuildOptions } from './vite-build.js';
 import type { KovoAppShellViteOutputOptions } from './vite-build-output.js';
 import { writeKovoAppShellVitePluginBuild } from './vite-plugin-build.js';
 
+/**
+ * @internal App-shell Vite dev/build internal (SPEC.md §9.5). Combined dev-server plus
+ * writeBundle plugin object returned by the raw kovoAppShellVitePlugin.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellVitePlugin {
   configureServer(server: KovoAppShellViteDevServer): void;
   name: 'kovo-app-shell';
@@ -24,12 +29,22 @@ export interface KovoAppShellVitePlugin {
   ): Promise<void>;
 }
 
+/**
+ * @internal App-shell Vite dev/build internal (SPEC.md §9.5). Options for the raw
+ * kovoAppShellVitePlugin (dev diagnostics, build wiring, request filter).
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellVitePluginOptions {
   build?: KovoAppShellVitePluginBuildOptions;
   devDiagnostics?: KovoAppShellDevDiagnosticLedger;
   shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
 }
 
+/**
+ * @internal App-shell Vite dev/build internal (SPEC.md §9.5). Raw combined dev + build
+ * plugin; app authors use kovoAppShellViteDevPlugin and the export helpers instead.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function kovoAppShellVitePlugin(
   app: KovoApp,
   options: KovoAppShellVitePluginOptions = {},

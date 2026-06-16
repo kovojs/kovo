@@ -1,7 +1,17 @@
+/**
+ * @internal Route-matching engine type (SPEC.md §6.x route table). The minimal route
+ * projection the matcher and ambiguity checker operate on. Exported only for in-repo
+ * consumers, not app authors.
+ */
 export interface RouteLike<Path extends string = string> {
   path: Path;
 }
 
+/**
+ * @internal Route-matching engine type (SPEC.md §6.x). The result of normalizing a
+ * request pathname (trailing-slash + authority collapse, with a 308 redirect when the
+ * canonical form differs). Exported only for in-repo consumers, not app authors.
+ */
 export interface PathnameNormalization {
   inputPathname: string;
   pathname: string;
@@ -12,6 +22,11 @@ export interface PathnameNormalization {
   trailingSlash: 'canonical' | 'removed';
 }
 
+/**
+ * @internal Route-matching engine type (SPEC.md §6.x route table). A resolved
+ * route-table match (route + extracted params + normalization). Exported only for in-repo
+ * consumers, not app authors.
+ */
 export interface RouteMatch<Route extends RouteLike = RouteLike> {
   normalization: PathnameNormalization;
   params: Record<string, string>;
@@ -19,6 +34,11 @@ export interface RouteMatch<Route extends RouteLike = RouteLike> {
   route: Route;
 }
 
+/**
+ * @internal Route-ambiguity diagnostic shape for KV228 (SPEC.md §9.5; KV228 in §appendix
+ * diagnostics). Two routes that can both match the same canonical request path, with a
+ * witness path. Exported only for in-repo conformance/audit tooling, not app authors.
+ */
 export interface RouteAmbiguity {
   code: 'KV228';
   message: string;
@@ -46,6 +66,12 @@ interface CachedRouteTable<Route extends RouteLike = RouteLike> {
 
 const routeTableCache = new WeakMap<readonly RouteLike[], CachedRouteTable>();
 
+/**
+ * @internal Route-matching engine (SPEC.md §6.3/§6.x). Collapses an authority-forming
+ * leading slash run and strips trailing slashes to one canonical pathname, emitting a 308
+ * redirect descriptor when the canonical form differs (security finding H5). Exported
+ * only for in-repo consumers, not app authors.
+ */
 export function normalizePathname(pathname: string): PathnameNormalization {
   const inputPathname = pathname;
   const withoutSearchOrHash = pathname.split(/[?#]/, 1)[0] ?? '';
@@ -87,6 +113,11 @@ export function normalizePathname(pathname: string): PathnameNormalization {
   };
 }
 
+/**
+ * @internal Route-matching engine (SPEC.md §6.x route table). Resolves a pathname to the
+ * most-specific matching route (static-first per segment) and extracts its params.
+ * Exported only for in-repo consumers, not app authors.
+ */
 export function matchRoute<Route extends RouteLike>(
   routes: readonly Route[],
   pathname: string,
@@ -111,6 +142,12 @@ export function matchRoute<Route extends RouteLike>(
   };
 }
 
+/**
+ * @internal Route-ambiguity conformance diagnostic for KV228 (SPEC.md §9.5; §680 makes
+ * an ambiguous route table a compile error rather than a runtime precedence footnote).
+ * Returns every pair of routes that can both match one canonical request path, with a
+ * witness path. Exported only for in-repo conformance/audit tooling, not app authors.
+ */
 export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly RouteAmbiguity[] {
   const compiledRoutes = compileRoutes(routes);
   const ambiguities: RouteAmbiguity[] = [];

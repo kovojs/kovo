@@ -21,6 +21,11 @@ import {
   type KovoAppShellViteOutputBundle,
 } from './vite-manifest.js';
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Compiled client module
+ * input with an optional precomputed version for the build.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellCompiledClientModule extends Omit<
   VersionedClientModuleInput,
   'version'
@@ -28,6 +33,11 @@ export interface KovoAppShellCompiledClientModule extends Omit<
   version?: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Low-level options for
+ * createKovoAppShellBuild (app plus resolved manifest/route entries).
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellBuildOptions {
   app: KovoApp;
   base?: string;
@@ -36,6 +46,11 @@ export interface KovoAppShellBuildOptions {
   routeEntries?: readonly KovoAppShellRouteBuildEntry[];
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Options for
+ * createKovoAppShellViteBuild from an in-memory manifest and route entry map.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteBuildOptions extends Omit<
   KovoAppShellBuildOptions,
   'routeEntries'
@@ -44,6 +59,11 @@ export interface KovoAppShellViteBuildOptions extends Omit<
   routeEntryMap?: KovoAppShellRouteEntryMap;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Options for building
+ * an app shell from a Rollup/Vite output bundle.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteBundleBuildOptions extends Omit<
   KovoAppShellViteBuildOptions,
   'manifest'
@@ -52,6 +72,11 @@ export interface KovoAppShellViteBundleBuildOptions extends Omit<
   manifest?: never;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Options for building
+ * an app shell from a manifest file on disk.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellViteManifestFileBuildOptions extends Omit<
   KovoAppShellViteBuildOptions,
   'manifest'
@@ -60,6 +85,11 @@ export interface KovoAppShellViteManifestFileBuildOptions extends Omit<
   manifestFile: string | URL;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Build/output options
+ * carried by kovoAppShellVitePlugin's writeBundle hook.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellVitePluginBuildOptions extends Omit<
   KovoAppShellViteBundleBuildOptions,
   'app' | 'bundle' | 'manifest'
@@ -69,6 +99,11 @@ export interface KovoAppShellVitePluginBuildOptions extends Omit<
   staticExport?: KovoAppShellVitePluginStaticExportOptions | false;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). A built, versioned
+ * client module with its emitted dist file/href.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellBuiltClientModule {
   contentType?: string;
   file: string;
@@ -78,11 +113,21 @@ export interface KovoAppShellBuiltClientModule {
   version: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Resolved page hints
+ * for a single route in a built app shell.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellRouteBuildHints {
   hints: PageHintOptions;
   routePath: string;
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). The built app shell
+ * (app, assets, client modules, route hints) consumed by the export pipeline.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export interface KovoAppShellBuild {
   app: KovoApp;
   assets: readonly KovoAppShellBuildAsset[];
@@ -90,6 +135,11 @@ export interface KovoAppShellBuild {
   routeHints: readonly KovoAppShellRouteBuildHints[];
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Builds an app shell
+ * from low-level resolved options.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function createKovoAppShellBuild(options: KovoAppShellBuildOptions): KovoAppShellBuild {
   assertKovoAppShellBuildApp(options.app);
   assertNoBlockingAppDiagnostics(options.app);
@@ -121,6 +171,11 @@ function assertKovoAppShellBuildApp(app: KovoApp): void {
   );
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Builds an app shell
+ * from an in-memory manifest and route entry map.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function createKovoAppShellViteBuild(
   options: KovoAppShellViteBuildOptions,
 ): KovoAppShellBuild {
@@ -141,6 +196,11 @@ export function createKovoAppShellViteBuild(
   });
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Builds an app shell
+ * from a Rollup/Vite output bundle.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export function createKovoAppShellViteBuildFromBundle(
   options: KovoAppShellViteBundleBuildOptions,
 ): KovoAppShellBuild {
@@ -153,6 +213,11 @@ export function createKovoAppShellViteBuildFromBundle(
   });
 }
 
+/**
+ * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Builds an app shell
+ * from a manifest file read off disk.
+ * Exported only for in-repo build/host config, not app authors.
+ */
 export async function createKovoAppShellViteBuildFromManifestFile(
   options: KovoAppShellViteManifestFileBuildOptions,
 ): Promise<KovoAppShellBuild> {

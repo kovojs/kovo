@@ -5,12 +5,21 @@ import {
   type RouteLike,
 } from './match.js';
 
+/**
+ * @internal Shell-dispatch engine input shape (SPEC.md §6.x dispatch order). The minimal
+ * endpoint projection the dispatcher matches against. Exported only for in-repo
+ * consumers, not app authors.
+ */
 export interface EndpointLike {
   method?: string;
   mount: 'exact' | 'prefix';
   path: string;
 }
 
+/**
+ * @internal Shell-dispatch engine type (SPEC.md §6.x dispatch order). Names the dispatch
+ * phase a request resolves to. Exported only for in-repo consumers, not app authors.
+ */
 export type ShellDispatchPhase =
   | 'mutation'
   | 'query'
@@ -20,6 +29,11 @@ export type ShellDispatchPhase =
   | 'route'
   | 'not-found';
 
+/**
+ * @internal Shell-dispatch engine type (SPEC.md §6.x dispatch order). One entry in the
+ * normative dispatch precedence table (reserved `/_m/`,`/_q/`,`/c/` prefixes → endpoints
+ * → route → 404). Exported only for in-repo consumers, not app authors.
+ */
 export type ShellDispatchEntry =
   | {
       kind: 'reserved';
@@ -56,11 +70,21 @@ const notFoundShellDispatchEntry = {
   phase: 'not-found',
 } as const satisfies Extract<ShellDispatchEntry, { kind: 'not-found' }>;
 
+/**
+ * @internal Shell-dispatch engine table (SPEC.md §6.x dispatch order). The normative,
+ * printable dispatch precedence order. Exported only for in-repo consumers and audit
+ * tooling, not app authors.
+ */
 export const shellDispatchTable = [
   ...shellDispatchMatchingTable,
   notFoundShellDispatchEntry,
 ] as const satisfies readonly ShellDispatchEntry[];
 
+/**
+ * @internal Shell-dispatch engine input (SPEC.md §6.x dispatch order). The request shape
+ * the dispatcher resolves against the route/endpoint tables. Exported only for in-repo
+ * consumers, not app authors.
+ */
 export interface ShellDispatchInput<
   Route extends RouteLike = RouteLike,
   Endpoint extends EndpointLike = EndpointLike,
@@ -71,6 +95,11 @@ export interface ShellDispatchInput<
   routes?: readonly Route[];
 }
 
+/**
+ * @internal Shell-dispatch engine result (SPEC.md §6.x dispatch order). The resolved
+ * dispatch outcome (reserved/endpoint/route/not-found) for a request. Exported only for
+ * in-repo consumers, not app authors.
+ */
 export type ShellDispatchMatch<
   Route extends RouteLike = RouteLike,
   Endpoint extends EndpointLike = EndpointLike,
@@ -108,6 +137,12 @@ export type ShellDispatchMatch<
 
 const routeAllowedMethods = ['GET', 'HEAD'] as const;
 
+/**
+ * @internal Shell-dispatch engine (SPEC.md §6.x dispatch order). Resolves a request to
+ * the first matching dispatch phase following the normative precedence: reserved `/_m/`,
+ * `/_q/`, `/c/` prefixes → endpoint exact/prefix mounts → route table → 404. Exported
+ * only for in-repo consumers, not app authors.
+ */
 export function matchShellDispatch<
   Route extends RouteLike,
   Endpoint extends EndpointLike = EndpointLike,

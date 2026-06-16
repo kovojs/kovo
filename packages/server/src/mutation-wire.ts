@@ -10,6 +10,11 @@ import {
   type ServerResponseBase,
 } from './response.js';
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). Renderer for a fragment patched
+ * into a `Kovo-Targets` site. Exported only for in-repo consumers and compiler-emitted
+ * code, not app authors.
+ */
 export interface FragmentRenderer {
   errorBoundary?: ErrorBoundaryRenderer;
   mode?: 'append' | 'replace';
@@ -18,11 +23,21 @@ export interface FragmentRenderer {
   target: string;
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). Error-boundary renderer for a
+ * fragment target. Exported only for in-repo consumers and compiler-emitted code, not
+ * app authors.
+ */
 export interface ErrorBoundaryRenderer {
   render(error: unknown, input: unknown): string | Promise<string>;
   target?: string;
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The resolved mutation request
+ * after the `Kovo-Fragment`/`Kovo-Idem`/`Kovo-Targets` headers are parsed. Exported only
+ * for in-repo consumers and compiler-emitted code, not app authors.
+ */
 export interface MutationWireRequest<
   Request,
   SessionValue = unknown,
@@ -40,14 +55,29 @@ export interface MutationWireRequest<
   targets?: readonly string[];
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The parsed
+ * `Kovo-Fragment`/`Kovo-Idem`/`Kovo-Targets` request headers. Exported only for in-repo
+ * consumers and compiler-emitted code, not app authors.
+ */
 export interface MutationWireHeaders {
   fragment: boolean;
   idem?: string;
   targets: readonly string[];
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The header bag the wire parsers
+ * read `Kovo-*` headers from. Exported only for in-repo consumers and compiler-emitted
+ * code, not app authors.
+ */
 export type MutationWireHeaderSource = HeaderSource;
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). Options for building a resolved
+ * MutationWireRequest from raw headers. Exported only for in-repo consumers and
+ * compiler-emitted code, not app authors.
+ */
 export interface MutationWireRequestOptions<
   Request,
   SessionValue = unknown,
@@ -63,12 +93,22 @@ export interface MutationWireRequestOptions<
   request: Request;
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The fragment-mode wire response
+ * (200/422/429/500). Exported only for in-repo consumers and compiler-emitted code, not
+ * app authors.
+ */
 export interface MutationWireResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
   200 | 422 | 429 | 500
 > {}
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The no-JS POST-redirect-GET
+ * request shape for the same mutation endpoint when no `Kovo-Fragment` header is present.
+ * Exported only for in-repo consumers and compiler-emitted code, not app authors.
+ */
 export interface NoJsMutationRequest<
   Request,
   Value,
@@ -81,12 +121,22 @@ export interface NoJsMutationRequest<
   request: Request;
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The no-JS POST-redirect-GET wire
+ * response (303 on success; 422/429/500 errors re-rendered into the full page). Exported
+ * only for in-repo consumers and compiler-emitted code, not app authors.
+ */
 export interface NoJsMutationResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
   303 | 422 | 429 | 500
 > {}
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The unified mutation-endpoint
+ * request that the one handler serves in both fragment and no-JS modes. Exported only
+ * for in-repo consumers and compiler-emitted code, not app authors.
+ */
 export interface MutationEndpointRequest<
   Request,
   Value,
@@ -96,8 +146,19 @@ export interface MutationEndpointRequest<
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
 }
 
+/**
+ * @internal Mutation-wire protocol type (SPEC.md §9.1). The union of the two mutation
+ * response modes one handler can answer. Exported only for in-repo consumers and
+ * compiler-emitted code, not app authors.
+ */
 export type MutationEndpointResponse = MutationWireResponse | NoJsMutationResponse;
 
+/**
+ * @internal Mutation-wire protocol parser (SPEC.md §9.1). Reads the `Kovo-Fragment`,
+ * `Kovo-Idem`, and `Kovo-Targets` headers off a request into a normalized
+ * MutationWireHeaders shape. Exported only for in-repo consumers and compiler-emitted
+ * code, not app authors.
+ */
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
   const fragment = readHeader(headers, 'Kovo-Fragment')?.toLowerCase() === 'true';
   const idem = readHeader(headers, 'Kovo-Idem')?.trim();
@@ -116,6 +177,12 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   };
 }
 
+/**
+ * @internal Mutation-wire protocol parser (SPEC.md §9.1). Builds a resolved mutation
+ * request from the raw `Kovo-Fragment`/`Kovo-Idem`/`Kovo-Targets` headers plus the
+ * request options. Exported only for in-repo consumers and compiler-emitted code, not app
+ * authors.
+ */
 export function mutationWireRequestFromHeaders<Request>(
   options: MutationWireRequestOptions<Request>,
 ): MutationWireRequest<Request> {
