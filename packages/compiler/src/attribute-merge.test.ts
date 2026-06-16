@@ -88,6 +88,49 @@ export const PrimitiveMerge = component({
     ]);
   });
 
+  it('rewrites primitive IDREFs when an authored id wins in the composition group', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-id-rewrite.tsx',
+      source: `
+export const PrimitiveIdRewrite = component({
+  render: () => (
+    <primitive-id-rewrite>
+      <Primitive.Trigger
+        asChild
+        attrs={{
+          'aria-controls': 'primitive-dialog',
+          command: 'show-modal',
+          commandfor: 'primitive-dialog',
+          type: 'button',
+        }}
+      >
+        <button>Open</button>
+      </Primitive.Trigger>
+      <Primitive.Content
+        asChild
+        attrs={{
+          id: 'primitive-dialog',
+          'aria-labelledby': 'primitive-title',
+        }}
+      >
+        <dialog id="author-dialog">
+          <h1 id="primitive-title">Title</h1>
+        </dialog>
+      </Primitive.Content>
+    </primitive-id-rewrite>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain('aria-controls="author-dialog"');
+    expect(serverSource).toContain('commandfor="author-dialog"');
+    expect(serverSource).toContain('id="author-dialog"');
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports KV231, KV232, and KV233 for residual attribute merge conflicts', () => {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',

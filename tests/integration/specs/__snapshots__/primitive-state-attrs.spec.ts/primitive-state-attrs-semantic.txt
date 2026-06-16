@@ -1,0 +1,3 @@
+<section data-case="primitive-state-attrs" kovo-c="primitive-state-attrs-card">
+  <button aria-pressed="true" class="primitive-toggle author-toggle" data-case="primitive-state-toggle" data-state="on" kovo-state="{}" on:click="/client.ts#toggleState" type="button">
+    "Alerts"
