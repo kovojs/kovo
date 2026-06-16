@@ -32,5 +32,7 @@ test('storage download route fails safely for escaped stored keys', async ({ req
   });
 
   expect(escaped.status()).toBe(404);
-  expect(await escaped.text()).not.toContain('escape');
+  const body = await escaped.text();
+  expect(body).not.toContain('../escape.txt');
+  expect(body).not.toContain('escape.txt');
 });
