@@ -86,6 +86,18 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(css.indexOf('@layer kovo-style.1000')).toBeLessThan(css.indexOf('@layer kovo-style.2000'));
   });
 
+  it('uses the full upstream property-priority table', () => {
+    expect(getPriority('@supports (display: grid)')).toBe(30);
+    expect(getPriority('@media (min-width: 40rem)')).toBe(200);
+    expect(getPriority('@container card (min-width: 20rem)')).toBe(300);
+    expect(getPriority(':hover')).toBe(130);
+    expect(getPriority('::before')).toBe(5000);
+    expect(getPriority('gridTemplate')).toBe(1000);
+    expect(getPriority('gridTemplateColumns')).toBe(3000);
+    expect(getPriority('scrollPadding')).toBe(1000);
+    expect(getPriority('scrollPaddingTop')).toBe(4000);
+  });
+
   it('defines typed token vars and theme override classes', () => {
     const tokens = defineVars(
       {

@@ -197,8 +197,15 @@ borrowing its concrete API/spike detail.
     resolve, array merge order, same-property override, nested pseudo override, source-map data, and the
     dynamic attrs fixture through Kovo's explicit `raw(...)` escape hatch.
   - [ ] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
-  - [ ] Replace the current curated priority-property subset with the full forked
+  - [x] Replace the current curated priority-property subset with the full forked
     `property-priorities` table before checking Phase 1 complete.
+    - Evidence (2026-06-16): `packages/style/src/property-priorities.ts` is ported from
+      `../stylex/packages/@stylexjs/shared/src/utils/property-priorities.js`; `packages/style/src/index.ts`
+      delegates priority lookup through the ported table.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/style test`, `pnpm exec tsc --noEmit`,
+      `pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/css.test.ts
+      packages/compiler/src/compile-component.test.ts`, `pnpm --filter @kovojs/style run build:dist`,
+      and `pnpm --filter @kovojs/compiler run build:dist` pass.
 - [ ] **Phase 2 — Compiler integration + readable output.** Re-home the extraction transform in
       `packages/compiler`; emit provenance-prefixed classes + `data-style-src`; **build and persist the
       rule→usage attribution map** (atom → referencing module/route/fragment/package, splitting invariant

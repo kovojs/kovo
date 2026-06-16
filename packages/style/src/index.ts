@@ -1,3 +1,5 @@
+import upstreamGetPriority from './property-priorities.js';
+
 const CSS_MARKER = '$$css';
 const STYLE_SRC = 'data-style-src';
 const DEFAULT_LAYER_NAME = 'kovo-style';
@@ -311,11 +313,7 @@ export function emitAtomicCss(rules: readonly AtomicRule[], options: CssEmitOpti
 /** @internal Priority bucket compatible with StyleX's shorthand-before-longhand cascade model. */
 export function getPriority(property: string): number {
   const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
-  if (cssProperty.startsWith('--')) return 1;
-  if (SHORTHANDS_OF_SHORTHANDS.has(cssProperty)) return 1000;
-  if (SHORTHANDS_OF_LONGHANDS.has(cssProperty)) return 2000;
-  if (LONGHAND_PHYSICAL.has(cssProperty)) return 4000;
-  return 3000;
+  return upstreamGetPriority(cssProperty);
 }
 
 interface CompileContext {
@@ -541,78 +539,3 @@ function hash(value: string): string {
   }
   return (result >>> 0).toString(36).slice(0, 6);
 }
-
-const SHORTHANDS_OF_SHORTHANDS = new Set([
-  'animation',
-  'background',
-  'border',
-  'border-block',
-  'border-inline',
-  'columns',
-  'flex',
-  'font',
-  'grid',
-  'inset',
-  'list-style',
-  'margin',
-  'offset',
-  'outline',
-  'padding',
-  'place-content',
-  'place-items',
-  'place-self',
-  'text-decoration',
-  'transition',
-]);
-
-const SHORTHANDS_OF_LONGHANDS = new Set([
-  'animation-range',
-  'background-position',
-  'border-color',
-  'border-radius',
-  'border-style',
-  'border-width',
-  'column-rule',
-  'contain-intrinsic-size',
-  'flex-flow',
-  'gap',
-  'grid-area',
-  'grid-column',
-  'grid-row',
-  'grid-template',
-  'inset-block',
-  'inset-inline',
-  'margin-block',
-  'margin-inline',
-  'overflow',
-  'overscroll-behavior',
-  'padding-block',
-  'padding-inline',
-  'scroll-margin',
-  'scroll-padding',
-]);
-
-const LONGHAND_PHYSICAL = new Set([
-  'bottom',
-  'height',
-  'left',
-  'max-height',
-  'max-width',
-  'min-height',
-  'min-width',
-  'right',
-  'top',
-  'width',
-  'border-bottom-color',
-  'border-bottom-style',
-  'border-bottom-width',
-  'border-left-color',
-  'border-left-style',
-  'border-left-width',
-  'border-right-color',
-  'border-right-style',
-  'border-right-width',
-  'border-top-color',
-  'border-top-style',
-  'border-top-width',
-]);
