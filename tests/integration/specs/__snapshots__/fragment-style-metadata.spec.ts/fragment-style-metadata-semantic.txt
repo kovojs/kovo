@@ -1,0 +1,5 @@
+<section kovo-deps="late-card" kovo-fragment-target="late-card">
+  <link href="/assets/late-card.css">
+  <section kovo-c="late-card" kovo-fragment-target="late-card">
+    <div>
+      "Late styled card"
