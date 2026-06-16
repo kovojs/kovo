@@ -402,6 +402,52 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     helper use. Narrow compiler verification passed with the command listed under the conformance
     snapshot evidence above.
 
+- [x] **Add a duplicate component-name (effective wire-name) validator.**
+  - Risk: the component name passed to `component('name', ...)` is the app-wide wire identity — it
+    becomes the `kovo-c` stamp, the `@scope [kovo-c="name"]` CSS host selector, and the
+    fragment-target key — but nothing enforces that it is unique. `deriveComponentFactsFromGraph()`
+    in `packages/compiler/src/graph.ts` silently `[...new Set(...)]`-dedupes colliding names, and
+    there is no validator in `packages/compiler/src/validate/**` that rejects two components sharing
+    one effective name. Package prefixes are enforced unique (KV234), but bare app-local names are
+    not, so the uniqueness SPEC §6.1.1 assumes is only assumed, never proven.
+  - Why it matters: a collision degrades silently rather than failing the build. Fragment targeting
+    resolves `querySelector('[kovo-c="name"]')` to the first DOM match (wrong-element patches), CSS
+    `@scope` selectors from one component leak into the other, and the duplicate vanishes from the
+    registry. For a compiler whose core promise is machine-auditable, load-bearing `kovo-c` identity
+    (SPEC §4.2, §4.8), an unenforced uniqueness invariant is a correctness/security gap, not a
+    style nit. This is the sibling of KV234: KV234 guards prefix uniqueness across packages, this
+    guards effective-name uniqueness across all components.
+  - Candidate implementation path: add a validator over the parser/graph model that computes each
+    component's **effective** name (package prefix + bare name, matching the rules used for `kovo-c`
+    and scoped CSS in §6.1.1/§13.1) and reports a new blocking diagnostic (proposed KV237) when two
+    components resolve to the same effective name. The diagnostic must name both colliding
+    definitions and their authored source spans, and the check must run on the same corpus as the
+    other structural gates (reference app, commerce app, focused fixtures).
+  - Acceptance evidence: a fixture with two components sharing one effective app/vendored name fails
+    with KV237 naming both writers; a fixture colliding with `registryFacts.components` fails with
+    KV237; a distinct-name fixture passes; KV237 has a teaching-help registry snapshot per the
+    Quantitative Conformance Bar. Package-prefix collisions remain KV234 because §6.1.1 already
+    defines package prefix uniqueness at that namespace boundary.
+  - Evidence 2026-06-16: `packages/compiler/src/validate/component-names.ts` validates duplicate
+    effective app/vendored component names from the parsed `ComponentModuleModel` and checks supplied
+    `registryFacts.components` so build callers can surface app-graph collisions.
+  - Evidence 2026-06-16: `packages/compiler/src/component-names.test.ts` covers duplicate explicit
+    names, inferred kebab-case collisions, registry-facts collisions, and distinct-name acceptance;
+    `packages/core/src/diagnostics.ts`, `packages/core/src/diagnostics.test.ts`, and `SPEC.md` define
+    KV237 as a blocking error with teaching help.
+  - Verification 2026-06-16:
+    `pnpm --filter @kovojs/compiler exec vitest run src/component-names.test.ts src/scan/parse.test.ts`
+    -> 2 files / 32 tests passed; `pnpm --filter @kovojs/core exec vitest run src/diagnostics.test.ts`
+    -> 1 file / 3 tests passed; `pnpm --filter @kovojs/compiler exec tsc --noEmit` -> passed.
+  - [x] Decision made: diagnostic code is KV237 and severity is blocking error.
+    - Evidence 2026-06-16: `packages/core/src/diagnostics.ts` defines KV237 as `severity: 'error'`
+      and `SPEC.md` lists it as an error.
+  - [x] Decision made: scope is effective app/vendored component names in the current module plus
+        app-graph names supplied through `registryFacts.components`; package prefix collisions stay
+        under KV234.
+    - Evidence 2026-06-16: `validateDuplicateComponentNames()` computes `component('name')` or
+      kebab-cased local names and checks both module-local duplicates and supplied registry names.
+
 - [ ] **Broaden diagnostics from detection to teaching.**
   - Risk: diagnostics can correctly detect a problem but still fail SPEC §5.2 rule 5 if they do not
     show the would-have-lowered output, why it cannot compile, and a concrete fix menu.
@@ -415,18 +461,21 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
   - [x] Decision made: every compiler diagnostic, new and existing, must have teaching help before
         merge.
     - Evidence 2026-06-15: user accepted the stringent D7=A posture.
-  - [ ] Decision needed: define the required diagnostic schema. Recommended fields: problem,
-        would-have-lowered form, blocked reason, fix menu, SPEC citation, and suppression/escape
-        posture when one exists.
+  - [x] Decision made: required diagnostic schema is problem, would-have-lowered form when a lowering
+        exists, blocked reason, fix menu, SPEC citation, and suppression/escape posture when one
+        exists.
+    - Evidence 2026-06-16: new KV236/KV237 diagnostics and the KV201/KV230/KV235/KV311 compatibility
+      snapshots follow this schema; the broader retrofit remains tracked by this open item.
   - [x] Decision made: incomplete teaching content is a blocking quality gate for all compiler
         diagnostics.
     - Evidence 2026-06-15: user chose D7=A rather than a new-code-only gradual retrofit.
 
 ## Decision Register
 
-- [ ] **D1: Semantic equivalence strategy.** Authored-side renderer and blocking rollout decisions
-      made: use a model interpreter and make the semantic gate blocking. Remaining D1 decision:
-      generated-delta allowlist.
+- [x] **D1: Semantic equivalence strategy.** Use a model interpreter, make the semantic gate
+      blocking, and allow only explicit generated-delta attributes.
+  - Evidence 2026-06-16: `semanticRenderEquivalenceCheck()` is wired into `compileComponentModule()`,
+    and `isGeneratedOnlyRenderAttribute()` defines the generated-delta allowlist.
 - [x] **D2: Structural IR scope.** Use a Kovo-owned full JSX tree IR on top of the TypeScript compiler
       API, implemented incrementally; use canonical compiler formatting; migrate the broad
       overlap-prone structural slice first.

@@ -23,6 +23,7 @@ export type DiagnosticCode =
   | 'KV234'
   | 'KV235'
   | 'KV236'
+  | 'KV237'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -225,6 +226,15 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Unsafe output context requires an explicit trusted Kovo escape hatch.',
+  },
+  KV237: {
+    code: 'KV237',
+    help: [
+      'Fixes: give one component a distinct component("wire-name") value, or split reusable package components behind distinct package prefixes.',
+      'SPEC §4.2 and §4.8 make kovo-c/component names load-bearing for identity, scoped CSS, fragments, and graph facts; duplicate effective names are ambiguous.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Duplicate component effective wire name.',
   },
   KV301: {
     code: 'KV301',

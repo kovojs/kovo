@@ -176,7 +176,9 @@ export interface ZeroArgArrowModel {
 
 export interface ComponentModel {
   explicitName?: string;
+  explicitNameSpan?: SourceSpan;
   localName?: string;
+  localNameSpan?: SourceSpan;
   options: readonly ComponentOptionEntry[];
   renderHost?: RenderHostModel;
   renderInputs: readonly RenderInputModel[];
@@ -268,6 +270,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
         sourceFile,
         source,
         node.name.text,
+        { end: node.name.getEnd(), start: node.name.getStart(sourceFile) },
         node.initializer,
       );
       if (model) components.push(model);
@@ -727,6 +730,7 @@ function componentModelFromInitializer(
   sourceFile: ts.SourceFile,
   source: string,
   localName: string,
+  localNameSpan: SourceSpan,
   initializer: ts.Expression | undefined,
 ): ComponentModel | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
@@ -735,6 +739,10 @@ function componentModelFromInitializer(
 
   const [nameArg, optionsArg] = initializer.arguments;
   const explicitName = nameArg && ts.isStringLiteralLike(nameArg) ? nameArg.text : undefined;
+  const explicitNameSpan =
+    nameArg && ts.isStringLiteralLike(nameArg)
+      ? { end: nameArg.getEnd(), start: nameArg.getStart(sourceFile) }
+      : undefined;
   const options =
     optionsArg && ts.isObjectLiteralExpression(optionsArg)
       ? componentOptions(sourceFile, source, optionsArg)
@@ -745,7 +753,9 @@ function componentModelFromInitializer(
 
   return {
     ...(explicitName === undefined ? {} : { explicitName }),
+    ...(explicitNameSpan === undefined ? {} : { explicitNameSpan }),
     localName,
+    localNameSpan,
     options,
     ...(render ? renderHostModel(sourceFile, render) : {}),
     renderInputs: render ? arrowObjectPatternKeys(sourceFile, render) : [],

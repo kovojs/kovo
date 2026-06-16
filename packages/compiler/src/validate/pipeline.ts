@@ -12,6 +12,7 @@ import {
   validateReservedQueryNames,
   validateServerFactsInLocalState,
 } from './component-contracts.js';
+import { validateDuplicateComponentNames as validateComponentNameUniqueness } from './component-names.js';
 import { validateEventTriggerNames } from './event-triggers.js';
 import {
   validateAttributeMergeConflicts,
@@ -40,6 +41,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ diagnosticSource, model, options, sourceOffsetMap }) =>
     validateServerFactsInLocalState(diagnosticSource, model, options.fileName, sourceOffsetMap),
   ({ model, options, source }) => validateReservedQueryNames(source, model, options.fileName),
+  ({ model, options, source }) => validateComponentNameUniqueness(source, model, options),
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),

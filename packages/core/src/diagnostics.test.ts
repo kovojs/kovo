@@ -25,6 +25,7 @@ describe('diagnostic registry', () => {
       'KV234',
       'KV235',
       'KV236',
+      'KV237',
       'KV301',
       'KV302',
       'KV303',
@@ -166,6 +167,13 @@ describe('diagnostic registry', () => {
           "help": "Fixes: route URLs through typed route helpers; mark intentional external links with external; keep dynamic styling to compiler-generated safe properties; or pass raw HTML only as a Kovo TrustedHtml value.
       SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.",
           "message": "Unsafe output context requires an explicit trusted Kovo escape hatch.",
+          "severity": "error",
+        },
+        "KV237": {
+          "code": "KV237",
+          "help": "Fixes: give one component a distinct component(\"wire-name\") value, or split reusable package components behind distinct package prefixes.
+      SPEC §4.2 and §4.8 make kovo-c/component names load-bearing for identity, scoped CSS, fragments, and graph facts; duplicate effective names are ambiguous.",
+          "message": "Duplicate component effective wire name.",
           "severity": "error",
         },
         "KV301": {
