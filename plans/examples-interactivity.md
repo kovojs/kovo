@@ -88,9 +88,14 @@ allow-same-origin` (SW-registerable; fetch-patch trivially works).
       served app; add-to-cart + receipt upload as enhance forms round-trip; demo authenticated
       session so the betterAuth guard passes. (Keep the existing dynamic app shell; it already has the
       mutations + fragmentRenderers.)
-- [ ] **Phase R3 — CRM served + interactive.** Register addContact/createDeal/moveDeal/closeDeal into
-      the served app; author enhance-form affordances (add contact, move/close deal); fragments
-      re-render from server truth.
+- [x] **Phase R3 — CRM served + interactive.** DONE 2026-06-16 (merged `agent/examples-crm-served`
+      9a6285c1). All 4 mutations (addContact/createDeal/moveDeal/closeDeal) as enhance forms over a
+      served Node app; demo session per request; parameterized `/deals/:id`. Verified in the integrated
+      tree: 20 CRM tests, `vp check` clean, `examples/crm/scratch/crm-serve-drive.mjs` PASS (contacts
+      8→9, open deals 4→5, d1 Open→Proposal→Won w/ server commission, no console errors). NOTE: the
+      `closeDeal` handler referenced a `compute_commission(...)` SQL function no test had ever executed;
+      the agent added it to the CRM DDL (`db.ts`) — framework note: handler-level execution of that
+      example was previously unexercised.
 - [ ] **Phase R4 — Deploy-ready.** A production serve path per app (build assets + serve built output,
       not Vite dev middleware) + a Dockerfile / host config so each app deploys to a Node host. `vp
 check`, per-app tests, gzip/format gates green.

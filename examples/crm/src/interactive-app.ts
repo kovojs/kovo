@@ -4,13 +4,21 @@ import type { AppMutationResponseResolver, RequestHandler } from '@kovojs/server
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import { asc, eq } from 'drizzle-orm';
 
-import { CONTACT_LIST_TARGET, renderContactsPage, renderContactsRegion } from './components/contacts.js';
+import {
+  CONTACT_LIST_TARGET,
+  renderContactsPage,
+  renderContactsRegion,
+} from './components/contacts.js';
 import {
   DEAL_DETAIL_TARGET,
   renderDealDetailPage,
   renderDealDetailRegion,
 } from './components/deal-detail.js';
-import { PIPELINE_TARGET, renderPipelinePage, renderPipelineRegion } from './components/pipeline.js';
+import {
+  PIPELINE_TARGET,
+  renderPipelinePage,
+  renderPipelineRegion,
+} from './components/pipeline.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
@@ -43,7 +51,13 @@ async function loadContact(db: CrmDb, id: string): Promise<ContactRow | undefine
   const rows = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   const row = rows[0];
   return row
-    ? { id: row.id, name: row.name, email: row.email, ownerId: row.ownerId, dealCount: row.dealCount }
+    ? {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        ownerId: row.ownerId,
+        dealCount: row.dealCount,
+      }
     : undefined;
 }
 
