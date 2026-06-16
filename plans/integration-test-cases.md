@@ -80,32 +80,68 @@ integration harness uniquely proves.
 
 ## Render and document shell
 
-- [ ] `document-shell` / `document-shell.spec.ts`: default document assembly includes doctype/html
+- [x] `document-shell` / `document-shell.spec.ts`: default document assembly includes doctype/html
       shell, route meta, query JSON before consumers, page body, and the inline loader.
   - SPEC refs: §9.5 request shell, §4.2 rendered output.
   - Assertions: initial response is full HTML; semantic snapshot keeps query/consumer ordering
     without raw HTML brittleness.
+  - Evidence: `tests/integration/fixtures/document-shell` and
+    `tests/integration/specs/document-shell.spec.ts` verify doctype/html/lang, route title meta,
+    inline loader script, initial `kovo-query` before the `[kovo-deps]` consumer, rendered body, and
+    a full-document semantic snapshot. Proving command:
+    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `custom-document-template` / `custom-document-template.spec.ts`: an app document template can
       wrap assembled parts but cannot drop loader, query scripts, or body content.
   - SPEC refs: §9.5 request shell.
   - Assertions: custom chrome renders; core assembled parts still present; interaction still works.
-- [ ] `asset-serving` / `asset-serving.spec.ts`: built `/assets/*` files are served with immutable
+  - Partial evidence: `tests/integration/fixtures/custom-document-template` and
+    `tests/integration/specs/custom-document-template.spec.ts` verify a custom template wrapping
+    assembled `parts.head`, `parts.queryScripts`, and `parts.body`; the response keeps the inline
+    loader, custom chrome, body content, and a client handler runs through the preserved loader.
+    Proving command:
+    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+  - Gap: left unchecked because the current `DocumentTemplate` API returns an arbitrary string and
+    does not enforce that `parts.head`, `parts.queryScripts`, or `parts.body` are retained; route
+    rendering also has no app-level mechanism to populate non-empty `parts.queryScripts`.
+- [x] `asset-serving` / `asset-serving.spec.ts`: built `/assets/*` files are served with immutable
       cache headers while app routes still dispatch through the Kovo handler.
   - SPEC refs: §9.5 request shell, `plans/integration-test-suite.md` serve path.
   - Assertions: asset response content type/cache headers; route response unaffected.
-- [ ] `client-module-versioning` / `client-module-versioning.spec.ts`: emitted `on:*` refs and module
+  - Evidence: `tests/integration/fixtures/asset-serving` and
+    `tests/integration/specs/asset-serving.spec.ts` verify `/assets/shell.css` content type and
+    immutable cache headers, then load `/` through the Kovo route shell. Proving command:
+    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+- [x] `client-module-versioning` / `client-module-versioning.spec.ts`: emitted `on:*` refs and module
       URLs stay readable and resolve after page load, with volatile version/hash normalized in
       semantic snapshots.
   - SPEC refs: §4.3 handlers, §5.2 source-derived names, §6.6 deploy skew.
   - Assertions: interaction imports module successfully; snapshot normalizes `?v=`/hash segments.
+  - Evidence: `tests/integration/fixtures/client-module-versioning` and
+    `tests/integration/specs/client-module-versioning.spec.ts` verify the readable
+    `/c/versioned.client.js?v=a1b2c3d4#mark` `on:click` ref, immutable client-module response
+    headers, successful first-interaction import, and semantic snapshot normalization. Proving
+    commands: `pnpm exec vitest run packages/test/src/integration/semantic-snapshot.test.ts` and
+    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `http-methods` / `http-methods.spec.ts`: page routes answer GET/HEAD, reject unsupported
       methods with 405, and mutation POSTs are owned by `/_m/`.
   - SPEC refs: §9.5 request shell.
   - Assertions: direct HTTP requests check status/method behavior; browser route still renders.
+  - Partial evidence: `tests/integration/fixtures/http-methods` and
+    `tests/integration/specs/http-methods.spec.ts` verify GET and HEAD route responses, browser
+    route rendering, and mutation POST ownership under `/_m/methods/record`. Proving command:
+    `pnpm exec playwright test document-shell.spec.ts custom-document-template.spec.ts http-methods.spec.ts asset-serving.spec.ts client-module-versioning.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+  - Gap: left unchecked because the current fixture server uses the Vite dev ownership filter from
+    `shouldHandleKovoAppShellViteRequest`, which intentionally lets disallowed route methods fall
+    through to Vite; `POST /` returns Vite 404 instead of the app-shell 405 even though core shell
+    dispatch records the 405 behavior.
 - [ ] `not-found-error-shells` / `not-found-error-shells.spec.ts`: missing routes, `notFound()`, and
       unexpected page errors render the configured safe shells with correct status.
   - SPEC refs: §6.4 `notFound()`, §9.2 unexpected failures, §9.5 error shells.
   - Assertions: 404/500 status; no internal stack text; custom shell semantic snapshot.
+  - Gap: not implemented in this slice because current app-shell support is partial: missing routes
+    can use configured 404 shells, but route-returned `notFound()` is converted to a plain 404 body
+    before document-shell rendering, and route page/render exceptions return the fallback
+    `Internal Server Error` response instead of the configured 500 shell.
 
 ## Mutation wire and forms
 
