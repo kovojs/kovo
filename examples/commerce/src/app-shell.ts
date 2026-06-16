@@ -213,17 +213,20 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
       const productId = productIdFromRawInput(rawInput);
       return {
         failureTarget: productId ? productFormTarget(productId) : 'product-form',
-        failureStylesheets: commerceStylesheets,
+        // No per-fragment `stylesheets` (Phase R1 learning): the inline loader's
+        // morph takes the fragment's first child as the new region root, and a
+        // leading `<link rel=stylesheet>` would REPLACE the region with a bare
+        // `<link>`, destroying the UI. The served page already loaded the app
+        // stylesheet (the route `stylesheets` below); the re-rendered region
+        // reuses the already-present Tailwind classes.
         fragmentRenderers: [
           {
             render: async () => CartBadge.definition.render({ cart: await loadCartQuery(db) }),
-            stylesheets: commerceStylesheets,
             target: 'cart-badge',
           },
           errorBoundary(
             {
               render: async () => renderProductGrid(await loadProductGrid(db), commerceRequest),
-              stylesheets: commerceStylesheets,
               target: 'product-grid',
             },
             {
@@ -236,7 +239,6 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
             // SECURITY (SECURITY_FINDINGS.md M9): scope order history to the
             // authenticated session user resolved onto the mutation request.
             render: () => renderOrderHistory(db, commerceRequest.session?.user?.id),
-            stylesheets: commerceStylesheets,
             target: 'order-history',
           },
         ],

@@ -1,9 +1,47 @@
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { createServer as createNodeServer } from 'node:http';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer as createViteServer } from 'vite';
 
 const commerceRoot = fileURLToPath(new URL('../', import.meta.url));
+const distDir = path.join(commerceRoot, 'dist');
+
+const STATIC_MIME = {
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
+  '.ico': 'image/x-icon',
+};
+
+// SPEC.md §9.5: the served app references built client assets at `/assets/*`
+// (the Vite build output, e.g. `<link href=/assets/tailwind.css>`). Serve those
+// from `dist/` (run `vp build` first) BEFORE the SSR middleware, so the app is
+// fully styled — the production-serve path (`vp build && node scripts/serve.mjs`),
+// not Vite's dev CSS-as-JS where the stylesheet `<link>` 404s.
+async function tryServeBuiltAsset(req, res) {
+  const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  if (!pathname.startsWith('/assets/')) return false;
+  const filePath = path.join(distDir, pathname);
+  if (!filePath.startsWith(distDir)) return false;
+  try {
+    const info = await stat(filePath);
+    if (!info.isFile()) return false;
+    res.writeHead(200, {
+      'content-type': STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      'cache-control': 'public, max-age=31536000, immutable',
+    });
+    createReadStream(filePath).pipe(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function createCommerceServeServer({
   host = '127.0.0.1',
@@ -17,7 +55,16 @@ export async function createCommerceServeServer({
     root: commerceRoot,
     server: { middlewareMode: true },
   });
-  const server = createNodeServer(vite.middlewares);
+  // The shared app-shell dev plugin wires the interactive `commerceNodeHandler`
+  // (createCommerceAppShell) into the Vite middleware — see vite.config.ts
+  // `nodeHandlerExportName: 'commerceNodeHandler'`. So mutations (`/_m/*`) round-
+  // trip against the real PGlite-backed app here; this serve path only adds the
+  // built-asset shortcut so the app is styled in production serve.
+  const server = createNodeServer((req, res) => {
+    void tryServeBuiltAsset(req, res).then((served) => {
+      if (!served) vite.middlewares(req, res);
+    });
+  });
 
   try {
     await listen(server, { host, port, strictPort });
