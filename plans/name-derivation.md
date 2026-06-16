@@ -177,22 +177,34 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     src/index.kovo-add.test.ts` passed on 2026-06-16.
 - [ ] **SPEC update.** §4.2 (identity + kovo-c omission against derived name), the `component()`
   signature/description, and §14 codegen note. Cite this plan.
-  - Evidence: authoring examples in `SPEC.md` now use `component({ ... })`.
-  - Gap: deeper normative text still needs a complete pass for derived DOM leaves, registry keys, and
-    no authored name override.
+  - Evidence: `SPEC.md` §4.1 now specifies single-argument `component(definition)` and derived DOM
+    leaf/registry key split; §4.2 documents host-tag omission against the derived DOM leaf and stable
+    collision disambiguation; §6.1 documents derived registry keys; §11.3 diagnostic summaries and
+    §13.1 CSS text use derived registry/DOM identity. `node tests/kovo-check.node.mjs` passed on
+    2026-06-16.
+  - Gap: package-prefix wording in §6.1.1 still needs reconciliation with the no-override derivation
+    posture.
 - [ ] **Docs.** `docs/integration-testing.md` fixtures and any authoring docs showing the string form.
 
 ## Verification
 
-- [ ] `pnpm --filter @kovojs/compiler test` (lowering + component-names + conformance).
-- [ ] `pnpm --filter @kovojs/core test` (descriptor shape, `FragmentTargets` typing — see
+- [x] `pnpm --filter @kovojs/compiler exec vitest run` (lowering + component-names + conformance).
+  - Evidence: passed on 2026-06-16.
+- [x] `pnpm --filter @kovojs/core exec vitest run` (descriptor shape, `FragmentTargets` typing — see
   `packages/core/src/index.test.ts:56,277`).
+  - Evidence: passed on 2026-06-16.
 - [ ] Integration suite (`tests/integration`) green — served HTML / semantic snapshots unchanged under
   Option 2 (or snapshots intentionally updated under Option 1).
 - [x] `kovo-check` post-parse guard still passes (no new raw-source reads).
   - Evidence: `node --test --test-name-pattern "post-parse compiler phases"
     tests/kovo-check.node.mjs` passed on 2026-06-16.
-- [ ] Built `.d.ts` registry facts inspected: derived names present, fragment-target keys typed.
+- [x] Full `kovo-check` passes with derived registry-key expectations.
+  - Evidence: `node tests/kovo-check.node.mjs` passed on 2026-06-16.
+- [x] Built `.d.ts` registry facts inspected: derived names present, fragment-target keys typed.
+  - Evidence: `node tests/kovo-check.node.mjs` test "P1 fragment targets emit typed registry facts"
+    passed on 2026-06-16; its generated registry consumer fixture uses
+    `fragmentTarget('cart-row/cart-row', { rowId: 'row-1' })` and rejects missing, mistyped, and
+    undeclared props.
 
 ## Risks
 

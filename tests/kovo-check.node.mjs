@@ -41,6 +41,7 @@ import {
   DomMorphTarget,
   installPagehideOptimismCleanup,
   installKovoLoader,
+  kovoEscapeHtml,
   kovoLoaderSource,
   morphStructuralTree,
   OptimisticRebaser,
@@ -216,6 +217,7 @@ const generatedModuleRuntime = {
   DomMorphTarget,
   handler: (callback) => (event, ctx) => callback(event, ctx),
   installKovoLoader,
+  kovoEscapeHtml,
 };
 
 const defaultDelegatedEvents = [
@@ -599,7 +601,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.deepEqual(fact.handlerExports, ['DocCard$choose']);
   assert.equal(fact.renderEquivalenceAsserted, true);
   assert.equal(fact.cssStylesheet.href, '/_kovo/components/docs/doc-card.css');
-  assert.deepEqual(fact.cssStylesheet.fragmentTargets, ['doc-card']);
+  assert.deepEqual(fact.cssStylesheet.fragmentTargets, ['components/docs/doc-card/doc-card']);
   assert.deepEqual(fact.cssScopeRules, [
     {
       limit: ':scope [kovo-c]',
@@ -932,18 +934,21 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
     {
       code: 'KV221',
       fileName: 'components/cart/cart-search.tsx',
+      help: diagnosticDefinitions.KV221.help,
       message: `${diagnosticDefinitions.KV221.message} missing-label`,
       severity: 'error',
     },
     {
       code: 'KV221',
       fileName: 'components/cart/cart-search.tsx',
+      help: diagnosticDefinitions.KV221.help,
       message: `${diagnosticDefinitions.KV221.message} missing-help`,
       severity: 'error',
     },
     {
       code: 'KV221',
       fileName: 'components/cart/cart-search.tsx',
+      help: diagnosticDefinitions.KV221.help,
       message: `${diagnosticDefinitions.KV221.message} missing-popover`,
       severity: 'error',
     },
@@ -952,12 +957,14 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
     {
       code: 'KV224',
       fileName: 'components/cart/cart-shell.tsx',
+      help: diagnosticDefinitions.KV224.help,
       message: `${diagnosticDefinitions.KV224.message} duplicate id="cart-title"`,
       severity: 'error',
     },
     {
       code: 'KV224',
       fileName: 'components/cart/cart-list.tsx',
+      help: diagnosticDefinitions.KV224.help,
       message: `${diagnosticDefinitions.KV224.message} repeatable id="cart-row"`,
       severity: 'error',
     },
@@ -966,12 +973,14 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
     {
       code: 'KV225',
       fileName: 'components/cart/cart-shell.tsx',
+      help: diagnosticDefinitions.KV225.help,
       message: `${diagnosticDefinitions.KV225.message} <div> cannot appear inside <p>`,
       severity: 'error',
     },
     {
       code: 'KV225',
       fileName: 'components/cart/cart-shell.tsx',
+      help: diagnosticDefinitions.KV225.help,
       message: `${diagnosticDefinitions.KV225.message} <tr> must be inside a table section or table`,
       severity: 'error',
     },
@@ -980,12 +989,14 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
     {
       code: 'KV211',
       fileName: 'components/execution-triggers.tsx',
+      help: diagnosticDefinitions.KV211.help,
       message: `${diagnosticDefinitions.KV211.message} on:load`,
       severity: 'lint',
     },
     {
       code: 'KV212',
       fileName: 'components/execution-triggers.tsx',
+      help: diagnosticDefinitions.KV212.help,
       message: `${diagnosticDefinitions.KV212.message} on:media`,
       severity: 'lint',
     },
@@ -994,12 +1005,14 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
     {
       code: 'KV226',
       fileName: 'components/recommendations.tsx',
+      help: diagnosticDefinitions.KV226.help,
       message: `${diagnosticDefinitions.KV226.message} kovo-c="unknown-component"`,
       severity: 'error',
     },
     {
       code: 'KV226',
       fileName: 'components/recommendations.tsx',
+      help: diagnosticDefinitions.KV226.help,
       message: `${diagnosticDefinitions.KV226.message} kovo-deps="missingQuery:p1"`,
       severity: 'error',
     },
@@ -1072,12 +1085,22 @@ export const CartBadge = component({
     {
       code: 'KV311',
       fileName: 'components/cart/cart-badge.tsx',
+      help: [
+        'Coverage classification: CartBadge expression UNHANDLED',
+        'Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        diagnosticDefinitions.KV311.help,
+      ].join('\n'),
       message: `${String(diagnosticDefinitions.KV311.message)} CartBadge cart.discount expression`,
       severity: 'warn',
     },
     {
       code: 'KV311',
       fileName: 'components/cart/cart-badge.tsx',
+      help: [
+        'Coverage classification: CartBadge expression UNHANDLED',
+        'Blocked update: query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        diagnosticDefinitions.KV311.help,
+      ].join('\n'),
       message: `${String(diagnosticDefinitions.KV311.message)} CartBadge product.name expression`,
       severity: 'warn',
     },
@@ -1162,6 +1185,7 @@ export const CartBadge = component({
       {
         code: 'KV223',
         fileName: 'components/cart/cart-badge.tsx',
+        help: diagnosticDefinitions.KV223.help,
         message: `${diagnosticDefinitions.KV223.message} data-bind="cart.count" wraps {cart.count}`,
         severity: 'lint',
       },
@@ -1186,6 +1210,7 @@ export const CartBadge = component({
       {
         code: 'KV222',
         fileName: 'components/cart/cart-badge.tsx',
+        help: diagnosticDefinitions.KV222.help,
         message: `${diagnosticDefinitions.KV222.message} data-bind="cart.count" wraps {cart.total}`,
         severity: 'error',
       },
@@ -1229,48 +1254,56 @@ export const PrimitiveMerge = component({
       {
         code: 'KV231',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV231.help,
         message: `${diagnosticDefinitions.KV231.message} commandfor`,
         severity: 'error',
       },
       {
         code: 'KV231',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV231.help,
         message: `${diagnosticDefinitions.KV231.message} data-p-id`,
         severity: 'error',
       },
       {
         code: 'KV231',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV231.help,
         message: `${diagnosticDefinitions.KV231.message} kovo-c`,
         severity: 'error',
       },
       {
         code: 'KV232',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV232.help,
         message: `${diagnosticDefinitions.KV232.message} aria-expanded`,
         severity: 'lint',
       },
       {
         code: 'KV232',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV232.help,
         message: `${diagnosticDefinitions.KV232.message} role`,
         severity: 'lint',
       },
       {
         code: 'KV232',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV232.help,
         message: `${diagnosticDefinitions.KV232.message} data-state`,
         severity: 'lint',
       },
       {
         code: 'KV233',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV233.help,
         message: `${diagnosticDefinitions.KV233.message} data-bind`,
         severity: 'error',
       },
       {
         code: 'KV233',
         fileName: 'components/primitive-merge.tsx',
+        help: diagnosticDefinitions.KV233.help,
         message: `${diagnosticDefinitions.KV233.message} data-bind:hidden`,
         severity: 'error',
       },
@@ -1343,7 +1376,7 @@ export const CartTable = component({
           // SECURITY_FINDINGS.md C1: static data-path text children are wrapped in escapeText(...)
           // during lowering, so the blocked-children snippet shows the escaped form.
           'Blocked children: <span>{escapeText(window.location.href)}</span>',
-          'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
+          diagnosticDefinitions.KV230.help,
         ].join('\n'),
         message: `${diagnosticDefinitions.KV230.message} CartRow`,
         severity: 'error',
@@ -1384,12 +1417,14 @@ void test('P3 typed routes validate navigation targets', async () => {
         {
           code: 'KV220',
           fileName: 'components/product-links.tsx',
+          help: diagnosticDefinitions.KV220.help,
           message: `${diagnosticDefinitions.KV220.message} /product/p1`,
           severity: 'error',
         },
         {
           code: 'KV220',
           fileName: 'components/product-links.tsx',
+          help: diagnosticDefinitions.KV220.help,
           message: `${diagnosticDefinitions.KV220.message} /checkout`,
           severity: 'error',
         },
@@ -2016,12 +2051,12 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   });
   assert.deepEqual(fact.componentGraphFacts, [
     {
-      name: 'CartBadge',
+      name: 'cart-badge/cart-badge',
       queries: ['cart'],
     },
   ]);
   assert.deepEqual(fact.registryFacts, {
-    components: ['cart-badge'],
+    components: ['cart-badge/cart-badge'],
     domainKeys: ['cart'],
     invalidations: {},
     routes: [],
@@ -2719,6 +2754,7 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
   });
   assert.deepEqual(dataBindFact.diagnostics, {
     KV227Help: [
+      'Blocked reason: the binding path crosses a nullable query segment without declaring empty-on-null behavior.',
       'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
       'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
     ].join('\n'),
@@ -2767,12 +2803,14 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
   assert.deepEqual(dataBindFact.staleGeneratedShapeDiagnostics, [
     {
       code: 'KV302',
+      help: diagnosticDefinitions.KV302.help,
       message: 'data-bind path is not present in the declared query shape. cart.count',
     },
   ]);
   assert.deepEqual(dataBindFact.invalidListStampDiagnostics, [
     {
       code: 'KV302',
+      help: diagnosticDefinitions.KV302.help,
       message: 'data-bind path is not present in the declared query shape. cart.items',
     },
   ]);
@@ -2868,17 +2906,17 @@ export const DiagnosticCard = component({
     });
     assert.deepEqual(
       diagnosticFact.help.map(({ label }) => label),
-      ['Would lower to', 'Blocked expression', 'Element params', 'Fixes', 'help'],
+      ['Would lower to', 'Blocked expression', 'Element params', 'Fixes', 'help', 'help'],
     );
     assert.equal(diagnosticFact.sourceExpression, "() => window.alert('x')");
     assert.equal(diagnosticFact.elementParams, '-');
-    assert.deepEqual(diagnosticFact.help.slice(3), [
-      {
-        label: 'Fixes',
-        text: diagnosticDefinitions.KV201.help.split('\n')[0]?.replace(/^Fixes:\s+/, ''),
-      },
-      { label: 'help', text: diagnosticDefinitions.KV201.help.split('\n')[1] },
-    ]);
+    assert.deepEqual(
+      diagnosticFact.help.slice(3),
+      diagnosticDefinitions.KV201.help.split('\n').map((line, index) => {
+        if (index === 0) return { label: 'Fixes', text: line.replace(/^Fixes:\s+/, '') };
+        return { label: 'help', text: line };
+      }),
+    );
   };
   const expectedStaticExportError = [
     `Static export refused error diagnostic KV201 at ${fileName}:5:25. ${diagnosticDefinitions.KV201.message}`,
@@ -3287,9 +3325,9 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
 });
 
 void test('P1 fragment targets emit typed registry facts', async () => {
-  assert.deepEqual(fragmentTarget('cart-row', { rowId: 'row-1' }), {
+  assert.deepEqual(fragmentTarget('cart-row/cart-row', { rowId: 'row-1' }), {
     props: { rowId: 'row-1' },
-    target: 'cart-row',
+    target: 'cart-row/cart-row',
   });
 
   const result = compileComponentModule({
@@ -3304,8 +3342,8 @@ export const CartRow = component({
   });
   assert.deepEqual(result.componentGraphFacts, [
     {
-      fragments: ['cart-row'],
-      name: 'CartRow',
+      fragments: ['cart-row/cart-row'],
+      name: 'cart-row/cart-row',
     },
   ]);
   await assertGeneratedRegistryConsumerTypes(
@@ -3313,17 +3351,17 @@ export const CartRow = component({
     `
 import { fragmentTarget } from '@kovojs/core';
 
-const cartRow = fragmentTarget('cart-row', { rowId: 'row-1' });
+const cartRow = fragmentTarget('cart-row/cart-row', { rowId: 'row-1' });
 cartRow.props.rowId.toUpperCase();
 
 // @ts-expect-error generated FragmentTargets require rowId.
-fragmentTarget('cart-row', {});
+fragmentTarget('cart-row/cart-row', {});
 
 // @ts-expect-error generated FragmentTargets keep rowId typed as string.
-fragmentTarget('cart-row', { rowId: 1 });
+fragmentTarget('cart-row/cart-row', { rowId: 1 });
 
 // @ts-expect-error generated FragmentTargets reject undeclared props.
-fragmentTarget('cart-row', { rowId: 'row-1', sku: 'sku-1' });
+fragmentTarget('cart-row/cart-row', { rowId: 'row-1', sku: 'sku-1' });
 `,
   );
 });
@@ -3337,7 +3375,7 @@ void test('D9 KV235 fails kovo-check for app-authored lowered IR component modul
       code: 'KV235',
       fileName: 'cart-badge.tsx',
       help:
-        'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.\n' +
+        `${diagnosticDefinitions.KV235.help}\n` +
         'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
       message:
         'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
