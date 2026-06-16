@@ -44,6 +44,16 @@ test('does not block serving for non-error diagnostics recorded against a route 
     expect(
       diagnostics.diagnosticsForModuleHref('/c/src/components/cart.client.js?v=warn'),
     ).toBeUndefined();
+    expect(
+      diagnostics.allDiagnosticsForModuleHref('/c/src/components/cart.client.js?v=warn'),
+    ).toMatchObject({
+      diagnostics: [{ code: 'KV210' }],
+      fileName: 'src/components/cart.tsx',
+    });
+    expect(diagnostics.allDiagnosticsForFile('src/components/cart.tsx')).toMatchObject({
+      diagnostics: [{ code: 'KV210' }],
+      fileName: 'src/components/cart.tsx',
+    });
   } finally {
     await server.close();
   }

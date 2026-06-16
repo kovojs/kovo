@@ -839,15 +839,21 @@ integration harness uniquely proves.
     then verify the route returns HTTP 500 with diagnostic code/location/help and no partial app
     body. Proving command:
     `pnpm exec playwright test static-export-l0-l1.spec.ts static-export-rejects-dynamic.spec.ts diagnostic-dev-document.spec.ts diagnostic-warning-nonblocking.spec.ts explain-artifact-smoke.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `diagnostic-warning-nonblocking` / `diagnostic-warning-nonblocking.spec.ts`: warn/lint/notice
+- [x] `diagnostic-warning-nonblocking` / `diagnostic-warning-nonblocking.spec.ts`: warn/lint/notice
       diagnostics are surfaced through the non-blocking channel but do not block serving.
   - SPEC refs: §11.3 diagnostic severity surface.
   - Assertions: page renders; diagnostic is observable in captured logs/channel.
-  - Partial evidence: `tests/integration/fixtures/diagnostic-warning-nonblocking` and
+  - Evidence: `tests/integration/fixtures/diagnostic-warning-nonblocking` and
     `tests/integration/specs/diagnostic-warning-nonblocking.spec.ts` verify a lint diagnostic
-    recorded through the public dev diagnostic ledger does not block serving. Gap: the current dev
-    ledger intentionally drops non-error diagnostics, so there is no public non-blocking diagnostic
-    channel to assert observability yet.
+    recorded through the public dev diagnostic ledger does not block serving and remains observable
+    through `allDiagnosticsForModuleHref()` / `allDiagnosticsForFile()` without being returned by
+    the blocking `diagnosticsForModuleHref()` lookup. Server coverage in
+    `packages/server/src/vite-dev.test.ts` verifies the same non-blocking channel and replacement
+    semantics when a later error diagnostic supersedes a lint record. Proving commands:
+    `pnpm exec vitest run packages/server/src/vite-dev.test.ts
+    packages/server/src/vite-diagnostics.test.ts`; `pnpm exec playwright test
+    tests/integration/specs/diagnostic-warning-nonblocking.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`.
 - [ ] `fixpoint-render-equivalence-fixture` / `fixpoint-render-equivalence-fixture.spec.ts`: a fixture
       that imports emitted/lowered IR renders byte/semantic-equivalent HTML to source TSX.
   - SPEC refs: §5.2 fixpoint + render-equivalence, §4.8 hand-written stamps.

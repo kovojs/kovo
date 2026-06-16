@@ -79,6 +79,54 @@ describe('server app shell Vite dev seam', () => {
     });
   });
 
+  it('keeps non-error module diagnostics observable without making them blocking', () => {
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV210',
+          fileName: 'src/components/cart.tsx',
+          message: 'Anonymous handler; name it for stable identity.',
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+      moduleHrefs: ['/c/custom-cart.client.js?v=lint'],
+    });
+
+    expect(diagnostics.diagnosticsForModuleHref('/c/custom-cart.client.js?v=lint')).toBeUndefined();
+    expect(diagnostics.allDiagnosticsForFile('src/components/cart.tsx')).toMatchObject({
+      diagnostics: [{ code: 'KV210' }],
+      fileName: 'src/components/cart.tsx',
+    });
+    expect(
+      diagnostics.allDiagnosticsForModuleHref('/c/custom-cart.client.js?v=lint'),
+    ).toMatchObject({
+      diagnostics: [{ code: 'KV210' }],
+      fileName: 'src/components/cart.tsx',
+    });
+
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'KV225',
+          fileName: 'src/components/cart.tsx',
+          message: 'JSX nesting violates the HTML content model.',
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+    });
+
+    expect(
+      diagnostics.allDiagnosticsForModuleHref('/c/custom-cart.client.js?v=lint'),
+    ).toBeUndefined();
+    expect(
+      diagnostics.diagnosticsForModuleHref('/c/src/components/cart.client.js?v=failed'),
+    ).toMatchObject({
+      diagnostics: [{ code: 'KV225' }],
+      fileName: 'src/components/cart.tsx',
+    });
+  });
+
   it('renders mutation diagnostics as fragment wire responses when requested', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
