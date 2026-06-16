@@ -810,6 +810,8 @@ describe('gallery demo fixtures', () => {
     expect(tabs.html).toContain('aria-labelledby="gallery-tabs-overview"');
     expect(tabs.html).toContain('data-disabled="" data-state="inactive" disabled');
     expect(tabs.html).toContain('role="tab" tabIndex="-1" type="button" value="audit"');
+    expect(tabs.html).toContain('kv-tabs-');
+    expect(tabs.html).toContain('data-style-src="tabs.tsx#');
   });
 
   it('renders progress fixture states through native progress attributes', () => {
@@ -904,7 +906,10 @@ describe('gallery demo fixtures', () => {
     expect(button.html).toContain('form="gallery-button-form"');
     expect(button.html).toContain('name="gallery-action"');
     expect(button.html).toContain('type="submit" value="save"');
-    expect(button.html).toContain('rounded-md border text-sm font-medium');
+    expect(button.html).toContain('kv-button-');
+    expect(button.html).toContain(
+      'data-style-src="button.tsx#root; button.tsx#md; button.tsx#primary"',
+    );
     expect(button.html).toContain('type="button"');
     expect(button.html).toContain('disabled type="button"');
 
@@ -1013,8 +1018,10 @@ describe('gallery demo fixtures', () => {
     expect(table.html).toContain('colspan="3"');
 
     expect(tabs.html).toContain('data-ui-demo="tabs"');
-    expect(tabs.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
-    expect(tabs.html).toContain('data-[state=active]:bg-white');
+    expect(tabs.html).toContain('class="kv-tabs-');
+    expect(tabs.html).toContain('data-style-src="tabs.tsx#list"');
+    expect(tabs.html).toContain('data-style-src="tabs.tsx#trigger"');
+    expect(tabs.html).toContain('data-style-src="tabs.tsx#panel"');
     expect(tabs.html).toContain('overview content');
 
     expect(tooltip.html).toContain('data-ui-demo="tooltip"');

@@ -271,7 +271,7 @@ borrowing its concrete API/spike detail.
       packages/compiler/src/query-coverage.test.ts`, `pnpm exec vitest --run
       packages/compiler/src/css.test.ts packages/compiler/src/compile-component.test.ts`,
       `pnpm exec tsc --noEmit`, and `pnpm --filter @kovojs/compiler run build:dist` pass.
-- [ ] **Phase 4 — UI model bake-off (Button) + one multi-slot component.** Implement Button as Model V
+- [x] **Phase 4 — UI model bake-off (Button) + one multi-slot component.** Implement Button as Model V
       and Model L; rewrite one interactive multi-slot component (`Select`/`Dialog`/`Tabs`) exercising
       headless attrs + slot overrides. Keep axe/browser gates green (§12.1). Recommend a model.
       _Evidence:_ both Buttons typecheck/build; multi-slot browser+axe suite green.
@@ -294,7 +294,13 @@ borrowing its concrete API/spike detail.
     - Evidence (2026-06-16): `pnpm exec vitest --run packages/ui/src/button.stylex.test.tsx
       packages/ui/src/copy-in.test.ts packages/cli/src/index.kovo-add.test.ts`,
       `node packages/ui/scripts/build-registry.mjs`, and `pnpm exec tsc --noEmit` pass.
-  - [ ] Compare Model V and Model L Button surfaces and record the final recommendation.
+  - [x] Compare Model V and Model L Button surfaces and record the final recommendation.
+    - Evidence (2026-06-16): Recommend Model L as the default distribution surface with `kovo add
+      --eject`/copy-in as the customization hatch. `packages/ui/src/button.tsx` proves the library
+      surface is compact and typed (`style?: style.StyleInput`, no `class` escape hatch), while
+      `packages/ui/registry.json`, `packages/ui/src/copy-in.test.ts`, and
+      `packages/cli/src/index.kovo-add.test.ts` prove the same StyleX-authored source remains
+      available for vendored customization with `@kovojs/style` preserved as a public dependency.
   - [x] Rewrite one interactive multi-slot component to StyleX slot override objects.
     - Evidence (2026-06-16): `packages/ui/src/tabs.tsx` now imports `@kovojs/style`, replaces
       `defineVariants`/`cn` with `tabsStyles = style.create(...)`, keeps the headless
@@ -310,7 +316,19 @@ borrowing its concrete API/spike detail.
       packages/ui/src/tabs.stylex.test.tsx packages/ui/src/copy-in.test.ts
       packages/cli/src/index.kovo-add.test.ts`, `node packages/ui/scripts/build-registry.mjs`, and
       `pnpm exec tsc --noEmit` pass.
-  - [ ] Run the relevant browser/axe gates for the StyleX multi-slot component.
+  - [x] Run the relevant browser/axe gates for the StyleX multi-slot component.
+    - Evidence (2026-06-16): `examples/gallery/src/visual-fixtures/tabs.html.txt` is refreshed from
+      the current `@kovojs/ui` Tabs renderer and contains `kv-tabs-*` classes plus `data-style-src`
+      for root/list/trigger/panel slots.
+    - Evidence (2026-06-16): `examples/gallery/src/interactive-gallery.axe.browser.test.ts` runs
+      axe against the StyleX Tabs static fixture and asserts the StyleX markers before the audit.
+      `examples/gallery/src/interactive-gallery.visual.browser.test.ts` pins the updated rendered
+      gallery route hash.
+    - Evidence (2026-06-16): `pnpm --filter @kovojs/example-gallery exec vitest --run
+      src/demo-fixtures.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --config
+      vitest.browser.config.ts --run src/interactive-gallery.axe.browser.test.ts`, and
+      `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+      src/interactive-gallery.visual.browser.test.ts` pass.
 - [ ] **Phase 5 — Replace Tailwind across starters/examples/docs.** Migrate gallery, commerce, crm,
       stackoverflow, docs site, and `create-kovo` starter; remove Tailwind deps + `@source` safelists;
       decide `@scope` retirement. _Evidence:_ `rg -i tailwind` returns only historical/plan references;

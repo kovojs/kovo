@@ -96,6 +96,22 @@ describe('compiled interactive gallery demos in the browser', () => {
     await expectNoAxeViolations(toastRoot);
   });
 
+  it('has no axe violations in the StyleX tabs static fixture', async () => {
+    // SPEC §12.1: the migrated @kovojs/ui Tabs fixture exercises the multi-slot StyleX
+    // component surface while preserving tablist/tab/tabpanel accessibility semantics.
+    const host = document.createElement('div');
+    host.innerHTML = staticVisualFixtureHtml['/components/tabs'];
+    document.body.append(host);
+    const route = required(
+      host.querySelector<HTMLElement>('[data-gallery-route="/components/tabs"]'),
+    );
+
+    expect(route.innerHTML).toContain('kv-tabs-');
+    expect(route.innerHTML).toContain('data-style-src="tabs.tsx#');
+
+    await expectNoAxeViolations(route);
+  });
+
   it('has no axe violations in the static styled component fixtures', async () => {
     // SPEC §12.1: the static-only styled families (no interactive end-state to drive) must each be
     // axe-clean as rendered. These fixtures are otherwise only geometry/hash-checked, so this is the
