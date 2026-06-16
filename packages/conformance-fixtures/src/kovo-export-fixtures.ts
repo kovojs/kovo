@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { htmlMainMarkerFact, type HtmlMainMarkerFact } from './html-fragment.ts';
+import { htmlMainMarkerFact, type HtmlMainMarkerFact } from '@kovojs/test/html-fragment';
 
 export interface KovoExportHtmlArtifact {
   bytes: number;

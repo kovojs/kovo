@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { commerceDeclaredQueriesHarnessFact } from '@kovojs/test/commerce-fixtures';
+import { commerceDeclaredQueriesHarnessFact } from '@kovojs/conformance-fixtures/commerce-fixtures';
 import { createKovoTestHarness } from '@kovojs/test/harness';
 import {
   kovoFragmentFacts,

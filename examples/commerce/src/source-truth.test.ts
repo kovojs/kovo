@@ -8,15 +8,15 @@ import {
   commerceHarnessQueryFact,
   commerceMutationQueryAcceptanceFact,
   commerceUpdateIntentFact,
-} from '@kovojs/test/commerce-fixtures';
+} from '@kovojs/conformance-fixtures/commerce-fixtures';
 import {
   kovoExplainEndpointAssertionFact,
   kovoExplainMutationAssertionFact,
   kovoExplainPageAssertionFact,
   kovoExplainQueryAssertionFact,
   kovoExplainScopeAuditAssertionFact,
-} from '@kovojs/test/kovo-explain-fixtures';
-import { kovoCheckOkAssertionFact } from '@kovojs/test/kovo-check-fixtures';
+} from '@kovojs/conformance-fixtures/kovo-explain-fixtures';
+import { kovoCheckOkAssertionFact } from '@kovojs/conformance-fixtures/kovo-check-fixtures';
 import {
   commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceProjectFact,
@@ -24,7 +24,7 @@ import {
   graphOptimisticStatusMatrix,
   graphPageFact,
   graphStaticBehaviorFact,
-} from '@kovojs/test/graph-fixtures';
+} from '@kovojs/conformance-fixtures/graph-fixtures';
 import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
 import { kovoCheck, kovoExplain } from 'kovo';
 

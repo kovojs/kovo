@@ -38,7 +38,7 @@ import {
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
   GeneratedFixtureTemplateStampHost,
-} from '@kovojs/test/generated-module-fixtures';
+} from './generated-module-fixtures.ts';
 
 describe('@kovojs/test generated module fixtures', () => {
   it('selects generated artifacts by kind instead of positional file membership checks', () => {

@@ -26,7 +26,7 @@ import {
   stylesheetsForTargets,
   t,
 } from '@kovojs/server';
-import { createQueryStore, submitEnhancedMutation } from '../../runtime/src/index.ts';
+import { createQueryStore, submitEnhancedMutation } from '@kovojs/runtime';
 
 import {
   serverCommerceAdoptDontInventBehaviorFact,

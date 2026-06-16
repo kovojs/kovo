@@ -1,9 +1,13 @@
 // v1-cleanup item 1: kept whole intentionally. This is a single cohesive
 // public-API acceptance surface — its assertions all depend on one full-surface
-// import manifest of every @kovojs/test root + subpath export, so splitting would
-// only duplicate that manifest and fragment a deliberately holistic "every
-// subpath resolves and type-matches the root barrel" check into pieces that
-// individually assert nothing meaningful.
+// import manifest of every @kovojs/test root + subpath export plus every
+// @kovojs/conformance-fixtures fixture subpath, so splitting would only
+// duplicate that manifest and fragment a deliberately holistic "every subpath
+// resolves and type-matches the root barrel" check into pieces that
+// individually assert nothing meaningful. The fixture subpaths moved to the
+// private @kovojs/conformance-fixtures package (api-cleanup R5); this suite
+// lives here because that package can import both the public @kovojs/test
+// surface and its own fixtures while keeping the dependency graph acyclic.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   assertMutationError as rootAssertMutationError,
@@ -34,7 +38,7 @@ import {
   type CommerceMutationQueryAcceptanceOptions,
   type CommerceUpdateIntentFact,
   type CommerceUpdateIntentOptions,
-} from '@kovojs/test/commerce-fixtures';
+} from '@kovojs/conformance-fixtures/commerce-fixtures';
 import {
   assertOrderedItems,
   browserSuiteAcceptanceGateFact,
@@ -78,7 +82,7 @@ import {
   type VitePlusConfig,
   type VitePlusTask,
   type WorkflowStepCommand,
-} from '@kovojs/test/command-fixtures';
+} from '@kovojs/conformance-fixtures/command-fixtures';
 import {
   compilerDataBindBehaviorFact,
   compilerDiagnosticMessageFacts,
@@ -96,7 +100,7 @@ import {
   type CompilerQueryShapeFact,
   type CompilerStampFact,
   type CompilerUpdateCoverageFact,
-} from '@kovojs/test/compiler-fixtures';
+} from '@kovojs/conformance-fixtures/compiler-fixtures';
 import {
   viteLoweredEventDiagnosticFact,
   viteDiagnosticMessageFacts,
@@ -105,7 +109,7 @@ import {
   type DiagnosticOutputFact,
   type ViteLoweredEventDiagnosticFact,
   type ViteDiagnosticMessageFacts,
-} from '@kovojs/test/diagnostic-output-fixtures';
+} from '@kovojs/conformance-fixtures/diagnostic-output-fixtures';
 import {
   kovoExportCliResultFact,
   kovoExportStaticBehaviorFact,
@@ -120,7 +124,7 @@ import {
   type KovoExportStaticBehaviorOptions,
   type KovoExportStaticDiagnosticLike,
   type KovoExportSummary,
-} from '@kovojs/test/kovo-export-fixtures';
+} from '@kovojs/conformance-fixtures/kovo-export-fixtures';
 import {
   kovoCheckAssertionFact,
   kovoCheckCoverageAssertionFacts,
@@ -140,7 +144,7 @@ import {
   type KovoCheckOutput,
   type KovoCheckResultFact,
   type KovoCheckUnguardedAuditBehaviorFact,
-} from '@kovojs/test/kovo-check-fixtures';
+} from '@kovojs/conformance-fixtures/kovo-check-fixtures';
 import {
   kovoExplainComponentAssertionFact,
   kovoExplainComponentDeriveFacts,
@@ -179,7 +183,7 @@ import {
   type KovoExplainUnguardedAssertionFact,
   type KovoExplainUnguardedFact,
   type KovoExplainUpdateConsumerFact,
-} from '@kovojs/test/kovo-explain-fixtures';
+} from '@kovojs/conformance-fixtures/kovo-explain-fixtures';
 import {
   assertGeneratedRegistryConsumerTypes,
   executeGeneratedBootstrapModule,
@@ -222,7 +226,7 @@ import {
   type GeneratedHandlerReferenceSummaryFact,
   type GeneratedRenderedElementFact,
   type InlineEnhancedFormLoaderFact,
-} from '@kovojs/test/generated-module-fixtures';
+} from '@kovojs/conformance-fixtures/generated-module-fixtures';
 import {
   commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceChecklistFact,
@@ -257,7 +261,7 @@ import {
   type GraphInvalidationMatrix,
   type GraphQueryConsumerFact,
   type ProjectGraphFixture,
-} from '@kovojs/test/graph-fixtures';
+} from '@kovojs/conformance-fixtures/graph-fixtures';
 import {
   createKovoTestHarness,
   type KovoTestContext,
@@ -325,14 +329,14 @@ import {
   type NormativeDocsGateFact,
   type PrelaunchChecklistGateFact,
   type V1AcceptanceLedgerGateFact,
-} from '@kovojs/test/markdown-fixtures';
+} from '@kovojs/conformance-fixtures/markdown-fixtures';
 import {
   mcpCompileResponseFacts,
   mcpJsonRpcResponseFacts,
   type McpCompileDiagnosticFact,
   type McpCompileResponseFact,
   type McpJsonRpcResponseFact,
-} from '@kovojs/test/mcp-fixtures';
+} from '@kovojs/conformance-fixtures/mcp-fixtures';
 import { createPageAssertion, type PageAssertion } from '@kovojs/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@kovojs/test/pglite';
 import {
@@ -348,7 +352,7 @@ import {
   type MorphFragmentRuntime,
   type OptimismCleanupBehaviorFact,
   type OptimismCleanupRuntime,
-} from '@kovojs/test/runtime-fixtures';
+} from '@kovojs/conformance-fixtures/runtime-fixtures';
 import {
   serverCommerceAdoptDontInventBehaviorFact,
   serverCommerceStylesheetBehaviorFact,
@@ -367,7 +371,7 @@ import {
   type ServerMutationLifecycleRuntime,
   type ServerPageHintsBehaviorFact,
   type ServerPageHintsRuntime,
-} from '@kovojs/test/server-fixtures';
+} from '@kovojs/conformance-fixtures/server-fixtures';
 import {
   cssScopeRules,
   cssSourceDirectives,
@@ -399,7 +403,7 @@ import {
   type ProjectSourceLineFact,
   type ProjectSourceSiteFact,
   type ProjectTouchGraphBehaviorFact,
-} from '@kovojs/test/source-fixtures';
+} from '@kovojs/conformance-fixtures/source-fixtures';
 import {
   executeStarterClientTemplate,
   runPnpmFilterTaskCommand,
@@ -417,7 +421,7 @@ import {
   type StarterTemplateIndexHtmlFacts,
   type StarterTemplatePackageFacts,
   type StarterTemplateSources,
-} from '@kovojs/test/starter-template-fixtures';
+} from '@kovojs/conformance-fixtures/starter-template-fixtures';
 import {
   observeSqlStatementArgument,
   observeSqlStatementIfString,
@@ -434,12 +438,12 @@ import {
   type TouchGraphProvenanceFact,
   type TouchGraphSourceFact,
   type TouchGraphSummaryEntryFact,
-} from '@kovojs/test/touch-graph-fixtures';
+} from '@kovojs/conformance-fixtures/touch-graph-fixtures';
 import {
   assertTypeScriptProgramHasNoDiagnostics,
   type TypeScriptInterfaceMemberTypes,
   typeScriptInterfaceMemberTypes,
-} from '@kovojs/test/typescript-fixtures';
+} from '@kovojs/conformance-fixtures/typescript-fixtures';
 import {
   createDbVerifier,
   type DbObservationOptions,
@@ -462,7 +466,7 @@ import {
   type VerificationLayerKovoCheckDiagnosticsFact,
   type VerificationLayerKovoCheckDiagnosticsRuntime,
   type VerificationLayerRuntime,
-} from '@kovojs/test/verification-fixtures';
+} from '@kovojs/conformance-fixtures/verification-fixtures';
 import { parseSqlOperations, type ParsedSqlOperation } from '@kovojs/test/verifier-sql';
 import {
   viteGeneratedHandlerMiddlewareFact,
@@ -479,7 +483,7 @@ import {
   type ViteProductionEmitContractOptions,
   type ViteRedGreenBuildFixtureFact,
   type ViteTransformElementFact,
-} from '@kovojs/test/vite-fixtures';
+} from '@kovojs/conformance-fixtures/vite-fixtures';
 import {
   generatedWireResponseBodies,
   loadWireFixtureSources,
@@ -501,7 +505,7 @@ import {
   type WireResponseMetadataFact,
   type WireTranscriptExchange,
   type WireTranscriptResponse,
-} from '@kovojs/test/wire-fixtures';
+} from '@kovojs/conformance-fixtures/wire-fixtures';
 import type { DiagnosticCode as RootDiagnosticCode } from '@kovojs/test';
 
 describe('@kovojs/test package subpath exports', () => {

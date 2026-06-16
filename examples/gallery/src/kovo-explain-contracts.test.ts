@@ -5,7 +5,7 @@ import {
   kovoExplainField,
   kovoExplainRecords,
   parseKovoExplainOutput,
-} from '@kovojs/test/kovo-explain-fixtures';
+} from '@kovojs/conformance-fixtures/kovo-explain-fixtures';
 import { main } from 'kovo/internal';
 import { describe, expect, it, vi } from 'vitest';
 

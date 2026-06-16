@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@kovojs/compiler';
-import { generatedComponentCommittedIrFacts } from '@kovojs/test/generated-module-fixtures';
+import { generatedComponentCommittedIrFacts } from '@kovojs/conformance-fixtures/generated-module-fixtures';
 import { htmlDocumentFacts, htmlElementFacts } from '@kovojs/test/html-fragment';
 
 import {

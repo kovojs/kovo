@@ -91,6 +91,12 @@
       "dir": "ui",
       "visibility": "private",
       "kind": "starter"
+    },
+    {
+      "name": "@kovojs/conformance-fixtures",
+      "dir": "conformance-fixtures",
+      "visibility": "private",
+      "kind": "fixtures"
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from '@kovojs/test/harness';
 import {
   kovoExplainListField,
   kovoExplainOptimisticStatuses,
@@ -8,9 +8,9 @@ import {
   type KovoExplainUpdateConsumerFact,
 } from './kovo-explain-fixtures.js';
 import { graphFragmentTargetForQuery, type KovoGraphFixture } from './graph-fixtures.js';
-import { kovoResponseBodyFact } from './html-fragment.js';
+import { kovoResponseBodyFact } from '@kovojs/test/html-fragment';
 import type { QueryDefinition } from '@kovojs/server';
-import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
+import type { DbVerificationDiagnostic } from '@kovojs/test/verifier-diagnostics';
 
 export interface CommerceFixtureFile {
   arrayBuffer(): Promise<ArrayBuffer>;

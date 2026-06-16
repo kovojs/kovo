@@ -15,7 +15,7 @@ import {
   starterTemplateAcceptanceFact,
   starterTemplateDevDependencyCoverage,
   starterTemplateFacts,
-} from '@kovojs/test/starter-template-fixtures';
+} from './starter-template-fixtures.ts';
 
 describe('@kovojs/test starter template fixtures', () => {
   it('collects package, task, CI, CSS, graph, and HTML facts through reusable seams', async () => {

@@ -1,4 +1,4 @@
-import { htmlElementFacts } from './html-fragment.ts';
+import { htmlElementFacts } from '@kovojs/test/html-fragment';
 
 export interface ServerMutationLifecycleRuntime {
   domain(name: string): unknown;

@@ -27,10 +27,7 @@ export type {
   DbVerifier,
   ObservedDbOperation,
 } from './verifier.js';
-// SPEC §5.2: mechanical guard that post-parse compiler phases consume typed model facts, not raw
-// source strings. Asserted in tests/kovo-check.node.mjs.
-export { postParseSourceStringFacts, postParseSourceStringProjectFact } from './source-fixtures.js';
-export type {
-  PostParseSourceStringFact,
-  PostParseSourceStringProjectFact,
-} from './source-fixtures.js';
+// SPEC §5.2: the post-parse source-string guard fixtures (postParseSourceStringFacts /
+// postParseSourceStringProjectFact, asserted in tests/kovo-check.node.mjs) are conformance
+// fixtures and now live in the private @kovojs/conformance-fixtures package (api-cleanup R5),
+// so they are no longer re-exported from the public @kovojs/test barrel.
