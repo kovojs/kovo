@@ -220,6 +220,10 @@ borrowing its concrete API/spike detail.
   - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/compiler/src/style.test.ts
     packages/compiler/src/css.test.ts packages/compiler/src/compile-component.test.ts`,
     `pnpm exec tsc --noEmit`, and `pnpm --filter @kovojs/compiler run build:dist` pass.
+  - Evidence (partial, 2026-06-16): `packages/compiler/src/css.ts` exposes
+    `createCssAssetResolver(manifest): (renderTarget) => asset[]`; `packages/compiler/src/css.test.ts`
+    verifies page, fragment-target, and defer/source-file selection while preserving the current v1 asset
+    behavior.
   - [ ] Extend compiler lowering beyond the static subset to reactive style-object toggles before
     checking Phase 2/3 complete.
   - [x] Persist attribution into an emitted inspectable artifact and teach `kovo explain component` to

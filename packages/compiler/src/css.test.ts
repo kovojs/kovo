@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectCssAssetManifest,
   compileComponentModule,
+  createCssAssetResolver,
   dedupeCss,
   scopeComponentCss,
   selectCssAssets,
@@ -134,6 +135,39 @@ export const CartDrawer = component({
         sourceFileName: 'components/cart/cart-drawer.css',
       },
     ]);
+
+    const stylesheetsForRender = createCssAssetResolver(manifest);
+    expect(stylesheetsForRender({ kind: 'page' })).toEqual(manifest.stylesheets);
+    expect(
+      stylesheetsForRender({
+        kind: 'fragment',
+        sourceFileNames: ['components/cart/cart-drawer.css'],
+      }),
+    ).toEqual([
+      {
+        componentName: 'cart-drawer',
+        criticalCss: expect.stringContaining(
+          '@scope ([kovo-c="cart-drawer"]) to (:scope [kovo-c])',
+        ),
+        fragmentTargets: [],
+        href: '/_kovo/components/cart/cart-drawer.css',
+        sourceFileName: 'components/cart/cart-drawer.css',
+      },
+    ]);
+    expect(
+      stylesheetsForRender({
+        kind: 'defer',
+        sourceFileNames: ['components/cart/cart-badge.css'],
+      }),
+    ).toEqual([
+      {
+        componentName: 'cart-badge',
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
+        fragmentTargets: [],
+        href: '/_kovo/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      },
+    ]);
   });
 
   it('preserves fragment target metadata in collected CSS manifests', () => {
@@ -152,7 +186,8 @@ export const CartBadge = component({
 `,
     });
 
-    expect(collectCssAssetManifest(cartBadge).stylesheets).toEqual([
+    const manifest = collectCssAssetManifest(cartBadge);
+    expect(manifest.stylesheets).toEqual([
       {
         componentName: 'cart-badge',
         criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [kovo-c])'),
@@ -161,6 +196,12 @@ export const CartBadge = component({
         sourceFileName: 'components/cart/cart-badge.css',
       },
     ]);
+    expect(
+      createCssAssetResolver(manifest)({
+        fragmentTargets: ['components/cart/cart-badge/cart-badge'],
+        kind: 'fragment',
+      }),
+    ).toEqual(manifest.stylesheets);
   });
 
   it('carries preload policy for late fragment stylesheet delivery', () => {

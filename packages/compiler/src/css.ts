@@ -57,6 +57,20 @@ export interface CssAssetManifestOptions {
 }
 
 /**
+ * @internal Render target passed to the stylesheet resolver. v1 may still resolve to a
+ * single app-wide asset, but callers use this shape so future route/fragment splitting
+ * does not require server or fragment API changes (plans/claude-stylex.md Phase 2).
+ */
+export interface CssRenderTarget {
+  fragmentTargets?: readonly string[];
+  kind: 'defer' | 'fragment' | 'page';
+  sourceFileNames?: readonly string[];
+}
+
+/** @internal Function shape for render-parameterized stylesheet hint resolution. */
+export type CssAssetResolver = (renderTarget?: CssRenderTarget) => ComponentCssAsset[];
+
+/**
  * @internal Result of {@link scopeComponentCss}: a `@scope`-based form and a prefixed
  * `fallback` for engines without `@scope`. Lowered-IR CSS-pipeline shape (SPEC.md §5.2).
  */
@@ -141,6 +155,25 @@ export function selectCssAssets(
     const asset = manifest.byFileName[fileName];
     return asset ? [asset] : [];
   });
+}
+
+/**
+ * @internal Build the render-parameterized stylesheet resolver required by
+ * plans/claude-stylex.md Phase 2. With today's unsplit manifest it returns all
+ * stylesheets for a page and the matching target assets for late fragments/defer.
+ */
+export function createCssAssetResolver(manifest: CssAssetManifest): CssAssetResolver {
+  return (renderTarget) => {
+    if (!renderTarget) return [...manifest.stylesheets];
+    if (renderTarget.sourceFileNames) return selectCssAssets(manifest, renderTarget.sourceFileNames);
+    if (renderTarget.fragmentTargets) {
+      const wanted = new Set(renderTarget.fragmentTargets);
+      return manifest.stylesheets.filter((asset) =>
+        asset.fragmentTargets.some((target) => wanted.has(target)),
+      );
+    }
+    return [...manifest.stylesheets];
+  };
 }
 
 export function componentCssAssetForFile(

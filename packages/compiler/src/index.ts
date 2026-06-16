@@ -30,10 +30,19 @@ export type {
   CssAsset,
   CssAssetManifest,
   CssAssetManifestOptions,
+  CssAssetResolver,
+  CssRenderTarget,
   ScopedCssResult,
   ScopeComponentCssOptions,
+  StyleRuleUsage,
 } from './css.js';
-export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
+export {
+  collectCssAssetManifest,
+  createCssAssetResolver,
+  dedupeCss,
+  scopeComponentCss,
+  selectCssAssets,
+} from './css.js';
 export type {
   CompileArtifactFileNames,
   CompileComponentOptions,
