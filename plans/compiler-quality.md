@@ -448,6 +448,60 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     - Evidence 2026-06-16: `validateDuplicateComponentNames()` computes `component('name')` or
       kebab-cased local names and checks both module-local duplicates and supplied registry names.
 
+- [ ] **Extend wire-name uniqueness (KV237) to the remaining runtime-string-match identities:
+      fragment-target names and view-transition names.**
+  - Risk: KV237 closed duplicate *component* names, but the same anti-pattern survives for the other
+    two namespaces that are also resolved by runtime string match with no compile guard.
+    `emit/registry.ts:30-31` emits the `FragmentTargets` interface keyed by `fact.target` and
+    `emit/registry.ts:39-41` emits `ViewTransitions` keyed by `stamp.name`, both with no uniqueness
+    check; the only fragment-target validator (`validate/component-contracts.ts`) checks capture
+    serialization (KV320), not name collisions, and there is no view-transition validator in
+    `validate/**` at all.
+  - Why it matters: like `kovo-c`, these are load-bearing DOM/CSS identities resolved by string
+    match, so a collision degrades silently. Fragment targets resolve find-first
+    (`[kovo-c]` → `getElementById` → `[kovo-fragment-target]` in `runtime/src/inline-loader.ts` and
+    `runtime/src/fragment-targets.ts`), so two components declaring `cart-row` patch the wrong
+    element. Duplicate `view-transition-name` on simultaneously-rendered elements is a CSS-level
+    breakage the browser cannot resolve. These share KV237's failure mode and resolution mechanism,
+    so they belong in the same effective-wire-name family rather than as one-off checks.
+  - Candidate implementation path: reuse the KV237 effective-name machinery
+    (`validate/component-names.ts`) to also detect duplicate fragment-target names (proposed KV238)
+    and duplicate view-transition names (proposed KV239), computing effective names with the same
+    package-prefix rules and naming both colliding definitions plus their authored source spans. Run
+    on the same corpus as KV237. Note that the registry interfaces give a *partial* TypeScript
+    backstop only for same-key/different-type collisions via `declare module '@kovojs/core'`
+    merging; same-name/same-type collisions and all runtime DOM/CSS consequences are unguarded.
+  - Acceptance evidence: a fixture with two components declaring the same fragment-target name fails
+    with KV238 naming both writers; a fixture with two elements sharing one `view-transition-name`
+    fails with KV239; distinct-name fixtures pass; both codes carry teaching-help registry snapshots
+    per the Quantitative Conformance Bar; the silent last-write-wins emission in `emit/registry.ts`
+    is no longer the de facto collision handler for app source.
+  - [ ] Decision needed: confirm codes (proposed KV238 fragment-target, KV239 view-transition) and
+        whether to fold them into the existing `validateDuplicateComponentNames()` path or add a
+        sibling validator that shares its effective-name helper. Recommended **error/blocking** to
+        match KV237.
+  - [ ] Decision needed: confirm whether view-transition uniqueness is checked per rendered page
+        (the strict CSS contract) or per component module (cheaper, weaker), given that two
+        components rendered on different pages may legitimately reuse a name.
+
+- [ ] **Flag the remaining silent last-write-wins collisions that have only a partial backstop:
+      query-name → shape and exact-duplicate routes.**
+  - Risk: two lower-severity cousins of the wire-name gaps remain. `queryShapesFromFacts` in
+    `packages/compiler/src/types.ts:404` is `Object.fromEntries(facts.map((f) => [f.query, f.shape]))`,
+    so two queries sharing a name with *different* shapes silently last-write-wins. Route facts are
+    `new Set`-deduped in `graph.ts`; KV228 catches *ambiguous/overlapping* routes, but two identical
+    route path strings are silently merged rather than flagged.
+  - Why it matters: both are softer than the DOM-identity gaps because the `QueryRegistry`/
+    `RouteRegistry` TypeScript interfaces give a partial backstop — a same-key/different-type
+    collision surfaces as a `tsc` error. But same-key/same-shape (or same exact route) still merges
+    quietly with no first-class diagnostic, so a real authoring mistake produces no teaching signal.
+  - Candidate implementation path: add a duplicate-key check when building the query-shape index and
+    the route table, emitting a teaching diagnostic (or extending KV228 to cover exact-duplicate
+    routes) that names both definitions. Lower priority than KV238/KV239 because of the TS backstop;
+    record as a known gap so the silent merge is not mistaken for "covered."
+  - [ ] Decision needed: confirm whether exact-duplicate routes warrant a new code or an extension of
+        KV228, and whether query-shape collision is a blocking error or a lint given the TS backstop.
+
 - [ ] **Broaden diagnostics from detection to teaching.**
   - Risk: diagnostics can correctly detect a problem but still fail SPEC §5.2 rule 5 if they do not
     show the would-have-lowered output, why it cannot compile, and a concrete fix menu.
