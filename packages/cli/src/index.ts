@@ -167,7 +167,13 @@ export interface CompileComponentV1Result {
   ok: boolean;
   platformSubstitutions: readonly unknown[];
   queryUpdatePlans: readonly unknown[];
-  renderEquivalenceChecks: readonly { artifact: string; ok: boolean }[];
+  renderEquivalenceChecks: readonly {
+    actual?: string;
+    artifact: string;
+    detail?: string;
+    expected?: string;
+    ok: boolean;
+  }[];
   updateCoverage: readonly unknown[];
   version: typeof compileOutputVersion;
   viewTransitions: readonly unknown[];
@@ -248,7 +254,10 @@ export async function compileComponentV1(
     platformSubstitutions: [...result.platformSubstitutions],
     queryUpdatePlans: [...result.queryUpdatePlans],
     renderEquivalenceChecks: result.renderEquivalenceChecks.map((check) => ({
+      ...(!check.ok && check.actual !== undefined ? { actual: check.actual } : {}),
       artifact: check.artifact,
+      ...(!check.ok && check.detail !== undefined ? { detail: check.detail } : {}),
+      ...(!check.ok && check.expected !== undefined ? { expected: check.expected } : {}),
       ok: check.ok,
     })),
     updateCoverage: [...result.updateCoverage],

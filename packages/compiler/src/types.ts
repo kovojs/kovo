@@ -359,6 +359,7 @@ export interface QueryUpdateCoverageFact {
 export interface RenderEquivalenceCheck {
   actual: string;
   artifact: string;
+  detail?: string;
   expected: string;
   ok: boolean;
 }

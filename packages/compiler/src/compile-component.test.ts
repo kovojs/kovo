@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
-import { renderEquivalenceCheck } from './emit/server.js';
+import {
+  emitServerModule,
+  renderEquivalenceCheck,
+  semanticRenderEquivalenceCheck,
+} from './emit/server.js';
+import { parseComponentModule } from './scan/parse.js';
 import { compileFixture } from './test-support.js';
 
 const cartBadgeSource = `
@@ -167,6 +172,76 @@ export const CartBadge = component('cart-badge', {
       expected,
       ok: false,
     });
+  });
+
+  it('fails the semantic render differential when visible HTML drifts', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component('cart-badge', {
+  render: () => <cart-badge><span>2</span></cart-badge>,
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component('cart-badge', {
+  render: () => <cart-badge><span>3</span></cart-badge>,
+});
+`;
+
+    const check = semanticRenderEquivalenceCheck(
+      'components/cart/cart-badge.server.js',
+      parseComponentModule('components/cart/cart-badge.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+
+    expect(check).toEqual({
+      actual: '<cart-badge><span>3</span></cart-badge>',
+      artifact: 'components/cart/cart-badge.server.js',
+      detail:
+        'SPEC §5.2 semantic render differential: render(src) differed from render(compile(src)).',
+      expected: '<cart-badge><span>2</span></cart-badge>',
+      ok: false,
+    });
+  });
+
+  it('allows generated-only semantic render attributes', () => {
+    const expectedSource = `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <cart-badge>
+      <button onClick={() => save(cart.id)}>Save</button>
+      <span>{cart.count}</span>
+    </cart-badge>
+  ),
+});
+`;
+    const actualSource = `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <cart-badge kovo-deps="cart" kovo-state="{&quot;open&quot;:true}">
+      <button on:click="/c/cart.client.js#CartBadge$button_click" kovo-param-types="id:string" data-p-id="{cart.id}">Save</button>
+      <span data-bind="cart.count">{cart.count}</span>
+    </cart-badge>
+  ),
+});
+`;
+
+    const check = semanticRenderEquivalenceCheck(
+      'components/cart/cart-badge.server.js',
+      parseComponentModule('components/cart/cart-badge.tsx', expectedSource),
+      emitServerModule(actualSource).executableSource,
+    );
+
+    expect(check.ok).toBe(true);
+    expect(check.expected).toBe(check.actual);
   });
 
   it('scopes native-host component CSS to the kovo-c identity stamp', () => {

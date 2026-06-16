@@ -199,7 +199,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
 
 ## Highest-Risk Gaps
 
-- [ ] **Replace render-equivalence source normalization with a real semantic differential.**
+- [x] **Replace render-equivalence source normalization with a real semantic differential.**
   - Risk: SPEC §5.2 rule 3 promises `render(src) == render(compile(src))`, but the current check
     compares normalized source forms and strips generated attributes with regexes. That catches some
     accidental drift, but it is not an independent semantic proof.
@@ -212,12 +212,35 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
   - Acceptance evidence: a fixture where a lowerer changes visible HTML must fail the semantic gate;
     a fixture adding only allowed generated attrs must pass; `kovo check` must report this as a real
     differential, not a source-normalization check.
+  - Evidence 2026-06-16: `packages/compiler/src/emit/server.ts` implements
+    `semanticRenderEquivalenceCheck()`, rendering the authored `ComponentModuleModel` and the
+    emitted server artifact independently before comparing semantic HTML.
+  - Evidence 2026-06-16: `packages/compiler/src/compile.ts` wires the semantic differential into the
+    blocking `renderEquivalenceChecks` gate.
+  - Evidence 2026-06-16: `packages/compiler/src/compile-component.test.ts` proves visible HTML drift
+    fails and generated-only runtime attributes pass.
+  - Evidence 2026-06-16: `packages/cli/src/index.ts` preserves semantic differential
+    `detail`/`expected`/`actual` for failing compile results so `kovo check` reports a real
+    `RENDER_EQUIV` differential.
+  - Verification 2026-06-16:
+    `pnpm --filter @kovojs/compiler exec vitest run src/compile-component.test.ts` -> 17 tests
+    passed.
+  - Verification 2026-06-16: `pnpm --filter @kovojs/compiler exec vitest run` -> 26 files / 261
+    tests passed.
+  - Verification 2026-06-16: `pnpm --filter @kovojs/compiler exec tsc --noEmit` -> passed.
+  - Verification 2026-06-16:
+    `pnpm --filter kovo exec vitest run src/index.kovo-check.test.ts src/index.compile-mcp.test.ts`
+    -> 2 files / 54 tests passed.
+  - Verification 2026-06-16: `pnpm --filter kovo exec tsc --noEmit` -> passed.
   - [x] Decision made: use a Kovo model interpreter as the authored-side reference renderer.
     - Evidence 2026-06-15: user chose D1=A. The interpreter should walk `ComponentModuleModel` and
       supported Kovo JSX semantics instead of executing authored TSX.
-  - [ ] Decision needed: define the exact generated-only delta allowlist. At minimum this includes
-        `kovo-c`, `kovo-deps`, `kovo-state`, handler refs, element params, and compiler-derived
-        binding stamps; everything else should require an explicit SPEC citation.
+  - [x] Decision made: generated-only delta allowlist is `kovo-c`, `kovo-deps`, `kovo-state`,
+        `kovo-param-types`, `on:*`, DOM `on[A-Z]` handler attributes, `data-p-*`, `data-bind`,
+        `data-bind:*`, `data-derive`, and `data-derive-attr`.
+    - Evidence 2026-06-16: `isGeneratedOnlyRenderAttribute()` in
+      `packages/compiler/src/emit/server.ts` defines the compiler-emitted stamp allowlist with
+      SPEC §5.2/§4.8 citations.
   - [x] Decision made: make the real semantic gate blocking immediately.
     - Evidence 2026-06-15: user chose D1b=A, preferring the stringent posture over warning-first
       rollout.

@@ -4,7 +4,7 @@ import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
 import {
   emitServerModule,
-  renderEquivalenceSourceCheck,
+  semanticRenderEquivalenceCheck,
   serverRenderLowering,
 } from './emit/server.js';
 import { componentGraphFact, findFragmentTargetFacts } from './graph.js';
@@ -184,29 +184,14 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
-    // SPEC §5.2 rule 3: compare the pre-server-stamp reference render source with the lowered
-    // server render source after normalizing generated-only runtime attributes.
+    // SPEC §5.2 rule 3: render the authored Kovo JSX model and the lowered server artifact
+    // independently, then ignore only generated runtime stamps with an explicit allowlist.
     renderEquivalenceChecks: [
-      renderEquivalenceSourceCheck(fileNames.server, source, serverRenderedSource, {
-        expectedIgnoredSpans: renderEquivalenceExpectedIgnoredSpans(model),
-      }),
+      semanticRenderEquivalenceCheck(fileNames.server, model, serverModule.executableSource),
     ],
     updateCoverage,
     viewTransitions: viewTransitions.stamps,
   };
-}
-
-function renderEquivalenceExpectedIgnoredSpans(
-  model: ComponentModuleModel,
-): readonly { end: number; start: number }[] {
-  // SPEC §5.2 rule 3: authored event expressions become generated handler refs and element-param
-  // stamps in the lowered render. Remove only parser-proven event attributes from the reference
-  // side; do not use raw string matching for nested JSX expressions.
-  return model.jsxElements.flatMap((element) =>
-    element.attributes
-      .filter((attribute) => attribute.domEventName || /^on[A-Z]/.test(attribute.name))
-      .map((attribute) => ({ end: attribute.end, start: attribute.start })),
-  );
 }
 
 function versionStateDeriveReferences(

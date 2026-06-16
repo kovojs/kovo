@@ -7,8 +7,11 @@ import {
   componentRenderHostElement,
   componentStateReturnObjectModel,
   firstComponentModel,
+  parseComponentModule,
   type ComponentModuleModel,
+  type JsxAttributeModel,
   type JsxElementModel,
+  type SourceSpan,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
@@ -46,6 +49,26 @@ export function renderEquivalenceCheck(
   return {
     actual,
     artifact,
+    expected,
+    ok: actual === expected,
+  };
+}
+
+export function semanticRenderEquivalenceCheck(
+  artifact: string,
+  expectedModel: ComponentModuleModel,
+  executableSource: string,
+): RenderEquivalenceCheck {
+  const expected = semanticRenderModel(expectedModel);
+  const actualSource = emittedServerRenderSource(executableSource);
+  const actualModel = parseComponentModule(artifact, actualSource);
+  const actual = semanticRenderModel(actualModel);
+
+  return {
+    actual,
+    artifact,
+    detail:
+      'SPEC §5.2 semantic render differential: render(src) differed from render(compile(src)).',
     expected,
     ok: actual === expected,
   };
@@ -104,6 +127,157 @@ function emittedServerRenderSource(serverSource: string): string {
   } catch {
     return '';
   }
+}
+
+const voidElements = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+]);
+
+function semanticRenderModel(model: ComponentModuleModel): string {
+  const host = componentRenderHostElement(model);
+  if (!host) return '';
+
+  return renderSemanticElement(model, host);
+}
+
+function renderSemanticElement(model: ComponentModuleModel, element: JsxElementModel): string {
+  const attributes = element.attributes
+    .map(renderSemanticAttribute)
+    .filter((attribute): attribute is string => attribute !== null)
+    .join('');
+
+  if (voidElements.has(element.tag)) return `<${element.tag}${attributes}>`;
+
+  return `<${element.tag}${attributes}>${renderSemanticChildren(model, element)}</${element.tag}>`;
+}
+
+function renderSemanticAttribute(attribute: JsxAttributeModel): string | null {
+  if (isGeneratedOnlyRenderAttribute(attribute.name)) return null;
+  if (attribute.domEventName || /^on[A-Z][\w-]*$/.test(attribute.name)) return null;
+
+  if (attribute.value !== undefined) {
+    return ` ${attribute.name}="${escapeAttribute(attribute.value)}"`;
+  }
+
+  if (attribute.expressionStaticValue !== undefined) {
+    return renderStaticAttributeValue(attribute.name, attribute.expressionStaticValue);
+  }
+
+  if (attribute.expression !== undefined) {
+    return ` ${attribute.name}="${escapeAttribute(`{${attribute.expression}}`)}"`;
+  }
+
+  return ` ${attribute.name}`;
+}
+
+function renderStaticAttributeValue(
+  name: string,
+  value: Exclude<JsxAttributeModel['expressionStaticValue'], undefined>,
+): string | null {
+  if (value === false || value === null) return null;
+  if (value === true) return ` ${name}`;
+  if (typeof value === 'string' || typeof value === 'number') {
+    return ` ${name}="${escapeAttribute(value.toString())}"`;
+  }
+
+  return ` ${name}="${escapeAttribute(JSON.stringify(value) ?? '')}"`;
+}
+
+function renderSemanticChildren(model: ComponentModuleModel, element: JsxElementModel): string {
+  const body = element.childBody;
+  if (!body) return '';
+
+  const bodyEnd = body.offset + body.source.length;
+  const tokens = [
+    ...directChildElements(model, element).map((child) => ({
+      end: child.end,
+      render: () => renderSemanticElement(model, child),
+      start: child.start,
+    })),
+    ...element.childExpressionContainers.map((container) => ({
+      end: container.end,
+      render: () => renderSemanticExpression(model, container),
+      start: container.start,
+    })),
+  ].toSorted((left, right) => left.start - right.start || left.end - right.end);
+
+  let output = '';
+  let cursor = body.offset;
+
+  for (const token of tokens) {
+    if (token.start < body.offset || token.end > bodyEnd || token.start < cursor) continue;
+    output += childBodySlice(body, cursor, token.start);
+    output += token.render();
+    cursor = token.end;
+  }
+
+  output += childBodySlice(body, cursor, bodyEnd);
+  return output;
+}
+
+function directChildElements(
+  model: ComponentModuleModel,
+  parent: JsxElementModel,
+): JsxElementModel[] {
+  const candidates = model.jsxElements.filter(
+    (element) =>
+      element !== parent &&
+      element.start >= parent.openingEnd &&
+      element.end <= parent.closingStart,
+  );
+
+  return candidates.filter(
+    (candidate) =>
+      !candidates.some(
+        (other) =>
+          other !== candidate && candidate.start >= other.openingEnd && candidate.end <= other.end,
+      ),
+  );
+}
+
+function renderSemanticExpression(model: ComponentModuleModel, container: SourceSpan): string {
+  const expression = model.jsxExpressions.find(
+    (candidate) =>
+      candidate.containerStart === container.start && candidate.containerEnd === container.end,
+  );
+  return expression ? `{${expression.expression}}` : '';
+}
+
+function childBodySlice(
+  body: NonNullable<JsxElementModel['childBody']>,
+  start: number,
+  end: number,
+): string {
+  return body.source.slice(start - body.offset, end - body.offset);
+}
+
+function isGeneratedOnlyRenderAttribute(name: string): boolean {
+  // SPEC §5.2 rule 3 permits the semantic gate to ignore generated-only stamps while requiring
+  // byte-identical visible HTML. SPEC §4.8 defines binding stamps as compiler-derived IR.
+  return (
+    name === 'kovo-c' ||
+    name === 'kovo-deps' ||
+    name === 'kovo-state' ||
+    name === 'kovo-param-types' ||
+    name === 'data-bind' ||
+    name === 'data-derive' ||
+    name === 'data-derive-attr' ||
+    name.startsWith('data-bind:') ||
+    name.startsWith('data-p-') ||
+    name.startsWith('on:')
+  );
 }
 
 function serverRenderPatches(
