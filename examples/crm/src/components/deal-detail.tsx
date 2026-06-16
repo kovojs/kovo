@@ -4,6 +4,17 @@ import { money, renderCrmShell, stageBadge } from './chrome.js';
 
 // Deal detail (route `/deals/:id`). Joins a single deal to its contact and the
 // activity timeline. This is the page the pipeline's open-deal rows link into.
+// The whole region is a `kovo-fragment-target` host so the moveDeal / closeDeal
+// mutationResponse can re-render it from server truth: moving the deal to a new
+// stage or closing it (won, server-computed commission) both morph this region
+// in place (SPEC.md §9.1).
+
+export const DEAL_DETAIL_TARGET = 'crm-deal-detail';
+
+// The pipeline stages a deal can be moved through (mirrors the demo data + the
+// pipelineByStage buckets). 'won' is reached via the close-deal action (which
+// also applies the server commission), so it is not a plain move target.
+const MOVE_STAGES = ['lead', 'qualified', 'open', 'proposal', 'lost'] as const;
 
 export interface ActivityRow {
   id: number;
@@ -18,9 +29,12 @@ export interface DealDetailPageData {
   activities: ActivityRow[];
 }
 
-export function renderDealDetailPage({ deal, contact, activities }: DealDetailPageData): string {
-  const body = (
-    <div class="space-y-6">
+// The interactive region, rendered inside the page and as the moveDeal /
+// closeDeal fragment payload (target = DEAL_DETAIL_TARGET).
+export function renderDealDetailRegion({ deal, contact, activities }: DealDetailPageData): string {
+  const closed = deal.stage === 'won' || deal.stage === 'lost';
+  return (
+    <div class="space-y-6" kovo-fragment-target={DEAL_DETAIL_TARGET}>
       <a
         class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
         href="/"
@@ -50,6 +64,54 @@ export function renderDealDetailPage({ deal, contact, activities }: DealDetailPa
         )}
       </div>
 
+      {/* SPEC.md §6.3: no-JS "move stage" + "close deal" controls. Each button is
+          its own enhance form posting the deal's id to a mutation endpoint; the
+          fragment re-renders this region so the new stage/amount appear from
+          server truth (closeDeal applies the server commission, so the amount is
+          whatever Postgres computed). The current stage's move button is
+          disabled, and once won/lost the deal is closed. */}
+      <div class="rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Move stage
+        </h2>
+        <div class="flex flex-wrap gap-2">
+          {MOVE_STAGES.map((stage) => (
+            <form method="post" action="/_m/moveDeal" enhance data-mutation="moveDeal">
+              <input type="hidden" name="dealId" value={deal.id} />
+              <input type="hidden" name="stage" value={stage} />
+              <button
+                type="submit"
+                disabled={deal.stage === stage || closed}
+                class={`rounded-md border px-3 py-1.5 text-sm font-medium capitalize ${
+                  deal.stage === stage
+                    ? 'cursor-default border-slate-300 bg-slate-900 text-white'
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40'
+                }`}
+              >
+                {stage}
+              </button>
+            </form>
+          ))}
+        </div>
+        <div class="mt-4 border-t border-slate-100 pt-4">
+          {closed ? (
+            <p class="text-sm text-slate-500">
+              This deal is closed ({deal.stage}). Commission is final.
+            </p>
+          ) : (
+            <form method="post" action="/_m/closeDeal" enhance data-mutation="closeDeal">
+              <input type="hidden" name="dealId" value={deal.id} />
+              <button
+                type="submit"
+                class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Close won
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+
       <section>
         <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Activity</h2>
         {activities.length === 0 ? (
@@ -71,6 +133,8 @@ export function renderDealDetailPage({ deal, contact, activities }: DealDetailPa
       </section>
     </div>
   );
+}
 
-  return renderCrmShell('pipeline', body);
+export function renderDealDetailPage(data: DealDetailPageData): string {
+  return renderCrmShell('pipeline', renderDealDetailRegion(data));
 }
