@@ -44,6 +44,12 @@ integration harness uniquely proves.
   - SPEC refs: §4.4 loader, §9.3 liveness, §9.4 typed reads.
   - Assertions: wait for `/_q/<query>`; `[data-bind]` text updates; semantic snapshot keeps
     `kovo-query`, `kovo-deps`, and binding attrs; no full navigation.
+  - Partial evidence: `tests/integration/fixtures/query-refetch` and
+    `tests/integration/specs/query-refetch.spec.ts` verify `/_q/refetch` returns latest server
+    truth and snapshots the stale page. Proving command:
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
+  - Gap: left unchecked because the default inline loader in this branch does not install
+    focus/visibility typed-read refetch or apply query-only chunks to live `[kovo-deps]` consumers.
 - [ ] `optimistic-success` / `optimistic-success.spec.ts`: a hand-written optimistic transform
       updates every consumer of the invalidated query immediately, marks affected islands pending,
       and reconciles cleanly when the server response arrives.
@@ -154,10 +160,20 @@ integration harness uniquely proves.
   - SPEC refs: §4.8 bindings.
   - Assertions: text and attribute values update from one query response; semantic snapshot keeps
     both binding forms.
-- [ ] `nullable-binding` / `nullable-binding.spec.ts`: optional path traversal with `?.` renders empty
+  - Partial evidence: `tests/integration/fixtures/binding-text-attr` and
+    `tests/integration/specs/binding-text-attr.spec.ts` verify server mutation fragments and
+    inline-loader local state update `data-bind` / `data-bind:<attr>` text and attributes. Proving
+    command: `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
+  - Gap: left unchecked because live DOM query-only chunk application is not currently wired by the
+    default inline loader; the server-side update path is proven through fragments.
+- [x] `nullable-binding` / `nullable-binding.spec.ts`: optional path traversal with `?.` renders empty
       text/removes attributes consistently between SSR and loader update.
   - SPEC refs: §4.8 null-aware paths, §6.2 query data/bindings.
   - Assertions: initial null state and later non-null state match; later null removes attr again.
+  - Evidence: `tests/integration/fixtures/nullable-binding` and
+    `tests/integration/specs/nullable-binding.spec.ts` verify initial null SSR, server null/non-null
+    fragment updates, inline-loader local state null/non-null updates, DB truth, and semantic
+    snapshots. Proving command: `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
 - [ ] `derive-binding` / `derive-binding.spec.ts`: a named derive lazily imports on first relevant
       query change and updates a bound attribute without dependency tracking.
   - SPEC refs: §4.8 derives.
@@ -175,10 +191,14 @@ integration harness uniquely proves.
   - SPEC refs: §10.2 instance keys, §9.4 typed reads.
   - Assertions: `kovo-query="product:p1"` and `product:p2` stay distinct; one mutation/refetch does
     not overwrite the other.
-- [ ] `shared-query-consumers` / `shared-query-consumers.spec.ts`: a single query value ships once and
+- [x] `shared-query-consumers` / `shared-query-consumers.spec.ts`: a single query value ships once and
       updates multiple islands consuming the same `kovo-deps` key.
   - SPEC refs: §4.2 query data ships once, §10.4 optimism keyed to queries.
   - Assertions: one query script/chunk; all dependent islands update together.
+  - Evidence: `tests/integration/fixtures/shared-query-consumers` and
+    `tests/integration/specs/shared-query-consumers.spec.ts` verify one initial `kovo-query` script,
+    one mutation response query chunk, both dependent islands updating in one enhanced mutation, DB
+    truth, and a semantic snapshot. Proving command: `pnpm --filter @kovojs/integration-tests exec playwright test specs/query-refetch.spec.ts specs/binding-text-attr.spec.ts specs/nullable-binding.spec.ts specs/shared-query-consumers.spec.ts`.
 - [ ] `query-args-search` / `query-args-search.spec.ts`: typed read endpoint coerces query args from
       search params and returns the canonical instance key.
   - SPEC refs: §9.4 typed reads, §10.2 query args/instance key.

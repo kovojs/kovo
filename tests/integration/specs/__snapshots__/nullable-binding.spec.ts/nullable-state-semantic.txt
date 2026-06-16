@@ -1,0 +1,8 @@
+<nullable-state kovo-state="{\"contact\":null}">
+  <output data-bind="state.contact?.name">
+  <a data-bind:aria-label="state.contact?.name" data-bind:href="state.contact?.name">
+    "State contact"
+  <button type="button">
+    "Fill state contact"
+  <button type="button">
+    "Clear state contact"
