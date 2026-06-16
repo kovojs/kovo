@@ -1,5 +1,5 @@
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
-import { componentCssAssetForFile, emitCssModule } from './css.js';
+import { componentCssAssetForFile, dedupeCss, emitCssModule } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
@@ -38,6 +38,7 @@ import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/autho
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
+import { extractKovoStyles } from './style.js';
 import type { CompileComponentOptions, CompileResult, StateDeriveFact } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
@@ -108,6 +109,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);
+  const styleExtraction = extractKovoStyles(options.fileName, source, model);
 
   const clientSource = emitClientModule(
     handlers,
@@ -119,7 +121,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
   );
-  const cssSource = emitCssModule(componentNames.domName, model);
+  const componentCssSource = emitCssModule(componentNames.domName, model);
+  const styleCssSource = styleExtraction.css;
+  const cssSource =
+    componentCssSource && styleCssSource
+      ? dedupeCss([componentCssSource, styleCssSource])
+      : (componentCssSource ?? styleCssSource ?? '');
   const fragmentTargetFacts = findFragmentTargetFacts(componentNames.registryKey, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const componentGraphFacts = [
@@ -127,19 +134,25 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   ];
   const cssAssets = cssSource
     ? [
-        componentCssAssetForFile(
-          fileNames.css,
-          componentNames.domName,
-          fragmentTargets,
-          {},
-          cssSource,
-        ),
+        {
+          ...componentCssAssetForFile(
+            fileNames.css,
+            componentNames.domName,
+            fragmentTargets,
+            {},
+            cssSource,
+          ),
+          ...(styleExtraction.ruleUsages.length > 0
+            ? { styleRuleUsages: styleExtraction.ruleUsages }
+            : {}),
+        },
       ]
     : [];
   const serverRenderReplacements = [
     ...serverRenderLowering(versionedHandlers, model, componentNames.domName),
     ...componentDescriptorNameAssignments(model, componentNames.registryKey),
     ...versionStateDeriveReferences(model, structuralLowering.stateDerives, clientHref),
+    ...styleExtraction.replacements,
   ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
   const serverModule = emitServerModule(serverRenderedSource);

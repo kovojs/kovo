@@ -206,6 +206,17 @@ borrowing its concrete API/spike detail.
       function returning the single v1 asset (invariant (c)). Prove devtools/`kovo explain component`
       resolves a class back to source. _Evidence:_ compiler fixture + one rendered page with legible
       classes; attribution map emitted as an inspectable artifact.
+  - Evidence (partial, 2026-06-16): `packages/compiler/src/style.ts` extracts namespace-imported static
+    `style.create(...)` calls, lowers static JSX `style={base.root}` / `style={[base.root, ...]}` to
+    authorable `class` + `data-style-src` IR, emits global `@layer kovo-style.*` atomic CSS, and attaches
+    `styleRuleUsages` attribution to the component CSS asset.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/compiler/src/style.test.ts
+    packages/compiler/src/css.test.ts packages/compiler/src/compile-component.test.ts`,
+    `pnpm exec tsc --noEmit`, and `pnpm --filter @kovojs/compiler run build:dist` pass.
+  - [ ] Extend compiler lowering beyond the static subset to reactive style-object toggles before
+    checking Phase 2/3 complete.
+  - [ ] Persist attribution into an emitted inspectable artifact and teach `kovo explain component` to
+    resolve classes before checking Phase 2 complete.
 - [ ] **Phase 3 — Fixpoint + reactive + merge integration.** Fixpoint fixture (compile(IR) ≡ IR);
       §4.9 classifier accepts style-object toggles; §4.7 atomic-aware class merge. _Evidence:_ fixpoint CI
       green; a reactive `state`-driven style toggle updates via §4.8 with no `setAttribute`.

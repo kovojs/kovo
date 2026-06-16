@@ -25,6 +25,19 @@ export interface CssAsset {
 export interface ComponentCssAsset extends CssAsset {
   componentName: string;
   fragmentTargets: readonly string[];
+  styleRuleUsages?: readonly StyleRuleUsage[];
+}
+
+/**
+ * @internal Attribution for a StyleX-derived atomic rule. This is persisted on the
+ * compiler CSS asset so future route/fragment splitting can compute chunks from
+ * rule usage instead of reverse-engineering CSS text (plans/claude-stylex.md Phase 2).
+ */
+export interface StyleRuleUsage {
+  className: string;
+  moduleFileName: string;
+  source: string;
+  styleRef: string;
 }
 
 /**

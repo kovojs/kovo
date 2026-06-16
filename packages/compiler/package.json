@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",
+    "@kovojs/style": "workspace:*",
     "typescript": "^6.0.3"
   },
   "devDependencies": {
