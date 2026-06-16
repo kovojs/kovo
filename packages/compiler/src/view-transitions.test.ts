@@ -44,7 +44,7 @@ export const ProductCard = component('product-card', {
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
     // SPEC.md section 4.2: the native <img> host also receives the derived kovo-c stamp.
     expect(result.files[0]?.source).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" kovo-c="product-card" />',
+      '<img style="view-transition-name: product-p1-image" src="/p1.png" kovo-c="product-card" />',
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
   });
@@ -160,7 +160,7 @@ export const ProductCard = component('product-card', {
     expect(serverSource).toContain('const sample = \'<img viewTransitionName="not-real" />\'');
     // SPEC.md section 4.2: the native <img> host also receives the derived kovo-c stamp.
     expect(serverSource).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" kovo-c="product-card" />',
+      '<img style="view-transition-name: product-p1-image" src="/p1.png" kovo-c="product-card" />',
     );
     expect(serverSource).not.toContain('viewTransitionName="product-p1-image"');
     expect(() => assertFixpoint(result)).not.toThrow();

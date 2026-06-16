@@ -245,7 +245,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     - Evidence 2026-06-15: user chose D1b=A, preferring the stringent posture over warning-first
       rollout.
 
-- [ ] **Reduce patch-order fragility by introducing phase-specific IR builders for structural
+- [x] **Reduce patch-order fragility by introducing phase-specific IR builders for structural
       transforms.**
   - Risk: the compiler currently relies heavily on span patches followed by a reparse. That is simple
     but fragile when multiple lowerers rewrite the same element or attribute family.
@@ -267,6 +267,15 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     attribute derives, mixed text binding insertion, and nested child rewrites can be composed in one
     fixture without depending on replacement order; conflict diagnostics name both writers and point
     to authored spans.
+  - Evidence 2026-06-16: `packages/compiler/src/jsx-ir.ts` defines a full JSX tree IR with
+    authored/generated/primitive ownership, spans, child/expression nodes, binding/update metadata,
+    merge provenance, diagnostic anchors, and a canonical printer. `packages/compiler/src/lower/structural-jsx.ts`
+    migrates the broad structural slice while keeping `SourceReplacement` as a terminal bridge.
+    `pnpm --filter @kovojs/compiler exec vitest run src/structural-jsx-ir.test.ts src/attribute-merge.test.ts src/navigation-lowering.test.ts src/view-transitions.test.ts src/state-bindings.test.ts src/fragment-targets.test.ts`
+    passed and proves primitive `asChild`, `Link`, dynamic `viewTransitionName`, state/query derives,
+    mixed text binding insertion, nested child rewrites, and writer-naming conflict diagnostics.
+    `pnpm --filter @kovojs/compiler exec vitest run` passed 27 files / 261 tests;
+    `pnpm --filter @kovojs/compiler exec tsc --noEmit` passed.
   - [x] Decision made: structural scope is full JSX tree IR, implemented incrementally.
     - Evidence 2026-06-15: user chose full JSX tree IR and agreed to use the TypeScript compiler API
       as the parse/span foundation while keeping Kovo semantics in a custom IR.

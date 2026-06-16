@@ -80,11 +80,11 @@ export const PrimitiveMerge = component('primitive-merge', {
       'KV233',
     ]);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
-      'Unmergeable attribute conflict in primitive composition. aria-controls',
-      'Author overrides a primitive-owned ARIA or state attribute. aria-label',
-      'Author overrides a primitive-owned ARIA or state attribute. data-state',
-      'Unmergeable attribute conflict in primitive composition. data-p-id',
-      'Two writers target the same binding slot. data-bind',
+      'Unmergeable attribute conflict in primitive composition. aria-controls (writers: primitive attrs, author JSX)',
+      'Author overrides a primitive-owned ARIA or state attribute. aria-label (writers: primitive attrs, author JSX)',
+      'Author overrides a primitive-owned ARIA or state attribute. data-state (writers: primitive attrs, author JSX)',
+      'Unmergeable attribute conflict in primitive composition. data-p-id (writers: primitive attrs, author JSX)',
+      'Two writers target the same binding slot. data-bind (writers: primitive attrs, author JSX)',
     ]);
   });
 

@@ -14,11 +14,9 @@ import {
   lowerEventHandlers,
   versionHandlerLowering,
 } from './lower/handlers.js';
-import { lowerInlineAttributeDerives } from './lower/inline-derives.js';
-import { navigationHrefLowering, navigationLinkLowering } from './lower/navigation.js';
+import { navigationHrefLowering } from './lower/navigation.js';
 import { platformBehaviorLowering } from './lower/platform.js';
-import { lowerPrimitiveAttributeSpreads } from './lower/primitive-spreads.js';
-import { viewTransitionLowering } from './lower/view-transitions.js';
+import { lowerStructuralJsx } from './lower/structural-jsx.js';
 import {
   inferComponentName,
   jsxElements,
@@ -76,31 +74,18 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const primitiveSpreadLowering = lowerPrimitiveAttributeSpreads(originalState.model, {
-    fileName: options.fileName,
-    source: options.source,
-  });
-  const viewTransitions = viewTransitionLowering(originalState.model);
+  const structuralLowering = lowerStructuralJsx(originalState.model, componentName, compileOptions);
   const platformLowering = platformBehaviorLowering(originalState.model);
-  const linkReplacements = navigationLinkLowering(originalState.model);
   const hrefReplacements = navigationHrefLowering(originalState.model);
-  const deriveLowering = lowerInlineAttributeDerives(
-    originalState.model,
-    componentName,
-    compileOptions,
-  );
   const modelPatch = applyModelPatchPass(
     originalState,
     [
-      ...primitiveSpreadLowering.replacements,
-      ...viewTransitions.replacements,
+      ...structuralLowering.replacements,
       ...platformLowering.replacements,
-      ...linkReplacements,
       ...hrefReplacements,
-      ...deriveLowering.replacements,
     ],
     parseComponentModuleModel,
-    { prefix: deriveLowering.prefix },
+    { prefix: structuralLowering.prefix },
   );
   const source = modelPatch.state.source;
   const diagnosticSource = options.source;
@@ -128,7 +113,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const clientSource = emitClientModule(
     handlers,
     queryUpdatePlans,
-    deriveLowering.stateDerives,
+    structuralLowering.stateDerives,
     componentName,
   );
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
@@ -144,7 +129,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     : [];
   const serverRenderReplacements = [
     ...serverRenderLowering(versionedHandlers, model),
-    ...versionStateDeriveReferences(model, deriveLowering.stateDerives, clientHref),
+    ...versionStateDeriveReferences(model, structuralLowering.stateDerives, clientHref),
   ];
   const serverRenderedSource = applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements);
   const serverModule = emitServerModule(serverRenderedSource);
@@ -157,7 +142,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
-    viewTransitions: viewTransitions.stamps,
+    viewTransitions: structuralLowering.viewTransitionStamps,
   });
 
   return {
@@ -165,7 +150,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     diagnostics: [
       ...authoringSurfaceDiagnostics,
       ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
-      ...primitiveSpreadLowering.diagnostics,
+      ...structuralLowering.diagnostics,
       ...packagePrefixDiagnostics,
       ...validationDiagnostics,
     ],
@@ -177,7 +162,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ],
     clientExports: [
       ...versionedHandlers.map((handler) => handler.exportName),
-      ...deriveLowering.stateDerives.map((derive) => derive.exportName),
+      ...structuralLowering.stateDerives.map((derive) => derive.exportName),
     ],
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
     loweredSource: serverRenderedSource,
@@ -190,7 +175,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       semanticRenderEquivalenceCheck(fileNames.server, model, serverModule.executableSource),
     ],
     updateCoverage,
-    viewTransitions: viewTransitions.stamps,
+    viewTransitions: structuralLowering.viewTransitionStamps,
   };
 }
 
