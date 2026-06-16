@@ -4,8 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./lib": "./src/lib/index.ts",
-    "./platform-audit": "./src/platform-audit.ts",
     "./primitives": "./src/primitives/index.ts",
     "./primitives/accordion": "./src/primitives/accordion.ts",
     "./primitives/alert-dialog": "./src/primitives/alert-dialog.ts",
@@ -40,8 +38,7 @@
     "./primitives/toolbar": "./src/primitives/toolbar.ts",
     "./primitives/toast": "./src/primitives/toast.ts",
     "./primitives/toggle": "./src/primitives/toggle.ts",
-    "./primitives/toggle-group": "./src/primitives/toggle-group.ts",
-    "./tooling": "./src/tooling/index.ts"
+    "./primitives/toggle-group": "./src/primitives/toggle-group.ts"
   },
   "scripts": {
     "lint:primitives": "rm -rf .lint-primitives && tsc --ignoreConfig --module NodeNext --moduleResolution NodeNext --target ES2024 --types node --skipLibCheck --strict --outDir .lint-primitives --rootDir src src/tooling/lint-primitives.ts && node .lint-primitives/tooling/lint-primitives.js; status=$?; rm -rf .lint-primitives; exit $status"
