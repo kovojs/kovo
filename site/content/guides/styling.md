@@ -191,6 +191,7 @@ Practical summary:
 
 ## Next
 
+- [Components & copy-in UI](/guides/components/) — the styled `@kovojs/ui` starter you copy into your app, built on `@kovojs/headless-ui`.
 - [Streaming & defer](/guides/streaming/) — the deferred streams these hints serve.
 - [Mutations & forms](/guides/mutations/) — fragment responses end to end.
 
