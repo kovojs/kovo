@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import type { QuestionListItem } from '../types.js';
-import { renderSoShell, voteButton } from './chrome.js';
+import { freshId, renderSoShell, voteButton } from './chrome.js';
 
 // Question list (route `/`). Reads the `questionList` rowset (id/title/score/
 // answerCount — each a column the postQuestion / postAnswer / voteUp derived
@@ -31,6 +31,44 @@ export function renderQuestionListRegion({ questions, totalVotes }: QuestionList
           </p>
         </div>
       </div>
+
+      {/* SPEC.md §6.3: a no-JS "ask question" form. POSTs to the postQuestion
+          mutation; the fragment re-renders this whole region so the new row
+          appears and the composer resets (with a fresh id). The text primary key
+          is minted at render time so each submission is unique. */}
+      <form
+        method="post"
+        action="/_m/postQuestion"
+        enhance
+        data-mutation="postQuestion"
+        class="rounded-lg border border-slate-200 bg-white p-4"
+      >
+        <input type="hidden" name="id" value={freshId('q')} />
+        <input type="hidden" name="authorId" value="demo-viewer" />
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-start">
+          <div class="grid gap-2">
+            <input
+              name="title"
+              required
+              placeholder="Question title"
+              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <textarea
+              name="body"
+              required
+              rows="2"
+              placeholder="What are the details?"
+              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            class="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          >
+            Ask question
+          </button>
+        </div>
+      </form>
 
       <ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
         {questions.map((question) => (

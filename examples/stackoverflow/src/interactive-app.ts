@@ -1,4 +1,4 @@
-import { route } from '@kovojs/server';
+import { route, s } from '@kovojs/server';
 import { createApp, createRequestHandler } from '@kovojs/server/app-shell/core';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/app-shell/client-modules';
 import type { RequestHandler } from '@kovojs/server';
@@ -9,7 +9,12 @@ import {
   renderQuestionListPage,
   renderQuestionListRegion,
 } from './components/question-list.js';
-import { renderQuestionDetailPage, type AnswerDetail } from './components/question-detail.js';
+import {
+  QUESTION_DETAIL_TARGET,
+  renderQuestionDetailPage,
+  renderQuestionDetailRegion,
+  type AnswerDetail,
+} from './components/question-detail.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import {
@@ -20,13 +25,13 @@ import {
 import { questionList, questionScore } from './queries.js';
 import { answers, questions } from './schema.js';
 
-// SPEC.md §9.1/§9.5: the Stack Overflow example as a FULLY INTERACTIVE Kovo app.
-// Unlike the read-only static-export shell (app-shell.ts), this registers the
-// postQuestion / postAnswer / voteUp mutations and a `mutationResponse` that
-// re-renders the affected fragment targets with server-truth query data. It is
-// the same app whether it runs on a Node server (`pnpm start`) or inside the
-// static export's in-browser backend (browser-backend.ts) — the request handler
-// is pure Web Fetch, so the only difference is who calls it.
+// SPEC.md §9.1: the Stack Overflow example as a FULLY INTERACTIVE Kovo app. It
+// registers the postQuestion / postAnswer / voteUp mutations and a
+// `mutationResponse` that re-renders the affected fragment targets with
+// server-truth query data. The native `enhance` forms POST to `/_m/*`; served by
+// the Node server (scripts/serve.mjs), the inline loader morphs the re-rendered
+// region. voteUp re-renders the list region (on `/`) and the question card (on a
+// detail page); postQuestion re-renders the list; postAnswer the detail region.
 
 const soStylesheets = ['/assets/tailwind.css'] as const;
 
@@ -57,6 +62,39 @@ async function renderQuestionListRegionFromDb(db: SoDb): Promise<string> {
   return renderQuestionListRegion({ questions: items, totalVotes });
 }
 
+// The voteUp (on a detail page) / postAnswer fragment payload: the question detail
+// region re-rendered from server truth (question card + answers + bumped count).
+async function renderQuestionDetailRegionFromDb(db: SoDb, questionId: string): Promise<string> {
+  const [row] = await db.select().from(questions).where(eq(questions.id, questionId)).limit(1);
+  if (!row) return '';
+  const detailAnswers = await loadAnswersForQuestion(db, questionId);
+  return renderQuestionDetailRegion({
+    answers: detailAnswers,
+    question: {
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      authorId: row.authorId,
+      score: row.score,
+      answerCount: row.answerCount,
+    },
+  });
+}
+
+// Read a string field from the parsed mutation input (FormData for enhance-form
+// posts, or a plain object for JSON posts).
+function readInputField(rawInput: unknown, name: string): string | undefined {
+  if (typeof FormData !== 'undefined' && rawInput instanceof FormData) {
+    const value = rawInput.get(name);
+    return typeof value === 'string' ? value : undefined;
+  }
+  if (rawInput && typeof rawInput === 'object' && name in rawInput) {
+    const value = (rawInput as Record<string, unknown>)[name];
+    return typeof value === 'string' ? value : undefined;
+  }
+  return undefined;
+}
+
 export interface SoInteractiveApp {
   app: ReturnType<typeof createApp>;
   db: SoDb;
@@ -65,16 +103,13 @@ export interface SoInteractiveApp {
 
 export interface BuildSoInteractiveAppOptions {
   db?: SoDb;
-  // When rendering the static export, the URL of the bundled in-browser backend.
-  // Each page is wrapped in an `on:load` host that imports + installs it so the
-  // export can serve its own mutation POSTs.
-  backendModuleHref?: string;
 }
 
 /**
  * Build the interactive Stack Overflow app over a (seeded) PGlite database. Pass
  * an existing `db` to share state with an already-rendered shell; otherwise a
- * fresh seeded database is created.
+ * fresh seeded database is created. The returned handler is what the Node server
+ * (scripts/serve.mjs) serves — mutations round-trip natively over PGlite.
  */
 export async function buildSoInteractiveApp(
   options: BuildSoInteractiveAppOptions = {},
@@ -86,72 +121,87 @@ export async function buildSoInteractiveApp(
   }
   const database = db;
 
-  const allQuestions = await database.select().from(questions).orderBy(asc(questions.id));
-
-  const questionRoutes = allQuestions.map((question) =>
-    route(`/questions/${question.id}`, {
-      meta: { description: question.title, title: `${question.title} · DevOverflow` },
-      async page() {
-        const detailAnswers = await loadAnswersForQuestion(database, question.id);
-        const [row] = await database
-          .select()
-          .from(questions)
-          .where(eq(questions.id, question.id))
-          .limit(1);
+  // SPEC.md §5.1: one parameterized detail route (not a route per seeded row), so
+  // questions posted at runtime are immediately viewable. The page loads the
+  // question + answers from PGlite by `params.id`.
+  const questionDetailRoute = route('/questions/:id', {
+    meta: { description: 'Question detail', title: 'Question · DevOverflow' },
+    params: s.object({ id: s.string() }),
+    async page({ params }: { params: { id: string } }) {
+      const [row] = await database
+        .select()
+        .from(questions)
+        .where(eq(questions.id, params.id))
+        .limit(1);
+      if (!row) {
         return renderQuestionDetailPage({
-          answers: detailAnswers,
+          answers: [],
           question: {
-            id: question.id,
-            title: row?.title ?? question.title,
-            body: row?.body ?? question.body,
-            authorId: row?.authorId ?? question.authorId,
-            score: row?.score ?? question.score,
-            answerCount: row?.answerCount ?? question.answerCount,
+            id: params.id,
+            title: 'Question not found',
+            body: 'This question does not exist (it may have been a demo that reset).',
+            authorId: 'system',
+            score: 0,
+            answerCount: 0,
           },
         });
-      },
-      stylesheets: soStylesheets,
-    }),
-  );
+      }
+      const detailAnswers = await loadAnswersForQuestion(database, row.id);
+      return renderQuestionDetailPage({
+        answers: detailAnswers,
+        question: {
+          id: row.id,
+          title: row.title,
+          body: row.body,
+          authorId: row.authorId,
+          score: row.score,
+          answerCount: row.answerCount,
+        },
+      });
+    },
+    stylesheets: soStylesheets,
+  });
 
-  const backendModuleHref = options.backendModuleHref;
   const app = createApp({
     clientModules: createMemoryVersionedClientModuleRegistry(),
     document: { lang: 'en-US' },
-    // SPEC.md §9.5: in the static export, wrap each page in a host whose
-    // `on:load` imports the bundled in-browser backend, so the inline loader
-    // stands up the mutation server before the viewer interacts.
-    ...(backendModuleHref
-      ? {
-          renderRoute(value: unknown): string {
-            const body = typeof value === 'string' ? value : '';
-            return `<div on:load="${backendModuleHref}#installBackend">${body}</div>`;
-          },
-        }
-      : {}),
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     queries: [questionList, questionScore],
-    mutationResponse({ key }) {
+    mutationResponse({ key, rawInput }) {
       // SPEC.md §6.4: CSRF guards cross-origin form posts against a server
-      // session. The example backend runs in the SAME browser context as the
-      // page it serves (or a single-user demo server), so there is no
-      // cross-origin session to protect — disable it for the no-auth demo.
+      // session. This is a no-auth public demo with no session to protect —
+      // disable it so the forms post freely.
       const csrf = false;
-      // voteUp and postQuestion both change the ranked question region; re-render
-      // it from server truth so every score / count reflects the committed write.
-      if (key === voteUpMutation.key || key === postQuestionMutation.key) {
-        return {
-          csrf,
-          fragmentRenderers: [
-            {
-              render: () => renderQuestionListRegionFromDb(database),
-              stylesheets: soStylesheets,
-              target: QUESTION_LIST_TARGET,
-            },
-          ],
-        };
+
+      // No per-fragment `stylesheets`: the page already loaded the app
+      // stylesheet, and a fragment-leading <link> would become the morph root and
+      // replace the region with a bare <link>. The re-rendered region reuses the
+      // already-present Tailwind classes.
+      const listRenderer = {
+        render: () => renderQuestionListRegionFromDb(database),
+        target: QUESTION_LIST_TARGET,
+      };
+      const detailRenderer = (questionId: string) => ({
+        render: () => renderQuestionDetailRegionFromDb(database, questionId),
+        target: QUESTION_DETAIL_TARGET,
+      });
+
+      // Return every plausibly-affected region; the inline loader applies only the
+      // fragments whose target host exists in the current page (list on `/`,
+      // detail on `/questions/:id`).
+      const fragmentRenderers = [];
+      if (key === voteUpMutation.key) {
+        fragmentRenderers.push(listRenderer);
+        const targetId = readInputField(rawInput, 'targetId');
+        if (targetId) fragmentRenderers.push(detailRenderer(targetId));
+      } else if (key === postQuestionMutation.key) {
+        fragmentRenderers.push(listRenderer);
+      } else if (key === postAnswerMutation.key) {
+        const questionId = readInputField(rawInput, 'questionId');
+        if (questionId) fragmentRenderers.push(detailRenderer(questionId));
       }
-      return { csrf };
+
+      return fragmentRenderers.length > 0 ? { csrf, fragmentRenderers } : { csrf };
     },
     routes: [
       route('/', {
@@ -169,7 +219,7 @@ export async function buildSoInteractiveApp(
         },
         stylesheets: soStylesheets,
       }),
-      ...questionRoutes,
+      questionDetailRoute,
     ],
   });
 

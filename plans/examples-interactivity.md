@@ -13,17 +13,22 @@ mutations into an app at all (mutations + derived-optimism exist in `mutations.t
 `generated/optimistic/` but no `component()`/form renders them, and the app-shell registers zero
 mutations). So browsing the examples shows dead UIs.
 
-## Approach (decided 2026-06-15 with user)
+## Approach (REVISED 2026-06-16 with user — serve as regular Node apps)
 
-**All three apps, real mutations round-tripping, with derived-optimism.** Static iframes have no
-server, so inject an **in-browser backend**: a per-app client module that (a) creates the app's
-PGlite DB (WASM, already browser-capable) + seeds it, (b) builds the *interactive* app
-(`createApp` WITH mutations registered + a demo sessionProvider/CSRF), (c) `createRequestHandler`,
-and (d) patches `window.fetch` (and/or a service worker) so requests to `/_m/*` (and GET routes) are
-served by `handleAppRequest` — which is pure Web Fetch API, no Node deps. The existing inline loader
-already submits `enhance`/`data-mutation` forms and morphs the returned fragment wire, so once the
-backend answers, mutations round-trip for real. Derived-optimism layers on top via the enhanced
-optimistic runtime for instant prediction + server-truth reconcile.
+The static-export-in-iframe framing was wrong. **Serve each example as a regular full-stack Node
+server** (its existing `scripts/serve.mjs` running the interactive `createApp` handler over PGlite),
+where mutations round-trip natively. The apps only *looked* inert because the docs embedded them as
+static exports. So the work is: (1) register each app's mutations into the served app + author the UI
+as the framework's native `enhance` server-action forms (POST `/_m/*`, inline loader morphs the
+fragment wire — NO islands, NO KV229, since the page is served dynamically), (2) make the Node server
+deploy-ready (production serve + Dockerfile / host config). DB stays PGlite-in-Node (works perfectly).
+
+### Superseded earlier exploration (do NOT resurrect)
+- **In-browser PGlite backend / on:click islands / KV229 dodges / Vite-bundling PGlite** — abandoned.
+  The Phase 0 work proved the mechanism but the user wants regular serving, not static-export hacks.
+- **PGlite on Cloudflare Workers** — spiked and rejected: PGlite's universal build takes a Node path
+  under `workerd` (nodejs_compat), where `import.meta.url` is undefined and cascades through fragile
+  Emscripten-glue failures. Not production-clean. Node host chosen instead.
 
 Key facts proven in research:
 - `handleAppRequest(app, request: Request): Promise<Response>` / `createRequestHandler(app)` are
@@ -57,23 +62,30 @@ Key facts proven in research:
     `kovo-fragment-target` host from server truth; the island applies the wire by replacing the
     matching `[kovo-fragment-target]` element's outerHTML (event delegation keeps new nodes live).
   - **on:load** pre-warm island boots PGlite before first click (wired via createApp `renderRoute`).
-- [ ] **Phase 1 — Generalize the in-browser backend** into a shared helper (one place that wires
-      PGlite + interactive `createApp` + fetch-patch), so each app supplies only its app + db factory.
-- [ ] **Phase 2 — StackOverflow full UI:** vote-up (list + detail), post-answer, post-question wired
-      to mutations with derived-optimism; interactive app registers all 3 mutations.
-- [ ] **Phase 3 — Commerce:** un-gate the interactive UI in the static export (drop `readOnly:true`),
-      add the in-browser backend so add-to-cart + receipt upload round-trip; demo session/CSRF.
-- [ ] **Phase 4 — CRM:** build an interactive app (register addContact/createDeal/moveDeal/closeDeal),
-      author the UI affordances (add contact, move/close deal stage), wire derived + custom optimism.
-- [ ] **Phase 5 — Gates:** update `site/scripts/smoke.mjs` to drive a real interaction in each iframe
-      and assert the DOM reflects the mutation; per-app tests; `vp check`, link-check, gzip budgets.
+### REVISED phases (Node-server direction)
+- [ ] **Phase R1 — StackOverflow served + interactive.** Strip the island/in-browser-backend
+      scaffolding; author vote-up (list + detail), post-answer, post-question as native `enhance`
+      server-action forms over the interactive app; serve via `scripts/serve.mjs` (Node + PGlite).
+      Proof: node mutation test + a real-browser drive against the running Node server (score
+      increments, answer/question appears). text-PK ids (postAnswer/postQuestion) generated at render
+      time (crypto.randomUUID), refreshed by the fragment re-render.
+- [ ] **Phase R2 — Commerce served + interactive.** Render the interactive (non-readOnly) UI in the
+      served app; add-to-cart + receipt upload as enhance forms round-trip; demo authenticated
+      session so the betterAuth guard passes. (Keep the existing dynamic app shell; it already has the
+      mutations + fragmentRenderers.)
+- [ ] **Phase R3 — CRM served + interactive.** Register addContact/createDeal/moveDeal/closeDeal into
+      the served app; author enhance-form affordances (add contact, move/close deal); fragments
+      re-render from server truth.
+- [ ] **Phase R4 — Deploy-ready.** A production serve path per app (build assets + serve built output,
+      not Vite dev middleware) + a Dockerfile / host config so each app deploys to a Node host. `vp
+      check`, per-app tests, gzip/format gates green.
 
-## Open risks
-
-- Bundling the full app + PGlite WASM into a browser client module via Vite, running inside the
-  sandboxed iframe (top-level await, WASM fetch, drizzle in browser). Phase 0 must prove this.
-- CSRF/session: the in-browser backend is the server, so it can issue+validate its own CSRF, or the
-  interactive app uses a demo sessionProvider returning a fixed user. Decide in Phase 0.
+## Open risks (Node-server direction)
+- Production serve: `serve.mjs` runs Vite in middleware (dev) mode; need a build+serve-static path for
+  deploy. Verify the app-shell can serve built assets without the Vite dev plugin.
+- CSRF: enhance forms need either `csrf:false` (demo) or a real session + `csrfField`. Commerce already
+  wires CSRF + betterAuth; SO/CRM use `csrf:false` for the no-auth demo.
+- text-PK collisions on repeat posts — mitigated by render-time uuid + fragment re-render.
 - Persistence across reload: in-memory PGlite resets on reload (acceptable for a demo; note it).
 - gzip/size budgets for the example client bundles may need adjustment (PGlite WASM is large; it is a
   separate asset, not inline).

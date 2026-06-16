@@ -4,36 +4,35 @@
 // page() return in the document <html>/<head> (with the stylesheet), so these
 // helpers render the <body> contents: a top bar plus a centered main column.
 
-export function score(value: number): string {
-  return (
-    <span class="flex w-12 shrink-0 flex-col items-center text-slate-500">
-      <span class="text-xs leading-none">&#9650;</span>
-      <span class="text-base font-semibold tabular-nums text-slate-700">{value}</span>
-      <span class="text-[10px] uppercase tracking-wide">votes</span>
-    </span>
-  );
+// SPEC.md §6.3: postQuestion / postAnswer use text primary keys, so each rendered
+// composer mints a unique id. The app-shell renders server-side (Node), where
+// crypto.randomUUID is available; a fresh fragment re-render yields a new id, so
+// sequential posts never collide.
+export function freshId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`;
 }
 
-// SPEC.md §9.5 / KV229: an exportable upvote island. A static export's documents
-// cannot reference a server `/_m/*` endpoint, so this is NOT an enhance form — it
-// is an `on:click` handler (browser-backend.ts#vote) that runs the real voteUp
-// mutation against the in-browser PGlite and morphs the re-rendered region back
-// in. `data-question-id` carries the vote target to the handler.
-const VOTE_HANDLER = '/assets/browser-backend.js#vote';
-
+// SPEC.md §6.3: a no-JS upvote form. It POSTs to the `voteUp` mutation endpoint;
+// served by the Node app, the inline loader (§9.1) intercepts the submit, fetches
+// the fragment wire, and morphs the re-rendered region with the server-truth
+// score. The hidden `id` satisfies the mutation input schema (the votes row uses
+// a serial key, so the handler ignores it); `userId` is the demo viewer.
 export function voteButton(questionId: string, value: number): string {
   return (
-    <button
-      type="button"
-      on:click={VOTE_HANDLER}
-      data-question-id={questionId}
-      aria-label="Upvote"
-      class="flex w-12 shrink-0 flex-col items-center rounded-md py-1 text-slate-500 hover:bg-orange-50 hover:text-orange-600"
-    >
-      <span class="text-xs leading-none">&#9650;</span>
-      <span class="text-base font-semibold tabular-nums text-slate-700">{value}</span>
-      <span class="text-[10px] uppercase tracking-wide">votes</span>
-    </button>
+    <form method="post" action="/_m/voteUp" enhance data-mutation="voteUp" class="w-12 shrink-0">
+      <input type="hidden" name="id" value={`vote-${questionId}`} />
+      <input type="hidden" name="targetId" value={questionId} />
+      <input type="hidden" name="userId" value="demo-viewer" />
+      <button
+        type="submit"
+        aria-label="Upvote"
+        class="flex w-full flex-col items-center rounded-md py-1 text-slate-500 hover:bg-orange-50 hover:text-orange-600"
+      >
+        <span class="text-xs leading-none">&#9650;</span>
+        <span class="text-base font-semibold tabular-nums text-slate-700">{value}</span>
+        <span class="text-[10px] uppercase tracking-wide">votes</span>
+      </button>
+    </form>
   );
 }
 
