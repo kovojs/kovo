@@ -1,82 +1,123 @@
-import { createReadStream, existsSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import path from 'node:path';
+import { createServer as createNodeServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
-const distDir = path.resolve(fileURLToPath(new URL('../dist/', import.meta.url)));
-const host = process.env.HOST ?? '127.0.0.1';
-const port = Number.parseInt(process.env.PORT ?? '4173', 10);
+import { createServer as createViteServer } from 'vite-plus';
 
-const types = new Map([
-  ['.css', 'text/css; charset=utf-8'],
-  ['.html', 'text/html; charset=utf-8'],
-  ['.js', 'text/javascript; charset=utf-8'],
-  ['.json', 'application/json; charset=utf-8'],
-  ['.md', 'text/markdown; charset=utf-8'],
-  ['.svg', 'image/svg+xml'],
-  ['.txt', 'text/plain; charset=utf-8'],
-]);
+import { runContentPipeline } from './content-pipeline.mjs';
 
-function resolveRequest(requestUrl) {
-  const url = new URL(requestUrl ?? '/', `http://${host}:${port}`);
-  const decoded = decodeURIComponent(url.pathname);
-  const clean = decoded.replace(/^\/+/, '');
-  const requested = path.resolve(distDir, clean);
+// Live dev server for the docs app. The app-shell dev plugin (vite.config.ts)
+// serves the same src/app.ts through its node handler, so what you see in dev is
+// what static export emits (SPEC §9.5). The content pre-pass runs first so the
+// app's generated inputs (gen/*) exist before the app module loads.
 
-  if (requested !== distDir && !requested.startsWith(`${distDir}${path.sep}`)) {
-    return null;
-  }
+const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 
-  if (decoded.endsWith('/')) return path.join(requested, 'index.html');
-  if (path.extname(requested)) return requested;
-  return path.join(requested, 'index.html');
-}
+export async function createSiteServeServer({
+  host = '127.0.0.1',
+  port = Number(process.env.PORT ?? 4173),
+  strictPort = false,
+} = {}) {
+  await runContentPipeline();
 
-async function sendFile(response, filePath) {
+  const vite = await createViteServer({
+    appType: 'custom',
+    configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
+    logLevel: 'info',
+    root: siteRoot,
+    server: { middlewareMode: true },
+  });
+  const server = createNodeServer(vite.middlewares);
+
   try {
-    const info = await stat(filePath);
-    if (!info.isFile()) throw new Error('not a file');
+    await listen(server, { host, port, strictPort });
+  } catch (error) {
+    await vite.close();
+    throw error;
+  }
 
-    response.writeHead(200, {
-      'content-length': info.size,
-      'content-type': types.get(path.extname(filePath)) ?? 'application/octet-stream',
-    });
-    createReadStream(filePath).pipe(response);
-  } catch {
-    const fallback = path.join(distDir, '404.html');
-    if (existsSync(fallback)) {
-      response.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-      createReadStream(fallback).pipe(response);
-      return;
+  return {
+    close: () => closeServer(server, vite),
+    host,
+    port: actualPort(server),
+    server,
+    vite,
+  };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const options = parseCliOptions(process.argv.slice(2));
+  const served = await createSiteServeServer(options);
+  const origin = `http://${served.host}:${served.port}`;
+  process.stdout.write(['site-serve/v1', origin, ''].join('\n'));
+
+  const shutdown = async () => {
+    await served.close();
+  };
+  process.once('SIGINT', () => void shutdown().then(() => process.exit(0)));
+  process.once('SIGTERM', () => void shutdown().then(() => process.exit(0)));
+}
+
+function parseCliOptions(args) {
+  const options = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--host') {
+      const host = args[index + 1];
+      if (!host) throw new Error('Missing value for site serve option --host.');
+      options.host = host;
+      index += 1;
+      continue;
     }
-
-    response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    response.end('Not found\n');
+    if (arg === '--port') {
+      const rawPort = args[index + 1];
+      const port = Number(rawPort);
+      if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+        throw new Error(`Invalid site serve port '${rawPort}'.`);
+      }
+      options.port = port;
+      index += 1;
+      continue;
+    }
+    if (arg === '--strictPort') {
+      options.strictPort = true;
+      continue;
+    }
+    throw new Error(`Unknown site serve option '${arg}'.`);
   }
+  return options;
 }
 
-if (!existsSync(distDir)) {
-  throw new Error('serve: site/dist is missing; run `pnpm --filter @kovojs/site run build` first');
+function listen(server, { host, port, strictPort }) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      if (strictPort || error.code !== 'EADDRINUSE') {
+        reject(error);
+        return;
+      }
+      server.listen(0, host);
+    };
+    server.once('error', onError);
+    server.listen(port, host, () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
 }
 
-const server = createServer((request, response) => {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    response.writeHead(405, { allow: 'GET, HEAD' });
-    response.end();
-    return;
-  }
+function actualPort(server) {
+  const address = server.address();
+  if (typeof address === 'object' && address !== null) return address.port;
+  throw new Error('Site serve server did not expose a TCP port.');
+}
 
-  const filePath = resolveRequest(request.url);
-  if (!filePath) {
-    response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
-    response.end('Bad request\n');
-    return;
-  }
-
-  void sendFile(response, filePath);
-});
-
-server.listen(port, host, () => {
-  console.log(`Kovo docs served from site/dist at http://${host}:${port}/`);
-});
+function closeServer(server, vite) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        void vite.close().finally(() => reject(error));
+        return;
+      }
+      void vite.close().then(resolve, reject);
+    });
+  });
+}

@@ -91,11 +91,11 @@ const specCitation = {
 /** Code blocks render as designed windows: title bar (optional
  * `title="..."` in the fence info string), language badge, copy button.
  * The copy button is a Kovo island — no JS loads until first click. */
-function codeWindow({ highlighted, language, title }) {
+function codeWindow({ copyHref, highlighted, language, title }) {
   const bar = [
     `<span class="code-window-title">${title ? escapeHtml(title) : ''}</span>`,
     language === 'txt' ? '' : `<span class="code-window-lang">${language}</span>`,
-    '<button type="button" class="code-copy" on:click="/c/code.js#copy">Copy</button>',
+    `<button type="button" class="code-copy" on:click="${copyHref}">Copy</button>`,
   ].join('');
   return `<figure class="code-window"><div class="code-window-bar">${bar}</div>${highlighted}</figure>`;
 }
@@ -119,7 +119,7 @@ function plainText(tokens, collected = []) {
  * Returns { html, headings, title, text } — headings carry stable ids for the
  * sidebar, the W9 anchor checker, and the W8 search index.
  */
-export async function renderMarkdown(body, { anchorStyle = 'slug' } = {}) {
+export async function renderMarkdown(body, { anchorStyle = 'slug', copyHref = '/c/code.js#copy' } = {}) {
   const shiki = await highlighter();
   const headings = [];
   const seen = new Map();
@@ -137,7 +137,7 @@ export async function renderMarkdown(body, { anchorStyle = 'slug' } = {}) {
           language === 'txt'
             ? `<pre class="shiki"><code>${escapeHtml(text)}</code></pre>`
             : shiki.codeToHtml(text, { lang: language, theme: SHIKI_THEME });
-        return codeWindow({ highlighted, language, title });
+        return codeWindow({ copyHref, highlighted, language, title });
       },
       heading({ tokens, depth, raw }) {
         const inline = this.parser.parseInline(tokens);

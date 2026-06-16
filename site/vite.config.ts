@@ -1,6 +1,12 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
+// The docs site is a real Kovo app (src/app.ts). Vite builds the Tailwind CSS
+// (with a manifest) into dist-css/; the app-shell export bridge replays the
+// declared route documents into dist/. The dev plugin serves the same app live
+// through its node handler so `serve` matches export byte-for-byte (SPEC §9.5).
 export default defineConfig({
   build: {
     manifest: true,
@@ -14,47 +20,14 @@ export default defineConfig({
       },
     },
   },
-  plugins: [tailwindcss()],
+  plugins: [tailwindcss(), siteSharedAppShellDevPlugin()],
   run: {
     tasks: {
-      'build-site': {
-        command: 'vp build && node scripts/build.mjs',
-        input: [
-          { pattern: 'content/**/*', base: 'workspace' },
-          { pattern: 'examples/gallery/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/gallery/src/**/*', base: 'workspace' },
-          { pattern: 'examples/commerce/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/commerce/src/**/*', base: 'workspace' },
-          { pattern: 'examples/crm/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/crm/src/**/*', base: 'workspace' },
-          { pattern: 'examples/stackoverflow/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/stackoverflow/src/**/*', base: 'workspace' },
-          { pattern: 'packages/ui/src/**/*', base: 'workspace' },
-          { pattern: 'public/**/*', base: 'workspace' },
-          { pattern: 'scripts/**/*', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'tutorial/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-        output: ['dist/**'],
-      },
-      'check-links': {
-        command: 'node scripts/check-links.mjs',
-        input: [{ pattern: 'dist/**', base: 'workspace' }],
-      },
       export: {
         command: 'node scripts/export-static.mjs',
         input: [
           { pattern: 'content/**/*', base: 'workspace' },
-          { pattern: 'examples/gallery/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/gallery/src/**/*', base: 'workspace' },
-          { pattern: 'examples/commerce/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/commerce/src/**/*', base: 'workspace' },
-          { pattern: 'examples/crm/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/crm/src/**/*', base: 'workspace' },
-          { pattern: 'examples/stackoverflow/scripts/**/*', base: 'workspace' },
-          { pattern: 'examples/stackoverflow/src/**/*', base: 'workspace' },
-          { pattern: 'packages/ui/src/**/*', base: 'workspace' },
+          { pattern: 'gen/**/*', base: 'workspace' },
           { pattern: 'public/**/*', base: 'workspace' },
           { pattern: 'scripts/**/*', base: 'workspace' },
           { pattern: 'src/**/*', base: 'workspace' },
@@ -62,6 +35,20 @@ export default defineConfig({
           { pattern: 'vite.config.ts', base: 'workspace' },
         ],
         output: ['dist/**'],
+      },
+      serve: {
+        command: 'node scripts/serve.mjs',
+        input: [
+          { pattern: 'content/**/*', base: 'workspace' },
+          { pattern: 'scripts/**/*', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'tutorial/**/*', base: 'workspace' },
+          { pattern: 'vite.config.ts', base: 'workspace' },
+        ],
+      },
+      'check-links': {
+        command: 'node scripts/check-links.mjs',
+        input: [{ pattern: 'dist/**', base: 'workspace' }],
       },
       smoke: {
         command: 'node scripts/smoke.mjs',
@@ -80,3 +67,45 @@ export default defineConfig({
     },
   },
 });
+
+type DevMiddleware = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: (error?: unknown) => void,
+) => void;
+
+type DevPostHook = () => void | Promise<void>;
+
+interface SiteDevServer {
+  middlewares: {
+    use(handler: DevMiddleware): void;
+  };
+  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+}
+
+interface SiteDevPlugin {
+  configureServer(server: SiteDevServer): Promise<void | DevPostHook>;
+  name: string;
+}
+
+export function siteSharedAppShellDevPlugin(): SiteDevPlugin {
+  return {
+    async configureServer(server) {
+      const serverModule = await server.ssrLoadModule('@kovojs/server/app-shell/vite');
+      const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
+      if (typeof sharedPluginFactory !== 'function') {
+        throw new Error('@kovojs/server/app-shell/vite must export kovoAppShellViteDevPlugin.');
+      }
+
+      const sharedPlugin = sharedPluginFactory({
+        moduleId: '/src/app.ts',
+        name: 'kovo-site-app-shell-dev',
+        nodeHandlerExportName: 'siteNodeHandler',
+        order: 'post',
+      }) as { configureServer(server: SiteDevServer): void | DevPostHook };
+
+      return sharedPlugin.configureServer(server);
+    },
+    name: 'kovo-site-app-shell-dev-loader',
+  };
+}

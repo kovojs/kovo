@@ -1,31 +1,35 @@
 import { execFileSync } from 'node:child_process';
+import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createServer } from 'vite-plus';
 
+import { runContentPipeline } from './content-pipeline.mjs';
+
+// SPEC §9.5: the docs site's public static-export bridge. The site is now a real
+// Kovo app (src/app.ts); this replays its declared route documents, copies the
+// versioned /c/ client modules, and copies the Vite CSS manifest assets through
+// the public app-shell export bridge — mirroring examples/*/scripts/export-static.mjs.
+
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
+const cssDistDir = path.join(siteRoot, 'dist-css');
+const publicDir = path.join(siteRoot, 'public');
 const defaultDistDir = path.join(siteRoot, 'dist');
-const defaultPublicDir = path.join(siteRoot, 'public');
-const defaultCssDistDir = path.join(siteRoot, 'dist-css');
 let staticExportTaskHelpers;
 
-export async function buildSiteStaticInputs() {
-  execFileSync('pnpm', ['--dir', '..', 'exec', 'vp', 'run', 'build'], {
-    cwd: siteRoot,
-    stdio: 'inherit',
-  });
-  execFileSync('vp', ['build'], { cwd: siteRoot, stdio: 'inherit' });
-  execFileSync(process.execPath, ['scripts/build.mjs'], { cwd: siteRoot, stdio: 'inherit' });
-}
-
 export async function exportSiteStaticApp({
-  cssDistDir = defaultCssDistDir,
   createViteServer = createServer,
-  distDir = defaultDistDir,
   outDir = defaultDistDir,
-  publicDir = defaultPublicDir,
+  skipPipeline = false,
 } = {}) {
+  if (!skipPipeline) await runContentPipeline();
+  // The export owns the whole static-host directory; clear stale routes/assets
+  // so removed pages cannot linger (the W9 link gate would otherwise pass on
+  // orphaned files). dist-css holds the Vite manifest and is left untouched.
+  await rm(outDir, { force: true, recursive: true });
+  execFileSync('vp', ['build'], { cwd: siteRoot, stdio: 'inherit' });
+
   const manifestFile = path.join(cssDistDir, '.vite/manifest.json');
   const viteServer = await createViteServer({
     appType: 'custom',
@@ -33,69 +37,34 @@ export async function exportSiteStaticApp({
     root: siteRoot,
     server: { middlewareMode: true },
   });
-  const previousDefaultApp = process.env.KOVO_SITE_APP_SHELL_DEFAULT;
-  process.env.KOVO_SITE_APP_SHELL_DEFAULT = 'off';
 
   try {
-    const [
-      appShellModule,
-      serverClientModulesModule,
-      serverCoreModule,
-      serverStaticExportModule,
-      serverViteModule,
-    ] = await Promise.all([
-      viteServer.ssrLoadModule('/scripts/app-shell.mjs'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/client-modules'),
+    const [appModule, coreModule, viteModule, staticExportModule] = await Promise.all([
+      viteServer.ssrLoadModule('/src/app.ts'),
       viteServer.ssrLoadModule('@kovojs/server/app-shell/core'),
-      viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
       viteServer.ssrLoadModule('@kovojs/server/app-shell/vite'),
+      viteServer.ssrLoadModule('@kovojs/server/app-shell/static-export'),
     ]);
-    const serverApi = {
-      ...serverClientModulesModule,
-      ...serverCoreModule,
-      ...serverStaticExportModule,
-      ...serverViteModule,
-    };
-    const { createSiteDistApp } = appShellModule;
+    const { isKovoApp } = coreModule;
     const {
       exportKovoAppShellViteBuildWithManifestFromManifestFile,
+      kovoAppShellViteManifestStylesheetHrefFromFile,
+    } = viteModule;
+    const { formatStaticExportDiagnostic, formatStaticExportDiagnostics, isStaticExportDiagnosticError } =
+      staticExportModule;
+    staticExportTaskHelpers = {
+      formatStaticExportDiagnostic,
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
-      kovoAppShellViteManifestStylesheetHrefFromFile,
-    } = serverApi;
+    };
 
-    if (typeof createSiteDistApp !== 'function') {
-      throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
+    const app = appModule.siteStaticExportApp;
+    if (!isKovoApp(app)) {
+      throw new Error('src/app.ts must export siteStaticExportApp for public export.');
     }
-
-    if (typeof exportKovoAppShellViteBuildWithManifestFromManifestFile !== 'function') {
-      throw new Error(
-        '@kovojs/server/app-shell/vite must export exportKovoAppShellViteBuildWithManifestFromManifestFile.',
-      );
-    }
-    if (typeof formatStaticExportDiagnostics !== 'function') {
-      throw new Error(
-        '@kovojs/server/app-shell/static-export must export formatStaticExportDiagnostics.',
-      );
-    }
-    if (typeof isStaticExportDiagnosticError !== 'function') {
-      throw new Error(
-        '@kovojs/server/app-shell/static-export must export isStaticExportDiagnosticError.',
-      );
-    }
-    if (typeof kovoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
-      throw new Error(
-        '@kovojs/server/app-shell/vite must export kovoAppShellViteManifestStylesheetHrefFromFile.',
-      );
-    }
-    staticExportTaskHelpers = { formatStaticExportDiagnostics, isStaticExportDiagnosticError };
 
     await kovoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
-    const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
-    // SPEC.md section 9.5 static export owns the final static host bytes:
-    // replay route documents, copy versioned /c/ modules, and copy the Vite
-    // manifest assets through the public app-shell export bridge.
     const { manifest, result } = await exportKovoAppShellViteBuildWithManifestFromManifestFile({
       app,
       distDir: cssDistDir,
@@ -103,29 +72,24 @@ export async function exportSiteStaticApp({
       outDir,
     });
 
+    // public/ (fonts + the gallery runtime shim) is verbatim static hosting,
+    // outside the manifest; copy it alongside the replayed documents.
+    await cp(publicDir, outDir, { recursive: true });
+
     return { ...result, manifest };
   } finally {
-    if (previousDefaultApp === undefined) {
-      delete process.env.KOVO_SITE_APP_SHELL_DEFAULT;
-    } else {
-      process.env.KOVO_SITE_APP_SHELL_DEFAULT = previousDefaultApp;
-    }
     await viteServer.close();
   }
 }
 
-if (isMainModule()) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    const options = parseSiteExportArgs(process.argv.slice(2));
+    const result = await exportSiteStaticApp(parseCliOptions(process.argv.slice(2)));
 
-    if (!options.skipBuild) {
-      await buildSiteStaticInputs();
+    for (const diagnostic of result.diagnostics) {
+      process.stderr.write(`${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`);
+      process.exitCode = 1;
     }
-
-    // The interactive gallery is now folded into the component pages, whose
-    // compiled /c/ client modules the replay copies (see createSiteDistApp's
-    // gallery client-module registration). No separate gallery export.
-    const result = await exportSiteStaticApp(options);
 
     process.stdout.write(
       [
@@ -134,15 +98,12 @@ if (isMainModule()) {
         `client-modules=${result.clientModules.length}`,
         `assets=${result.assets.length}`,
         `manifest-html=${result.manifest?.routeDocuments.length ?? 0}`,
-        `manifest-client-modules=${result.manifest?.clientModules.length ?? 0}`,
-        `manifest-assets=${result.manifest?.assets.length ?? 0}`,
         `diagnostics=${result.diagnostics.length}`,
         '',
       ].join('\n'),
     );
   } catch (error) {
     if (!staticExportTaskHelpers?.isStaticExportDiagnosticError(error)) throw error;
-
     process.stderr.write(
       [
         'site-export/v1',
@@ -154,57 +115,22 @@ if (isMainModule()) {
   }
 }
 
-function isMainModule() {
-  return process.argv[1] === fileURLToPath(import.meta.url);
-}
-
-function parseSiteExportArgs(args) {
+function parseCliOptions(args) {
   const options = {};
-
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-
-    if (arg === '--skip-build') {
-      options.skipBuild = true;
-      continue;
-    }
-
-    if (arg === '--css-dist-dir') {
-      options.cssDistDir = requireValue(args, index, arg);
-      index += 1;
-      continue;
-    }
-
-    if (arg === '--dist-dir') {
-      options.distDir = requireValue(args, index, arg);
-      index += 1;
-      continue;
-    }
-
     if (arg === '--out') {
-      options.outDir = requireValue(args, index, arg);
+      const outDir = args[index + 1];
+      if (!outDir) throw new Error('Missing value for site export option --out.');
+      options.outDir = path.resolve(process.cwd(), outDir);
       index += 1;
       continue;
     }
-
-    if (arg === '--public-dir') {
-      options.publicDir = requireValue(args, index, arg);
-      index += 1;
+    if (arg === '--skip-pipeline') {
+      options.skipPipeline = true;
       continue;
     }
-
     throw new Error(`Unknown site export option '${arg}'.`);
   }
-
   return options;
-}
-
-function requireValue(args, index, flag) {
-  const value = args[index + 1];
-
-  if (value === undefined || value.startsWith('--')) {
-    throw new Error(`Missing value for ${flag}.`);
-  }
-
-  return path.resolve(process.cwd(), value);
 }

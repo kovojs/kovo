@@ -7,10 +7,11 @@
     "api:check": "node scripts/api-ref.mjs && node scripts/api-examples-check.mjs",
     "api:examples": "node scripts/api-examples-check.mjs",
     "api:ref": "node scripts/api-ref.mjs",
-    "build": "vp build && node scripts/build.mjs",
+    "build": "node scripts/export-static.mjs",
     "build:css": "vp build",
-    "build:pages": "node scripts/build.mjs",
     "check:links": "node scripts/check-links.mjs",
+    "content": "node scripts/content-pipeline.mjs",
+    "serve": "node scripts/serve.mjs",
     "test": "vitest --run"
   },
   "dependencies": {
