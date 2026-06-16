@@ -53,8 +53,11 @@ export async function exportSiteStaticApp({
       exportKovoAppShellViteBuildWithManifestFromManifestFile,
       kovoAppShellViteManifestStylesheetHrefFromFile,
     } = viteModule;
-    const { formatStaticExportDiagnostic, formatStaticExportDiagnostics, isStaticExportDiagnosticError } =
-      staticExportModule;
+    const {
+      formatStaticExportDiagnostic,
+      formatStaticExportDiagnostics,
+      isStaticExportDiagnosticError,
+    } = staticExportModule;
     staticExportTaskHelpers = {
       formatStaticExportDiagnostic,
       formatStaticExportDiagnostics,
@@ -95,7 +98,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const result = await exportSiteStaticApp(parseCliOptions(process.argv.slice(2)));
 
     for (const diagnostic of result.diagnostics) {
-      process.stderr.write(`${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`);
+      process.stderr.write(
+        `${staticExportTaskHelpers.formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`,
+      );
       process.exitCode = 1;
     }
 

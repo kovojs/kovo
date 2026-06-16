@@ -119,7 +119,10 @@ function plainText(tokens, collected = []) {
  * Returns { html, headings, title, text } — headings carry stable ids for the
  * sidebar, the W9 anchor checker, and the W8 search index.
  */
-export async function renderMarkdown(body, { anchorStyle = 'slug', copyHref = '/c/code.js#copy' } = {}) {
+export async function renderMarkdown(
+  body,
+  { anchorStyle = 'slug', copyHref = '/c/code.js#copy' } = {},
+) {
   const shiki = await highlighter();
   const headings = [];
   const seen = new Map();

@@ -17,7 +17,10 @@ function contentHash(source: string): string {
   return createHash('sha256').update(source).digest('hex').slice(0, 12);
 }
 
-function register(registry: ReturnType<typeof createMemoryVersionedClientModuleRegistry>, name: string): string {
+function register(
+  registry: ReturnType<typeof createMemoryVersionedClientModuleRegistry>,
+  name: string,
+): string {
   const source = readFileSync(path.join(clientDir, name), 'utf8');
   return registry.put({
     path: `/c/${name}`,

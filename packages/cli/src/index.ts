@@ -165,7 +165,11 @@ export interface CompileComponentV1Result {
   viewTransitions: readonly unknown[];
 }
 
-export type KovoMcpToolName = 'compile_component' | 'kovo_check' | 'kovo_explain' | 'list_diagnostics';
+export type KovoMcpToolName =
+  | 'compile_component'
+  | 'kovo_check'
+  | 'kovo_explain'
+  | 'list_diagnostics';
 
 export type KovoMcpRequest =
   | {
