@@ -261,6 +261,14 @@ integration harness uniquely proves.
       search params and returns the canonical instance key.
   - SPEC refs: §9.4 typed reads, §10.2 query args/instance key.
   - Assertions: `/_q/product?id=p1` response includes `product:p1`; invalid args fail safely.
+  - Partial evidence: added `tests/integration/fixtures/query-args-search/app.tsx` and
+    `tests/integration/specs/query-args-search.spec.ts`; the positive Playwright test verifies
+    search-param coercion, defaulted args, and canonical `product:p1` / `product:p2` chunks. Proving
+    command:
+    `pnpm exec playwright test tests/integration/specs/guarded-mutation.spec.ts tests/integration/specs/session-provider-once.spec.ts tests/integration/specs/session-null-anonymous.spec.ts tests/integration/specs/redirect-typed-target.spec.ts tests/integration/specs/query-args-search.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+  - Gap: left unchecked because invalid query args through the app-level `/_q` endpoint currently
+    return HTTP 500 instead of the SPEC §9.4/§10.2 safe validation response; the skipped spec records
+    the expected 422 `VALIDATION` behavior.
 - [ ] `broadcast-channel-sync` / `broadcast-channel-sync.spec.ts`: mutation response query chunks
       rebroadcast to another same-user tab.
   - SPEC refs: §9.3 BroadcastChannel liveness.
@@ -450,10 +458,15 @@ integration harness uniquely proves.
   - Assertions: URL search changes; rendered result matches coerced search schema.
   - Evidence: same Playwright command passed on 2026-06-16; `tests/integration/specs/get-form-search.spec.ts`
     asserts GET form URL search params and server-rendered coerced search output.
-- [ ] `redirect-typed-target` / `redirect-typed-target.spec.ts`: a mutation follows a typed
+- [x] `redirect-typed-target` / `redirect-typed-target.spec.ts`: a mutation follows a typed
       POST-redirect-GET target with params/search and lands on the expected route.
   - SPEC refs: §6.4 redirect, §9.1 no-JS behavior.
   - Assertions: response status/location; final page semantic content.
+  - Evidence: added `tests/integration/fixtures/redirect-typed-target/app.tsx` and
+    `tests/integration/specs/redirect-typed-target.spec.ts`; the no-JS POST returns `303 Location:
+    /orders/ord-42?source=mutation&tab=receipt` from `redirect('/orders/:id', ...)`, and the final
+    route renders the typed params/search content. Proving command: the Slice I Playwright command
+    recorded under `query-args-search`.
 - [x] `trailing-slash-308` / `trailing-slash-308.spec.ts`: trailing slashes normalize before matching.
   - SPEC refs: §9.5 request shell.
   - Assertions: direct request receives 308; canonical route renders once followed.
@@ -481,10 +494,15 @@ integration harness uniquely proves.
   - Assertions: anonymous `/_q` denies/redirects safely; signed-in read succeeds.
   - Evidence: same Playwright command passed on 2026-06-16; `tests/integration/specs/guarded-query-read.spec.ts`
     asserts anonymous route/`/_q` denial and signed-in route/typed-read success.
-- [ ] `guarded-mutation` / `guarded-mutation.spec.ts`: mutation guards fail before transaction/write
+- [x] `guarded-mutation` / `guarded-mutation.spec.ts`: mutation guards fail before transaction/write
       execution and return the typed enhanced error path.
   - SPEC refs: §6.5 mutation guard failures, §10.3 request lifecycle.
   - Assertions: anonymous enhanced POST does not change db; signed-in POST does.
+  - Evidence: added `tests/integration/fixtures/guarded-mutation/app.tsx` and
+    `tests/integration/specs/guarded-mutation.spec.ts`; anonymous enhanced submit returns a
+    `data-error-code="UNAUTHORIZED"` fragment and leaves `guarded_counter.count = 0`, while the
+    signed-in submit morphs the count and updates server truth to 1. Proving command: the Slice I
+    Playwright command recorded under `query-args-search`.
 - [ ] `forbidden-route` / `forbidden-route.spec.ts`: authenticated-but-unauthorized route access renders
       the configured 403 shell with status 403.
   - SPEC refs: §6.5 route/query guard failures, §9.5 error shells.
@@ -493,14 +511,24 @@ integration harness uniquely proves.
     passed on 2026-06-16 for role-based 403/default body and authorized access, but the current app
     route guard path does not wire `createApp({ errorShells.forbidden })` into guard rendering, so the
     configured-shell claim remains unchecked.
-- [ ] `session-provider-once` / `session-provider-once.spec.ts`: request shell resolves
+- [x] `session-provider-once` / `session-provider-once.spec.ts`: request shell resolves
       `sessionProvider` once before route/query/mutation guards.
   - SPEC refs: §6.5 sessions, §9.5 request shell.
   - Assertions: instrumentation counter per request; route/query/mutation see same session value.
-- [ ] `session-null-anonymous` / `session-null-anonymous.spec.ts`: a provider returning null/undefined is
+  - Evidence: added `tests/integration/fixtures/session-provider-once/app.tsx` and
+    `tests/integration/specs/session-provider-once.spec.ts`; route, query, and mutation requests each
+    record exactly one `provider` event before their guarded work, and every guard/handler observes
+    the same `user-<case>` session subject. Proving command: the Slice I Playwright command recorded
+    under `query-args-search`.
+- [x] `session-null-anonymous` / `session-null-anonymous.spec.ts`: a provider returning null/undefined is
       treated as anonymous, not malformed session data.
   - SPEC refs: §6.5 session schema.
   - Assertions: anonymous shell/redirect path; no server 500.
+  - Evidence: added `tests/integration/fixtures/session-null-anonymous/app.tsx` and
+    `tests/integration/specs/session-null-anonymous.spec.ts`; both null and undefined provider
+    results render the public anonymous shell and send guarded route access through the 303 login
+    redirect without a server error, while a real session reaches the guarded route. Proving command:
+    the Slice I Playwright command recorded under `query-args-search`.
 - [ ] `unscoped-owner-fixture` / `unscoped-owner-fixture.spec.ts`: an owner-scoped table/query path
       renders only rows tied to `req.session` and rejects cross-user access at request time.
   - SPEC refs: §10.1 owner annotations, §10.3 unscoped audit.
