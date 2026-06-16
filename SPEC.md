@@ -423,7 +423,14 @@ Component packages declare their HTML namespace once in their package manifest:
 }
 ```
 
-The field is required for any dependency that exports Kovo components intended to render as package components. A package prefix is lowercase ASCII, dash-terminated, and becomes part of the package's public wire vocabulary: rendered dashed hosts, residual `kovo-c` values, compiler-scoped CSS hosts (§13.1), `kovo explain component <name>` provenance, and package behavior attributes all use the package's **effective** prefix. App-local components may remain bare-named; vendored source such as `@kovojs/ui` installed by `kovo add` is app source, not a component package, so its names are the app's names.
+The field is required for any dependency that exports Kovo component primitives intended to define a
+package-owned public HTML vocabulary. A package prefix is lowercase ASCII, dash-terminated, and
+becomes part of that package vocabulary: package behavior attributes use the effective prefix
+(`acme-menu="account-menu"`), `kovo explain component <name>` uses it for provenance, and packages
+should encode it in their exported component binding names (`AcmeCartBadge` -> `acme-cart-badge`)
+because component DOM leaves are always derived from bindings (§4.1). App-local components may remain
+bare-named; vendored source such as `@kovojs/ui` installed by `kovo add` is app source, not a
+component package, so its names are the app's names.
 
 Prefix uniqueness is app-wide. During registry generation the compiler collects every imported component package, applies app aliases, and requires that no two packages have the same effective prefix. The alias escape hatch is app-side and explicit:
 
@@ -436,13 +443,16 @@ export default {
 };
 ```
 
-Aliases affect only the consuming app's effective prefix and all emitted surfaces derived from it; they do not rewrite the package manifest or the package's documentation. They are for collision repair, not style preferences, because changing prefixes changes the HTML vocabulary an app serves.
+Aliases affect only the consuming app's effective package behavior/provenance prefix; they do not
+rewrite component binding-derived DOM leaves, the package manifest, or the package's documentation.
+They are for package-vocabulary collision repair, not style preferences, because changing prefixes
+changes the HTML behavior-attribute vocabulary an app serves.
 
 The `kovo-` prefix family is reserved for first-party packages. Only packages whose manifest `name` is in the `@kovojs/*` scope may declare or be aliased to a prefix beginning with `kovo-`; `@kovojs/headless-ui` declares `kovo-`. This is a reservation check inside the same general prefix-registration rule, not a separate first-party naming mechanism.
 
 Package behavior attributes ride the effective package prefix: `kovo-tooltip="pricing-tip"`, `acme-menu="account-menu"`, and so on. The `kovo-*` attribute namespace is reserved for framework-owned attributes and future loader/compiler growth. Package behavior attributes are compiler-known attributes supplied by the owning package; when a behavior value is an IDREF, it participates in the same page/component id registry as `commandfor`, `popovertarget`, `for`, and `aria-*` and is validated by KV221.
 
-A duplicate prefix, invalid prefix, missing prefix on an imported component package, or non-`@kovojs/*` attempt to use `kovo-*` is **KV234**. The teaching error names both packages when there is a collision, shows the effective prefix that would have been emitted into `kovo-c`/CSS/behavior attributes, and prints the alias fix:
+A duplicate prefix, invalid prefix, missing prefix on an imported component package, or non-`@kovojs/*` attempt to use `kovo-*` is **KV234**. The teaching error names both packages when there is a collision, shows the effective prefix that would have been emitted into package behavior attributes and component explain provenance, and prints the alias fix:
 
 ```text
 ERROR KV234 package component prefix conflict.
@@ -450,7 +460,7 @@ ERROR KV234 package component prefix conflict.
   packages:
     @acme/primitives (package.json kovo.prefix)
     @other/acme-widgets (package.json kovo.prefix)
-  emitted names would collide: acme-tooltip, [kovo-c="acme-tooltip"], acme-tooltip="..."
+  emitted names would collide: acme-tooltip="..."
   fix: add an app alias, for example packagePrefixes["@other/acme-widgets"] = "other-acme-"
 ```
 

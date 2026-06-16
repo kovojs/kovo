@@ -196,9 +196,15 @@ DOM-facing names. Only attractive if dashed hosts were abandoned (a §3.1-level 
     collision disambiguation; §6.1 documents derived registry keys; §11.3 diagnostic summaries and
     §13.1 CSS text use derived registry/DOM identity. `node tests/kovo-check.node.mjs` passed on
     2026-06-16.
-  - Gap: package-prefix wording in §6.1.1 still needs reconciliation with the no-override derivation
-    posture.
-- [ ] **Docs.** `docs/integration-testing.md` fixtures and any authoring docs showing the string form.
+  - Evidence: `SPEC.md` §6.1.1 now says package prefixes affect package behavior/provenance
+    vocabulary and that component DOM leaves remain binding-derived; packages encode public prefixes
+    through exported binding names. `rg -n "wire name|wire-name|component name string|component\(\)|ComponentRegistry|registry key|derived DOM|package prefix" SPEC.md site/content docs packages/core/src/index.ts`
+    inspected the remaining identity wording on 2026-06-16.
+  - Gap: the SPEC text still does not cite this plan explicitly.
+- [x] **Docs.** `docs/integration-testing.md` fixtures and any authoring docs showing the string form.
+  - Evidence: `rg -n "component\(\s*(['\"])" docs site/content site/tutorial
+    packages/create-kovo/templates examples -g '*.md' -g '*.ts' -g '*.tsx' -g '*.mjs'` returned no
+    results on 2026-06-16; `docs/integration-testing.md` uses current fixture/component guidance.
 
 ## Verification
 
