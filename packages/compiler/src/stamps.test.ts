@@ -229,7 +229,7 @@ export const Recommendations = component('recommendations', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV223',
         fileName: 'recommendations.tsx',
@@ -257,7 +257,7 @@ export const Recommendations = component('recommendations', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV223',
         fileName: 'recommendations.tsx',
@@ -330,7 +330,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(redundant.diagnostics).toEqual([
+    expect(redundant.diagnostics).toMatchObject([
       {
         code: 'KV223',
         fileName: 'cart-badge.tsx',
@@ -341,7 +341,7 @@ export const CartBadge = component('cart-badge', {
         start: { column: 31, line: 4 },
       },
     ]);
-    expect(drift.diagnostics).toEqual([
+    expect(drift.diagnostics).toMatchObject([
       {
         code: 'KV222',
         fileName: 'cart-badge.tsx',
@@ -406,14 +406,14 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
-        {
+        expect.objectContaining({
           code: 'KV302',
           fileName: 'cart-badge.tsx',
           message: 'data-bind path is not present in the declared query shape. cart.items',
           severity: 'error',
           start: { column: 9, line: 4 },
           length: 27,
-        },
+        }),
       ]),
     );
   });

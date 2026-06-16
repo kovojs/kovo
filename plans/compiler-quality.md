@@ -514,7 +514,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
   - [ ] Decision needed: confirm whether exact-duplicate routes warrant a new code or an extension of
         KV228, and whether query-shape collision is a blocking error or a lint given the TS backstop.
 
-- [ ] **Broaden diagnostics from detection to teaching.**
+- [x] **Broaden diagnostics from detection to teaching.**
   - Risk: diagnostics can correctly detect a problem but still fail SPEC §5.2 rule 5 if they do not
     show the would-have-lowered output, why it cannot compile, and a concrete fix menu.
   - Why it matters: Kovo's compiler is intended for humans and code-generation agents. Teaching
@@ -524,6 +524,27 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     gap because it currently emits a terse coverage message.
   - Acceptance evidence: diagnostic snapshots cover message, severity, source position, help, and
     fix options; Vite/CLI/MCP surfaces render the same structured fields.
+  - Evidence 2026-06-16: `packages/core/src/diagnostics.ts` gives every KV2xx/KV3xx compiler-owned
+    registry entry teaching help with a fix menu and SPEC citation; `packages/core/src/diagnostics.test.ts`
+    gates future KV2xx/KV3xx entries on help, `Fixes:`, and `SPEC §`.
+  - Evidence 2026-06-16: `packages/compiler/src/diagnostics.ts` now preserves registry help on
+    emitted `CompilerDiagnostic` values by default, while dynamic diagnostics such as KV201, KV230,
+    KV235, and KV311 continue to append source-specific lowering/blocking context.
+  - Evidence 2026-06-16: `packages/compiler/src/conformance-compat.test.ts` snapshots diagnostic
+    code, file name, severity, message, source position, length, help, and fix guidance for KV201,
+    KV230, KV235, and KV311.
+  - Evidence 2026-06-16: `packages/cli/src/index.compile-mcp.test.ts` proves compile/v1 and MCP
+    JSON-RPC structured diagnostics preserve inherited help plus source position and length; existing
+    Vite diagnostic tests continue to prove help text rendering through transform errors.
+  - Verification 2026-06-16:
+    `pnpm --filter @kovojs/core exec vitest run src/diagnostics.test.ts` -> 1 file / 4 tests passed.
+  - Verification 2026-06-16:
+    `pnpm --filter @kovojs/compiler exec vitest run` -> 30 files / 275 tests passed.
+  - Verification 2026-06-16:
+    `pnpm --filter @kovojs/compiler exec tsc --noEmit` -> passed.
+  - Verification 2026-06-16:
+    `pnpm --filter kovo exec vitest run src/index.compile-mcp.test.ts` -> 1 file / 7 tests passed.
+  - Verification 2026-06-16: `git diff --check` -> passed.
   - [x] Decision made: every compiler diagnostic, new and existing, must have teaching help before
         merge.
     - Evidence 2026-06-15: user accepted the stringent D7=A posture.
@@ -531,7 +552,8 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
         exists, blocked reason, fix menu, SPEC citation, and suppression/escape posture when one
         exists.
     - Evidence 2026-06-16: new KV236/KV237 diagnostics and the KV201/KV230/KV235/KV311 compatibility
-      snapshots follow this schema; the broader retrofit remains tracked by this open item.
+      snapshots follow this schema; the completed KV2xx/KV3xx retrofit is proven by the evidence
+      above.
   - [x] Decision made: incomplete teaching content is a blocking quality gate for all compiler
         diagnostics.
     - Evidence 2026-06-15: user chose D7=A rather than a new-code-only gradual retrofit.

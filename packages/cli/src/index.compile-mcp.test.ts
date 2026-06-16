@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -123,6 +124,16 @@ describe('compile/v1 and kovo mcp', () => {
       'KV210',
       'KV201',
     ]);
+    const kv210 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'KV210');
+    expect(kv210).toMatchObject({
+      code: 'KV210',
+      fileName: 'cart-badge.tsx',
+      help: diagnosticDefinitions.KV210.help,
+      length: 5,
+      message: diagnosticDefinitions.KV210.message,
+      severity: 'lint',
+      start: { column: 9, line: 1 },
+    });
     const kv201 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
     expect(kv201).toMatchObject({
       code: 'KV201',
@@ -326,8 +337,20 @@ export const Shell = component('shell', {
       result: {
         structuredContent: {
           diagnostics: [
-            { code: 'KV210', severity: 'lint' },
-            { code: 'KV201', severity: 'error' },
+            {
+              code: 'KV210',
+              help: diagnosticDefinitions.KV210.help,
+              length: 5,
+              severity: 'lint',
+              start: { column: 9, line: 1 },
+            },
+            {
+              code: 'KV201',
+              help: expect.stringContaining('Would lower to:'),
+              length: 8,
+              severity: 'error',
+              start: { column: 9, line: 1 },
+            },
           ],
           ok: false,
           version: 'compile/v1',
@@ -501,8 +524,20 @@ export const Shell = component('shell', {
         content: [{ type: 'text' }],
         structuredContent: {
           diagnostics: [
-            { code: 'KV210', severity: 'lint' },
-            { code: 'KV201', severity: 'error' },
+            {
+              code: 'KV210',
+              help: diagnosticDefinitions.KV210.help,
+              length: 5,
+              severity: 'lint',
+              start: { column: 9, line: 1 },
+            },
+            {
+              code: 'KV201',
+              help: expect.stringContaining('Would lower to:'),
+              length: 8,
+              severity: 'error',
+              start: { column: 9, line: 1 },
+            },
           ],
           ok: false,
           version: 'compile/v1',

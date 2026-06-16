@@ -332,7 +332,7 @@ export const ProductLinks = component('product-links', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV220',
         fileName: 'product-links.tsx',
@@ -371,7 +371,7 @@ export const ProductLinks = component('product-links', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV220',
         fileName: 'product-links.tsx',

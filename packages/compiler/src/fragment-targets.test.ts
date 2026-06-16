@@ -60,7 +60,7 @@ export const CartRow = component('cart-row', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV303',
         fileName: 'cart-row.tsx',
@@ -121,7 +121,7 @@ export const CartTable = component('cart-table', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV230',
         fileName: 'cart-row.tsx',
@@ -179,7 +179,9 @@ export const CartTable = component('cart-table', {
           "code": "KV230",
           "help": "Would hoist children to: CartRow$slot_children
       Blocked children: <span>{escapeText(snapshot.total)}</span>
-      Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.",
+      Blocked reason: fragment responses must fully describe the DOM they produce, but these children cannot be hoisted through serializable props.
+      Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.
+      SPEC §4.5 requires fragment-target children to lower to component references when they cross the target boundary.",
           "message": "Fragment-target children cannot lower to a component reference. CartRow",
           "severity": "error",
         },

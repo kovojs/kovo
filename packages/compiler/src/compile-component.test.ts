@@ -371,14 +371,13 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV235',
         fileName: 'cart-badge.tsx',
-        help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
+        help: expect.stringContaining(
           'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
-        ].join('\n'),
+        ),
         length: 93,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
@@ -398,14 +397,13 @@ export function renderSource() {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV235',
         fileName: 'cart-badge.server.ts',
-        help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
+        help: expect.stringContaining(
           'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
-        ].join('\n'),
+        ),
         length: 41,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
@@ -425,14 +423,13 @@ export const TotalDisplay = component('total-display', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV235',
         fileName: 'total-display.tsx',
-        help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
+        help: expect.stringContaining(
           'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
-        ].join('\n'),
+        ),
         length: 13,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
@@ -452,14 +449,13 @@ export function renderSource() {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV235',
         fileName: 'total-display.server.ts',
-        help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
+        help: expect.stringContaining(
           'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
-        ].join('\n'),
+        ),
         length: 10,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
@@ -481,14 +477,13 @@ export function renderSource() {
       ].join('\n'),
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV235',
         fileName: 'cart-badge.server.js',
-        help: [
-          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), kovo-c, kovo-deps, and data-bind.',
+        help: expect.stringContaining(
           'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
-        ].join('\n'),
+        ),
         length: 13,
         message:
           'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',

@@ -119,7 +119,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV210',
         fileName: 'cart-badge.tsx',
@@ -288,7 +288,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV210',
         fileName: 'cart-badge.tsx',

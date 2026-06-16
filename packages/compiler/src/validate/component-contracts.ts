@@ -264,7 +264,6 @@ function kv311Diagnostic(
       `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
       `Blocked update: ${fact.detail}`,
       diagnosticDefinitions.KV311.help ?? '',
-      'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
     ].join('\n'),
     message: `${diagnosticDefinitions.KV311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };

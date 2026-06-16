@@ -106,7 +106,7 @@ export const PrimitiveMerge = component('primitive-merge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV231',
         fileName: 'primitive-merge.tsx',

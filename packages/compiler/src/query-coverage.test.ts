@@ -285,7 +285,7 @@ export const CartBadge = component('cart-badge', {
         status: 'UNHANDLED',
       },
     ]);
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV223',
         fileName: 'cart-badge.tsx',

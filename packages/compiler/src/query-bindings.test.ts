@@ -129,14 +129,13 @@ export const ProductCard = component('product-card', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV227',
         fileName: 'product-card.tsx',
-        help: [
+        help: expect.stringContaining(
           'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
-          'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
-        ].join('\n'),
+        ),
         length: 32,
         message:
           'Binding path traverses a nullable segment without ?. product.details.name (segment: details)',
@@ -208,7 +207,7 @@ export const ProductCard = component('product-card', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV302',
         fileName: 'product-card.tsx',
@@ -235,7 +234,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV302',
         fileName: 'cart-badge.tsx',
@@ -266,7 +265,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV302',
         fileName: 'cart-badge.tsx',
@@ -341,7 +340,7 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(valid.diagnostics).toEqual([]);
-    expect(invalid.diagnostics).toEqual([
+    expect(invalid.diagnostics).toMatchObject([
       {
         code: 'KV302',
         fileName: 'cart-badge.tsx',

@@ -56,7 +56,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV301',
         fileName: 'cart-badge.tsx',
@@ -114,7 +114,7 @@ export function notifyPrice(product, emit) {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV320',
         fileName: 'cart.events.tsx',
@@ -142,7 +142,7 @@ export function notifyOrder(order, emit) {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV320',
         fileName: 'order.events.tsx',

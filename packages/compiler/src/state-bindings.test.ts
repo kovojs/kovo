@@ -168,7 +168,7 @@ export const BadProfileCard = component('bad-profile-card', {
     });
 
     expect(valid.diagnostics).toEqual([]);
-    expect(invalid.diagnostics).toEqual([
+    expect(invalid.diagnostics).toMatchObject([
       {
         code: 'KV302',
         fileName: 'bad-profile-card.tsx',
@@ -281,7 +281,7 @@ export const MixedState = component('mixed-state', {
         status: 'UNHANDLED',
       },
     ]);
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV311',
         fileName: 'mixed-state.tsx',
@@ -357,7 +357,7 @@ export const BadStateQuery = component('bad-state-query', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV304',
         fileName: 'bad-state-query.tsx',

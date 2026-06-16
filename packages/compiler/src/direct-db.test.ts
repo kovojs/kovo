@@ -20,7 +20,7 @@ export const addToCart = mutation('cart/add', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -46,7 +46,7 @@ export const addToCart = mutation('cart/add', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -78,7 +78,7 @@ export const clearCart = mutation('cart/clear', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',

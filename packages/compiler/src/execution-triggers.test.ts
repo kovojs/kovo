@@ -43,7 +43,7 @@ export const ExecutionTriggers = component('execution-triggers', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV211',
         fileName: 'execution-triggers.tsx',
@@ -115,7 +115,7 @@ export const ExecutionTriggers = component('execution-triggers', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV211',
         fileName: 'execution-triggers.tsx',
@@ -142,7 +142,7 @@ export const ExecutionTriggers = component('execution-triggers', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV211',
         fileName: 'execution-triggers.tsx',

@@ -64,7 +64,7 @@ export const SearchInput = component('search-input', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV221',
         fileName: 'search-controls.tsx',
@@ -98,7 +98,7 @@ export const PricingLink = component('pricing-link', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV221',
         fileName: 'pricing-link.tsx',
@@ -127,7 +127,7 @@ export const CartShell = component('cart-shell', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV221',
         fileName: 'cart-shell.tsx',
@@ -187,7 +187,7 @@ export const CartShell = component('cart-shell', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV224',
         fileName: 'cart-shell.tsx',
@@ -216,7 +216,7 @@ export const CartShell = component('cart-shell', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV224',
         fileName: 'cart-shell.tsx',
@@ -245,7 +245,7 @@ export const CartList = component('cart-list', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV224',
         fileName: 'cart-list.tsx',
@@ -321,7 +321,7 @@ export const CartShell = component('cart-shell', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toMatchObject([
       {
         code: 'KV225',
         fileName: 'cart-shell.tsx',

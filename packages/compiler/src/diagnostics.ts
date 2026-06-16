@@ -29,9 +29,11 @@ export function diagnosticFor(
   length?: number,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions[code];
+  const help = 'help' in definition ? definition.help : undefined;
   return {
     code,
     fileName,
+    ...(help === undefined ? {} : { help }),
     ...(source !== undefined && offset !== undefined
       ? {
           ...(length === undefined ? {} : { length }),
