@@ -21,6 +21,7 @@ import {
   validateStaticIds,
 } from './markup.js';
 import { validateLiteralHrefs } from './navigation.js';
+import { validateOutputContexts } from '../security/output-context.js';
 
 interface ValidatorContext {
   componentName: string;
@@ -55,6 +56,7 @@ const compilerValidators: readonly CompilerValidator[] = [
     ),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ model, options, source }) => validateLiteralHrefs(source, model, options),
+  ({ options, originalModel }) => validateOutputContexts(options.source, originalModel, options),
   ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
   ({ componentName, model, options, source }) =>

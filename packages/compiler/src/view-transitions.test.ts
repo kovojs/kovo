@@ -104,7 +104,7 @@ export const ProductCard = component('product-card', {
       '<img data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" />',
     );
     expect(clientSource).toContain(
-      'export const ProductCard$img_style_derive = derive(["product"], (product) => `view-transition-name: ${product.slug}`);',
+      'export const ProductCard$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));',
     );
     expect(result.queryUpdatePlans[0]?.stamps).toEqual([
       expect.objectContaining({ attr: 'style' }),
@@ -132,7 +132,7 @@ export const ProductCard = component('product-card', {
       '<img style="opacity: .8" data-derive="product.ProductCard$img_style_derive" data-derive-attr="style" src="/p1.png" kovo-c="product-card" kovo-deps="product" />',
     );
     expect(clientSource).toContain(
-      'export const ProductCard$img_style_derive = derive(["product"], (product) => `opacity: .8; view-transition-name: ${product.slug}`);',
+      `export const ProductCard$img_style_derive = derive(["product"], (product) => ["opacity: .8; ", kovoStyleProperty("view-transition-name", product.slug)].join(''));`,
     );
     expect(serverSource).not.toContain('viewTransitionName=');
     expect(result.queryUpdatePlans[0]?.stamps).toEqual([

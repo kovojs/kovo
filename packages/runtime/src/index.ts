@@ -158,6 +158,14 @@ export type {
   QueryRefetchOptions,
   QueryRefetchResponse,
 } from './query-refetch.js';
+export {
+  kovoBoundAttributeValue,
+  kovoEscapeHtml,
+  kovoSafeUrl,
+  kovoStyleProperty,
+  trustedHtml,
+} from './security-output.js';
+export type { BrowserTrustedHTML, KovoOutputContext, TrustedHtml } from './security-output.js';
 export { createQueryStore } from './query-store.js';
 export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
 export { derive } from './derive.js';

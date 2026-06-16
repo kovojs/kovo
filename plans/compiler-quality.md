@@ -293,7 +293,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     - Evidence 2026-06-15: user explicitly said performance is the only decision area they do not care
       about right now and accepted D3=C. Keep this as deliberately deferred, not complete.
 
-- [ ] **Centralize output-context security.**
+- [x] **Centralize output-context security.**
   - Risk: security handling is distributed: text interpolation has an `escapeText(...)` pass,
     template-stamp client rendering escapes locally, attributes depend on JSX/runtime behavior, and
     URLs/styles are handled by feature-specific code.
@@ -306,6 +306,22 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
   - Acceptance evidence: malicious payload fixtures exist for text, title/aria attrs, `href`,
     `style`, CSS component blocks, list template stamps, fragment targets, and raw HTML escape hatches.
     Server render and client update paths must agree.
+  - Evidence 2026-06-16: `packages/compiler/src/security/output-context.ts` defines the compiler
+    output contexts, validates URL/style/CSS/raw-HTML sinks with KV236, and is wired into
+    `packages/compiler/src/validate/pipeline.ts` on the authored parser model.
+  - Evidence 2026-06-16: `packages/runtime/src/security-output.ts`,
+    `packages/compiler/src/lower/inline-derives.ts`, `packages/compiler/src/emit/client.ts`, and
+    `packages/runtime/src/query-bindings.ts` route generated style properties, list stamp HTML, and
+    live attribute updates through shared output-context helpers.
+  - Evidence 2026-06-16: `packages/compiler/src/output-context-security.test.ts` covers malicious
+    payload fixtures for text, title/aria attrs, href, style, CSS component blocks, list template
+    stamps, fragment targets, raw HTML strings, and trusted HTML wrapper use.
+  - Evidence 2026-06-16: verification passed:
+    `pnpm --filter @kovojs/compiler exec vitest run`;
+    `pnpm --filter @kovojs/compiler exec tsc --noEmit`;
+    `pnpm --filter @kovojs/core exec vitest run src/diagnostics.test.ts`;
+    `pnpm --filter @kovojs/runtime exec tsc --noEmit`;
+    `pnpm --filter @kovojs/runtime exec vitest run src/security-output.test.ts src/query-bindings.test.ts`.
   - [x] Decision made: raw HTML exists only through an explicit Kovo trusted HTML wrapper type, with
         browser Trusted Types interop as the target shape.
     - Evidence 2026-06-15: user chose the D4/B posture after reviewing how a Kovo `TrustedHtml`

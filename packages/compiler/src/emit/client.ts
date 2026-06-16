@@ -1,4 +1,8 @@
 import { compilerIrHeader } from '../ir.js';
+import {
+  runtimeOutputHelpers,
+  templateStampHtmlEscapeExpression,
+} from '../security/output-context.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import { elementParamNameFromAttribute } from '../types.js';
 import type {
@@ -28,6 +32,10 @@ export function emitClientModule(
     )
       ? ['derive']
       : []),
+    ...(queryUpdatePlans.some((plan) => (plan.templateStamps?.length ?? 0) > 0)
+      ? [runtimeOutputHelpers.escapeHtml]
+      : []),
+    ...runtimeOutputHelperImports([...queryUpdatePlans], stateDerives),
     ...(handlers.length > 0 ? ['handler'] : []),
   ].sort();
   const importLine =
@@ -232,15 +240,11 @@ function emitStampPlan(stamp: QueryStampFact): string {
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
   const renderSegments = templateStampRenderSegments(stamp);
 
-  // SECURITY (SECURITY_FINDINGS.md H1): the item body is assembled as an HTML string and parsed
-  // via innerHTML, so query/state values interpolated into it must be HTML-escaped or an
-  // `<img onerror>`-style row payload executes on a reactive list update. `esc` covers both text
-  // and double-quoted attribute positions (& < > "); list-stamp placeholders are scalar data, not
-  // composed HTML, so escaping every placeholder is correct.
+  // SPEC §1 and §5.2: list stamp item bodies are generated HTML fragments later parsed with
+  // innerHTML, so scalar placeholders must use the shared output-context HTML escaping helper.
   return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(stamp.listReadPath)}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
       const record = item && typeof item === "object" ? item : {};
       const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
-      const esc = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
       return [${renderSegments.join(', ')}].join("");
     } }`;
 }
@@ -258,7 +262,9 @@ function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
       segments.push(JSON.stringify(stamp.template.slice(cursor, placeholder.templateStart)));
     }
     segments.push(
-      `esc(String(read(${JSON.stringify(placeholder.readSegments.map((segment) => segment.name))}) ?? ""))`,
+      templateStampHtmlEscapeExpression(
+        `read(${JSON.stringify(placeholder.readSegments.map((segment) => segment.name))})`,
+      ),
     );
     cursor = placeholder.templateEnd;
   }
@@ -268,4 +274,14 @@ function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
   }
 
   return segments.length > 0 ? segments : [JSON.stringify(stamp.template)];
+}
+
+function runtimeOutputHelperImports(
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+  stateDerives: readonly StateDeriveFact[],
+): string[] {
+  return queryUpdatePlans.some((plan) => plan.stamps?.some((stamp) => stamp.attr === 'style')) ||
+    stateDerives.some((derive) => derive.attr === 'style')
+    ? [runtimeOutputHelpers.styleProperty]
+    : [];
 }

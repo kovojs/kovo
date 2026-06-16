@@ -5,6 +5,7 @@ import type {
   QuerySelectorAllRootLike,
 } from './dom-like.js';
 import { morphDomElement } from './morph.js';
+import { kovoBoundAttributeValue } from './security-output.js';
 
 /** @internal */
 export interface QueryBindingElement
@@ -510,13 +511,9 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
     return;
   }
 
-  // SECURITY (SECURITY_FINDINGS.md H2): reactive attribute bindings flow live query/state values
-  // into raw setAttribute. For URL-bearing attributes, neutralize javascript:/data:/vbscript: (and
-  // other non-allowlisted) schemes so a refreshed binding cannot install a script/redirect URL.
-  const rendered =
-    URL_BOUND_ATTRIBUTES.has(name) && hasUnsafeBoundUrlScheme(formatBoundValue(value))
-      ? '#'
-      : formatBoundValue(value);
+  // SPEC §1 and §5.2: generated/client-updated attributes use the shared output-context model so
+  // security behavior remains auditable in emitted code and in the live update path.
+  const rendered = kovoBoundAttributeValue(name, value);
   element.setAttribute?.(name, rendered);
   if (name === 'value' && element.value !== undefined) {
     element.value = rendered;
@@ -543,32 +540,4 @@ function formatBoundValue(value: unknown): string {
   }
   if (typeof value === 'object') return JSON.stringify(value);
   return '';
-}
-
-// SECURITY (SECURITY_FINDINGS.md H2): attributes whose value is interpreted as a URL. A live
-// reactive binding to one of these must not be allowed to install a dangerous scheme.
-const URL_BOUND_ATTRIBUTES = new Set([
-  'href',
-  'src',
-  'action',
-  'formaction',
-  'poster',
-  'background',
-  'cite',
-  'data',
-  'ping',
-  'xlink:href',
-]);
-
-const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
-
-function hasUnsafeBoundUrlScheme(value: string): boolean {
-  // Strip ASCII control/whitespace chars (defeats `java\tscript:` and leading-space obfuscation),
-  // then look for an explicit scheme at the start. Relative/fragment/query values have no scheme
-  // and are always allowed; an explicit scheme outside the allowlist is rejected.
-  const normalized = value.replace(/[\u0000-\u0020]+/g, '').toLowerCase();
-  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
-  if (!match) return false;
-
-  return !SAFE_URL_SCHEMES.has(match[1] ?? '');
 }

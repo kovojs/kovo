@@ -506,7 +506,7 @@ export const CartBadge = component('cart-badge', {
         value: `{'<span data-bind=".qty">wrong</span>'}`,
       },
     ]);
-    expect(clientSource).toContain('String(read(["qty"]) ?? "")');
+    expect(clientSource).toContain('kovoEscapeHtml(read(["qty"]))');
     expect(clientSource).not.toContain('html.replace');
   });
 

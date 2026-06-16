@@ -22,6 +22,7 @@ export type DiagnosticCode =
   | 'KV233'
   | 'KV234'
   | 'KV235'
+  | 'KV236'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -215,6 +216,15 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message:
       'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+  },
+  KV236: {
+    code: 'KV236',
+    help: [
+      'Fixes: route URLs through typed route helpers; mark intentional external links with external; keep dynamic styling to compiler-generated safe properties; or pass raw HTML only as a Kovo TrustedHtml value.',
+      'SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Unsafe output context requires an explicit trusted Kovo escape hatch.',
   },
   KV301: {
     code: 'KV301',

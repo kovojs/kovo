@@ -72,15 +72,15 @@ export const CartBadge = component('cart-badge', {
       },
     ]);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan } from '@kovojs/runtime';",
+      "import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/runtime';",
     );
     expect(clientSource).toContain('export const CartBadge$queryUpdatePlans = {');
     expect(clientSource).toContain(
       'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [{ key: "productId", list: "items", selector: "[data-bind-list=\\"cart.items\\"]", render(item) {',
     );
     expect(clientSource).toContain('return ["<li kovo-key=\\"\\">');
-    expect(clientSource).toContain('String(read(["qty"]) ?? "")');
-    expect(clientSource).toContain('String(read(["name"]) ?? "")');
+    expect(clientSource).toContain('kovoEscapeHtml(read(["qty"]))');
+    expect(clientSource).toContain('kovoEscapeHtml(read(["name"]))');
     expect(clientSource).not.toContain('html.replace');
     expect(clientSource).toContain(
       'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',

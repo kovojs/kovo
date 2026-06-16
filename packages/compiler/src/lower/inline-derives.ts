@@ -13,6 +13,10 @@ import {
   queryPathUsesKnownQuery,
 } from '../analyze/query-shapes.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
+import {
+  runtimeOutputHelpers,
+  stylePropertyExpression,
+} from '../security/output-context.js';
 import type { CompileComponentOptions, StateDeriveFact } from '../types.js';
 
 type InlineDeriveLoweringOptions = Pick<
@@ -53,6 +57,7 @@ export function lowerInlineAttributeDerives(
   const deriveExports: string[] = [];
   const stateDerives: StateDeriveFact[] = [];
   const nameCounts = new Map<string, number>();
+  let needsStylePropertyHelper = false;
 
   for (const element of jsxElements(model)) {
     if (
@@ -75,6 +80,7 @@ export function lowerInlineAttributeDerives(
         candidate.source === 'state'
           ? deriveExpression(candidate.attribute, candidate.expression)
           : candidate.expression.trim();
+      if (candidate.attribute.name === 'viewTransitionName') needsStylePropertyHelper = true;
 
       deriveExports.push(
         `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${deriveParam(candidate)}) => ${expression});`,
@@ -179,9 +185,13 @@ export function lowerInlineAttributeDerives(
     escapeApplied && !alreadyImportsEscapeText
       ? `import { escapeText } from '@kovojs/server';\n`
       : '';
+  const runtimeImports = [
+    ...(deriveExports.length > 0 ? ['derive'] : []),
+    ...(needsStylePropertyHelper ? [runtimeOutputHelpers.styleProperty] : []),
+  ].sort();
   const derivePrefix =
-    deriveExports.length > 0
-      ? `import { derive } from '@kovojs/runtime';\n\n${deriveExports.join('\n')}\n\n`
+    runtimeImports.length > 0
+      ? `import { ${runtimeImports.join(', ')} } from '@kovojs/runtime';\n\n${deriveExports.join('\n')}\n\n`
       : '';
   const prefix = `${escapeImport}${derivePrefix}`;
   if (prefix.length > 0) {
@@ -558,19 +568,15 @@ function viewTransitionNameStyleExpression(
   transitionExpression: string,
   styleAttribute: JsxAttributeModel | undefined,
 ): string {
-  const transition = `view-transition-name: \${${transitionExpression.trim()}}`;
+  const transition = stylePropertyExpression('view-transition-name', transitionExpression);
   if (styleAttribute?.expression !== undefined) {
-    return `[${styleAttribute.expression}, \`${transition}\`].filter(Boolean).join('; ')`;
+    return `[${styleAttribute.expression}, ${transition}].filter(Boolean).join('; ')`;
   }
 
   const existing = (styleAttribute?.value ?? '').trim();
   const separator = existing === '' || existing.endsWith(';') ? '' : ';';
-  const prefix = existing === '' ? '' : `${templateLiteralText(existing)}${separator} `;
-  return `\`${prefix}${transition}\``;
-}
-
-function templateLiteralText(value: string): string {
-  return value.replace(/[`\\]/g, (char) => `\\${char}`).replace(/\$\{/g, '\\${');
+  const prefix = existing === '' ? '' : `${existing}${separator} `;
+  return prefix === '' ? transition : `[${JSON.stringify(`${prefix}`)}, ${transition}].join('')`;
 }
 
 const booleanPresenceAttributes = new Set([

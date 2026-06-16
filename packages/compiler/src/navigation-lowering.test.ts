@@ -126,7 +126,7 @@ export const ProductLinks = component('product-links', {
     <nav>
       <a href="/products/p1?max=500">Product</a>
       <form method="get" action="/cart"></form>
-      <a href="https://example.com/products/p1">External</a>
+      <a href="https://example.com/products/p1" external>External</a>
       <a href="#details">Skip link</a>
     </nav>
   ),

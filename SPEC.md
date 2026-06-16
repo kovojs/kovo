@@ -947,6 +947,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV233 | error      | Two writers for one binding target                                                                            |
 | KV234 | error      | Package component prefix registration conflict or reservation violation (§6.1.1)                              |
 | KV235 | error      | App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR (§5.2)  |
+| KV236 | error      | Unsafe output context requires an explicit trusted Kovo escape hatch (§1, §5.2)                               |
 | KV301 | lint       | Server fact in island-local state                                                                             |
 | KV302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                            |
 | KV303 | error      | Fragment-target render input is not declared as query data or stamped props (§4.5)                            |
