@@ -1,0 +1,46 @@
+---
+title: Stability & Versioning
+description: What Kovo promises about its public API, how versions change, and which packages are safe to depend on.
+order: 9
+---
+
+# Stability & Versioning
+
+This page answers "is this safe to depend on?". The full policy lives in
+[`STABILITY.md`](https://github.com/kovojs/kovo/blob/main/STABILITY.md) at the repo
+root; this is the short version.
+
+## What counts as public
+
+A symbol is supported public API only if **both** hold:
+
+1. it is exported from a package marked `public` in `public-packages.json`, and
+2. it is reachable from that package's published `exports` and is **documented**
+   (not tagged `@internal`).
+
+Everything else — `private` packages, `@internal` exports, and raw `./src/**` — is
+internal and may change without notice. A CI gate (`scripts/api-surface-gate.mjs`) and
+this site's generated [API reference](/api) keep that line visible.
+
+## Public vs internal packages
+
+| Public (depend on these)                                                                                             | Internal / special                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kovojs/core`, `@kovojs/server`, `@kovojs/runtime`, `@kovojs/drizzle`, `@kovojs/better-auth`, `@kovojs/headless-ui` | `@kovojs/test` (harness only; fixtures live in the private `@kovojs/conformance-fixtures`)                                                                      |
+| `@kovojs/compiler` (build/codegen API + Vite plugin)                                                                 | `@kovojs/ui` — **not** a versioned dependency: copy components in shadcn-style (see [Styling](/guides/styling)); they build on the public `@kovojs/headless-ui` |
+| `kovo`, `create-kovo` (CLIs — a command contract, plus `kovo`'s `kovoCheck`/`kovoExplain`)                           |                                                                                                                                                                 |
+
+## Versioning
+
+Public packages follow [SemVer](https://semver.org). On the current `0.x` line the API
+is stabilizing: **minor** bumps may break, **patch** bumps never do, and every breaking
+change is in the release notes. At `1.0.0` the standard guarantee applies. Surface that
+ships before it's frozen is marked `experimental_` / `@experimental` and is exempt until
+the marker is removed. A public symbol is removed only after a deprecation cycle
+(`@deprecated` for at least one minor on `0.x`, naming its replacement).
+
+## Distribution
+
+Published packages ship built `dist/` (JavaScript + rolled-up `.d.ts`); `@internal`
+symbols are stripped from the type surface, so depending on Kovo does not couple you to
+the monorepo's `tsconfig`.

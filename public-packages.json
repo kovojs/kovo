@@ -66,19 +66,34 @@
       "name": "@kovojs/better-auth",
       "dir": "better-auth",
       "visibility": "public",
-      "kind": "library"
+      "kind": "library",
+      "apiRef": {
+        "order": 6,
+        "slug": "better-auth",
+        "description": "Better Auth adapter: typed session/sign-in/up/out mutations, authed/role guards, and the redirect-protocol mount."
+      }
     },
     {
       "name": "@kovojs/compiler",
       "dir": "compiler",
       "visibility": "public",
-      "kind": "build-tool"
+      "kind": "build-tool",
+      "apiRef": {
+        "order": 7,
+        "slug": "compiler",
+        "description": "Build/codegen surface: app-graph derivation, component compilation, fixpoint/render-equivalence assertions, and the Vite plugin."
+      }
     },
     {
       "name": "kovo",
       "dir": "cli",
       "visibility": "public",
-      "kind": "cli"
+      "kind": "cli",
+      "apiRef": {
+        "order": 8,
+        "slug": "cli",
+        "description": "Programmatic verifiers behind the kovo CLI: kovoCheck and kovoExplain over the compiler's app graph."
+      }
     },
     {
       "name": "create-kovo",

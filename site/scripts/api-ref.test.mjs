@@ -69,6 +69,9 @@ describe('api-ref generator', () => {
       'runtime.md',
       'test.md',
       'drizzle.md',
+      'better-auth.md',
+      'compiler.md',
+      'cli.md',
     ]);
     for (const pkg of result.packages) expect(pkg.exports).toBeGreaterThan(0);
   });
@@ -138,6 +141,9 @@ describe('api-ref generator', () => {
       '@kovojs/runtime': 15,
       '@kovojs/server': 70,
       '@kovojs/test': 12,
+      '@kovojs/better-auth': 30,
+      '@kovojs/compiler': 12,
+      kovo: 8,
     };
     for (const pkg of result.packages) {
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);
