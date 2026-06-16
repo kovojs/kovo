@@ -287,7 +287,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
       composition, navigation `Link`, view-transition style merging, inline state/query attribute
       derives, mixed text binding insertion, and fragment/slot child lowering.
 
-- [ ] **Add compiler performance gates.**
+- [x] **Add compiler performance gates.**
   - Risk: the compiler is fast on the current package-local suite, but there is no performance
     contract for real app scale or CI regression detection.
   - Why it matters: compiler latency is part of framework UX. Angular/Vue users expect predictable
@@ -298,9 +298,21 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     compile under the same `vp run p10-perf` discipline already used elsewhere.
   - Acceptance evidence: checked-in baselines and budgets exist; CI fails or warns on clear
     regressions; output includes file count, LOC, transform count, parse count, and elapsed time.
-  - [x] Decision made: defer compiler performance gates for now.
+  - Evidence 2026-06-16: `tests/compiler-perf.test.ts` generates six corpora covering one large TSX
+    component, many small components, many routes/registry facts, CSS-heavy components, heavy
+    primitive composition, and a mixed app fixture. `tests/compiler-perf.budgets.json` checks exact
+    file counts, LOC floors, cold/warm elapsed budgets, and total budgets; `vite.config.ts` wires
+    `vp run compiler-perf`, and `package.json` wires `pnpm run test:compiler-perf` into
+    `acceptance`. `pnpm run test:compiler-perf` passed and printed file count, LOC, compile count,
+    authored parse count, emitted file/LOC counts, transform-fact counts, query/CSS/platform/view
+    transition counts, diagnostics, and cold/warm elapsed time for every corpus. Supporting checks
+    passed: `pnpm --filter @kovojs/compiler exec vitest run` (30 files / 275 tests),
+    `pnpm --filter @kovojs/compiler exec tsc --noEmit`, and
+    `pnpm exec vitest --run tests/compiler-perf.test.ts` (1 skipped without the perf env).
+  - [x] Historical decision superseded: compiler performance gates were deferred until this item was
+    reopened.
     - Evidence 2026-06-15: user explicitly said performance is the only decision area they do not care
-      about right now and accepted D3=C. Keep this as deliberately deferred, not complete.
+      about right now and accepted D3=C.
 
 - [x] **Centralize output-context security.**
   - Risk: security handling is distributed: text interpolation has an `escapeText(...)` pass,

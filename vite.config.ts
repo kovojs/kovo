@@ -63,6 +63,15 @@ export default defineConfig({
           { pattern: 'dist/**', base: 'workspace' },
         ],
       },
+      'compiler-perf': {
+        command: 'KOVO_RUN_COMPILER_PERF=1 vitest --run tests/compiler-perf.test.ts',
+        input: [
+          { auto: true },
+          { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },
+          { pattern: 'tests/compiler-perf.budgets.json', base: 'workspace' },
+          { pattern: 'packages/compiler/src/**/*.ts', base: 'workspace' },
+        ],
+      },
       'conformance-drizzle': {
         command: 'vitest --run conformance/drizzle-pin/src/',
         input: [
@@ -132,6 +141,8 @@ export default defineConfig({
           { pattern: 'tests/kovo-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
+          { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },
+          { pattern: 'tests/compiler-perf.budgets.json', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },
         ],

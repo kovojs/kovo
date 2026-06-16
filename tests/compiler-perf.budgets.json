@@ -1,0 +1,52 @@
+{
+  "$schema": "https://kovojs.dev/schemas/compiler-perf-budgets.v1.json",
+  "version": 1,
+  "runs": {
+    "cold": 1,
+    "warm": 1
+  },
+  "corpora": {
+    "large-component": {
+      "fileCount": 1,
+      "minLoc": 600,
+      "coldMaxMs": 700,
+      "warmMaxMs": 650
+    },
+    "many-small-components": {
+      "fileCount": 48,
+      "minLoc": 620,
+      "coldMaxMs": 600,
+      "warmMaxMs": 600
+    },
+    "many-routes-registries": {
+      "fileCount": 32,
+      "minLoc": 380,
+      "coldMaxMs": 350,
+      "warmMaxMs": 350
+    },
+    "css-heavy-components": {
+      "fileCount": 16,
+      "minLoc": 1660,
+      "coldMaxMs": 300,
+      "warmMaxMs": 300
+    },
+    "heavy-primitive-composition": {
+      "fileCount": 20,
+      "minLoc": 1390,
+      "coldMaxMs": 500,
+      "warmMaxMs": 500
+    },
+    "mixed-real-app": {
+      "fileCount": 8,
+      "minLoc": 200,
+      "coldMaxMs": 300,
+      "warmMaxMs": 300
+    }
+  },
+  "total": {
+    "fileCount": 125,
+    "minLoc": 5290,
+    "coldMaxMs": 2750,
+    "warmMaxMs": 2700
+  }
+}
