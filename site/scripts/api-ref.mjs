@@ -240,6 +240,17 @@ function resolveAlias(symbol, checker) {
   return symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 
+/** True if a declaration carries an `@internal` JSDoc tag (variable decls carry
+ * tags on the enclosing statement). `@internal` exports are framework internals —
+ * reachable for in-repo/emitted consumers but excluded from the public reference. */
+function isInternalDeclaration(decl) {
+  let node = decl;
+  if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent)) {
+    node = node.parent.parent;
+  }
+  return ts.getJSDocTags(node).some((tag) => tag.tagName.getText() === 'internal');
+}
+
 function entryFromSymbol(name, symbol, checker, packageName) {
   const resolved = resolveAlias(symbol, checker);
   const declarations = (resolved.declarations ?? []).filter(isApiDeclaration);
@@ -248,6 +259,8 @@ function entryFromSymbol(name, symbol, checker, packageName) {
       `api-ref: export "${name}" of ${packageName} does not resolve to a declaration — fix the export or the generator`,
     );
   }
+
+  const internal = declarations.some(isInternalDeclaration);
 
   // Function overloads: show the signature declarations, not the implementation.
   const overloads = declarations.filter((decl) => ts.isFunctionDeclaration(decl) && !decl.body);
@@ -260,7 +273,7 @@ function entryFromSymbol(name, symbol, checker, packageName) {
   );
   const doc = declarations.map((decl) => docCommentOf(decl)).find((text) => text !== '') ?? '';
 
-  return { doc, kind, name, signature };
+  return { doc, internal, kind, name, signature };
 }
 
 function hasExportModifier(statement) {
@@ -282,6 +295,7 @@ function collectExports(sourceFile, checker, packageName) {
   const entries = [];
   const seen = new Set();
   const push = (entry) => {
+    if (entry.internal) return; // @internal exports are excluded from the public reference
     if (seen.has(entry.name)) return;
     seen.add(entry.name);
     entries.push(entry);
