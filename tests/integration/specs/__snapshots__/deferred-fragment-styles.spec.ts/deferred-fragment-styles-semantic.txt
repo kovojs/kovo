@@ -1,0 +1,6 @@
+<section kovo-fragment-target="deferred-review">
+  "Loading reviews"
+  <link href="/assets/deferred-review.css">
+  <section kovo-c="deferred-review" kovo-fragment-target="deferred-review">
+    <div>
+      "Deferred review ready"

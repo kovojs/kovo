@@ -779,10 +779,23 @@ integration harness uniquely proves.
     runtime exposes stream-apply helpers, but the current inline loader does not consume initial
     document stream boundaries in the browser, so the fallback-then-morph integration assertion is
     not yet expressible through the public harness.
-- [ ] `deferred-fragment-styles` / `deferred-fragment-styles.spec.ts`: late fragments request or reuse
+- [x] `deferred-fragment-styles` / `deferred-fragment-styles.spec.ts`: late fragments request or reuse
       required styles without duplicating per-page CSS.
   - SPEC refs: §13.1 CSS, §13.3 streaming details.
   - Assertions: styled deferred content appears correctly; stylesheet hints remain deduped.
+  - Evidence: `tests/integration/fixtures/deferred-fragment-styles` and
+    `tests/integration/specs/deferred-fragment-styles.spec.ts` fetch a `renderDeferredDocument`
+    wire response, apply it through the public deferred runtime helper in the browser, verify the
+    compiler-emitted `/assets/deferred-review.css` link appears once, and assert the deferred
+    content's computed background style plus semantic snapshot. Proving commands:
+    `pnpm exec playwright test tests/integration/specs/scoped-component-css.spec.ts
+    tests/integration/specs/fragment-style-metadata.spec.ts
+    tests/integration/specs/deferred-fragment-styles.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1` and `pnpm exec vitest run
+    packages/compiler/src/css.test.ts packages/server/src/hints.test.ts
+    packages/server/src/deferred-stream.test.ts packages/server/src/mutation-response.test.ts
+    packages/runtime/src/inline-loader-build.test.ts
+    packages/runtime/src/inline-loader-response-apply-extract.test.ts`.
 - [x] `static-export-l0-l1` / `static-export-l0-l1.spec.ts`: an exportable L0/L1 route replays through
       the same handler and writes HTML plus immutable client modules.
   - SPEC refs: §9.5 static export.
@@ -818,14 +831,26 @@ integration harness uniquely proves.
   - Gap: left unchecked because this fixture uses a prebuilt CSS asset; it does not prove Tailwind
     source scanning or safelist generation for classes that exist only in mutation/deferred
     fragments.
-- [ ] `scoped-component-css` / `scoped-component-css.spec.ts`: co-located component CSS is scoped to the
+- [x] `scoped-component-css` / `scoped-component-css.spec.ts`: co-located component CSS is scoped to the
       derived host leaf, donut-scopes nested islands out, and dedupes in page order.
   - SPEC refs: §4.2 rendered output, §13.1 CSS.
   - Assertions: host style applies; nested island not accidentally styled; only one stylesheet hint.
-- [ ] `fragment-style-metadata` / `fragment-style-metadata.spec.ts`: a fragment target rendered after
+  - Evidence: `tests/integration/fixtures/scoped-component-css` and
+    `tests/integration/specs/scoped-component-css.spec.ts` verify compiler-emitted co-located CSS
+    is served from `/assets/scoped-panel.css`, the page emits one stylesheet link, the scoped
+    descendant receives the expected computed color, and a nested `kovo-c` island descendant does
+    not receive the parent `.nested-copy` rule. Proving commands: the focused Playwright and Vitest
+    commands recorded under `deferred-fragment-styles`.
+- [x] `fragment-style-metadata` / `fragment-style-metadata.spec.ts`: a fragment target rendered after
       initial load can request styles keyed by registry metadata.
   - SPEC refs: §13.1 CSS, §9.1 fragments.
   - Assertions: late component has styles; no duplicate or missing CSS asset.
+  - Evidence: `tests/integration/fixtures/fragment-style-metadata` and
+    `tests/integration/specs/fragment-style-metadata.spec.ts` use the fixture compiler's generated
+    stylesheet manifest to select the `late-card` fragment target's CSS, return it on an enhanced
+    mutation fragment, verify the response carries one `/assets/late-card.css` link, and assert the
+    late component's computed background style plus semantic snapshot. Proving commands: the
+    focused Playwright and Vitest commands recorded under `deferred-fragment-styles`.
 
 ## Diagnostics surfaced through integration
 
