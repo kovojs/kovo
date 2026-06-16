@@ -1,0 +1,8 @@
+<main>
+  <button command="show-modal" commandfor="account-dialog" type="button">
+    "Open dialog"
+  <dialog aria-label="Account dialog" id="account-dialog">
+    <p>
+      "Account settings"
+    <button command="close" commandfor="account-dialog" type="button">
+      "Close dialog"

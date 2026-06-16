@@ -1,0 +1,10 @@
+<section kovo-deps="feed" kovo-fragment-target="feed">
+  <article data-row="1" kovo-key="1">
+    <h2>
+      "Item 1"
+  <article data-row="2" kovo-key="2">
+    <h2>
+      "Item 2"
+  <article data-row="3" kovo-key="3">
+    <h2>
+      "Item 3"

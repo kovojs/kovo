@@ -1,0 +1,11 @@
+<section kovo-deps="profile" kovo-fragment-target="profile-editor" kovo-key="profile-editor">
+  <form action="/_m/profile/save-draft" kovo-deps="profile" kovo-key="draft-form" method="post">
+    <label>
+      "Draft"
+    <input kovo-key="draft" name="draft" value="server draft 1">
+    <p>
+      "Server version"
+      <output data-bind="profile.version">
+        "1"
+    <button type="submit">
+      "Refresh server truth"
