@@ -16,7 +16,7 @@ export {
 export type { BreadcrumbLinkProps, BreadcrumbPartProps, BreadcrumbProps } from './breadcrumb.js';
 export { Button, buttonClasses, buttonStyles } from './button.js';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './button.js';
-export { Card, cardClassNames, cardClasses } from './card.js';
+export { Card, cardClasses, cardStyles } from './card.js';
 export type { CardProps } from './card.js';
 export {
   Checkbox,

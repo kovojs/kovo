@@ -387,6 +387,20 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
     `pnpm exec tsc --noEmit`, and `git diff --check` pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/card.tsx` now uses `@kovojs/style`, exports
+    `cardStyles`, accepts `style?: style.StyleInput`, and drops `cn` plus the `class` escape hatch.
+    `packages/ui/src/card.stylex.test.tsx` snapshots default StyleX output, exported style groups, and
+    author-last overrides; the gallery Card fixture and demo snapshot are refreshed with `kv-card-*`
+    classes and `data-style-src`.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/card.stylex.test.tsx
+    packages/ui/src/alert.stylex.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest --run
+    src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
+    `pnpm exec tsc --noEmit`, and `git diff --check` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

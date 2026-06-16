@@ -164,7 +164,8 @@
       "files": ["src/card.tsx"],
       "exports": ["Card"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

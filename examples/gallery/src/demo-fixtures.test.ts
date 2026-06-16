@@ -920,8 +920,7 @@ describe('gallery demo fixtures', () => {
     expect(breadcrumb.html).toContain('aria-current="page"');
     expect(breadcrumb.html).toContain('data-orientation="horizontal" role="none"');
 
-    expect(card.html).toContain('data-ui-demo="card"');
-    expect(card.html).toContain('rounded-lg border border-neutral-200');
+    expect(card.html).toMatchSnapshot('card demo html');
     expect(card.html).toContain('<h2>Release candidate</h2>');
 
     expect(checkboxGroup.html).toContain('data-ui-demo="checkbox-group"');

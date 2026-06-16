@@ -214,8 +214,8 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Badge.definition.render({ children: 'Live', variant: 'success' })).toContain(
       'data-style-src="badge.tsx#root; badge.tsx#success"',
     );
-    expect(Card.definition.render({ children: '<p>Total</p>' })).toBe(
-      '<section class="rounded-lg border border-neutral-200 bg-white p-4 text-neutral-950 shadow-sm"><p>Total</p></section>',
+    expect(Card.definition.render({ children: '<p>Total</p>' })).toContain(
+      'data-style-src="card.tsx#root"',
     );
     expect(Kbd.definition.render({ children: 'Ctrl K', class: 'uppercase' })).toContain(
       '<kbd class="inline-flex h-5 min-w-5',

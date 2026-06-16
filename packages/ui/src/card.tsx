@@ -1,18 +1,34 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export interface CardProps {
   children?: string;
-  class?: ClassValue;
+  style?: style.StyleInput;
 }
 
-export const cardClassNames =
-  'rounded-lg border border-neutral-200 bg-white p-4 text-neutral-950 shadow-sm';
-export const cardClasses = [cardClassNames] as const;
+export const cardStyles = style.create(
+  {
+    root: {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      borderRadius: 8,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      padding: 16,
+    },
+  },
+  { namespace: 'card', source: 'card.tsx' },
+);
+
+export const cardClasses = [style.attrs(cardStyles.root).class ?? ''] as const;
 
 export const Card = component({
   render(props: CardProps) {
-    return <section class={cn(cardClassNames, props.class)}>{props.children}</section>;
+    const attrs = style.attrs(cardStyles.root, props.style);
+
+    return <section {...attrs}>{props.children}</section>;
   },
 });
