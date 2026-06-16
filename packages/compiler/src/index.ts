@@ -62,7 +62,11 @@ export {
   collectMinifierReservedNames,
   compileComponentModule,
 } from './compile.js';
-export { createEmptyCompileResult, queryShapesFromFacts } from './types.js';
+export {
+  createEmptyCompileResult,
+  queryShapeFactDiagnostics,
+  queryShapesFromFacts,
+} from './types.js';
 
 /**
  * The Kovo Vite plugin: lowers authored component modules through compileComponentModule

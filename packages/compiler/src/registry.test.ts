@@ -1,3 +1,4 @@
+import { diagnosticDefinitions } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -119,6 +120,16 @@ describe('compiler registry and graph emission', () => {
     );
 
     expect(registryFacts).toEqual({
+      diagnostics: [
+        {
+          code: 'KV228',
+          fileName: 'app graph route table',
+          help: diagnosticDefinitions.KV228.help,
+          message:
+            'Ambiguous route table: two routes can match the same canonical request path or duplicate route path. duplicate route path "/cart" appears 2 times in graph pages.',
+          severity: 'error',
+        },
+      ],
       domainKeys: ['cart', 'order', 'product'],
       invalidations: {
         'cart/add': ['cart'],
@@ -201,6 +212,7 @@ export const ProductGrid = component('product-grid', {
         queries: ['productGrid'],
       },
     ]);
+    expect(derived.diagnostics).toEqual([]);
     expect(derived.registryFacts).toEqual({
       components: ['cart-badge', 'product-grid'],
       domainKeys: ['cart', 'product'],
@@ -210,5 +222,25 @@ export const ProductGrid = component('product-grid', {
       },
       routes: ['/cart'],
     });
+  });
+
+  it('reports KV228 for exact duplicate route facts before registry route dedupe', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        pages: [{ route: '/cart' }, { route: '/cart' }, { route: '/products/:id' }],
+      },
+    });
+
+    expect(derived.registryFacts.routes).toEqual(['/cart', '/products/:id']);
+    expect(derived.diagnostics).toEqual([
+      {
+        code: 'KV228',
+        fileName: 'app graph route table',
+        help: diagnosticDefinitions.KV228.help,
+        message:
+          'Ambiguous route table: two routes can match the same canonical request path or duplicate route path. duplicate route path "/cart" appears 2 times in graph pages.',
+        severity: 'error',
+      },
+    ]);
   });
 });

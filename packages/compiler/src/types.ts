@@ -1,7 +1,8 @@
 import type { ComponentExplain, KovoExplainInput } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core';
 
 import type { ComponentCssAsset } from './css.js';
-import type { CompilerDiagnostic } from './diagnostics.js';
+import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import { replaceExtension } from './shared.js';
 
@@ -43,6 +44,7 @@ export interface FragmentTargetFact {
  */
 export interface RegistryFacts {
   components?: readonly string[];
+  diagnostics?: readonly CompilerDiagnostic[];
   domainKeys?: readonly string[];
   fragmentTargets?: readonly string[];
   invalidations?: Readonly<Record<string, readonly string[]>>;
@@ -78,6 +80,7 @@ export interface CompileAppGraphOptions {
 }
 
 export interface CompileAppGraphResult {
+  diagnostics: readonly CompilerDiagnostic[];
   graph: RegistryGraphInput;
   registryFacts: RegistryFacts;
 }
@@ -404,7 +407,48 @@ export interface QueryShapeFact {
  * In-repo use only (SPEC.md §5.2).
  */
 export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
-  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
+  const shapes: Record<string, QueryShape> = {};
+
+  for (const fact of facts) {
+    if (!(fact.query in shapes)) shapes[fact.query] = fact.shape;
+  }
+
+  return shapes;
+}
+
+/**
+ * @internal Report duplicate query-shape graph facts before indexing them by query name.
+ * SPEC §4.8 validation needs one authoritative shape per query; last-write-wins would
+ * make binding diagnostics depend on fact ordering.
+ */
+export function queryShapeFactDiagnostics(
+  fileName: string,
+  facts: readonly QueryShapeFact[],
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const factsByQuery = new Map<string, QueryShapeFact[]>();
+
+  for (const fact of facts) {
+    const queryFacts = factsByQuery.get(fact.query);
+    if (queryFacts) {
+      queryFacts.push(fact);
+    } else {
+      factsByQuery.set(fact.query, [fact]);
+    }
+  }
+
+  for (const [query, queryFacts] of factsByQuery) {
+    if (queryFacts.length < 2) continue;
+    const sources = [...new Set(queryFacts.map((fact) => fact.source))].sort();
+    const base = diagnosticFor(fileName, 'KV240');
+    diagnostics.push({
+      ...base,
+      help: diagnosticDefinitions.KV240.help,
+      message: `${base.message} query="${query}" sources=${sources.join(', ')}`,
+    });
+  }
+
+  return diagnostics;
 }
 
 export function isArrayQueryShape(shape: QueryShape): shape is readonly QueryShape[] {

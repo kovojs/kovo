@@ -27,6 +27,7 @@ import {
 } from './markup.js';
 import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
+import { queryShapeFactDiagnostics } from '../types.js';
 
 interface ValidatorContext {
   componentName: string;
@@ -49,6 +50,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateFragmentTargetNameUniqueness(source, model, options),
   ({ options, originalModel }) =>
     validateStaticViewTransitionNameUniqueness(options.source, originalModel, options),
+  ({ options }) => queryShapeFactDiagnostics(options.fileName, options.queryShapeFacts ?? []),
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),

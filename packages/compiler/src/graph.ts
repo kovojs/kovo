@@ -1,4 +1,7 @@
+import { diagnosticDefinitions } from '@kovojs/core';
+
 import { kebabCase } from './shared.js';
+import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
@@ -39,9 +42,12 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 
+  const registryFacts = deriveRegistryFactsFromGraph(graph, options.registryTypes);
+
   return {
+    diagnostics: registryFacts.diagnostics ?? [],
     graph,
-    registryFacts: deriveRegistryFactsFromGraph(graph, options.registryTypes),
+    registryFacts,
   };
 }
 
@@ -94,11 +100,13 @@ export function deriveRegistryFactsFromGraph(
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
   const components = deriveComponentFactsFromGraph(graph);
+  const diagnostics = routeFactDiagnostics(graph);
   const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
   const viewTransitions = deriveViewTransitionsFromGraph(graph);
 
   return {
     ...(components.length > 0 ? { components } : {}),
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
     domainKeys: deriveDomainKeysFromGraph(graph),
     ...(fragmentTargets.length > 0 ? { fragmentTargets } : {}),
     invalidations: deriveInvalidationFactsFromGraph(graph),
@@ -107,6 +115,35 @@ export function deriveRegistryFactsFromGraph(
     routes: [...new Set((graph.pages ?? []).map((page) => page.route))].sort(),
     ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
   };
+}
+
+/**
+ * @internal Report exact duplicate route facts before registry generation dedupes them.
+ * SPEC §9.5 makes route-table ambiguity KV228; exact duplicates are ambiguous graph
+ * authorship even though the runtime matcher would collapse them to one path.
+ */
+export function routeFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const routeCounts = new Map<string, number>();
+
+  for (const page of graph.pages ?? []) {
+    routeCounts.set(page.route, (routeCounts.get(page.route) ?? 0) + 1);
+  }
+
+  for (const [route, count] of [...routeCounts].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (count < 2) continue;
+    diagnostics.push({
+      code: 'KV228',
+      fileName: 'app graph route table',
+      help: diagnosticDefinitions.KV228.help,
+      message: `${diagnosticDefinitions.KV228.message} duplicate route path "${route}" appears ${count} times in graph pages.`,
+      severity: diagnosticDefinitions.KV228.severity,
+    });
+  }
+
+  return diagnostics;
 }
 
 function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {

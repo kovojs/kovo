@@ -26,6 +26,7 @@ export type DiagnosticCode =
   | 'KV237'
   | 'KV238'
   | 'KV239'
+  | 'KV240'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -242,11 +243,12 @@ export const diagnosticDefinitions = {
     code: 'KV228',
     help: [
       'Blocked reason: static-first route matching cannot choose a single canonical handler for at least one request path.',
-      'Fixes: split the patterns, add a static segment, or make one route path more specific.',
+      'Fixes: remove duplicate route facts, split overlapping patterns, add a static segment, or make one route path more specific.',
       'SPEC §9.5 requires route matching to be unambiguous at compile time.',
     ].join('\n'),
     severity: 'error',
-    message: 'Ambiguous route table: two routes can match the same canonical request path.',
+    message:
+      'Ambiguous route table: two routes can match the same canonical request path or duplicate route path.',
   },
   KV230: {
     code: 'KV230',
@@ -357,6 +359,15 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Duplicate static view-transition name.',
+  },
+  KV240: {
+    code: 'KV240',
+    help: [
+      'Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.',
+      'SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Duplicate query-shape fact for one query name.',
   },
   KV301: {
     code: 'KV301',

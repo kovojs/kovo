@@ -519,30 +519,57 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
         duplicate static view-transition names; both are blocking errors.
     - Evidence 2026-06-16: `packages/core/src/diagnostics.ts` sets KV238 and KV239 to
       `severity: 'error'`, and `SPEC.md §11.3` lists both as errors.
-  - [x] Decision made: view-transition uniqueness is checked for module-local static rendered source
+- [x] Decision made: view-transition uniqueness is checked for module-local static rendered source
         plus `registryFacts.viewTransitions` when a caller supplies app/page facts.
     - Evidence 2026-06-16: `validateDuplicateStaticViewTransitionNames()` consumes typed
       `viewTransitionName` parser facts from the original model and documents the conservative
       scope in KV239 help; dynamic names remain outside this validator until page-composition proof
       is available.
 
-- [ ] **Flag the remaining silent last-write-wins collisions that have only a partial backstop:
-      query-name → shape and exact-duplicate routes.**
-  - Risk: two lower-severity cousins of the wire-name gaps remain. `queryShapesFromFacts` in
-    `packages/compiler/src/types.ts:404` is `Object.fromEntries(facts.map((f) => [f.query, f.shape]))`,
-    so two queries sharing a name with *different* shapes silently last-write-wins. Route facts are
-    `new Set`-deduped in `graph.ts`; KV228 catches *ambiguous/overlapping* routes, but two identical
-    route path strings are silently merged rather than flagged.
-  - Why it matters: both are softer than the DOM-identity gaps because the `QueryRegistry`/
-    `RouteRegistry` TypeScript interfaces give a partial backstop — a same-key/different-type
-    collision surfaces as a `tsc` error. But same-key/same-shape (or same exact route) still merges
-    quietly with no first-class diagnostic, so a real authoring mistake produces no teaching signal.
-  - Candidate implementation path: add a duplicate-key check when building the query-shape index and
-    the route table, emitting a teaching diagnostic (or extending KV228 to cover exact-duplicate
-    routes) that names both definitions. Lower priority than KV238/KV239 because of the TS backstop;
-    record as a known gap so the silent merge is not mistaken for "covered."
-  - [ ] Decision needed: confirm whether exact-duplicate routes warrant a new code or an extension of
-        KV228, and whether query-shape collision is a blocking error or a lint given the TS backstop.
+- [x] **Flag remaining silent last-write-wins collisions that have only partial backstops: query-name
+      → shape and exact-duplicate routes.**
+  - Risk: `queryShapesFromFacts` in `packages/compiler/src/types.ts` uses `Object.fromEntries`, so
+    duplicate query facts silently last-write. Route facts are `new Set`-deduped in `graph.ts`;
+    KV228 catches ambiguous/overlapping routes but exact duplicates silently merge.
+  - Why it matters: both collisions erase compiler graph evidence at the point the framework should
+    be most auditable. SPEC §4.8 needs one authoritative query shape per binding root, and SPEC
+    §9.5 treats ambiguous route-table authorship as blocking rather than declaration-order behavior.
+  - Candidate implementation path: add duplicate-key checks when building query-shape index and
+    route table, with teaching diagnostics or extending KV228 for exact duplicate routes. Decide
+    whether query-shape collision is blocking error or lint; given compiler quality posture,
+    blocking error is acceptable if defensible.
+  - Acceptance evidence: duplicate query-shape facts with different and same shapes fail with a
+    blocking diagnostic that names the query and sources; distinct query-shape facts pass; exact
+    duplicate route facts fail with KV228 before registry route dedupe; distinct route facts pass;
+    diagnostic registry/SPEC entries stay aligned.
+  - Evidence 2026-06-16: `packages/compiler/src/types.ts` preserves the first query shape while
+    `queryShapeFactDiagnostics()` reports KV240 for duplicate query names with source names, and
+    `packages/compiler/src/validate/pipeline.ts` runs that validator during component compilation.
+  - Evidence 2026-06-16: `packages/compiler/src/graph.ts` reports graph-level KV228 diagnostics for
+    exact duplicate route paths through `deriveRegistryFactsFromGraph()` and `deriveAppGraph()`
+    before `routes` is sorted/deduped for registry emission.
+  - Evidence 2026-06-16: `packages/core/src/diagnostics.ts`, `packages/core/src/diagnostics.test.ts`,
+    and `SPEC.md` define KV240 as a blocking error with teaching help and extend KV228 text/help to
+    include exact duplicate route paths under SPEC §9.5.
+  - Evidence 2026-06-16: `packages/compiler/src/query-bindings.test.ts` covers duplicate
+    query-shape facts with different shapes, duplicate query-shape facts with the same shape, and
+    distinct query-shape fact names; `packages/compiler/src/registry.test.ts` covers exact duplicate
+    route facts and a distinct-route passing app graph.
+  - Verification 2026-06-16:
+    `pnpm --filter @kovojs/compiler exec vitest run src/query-bindings.test.ts src/registry.test.ts`
+    -> 2 files / 18 tests passed; `pnpm --filter @kovojs/core exec vitest run
+    src/diagnostics.test.ts` -> 1 file / 3 tests passed; `pnpm --filter @kovojs/compiler exec
+    vitest run` -> 30 files / 279 tests passed; `pnpm --filter @kovojs/compiler exec tsc
+    --noEmit` -> passed.
+  - [x] Decision made: duplicate query-shape facts are blocking KV240 errors because SPEC §4.8
+        binding validation needs one stable shape per query root.
+    - Evidence 2026-06-16: `packages/core/src/diagnostics.ts` defines KV240 as `severity: 'error'`,
+      and `packages/compiler/src/query-bindings.test.ts` verifies duplicate same-shape and
+      different-shape facts both emit KV240.
+  - [x] Decision made: exact duplicate route facts reuse KV228 because they are route-table
+        ambiguity under SPEC §9.5, not a separate query/binding collision.
+    - Evidence 2026-06-16: `packages/compiler/src/registry.test.ts` verifies duplicate `/cart`
+      route facts emit KV228 while registry routes remain deduped for emission.
 
 - [x] **Broaden diagnostics from detection to teaching.**
   - Risk: diagnostics can correctly detect a problem but still fail SPEC §5.2 rule 5 if they do not

@@ -939,7 +939,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV225 | error      | JSX nesting violates the HTML content model — the parser would re-parent (§4.2)                               |
 | KV226 | internal   | `kovo-deps`/`kovo-c` names an unknown query instance or component in emitted IR fixpoint validation           |
 | KV227 | error      | Binding path traverses a nullable segment without `?.` or a null-handling derive (§4.8)                       |
-| KV228 | error      | Ambiguous route table: two routes can match the same canonical request path (§9.5)                            |
+| KV228 | error      | Ambiguous route table: two routes can match the same canonical request path or duplicate route path (§9.5)     |
 | KV229 | error      | Static export constraint violation: route/session/mutation/param usage cannot be exported as L0/L1 (§9.5)     |
 | KV230 | error      | Fragment-target children not lowerable to a component reference (shows the hoisting + fixes)                  |
 | KV231 | error      | Unmergeable attribute conflict in primitive composition (shows both sources + the §4.6 rule)                  |
@@ -951,6 +951,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV237 | error      | Duplicate component effective wire name (§4.2, §4.8, §6.1.1)                                                 |
 | KV238 | error      | Duplicate fragment-target wire name (§4.5, §6.2, §9.1)                                                       |
 | KV239 | error      | Duplicate static view-transition name (§8)                                                                    |
+| KV240 | error      | Duplicate query-shape fact for one query name (§4.8)                                                         |
 | KV301 | lint       | Server fact in island-local state                                                                             |
 | KV302 | error      | `data-bind` path is not present in the declared query shape (§4.8)                                            |
 | KV303 | error      | Fragment-target render input is not declared as query data or stamped props (§4.5)                            |

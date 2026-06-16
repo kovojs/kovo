@@ -32,6 +32,7 @@ describe('diagnostic registry', () => {
       'KV237',
       'KV238',
       'KV239',
+      'KV240',
       'KV301',
       'KV302',
       'KV303',
@@ -170,9 +171,9 @@ describe('diagnostic registry', () => {
         "KV228": {
           "code": "KV228",
           "help": "Blocked reason: static-first route matching cannot choose a single canonical handler for at least one request path.
-      Fixes: split the patterns, add a static segment, or make one route path more specific.
+      Fixes: remove duplicate route facts, split overlapping patterns, add a static segment, or make one route path more specific.
       SPEC §9.5 requires route matching to be unambiguous at compile time.",
-          "message": "Ambiguous route table: two routes can match the same canonical request path.",
+          "message": "Ambiguous route table: two routes can match the same canonical request path or duplicate route path.",
           "severity": "error",
         },
         "KV230": {
@@ -262,6 +263,13 @@ describe('diagnostic registry', () => {
           "help": "Fixes: give one static viewTransitionName a distinct value, or make the transition name dynamic only when page composition proves uniqueness.
       SPEC §8 uses view-transition-name as a cross-document element-pair identity; duplicate static names in one rendered module or supplied registry facts are ambiguous.",
           "message": "Duplicate static view-transition name.",
+          "severity": "error",
+        },
+        "KV240": {
+          "code": "KV240",
+          "help": "Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
+      SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
+          "message": "Duplicate query-shape fact for one query name.",
           "severity": "error",
         },
         "KV301": {
