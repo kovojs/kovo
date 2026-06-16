@@ -749,23 +749,56 @@ integration harness uniquely proves.
       is axe-clean and keeps correct role/name/focus semantics.
   - SPEC refs: §12.1 accessibility conformance.
   - Assertions: visible top-layer DOM is checked; semantic snapshot includes role/name/state.
+  - Partial evidence: `tests/integration/fixtures/a11y-dialog-terminal` and
+    `tests/integration/specs/a11y-dialog-terminal.spec.ts` verify a native dialog invoker reaches
+    terminal open state with an accessible dialog name, focused close control, and semantic snapshot
+    coverage of `command`, `commandfor`, `id`, and `open`.
+  - Gap: left unchecked because the integration harness does not currently include an axe helper or
+    dependency, so the `axe-clean` assertion is not proven.
 - [ ] `a11y-tabs-terminal` / `a11y-tabs-terminal.spec.ts`: tabs selected state is axe-clean after
       interaction and state attrs update.
   - SPEC refs: §12.1 accessibility conformance.
   - Assertions: selected tab/panel semantics; axe terminal check.
+  - Partial evidence: `tests/integration/fixtures/a11y-tabs-terminal` and
+    `tests/integration/specs/a11y-tabs-terminal.spec.ts` verify interaction-driven selected tab
+    state, focus, panel relationship, `aria-selected`, `data-state`, and semantic snapshot coverage.
+  - Gap: left unchecked because the integration harness does not currently include an axe helper or
+    dependency, so the `axe-clean` assertion is not proven.
 - [ ] `a11y-menu-terminal` / `a11y-menu-terminal.spec.ts`: menu/command terminal open and item active
       states are axe-clean.
   - SPEC refs: §12.1 accessibility conformance.
   - Assertions: open surface is visible DOM; role/name/aria state snapshot.
+  - Partial evidence: `tests/integration/fixtures/a11y-menu-terminal` and
+    `tests/integration/specs/a11y-menu-terminal.spec.ts` verify terminal expanded trigger state,
+    visible named menu, focused active menuitem, and semantic snapshot coverage.
+  - Gap: left unchecked because the integration harness does not currently include an axe helper or
+    dependency, so the `axe-clean` assertion is not proven.
 - [ ] `a11y-form-error-terminal` / `a11y-form-error-terminal.spec.ts`: validation/error state is
       axe-clean after enhanced mutation failure.
   - SPEC refs: §9.2 errors, §12.1 accessibility conformance.
   - Assertions: field references error text; `aria-invalid`/`data-error-path`; axe terminal check.
+  - Partial evidence: `tests/integration/fixtures/a11y-form-error-terminal` and
+    `tests/integration/specs/a11y-form-error-terminal.spec.ts` verify an enhanced mutation failure
+    morphs a field-scoped error state with `aria-invalid`, `aria-describedby`, `role="alert"`,
+    `data-error-code`, `data-error-path`, and a semantic snapshot.
+  - Gap: left unchecked because the integration harness does not currently include an axe helper or
+    dependency, so the `axe-clean` assertion is not proven.
 - [ ] `a11y-value-controls-terminal` / `a11y-value-controls-terminal.spec.ts`: slider/number-field/OTP
       value end-states are axe-clean if those primitive fixtures are available.
   - SPEC refs: §12.1 accessibility conformance.
   - Assertions: terminal value semantics; axe terminal check; unsupported primitive families remain
     unimplemented until the package exists.
+  - Partial evidence: `tests/integration/fixtures/a11y-value-controls-terminal` and
+    `tests/integration/specs/a11y-value-controls-terminal.spec.ts` verify native slider,
+    spinbutton, and OTP-like textbox names/values plus a semantic snapshot of value-control attrs.
+    Proving command for all accessibility partials:
+    `pnpm exec playwright test specs/a11y-dialog-terminal.spec.ts specs/a11y-tabs-terminal.spec.ts
+    specs/a11y-menu-terminal.spec.ts specs/a11y-form-error-terminal.spec.ts
+    specs/a11y-value-controls-terminal.spec.ts --config tests/integration/playwright.config.ts
+    --workers=1`.
+  - Gap: left unchecked because the integration harness does not currently include an axe helper or
+    dependency, and package-level primitive value-control fixtures are not exposed through the
+    browser integration harness yet.
 
 ## Suggested implementation batches
 

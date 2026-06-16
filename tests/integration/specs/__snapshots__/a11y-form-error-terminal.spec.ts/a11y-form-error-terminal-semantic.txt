@@ -1,0 +1,8 @@
+<form action="/_m/a11y-form-error/subscribe" kovo-fragment-target="newsletter-form" method="post">
+  <label>
+    "Email"
+  <input aria-describedby="email-error" aria-invalid="true" id="email" name="email" type="text" value="">
+  <p data-error-code="INVALID_EMAIL" data-error-path="email" id="email-error" role="alert">
+    "Enter a valid email address."
+  <button type="submit">
+    "Subscribe"

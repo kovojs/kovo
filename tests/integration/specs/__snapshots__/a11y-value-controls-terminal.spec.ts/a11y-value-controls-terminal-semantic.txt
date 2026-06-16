@@ -1,0 +1,18 @@
+<main>
+  <h1>
+    "Value controls"
+  <label for="volume">
+    "Volume"
+  <input id="volume" max="10" min="0" name="volume" type="range" value="7">
+  <label for="quantity">
+    "Quantity"
+  <input id="quantity" max="9" min="1" name="quantity" type="number" value="3">
+  <fieldset>
+    <legend>
+      "One-time code"
+    <label for="otp-1">
+      "Digit 1"
+    <input id="otp-1" inputmode="numeric" maxlength="1" name="otp-1" pattern="[0-9]" value="4">
+    <label for="otp-2">
+      "Digit 2"
+    <input id="otp-2" inputmode="numeric" maxlength="1" name="otp-2" pattern="[0-9]" value="2">

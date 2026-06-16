@@ -1,0 +1,10 @@
+<section aria-label="Account sections">
+  <div aria-label="Account sections" role="tablist">
+    <button aria-controls="panel-profile" aria-selected="false" data-state="inactive" id="tab-profile" role="tab" type="button">
+      "Profile"
+    <button aria-controls="panel-billing" aria-selected="true" data-state="active" id="tab-billing" kovo-state="{}" role="tab" type="button">
+      "Billing"
+  <section aria-labelledby="tab-profile" hidden="" id="panel-profile" role="tabpanel">
+    "Profile details"
+  <section aria-labelledby="tab-billing" id="panel-billing" role="tabpanel">
+    "Billing history"

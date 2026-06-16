@@ -1,0 +1,10 @@
+<main>
+  <h1>
+    "Menu terminal state"
+  <button aria-controls="account-menu" aria-expanded="true" aria-haspopup="menu" id="menu-trigger" kovo-state="{}" type="button">
+    "Account actions"
+  <div aria-labelledby="menu-trigger" id="account-menu" role="menu">
+    <button data-state="active" role="menuitem" type="button">
+      "View profile"
+    <button data-state="inactive" role="menuitem" type="button">
+      "Sign out"
