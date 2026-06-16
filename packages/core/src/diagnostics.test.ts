@@ -252,7 +252,7 @@ describe('diagnostic registry', () => {
         },
         "KV238": {
           "code": "KV238",
-          "help": "Fixes: give one fragment target a distinct component(\"target-name\") value, or remove fragmentTarget from the component that should not receive enhanced patches.
+          "help": "Fixes: give one fragment target a distinct component("target-name") value, or remove fragmentTarget from the component that should not receive enhanced patches.
       SPEC §4.5 and §6.2 make fragment-target names registry-visible wire identities; duplicate names make enhanced fragment patches ambiguous.",
           "message": "Duplicate fragment-target wire name.",
           "severity": "error",

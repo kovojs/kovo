@@ -78,8 +78,7 @@ export const CartBadge = component('cart-badge', {
 `,
     }).diagnostics.filter((diagnostic) => diagnostic.code === 'KV311');
 
-    expect(diagnosticTextSnapshot([...kv201, ...kv230, ...kv235, ...kv311]))
-      .toMatchInlineSnapshot(`
+    expect(diagnosticTextSnapshot([...kv201, ...kv230, ...kv235, ...kv311])).toMatchInlineSnapshot(`
         [
           {
             "code": "KV201",

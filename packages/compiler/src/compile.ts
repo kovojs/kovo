@@ -79,11 +79,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const hrefReplacements = navigationHrefLowering(originalState.model);
   const modelPatch = applyModelPatchPass(
     originalState,
-    [
-      ...structuralLowering.replacements,
-      ...platformLowering.replacements,
-      ...hrefReplacements,
-    ],
+    [...structuralLowering.replacements, ...platformLowering.replacements, ...hrefReplacements],
     parseComponentModuleModel,
     { prefix: structuralLowering.prefix },
   );

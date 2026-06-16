@@ -12,8 +12,7 @@ test('increments via mutation + morph, without navigating', async ({ page, kovoA
 
   await Promise.all([
     page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/_m/counter/increment') && response.status() === 200,
+      (response) => response.url().endsWith('/_m/counter/increment') && response.status() === 200,
     ),
     page.getByRole('button', { name: 'Increment' }).click(),
   ]);

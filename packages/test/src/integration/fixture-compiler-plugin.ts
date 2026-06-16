@@ -42,7 +42,9 @@ export function kovoFixtureCompilerPlugin(): Plugin {
         );
       }
 
-      return { code: result.loweredSource, map: null };
+      const code = result.loweredSource;
+      if (typeof code !== 'string') return null;
+      return { code, map: null };
     },
   };
 }

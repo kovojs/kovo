@@ -47,7 +47,7 @@ interface KovoTestFixtures {
   resetDatabase: void;
 }
 
-export const test = base.extend<KovoTestOptions & KovoTestFixtures, KovoWorkerFixtures>({
+export const test = base.extend<KovoTestFixtures, KovoTestOptions & KovoWorkerFixtures>({
   fixturesRoot: [DEFAULT_FIXTURES_ROOT, { option: true, scope: 'worker' }],
   kovoFixture: ['', { option: true, scope: 'worker' }],
 
@@ -80,8 +80,9 @@ export const test = base.extend<KovoTestOptions & KovoTestFixtures, KovoWorkerFi
     { auto: true },
   ],
 
-  kovoApp: async ({ kovoServer, resetDatabase, page }, use) => {
-    void resetDatabase;
+  // `resetDatabase` is an `auto` fixture, so it runs before this (and every) test
+  // regardless of whether kovoApp depends on it; `db` is read live post-reset.
+  kovoApp: async ({ kovoServer, page }, use) => {
     const app: KovoApp = {
       get db() {
         return kovoServer.db;

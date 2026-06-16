@@ -220,7 +220,9 @@ function validateComponentCssText(
 
 function literalAttributeStringValue(attribute: JsxAttributeModel): string | null {
   if (attribute.value !== undefined) return attribute.value;
-  return typeof attribute.expressionStaticValue === 'string' ? attribute.expressionStaticValue : null;
+  return typeof attribute.expressionStaticValue === 'string'
+    ? attribute.expressionStaticValue
+    : null;
 }
 
 function isRawHtmlAttribute(name: string): boolean {

@@ -4,7 +4,8 @@ import { semanticSnapshot } from './semantic-snapshot.js';
 
 describe('semanticSnapshot', () => {
   it('keeps Kovo semantic attributes and bound text', () => {
-    const html = '<cart-badge kovo-c="cart-badge"><span data-bind="cart.count">3</span></cart-badge>';
+    const html =
+      '<cart-badge kovo-c="cart-badge"><span data-bind="cart.count">3</span></cart-badge>';
     expect(semanticSnapshot(html)).toBe(
       ['<cart-badge kovo-c="cart-badge">', '  <span data-bind="cart.count">', '    "3"'].join('\n'),
     );
@@ -20,11 +21,7 @@ describe('semanticSnapshot', () => {
     const html =
       '<form action="/_m/cart/add"><input type="hidden" name="csrf" value="tok-abc123"><button type="submit">Add</button></form>';
     expect(semanticSnapshot(html)).toBe(
-      [
-        '<form action="/_m/cart/add">',
-        '  <button type="submit">',
-        '    "Add"',
-      ].join('\n'),
+      ['<form action="/_m/cart/add">', '  <button type="submit">', '    "Add"'].join('\n'),
     );
   });
 
@@ -77,7 +74,8 @@ describe('semanticSnapshot', () => {
   });
 
   it('drops script/style content but keeps the element shell', () => {
-    const html = '<div><style>.x{color:red}</style><kovo-query name="cart">[{"count":3}]</kovo-query></div>';
+    const html =
+      '<div><style>.x{color:red}</style><kovo-query name="cart">[{"count":3}]</kovo-query></div>';
     expect(semanticSnapshot(html)).toBe(
       ['<div>', '  <style>', '  <kovo-query name="cart">'].join('\n'),
     );

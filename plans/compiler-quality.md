@@ -49,13 +49,13 @@ Current maturity rating: **strong early compiler / pre-world-class**.
 A Kovo compiler quality claim is "world-class" only when this compact bar is met against the decided
 corpus: the reference app, the commerce app, and focused generated fixtures.
 
-| Area | Minimum bar |
-| ---- | ----------- |
-| Diagnostic coverage | Every compiler-owned KV2xx/KV3xx diagnostic has a positive fixture, a negative fixture, and a stable text snapshot covering code, severity, message, help/fix menu, and source surface. KV201/KV230 compatibility snapshots are included with this cleanup because they guard the capture-channel contract in SPEC §4.3 and §4.5. |
-| SPEC clause coverage | Every falsifiable compiler promise in SPEC §4.3, §4.6, §4.8, §4.9, §5.2, §6.1.1, §6.4, and §11.3/§11.4 has at least one corpus fixture that proves the accepted path and one that proves the diagnostic or check path. Clause-only design decisions remain recorded as decisions, not test coverage. |
-| Browser matrix | Browser tests are limited to behavior that cannot be proven browser-free and must run on Chromium, Firefox, and WebKit in CI; bulky screenshots/traces stay generated artifacts, not checked-in fixtures. |
-| Performance posture | Performance gates remain deliberately deferred by D3. Until D3 is reopened, compiler performance evidence is descriptive only: full compiler tests, type-checking, and any local timing notes do not constitute a blocking budget. |
-| Security payload matrix | Security fixtures must cover text, title/ARIA attributes, `href`/route URLs, style/CSS values, template stamps, fragment targets, and raw/trusted-HTML escape hatches, with server-render and client-update agreement where both paths exist. |
+| Area                    | Minimum bar                                                                                                                                                                                                                                                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diagnostic coverage     | Every compiler-owned KV2xx/KV3xx diagnostic has a positive fixture, a negative fixture, and a stable text snapshot covering code, severity, message, help/fix menu, and source surface. KV201/KV230 compatibility snapshots are included with this cleanup because they guard the capture-channel contract in SPEC §4.3 and §4.5. |
+| SPEC clause coverage    | Every falsifiable compiler promise in SPEC §4.3, §4.6, §4.8, §4.9, §5.2, §6.1.1, §6.4, and §11.3/§11.4 has at least one corpus fixture that proves the accepted path and one that proves the diagnostic or check path. Clause-only design decisions remain recorded as decisions, not test coverage.                              |
+| Browser matrix          | Browser tests are limited to behavior that cannot be proven browser-free and must run on Chromium, Firefox, and WebKit in CI; bulky screenshots/traces stay generated artifacts, not checked-in fixtures.                                                                                                                         |
+| Performance posture     | Performance gates remain deliberately deferred by D3. Until D3 is reopened, compiler performance evidence is descriptive only: full compiler tests, type-checking, and any local timing notes do not constitute a blocking budget.                                                                                                |
+| Security payload matrix | Security fixtures must cover text, title/ARIA attributes, `href`/route URLs, style/CSS values, template stamps, fragment targets, and raw/trusted-HTML escape hatches, with server-render and client-update agreement where both paths exist.                                                                                     |
 
 ## Understandability
 
@@ -310,7 +310,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     `pnpm --filter @kovojs/compiler exec tsc --noEmit`, and
     `pnpm exec vitest --run tests/compiler-perf.test.ts` (1 skipped without the perf env).
   - [x] Historical decision superseded: compiler performance gates were deferred until this item was
-    reopened.
+        reopened.
     - Evidence 2026-06-15: user explicitly said performance is the only decision area they do not care
       about right now and accepted D3=C.
 
@@ -384,12 +384,11 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     - Evidence 2026-06-16: `plans/compiler-quality.md` now defines diagnostic coverage, SPEC clause
       coverage, browser matrix, deliberately deferred performance posture, and security payload
       matrix under "Quantitative Conformance Bar."
-  - [x] Initial compatibility cleanup snapshots added without bulky/browser artifacts.
-    - Evidence 2026-06-16: `packages/compiler/src/conformance-compat.test.ts` snapshots KV201,
-      KV230, KV235, and KV311 structured diagnostic text; narrow verification
-      `pnpm --filter @kovojs/compiler exec vitest run src/conformance-compat.test.ts
-      src/fragment-targets.test.ts src/query-coverage.test.ts src/state-bindings.test.ts
-      src/stamps.test.ts` passed.
+  - [x] Initial compatibility cleanup snapshots added without bulky/browser artifacts. - Evidence 2026-06-16: `packages/compiler/src/conformance-compat.test.ts` snapshots KV201,
+        KV230, KV235, and KV311 structured diagnostic text; narrow verification
+        `pnpm --filter @kovojs/compiler exec vitest run src/conformance-compat.test.ts
+src/fragment-targets.test.ts src/query-coverage.test.ts src/state-bindings.test.ts
+src/stamps.test.ts` passed.
   - [x] Compiler-owned conformance corpus and harness added without bulky/browser artifacts.
     - Evidence 2026-06-16: `packages/compiler/src/compiler-conformance.test.ts` starts from
       authored TSX for a reference-shell fixture, the commerce app component corpus
@@ -432,7 +431,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
     model-backed context; `rg -n "capturesUnserializableReferences\\(" packages/compiler/src`
     shows only handler lowering and fragment-target validation call sites plus the helper
     definition; `rg -n "capturesUnserializableReferences" packages/compiler/src/index.ts
-    packages/**/*.test.ts packages/conformance-fixtures/src` returns no public export or test
+packages/**/*.test.ts packages/conformance-fixtures/src` returns no public export or test
     helper use. Narrow compiler verification passed with the command listed under the conformance
     snapshot evidence above.
 
@@ -484,7 +483,7 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
 
 - [x] **Extend wire-name uniqueness (KV237) to the remaining runtime-string-match identities:
       fragment-target names and view-transition names.**
-  - Risk: KV237 closed duplicate *component* names, but the same anti-pattern survives for the other
+  - Risk: KV237 closed duplicate _component_ names, but the same anti-pattern survives for the other
     runtime string-match identities. Fragment-target registry keys are silently declaration-merged
     and view-transition registry keys are silently emitted as repeated interface members unless the
     compiler rejects collisions first.
@@ -530,8 +529,8 @@ years of XSS, SSR, sanitizer, CSP, URL, and ecosystem edge-case pressure.
       query-name → shape and exact-duplicate routes.**
   - Risk: two lower-severity cousins of the wire-name gaps remain. `queryShapesFromFacts` in
     `packages/compiler/src/types.ts:404` is `Object.fromEntries(facts.map((f) => [f.query, f.shape]))`,
-    so two queries sharing a name with *different* shapes silently last-write-wins. Route facts are
-    `new Set`-deduped in `graph.ts`; KV228 catches *ambiguous/overlapping* routes, but two identical
+    so two queries sharing a name with _different_ shapes silently last-write-wins. Route facts are
+    `new Set`-deduped in `graph.ts`; KV228 catches _ambiguous/overlapping_ routes, but two identical
     route path strings are silently merged rather than flagged.
   - Why it matters: both are softer than the DOM-identity gaps because the `QueryRegistry`/
     `RouteRegistry` TypeScript interfaces give a partial backstop — a same-key/different-type

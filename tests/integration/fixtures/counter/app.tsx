@@ -10,7 +10,9 @@ import { CountBadge } from './count-badge';
 import { counter, readCount } from './shared';
 
 function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
-  return readCount(db).then((count) => CountBadge.definition.render({ count }) as unknown as string);
+  return readCount(db).then(
+    (count) => CountBadge.definition.render({ count }) as unknown as string,
+  );
 }
 
 export const increment = mutation('counter/increment', {

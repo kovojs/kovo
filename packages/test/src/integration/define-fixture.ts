@@ -33,7 +33,7 @@ export interface FixtureDefinition {
   /** SQL DDL run once per test before seeding (string or ordered statements). */
   schema?: string | readonly string[];
   /** Populate the database before each test, after `schema` has run. */
-  seed?: (db: PgliteTestDb) => void | Promise<void>;
+  seed?: (db: PgliteTestDb) => void | Promise<unknown>;
 }
 
 const FIXTURE_BRAND = '__kovoIntegrationFixture';

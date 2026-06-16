@@ -1,4 +1,8 @@
-import { knownQueryNames, queryNameFromPath, queryPathUsesKnownQuery } from '../analyze/query-shapes.js';
+import {
+  knownQueryNames,
+  queryNameFromPath,
+  queryPathUsesKnownQuery,
+} from '../analyze/query-shapes.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
   createJsxIrTree,
@@ -19,10 +23,7 @@ import {
 import type { ComponentModuleModel, JsxAttributeModel, JsxExpressionModel } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import { literalStringValue } from '../scan/object.js';
-import {
-  runtimeOutputHelpers,
-  stylePropertyExpression,
-} from '../security/output-context.js';
+import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 import {
@@ -91,15 +92,35 @@ export function lowerStructuralJsx(
     stateDerives,
     nameCounts,
   );
-  lowerInlineAttributeDerivesInIr(tree.elements, componentName, knownQueries, options, deriveExports, stateDerives, nameCounts);
-  lowerInlineTextBindings(tree.elements, model, componentName, knownQueries, options, deriveExports, stateDerives, nameCounts, boundElementStarts);
+  lowerInlineAttributeDerivesInIr(
+    tree.elements,
+    componentName,
+    knownQueries,
+    options,
+    deriveExports,
+    stateDerives,
+    nameCounts,
+  );
+  lowerInlineTextBindings(
+    tree.elements,
+    model,
+    componentName,
+    knownQueries,
+    options,
+    deriveExports,
+    stateDerives,
+    nameCounts,
+    boundElementStarts,
+  );
   const escapeApplied = escapeStaticTextInterpolations(tree.elements, boundElementStarts);
 
   const alreadyImportsEscapeText = model.namedImports.some(
     (entry) => entry.importedName === 'escapeText' && entry.moduleSpecifier === '@kovojs/server',
   );
   const escapeImport =
-    escapeApplied && !alreadyImportsEscapeText ? `import { escapeText } from '@kovojs/server';\n` : '';
+    escapeApplied && !alreadyImportsEscapeText
+      ? `import { escapeText } from '@kovojs/server';\n`
+      : '';
   const runtimeImports = [
     ...(deriveExports.length > 0 ? ['derive'] : []),
     ...(needsStylePropertyHelper ? [runtimeOutputHelpers.styleProperty] : []),
@@ -139,7 +160,9 @@ function lowerPrimitiveComposition(
   const diagnostics: CompilerDiagnostic[] = [];
   for (const wrapper of elements) {
     if (!isComponentTag(wrapper.tag)) continue;
-    const attrsAttribute = wrapper.element.attributes.find((attribute) => attribute.name === 'attrs');
+    const attrsAttribute = wrapper.element.attributes.find(
+      (attribute) => attribute.name === 'attrs',
+    );
     const attrs = attrsAttribute?.expressionObjectEntries;
     if (!attrs) continue;
 
@@ -192,7 +215,9 @@ function lowerNavigationLinks(
     if (link.tag !== 'Link') continue;
     const toAttribute = attributeByName(link, 'to');
     if (!toAttribute?.source || !('name' in toAttribute.source)) continue;
-    const target = jsxIrAttributeValue(toAttribute) ?? staticStringValue(toAttribute.source.expressionStaticValue);
+    const target =
+      jsxIrAttributeValue(toAttribute) ??
+      staticStringValue(toAttribute.source.expressionStaticValue);
     if (!target && toAttribute.source.expression === undefined) continue;
     const params = navigationObjectValue(link, 'params') ?? {};
     const search = navigationObjectValue(link, 'search') ?? {};
@@ -234,12 +259,22 @@ function lowerViewTransitionNames(
     if (!attribute?.source || !('name' in attribute.source)) continue;
     if (attribute.source.value !== undefined) {
       stamps.push({ name: attribute.source.value });
-      mergeStyle(element, `view-transition-name: ${attribute.source.value}`, 'viewTransitionName lowering', options);
+      mergeStyle(
+        element,
+        `view-transition-name: ${attribute.source.value}`,
+        'viewTransitionName lowering',
+        options,
+      );
       removeJsxIrAttribute(element, 'viewTransitionName');
       continue;
     }
 
-    const derive = inlineViewTransitionNameDerive(attribute.source, element, componentName, knownQueries);
+    const derive = inlineViewTransitionNameDerive(
+      attribute.source,
+      element,
+      componentName,
+      knownQueries,
+    );
     if (!derive) continue;
     lowerAttributeDerive(derive, options, deriveExports, stateDerives, nameCounts);
     needsStylePropertyHelper = true;
@@ -257,7 +292,10 @@ function lowerInlineAttributeDerivesInIr(
   nameCounts: Map<string, number>,
 ): void {
   for (const element of elements) {
-    if (hasAuthoredAttribute(element, 'data-derive') || hasAuthoredAttribute(element, 'data-derive-attr')) {
+    if (
+      hasAuthoredAttribute(element, 'data-derive') ||
+      hasAuthoredAttribute(element, 'data-derive-attr')
+    ) {
       continue;
     }
     const derives = [...element.attributes]
@@ -345,12 +383,22 @@ function lowerAttributeDerive(
   insertJsxIrAttributeAtSource(
     candidate.element,
     candidate.attribute.start,
-    generatedJsxIrAttribute('data-derive', { kind: 'string', value: stampName }, 'inline query attribute derive', options),
+    generatedJsxIrAttribute(
+      'data-derive',
+      { kind: 'string', value: stampName },
+      'inline query attribute derive',
+      options,
+    ),
   );
   insertJsxIrAttributeAtSource(
     candidate.element,
     candidate.attribute.start + 0.1,
-    generatedJsxIrAttribute('data-derive-attr', { kind: 'string', value: candidate.targetAttr }, 'inline query attribute derive', options),
+    generatedJsxIrAttribute(
+      'data-derive-attr',
+      { kind: 'string', value: candidate.targetAttr },
+      'inline query attribute derive',
+      options,
+    ),
   );
 }
 
@@ -372,7 +420,12 @@ function lowerInlineTextBindings(
       boundElementStarts.add(element.element.start);
       setJsxIrAttribute(
         element,
-        generatedJsxIrAttribute('data-bind', { kind: 'string', value: binding }, 'inline text binding', options),
+        generatedJsxIrAttribute(
+          'data-bind',
+          { kind: 'string', value: binding },
+          'inline text binding',
+          options,
+        ),
       );
       continue;
     }
@@ -384,7 +437,12 @@ function lowerInlineTextBindings(
     recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives);
     setJsxIrAttribute(
       element,
-      generatedJsxIrAttribute('data-bind', { kind: 'string', value: stampName }, 'inline state text derive', options),
+      generatedJsxIrAttribute(
+        'data-bind',
+        { kind: 'string', value: stampName },
+        'inline state text derive',
+        options,
+      ),
     );
   }
 
@@ -431,7 +489,9 @@ function escapeStaticTextInterpolations(
 }
 
 function singleImmediateElementChild(wrapper: JsxIrElement): JsxIrElement | null {
-  const children = wrapper.children.filter((child): child is JsxIrElement => child.kind === 'element');
+  const children = wrapper.children.filter(
+    (child): child is JsxIrElement => child.kind === 'element',
+  );
   if (wrapper.element.childNonWhitespaceCount !== 1 || children.length !== 1) return null;
   return children[0] ?? null;
 }
@@ -440,18 +500,23 @@ function singleAttrsFunctionElementChild(wrapper: JsxIrElement): JsxIrElement | 
   const child = wrapper.children
     .filter((item): item is JsxIrElement => item.kind === 'element')
     .find((item) =>
-      item.element.spreadAttributes.some((spread) => spread.expressionBareIdentifierName === 'attrs'),
+      item.element.spreadAttributes.some(
+        (spread) => spread.expressionBareIdentifierName === 'attrs',
+      ),
     );
   if (child) return child;
 
-  const nested = wrapper.element.childExpressionContainers.length === 1
-    ? wrapper.children.flatMap((item) => (item.kind === 'element' ? [item] : []))
-    : [];
+  const nested =
+    wrapper.element.childExpressionContainers.length === 1
+      ? wrapper.children.flatMap((item) => (item.kind === 'element' ? [item] : []))
+      : [];
   return nested[0] ?? null;
 }
 
 function childHasUnsupportedSpreads(element: JsxIrElement): boolean {
-  return element.element.spreadAttributes.some((spread) => spread.expressionBareIdentifierName !== 'attrs');
+  return element.element.spreadAttributes.some(
+    (spread) => spread.expressionBareIdentifierName !== 'attrs',
+  );
 }
 
 function mergeStyle(
@@ -462,11 +527,16 @@ function mergeStyle(
 ): void {
   const styleAttribute = attributeByName(element, 'style');
   const current = styleAttribute ? jsxIrAttributeValue(styleAttribute) : undefined;
-  const merged = current === undefined || current === '' ? style : `${trimTrailingSemicolon(current)}; ${style}`;
+  const merged =
+    current === undefined || current === '' ? style : `${trimTrailingSemicolon(current)}; ${style}`;
   if (styleAttribute) {
     styleAttribute.value = { kind: 'string', value: merged };
     styleAttribute.ownership = 'generated';
-    styleAttribute.provenance = { description: 'view-transition style merge', ownership: 'generated', writer };
+    styleAttribute.provenance = {
+      description: 'view-transition style merge',
+      ownership: 'generated',
+      writer,
+    };
     markJsxIrChanged(element);
     return;
   }
@@ -534,7 +604,8 @@ function inlineViewTransitionNameDerive(
   );
   const queryRoots = new Set([...roots].filter((query) => knownQueries.has(query)));
   const stateOnly = roots.size > 0 && [...roots].every((root) => root === 'state');
-  const queryOnly = queryRoots.size === 1 && [...roots].every((root) => root === [...queryRoots][0]);
+  const queryOnly =
+    queryRoots.size === 1 && [...roots].every((root) => root === [...queryRoots][0]);
   const query = stateOnly ? 'state' : queryOnly ? [...queryRoots][0] : null;
   if (!query) return null;
 
@@ -617,7 +688,9 @@ function recordStateDerive(
   stateDerives: StateDeriveFact[],
 ): void {
   const expression = derive.expression.trim();
-  deriveExports.push(`export const ${exportName} = derive(["state"], (state: any) => ${expression});`);
+  deriveExports.push(
+    `export const ${exportName} = derive(["state"], (state: any) => ${expression});`,
+  );
   stateDerives.push({
     expression,
     exportName,
@@ -661,7 +734,12 @@ function sourceAttributeToIr(
       : attribute.expression !== undefined
         ? { kind: 'expression', source: attribute.expression }
         : { kind: 'boolean', value: true };
-  return generatedJsxIrAttribute(attribute.name, value, 'preserve state attribute expression', options);
+  return generatedJsxIrAttribute(
+    attribute.name,
+    value,
+    'preserve state attribute expression',
+    options,
+  );
 }
 
 function mergeableToIrAttribute(
@@ -674,7 +752,11 @@ function mergeableToIrAttribute(
       ? primitiveJsxIrAttribute(attribute.name, value, 'primitive attrs', options)
       : generatedJsxIrAttribute(attribute.name, value, 'author merged attrs', options);
   if (attribute.attribute) {
-    base.anchor = { end: attribute.attribute.end, fileName: options.fileName, start: attribute.attribute.start };
+    base.anchor = {
+      end: attribute.attribute.end,
+      fileName: options.fileName,
+      start: attribute.attribute.start,
+    };
     base.source = attribute.attribute;
   }
   return base;
@@ -687,7 +769,9 @@ function mergeableValueToIr(value: MergeableAttributeValue): JsxIrAttributeValue
   return value;
 }
 
-function spreadObjectAttributes(entries: readonly { key: string; value?: string }[]): JsxIrAttribute[] | null {
+function spreadObjectAttributes(
+  entries: readonly { key: string; value?: string }[],
+): JsxIrAttribute[] | null {
   const attributes: JsxIrAttribute[] = [];
   for (const entry of entries) {
     const value = spreadObjectAttributeValue(entry.value);
@@ -696,14 +780,20 @@ function spreadObjectAttributes(entries: readonly { key: string; value?: string 
     attributes.push({
       name: entry.key,
       ownership: 'generated',
-      provenance: { description: 'static spread attribute', ownership: 'generated', writer: 'static spread lowering' },
+      provenance: {
+        description: 'static spread attribute',
+        ownership: 'generated',
+        writer: 'static spread lowering',
+      },
       value,
     });
   }
   return attributes;
 }
 
-function spreadObjectAttributeValue(value: string | undefined): JsxIrAttributeValue | null | undefined {
+function spreadObjectAttributeValue(
+  value: string | undefined,
+): JsxIrAttributeValue | null | undefined {
   if (value === undefined) return null;
   const trimmed = value.trim();
   if (trimmed === 'false' || trimmed === 'null' || trimmed === 'undefined') return undefined;
@@ -788,13 +878,18 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
   );
 }
 
-function navigationObjectValue(element: JsxIrElement, name: string): Record<string, string | number | boolean | null> | null | undefined {
+function navigationObjectValue(
+  element: JsxIrElement,
+  name: string,
+): Record<string, string | number | boolean | null> | null | undefined {
   const attribute = attributeByName(element, name)?.source;
   if (!attribute || !('expressionStaticValue' in attribute)) return undefined;
   return staticNavigationObjectValue(attribute.expressionStaticValue);
 }
 
-function staticNavigationObjectValue(value: StaticLiteralValue | undefined): Record<string, string | number | boolean | null> | null | undefined {
+function staticNavigationObjectValue(
+  value: StaticLiteralValue | undefined,
+): Record<string, string | number | boolean | null> | null | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'object' || value === null) return null;
   return Object.values(value).every((entry) => typeof entry !== 'object' || entry === null)
@@ -817,7 +912,10 @@ function buildStaticHref(
   return query ? `${pathname}?${query}` : pathname;
 }
 
-function substituteStaticRouteParams(path: string, params: Record<string, string | number | boolean | null>): string {
+function substituteStaticRouteParams(
+  path: string,
+  params: Record<string, string | number | boolean | null>,
+): string {
   let output = '';
   let index = 0;
   while (index < path.length) {
@@ -845,7 +943,10 @@ function sortHrefFirstForStaticLink(element: JsxIrElement, staticHref: boolean):
   markJsxIrChanged(element);
 }
 
-function isJsxAttributeExpression(expression: { end: number; start: number }, model: ComponentModuleModel): boolean {
+function isJsxAttributeExpression(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): boolean {
   return model.jsxElements.some((element) =>
     element.attributes.some(
       (attribute) =>
@@ -857,7 +958,10 @@ function isJsxAttributeExpression(expression: { end: number; start: number }, mo
   );
 }
 
-function innermostContainingElement(expression: { end: number; start: number }, model: ComponentModuleModel) {
+function innermostContainingElement(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+) {
   return (
     model.jsxElements
       .filter(
@@ -870,7 +974,10 @@ function innermostContainingElement(expression: { end: number; start: number }, 
   );
 }
 
-function soleKnownQueryPath(expression: JsxExpressionModel, knownQueries: ReadonlySet<string>): string | null {
+function soleKnownQueryPath(
+  expression: JsxExpressionModel,
+  knownQueries: ReadonlySet<string>,
+): string | null {
   const path = expression.solePropertyAccessPath ?? null;
   if (!path) return null;
   return queryPathUsesKnownQuery(path, knownQueries) || isStatePath(path) ? path : null;
