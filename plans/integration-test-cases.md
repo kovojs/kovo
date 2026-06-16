@@ -56,27 +56,50 @@ integration harness uniquely proves.
   - SPEC refs: §10.4 optimism, §4.8 update plan, §9.1 `<kovo-query>`.
   - Assertions: pre-response UI changes; `kovo-pending`/`aria-busy` present while pending; final
     server truth matches db and no pending state remains.
+  - Partial evidence: `tests/integration/specs/optimistic-success.spec.ts` records the current
+    browser-integration blocker: fixture bootstraps install enhanced submit/query plans, but they do
+    not expose optimistic plans or an `OptimisticRebaser` to authored fixtures. Focused command:
+    `pnpm exec playwright test tests/integration/specs/optimistic-success.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `optimistic-rollback` / `optimistic-rollback.spec.ts`: an optimistic transform predicts a
       change, the mutation returns a typed error, snapshots are restored, and the error fragment is
       rendered.
   - SPEC refs: §10.4 runtime protocol, §9.2 errors.
   - Assertions: transient predicted value; rollback to prior value; `data-error-code`; db unchanged.
+  - Partial evidence: `tests/integration/specs/optimistic-rollback.spec.ts` pins the same missing
+    end-to-end optimistic wiring in the browser fixture path. Focused command:
+    `pnpm exec playwright test tests/integration/specs/optimistic-rollback.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `optimistic-rebase` / `optimistic-rebase.spec.ts`: two same-query optimistic mutations are
       pending concurrently; the first server truth arrives before the second, and the loader rebases
       the remaining transform in order.
   - SPEC refs: §10.4 concurrency.
   - Assertions: ordered visible state, final query value equals db, no stale intermediate overwrite.
+  - Partial evidence: `tests/integration/specs/optimistic-rebase.spec.ts` records that the browser
+    fixture path still cannot attach the runtime optimistic log/rebase protocol to enhanced submits.
+    Focused command:
+    `pnpm exec playwright test tests/integration/specs/optimistic-rebase.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `enhanced-submit-controls` / `enhanced-submit-controls.spec.ts`: enhanced form submission
       preserves submitter semantics for multiple buttons, disabled controls, default values, and
       schema coercion.
   - SPEC refs: §6.3 form typing, §9.1 enhanced mutation round-trip, §6.6 wire validation.
   - Assertions: server receives the intended submitter/input shape; validation errors are field
     scoped; no-JS form markup remains a real `method="post"` form.
+  - Partial evidence: `tests/integration/fixtures/enhanced-submit-controls` and
+    `tests/integration/specs/enhanced-submit-controls.spec.ts` verify real `method="post"` markup,
+    enhanced schema coercion for number/checkbox fields, and disabled-control omission; the same
+    spec keeps a skipped submitter-button assertion because the current enhanced submit runtime
+    builds `FormData(form)` without the clicked submitter. Proving command:
+    `pnpm exec playwright test tests/integration/specs/enhanced-submit-controls.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 - [ ] `loader-lifecycle` / `loader-lifecycle.spec.ts`: a long-running handler receives
       `ctx.signal`, fragment morph removes its island, and cleanup runs without mount/unmount hooks.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.
   - Assertions: handler starts only after declared trigger/interaction; removal aborts signal;
     replacement island remains inert until touched.
+  - Partial evidence: `tests/integration/fixtures/loader-lifecycle` and
+    `tests/integration/specs/loader-lifecycle.spec.ts` now exercise the intended trigger + morph
+    shape, but the spec remains skipped because the browser fixture path morphs in the replacement
+    island without aborting the running delegated handler signal, so SPEC.md §4.7 cleanup is not yet
+    provable end-to-end. Focused command:
+    `pnpm exec playwright test tests/integration/specs/loader-lifecycle.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
 
 ## Render and document shell
 
