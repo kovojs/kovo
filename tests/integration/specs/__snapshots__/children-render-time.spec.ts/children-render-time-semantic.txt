@@ -1,0 +1,9 @@
+<main>
+  <composition-shell>
+    <h1>
+      "Server composition"
+    <section aria-label="server composed panel">
+      <div data-slot="body">
+        "Children rendered on the server"
+      <footer data-slot="footer">
+        "Named slot rendered on the server"

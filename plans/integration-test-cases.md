@@ -335,27 +335,47 @@ integration harness uniquely proves.
 
 ## Composition, slots, and component identity
 
-- [ ] `children-render-time` / `children-render-time.spec.ts`: children and named slots render once on
+- [x] `children-render-time` / `children-render-time.spec.ts`: children and named slots render once on
       the server as ordinary HTML with no client projection runtime.
   - SPEC refs: §4.5 composition.
   - Assertions: slotted content in initial HTML; no client re-render needed for static slot content.
+  - Evidence: added `tests/integration/fixtures/children-render-time` and
+    `tests/integration/specs/children-render-time.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/children-render-time.spec.ts specs/layout-function-composition.spec.ts specs/native-host-kovo-c.spec.ts --config playwright.config.ts --workers=1`.
 - [ ] `fragment-slot-hoist` / `fragment-slot-hoist.spec.ts`: fragment-target children that capture only
       serializable stamped props re-render in the fragment response.
   - SPEC refs: §4.5 fragment-target children, §9.1 fragments.
   - Assertions: slot subtree updates after mutation; semantic snapshot includes hoisted child output.
-- [ ] `layout-function-composition` / `layout-function-composition.spec.ts`: route-level layout
+  - Gap: left unchecked because current integration fixture components still expose
+    `definition.render(queries, state)` rather than the SPEC §4.5 third `Html` composition
+    argument, and the fixture compiler does not emit fragment slot-hoist render metadata for
+    mutation fragment responses. Compiler-only acceptance/diagnostic coverage exists in
+    `packages/compiler/src/fragment-targets.test.ts`.
+- [x] `layout-function-composition` / `layout-function-composition.spec.ts`: route-level layout
       composition renders a full document per navigation without persistent layout state.
   - SPEC refs: §4.5 layouts, §8 MPA spine.
   - Assertions: layout wraps two routes; navigation is a real document load; state does not persist.
-- [ ] `native-host-kovo-c` / `native-host-kovo-c.spec.ts`: native hosts such as table rows use
+  - Evidence: added `tests/integration/fixtures/layout-function-composition` and
+    `tests/integration/specs/layout-function-composition.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/children-render-time.spec.ts specs/layout-function-composition.spec.ts specs/native-host-kovo-c.spec.ts --config playwright.config.ts --workers=1`.
+- [x] `native-host-kovo-c` / `native-host-kovo-c.spec.ts`: native hosts such as table rows use
       `kovo-c` instead of illegal dashed custom elements.
   - SPEC refs: §4.2 rendered output, KV225 content model.
   - Assertions: valid parsed table DOM; component identity present as `kovo-c`.
+  - Evidence: added `tests/integration/fixtures/native-host-kovo-c` and
+    `tests/integration/specs/native-host-kovo-c.spec.ts`; passed
+    `pnpm --filter @kovojs/integration-tests exec playwright test specs/children-render-time.spec.ts specs/layout-function-composition.spec.ts specs/native-host-kovo-c.spec.ts --config playwright.config.ts --workers=1`.
+  - Gap: the browser fixture proves current native-host stamping on a valid table host. A
+    standalone row-root component still fails current integration compilation with KV225, so
+    row-root identity remains covered only by compiler-level composition tests.
 - [ ] `same-dom-leaf-disambiguation` / `same-dom-leaf-disambiguation.spec.ts`: two registry-distinct
       components with the same DOM leaf on one page get stable disambiguated `kovo-c` values.
   - SPEC refs: §4.2 rendered output, §6.1 component registry keys.
   - Assertions: both render and update independently; explain output may be better suited for the
     disambiguation reason while browser snapshot proves emitted identity.
+  - Gap: left unchecked because current browser integration compiles fixture component modules one
+    at a time and does not run `composePageComponentArtifacts`, where duplicate DOM leaf
+    disambiguation is currently implemented and covered by `packages/compiler/src/page-composition.test.ts`.
 
 ## Routes and navigation
 

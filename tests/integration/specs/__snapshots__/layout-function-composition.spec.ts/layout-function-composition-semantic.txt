@@ -1,0 +1,17 @@
+<main data-layout-section="reports">
+  <header>
+    <h1>
+      "Workspace"
+    <nav aria-label="Primary">
+      <a href="/">
+        "Home"
+      <a href="/reports">
+        "Reports"
+  <details>
+    <summary>
+      "Layout drawer"
+    <p>
+      "Open state belongs to this document."
+  <section aria-label="page content">
+    <article data-route="reports">
+      "Reports document"
