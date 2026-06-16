@@ -66,8 +66,10 @@ function symbolDocState(symbol, checker) {
     const tags = ts.getJSDocTags(node);
     if (tags.some((tag) => tag.tagName.getText() === 'internal')) internal = true;
     const jsDoc = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
+    // `doc.comment` is a string OR a NodeArray<JSDocComment> when the summary
+    // contains inline tags like `{@link …}`; getTextOfJSDocComment flattens both.
     const summary = jsDoc
-      .map((doc) => (typeof doc.comment === 'string' ? doc.comment : ''))
+      .map((doc) => ts.getTextOfJSDocComment(doc.comment) ?? '')
       .join('')
       .trim();
     if (summary.length > 0) documented = true;
