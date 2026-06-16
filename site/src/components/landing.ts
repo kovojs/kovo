@@ -1,18 +1,10 @@
-/**
- * Landing page (plan W4, redesigned): terminal-ledger composition — wordmark
- * hero with the rename-cascade panel, the radio-driven "break it" pipeline
- * (SPEC §7 L0: zero JavaScript), the agents/users split, and the ledger strip.
- *
- * Honesty note: the loader byte count comes from the W3 capture (measured
- * from the shipping artifact every build). The cascade, KV402/KV223 panels,
- * and the `BRAND_CLI check` framing are *designed illustrations* of the
- * intended DX — KV227 is a real diagnostic today (SPEC §4.8); the cascade
- * codes and code-frame presentation are aspirational and not claimed as
- * live captures anywhere in the copy.
- *
- * The landing brands the framework as BRAND (display-only rename for now);
- * packages, docs, and the spec keep the repo name until the rename lands.
- */
+import type { ClientHrefs } from './chrome.js';
+
+// Landing page (SPEC §7 L0: the "break it" pipeline is radio buttons + :has(),
+// zero JavaScript). Composed at render time (SPEC §4.5). It owns its own
+// header/footer (the docs chrome and global search dialog still apply); the
+// loader byte count is the real W3 capture, measured from the shipping artifact
+// every build. on:click islands resolve to the versioned client modules.
 
 const BRAND = 'Kovo';
 const BRAND_CAPS = BRAND.toUpperCase();
@@ -26,20 +18,25 @@ const NAV = [
   { href: '/spec/', label: 'Spec' },
 ];
 
-function landingHeader() {
+export interface LandingDeps {
+  clients: ClientHrefs;
+  loaderGzipBytes: number;
+}
+
+function landingHeader(clients: ClientHrefs): string {
   return `<header>
     <div class="bar">
       <a href="/" class="logo"><span class="mark">&#9670;</span> ${BRAND_CAPS}</a>
       <nav>${NAV.map((item) => `<a href="${item.href}">${item.label}</a>`).join('')}</nav>
       <span class="right">
-        <button type="button" on:click="/c/search.js#open">&#8984;K</button>
+        <button type="button" on:click="${clients.search}#open">&#8984;K</button>
         <a href="https://github.com/kovojs/kovo" rel="external">GitHub</a>
       </span>
     </div>
   </header>`;
 }
 
-function hero() {
+function hero(clients: ClientHrefs): string {
   return `<section class="hero">
     <div>
       <h1 class="stencil">${BRAND_CAPS}<span class="cursor">&#9646;</span></h1>
@@ -47,7 +44,7 @@ function hero() {
       <p class="sub">${BRAND} is built from the ground up so AI coding agents get a precise error and know <b>exactly what to fix</b>. And it's delightful for your users: pages are real HTML, <b>interactive at first paint</b>.</p>
       <span class="nojs">&#10003; No JS required on load</span>
       <div class="try">
-        <div class="cmd"><span><span class="dollar">$</span> <code>pnpm create ${BRAND_CLI} my-app</code></span><button type="button" class="code-copy" on:click="/c/code.js#copy">copy</button></div>
+        <div class="cmd"><span><span class="dollar">$</span> <code>pnpm create ${BRAND_CLI} my-app</code></span><button type="button" class="code-copy" on:click="${clients.code}#copy">copy</button></div>
         <a class="go" href="/tutorial/">Start the tutorial</a>
       </div>
     </div>
@@ -78,7 +75,7 @@ function hero() {
   </section>`;
 }
 
-function breakIt() {
+function breakIt(): string {
   return `<section class="breakit">
     <p class="sec-label">How it works</p>
     <h2 class="pipe-title">Build-time checks from backend to frontend</h2>
@@ -142,7 +139,7 @@ function breakIt() {
   </section>`;
 }
 
-function split() {
+function split(): string {
   return `<section class="split">
     <div class="half agents">
       <p class="hl-label">For agents</p>
@@ -181,10 +178,10 @@ function split() {
   </section>`;
 }
 
-function ledgerStrip(loader) {
+function ledgerStrip(loaderGzipBytes: number): string {
   return `<p class="ledger-strip">
     <span><span class="g">&#9679;</span> all build gates green</span><span class="sep">&#9474;</span>
-    <span>loader <b>${loader.gzipBytes.toLocaleString('en-US')} B</b> gzip &mdash; measured this build</span><span class="sep">&#9474;</span>
+    <span>loader <b>${loaderGzipBytes.toLocaleString('en-US')} B</b> gzip &mdash; measured this build</span><span class="sep">&#9474;</span>
     <span>TTI = first paint</span><span class="sep">&#9474;</span>
     <span>JS-off: every page</span><span class="sep">&#9474;</span>
     <span>fixpoint compile</span>
@@ -192,7 +189,7 @@ function ledgerStrip(loader) {
   </p>`;
 }
 
-function landingFooter() {
+function landingFooter(): string {
   return `<footer class="l-footer">
     <span>${BRAND} &mdash; interactive at first paint &middot; legible at every layer &middot; statically verifiable</span>
     <span class="links">
@@ -203,14 +200,14 @@ function landingFooter() {
   </footer>`;
 }
 
-export function renderLanding(captures) {
+export function renderLanding({ clients, loaderGzipBytes }: LandingDeps): string {
   return `<div class="landing">
-    ${landingHeader()}
+    ${landingHeader(clients)}
     <div class="wrap">
-      ${hero()}
+      ${hero(clients)}
       ${breakIt()}
       ${split()}
-      ${ledgerStrip(captures.loader)}
+      ${ledgerStrip(loaderGzipBytes)}
       ${landingFooter()}
     </div>
   </div>`;
