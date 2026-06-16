@@ -617,7 +617,8 @@
       "files": ["src/progress.tsx"],
       "exports": ["Progress"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants", "progressRootAttributes"],
+        "@kovojs/headless-ui": ["progressRootAttributes"],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

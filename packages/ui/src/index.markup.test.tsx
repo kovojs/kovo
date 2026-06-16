@@ -112,7 +112,6 @@ import {
   otpFieldClasses,
   popoverClasses,
   popoverContentClasses,
-  progressClasses,
   radioGroupClasses,
   scrollAreaClasses,
   selectClasses,
@@ -285,7 +284,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(meterClasses.join(' ')).toContain('data-[state=suboptimum]');
     expect(popoverClasses.join(' ')).toContain('relative inline-block');
     expect(popoverContentClasses.join(' ')).toContain('w-64');
-    expect(progressClasses.join(' ')).toContain('data-[state=indeterminate]');
     expect(tooltipClasses.join(' ')).toContain('relative inline-block');
     expect(tooltipContentClasses.join(' ')).toContain('max-w-64');
   });

@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`@kovojs/ui Progress StyleX styles > exports a StyleX style group 1`] = `
+{
+  "keys": [
+    "root",
+  ],
+  "marker": true,
+}
+`;
+
+exports[`@kovojs/ui Progress StyleX styles > matches author-last override output 1`] = `"<progress class="kv-progress-bg-lw8anm kv-progress-bd-1tgh7u kv-progress-overflow-v522gr kv-progress-w-xoythx kv-progress-accent-ysrh03 kv-progress-animation-lfvqab kv-progress-animation-ekfmir kv-progress-animation-1k5ret kv-progress-animation-1gjls1 kv-app-progress-accent-1sl90w kv-app-progress-h-5tlkqb" data-style-src="progress.tsx#root; app-progress.tsx#root" data-max="100" data-state="loading" data-value="75" max="100" value="75">75%</progress>"`;
+
+exports[`@kovojs/ui Progress StyleX styles > matches native progress states with StyleX output 1`] = `
+{
+  "classes": [
+    "kv-progress-accent-o3ilex kv-progress-bg-lw8anm kv-progress-bd-1tgh7u kv-progress-h-dojw10 kv-progress-overflow-v522gr kv-progress-w-xoythx kv-progress-accent-ysrh03 kv-progress-animation-lfvqab kv-progress-animation-ekfmir kv-progress-animation-1k5ret kv-progress-animation-1gjls1",
+  ],
+  "complete": "<progress class="kv-progress-accent-o3ilex kv-progress-bg-lw8anm kv-progress-bd-1tgh7u kv-progress-h-dojw10 kv-progress-overflow-v522gr kv-progress-w-xoythx kv-progress-accent-ysrh03 kv-progress-animation-lfvqab kv-progress-animation-ekfmir kv-progress-animation-1k5ret kv-progress-animation-1gjls1" data-style-src="progress.tsx#root" data-max="100" data-state="complete" data-value="100" max="100" value="100">100%</progress>",
+  "indeterminate": "<progress class="kv-progress-accent-o3ilex kv-progress-bg-lw8anm kv-progress-bd-1tgh7u kv-progress-h-dojw10 kv-progress-overflow-v522gr kv-progress-w-xoythx kv-progress-accent-ysrh03 kv-progress-animation-lfvqab kv-progress-animation-ekfmir kv-progress-animation-1k5ret kv-progress-animation-1gjls1" data-style-src="progress.tsx#root" data-max="100" data-state="indeterminate" max="100">Loading</progress>",
+  "loading": "<progress class="kv-progress-accent-o3ilex kv-progress-bg-lw8anm kv-progress-bd-1tgh7u kv-progress-h-dojw10 kv-progress-overflow-v522gr kv-progress-w-xoythx kv-progress-accent-ysrh03 kv-progress-animation-lfvqab kv-progress-animation-ekfmir kv-progress-animation-1k5ret kv-progress-animation-1gjls1" data-style-src="progress.tsx#root" aria-valuetext="42 of 100 tasks complete" data-max="100" data-state="loading" data-value="42" max="100" value="42">42%</progress>",
+}
+`;

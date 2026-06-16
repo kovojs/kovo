@@ -1,21 +1,48 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, progressRootAttributes, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
+import { progressRootAttributes } from '@kovojs/headless-ui';
 
 export interface ProgressProps {
   children?: string;
-  class?: ClassValue;
   max?: number;
+  style?: style.StyleInput;
   value?: number | null;
   valueText?: string;
 }
 
-export const progressClassNames = defineVariants({
-  base: 'h-2 w-full overflow-hidden rounded-full bg-neutral-200 accent-neutral-950 data-[state=complete]:accent-emerald-600 data-[state=indeterminate]:animate-pulse',
-  variants: {},
-});
+const pulse = style.keyframes(
+  {
+    '0%, 100%': { opacity: 1 },
+    '50%': { opacity: 0.5 },
+  },
+  { namespace: 'progressPulse' },
+);
 
-export const progressClasses = progressClassNames.classes;
+export const progressStyles = style.create(
+  {
+    root: {
+      accentColor: '#0a0a0a',
+      backgroundColor: '#e5e5e5',
+      borderRadius: 9999,
+      height: 8,
+      overflow: 'hidden',
+      width: '100%',
+      '[data-state=complete]': {
+        accentColor: '#059669',
+      },
+      '[data-state=indeterminate]': {
+        animationDuration: '2s',
+        animationIterationCount: 'infinite',
+        animationName: pulse,
+        animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
+      },
+    },
+  },
+  { namespace: 'progress', source: 'progress.tsx' },
+);
+
+export const progressClasses = [style.attrs(progressStyles.root).class ?? ''] as const;
 
 export const Progress = component({
   render(props: ProgressProps) {
@@ -24,11 +51,12 @@ export const Progress = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
+    const styleAttrs = style.attrs(progressStyles.root, props.style);
 
     return (
       <progress
+        {...styleAttrs}
         aria-valuetext={attrs['aria-valuetext']}
-        class={cn(progressClassNames(), props.class)}
         data-max={attrs['data-max']}
         data-state={attrs['data-state']}
         data-value={attrs['data-value']}

@@ -84,6 +84,7 @@ describe('kovo add', () => {
           'kbd',
           'menubar',
           'navigation-menu',
+          'progress',
           'radio-group',
           'select',
           'separator',
@@ -151,6 +152,9 @@ describe('kovo add', () => {
         `ADD navigation-menu path=${JSON.stringify(join(outDir, 'navigation-menu.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD progress path=${JSON.stringify(join(outDir, 'progress.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD radio-group path=${JSON.stringify(join(outDir, 'radio-group.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -205,6 +209,7 @@ describe('kovo add', () => {
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
       const menubar = readFileSync(join(outDir, 'menubar.tsx'), 'utf8');
       const navigationMenu = readFileSync(join(outDir, 'navigation-menu.tsx'), 'utf8');
+      const progress = readFileSync(join(outDir, 'progress.tsx'), 'utf8');
       const radioGroup = readFileSync(join(outDir, 'radio-group.tsx'), 'utf8');
       const select = readFileSync(join(outDir, 'select.tsx'), 'utf8');
       const separator = readFileSync(join(outDir, 'separator.tsx'), 'utf8');
@@ -259,6 +264,10 @@ describe('kovo add', () => {
       expect(menubar).toContain('export const menubarClassNames = defineVariants');
       expect(navigationMenu).toContain('export const NavigationMenu = component({');
       expect(navigationMenu).toContain('export const navigationMenuClassNames = defineVariants');
+      expect(progress).toContain('export const Progress = component({');
+      expect(progress).toContain("import * as style from '@kovojs/style';");
+      expect(progress).toContain('export const progressStyles = style.create');
+      expect(progress).toContain('style?: style.StyleInput');
       expect(radioGroup).toContain('export const RadioGroup = component({');
       expect(radioGroup).toContain('export const radioGroupClassNames = defineVariants');
       expect(select).toContain('export const Select = component({');
@@ -306,6 +315,7 @@ describe('kovo add', () => {
         kbd,
         menubar,
         navigationMenu,
+        progress,
         radioGroup,
         select,
         separator,

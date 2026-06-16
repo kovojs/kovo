@@ -709,7 +709,7 @@ export type {
   PopoverStateProps,
   PopoverTriggerProps,
 } from './popover.js';
-export { Progress, progressClassNames, progressClasses } from './progress.js';
+export { Progress, progressClasses, progressStyles } from './progress.js';
 export type { ProgressProps } from './progress.js';
 export { Separator, separatorClasses, separatorStyles } from './separator.js';
 export type { SeparatorProps } from './separator.js';
