@@ -31,11 +31,6 @@ test('keeps real post markup and submits supported coerced values', async ({ pag
 });
 
 test('preserves clicked submitter button values for enhanced requests', async ({ page, kovoApp }) => {
-  test.skip(
-    true,
-    'Blocked by current enhanced submit runtime: delegated and inline submit paths both build FormData from the form only, so submitter button name/value semantics from SPEC.md §9.1 and §6.3 are lost.',
-  );
-
   await page.goto('/');
 
   await Promise.all([
@@ -45,6 +40,9 @@ test('preserves clicked submitter button values for enhanced requests', async ({
     page.getByRole('button', { name: 'Preview order' }).click(),
   ]);
 
+  await expect(page.locator('[data-submit-report]')).toContainText(
+    'intent=preview; quantity=2; includeGift=true; adminNote=missing',
+  );
   await expect(
     kovoApp.db.query(
       'select quantity, include_gift from enhanced_submit_log order by id desc limit 1',

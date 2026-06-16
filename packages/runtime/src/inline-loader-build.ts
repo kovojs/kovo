@@ -213,9 +213,7 @@ function installInlineKovoLoader(im) {
   }
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
-  const dq = (type, init) => {
-    dispatchEvent(new CustomEvent(type, init));
-  };
+  const dq = (type, init) => dispatchEvent(new CustomEvent(type, init));
   const ab = (body) => {
     applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body), {
       dispatchQueryEvent: dq,
@@ -238,7 +236,7 @@ function installInlineKovoLoader(im) {
   const sef = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
-      body: new FormData(form),
+      body: new FormData(form, event.submitter),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Fragment': 'true',

@@ -77,18 +77,23 @@ integration harness uniquely proves.
     fixture path still cannot attach the runtime optimistic log/rebase protocol to enhanced submits.
     Focused command:
     `pnpm exec playwright test tests/integration/specs/optimistic-rebase.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
-- [ ] `enhanced-submit-controls` / `enhanced-submit-controls.spec.ts`: enhanced form submission
+- [x] `enhanced-submit-controls` / `enhanced-submit-controls.spec.ts`: enhanced form submission
       preserves submitter semantics for multiple buttons, disabled controls, default values, and
       schema coercion.
   - SPEC refs: §6.3 form typing, §9.1 enhanced mutation round-trip, §6.6 wire validation.
   - Assertions: server receives the intended submitter/input shape; validation errors are field
     scoped; no-JS form markup remains a real `method="post"` form.
-  - Partial evidence: `tests/integration/fixtures/enhanced-submit-controls` and
+  - Evidence: `tests/integration/fixtures/enhanced-submit-controls` and
     `tests/integration/specs/enhanced-submit-controls.spec.ts` verify real `method="post"` markup,
-    enhanced schema coercion for number/checkbox fields, and disabled-control omission; the same
-    spec keeps a skipped submitter-button assertion because the current enhanced submit runtime
-    builds `FormData(form)` without the clicked submitter. Proving command:
-    `pnpm exec playwright test tests/integration/specs/enhanced-submit-controls.spec.ts --config tests/integration/playwright.config.ts --workers=1`.
+    enhanced schema coercion for number/checkbox fields, disabled-control omission, and clicked
+    submitter button `name`/`value` preservation for `intent=confirm` and `intent=preview`. Runtime
+    parity is pinned by `packages/runtime/src/loader-enhanced-mutation-submit.test.ts` and
+    `packages/runtime/src/inline-loader-enhanced-submit.test.ts`. Proving commands:
+    `pnpm exec playwright test tests/integration/specs/enhanced-submit-controls.spec.ts --config
+    tests/integration/playwright.config.ts --workers=1`; `pnpm exec vitest run
+    packages/runtime/src/loader-enhanced-mutation-submit.test.ts
+    packages/runtime/src/inline-loader-enhanced-submit.test.ts`; `pnpm --filter @kovojs/runtime run
+    check:inline-loader`.
 - [ ] `loader-lifecycle` / `loader-lifecycle.spec.ts`: a long-running handler receives
       `ctx.signal`, fragment morph removes its island, and cleanup runs without mount/unmount hooks.
   - SPEC refs: §4.4 loader, §4.7 lifecycle.

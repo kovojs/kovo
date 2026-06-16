@@ -51,9 +51,8 @@ const homeRoute = route('/', {
       data-mutation="enhanced-submit-controls/submit" kovo-fragment-target="submit-controls-form">
       <label>Quantity <input name="quantity" type="number" value="2" min="1" /></label>
       <label><input name="includeGift" type="checkbox" value="true" checked /> Include gift wrap</label>
-      <input type="hidden" name="intent" value="confirm" />
       <input name="adminNote" value="do-not-include" disabled />
-      <button type="submit">Submit order</button>
+      <button type="submit" name="intent" value="confirm">Submit order</button>
       <button type="submit" name="intent" value="preview">Preview order</button>
     </form>
     <div kovo-fragment-target="submit-controls-report">${await renderInitialReport(request.db)}</div>

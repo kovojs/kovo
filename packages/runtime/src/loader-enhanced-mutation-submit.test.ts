@@ -104,6 +104,66 @@ describe('loader enhanced mutation submits', () => {
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
   });
 
+  it('includes the clicked submitter when constructing default enhanced form data', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const preventDefault = vi.fn();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'data-mutation': 'cart/add',
+      },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
+    const submitter = new FakeElement({ name: 'intent', value: 'preview' });
+    const constructedArgs: unknown[][] = [];
+    const originalFormData = globalThis.FormData;
+    const formData = { kind: 'submitter-aware-form-data' };
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get() {
+          return null;
+        },
+      },
+      async text() {
+        return '';
+      },
+    }));
+
+    try {
+      globalThis.FormData = function FormData(...args: unknown[]) {
+        constructedArgs.push(args);
+        return formData;
+      } as unknown as typeof FormData;
+
+      installKovoLoader({
+        enhancedMutations: {
+          fetch,
+          root: mutationRoot,
+          store,
+        },
+        importModule: vi.fn(),
+        root: loaderRoot,
+      });
+
+      await loaderRoot.listeners.get('submit')?.({
+        preventDefault,
+        submitter,
+        target: form,
+        type: 'submit',
+      });
+
+      expect(constructedArgs).toEqual([[form, submitter]]);
+      expect(fetch).toHaveBeenCalledWith('/_m/cart/add', expect.objectContaining({ body: formData }));
+    } finally {
+      globalThis.FormData = originalFormData;
+    }
+  });
+
   it('renders upload progress as indeterminate when total bytes are unknown', async () => {
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();

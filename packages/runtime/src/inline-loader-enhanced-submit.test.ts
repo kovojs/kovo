@@ -300,4 +300,94 @@ describe('inline loader enhanced submit source', () => {
       }
     },
   );
+
+  it.each(inlineSourceInstallCases)(
+    'includes the clicked submitter in inline enhanced form data through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const constructedArgs: unknown[][] = [];
+      const formData = { kind: 'submitter-aware-form-data' };
+      const form = {
+        action: '/_m/cart/add',
+        getAttribute(name: string) {
+          return name === 'enhance' ? '' : null;
+        },
+        method: 'post',
+      };
+      const submitter = { name: 'intent', value: 'preview' };
+      const inlineFetch = vi.fn(async () => ({
+        async text() {
+          return '';
+        },
+      }));
+
+      try {
+        globalRecord.FormData = function FormData(...args: unknown[]) {
+          constructedArgs.push(args);
+          return formData;
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector() {
+            return null;
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = inlineFetch;
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          submitter,
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(constructedArgs).toEqual([[form, submitter]]);
+        expect(inlineFetch).toHaveBeenCalledWith(
+          '/_m/cart/add',
+          expect.objectContaining({ body: formData }),
+        );
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
 });

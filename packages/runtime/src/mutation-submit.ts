@@ -42,7 +42,7 @@ export interface EnhancedMutationLoaderOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   fetch: EnhancedMutationFetch;
-  formData?: (form: EnhancedFormElementLike) => unknown;
+  formData?: (form: EnhancedFormElementLike, event: DelegatedEvent) => unknown;
   idem?: () => string;
   morph?: MorphFragment;
   /**
@@ -81,7 +81,7 @@ export async function dispatchEnhancedFormSubmit(
     const applied = await submitEnhancedMutation({
       fetch: options.fetch,
       form,
-      formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
+      formData: options.formData ? options.formData(form, event) : formDataForSubmit(form, event),
       ...(options.onError
         ? {
             onError(error) {
@@ -124,6 +124,17 @@ export function isEnhancedSubmitEvent(
   if (!options || event.type !== 'submit') return false;
 
   return closestEnhancedMutationForm(event.target) !== null;
+}
+
+function formDataForSubmit(form: EnhancedFormElementLike, event: DelegatedEvent): FormData {
+  if (event.submitter !== undefined) {
+    try {
+      return new FormData(form as HTMLFormElement, event.submitter as HTMLElement);
+    } catch {
+      // Older DOM implementations and test doubles may not support the submitter overload.
+    }
+  }
+  return new FormData(form as HTMLFormElement);
 }
 
 /** @internal */
