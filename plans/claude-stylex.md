@@ -183,7 +183,7 @@ borrowing its concrete API/spike detail.
       retrofit). _Evidence:_ `pnpm --filter @kovojs/style test`; a fixture proving two atoms in separate
       files resolve correctly regardless of link order.
   - Evidence (partial, 2026-06-16): `packages/style` added as `@kovojs/style` with TS-native
-    `create`/`attrs`/`props`/`defineVars`/`createTheme`/`raw`/`firstThatWorks`/`keyframes`,
+    `create`/`attrs`/`props`/`defineVars`/`defineConsts`/`createTheme`/`raw`/`firstThatWorks`/`keyframes`,
     provenance-prefixed atoms, `data-style-src`, and priority-layer CSS emission.
   - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/style test` covers property-level last-wins
     merge, raw inline escape serialization, readable atomic class generation, `@layer` priority buckets,
@@ -196,6 +196,13 @@ borrowing its concrete API/spike detail.
     `packages/style/src/index.test.ts`; `pnpm --filter @kovojs/style test` now covers upstream basic
     resolve, array merge order, same-property override, nested pseudo override, source-map data, and the
     dynamic attrs fixture through Kovo's explicit `raw(...)` escape hatch.
+  - Evidence (partial, 2026-06-16): `packages/style/src/index.ts` now exposes `defineConsts`, and
+    `packages/style/src/index.test.ts` ports additional upstream runtime fixtures for pseudo-only
+    props, the complicated nested merge-order stress case, attrs basic resolution, and dynamic props
+    through Kovo's explicit `raw(...)` escape hatch.
+  - Evidence (partial, 2026-06-16): `pnpm --filter @kovojs/style test`, `pnpm exec tsc --noEmit`,
+    and `pnpm --filter @kovojs/style run build:dist` pass for the expanded Phase 1 runtime fork
+    coverage.
   - [ ] Port the broader upstream StyleX shared/runtime fixture set before checking Phase 1 complete.
   - [x] Replace the current curated priority-property subset with the full forked
     `property-priorities` table before checking Phase 1 complete.

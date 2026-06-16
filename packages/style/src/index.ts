@@ -47,6 +47,9 @@ export type Vars<Tokens extends Record<string, CssValue>> = {
   readonly __rules?: readonly AtomicRule[];
 };
 
+/** Compile-time constants returned unchanged for use inside static style objects. */
+export type Consts<Constants extends Record<string, StylePrimitive>> = Readonly<Constants>;
+
 /** Theme class returned by `createTheme`, with extracted custom-property override rules. */
 export interface Theme {
   readonly [CSS_MARKER]: true | string;
@@ -218,6 +221,17 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
 
   result.__rules = rules;
   return result as Vars<Tokens>;
+}
+
+/**
+ * Define reusable static constants for style objects. Unlike `defineVars`, these
+ * values are not CSS custom properties; the compiler can inline them directly
+ * when lowering `style.create(...)` (SPEC.md §5.2).
+ */
+export function defineConsts<const Constants extends Record<string, StylePrimitive>>(
+  constants: Constants,
+): Consts<Constants> {
+  return Object.freeze({ ...constants }) as Consts<Constants>;
 }
 
 /**

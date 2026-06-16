@@ -4,6 +4,7 @@ import {
   attrs,
   create,
   createAtomicStyles,
+  defineConsts,
   createTheme,
   defineVars,
   emitAtomicCss,
@@ -114,6 +115,26 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(theme.__rules?.[0]?.rule).toContain('--kovo-ui-accent:#16a34a');
     expect(props(styles.root).className).toMatch(/^kv-button-bg-[a-z0-9]+ kv-button-fg-[a-z0-9]+$/);
   });
+
+  it('defines typed constants that can feed static style objects', () => {
+    const spacing = defineConsts({
+      buttonHeight: 36,
+      buttonPadding: '12px',
+    });
+    const styles = create(
+      {
+        root: {
+          height: spacing.buttonHeight,
+          paddingInline: spacing.buttonPadding,
+        },
+      },
+      { namespace: 'button' },
+    );
+
+    expect(spacing.buttonHeight).toBe(36);
+    expect(Object.isFrozen(spacing)).toBe(true);
+    expect(attrs(styles.root).class).toMatch(/^kv-button-h-[a-z0-9]+ kv-button-pad-[a-z0-9]+$/);
+  });
 });
 
 describe('ported upstream StyleX runtime fixtures', () => {
@@ -143,6 +164,127 @@ describe('ported upstream StyleX runtime fixtures', () => {
     ).toBe('gh25dzvf');
   });
 
+  it('matches upstream props resolution with just pseudoclasses', () => {
+    // Ported from StyleX "with just pseudoclasses".
+    expect(
+      props(
+        { ':hover__backgroundColor': 'rse6dlih', $$css: true },
+        { ':hover__color': 'gofk2cf1', $$css: true },
+      ).className,
+    ).toBe('rse6dlih gofk2cf1');
+  });
+
+  it('matches upstream props resolution for a complicated nested argument set', () => {
+    // Ported from StyleX "with complicated set of arguments".
+    const styles = [
+      {
+        backgroundColor: 'nu7423ey',
+        borderColor: 'tpe1esc0',
+        borderStyle: 'gewhe1h2',
+        borderWidth: 'gcovof34',
+        boxSizing: 'bdao358l',
+        display: 'rse6dlih',
+        listStyle: 's5oniofx',
+        marginTop: 'm8h3af8h',
+        marginEnd: 'l7ghb35v',
+        marginBottom: 'kjdc1dyq',
+        marginStart: 'kmwttqpk',
+        paddingTop: 'srn514ro',
+        paddingEnd: 'oxkhqvkx',
+        paddingBottom: 'rl78xhln',
+        paddingStart: 'nch0832m',
+        WebkitTapHighlightColor: 'qi72231t',
+        textAlign: 'cr00lzj9',
+        textDecoration: 'rn8ck1ys',
+        whiteSpace: 'n3t5jt4f',
+        wordWrap: 'gh25dzvf',
+        zIndex: 'g4tp4svg',
+        $$css: true,
+      },
+      false,
+      false,
+      false,
+      false,
+      [
+        {
+          cursor: 'fsf7x5fv',
+          touchAction: 's3jn8y49',
+          $$css: true,
+        },
+        false,
+        {
+          outline: 'icdlwmnq',
+          $$css: true,
+        },
+        [
+          {
+            WebkitTapHighlightColor: 'oajrlxb2',
+            cursor: 'nhd2j8a9',
+            touchAction: 'f1sip0of',
+            $$css: true,
+          },
+          false,
+          false,
+          {
+            textDecoration: 'esuyzwwr',
+            ':hover__textDecoration': 'p8dawk7l',
+            $$css: true,
+          },
+          false,
+          [
+            {
+              backgroundColor: 'g5ia77u1',
+              border: 'e4t7hp5w',
+              color: 'gmql0nx0',
+              cursor: 'nhd2j8a9',
+              display: 'q9uorilb',
+              fontFamily: 'ihxqhq3m',
+              fontSize: 'l94mrbxd',
+              lineHeight: 'aenfhxwr',
+              marginTop: 'kvgmc6g5',
+              marginEnd: 'cxmmr5t8',
+              marginBottom: 'oygrvhab',
+              marginStart: 'hcukyx3x',
+              paddingTop: 'jb3vyjys',
+              paddingEnd: 'rz4wbd8a',
+              paddingBottom: 'qt6c0cv9',
+              paddingStart: 'a8nywdso',
+              textAlign: 'i1ao9s8h',
+              textDecoration: 'myohyog2',
+              ':hover__color': 'ksdfmwjs',
+              ':hover__textDecoration': 'gofk2cf1',
+              ':active__transform': 'lsqurvkf',
+              ':active__transition': 'bj9fd4vl',
+              $$css: true,
+            },
+            {
+              display: 'a8c37x1j',
+              width: 'k4urcfbm',
+              $$css: true,
+            },
+            [
+              {
+                ':active__transform': 'tm8avpzi',
+                $$css: true,
+              },
+            ],
+          ],
+        ],
+      ],
+    ] as const;
+
+    const value = props(styles).className ?? '';
+    const repeat = props(styles).className ?? '';
+
+    expect(value).toBe(repeat);
+    expect(value.split(' ').sort().join(' ')).toBe(
+      'g5ia77u1 tpe1esc0 gewhe1h2 gcovof34 bdao358l a8c37x1j s5oniofx kvgmc6g5 cxmmr5t8 oygrvhab hcukyx3x jb3vyjys rz4wbd8a qt6c0cv9 a8nywdso oajrlxb2 i1ao9s8h myohyog2 n3t5jt4f gh25dzvf g4tp4svg nhd2j8a9 f1sip0of icdlwmnq e4t7hp5w gmql0nx0 ihxqhq3m l94mrbxd aenfhxwr k4urcfbm gofk2cf1 ksdfmwjs tm8avpzi bj9fd4vl'
+        .split(' ')
+        .sort()
+        .join(' '),
+    );
+  });
+
   it('matches upstream nested arrays and pseudo-class override behavior', () => {
     // Ported from StyleX "nested arrays and pseudoClasses overriding things".
     expect(
@@ -166,6 +308,27 @@ describe('ported upstream StyleX runtime fixtures', () => {
       class: 'backgroundColor-red color-blue display-block',
       'data-style-src':
         'components/Foo.react.js:1; components/Bar.react.js:3; components/Baz.react.js:5',
+    });
+  });
+
+  it('matches upstream attrs basic resolution', () => {
+    // Ported from StyleX attrs "basic resolve".
+    expect(attrs({ a: 'aaa', b: 'bbb', $$css: true }).class).toBe('aaa bbb');
+  });
+
+  it('ports upstream dynamic props fixture through Kovo raw inline style', () => {
+    // Upstream accepts a bare inline object; Kovo requires the explicit `raw(...)` escape hatch.
+    expect(
+      props([
+        { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
+        raw({ color: 'red' }),
+      ]),
+    ).toEqual({
+      className: 'backgroundColor-red',
+      'data-style-src': 'components/Foo.react.js:1',
+      style: {
+        color: 'red',
+      },
     });
   });
 
