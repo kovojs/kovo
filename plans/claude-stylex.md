@@ -349,6 +349,18 @@ borrowing its concrete API/spike detail.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
     src/interactive-gallery.visual.browser.test.ts`, `node packages/ui/scripts/build-registry.mjs`,
     and `pnpm exec tsc --noEmit` pass.
+  - Evidence (partial, 2026-06-16): `packages/ui/src/skeleton.tsx` now uses `@kovojs/style`,
+    exports `skeletonStyles`, accepts `style?: style.StyleInput`, and drops `cn` plus the `class`
+    escape hatch. `examples/gallery/src/demo-fixtures.tsx` uses StyleX size overrides for the
+    Skeleton route, and `examples/gallery/package.json` declares `@kovojs/style` for those fixtures.
+  - Evidence (partial, 2026-06-16): `pnpm exec vitest --run packages/ui/src/skeleton.stylex.test.tsx
+    packages/ui/src/badge.stylex.test.tsx packages/ui/src/copy-in.test.ts
+    packages/cli/src/index.kovo-add.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest
+    --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts --run
+    src/interactive-gallery.axe.browser.test.ts`, `pnpm --filter @kovojs/example-gallery exec vitest
+    --config vitest.browser.config.ts --run src/interactive-gallery.visual.browser.test.ts`,
+    `node packages/ui/scripts/build-registry.mjs`, and `pnpm exec tsc --noEmit` pass.
 - [ ] **Phase 6 — Perf/size gate.** CSS bytes, HTML bytes, client JS, build time vs. Tailwind baseline on
       a CSS-heavy fixture (ties to `plans/compiler-quality.md`'s missing CSS-heavy perf coverage).
 - [ ] **Phase 7 — SPEC + docs.** Rewrite §13.1 to StyleX-first; update package-prefix language if Model L

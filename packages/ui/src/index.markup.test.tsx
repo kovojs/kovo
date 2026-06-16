@@ -234,8 +234,12 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(Alert.definition.render({ children: 'Saved.', variant: 'success' })).toContain(
       'border-emerald-200 bg-emerald-50',
     );
-    expect(Skeleton.definition.render({ class: 'h-4 w-32' })).toBe(
-      '<div aria-hidden="true" class="animate-pulse rounded-md bg-neutral-200 h-4 w-32"></div>',
+    const skeletonOverride = style.create(
+      { root: { height: 16, width: 128 } },
+      { namespace: 'markupSkeleton', source: 'index.markup.test.tsx' },
+    );
+    expect(Skeleton.definition.render({ style: skeletonOverride.root })).toContain(
+      'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );
     expect(buttonClasses).toContain('h-9 gap-2 px-3');
     expect(accordionClasses.join(' ')).toContain('grid w-full gap-2');

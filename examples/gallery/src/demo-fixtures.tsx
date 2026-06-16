@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { tabsRootAttributes } from '@kovojs/headless-ui/primitives';
+import * as style from '@kovojs/style';
 import {
   Alert,
   Accordion,
@@ -2382,14 +2383,28 @@ export function DrawerDemo(): string {
 }
 
 export function SkeletonDemo(): string {
+  const skeletonDemoStyles = style.create(
+    {
+      line: {
+        height: 16,
+        width: 160,
+      },
+      panel: {
+        height: 80,
+        width: '100%',
+      },
+    },
+    { namespace: 'gallerySkeleton', source: 'demo-fixtures.tsx' },
+  );
+
   return (
     <section data-gallery-demo="skeleton">
       <p data-demo-summary="no-js">
         Skeleton is decorative loading markup hidden from assistive technology.
       </p>
       <div data-ui-demo="skeleton">
-        {Skeleton.definition.render({ class: 'h-4 w-40' })}
-        {Skeleton.definition.render({ class: 'h-20 w-full' })}
+        {Skeleton.definition.render({ style: skeletonDemoStyles.line })}
+        {Skeleton.definition.render({ style: skeletonDemoStyles.panel })}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',

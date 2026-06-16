@@ -255,7 +255,9 @@ describe('kovo add', () => {
       expect(sheet).toContain('export const Sheet = component({');
       expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
       expect(skeleton).toContain('export const Skeleton = component({');
-      expect(skeleton).toContain('export const skeletonClassNames =');
+      expect(skeleton).toContain("import * as style from '@kovojs/style';");
+      expect(skeleton).toContain('export const skeletonStyles = style.create');
+      expect(skeleton).toContain('style?: style.StyleInput');
       expect(slider).toContain('export const Slider = component({');
       expect(slider).toContain('export const sliderClassNames = defineVariants');
       expect(switchSource).toContain('export const Switch = component({');

@@ -745,7 +745,8 @@
       "files": ["src/skeleton.tsx"],
       "exports": ["Skeleton"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

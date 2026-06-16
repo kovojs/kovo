@@ -1004,7 +1004,9 @@ describe('gallery demo fixtures', () => {
 
     expect(skeleton.html).toContain('data-ui-demo="skeleton"');
     expect(skeleton.html).toContain('aria-hidden="true"');
-    expect(skeleton.html).toContain('animate-pulse rounded-md bg-neutral-200 h-4 w-40');
+    expect(skeleton.html).toContain('kv-skeleton-');
+    expect(skeleton.html).toContain('data-style-src="skeleton.tsx#root; demo-fixtures.tsx#line"');
+    expect(skeleton.html).toContain('data-style-src="skeleton.tsx#root; demo-fixtures.tsx#panel"');
 
     expect(slider.html).toContain('data-ui-demo="slider"');
     expect(slider.html).toContain('accent-neutral-950');

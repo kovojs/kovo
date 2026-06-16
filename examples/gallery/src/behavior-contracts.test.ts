@@ -517,7 +517,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   ],
   '/components/skeleton': [
     'aria-hidden="true"',
-    'animate-pulse rounded-md bg-neutral-200 h-4 w-40',
+    'data-style-src="skeleton.tsx#root; demo-fixtures.tsx#line"',
   ],
   '/components/slider': [
     'type="range"',

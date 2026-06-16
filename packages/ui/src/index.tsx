@@ -371,7 +371,7 @@ export type {
   OtpFieldProps,
   OtpFieldStateProps,
 } from './otp-field.js';
-export { Skeleton, skeletonClassNames, skeletonClasses } from './skeleton.js';
+export { Skeleton, skeletonClasses, skeletonStyles } from './skeleton.js';
 export type { SkeletonProps } from './skeleton.js';
 export {
   ScrollArea,

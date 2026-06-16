@@ -13,6 +13,7 @@
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*",
     "@kovojs/ui": "workspace:*"
   },
   "devDependencies": {
