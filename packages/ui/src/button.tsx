@@ -1,51 +1,130 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { cn, defineVariants, type ClassValue } from '@kovojs/headless-ui';
+import * as style from '@kovojs/style';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 export type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps {
   children?: string;
-  class?: ClassValue;
   disabled?: boolean;
   form?: string;
   name?: string;
   size?: ButtonSize;
+  style?: style.StyleInput;
   type?: 'button' | 'submit' | 'reset';
   value?: string;
   variant?: ButtonVariant;
 }
 
-export const buttonClassNames = defineVariants({
-  base: 'inline-flex items-center justify-center rounded-md border text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50',
-  variants: {
-    size: {
-      sm: 'h-8 gap-1.5 px-2.5',
-      md: 'h-9 gap-2 px-3',
-    },
-    variant: {
-      ghost:
-        'border-transparent bg-transparent text-neutral-950 hover:bg-neutral-100 focus-visible:outline-neutral-400',
-      primary:
-        'border-neutral-950 bg-neutral-950 text-white shadow-sm hover:bg-neutral-800 focus-visible:outline-neutral-950',
-      secondary:
-        'border-neutral-300 bg-white text-neutral-950 shadow-sm hover:bg-neutral-50 focus-visible:outline-neutral-400',
+const base = style.create(
+  {
+    root: {
+      alignItems: 'center',
+      borderRadius: 6,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'inline-flex',
+      fontSize: 14,
+      fontWeight: 500,
+      justifyContent: 'center',
+      transitionProperty: 'background-color, border-color, color, box-shadow',
+      ':focus-visible': {
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+        outlineOffset: 2,
+      },
+      ':disabled': {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
     },
   },
-  defaultVariants: {
-    size: 'md',
-    variant: 'primary',
-  },
-});
+  { namespace: 'button', source: 'button.tsx' },
+);
 
-export const buttonClasses = buttonClassNames.classes;
+const sizes = style.create(
+  {
+    sm: {
+      columnGap: 6,
+      height: 32,
+      paddingInline: 10,
+    },
+    md: {
+      columnGap: 8,
+      height: 36,
+      paddingInline: 12,
+    },
+  },
+  { namespace: 'buttonSize', source: 'button.tsx' },
+);
+
+const variants = style.create(
+  {
+    ghost: {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+      color: '#0a0a0a',
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+      },
+      ':hover': {
+        backgroundColor: '#f5f5f5',
+      },
+    },
+    primary: {
+      backgroundColor: '#0a0a0a',
+      borderColor: '#0a0a0a',
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#ffffff',
+      ':focus-visible': {
+        outlineColor: '#0a0a0a',
+      },
+      ':hover': {
+        backgroundColor: '#262626',
+      },
+    },
+    secondary: {
+      backgroundColor: '#ffffff',
+      borderColor: '#d4d4d4',
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: '#0a0a0a',
+      ':focus-visible': {
+        outlineColor: '#a3a3a3',
+      },
+      ':hover': {
+        backgroundColor: '#fafafa',
+      },
+    },
+  },
+  { namespace: 'buttonVariant', source: 'button.tsx' },
+);
+
+export const buttonStyles = {
+  base,
+  sizes,
+  variants,
+} as const;
+
+export const buttonClasses = [
+  style.attrs(base.root, sizes.md, variants.primary).class ?? '',
+  style.attrs(sizes.sm).class ?? '',
+  style.attrs(variants.secondary).class ?? '',
+  style.attrs(variants.ghost).class ?? '',
+] as const;
 
 export const Button = component({
   render(props: ButtonProps) {
+    const attrs = style.attrs(
+      base.root,
+      sizes[props.size ?? 'md'],
+      variants[props.variant ?? 'primary'],
+      props.style,
+    );
+
     return (
       <button
-        class={cn(buttonClassNames({ size: props.size, variant: props.variant }), props.class)}
+        {...attrs}
         disabled={props.disabled}
         form={props.form}
         name={props.name}

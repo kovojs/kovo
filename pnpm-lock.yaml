@@ -493,6 +493,9 @@ importers:
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../style
     devDependencies:
       vitest:
         specifier: 4.1.8

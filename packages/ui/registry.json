@@ -1,6 +1,11 @@
 {
-  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior + cn/variants), @kovojs/core (component()), and optionally @kovojs/server (escape helpers). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
-  "registryDependencies": ["@kovojs/headless-ui", "@kovojs/core", "@kovojs/server"],
+  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), and optionally @kovojs/server (escape helpers). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "registryDependencies": [
+    "@kovojs/headless-ui",
+    "@kovojs/style",
+    "@kovojs/core",
+    "@kovojs/server"
+  ],
   "components": [
     {
       "name": "accordion",
@@ -145,7 +150,8 @@
       "files": ["src/button.tsx"],
       "exports": ["Button"],
       "dependencies": {
-        "@kovojs/headless-ui": ["ClassValue", "cn", "defineVariants"],
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
       "uiComponents": []

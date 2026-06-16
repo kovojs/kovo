@@ -14,7 +14,7 @@ export {
   breadcrumbSeparatorClassNames,
 } from './breadcrumb.js';
 export type { BreadcrumbLinkProps, BreadcrumbPartProps, BreadcrumbProps } from './breadcrumb.js';
-export { Button, buttonClassNames, buttonClasses } from './button.js';
+export { Button, buttonClasses, buttonStyles } from './button.js';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './button.js';
 export { Card, cardClassNames, cardClasses } from './card.js';
 export type { CardProps } from './card.js';

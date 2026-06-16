@@ -217,8 +217,10 @@ describe('kovo add', () => {
       expect(breadcrumb).toContain('export const Breadcrumb = component({');
       expect(breadcrumb).toContain('export const breadcrumbClasses =');
       expect(button).toContain("import { component } from '@kovojs/core';");
+      expect(button).toContain("import * as style from '@kovojs/style';");
       expect(button).toContain('export const Button = component({');
-      expect(button).toContain('export const buttonClassNames = defineVariants');
+      expect(button).toContain('export const buttonStyles = {');
+      expect(button).toContain('style.attrs(');
       expect(card).toContain('export const Card = component({');
       expect(card).toContain('export const cardClassNames =');
       expect(checkbox).toContain('export const Checkbox = component({');

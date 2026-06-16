@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest';
 // @kovojs/ui is `private: true`. External apps do NOT install it; they copy a
 // component's .tsx source into their own app ("you own the code", shadcn-style).
 // The copied source must compile against ONLY the public, versioned packages it
-// imports — @kovojs/core (component()), @kovojs/headless-ui (behavior +
-// cn/variants), and optionally @kovojs/server (escape helpers) — with NO
+// imports — @kovojs/core (component()), @kovojs/headless-ui (behavior),
+// @kovojs/style (StyleX fork), and optionally @kovojs/server (escape helpers) — with NO
 // dependency on any @kovojs/ui-internal module.
 //
 // This test proves the model end to end: it copies representative components
@@ -71,7 +71,12 @@ describe('@kovojs/ui copy-in model', () => {
 
       const nodeModules = join(root, 'node_modules');
       mkdirSync(nodeModules, { recursive: true });
-      for (const pkg of ['@kovojs/core', '@kovojs/headless-ui', '@kovojs/server']) {
+      for (const pkg of [
+        '@kovojs/core',
+        '@kovojs/headless-ui',
+        '@kovojs/server',
+        '@kovojs/style',
+      ]) {
         linkKovoDep(nodeModules, pkg);
       }
 
@@ -116,7 +121,12 @@ describe('@kovojs/ui copy-in model', () => {
         uiComponents: string[];
       }[];
     };
-    const PUBLIC = new Set(['@kovojs/core', '@kovojs/headless-ui', '@kovojs/server']);
+    const PUBLIC = new Set([
+      '@kovojs/core',
+      '@kovojs/headless-ui',
+      '@kovojs/server',
+      '@kovojs/style',
+    ]);
 
     expect(registry.components.length).toBeGreaterThan(0);
     for (const component of registry.components) {

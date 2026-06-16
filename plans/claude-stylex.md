@@ -275,6 +275,28 @@ borrowing its concrete API/spike detail.
       and Model L; rewrite one interactive multi-slot component (`Select`/`Dialog`/`Tabs`) exercising
       headless attrs + slot overrides. Keep axe/browser gates green (§12.1). Recommend a model.
       _Evidence:_ both Buttons typecheck/build; multi-slot browser+axe suite green.
+  - [x] Prototype Button as installable-library Model L with StyleX object overrides.
+    - Evidence (2026-06-16): `packages/ui/src/button.tsx` now imports `@kovojs/style`, replaces
+      `defineVariants`/`cn` with `style.create` groups and `style.attrs(...)`, exposes typed
+      `style?: style.StyleInput` overrides, and drops the `class` override escape hatch for Button.
+    - Evidence (2026-06-16): `packages/ui/src/button.stylex.test.tsx` proves StyleX-rendered
+      `kv-*` classes, source metadata, default variant/size selection, and author-last typed style
+      overrides. `packages/ui/registry.json` and `packages/ui/scripts/build-registry.mjs` now treat
+      `@kovojs/style` as a public copied-component dependency.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/ui/src/button.stylex.test.tsx
+      packages/ui/src/copy-in.test.ts packages/cli/src/index.kovo-add.test.ts`,
+      `node packages/ui/scripts/build-registry.mjs`, and `pnpm exec tsc --noEmit` pass.
+  - [x] Prototype Button as copy-in Model V with StyleX-authored vendored source.
+    - Evidence (2026-06-16): `packages/ui/registry.json` records Button's copied-source dependency on
+      `@kovojs/style`, `packages/ui/src/copy-in.test.ts` links that public package into the scratch app,
+      and `packages/cli/src/index.kovo-add.test.ts` asserts copied `button.tsx` contains
+      `import * as style from '@kovojs/style'`, `buttonStyles`, and `style.attrs(...)`.
+    - Evidence (2026-06-16): `pnpm exec vitest --run packages/ui/src/button.stylex.test.tsx
+      packages/ui/src/copy-in.test.ts packages/cli/src/index.kovo-add.test.ts`,
+      `node packages/ui/scripts/build-registry.mjs`, and `pnpm exec tsc --noEmit` pass.
+  - [ ] Compare Model V and Model L Button surfaces and record the final recommendation.
+  - [ ] Rewrite one interactive multi-slot component (`Select`/`Dialog`/`Tabs`) to StyleX slot override
+        objects and run the relevant axe/browser gates.
 - [ ] **Phase 5 — Replace Tailwind across starters/examples/docs.** Migrate gallery, commerce, crm,
       stackoverflow, docs site, and `create-kovo` starter; remove Tailwind deps + `@source` safelists;
       decide `@scope` retirement. _Evidence:_ `rg -i tailwind` returns only historical/plan references;
